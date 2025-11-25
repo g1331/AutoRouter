@@ -1,0 +1,33 @@
+src = ["app"]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["alembic"]
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "SIM", # flake8-simplify
+    "PL",  # pylint rules (subset)
+    "PTH", # pathlib
+    "RUF", # ruff-specific
+    "C4",  # flake8-comprehensions
+    "ICN", # import-conventions
+    "PIE"  # flake8-pie
+]
+ignore = [
+    "E203", # allow spacing around slice
+    "E501"  # handled by formatter
+]
+
+[format]
+quote-style = "double"
+line-ending = "lf"
+
+[lint.isort]
+known-first-party = ["app"]
+combine-as-imports = true
+order-by-type = false

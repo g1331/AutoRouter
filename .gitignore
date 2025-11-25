@@ -1,0 +1,40 @@
+# Node
+node_modules/
+.pnp.*
+.next/
+out/
+dist/
+.turbo/
+.pnpm-store/
+*.log
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.pytype/
+coverage/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.egg-info/
+build/
+dist/
+.python-version
+
+# Env
+.env
+.env.*
+
+# Mac/Win
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Project data
+data.db

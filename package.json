@@ -1,0 +1,11 @@
+{
+  "name": "autorouter",
+  "private": true,
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "dev:web": "pnpm --filter web dev",
+    "lint:web": "pnpm --filter web lint",
+    "build:web": "pnpm --filter web build",
+    "test:web": "pnpm --filter web test"
+  }
+}
