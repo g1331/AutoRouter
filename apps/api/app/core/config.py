@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     proxy_prefix: str = "/proxy"
     upstreams: list[UpstreamConfig] = []
 
+    # Debug mode - 显示所有请求头（仅用于调试 AI 工具请求格式）
+    debug_log_headers: bool = False
+
     @field_validator("upstreams", mode="before")
     @classmethod
     def parse_upstreams(cls, v: Any) -> list[UpstreamConfig]:

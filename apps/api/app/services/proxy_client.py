@@ -174,7 +174,8 @@ async def forward_request(
         UpstreamConnectionError: If connection fails
     """
     # Prepare headers
-    headers = filter_headers(dict(request.headers))
+    original_headers = dict(request.headers)
+    headers = filter_headers(original_headers)
     headers = inject_auth_header(headers, upstream)
 
     # Construct upstream URL
@@ -184,10 +185,64 @@ async def forward_request(
     # Read request body
     body = await request.body()
 
-    # Log request
+    # Enhanced Debug Logging - 观察 AI 工具的实际请求格式
     logger.info(
-        f"Forwarding request {request_id}: {request.method} {path} "
-        f"to {upstream.name} ({upstream.provider.value}), body_size={len(body)}"
+        f"[IN] Request {request_id}:\n"
+        f"  Method: {request.method}\n"
+        f"  Path: {path}\n"
+        f"  Client: {request.client.host if request.client else 'unknown'}\n"
+        f"  User-Agent: {original_headers.get('user-agent', 'N/A')}"
+    )
+
+    # 记录原始请求头中的认证信息（脱敏显示）
+    auth_header = original_headers.get("authorization", "")
+    if auth_header:
+        # 脱敏：只显示前缀和后4位
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+            masked_token = f"{token[:15]}...{token[-4:]}" if len(token) > 20 else "***"
+            logger.info(f"  [AUTH] Original Auth: Bearer {masked_token}")
+        else:
+            logger.info(f"  [AUTH] Original Auth: {auth_header[:20]}...")
+
+    # 记录其他关键请求头
+    x_api_key = original_headers.get("x-api-key", "")
+    if x_api_key:
+        masked = f"{x_api_key[:10]}...{x_api_key[-4:]}" if len(x_api_key) > 15 else "***"
+        logger.info(f"  [AUTH] Original x-api-key: {masked}")
+
+    # 记录请求体概要（JSON 格式）
+    if body:
+        try:
+            body_json = json.loads(body)
+            logger.info(
+                f"  [BODY] Request Body:\n"
+                f"    model: {body_json.get('model', 'N/A')}\n"
+                f"    stream: {body_json.get('stream', False)}\n"
+                f"    messages: {len(body_json.get('messages', []))} messages\n"
+                f"    max_tokens: {body_json.get('max_tokens', 'N/A')}"
+            )
+        except json.JSONDecodeError:
+            logger.info(f"  [BODY] Request Body: {len(body)} bytes (non-JSON)")
+
+    # Debug mode - 显示所有请求头（通过环境变量 DEBUG_LOG_HEADERS=true 启用）
+    from app.core.config import settings
+    if settings.debug_log_headers:
+        logger.debug(f"  [DEBUG] All Request Headers:")
+        for key, value in original_headers.items():
+            # 脱敏处理敏感信息
+            if key.lower() in ["authorization", "x-api-key", "api-key"]:
+                display_value = f"{value[:20]}..." if len(value) > 20 else "***"
+            else:
+                display_value = value
+            logger.debug(f"    {key}: {display_value}")
+
+    # Log forwarding details
+    logger.info(
+        f"[OUT] Forwarding to upstream {request_id}:\n"
+        f"  Upstream: {upstream.name} ({upstream.provider.value})\n"
+        f"  URL: {url}\n"
+        f"  Timeout: {upstream.timeout}s"
     )
 
     try:
