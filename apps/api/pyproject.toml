@@ -10,7 +10,12 @@ dependencies = [
     "sqlalchemy>=2.0.32",
     "alembic>=1.13.2",
     "httpx>=0.27.0",
-    "loguru>=0.7.0"
+    "loguru>=0.7.0",
+    "cryptography>=46.0.3",
+    "cachetools>=6.2.2",
+    "apscheduler>=3.11.1",
+    "aiosqlite>=0.21.0",
+    "bcrypt>=5.0.0",
 ]
 
 [project.optional-dependencies]

@@ -1,0 +1,268 @@
+"""Admin API routes for managing API keys and upstreams.
+
+All endpoints require admin authentication (Bearer token from ADMIN_TOKEN env var).
+"""
+
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.deps import get_db, verify_admin_token
+from app.models.schemas import (
+    APIKeyCreate,
+    APIKeyCreateResponse,
+    APIKeyResponse,
+    PaginatedAPIKeysResponse,
+    PaginatedUpstreamsResponse,
+    UpstreamCreate,
+    UpstreamResponse,
+    UpstreamUpdate,
+)
+from app.services import key_manager, upstream_service
+
+router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+# ============================================================================
+# API Key Management Endpoints
+# ============================================================================
+
+
+@router.post(
+    "/keys",
+    response_model=APIKeyCreateResponse,
+    status_code=201,
+    dependencies=[Depends(verify_admin_token)],
+    summary="Create a new API key",
+    description="Generate and store a new API key with permissions for specified upstreams. "
+    "The full key value is returned ONLY in this response and cannot be retrieved later.",
+)
+async def create_api_key(
+    body: APIKeyCreate,
+    db: AsyncSession = Depends(get_db),
+) -> APIKeyCreateResponse:
+    """Create a new API key.
+
+    Args:
+        body: API key creation parameters
+        db: Database session
+
+    Returns:
+        APIKeyCreateResponse: Created API key with full key_value (only shown once)
+
+    Raises:
+        HTTPException(400): Invalid upstream IDs
+    """
+    try:
+        api_key = await key_manager.create_api_key(
+            db=db,
+            name=body.name,
+            upstream_ids=body.upstream_ids,
+            description=body.description,
+            expires_at=body.expires_at,
+        )
+        return api_key
+    except ValueError as e:
+        logger.warning(f"Failed to create API key: {e}")
+        raise HTTPException(status_code=400, detail={"error": "invalid_request", "message": str(e)}) from e
+
+
+@router.get(
+    "/keys",
+    response_model=PaginatedAPIKeysResponse,
+    dependencies=[Depends(verify_admin_token)],
+    summary="List all API keys",
+    description="Retrieve a paginated list of API keys. Keys are masked (only prefix shown).",
+)
+async def list_api_keys(
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page (max 100)"),
+    db: AsyncSession = Depends(get_db),
+) -> PaginatedAPIKeysResponse:
+    """List all API keys with pagination.
+
+    Args:
+        page: Page number (1-indexed)
+        page_size: Number of items per page
+        db: Database session
+
+    Returns:
+        PaginatedAPIKeysResponse: Paginated list of API keys
+    """
+    return await key_manager.list_api_keys(db=db, page=page, page_size=page_size)
+
+
+@router.delete(
+    "/keys/{key_id}",
+    status_code=204,
+    dependencies=[Depends(verify_admin_token)],
+    summary="Revoke an API key",
+    description="Mark an API key as inactive. Existing requests with this key will fail after cache TTL (5 min).",
+)
+async def revoke_api_key(
+    key_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Revoke (deactivate) an API key.
+
+    Args:
+        key_id: ID of the API key to revoke
+        db: Database session
+
+    Raises:
+        HTTPException(404): API key not found
+    """
+    try:
+        await key_manager.revoke_api_key(db=db, key_id=key_id)
+    except ValueError as e:
+        logger.warning(f"Failed to revoke API key: {e}")
+        raise HTTPException(status_code=404, detail={"error": "not_found", "message": str(e)}) from e
+
+
+# ============================================================================
+# Upstream Management Endpoints
+# ============================================================================
+
+
+@router.post(
+    "/upstreams",
+    response_model=UpstreamResponse,
+    status_code=201,
+    dependencies=[Depends(verify_admin_token)],
+    summary="Create a new upstream",
+    description="Add a new upstream service. The API key is encrypted before storage.",
+)
+async def create_upstream(
+    body: UpstreamCreate,
+    db: AsyncSession = Depends(get_db),
+) -> UpstreamResponse:
+    """Create a new upstream.
+
+    Args:
+        body: Upstream creation parameters
+        db: Database session
+
+    Returns:
+        UpstreamResponse: Created upstream with masked API key
+
+    Raises:
+        HTTPException(400): Upstream name already exists
+    """
+    try:
+        upstream = await upstream_service.create_upstream(
+            db=db,
+            name=body.name,
+            provider=body.provider,
+            base_url=body.base_url,
+            api_key=body.api_key,
+            is_default=body.is_default,
+            timeout=body.timeout,
+            config=body.config,
+        )
+        return upstream
+    except ValueError as e:
+        logger.warning(f"Failed to create upstream: {e}")
+        raise HTTPException(status_code=400, detail={"error": "invalid_request", "message": str(e)}) from e
+
+
+@router.get(
+    "/upstreams",
+    response_model=PaginatedUpstreamsResponse,
+    dependencies=[Depends(verify_admin_token)],
+    summary="List all upstreams",
+    description="Retrieve a paginated list of upstreams. API keys are masked (e.g., 'sk-***1234').",
+)
+async def list_upstreams(
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page (max 100)"),
+    db: AsyncSession = Depends(get_db),
+) -> PaginatedUpstreamsResponse:
+    """List all upstreams with pagination.
+
+    Args:
+        page: Page number (1-indexed)
+        page_size: Number of items per page
+        db: Database session
+
+    Returns:
+        PaginatedUpstreamsResponse: Paginated list of upstreams
+    """
+    return await upstream_service.list_upstreams(db=db, page=page, page_size=page_size)
+
+
+@router.put(
+    "/upstreams/{upstream_id}",
+    response_model=UpstreamResponse,
+    dependencies=[Depends(verify_admin_token)],
+    summary="Update an upstream",
+    description="Update upstream configuration. Only provided fields are updated. "
+    "If api_key is provided, it will be re-encrypted.",
+)
+async def update_upstream(
+    upstream_id: UUID,
+    body: UpstreamUpdate,
+    db: AsyncSession = Depends(get_db),
+) -> UpstreamResponse:
+    """Update an existing upstream.
+
+    Args:
+        upstream_id: ID of the upstream to update
+        body: Update parameters (all fields optional)
+        db: Database session
+
+    Returns:
+        UpstreamResponse: Updated upstream with masked API key
+
+    Raises:
+        HTTPException(404): Upstream not found
+        HTTPException(400): Name conflict
+    """
+    try:
+        upstream = await upstream_service.update_upstream(
+            db=db,
+            upstream_id=upstream_id,
+            name=body.name,
+            provider=body.provider,
+            base_url=body.base_url,
+            api_key=body.api_key,
+            is_default=body.is_default,
+            timeout=body.timeout,
+            is_active=body.is_active,
+            config=body.config,
+        )
+        return upstream
+    except ValueError as e:
+        error_msg = str(e)
+        if "not found" in error_msg.lower():
+            raise HTTPException(status_code=404, detail={"error": "not_found", "message": error_msg}) from e
+        else:
+            raise HTTPException(status_code=400, detail={"error": "invalid_request", "message": error_msg}) from e
+
+
+@router.delete(
+    "/upstreams/{upstream_id}",
+    status_code=204,
+    dependencies=[Depends(verify_admin_token)],
+    summary="Delete an upstream",
+    description="Soft-delete an upstream (mark as inactive). API keys referencing this upstream will fail with 503.",
+)
+async def delete_upstream(
+    upstream_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Soft-delete an upstream.
+
+    Args:
+        upstream_id: ID of the upstream to delete
+        db: Database session
+
+    Raises:
+        HTTPException(404): Upstream not found
+    """
+    try:
+        await upstream_service.delete_upstream(db=db, upstream_id=upstream_id)
+    except ValueError as e:
+        logger.warning(f"Failed to delete upstream: {e}")
+        raise HTTPException(status_code=404, detail={"error": "not_found", "message": str(e)}) from e
