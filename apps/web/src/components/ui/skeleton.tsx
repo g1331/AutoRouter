@@ -1,7 +1,10 @@
 import { cn } from "@/lib/utils";
 
 /**
- * M3 Skeleton Loading Component
+ * Cassette Futurism Skeleton Loading
+ *
+ * Terminal-style loading placeholder with scanline animation.
+ * Respects prefers-reduced-motion.
  */
 function Skeleton({
   className,
@@ -10,7 +13,13 @@ function Skeleton({
   return (
     <div
       className={cn(
-        "animate-pulse rounded-[var(--shape-corner-small)] bg-[rgb(var(--md-sys-color-surface-container-highest))]",
+        "relative overflow-hidden rounded-cf-sm bg-surface-400",
+        // Scanline animation effect
+        "before:absolute before:inset-0",
+        "before:bg-gradient-to-r before:from-transparent before:via-amber-500/10 before:to-transparent",
+        "before:animate-[shimmer_2s_infinite]",
+        // Respect reduced motion
+        "motion-reduce:before:animate-none",
         className
       )}
       {...props}

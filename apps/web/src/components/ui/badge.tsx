@@ -4,43 +4,50 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 /**
- * M3 Badge / Chip Variants
+ * Cassette Futurism Badge / Status Chip
+ *
+ * Terminal-style status indicators with:
+ * - Monospace uppercase text
+ * - Status color variants with muted backgrounds
+ * - Border emphasis for accessibility (non-color indication)
  */
 const badgeVariants = cva(
-  "inline-flex items-center gap-1 rounded-[var(--shape-corner-small)] px-3 py-1 type-label-large transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--md-sys-color-primary))]",
+  [
+    "inline-flex items-center gap-1.5 px-2.5 py-1",
+    "rounded-cf-sm border",
+    "font-mono text-xs font-medium uppercase tracking-wider",
+    "transition-colors duration-cf-fast ease-cf-standard",
+    "focus-visible:outline-none focus-visible:ring-cf focus-visible:ring-amber-500",
+  ].join(" "),
   {
     variants: {
       variant: {
-        // Primary filled
+        // Default amber
         default:
-          "bg-[rgb(var(--md-sys-color-primary))] text-[rgb(var(--md-sys-color-on-primary))]",
-        // Secondary filled
+          "bg-amber-500 text-black-900 border-amber-500",
+        // Secondary / muted
         secondary:
-          "bg-[rgb(var(--md-sys-color-secondary))] text-[rgb(var(--md-sys-color-on-secondary))]",
-        // Destructive / Error
-        destructive:
-          "bg-[rgb(var(--md-sys-color-error))] text-[rgb(var(--md-sys-color-on-error))]",
+          "bg-surface-400 text-amber-500 border-surface-500",
         // Outlined
         outline:
-          "border border-[rgb(var(--md-sys-color-outline))] bg-transparent text-[rgb(var(--md-sys-color-on-surface))]",
-        // Success container
+          "bg-transparent text-amber-500 border-amber-500",
+        // Success status
         success:
-          "bg-[rgb(var(--md-sys-color-success-container))] text-[rgb(var(--md-sys-color-on-success-container))]",
-        // Warning container
+          "bg-status-success-muted text-status-success border-status-success",
+        // Warning status
         warning:
-          "bg-[rgb(var(--md-sys-color-warning-container))] text-[rgb(var(--md-sys-color-on-warning-container))]",
-        // Error container
+          "bg-status-warning-muted text-status-warning border-status-warning",
+        // Error / Destructive status
         error:
-          "bg-[rgb(var(--md-sys-color-error-container))] text-[rgb(var(--md-sys-color-on-error-container))]",
-        // Info / Primary container
+          "bg-status-error-muted text-status-error border-status-error",
+        destructive:
+          "bg-status-error-muted text-status-error border-status-error",
+        // Info status
         info:
-          "bg-[rgb(var(--md-sys-color-primary-container))] text-[rgb(var(--md-sys-color-on-primary-container))]",
-        // Neutral / Surface container
+          "bg-status-info-muted text-status-info border-status-info",
+        // Neutral / muted
         neutral:
-          "bg-[rgb(var(--md-sys-color-surface-container-highest))] text-[rgb(var(--md-sys-color-on-surface-variant))]",
-        // Tertiary container
-        tertiary:
-          "bg-[rgb(var(--md-sys-color-tertiary-container))] text-[rgb(var(--md-sys-color-on-tertiary-container))]",
+          "bg-surface-300 text-amber-700 border-divider",
       },
     },
     defaultVariants: {

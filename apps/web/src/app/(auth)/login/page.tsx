@@ -5,8 +5,19 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useAuth } from "@/providers/auth-provider";
 import { createApiClient } from "@/lib/api";
-import { ArrowRight, KeyRound, Zap } from "lucide-react";
+import { ArrowRight, KeyRound, Zap, Terminal } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
+/**
+ * Cassette Futurism Login Page
+ *
+ * Terminal-style login with:
+ * - CRT scanline and noise effects
+ * - Amber text on deep black
+ * - Glowing accents and borders
+ * - Blinking cursor animation
+ */
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -44,6 +55,7 @@ export default function LoginPage() {
       if (typeof window !== "undefined") {
         sessionStorage.removeItem("admin_token");
       }
+      setError("Admin Token 无效，请检查后重试");
       toast.error("Admin Token 无效，请检查后重试");
     } finally {
       setIsLoading(false);
@@ -53,194 +65,133 @@ export default function LoginPage() {
   if (token) return null;
 
   return (
-    <div className="login-page">
-      <style jsx>{`
-        .login-page {
-          min-height: 100vh;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 24px;
-          background: linear-gradient(160deg, #141312 0%, #1c1b19 50%, #1a1918 100%);
-        }
-        .login-card {
-          width: 100%;
-          max-width: 360px;
-          padding: 36px;
-          border-radius: 24px;
-          background: linear-gradient(180deg, #242320 0%, #1e1d1b 100%);
-          border: 1px solid rgba(150, 145, 138, 0.15);
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-        }
-        .logo-icon {
-          width: 48px;
-          height: 48px;
-          border-radius: 14px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: linear-gradient(135deg, #0d9488 0%, #0a756a 100%);
-          box-shadow: 0 2px 12px rgba(13, 148, 136, 0.25);
-          flex-shrink: 0;
-        }
-        .header {
-          display: flex;
-          align-items: center;
-          gap: 14px;
-          margin-bottom: 36px;
-        }
-        .brand-name {
-          font-size: 15px;
-          font-weight: 600;
-          color: #94cdc6;
-          letter-spacing: 0.02em;
-        }
-        .brand-desc {
-          font-size: 12px;
-          color: #9a958e;
-        }
-        .title {
-          font-size: 26px;
-          font-weight: 600;
-          color: #f5f4f2;
-          margin-bottom: 8px;
-        }
-        .subtitle {
-          font-size: 14px;
-          color: #9a958e;
-          margin-bottom: 32px;
-        }
-        .form-label {
-          display: block;
-          font-size: 13px;
-          font-weight: 500;
-          color: #b0aba4;
-          margin-bottom: 10px;
-        }
-        .input-wrapper {
-          position: relative;
-          margin-bottom: 20px;
-        }
-        .token-input {
-          width: 100%;
-          height: 48px;
-          padding: 0 16px 0 44px;
-          border-radius: 12px;
-          font-size: 14px;
-          color: #f5f4f2;
-          background: rgba(20, 19, 18, 0.9);
-          border: 1px solid rgba(150, 145, 138, 0.25);
-          outline: none;
-          transition: all 0.2s;
-          box-sizing: border-box;
-        }
-        .token-input::placeholder {
-          color: #706b64;
-        }
-        .token-input:focus {
-          border-color: rgba(13, 148, 136, 0.6);
-          box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12);
-        }
-        .error-text {
-          font-size: 12px;
-          color: #e57373;
-          margin-top: 8px;
-        }
-        .submit-btn {
-          width: 100%;
-          height: 48px;
-          border-radius: 12px;
-          font-size: 15px;
-          font-weight: 500;
-          color: #052e2a;
-          background: linear-gradient(135deg, #5ecdc0 0%, #0d9488 100%);
-          border: none;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          transition: all 0.2s;
-          box-shadow: 0 2px 12px rgba(13, 148, 136, 0.25);
-        }
-        .submit-btn:hover:not(:disabled) {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 16px rgba(13, 148, 136, 0.35);
-        }
-        .submit-btn:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-        .spinner {
-          width: 18px;
-          height: 18px;
-          border: 2px solid rgba(5, 46, 42, 0.3);
-          border-top-color: #052e2a;
-          border-radius: 50%;
-          animation: spin 0.8s linear infinite;
-        }
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-        .help-text {
-          margin-top: 28px;
-          font-size: 12px;
-          color: #706b64;
-          line-height: 1.6;
-        }
-        .help-label {
-          color: #9a958e;
-        }
-      `}</style>
+    <div className="cf-noise min-h-screen flex items-center justify-center p-6 bg-black-900">
+      {/* CRT Scanlines overlay */}
+      <div className="cf-scanlines fixed inset-0 pointer-events-none" />
 
-      <div className="login-card">
-        <div className="header">
-          <div className="logo-icon">
-            <Zap size={22} color="#052e2a" />
+      <div className="w-full max-w-sm relative z-10">
+        {/* Terminal Window */}
+        <div className="cf-panel bg-surface-200 rounded-cf-md border-2 border-amber-500 shadow-cf-glow overflow-hidden">
+          {/* Terminal Header */}
+          <div className="flex items-center gap-2 px-4 py-3 bg-black-900 border-b border-amber-500/50">
+            <div className="flex gap-1.5">
+              <div className="w-3 h-3 rounded-full bg-status-error" />
+              <div className="w-3 h-3 rounded-full bg-status-warning" />
+              <div className="w-3 h-3 rounded-full bg-status-success" />
+            </div>
+            <span className="flex-1 text-center font-mono text-xs text-amber-700 tracking-wider">
+              AUTOROUTER TERMINAL v1.0
+            </span>
           </div>
-          <div>
-            <div className="brand-name">AUTOROUTER</div>
-            <div className="brand-desc">管理员控制台</div>
+
+          {/* Terminal Content */}
+          <div className="p-6">
+            {/* Logo & Brand */}
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-12 h-12 rounded-cf-sm bg-amber-500 flex items-center justify-center shadow-cf-glow-subtle">
+                <Zap
+                  className="w-6 h-6 text-black-900"
+                  strokeWidth={2.5}
+                  aria-hidden="true"
+                />
+              </div>
+              <div>
+                <h1 className="font-mono text-lg font-medium text-amber-500 tracking-wide cf-glow-text">
+                  AUTOROUTER
+                </h1>
+                <p className="font-mono text-xs text-amber-700">
+                  ADMIN CONSOLE
+                </p>
+              </div>
+            </div>
+
+            {/* System Message */}
+            <div className="mb-6 font-mono text-sm">
+              <div className="flex items-center gap-2 text-amber-700 mb-1">
+                <Terminal className="w-4 h-4" aria-hidden="true" />
+                <span>SYSTEM MESSAGE</span>
+              </div>
+              <p className="text-amber-500 pl-6">
+                {">"} 身份验证需要 Admin Token
+                <span className="cf-cursor-blink">_</span>
+              </p>
+            </div>
+
+            {/* Login Form */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label
+                  htmlFor="admin-token"
+                  className="block font-mono text-xs uppercase tracking-wider text-amber-700 mb-2"
+                >
+                  ADMIN TOKEN
+                </label>
+                <div className="relative">
+                  <KeyRound
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-700 pointer-events-none"
+                    aria-hidden="true"
+                  />
+                  <Input
+                    id="admin-token"
+                    type="password"
+                    placeholder="输入您的 Admin Token"
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    disabled={isLoading}
+                    className="pl-10"
+                    aria-invalid={!!error}
+                    aria-describedby={error ? "token-error" : undefined}
+                  />
+                </div>
+                {error && (
+                  <p
+                    id="token-error"
+                    className="mt-2 font-mono text-xs text-status-error"
+                    role="alert"
+                  >
+                    [ERROR] {error}
+                  </p>
+                )}
+              </div>
+
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                className="w-full gap-2"
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-black-900/30 border-t-black-900 rounded-full animate-spin" />
+                    AUTHENTICATING...
+                  </>
+                ) : (
+                  <>
+                    LOGIN
+                    <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                  </>
+                )}
+              </Button>
+            </form>
+
+            {/* Help Text */}
+            <div className="mt-6 pt-4 border-t border-dashed border-divider">
+              <p className="font-mono text-xs text-amber-700">
+                <span className="text-amber-500">[INFO]</span> Admin Token
+                由系统管理员在服务端配置时生成。
+              </p>
+            </div>
+          </div>
+
+          {/* Terminal Footer */}
+          <div className="px-4 py-2 bg-black-900 border-t border-amber-500/50">
+            <div className="flex items-center justify-between font-mono text-xs text-amber-700">
+              <span>SYS::READY</span>
+              <span className="text-status-success">ONLINE</span>
+            </div>
           </div>
         </div>
-
-        <h1 className="title">欢迎回来</h1>
-        <p className="subtitle">使用 Admin Token 继续访问</p>
-
-        <form onSubmit={handleSubmit}>
-          <label className="form-label">Admin Token</label>
-          <div className="input-wrapper">
-            <KeyRound size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#9a958e', pointerEvents: 'none' }} />
-            <input
-              type="password"
-              className="token-input"
-              placeholder="请输入您的 Admin Token"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              disabled={isLoading}
-            />
-          </div>
-          {error && <p className="error-text">{error}</p>}
-
-          <button type="submit" className="submit-btn" disabled={isLoading}>
-            {isLoading ? (
-              <>
-                <div className="spinner" />
-                验证中...
-              </>
-            ) : (
-              <>
-                登录
-                <ArrowRight size={16} />
-              </>
-            )}
-          </button>
-        </form>
-
-        <p className="help-text">
-          <span className="help-label">提示：</span>
-          Admin Token 由系统管理员在服务端配置时生成。
-        </p>
       </div>
     </div>
   );

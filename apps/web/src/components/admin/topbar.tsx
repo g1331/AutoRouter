@@ -6,10 +6,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useAuth } from "@/providers/auth-provider";
 
 interface TopbarProps {
@@ -17,23 +15,36 @@ interface TopbarProps {
 }
 
 /**
- * M3 Top App Bar
+ * Cassette Futurism Top Bar
+ *
+ * Terminal-style header with:
+ * - Scanline effect
+ * - Amber text on dark background
+ * - System status indicators
  */
 export function Topbar({ title }: TopbarProps) {
   const { logout } = useAuth();
 
   return (
-    <header className="sticky top-0 z-20 w-full bg-[rgb(var(--md-sys-color-surface)_/_0.95)] backdrop-blur-md border-b border-[rgb(var(--md-sys-color-outline-variant))]">
-      <div className="flex items-center justify-between h-16 px-6">
+    <header className="cf-scanlines sticky top-0 z-20 w-full bg-surface-200/95 backdrop-blur-sm border-b-2 border-amber-500">
+      <div className="flex items-center justify-between h-14 px-6">
         {/* Page Title */}
-        <h1 className="type-title-large text-[rgb(var(--md-sys-color-on-surface))]">
-          {title}
-        </h1>
+        <div className="flex items-center gap-3">
+          <span className="font-mono text-xs text-amber-700 hidden sm:inline">
+            {">>"}
+          </span>
+          <h1 className="font-mono text-lg font-medium tracking-wide text-amber-500 cf-glow-text">
+            {title.toUpperCase()}
+          </h1>
+        </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-2">
-          {/* Theme Toggle */}
-          <ThemeToggle />
+        {/* System Status & Actions */}
+        <div className="flex items-center gap-4">
+          {/* Status Indicator */}
+          <div className="hidden sm:flex items-center gap-2 font-mono text-xs">
+            <span className="text-amber-700">STATUS:</span>
+            <span className="text-status-success">ONLINE</span>
+          </div>
 
           {/* User Menu */}
           <DropdownMenu>
@@ -41,26 +52,26 @@ export function Topbar({ title }: TopbarProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-10 gap-2 rounded-[var(--shape-corner-full)] hover:bg-[rgb(var(--md-sys-color-on-surface)_/_0.08)] transition-colors"
-                aria-label="用户菜单"
+                className="h-9 gap-2"
+                aria-label="User menu"
               >
-                <div className="w-8 h-8 rounded-[var(--shape-corner-full)] bg-[rgb(var(--md-sys-color-primary-container))] flex items-center justify-center">
-                  <span className="type-label-large text-[rgb(var(--md-sys-color-on-primary-container))]">
+                <div className="w-7 h-7 rounded-cf-sm bg-amber-500 flex items-center justify-center">
+                  <span className="font-mono text-sm font-bold text-black-900">
                     A
                   </span>
                 </div>
-                <span className="hidden sm:inline type-label-large text-[rgb(var(--md-sys-color-on-surface-variant))]">
-                  Admin
+                <span className="hidden sm:inline font-mono text-xs text-amber-500">
+                  ADMIN
                 </span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuItem
                 onClick={logout}
-                className="gap-2 cursor-pointer text-[rgb(var(--md-sys-color-error))] focus:text-[rgb(var(--md-sys-color-error))] focus:bg-[rgb(var(--md-sys-color-error-container))]"
+                className="gap-2 cursor-pointer text-status-error focus:text-status-error focus:bg-status-error-muted"
               >
                 <LogOut className="h-4 w-4" aria-hidden="true" />
-                <span>登出</span>
+                <span className="font-mono text-xs">LOGOUT</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

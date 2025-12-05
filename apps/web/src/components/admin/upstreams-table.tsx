@@ -22,7 +22,12 @@ interface UpstreamsTableProps {
 }
 
 /**
- * M3 Upstreams Data Table
+ * Cassette Futurism Upstreams Data Table
+ *
+ * Terminal-style data display with:
+ * - Mono font for URL data
+ * - Provider-specific badge colors
+ * - Amber accents and glow effects
  */
 export function UpstreamsTable({
   upstreams,
@@ -35,7 +40,7 @@ export function UpstreamsTable({
       { label: string; variant: BadgeProps["variant"] }
     > = {
       openai: { label: "OpenAI", variant: "success" },
-      anthropic: { label: "Anthropic", variant: "tertiary" },
+      anthropic: { label: "Anthropic", variant: "secondary" },
       azure: { label: "Azure", variant: "info" },
       gemini: { label: "Gemini", variant: "warning" },
     };
@@ -51,13 +56,13 @@ export function UpstreamsTable({
   if (upstreams.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="w-16 h-16 rounded-[var(--shape-corner-large)] bg-[rgb(var(--md-sys-color-surface-container-highest))] flex items-center justify-center mb-4">
-          <Server className="w-8 h-8 text-[rgb(var(--md-sys-color-on-surface-variant))]" />
+        <div className="w-16 h-16 rounded-cf-sm bg-surface-300 border border-divider flex items-center justify-center mb-4">
+          <Server className="w-8 h-8 text-amber-700" aria-hidden="true" />
         </div>
-        <h3 className="type-title-medium text-[rgb(var(--md-sys-color-on-surface))] mb-2">
-          暂无 Upstream
+        <h3 className="font-mono text-lg text-amber-500 mb-2">
+          NO UPSTREAMS CONFIGURED
         </h3>
-        <p className="type-body-medium text-[rgb(var(--md-sys-color-on-surface-variant))]">
+        <p className="font-sans text-sm text-amber-700">
           点击上方按钮添加第一个 Upstream
         </p>
       </div>
@@ -65,7 +70,7 @@ export function UpstreamsTable({
   }
 
   return (
-    <div className="rounded-[var(--shape-corner-large)] border border-[rgb(var(--md-sys-color-outline-variant))] overflow-hidden">
+    <div className="rounded-cf-sm border border-divider overflow-hidden">
       <Table>
         <TableHeader>
           <TableRow>
@@ -83,15 +88,13 @@ export function UpstreamsTable({
               <TableCell className="font-medium">{upstream.name}</TableCell>
               <TableCell>{formatProvider(upstream.provider)}</TableCell>
               <TableCell>
-                <code className="px-2 py-1 bg-[rgb(var(--md-sys-color-surface-container-highest))] text-[rgb(var(--md-sys-color-on-surface))] rounded-[var(--shape-corner-extra-small)] type-label-medium font-mono max-w-xs truncate inline-block">
+                <code className="px-2 py-1 bg-surface-300 text-amber-500 rounded-cf-sm font-mono text-xs border border-divider max-w-xs truncate inline-block">
                   {upstream.base_url}
                 </code>
               </TableCell>
               <TableCell className="max-w-xs truncate">
                 {upstream.description || (
-                  <span className="text-[rgb(var(--md-sys-color-on-surface-variant))]">
-                    -
-                  </span>
+                  <span className="text-amber-700">-</span>
                 )}
               </TableCell>
               <TableCell>
@@ -105,18 +108,20 @@ export function UpstreamsTable({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-[rgb(var(--md-sys-color-primary))] hover:bg-[rgb(var(--md-sys-color-primary-container))]"
+                    className="h-8 w-8 text-amber-500 hover:bg-amber-500/10"
                     onClick={() => onEdit(upstream)}
+                    aria-label={`编辑 Upstream: ${upstream.name}`}
                   >
-                    <Pencil className="h-4 w-4" />
+                    <Pencil className="h-4 w-4" aria-hidden="true" />
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-[rgb(var(--md-sys-color-error))] hover:bg-[rgb(var(--md-sys-color-error-container))]"
+                    className="h-8 w-8 text-status-error hover:bg-status-error-muted"
                     onClick={() => onDelete(upstream)}
+                    aria-label={`删除 Upstream: ${upstream.name}`}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </div>
               </TableCell>

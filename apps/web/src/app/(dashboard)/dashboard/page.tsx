@@ -10,14 +10,15 @@ import {
   PaginatedAPIKeysResponse,
   PaginatedUpstreamsResponse,
 } from "@/types/api";
-import { Key, Server, ArrowRight, Activity } from "lucide-react";
+import { Key, Server, ArrowRight, Activity, Cpu, Zap } from "lucide-react";
 
 /**
- * Dashboard Page - Material You Style
- * 避免 AI 味儿的设计：
- * 1. 不对称布局
- * 2. 不同大小的元素
- * 3. 有机的层次感
+ * Cassette Futurism Dashboard
+ *
+ * System monitoring panel style with:
+ * - Pixel font statistics (VT323)
+ * - Glowing numbers
+ * - Terminal-style status indicators
  */
 export default function DashboardPage() {
   const { apiClient } = useAuth();
@@ -43,128 +44,157 @@ export default function DashboardPage() {
 
   return (
     <>
-      <Topbar title="Dashboard" />
+      <Topbar title="System Monitor" />
       <div className="p-6 lg:p-8 max-w-6xl">
-        {/* Welcome Section - 简洁的欢迎语 */}
-        <div className="mb-8">
-          <p className="type-body-large text-[rgb(var(--md-sys-color-on-surface-variant))]">
-            管理你的 API 密钥和上游服务
+        {/* System Status Header */}
+        <div className="mb-8 border-b border-dashed border-divider pb-4">
+          <div className="flex items-center gap-2 font-mono text-xs text-amber-700 mb-2">
+            <Cpu className="w-4 h-4" />
+            <span>AUTOROUTER CONTROL PANEL</span>
+          </div>
+          <p className="font-sans text-sm text-amber-500">
+            Manage API keys and upstream services
           </p>
         </div>
 
-        {/* Stats Overview - 不对称网格 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          {/* 主要统计卡片 - 占据更大空间 */}
-          <Card className="md:col-span-2 bg-[rgb(var(--md-sys-color-primary-container))] border-0">
+        {/* Stats Grid - Terminal Style */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+          {/* API Keys Stat */}
+          <Card className="cf-panel">
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="type-label-large text-[rgb(var(--md-sys-color-on-primary-container)_/_0.7)] mb-1">
-                    API 密钥
+                  <p className="font-mono text-xs uppercase tracking-wider text-amber-700 mb-2">
+                    API KEYS
                   </p>
                   {keysLoading ? (
-                    <Skeleton className="h-12 w-20 bg-[rgb(var(--md-sys-color-on-primary-container)_/_0.1)]" />
+                    <Skeleton className="h-16 w-24" />
                   ) : (
-                    <p className="type-display-medium text-[rgb(var(--md-sys-color-on-primary-container))]">
-                      {keyCount}
+                    <p className="font-display text-5xl text-amber-500 cf-glow-text">
+                      {String(keyCount).padStart(3, "0")}
                     </p>
                   )}
-                  <p className="type-body-medium text-[rgb(var(--md-sys-color-on-primary-container)_/_0.6)] mt-2">
-                    {keyCount === 0 ? "还没有创建密钥" : "个活跃密钥"}
+                  <p className="font-mono text-xs text-amber-700 mt-2">
+                    {keyCount === 0 ? "NO KEYS FOUND" : "ACTIVE"}
                   </p>
                 </div>
-                <div className="w-12 h-12 rounded-2xl bg-[rgb(var(--md-sys-color-on-primary-container)_/_0.12)] flex items-center justify-center">
-                  <Key className="w-6 h-6 text-[rgb(var(--md-sys-color-on-primary-container))]" />
+                <div className="w-12 h-12 rounded-cf-sm bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
+                  <Key className="w-6 h-6 text-amber-500" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* 次要统计卡片 */}
-          <Card className="bg-[rgb(var(--md-sys-color-surface-container-high))] border-0">
+          {/* Upstreams Stat */}
+          <Card className="cf-panel">
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="type-label-large text-[rgb(var(--md-sys-color-on-surface-variant))] mb-1">
-                    上游服务
+                  <p className="font-mono text-xs uppercase tracking-wider text-amber-700 mb-2">
+                    UPSTREAMS
                   </p>
                   {upstreamsLoading ? (
-                    <Skeleton className="h-10 w-12" />
+                    <Skeleton className="h-16 w-24" />
                   ) : (
-                    <p className="type-display-small text-[rgb(var(--md-sys-color-on-surface))]">
-                      {upstreamCount}
+                    <p className="font-display text-5xl text-amber-500 cf-glow-text">
+                      {String(upstreamCount).padStart(3, "0")}
                     </p>
                   )}
-                  <p className="type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))] mt-1">
-                    已配置
+                  <p className="font-mono text-xs text-amber-700 mt-2">
+                    CONFIGURED
                   </p>
                 </div>
-                <div className="w-10 h-10 rounded-xl bg-[rgb(var(--md-sys-color-tertiary-container))] flex items-center justify-center">
-                  <Server className="w-5 h-5 text-[rgb(var(--md-sys-color-on-tertiary-container))]" />
+                <div className="w-12 h-12 rounded-cf-sm bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
+                  <Server className="w-6 h-6 text-amber-500" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* System Status */}
+          <Card className="cf-panel">
+            <CardContent className="p-6">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="font-mono text-xs uppercase tracking-wider text-amber-700 mb-2">
+                    SYS STATUS
+                  </p>
+                  <p className="font-display text-5xl text-status-success cf-glow-text">
+                    OK
+                  </p>
+                  <p className="font-mono text-xs text-status-success mt-2">
+                    ALL SYSTEMS NOMINAL
+                  </p>
+                </div>
+                <div className="w-12 h-12 rounded-cf-sm bg-status-success/10 border border-status-success/30 flex items-center justify-center">
+                  <Activity className="w-6 h-6 text-status-success" />
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Quick Actions - 卡片式导航 */}
-        <div className="space-y-3">
-          <h2 className="type-title-medium text-[rgb(var(--md-sys-color-on-surface-variant))] px-1">
-            快捷操作
-          </h2>
+        {/* Quick Actions */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 font-mono text-xs text-amber-700">
+            <Zap className="w-4 h-4" />
+            <span>QUICK ACTIONS</span>
+          </div>
 
           <div className="space-y-2">
             <Link href="/keys" className="block group">
-              <Card className="border border-[rgb(var(--md-sys-color-outline-variant))] hover:border-[rgb(var(--md-sys-color-outline))] hover:bg-[rgb(var(--md-sys-color-surface-container-low))] transition-all duration-200">
+              <Card variant="outlined" className="hover:shadow-cf-glow-subtle transition-all duration-cf-normal">
                 <CardContent className="p-4 flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-[rgb(var(--md-sys-color-primary)_/_0.12)] flex items-center justify-center">
-                      <Key className="w-5 h-5 text-[rgb(var(--md-sys-color-primary))]" />
+                    <div className="w-10 h-10 rounded-cf-sm bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
+                      <Key className="w-5 h-5 text-amber-500" />
                     </div>
                     <div>
-                      <p className="type-title-small text-[rgb(var(--md-sys-color-on-surface))]">
-                        管理 API 密钥
+                      <p className="font-mono text-sm text-amber-500">
+                        MANAGE API KEYS
                       </p>
-                      <p className="type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
-                        创建、编辑或删除客户端访问密钥
+                      <p className="font-sans text-xs text-amber-700">
+                        Create, edit or revoke client access keys
                       </p>
                     </div>
                   </div>
-                  <ArrowRight className="w-5 h-5 text-[rgb(var(--md-sys-color-on-surface-variant))] group-hover:text-[rgb(var(--md-sys-color-primary))] group-hover:translate-x-1 transition-all" />
+                  <ArrowRight className="w-5 h-5 text-amber-700 group-hover:text-amber-500 group-hover:translate-x-1 transition-all" />
                 </CardContent>
               </Card>
             </Link>
 
             <Link href="/upstreams" className="block group">
-              <Card className="border border-[rgb(var(--md-sys-color-outline-variant))] hover:border-[rgb(var(--md-sys-color-outline))] hover:bg-[rgb(var(--md-sys-color-surface-container-low))] transition-all duration-200">
+              <Card variant="outlined" className="hover:shadow-cf-glow-subtle transition-all duration-cf-normal">
                 <CardContent className="p-4 flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-[rgb(var(--md-sys-color-tertiary)_/_0.12)] flex items-center justify-center">
-                      <Server className="w-5 h-5 text-[rgb(var(--md-sys-color-tertiary))]" />
+                    <div className="w-10 h-10 rounded-cf-sm bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
+                      <Server className="w-5 h-5 text-amber-500" />
                     </div>
                     <div>
-                      <p className="type-title-small text-[rgb(var(--md-sys-color-on-surface))]">
-                        配置上游服务
+                      <p className="font-mono text-sm text-amber-500">
+                        CONFIGURE UPSTREAMS
                       </p>
-                      <p className="type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
-                        添加或修改 AI 服务提供商
+                      <p className="font-sans text-xs text-amber-700">
+                        Add or modify AI service providers
                       </p>
                     </div>
                   </div>
-                  <ArrowRight className="w-5 h-5 text-[rgb(var(--md-sys-color-on-surface-variant))] group-hover:text-[rgb(var(--md-sys-color-tertiary))] group-hover:translate-x-1 transition-all" />
+                  <ArrowRight className="w-5 h-5 text-amber-700 group-hover:text-amber-500 group-hover:translate-x-1 transition-all" />
                 </CardContent>
               </Card>
             </Link>
           </div>
         </div>
 
-        {/* System Status Hint */}
-        <div className="mt-8 p-4 rounded-2xl bg-[rgb(var(--md-sys-color-surface-container))]">
-          <div className="flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-[rgb(var(--md-sys-color-success))]" />
-            <p className="type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
-              系统运行正常
-            </p>
+        {/* System Log Footer */}
+        <div className="mt-8 p-4 rounded-cf-sm bg-surface-200 border border-divider font-mono text-xs">
+          <div className="flex items-center gap-3 text-amber-700">
+            <span className="text-status-success">[OK]</span>
+            <span>System initialized successfully</span>
+          </div>
+          <div className="flex items-center gap-3 text-amber-700 mt-1">
+            <span className="text-status-success">[OK]</span>
+            <span>All services online</span>
           </div>
         </div>
       </div>

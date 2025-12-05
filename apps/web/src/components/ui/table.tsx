@@ -3,17 +3,22 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * M3 Data Table Container
+ * Cassette Futurism Data Table
+ *
+ * Terminal-style data display with:
+ * - Amber borders and dashed separators
+ * - Uppercase monospace headers
+ * - Row hover and selection states
  */
 const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement>
 >(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-auto rounded-[var(--shape-corner-large)] border border-[rgb(var(--md-sys-color-outline-variant))]">
+  <div className="relative w-full overflow-auto rounded-cf-sm border-2 border-amber-500 bg-surface-200">
     <table
       ref={ref}
       className={cn(
-        "w-full caption-bottom text-sm text-[rgb(var(--md-sys-color-on-surface))]",
+        "w-full caption-bottom text-sm font-mono text-amber-500",
         className
       )}
       {...props}
@@ -29,7 +34,7 @@ const TableHeader = React.forwardRef<
   <thead
     ref={ref}
     className={cn(
-      "bg-[rgb(var(--md-sys-color-surface-container))] [&_tr]:border-b [&_tr]:border-[rgb(var(--md-sys-color-outline-variant))]",
+      "bg-surface-300 [&_tr]:border-b [&_tr]:border-dashed [&_tr]:border-divider",
       className
     )}
     {...props}
@@ -43,10 +48,7 @@ const TableBody = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <tbody
     ref={ref}
-    className={cn(
-      "bg-[rgb(var(--md-sys-color-surface))] [&_tr:last-child]:border-0",
-      className
-    )}
+    className={cn("bg-surface-200 [&_tr:last-child]:border-b-0", className)}
     {...props}
   />
 ));
@@ -59,7 +61,7 @@ const TableFooter = React.forwardRef<
   <tfoot
     ref={ref}
     className={cn(
-      "border-t border-[rgb(var(--md-sys-color-outline-variant))] bg-[rgb(var(--md-sys-color-surface-container))] font-medium [&>tr]:last:border-b-0",
+      "border-t border-dashed border-divider bg-surface-300 font-mono text-amber-500 [&>tr]:last:border-b-0",
       className
     )}
     {...props}
@@ -74,7 +76,11 @@ const TableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      "border-b border-[rgb(var(--md-sys-color-outline-variant))] transition-colors hover:bg-[rgb(var(--md-sys-color-on-surface)_/_0.04)] data-[state=selected]:bg-[rgb(var(--md-sys-color-primary-container))]",
+      "border-b border-dashed border-divider",
+      "border-l-2 border-l-transparent",
+      "transition-colors duration-cf-normal ease-cf-standard",
+      "hover:bg-surface-400",
+      "data-[state=selected]:border-l-amber-500 data-[state=selected]:bg-surface-300",
       className
     )}
     {...props}
@@ -89,7 +95,9 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-14 px-4 text-left align-middle type-title-small text-[rgb(var(--md-sys-color-on-surface-variant))] [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      "h-12 px-4 text-left align-middle",
+      "uppercase font-mono text-xs font-medium tracking-[0.1em] text-amber-500",
+      "[&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
       className
     )}
     {...props}
@@ -104,7 +112,8 @@ const TableCell = React.forwardRef<
   <td
     ref={ref}
     className={cn(
-      "h-14 px-4 align-middle type-body-medium [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      "h-12 px-4 align-middle font-mono text-amber-500",
+      "[&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
       className
     )}
     {...props}
@@ -118,10 +127,7 @@ const TableCaption = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <caption
     ref={ref}
-    className={cn(
-      "mt-4 type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]",
-      className
-    )}
+    className={cn("mt-4 text-sm font-mono text-amber-700", className)}
     {...props}
   />
 ));

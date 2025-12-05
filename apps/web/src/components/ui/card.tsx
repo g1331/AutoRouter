@@ -4,26 +4,29 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 /**
- * M3 Card Variants
- * - elevated: Default card with shadow
- * - filled: Solid background without border
- * - outlined: Bordered card without shadow
+ * Cassette Futurism Card Variants
+ *
+ * Panel-style containers with amber borders and glow effects.
+ * - default: Amber border with filled surface background
+ * - outlined: Amber border only, transparent background
+ * - filled: Solid surface without border
  */
 const cardVariants = cva(
-  "rounded-[var(--shape-corner-large)] text-[rgb(var(--md-sys-color-on-surface))] transition-shadow duration-200",
+  [
+    "rounded-cf-sm text-amber-500",
+    "transition-all duration-cf-normal ease-cf-standard",
+    "hover:shadow-cf-glow-subtle",
+  ].join(" "),
   {
     variants: {
       variant: {
-        elevated:
-          "bg-[rgb(var(--md-sys-color-surface-container-low))] shadow-[var(--md-elevation-1)] hover:shadow-[var(--md-elevation-2)]",
-        filled:
-          "bg-[rgb(var(--md-sys-color-surface-container-highest))]",
-        outlined:
-          "bg-[rgb(var(--md-sys-color-surface))] border border-[rgb(var(--md-sys-color-outline-variant))]",
+        default: "bg-surface-300 border-2 border-amber-500",
+        outlined: "bg-transparent border-2 border-amber-500",
+        filled: "bg-surface-300 border-0",
       },
     },
     defaultVariants: {
-      variant: "elevated",
+      variant: "default",
     },
   }
 );
@@ -62,7 +65,7 @@ const CardTitle = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "type-title-large text-[rgb(var(--md-sys-color-on-surface))]",
+      "font-mono text-lg font-medium tracking-wide text-amber-500",
       className
     )}
     {...props}
@@ -76,10 +79,7 @@ const CardDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn(
-      "type-body-medium text-[rgb(var(--md-sys-color-on-surface-variant))]",
-      className
-    )}
+    className={cn("font-sans text-sm leading-relaxed text-amber-700", className)}
     {...props}
   />
 ));
@@ -91,7 +91,7 @@ const CardContent = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("p-6 pt-0 text-[rgb(var(--md-sys-color-on-surface))]", className)}
+    className={cn("p-6 pt-0 text-amber-500", className)}
     {...props}
   />
 ));

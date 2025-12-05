@@ -27,9 +27,11 @@ const DropdownMenuSubTrigger = React.forwardRef<
   <DropdownMenuPrimitive.SubTrigger
     ref={ref}
     className={cn(
-      "flex cursor-default select-none items-center gap-2 rounded-[var(--shape-corner-extra-small)] px-3 py-2 type-body-large outline-none transition-colors",
-      "focus:bg-[rgb(var(--md-sys-color-on-surface)_/_0.08)]",
-      "data-[state=open]:bg-[rgb(var(--md-sys-color-on-surface)_/_0.08)]",
+      "flex cursor-default select-none items-center gap-2 rounded-cf-sm px-3 py-2",
+      "font-mono text-sm text-amber-500 outline-none",
+      "transition-colors duration-cf-fast ease-cf-standard",
+      "focus:bg-surface-400",
+      "data-[state=open]:bg-surface-400",
       "[&_svg]:pointer-events-none [&_svg]:size-5 [&_svg]:shrink-0",
       inset && "pl-9",
       className
@@ -37,7 +39,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
     {...props}
   >
     {children}
-    <ChevronRight className="ml-auto text-[rgb(var(--md-sys-color-on-surface-variant))]" />
+    <ChevronRight className="ml-auto text-amber-700" />
   </DropdownMenuPrimitive.SubTrigger>
 ));
 DropdownMenuSubTrigger.displayName =
@@ -50,8 +52,15 @@ const DropdownMenuSubContent = React.forwardRef<
   <DropdownMenuPrimitive.SubContent
     ref={ref}
     className={cn(
-      "z-50 min-w-[8rem] overflow-hidden rounded-[var(--shape-corner-extra-small)] bg-[rgb(var(--md-sys-color-surface-container))] p-1 text-[rgb(var(--md-sys-color-on-surface))] shadow-[var(--md-elevation-2)]",
-      "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[--radix-dropdown-menu-content-transform-origin]",
+      "z-50 min-w-[8rem] overflow-hidden rounded-cf-sm p-1",
+      "bg-surface-300 border-2 border-amber-500 shadow-cf-glow-subtle",
+      "font-mono text-amber-500",
+      "data-[state=open]:animate-in data-[state=closed]:animate-out",
+      "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+      "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2",
+      "data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+      "origin-[--radix-dropdown-menu-content-transform-origin]",
       className
     )}
     {...props}
@@ -61,7 +70,7 @@ DropdownMenuSubContent.displayName =
   DropdownMenuPrimitive.SubContent.displayName;
 
 /**
- * M3 Menu Content
+ * Cassette Futurism Dropdown Menu Content
  */
 const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
@@ -72,8 +81,16 @@ const DropdownMenuContent = React.forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        "z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-[var(--shape-corner-extra-small)] bg-[rgb(var(--md-sys-color-surface-container))] p-1 text-[rgb(var(--md-sys-color-on-surface))] shadow-[var(--md-elevation-2)]",
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[--radix-dropdown-menu-content-transform-origin]",
+        "z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-[8rem]",
+        "overflow-y-auto overflow-x-hidden rounded-cf-sm p-1",
+        "bg-surface-300 border-2 border-amber-500 shadow-cf-glow-subtle",
+        "font-mono text-amber-500",
+        "data-[state=open]:animate-in data-[state=closed]:animate-out",
+        "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+        "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+        "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2",
+        "data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        "origin-[--radix-dropdown-menu-content-transform-origin]",
         className
       )}
       {...props}
@@ -83,7 +100,7 @@ const DropdownMenuContent = React.forwardRef<
 DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;
 
 /**
- * M3 Menu Item
+ * Cassette Futurism Dropdown Menu Item
  */
 const DropdownMenuItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Item>,
@@ -94,10 +111,12 @@ const DropdownMenuItem = React.forwardRef<
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center gap-3 rounded-[var(--shape-corner-extra-small)] px-3 py-2.5 type-body-large outline-none transition-colors",
-      "focus:bg-[rgb(var(--md-sys-color-on-surface)_/_0.08)]",
-      "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-      "[&>svg]:size-5 [&>svg]:shrink-0 [&>svg]:text-[rgb(var(--md-sys-color-on-surface-variant))]",
+      "relative flex cursor-default select-none items-center gap-3 rounded-cf-sm px-3 py-2.5",
+      "font-mono text-sm text-amber-500 outline-none",
+      "transition-colors duration-cf-fast ease-cf-standard",
+      "focus:bg-surface-400",
+      "data-[disabled]:pointer-events-none data-[disabled]:text-disabled-text",
+      "[&>svg]:size-5 [&>svg]:shrink-0 [&>svg]:text-amber-700",
       inset && "pl-9",
       className
     )}
@@ -113,9 +132,11 @@ const DropdownMenuCheckboxItem = React.forwardRef<
   <DropdownMenuPrimitive.CheckboxItem
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-[var(--shape-corner-extra-small)] py-2.5 pl-9 pr-3 type-body-large outline-none transition-colors",
-      "focus:bg-[rgb(var(--md-sys-color-on-surface)_/_0.08)]",
-      "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex cursor-default select-none items-center rounded-cf-sm py-2.5 pl-9 pr-3",
+      "font-mono text-sm text-amber-500 outline-none",
+      "transition-colors duration-cf-fast ease-cf-standard",
+      "focus:bg-surface-400",
+      "data-[disabled]:pointer-events-none data-[disabled]:text-disabled-text",
       className
     )}
     checked={checked}
@@ -123,7 +144,7 @@ const DropdownMenuCheckboxItem = React.forwardRef<
   >
     <span className="absolute left-3 flex h-5 w-5 items-center justify-center">
       <DropdownMenuPrimitive.ItemIndicator>
-        <Check className="h-5 w-5 text-[rgb(var(--md-sys-color-primary))]" />
+        <Check className="h-5 w-5 text-amber-500" />
       </DropdownMenuPrimitive.ItemIndicator>
     </span>
     {children}
@@ -139,16 +160,18 @@ const DropdownMenuRadioItem = React.forwardRef<
   <DropdownMenuPrimitive.RadioItem
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-[var(--shape-corner-extra-small)] py-2.5 pl-9 pr-3 type-body-large outline-none transition-colors",
-      "focus:bg-[rgb(var(--md-sys-color-on-surface)_/_0.08)]",
-      "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex cursor-default select-none items-center rounded-cf-sm py-2.5 pl-9 pr-3",
+      "font-mono text-sm text-amber-500 outline-none",
+      "transition-colors duration-cf-fast ease-cf-standard",
+      "focus:bg-surface-400",
+      "data-[disabled]:pointer-events-none data-[disabled]:text-disabled-text",
       className
     )}
     {...props}
   >
     <span className="absolute left-3 flex h-5 w-5 items-center justify-center">
       <DropdownMenuPrimitive.ItemIndicator>
-        <Circle className="h-2.5 w-2.5 fill-[rgb(var(--md-sys-color-primary))]" />
+        <Circle className="h-2.5 w-2.5 fill-amber-500" />
       </DropdownMenuPrimitive.ItemIndicator>
     </span>
     {children}
@@ -165,7 +188,7 @@ const DropdownMenuLabel = React.forwardRef<
   <DropdownMenuPrimitive.Label
     ref={ref}
     className={cn(
-      "px-3 py-2 type-label-large text-[rgb(var(--md-sys-color-on-surface-variant))]",
+      "px-3 py-2 font-mono text-xs font-medium uppercase tracking-wider text-amber-700",
       inset && "pl-9",
       className
     )}
@@ -180,10 +203,7 @@ const DropdownMenuSeparator = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DropdownMenuPrimitive.Separator
     ref={ref}
-    className={cn(
-      "-mx-1 my-1 h-px bg-[rgb(var(--md-sys-color-outline-variant))]",
-      className
-    )}
+    className={cn("-mx-1 my-1 h-px bg-divider", className)}
     {...props}
   />
 ));
@@ -196,7 +216,7 @@ const DropdownMenuShortcut = ({
   return (
     <span
       className={cn(
-        "ml-auto type-label-medium text-[rgb(var(--md-sys-color-on-surface-variant))]",
+        "ml-auto font-mono text-xs tracking-wider text-amber-700",
         className
       )}
       {...props}

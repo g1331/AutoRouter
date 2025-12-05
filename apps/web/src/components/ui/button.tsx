@@ -5,47 +5,55 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 /**
- * M3 Button Variants
- * - filled: Primary action button with solid background
- * - tonal: Secondary action with tonal container
- * - outlined: Bordered button for medium emphasis
- * - text: Text-only button for low emphasis
- * - elevated: Filled button with elevation
+ * Cassette Futurism Button Variants
+ *
+ * - default/primary: Amber background, black text (high emphasis)
+ * - secondary/outline: Transparent with amber border (medium emphasis)
+ * - ghost: Transparent, amber text only (low emphasis)
+ * - destructive/danger: Red background for destructive actions
+ * - success: Green background for positive actions
  */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-[18px] [&_svg]:shrink-0",
+  [
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap",
+    "font-mono text-sm font-medium leading-none",
+    "border-2 border-transparent rounded-cf-sm",
+    "transition-all duration-cf-normal ease-cf-standard",
+    "focus-visible:outline-none focus-visible:ring-cf focus-visible:ring-amber-500",
+    "focus-visible:ring-offset-cf focus-visible:ring-offset-black-900",
+    "disabled:pointer-events-none disabled:cursor-not-allowed",
+    "disabled:bg-disabled-bg disabled:text-disabled-text disabled:border-disabled-border",
+    "disabled:shadow-none disabled:hover:shadow-none",
+    "[&_svg]:pointer-events-none [&_svg]:size-[18px] [&_svg]:shrink-0",
+  ].join(" "),
   {
     variants: {
       variant: {
-        // Filled Button - Primary action
         default:
-          "bg-[rgb(var(--md-sys-color-primary))] text-[rgb(var(--md-sys-color-on-primary))] hover:shadow-[var(--md-elevation-1)] active:shadow-none focus-visible:ring-[rgb(var(--md-sys-color-primary))]",
-        // Filled Tonal - Secondary action
-        tonal:
-          "bg-[rgb(var(--md-sys-color-secondary-container))] text-[rgb(var(--md-sys-color-on-secondary-container))] hover:shadow-[var(--md-elevation-1)] active:shadow-none focus-visible:ring-[rgb(var(--md-sys-color-secondary))]",
-        // Outlined Button - Medium emphasis
+          "bg-amber-500 text-black-900 border-amber-500 hover:shadow-cf-glow-subtle active:bg-amber-600",
+        primary:
+          "bg-amber-500 text-black-900 border-amber-500 hover:shadow-cf-glow-subtle active:bg-amber-600",
+        secondary:
+          "bg-transparent text-amber-500 border-amber-500 hover:bg-surface-400 hover:shadow-cf-glow-subtle active:bg-surface-500",
         outline:
-          "border border-[rgb(var(--md-sys-color-outline))] bg-transparent text-[rgb(var(--md-sys-color-primary))] hover:bg-[rgb(var(--md-sys-color-primary)_/_0.08)] focus-visible:ring-[rgb(var(--md-sys-color-primary))]",
-        // Text Button - Low emphasis
+          "bg-transparent text-amber-500 border-amber-500 hover:bg-surface-400 hover:shadow-cf-glow-subtle active:bg-surface-500",
+        tonal:
+          "bg-surface-400 text-amber-500 border-surface-400 hover:border-amber-500 hover:shadow-cf-glow-subtle active:bg-surface-500",
         ghost:
-          "text-[rgb(var(--md-sys-color-primary))] hover:bg-[rgb(var(--md-sys-color-primary)_/_0.08)] focus-visible:ring-[rgb(var(--md-sys-color-primary))]",
-        // Elevated Button - With shadow
-        elevated:
-          "bg-[rgb(var(--md-sys-color-surface-container-low))] text-[rgb(var(--md-sys-color-primary))] shadow-[var(--md-elevation-1)] hover:shadow-[var(--md-elevation-2)] focus-visible:ring-[rgb(var(--md-sys-color-primary))]",
-        // Destructive - Error action
+          "bg-transparent text-amber-500 border-transparent hover:bg-surface-400 hover:shadow-cf-glow-subtle active:bg-surface-500",
         destructive:
-          "bg-[rgb(var(--md-sys-color-error))] text-[rgb(var(--md-sys-color-on-error))] hover:shadow-[var(--md-elevation-1)] active:shadow-none focus-visible:ring-[rgb(var(--md-sys-color-error))]",
-        // Success - Positive action
+          "bg-status-error text-black-900 border-status-error hover:shadow-cf-glow-error active:brightness-90",
+        danger:
+          "bg-status-error text-black-900 border-status-error hover:shadow-cf-glow-error active:brightness-90",
         success:
-          "bg-[rgb(var(--md-sys-color-success))] text-[rgb(var(--md-sys-color-on-success))] hover:shadow-[var(--md-elevation-1)] active:shadow-none focus-visible:ring-[rgb(var(--md-sys-color-success))]",
-        // Link style
-        link: "text-[rgb(var(--md-sys-color-primary))] underline-offset-4 hover:underline",
+          "bg-status-success text-black-900 border-status-success hover:shadow-cf-glow-success active:brightness-90",
+        link: "bg-transparent border-transparent text-amber-500 underline-offset-4 hover:underline hover:text-amber-400 px-0 h-auto",
       },
       size: {
-        default: "h-10 px-6 rounded-[var(--shape-corner-full)]",
-        sm: "h-9 px-4 text-sm rounded-[var(--shape-corner-full)]",
-        lg: "h-12 px-8 text-base rounded-[var(--shape-corner-full)]",
-        icon: "h-10 w-10 rounded-[var(--shape-corner-full)]",
+        default: "h-10 px-5",
+        sm: "h-9 px-4 text-xs",
+        lg: "h-12 px-7 text-base",
+        icon: "h-10 w-10 p-0",
       },
     },
     defaultVariants: {
