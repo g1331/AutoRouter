@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,6 +29,8 @@ export function DeleteUpstreamDialog({
   onClose,
 }: DeleteUpstreamDialogProps) {
   const deleteMutation = useDeleteUpstream();
+  const t = useTranslations("upstreams");
+  const tCommon = useTranslations("common");
 
   const handleDelete = async () => {
     if (!upstream) return;
@@ -50,10 +53,10 @@ export function DeleteUpstreamDialog({
             <div className="w-10 h-10 rounded-[var(--shape-corner-medium)] bg-[rgb(var(--md-sys-color-error-container))] flex items-center justify-center">
               <AlertTriangle className="h-5 w-5 text-[rgb(var(--md-sys-color-on-error-container))]" />
             </div>
-            删除 Upstream
+            {t("deleteUpstreamTitle")}
           </DialogTitle>
           <DialogDescription>
-            此操作无法撤销，确定要删除以下 Upstream 吗？
+            {t("deleteUpstreamDesc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -62,7 +65,7 @@ export function DeleteUpstreamDialog({
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="type-label-large text-[rgb(var(--md-sys-color-on-error-container))]">
-                  名称：
+                  {tCommon("name")}:
                 </span>
                 <span className="type-body-medium text-[rgb(var(--md-sys-color-on-error-container))]">
                   {upstream.name}
@@ -70,7 +73,7 @@ export function DeleteUpstreamDialog({
               </div>
               <div className="flex justify-between">
                 <span className="type-label-large text-[rgb(var(--md-sys-color-on-error-container))]">
-                  Provider：
+                  {t("provider")}:
                 </span>
                 <span className="type-body-medium text-[rgb(var(--md-sys-color-on-error-container))]">
                   {upstream.provider}
@@ -78,7 +81,7 @@ export function DeleteUpstreamDialog({
               </div>
               <div className="flex justify-between">
                 <span className="type-label-large text-[rgb(var(--md-sys-color-on-error-container))]">
-                  Base URL：
+                  {t("baseUrl")}:
                 </span>
                 <code className="type-body-medium font-mono text-[rgb(var(--md-sys-color-on-error-container))] max-w-xs text-right truncate">
                   {upstream.base_url}
@@ -87,7 +90,7 @@ export function DeleteUpstreamDialog({
               {upstream.description && (
                 <div className="flex justify-between">
                   <span className="type-label-large text-[rgb(var(--md-sys-color-on-error-container))]">
-                    描述：
+                    {tCommon("description")}:
                   </span>
                   <span className="type-body-medium text-[rgb(var(--md-sys-color-on-error-container))] max-w-xs text-right truncate">
                     {upstream.description}
@@ -100,7 +103,7 @@ export function DeleteUpstreamDialog({
           <div className="flex items-start gap-3 bg-[rgb(var(--md-sys-color-warning-container))] rounded-[var(--shape-corner-medium)] p-3">
             <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5 text-[rgb(var(--md-sys-color-on-warning-container))]" />
             <p className="type-body-small text-[rgb(var(--md-sys-color-on-warning-container))]">
-              删除后，关联此 Upstream 的所有 API Keys 将无法再路由到此上游服务
+              {t("deleteUpstreamWarning")}
             </p>
           </div>
         </div>
@@ -111,14 +114,14 @@ export function DeleteUpstreamDialog({
             onClick={onClose}
             disabled={deleteMutation.isPending}
           >
-            取消
+            {tCommon("cancel")}
           </Button>
           <Button
             variant="destructive"
             onClick={handleDelete}
             disabled={deleteMutation.isPending}
           >
-            {deleteMutation.isPending ? "删除中..." : "确认删除"}
+            {deleteMutation.isPending ? t("deleting") : tCommon("delete")}
           </Button>
         </DialogFooter>
       </DialogContent>

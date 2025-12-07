@@ -1,7 +1,7 @@
 "use client";
 
 import { formatDistanceToNow } from "date-fns";
-import { zhCN } from "date-fns/locale";
+import { useLocale, useTranslations } from "next-intl";
 import { Trash2, Copy, Check, Key } from "lucide-react";
 import { useState } from "react";
 import type { APIKey } from "@/types/api";
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { getDateLocale } from "@/lib/date-locale";
 
 interface KeysTableProps {
   keys: APIKey[];
@@ -32,21 +33,25 @@ interface KeysTableProps {
  */
 export function KeysTable({ keys, onRevoke }: KeysTableProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const t = useTranslations("keys");
+  const tCommon = useTranslations("common");
+  const locale = useLocale();
+  const dateLocale = getDateLocale(locale);
 
   const copyKeyPrefix = async (keyPrefix: string, keyId: string) => {
     try {
       await navigator.clipboard.writeText(keyPrefix);
       setCopiedId(keyId);
-      toast.success("Key 前缀已复制");
+      toast.success(tCommon("copied"));
       setTimeout(() => setCopiedId(null), 2000);
     } catch {
-      toast.error("复制失败");
+      toast.error(tCommon("error"));
     }
   };
 
   const formatExpiry = (expiresAt: string | null) => {
     if (!expiresAt) {
-      return <Badge variant="success">永不过期</Badge>;
+      return <Badge variant="success">{t("neverExpires")}</Badge>;
     }
 
     const expiryDate = new Date(expiresAt);
@@ -54,12 +59,12 @@ export function KeysTable({ keys, onRevoke }: KeysTableProps) {
     const isExpired = expiryDate < now;
 
     if (isExpired) {
-      return <Badge variant="error">已过期</Badge>;
+      return <Badge variant="error">{t("expired")}</Badge>;
     }
 
     return (
       <Badge variant="warning">
-        {formatDistanceToNow(expiryDate, { addSuffix: true, locale: zhCN })}
+        {formatDistanceToNow(expiryDate, { addSuffix: true, locale: dateLocale })}
       </Badge>
     );
   };
@@ -71,10 +76,10 @@ export function KeysTable({ keys, onRevoke }: KeysTableProps) {
           <Key className="w-8 h-8 text-amber-700" aria-hidden="true" />
         </div>
         <h3 className="font-mono text-lg text-amber-500 mb-2">
-          NO API KEYS FOUND
+          {t("noKeys")}
         </h3>
         <p className="font-sans text-sm text-amber-700">
-          点击上方按钮创建第一个 API Key
+          {t("noKeysDesc")}
         </p>
       </div>
     );
@@ -85,13 +90,13 @@ export function KeysTable({ keys, onRevoke }: KeysTableProps) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>名称</TableHead>
-            <TableHead>Key 前缀</TableHead>
-            <TableHead>描述</TableHead>
-            <TableHead>Upstreams</TableHead>
-            <TableHead>过期时间</TableHead>
-            <TableHead>创建时间</TableHead>
-            <TableHead className="text-right">操作</TableHead>
+            <TableHead>{tCommon("name")}</TableHead>
+            <TableHead>{t("tableKeyPrefix")}</TableHead>
+            <TableHead>{tCommon("description")}</TableHead>
+            <TableHead>{t("tableUpstreams")}</TableHead>
+            <TableHead>{t("tableExpires")}</TableHead>
+            <TableHead>{tCommon("createdAt")}</TableHead>
+            <TableHead className="text-right">{tCommon("actions")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -109,7 +114,7 @@ export function KeysTable({ keys, onRevoke }: KeysTableProps) {
                     className="h-7 w-7"
                     onClick={() => copyKeyPrefix(key.key_prefix, key.id)}
                     aria-label={
-                      copiedId === key.id ? "已复制" : "复制 Key 前缀"
+                      copiedId === key.id ? tCommon("copied") : tCommon("copy")
                     }
                   >
                     {copiedId === key.id ? (
@@ -129,13 +134,13 @@ export function KeysTable({ keys, onRevoke }: KeysTableProps) {
                 )}
               </TableCell>
               <TableCell>
-                <Badge variant="info">{key.upstream_ids.length} 个</Badge>
+                <Badge variant="info">{key.upstream_ids.length}</Badge>
               </TableCell>
               <TableCell>{formatExpiry(key.expires_at)}</TableCell>
               <TableCell>
                 {formatDistanceToNow(new Date(key.created_at), {
                   addSuffix: true,
-                  locale: zhCN,
+                  locale: dateLocale,
                 })}
               </TableCell>
               <TableCell className="text-right">
@@ -144,7 +149,7 @@ export function KeysTable({ keys, onRevoke }: KeysTableProps) {
                   size="icon"
                   className="h-8 w-8 text-status-error hover:bg-status-error-muted"
                   onClick={() => onRevoke(key)}
-                  aria-label={`撤销 API Key: ${key.name}`}
+                  aria-label={`${t("revokeKey")}: ${key.name}`}
                 >
                   <Trash2 className="h-4 w-4" aria-hidden="true" />
                 </Button>

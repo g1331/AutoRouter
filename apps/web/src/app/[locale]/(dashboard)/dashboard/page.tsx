@@ -1,6 +1,7 @@
 "use client";
 
-import Link from "next/link";
+import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { Topbar } from "@/components/admin/topbar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,6 +23,8 @@ import { Key, Server, ArrowRight, Activity, Cpu, Zap } from "lucide-react";
  */
 export default function DashboardPage() {
   const { apiClient } = useAuth();
+  const t = useTranslations("dashboard");
+  const tCommon = useTranslations("common");
 
   const { data: keysData, isLoading: keysLoading } = useQuery({
     queryKey: ["stats", "keys"],
@@ -44,16 +47,16 @@ export default function DashboardPage() {
 
   return (
     <>
-      <Topbar title="System Monitor" />
+      <Topbar title={t("pageTitle")} />
       <div className="p-6 lg:p-8 max-w-6xl">
         {/* System Status Header */}
         <div className="mb-8 border-b border-dashed border-divider pb-4">
           <div className="flex items-center gap-2 font-mono text-xs text-amber-700 mb-2">
             <Cpu className="w-4 h-4" />
-            <span>AUTOROUTER CONTROL PANEL</span>
+            <span>{t("controlPanel")}</span>
           </div>
           <p className="font-sans text-sm text-amber-500">
-            Manage API keys and upstream services
+            {t("controlPanelDesc")}
           </p>
         </div>
 
@@ -65,7 +68,7 @@ export default function DashboardPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="font-mono text-xs uppercase tracking-wider text-amber-700 mb-2">
-                    API KEYS
+                    {t("apiKeysCount")}
                   </p>
                   {keysLoading ? (
                     <Skeleton className="h-16 w-24" />
@@ -75,7 +78,7 @@ export default function DashboardPage() {
                     </p>
                   )}
                   <p className="font-mono text-xs text-amber-700 mt-2">
-                    {keyCount === 0 ? "NO KEYS FOUND" : "ACTIVE"}
+                    {keyCount === 0 ? t("noKeysFound") : "ACTIVE"}
                   </p>
                 </div>
                 <div className="w-12 h-12 rounded-cf-sm bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
@@ -91,7 +94,7 @@ export default function DashboardPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="font-mono text-xs uppercase tracking-wider text-amber-700 mb-2">
-                    UPSTREAMS
+                    {t("upstreamsCount")}
                   </p>
                   {upstreamsLoading ? (
                     <Skeleton className="h-16 w-24" />
@@ -101,7 +104,7 @@ export default function DashboardPage() {
                     </p>
                   )}
                   <p className="font-mono text-xs text-amber-700 mt-2">
-                    CONFIGURED
+                    {t("configured")}
                   </p>
                 </div>
                 <div className="w-12 h-12 rounded-cf-sm bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
@@ -117,13 +120,13 @@ export default function DashboardPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="font-mono text-xs uppercase tracking-wider text-amber-700 mb-2">
-                    SYS STATUS
+                    {t("sysStatus")}
                   </p>
                   <p className="font-display text-5xl text-status-success cf-glow-text">
                     OK
                   </p>
                   <p className="font-mono text-xs text-status-success mt-2">
-                    ALL SYSTEMS NOMINAL
+                    {t("allSystemsNominal")}
                   </p>
                 </div>
                 <div className="w-12 h-12 rounded-cf-sm bg-status-success/10 border border-status-success/30 flex items-center justify-center">
@@ -138,7 +141,7 @@ export default function DashboardPage() {
         <div className="space-y-4">
           <div className="flex items-center gap-2 font-mono text-xs text-amber-700">
             <Zap className="w-4 h-4" />
-            <span>QUICK ACTIONS</span>
+            <span>{t("quickActions").toUpperCase()}</span>
           </div>
 
           <div className="space-y-2">
@@ -151,10 +154,10 @@ export default function DashboardPage() {
                     </div>
                     <div>
                       <p className="font-mono text-sm text-amber-500">
-                        MANAGE API KEYS
+                        {t("manageApiKeys").toUpperCase()}
                       </p>
                       <p className="font-sans text-xs text-amber-700">
-                        Create, edit or revoke client access keys
+                        {t("manageApiKeysDesc")}
                       </p>
                     </div>
                   </div>
@@ -172,10 +175,10 @@ export default function DashboardPage() {
                     </div>
                     <div>
                       <p className="font-mono text-sm text-amber-500">
-                        CONFIGURE UPSTREAMS
+                        {t("configureUpstreams").toUpperCase()}
                       </p>
                       <p className="font-sans text-xs text-amber-700">
-                        Add or modify AI service providers
+                        {t("configureUpstreamsDesc")}
                       </p>
                     </div>
                   </div>
@@ -189,12 +192,12 @@ export default function DashboardPage() {
         {/* System Log Footer */}
         <div className="mt-8 p-4 rounded-cf-sm bg-surface-200 border border-divider font-mono text-xs">
           <div className="flex items-center gap-3 text-amber-700">
-            <span className="text-status-success">[OK]</span>
-            <span>System initialized successfully</span>
+            <span className="text-status-success">[{tCommon("sysOk").split("::")[0]}]</span>
+            <span>{t("systemInitialized")}</span>
           </div>
           <div className="flex items-center gap-3 text-amber-700 mt-1">
-            <span className="text-status-success">[OK]</span>
-            <span>All services online</span>
+            <span className="text-status-success">[{tCommon("sysOk").split("::")[0]}]</span>
+            <span>{t("allServicesOnline")}</span>
           </div>
         </div>
       </div>

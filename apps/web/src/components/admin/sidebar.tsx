@@ -1,20 +1,9 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
+import { Link, usePathname } from "@/i18n/navigation";
 import { LayoutDashboard, Key, Server } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const navigation = [
-  {
-    name: "Dashboard",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-    label: "DASHBOARD",
-  },
-  { name: "Keys", href: "/keys", icon: Key, label: "API KEYS" },
-  { name: "Upstreams", href: "/upstreams", icon: Server, label: "UPSTREAMS" },
-];
 
 /**
  * Cassette Futurism Sidebar Navigation
@@ -26,6 +15,18 @@ const navigation = [
  */
 export function Sidebar() {
   const pathname = usePathname();
+  const t = useTranslations("nav");
+  const tCommon = useTranslations("common");
+
+  const navigation = [
+    {
+      href: "/dashboard",
+      icon: LayoutDashboard,
+      labelKey: "dashboard" as const,
+    },
+    { href: "/keys", icon: Key, labelKey: "apiKeys" as const },
+    { href: "/upstreams", icon: Server, labelKey: "upstreams" as const },
+  ];
 
   return (
     <aside
@@ -53,10 +54,10 @@ export function Sidebar() {
         </div>
         <div className="hidden lg:flex flex-col flex-1 min-w-0">
           <span className="font-mono text-sm font-medium text-amber-500 tracking-wide truncate cf-glow-text">
-            AUTOROUTER
+            {tCommon("appName").toUpperCase()}
           </span>
           <span className="font-mono text-xs text-amber-700 truncate">
-            ADMIN v1.0
+            ADMIN {tCommon("version")}
           </span>
         </div>
       </div>
@@ -65,6 +66,7 @@ export function Sidebar() {
       <nav className="flex-1 py-4 space-y-1" aria-label="Main menu">
         {navigation.map((item) => {
           const Icon = item.icon;
+          const label = t(item.labelKey).toUpperCase();
           const isActive =
             pathname === item.href ||
             (item.href !== "/" && pathname?.startsWith(item.href + "/"));
@@ -83,10 +85,10 @@ export function Sidebar() {
                   : "text-amber-700 hover:bg-surface-400 hover:text-amber-500 hover:border-l-amber-700"
               )}
               aria-current={isActive ? "page" : undefined}
-              title={item.label}
+              title={label}
             >
               <Icon className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
-              <span className="hidden lg:inline flex-1">{item.label}</span>
+              <span className="hidden lg:inline flex-1">{label}</span>
             </Link>
           );
         })}
@@ -95,7 +97,7 @@ export function Sidebar() {
       {/* Version Info */}
       <div className="px-3 py-4 border-t border-divider-subtle">
         <p className="font-mono text-xs text-amber-700 text-center lg:text-left">
-          SYS::OK
+          {tCommon("sysOk")}
         </p>
       </div>
     </aside>

@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Plus } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -36,16 +37,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCreateUpstream, useUpdateUpstream } from "@/hooks/use-upstreams";
 import type { Upstream } from "@/types/api";
 
-const upstreamFormSchema = z.object({
-  name: z.string().min(1, "请输入名称").max(100, "名称不能超过 100 个字符"),
-  provider: z.string().min(1, "请选择 Provider"),
-  base_url: z.string().url("请输入有效的 URL"),
-  api_key: z.string().min(1, "请输入 API Key"),
-  description: z.string().max(500, "描述不能超过 500 个字符").optional(),
-});
-
-type UpstreamForm = z.infer<typeof upstreamFormSchema>;
-
 interface UpstreamFormDialogProps {
   upstream?: Upstream | null;
   open: boolean;
@@ -65,6 +56,18 @@ export function UpstreamFormDialog({
   const isEdit = !!upstream;
   const createMutation = useCreateUpstream();
   const updateMutation = useUpdateUpstream();
+  const t = useTranslations("upstreams");
+  const tCommon = useTranslations("common");
+
+  const upstreamFormSchema = z.object({
+    name: z.string().min(1, t("upstreamNameRequired")).max(100),
+    provider: z.string().min(1, t("providerRequired")),
+    base_url: z.string().url(t("baseUrlRequired")),
+    api_key: z.string().min(1, t("apiKeyRequired")),
+    description: z.string().max(500).optional(),
+  });
+
+  type UpstreamForm = z.infer<typeof upstreamFormSchema>;
 
   const form = useForm<UpstreamForm>({
     resolver: zodResolver(upstreamFormSchema),
@@ -131,12 +134,10 @@ export function UpstreamFormDialog({
     <DialogContent className="max-w-2xl">
       <DialogHeader>
         <DialogTitle>
-          {isEdit ? "编辑 Upstream" : "添加新的 Upstream"}
+          {isEdit ? t("editUpstreamTitle") : t("createUpstreamTitle")}
         </DialogTitle>
         <DialogDescription>
-          {isEdit
-            ? "修改上游 AI 服务的配置信息"
-            : "配置一个新的上游 AI 服务提供商"}
+          {t("createUpstreamDesc")}
         </DialogDescription>
       </DialogHeader>
 
@@ -147,9 +148,9 @@ export function UpstreamFormDialog({
             name="name"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>名称 *</FormLabel>
+                <FormLabel>{t("upstreamName")} *</FormLabel>
                 <FormControl>
-                  <Input placeholder="例如：OpenAI GPT-4" {...field} />
+                  <Input placeholder={t("upstreamNamePlaceholder")} {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -161,11 +162,11 @@ export function UpstreamFormDialog({
             name="provider"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Provider *</FormLabel>
+                <FormLabel>{t("provider")} *</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="选择 Provider" />
+                      <SelectValue placeholder={t("providerPlaceholder")} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
@@ -175,7 +176,6 @@ export function UpstreamFormDialog({
                     <SelectItem value="gemini">Google Gemini</SelectItem>
                   </SelectContent>
                 </Select>
-                <FormDescription>选择上游服务提供商类型</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -186,15 +186,14 @@ export function UpstreamFormDialog({
             name="base_url"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Base URL *</FormLabel>
+                <FormLabel>{t("baseUrl")} *</FormLabel>
                 <FormControl>
                   <Input
                     type="url"
-                    placeholder="https://api.openai.com/v1"
+                    placeholder={t("baseUrlPlaceholder")}
                     {...field}
                   />
                 </FormControl>
-                <FormDescription>上游服务的 API 基础地址</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -205,22 +204,16 @@ export function UpstreamFormDialog({
             name="api_key"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>API Key *</FormLabel>
+                <FormLabel>{t("apiKey")} *</FormLabel>
                 <FormControl>
                   <Input
                     type="password"
-                    placeholder={
-                      isEdit
-                        ? "输入新的 API Key（留空则保持不变）"
-                        : "输入上游服务的 API Key"
-                    }
+                    placeholder={t("apiKeyPlaceholder")}
                     {...field}
                   />
                 </FormControl>
                 <FormDescription>
-                  {isEdit
-                    ? "留空则保持原有 API Key 不变"
-                    : "用于访问上游服务的认证密钥"}
+                  {isEdit ? t("apiKeyEditHint") : undefined}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -232,10 +225,10 @@ export function UpstreamFormDialog({
             name="description"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>描述</FormLabel>
+                <FormLabel>{t("upstreamDescription")}</FormLabel>
                 <FormControl>
                   <Textarea
-                    placeholder="简要描述此 Upstream 的用途..."
+                    placeholder={t("upstreamDescriptionPlaceholder")}
                     rows={3}
                     {...field}
                   />
@@ -251,7 +244,7 @@ export function UpstreamFormDialog({
               variant="outline"
               onClick={() => onOpenChange(false)}
             >
-              取消
+              {tCommon("cancel")}
             </Button>
             <Button
               type="submit"
@@ -259,11 +252,11 @@ export function UpstreamFormDialog({
             >
               {createMutation.isPending || updateMutation.isPending
                 ? isEdit
-                  ? "保存中..."
-                  : "创建中..."
+                  ? t("updating")
+                  : t("creating")
                 : isEdit
-                  ? "保存"
-                  : "创建"}
+                  ? tCommon("save")
+                  : tCommon("create")}
             </Button>
           </DialogFooter>
         </form>
@@ -291,6 +284,8 @@ export function UpstreamFormDialog({
  * M3 Create Upstream Button with Dialog
  */
 export function CreateUpstreamButton() {
+  const t = useTranslations("upstreams");
+
   return (
     <UpstreamFormDialog
       open={false}
@@ -298,7 +293,7 @@ export function CreateUpstreamButton() {
       trigger={
         <Button variant="tonal">
           <Plus className="h-4 w-4 mr-2" />
-          添加 Upstream
+          {t("addUpstream")}
         </Button>
       }
     />

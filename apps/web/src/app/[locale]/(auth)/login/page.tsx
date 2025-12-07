@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { useAuth } from "@/providers/auth-provider";
 import { createApiClient } from "@/lib/api";
+import { useRouter } from "@/i18n/navigation";
 import { ArrowRight, KeyRound, Zap, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 /**
  * Cassette Futurism Login Page
@@ -26,6 +29,9 @@ export default function LoginPage() {
   const [inputValue, setInputValue] = useState("");
   const [error, setError] = useState("");
 
+  const t = useTranslations("auth");
+  const tCommon = useTranslations("common");
+
   useEffect(() => {
     if (token) {
       const redirect = searchParams.get("redirect") || "/dashboard";
@@ -37,7 +43,7 @@ export default function LoginPage() {
     e.preventDefault();
 
     if (!inputValue.trim()) {
-      setError("请输入 Admin Token");
+      setError(t("tokenPlaceholder"));
       return;
     }
 
@@ -48,15 +54,15 @@ export default function LoginPage() {
       const tempClient = createApiClient({ getToken: () => inputValue });
       await tempClient.get("/admin/keys?page=1&page_size=1");
       setToken(inputValue);
-      toast.success("登录成功");
+      toast.success(t("loginSuccess"));
       const redirect = searchParams.get("redirect") || "/dashboard";
       router.push(redirect);
     } catch {
       if (typeof window !== "undefined") {
         sessionStorage.removeItem("admin_token");
       }
-      setError("Admin Token 无效，请检查后重试");
-      toast.error("Admin Token 无效，请检查后重试");
+      setError(t("invalidToken"));
+      toast.error(t("invalidToken"));
     } finally {
       setIsLoading(false);
     }
@@ -69,6 +75,11 @@ export default function LoginPage() {
       {/* CRT Scanlines overlay */}
       <div className="cf-scanlines fixed inset-0 pointer-events-none" />
 
+      {/* Language Switcher - Top Right */}
+      <div className="fixed top-4 right-4 z-20">
+        <LanguageSwitcher />
+      </div>
+
       <div className="w-full max-w-sm relative z-10">
         {/* Terminal Window */}
         <div className="cf-panel bg-black-900/80 backdrop-blur-xs rounded-cf-md border-2 border-amber-500/80 shadow-cf-glow overflow-hidden">
@@ -80,7 +91,7 @@ export default function LoginPage() {
               <div className="w-3 h-3 rounded-full bg-status-success" />
             </div>
             <span className="flex-1 text-center font-mono text-xs text-amber-700 tracking-wider">
-              AUTOROUTER TERMINAL v1.0
+              {t("terminalTitle")}
             </span>
           </div>
 
@@ -97,10 +108,10 @@ export default function LoginPage() {
               </div>
               <div>
                 <h1 className="font-mono text-lg font-medium text-amber-500 tracking-wide cf-glow-text">
-                  AUTOROUTER
+                  {t("title")}
                 </h1>
                 <p className="font-mono text-xs text-amber-700">
-                  ADMIN CONSOLE
+                  {t("subtitle").toUpperCase()}
                 </p>
               </div>
             </div>
@@ -109,10 +120,10 @@ export default function LoginPage() {
             <div className="mb-6 font-mono text-sm">
               <div className="flex items-center gap-2 text-amber-700 mb-1">
                 <Terminal className="w-4 h-4" aria-hidden="true" />
-                <span>SYSTEM MESSAGE</span>
+                <span>{t("systemMessage").toUpperCase()}</span>
               </div>
               <p className="text-amber-500 pl-6">
-                {">"} 身份验证需要 Admin Token
+                {">"} {t("authRequired")}
                 <span className="cf-cursor-blink">_</span>
               </p>
             </div>
@@ -124,7 +135,7 @@ export default function LoginPage() {
                   htmlFor="admin-token"
                   className="block font-mono text-xs uppercase tracking-wider text-amber-700 mb-2"
                 >
-                  ADMIN TOKEN
+                  {t("adminToken")}
                 </label>
                 <div className="relative">
                   <KeyRound
@@ -134,7 +145,7 @@ export default function LoginPage() {
                   <Input
                     id="admin-token"
                     type="password"
-                    placeholder="输入您的 Admin Token"
+                    placeholder={t("tokenPlaceholder")}
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     disabled={isLoading}
@@ -164,11 +175,11 @@ export default function LoginPage() {
                 {isLoading ? (
                   <>
                     <div className="w-4 h-4 border-2 border-black-900/30 border-t-black-900 rounded-full animate-spin" />
-                    AUTHENTICATING...
+                    {tCommon("loading")}
                   </>
                 ) : (
                   <>
-                    LOGIN
+                    {t("loginButton")}
                     <ArrowRight className="w-4 h-4" aria-hidden="true" />
                   </>
                 )}
@@ -178,8 +189,7 @@ export default function LoginPage() {
             {/* Help Text */}
             <div className="mt-6 pt-4 border-t border-dashed border-divider">
               <p className="font-mono text-xs text-amber-700">
-                <span className="text-amber-500">[INFO]</span> Admin Token
-                由系统管理员在服务端配置时生成。
+                <span className="text-amber-500">[INFO]</span> {t("tokenInfo")}
               </p>
             </div>
           </div>
@@ -187,8 +197,8 @@ export default function LoginPage() {
           {/* Terminal Footer */}
           <div className="px-4 py-2 bg-black-900 border-t border-amber-500/50">
             <div className="flex items-center justify-between font-mono text-xs text-amber-700">
-              <span>SYS::READY</span>
-              <span className="text-status-success">ONLINE</span>
+              <span>{tCommon("sysReady")}</span>
+              <span className="text-status-success">{tCommon("online").toUpperCase()}</span>
             </div>
           </div>
         </div>

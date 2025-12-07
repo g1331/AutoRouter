@@ -1,6 +1,7 @@
 "use client";
 
 import { LogOut } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -9,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/providers/auth-provider";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 interface TopbarProps {
   title: string;
@@ -24,6 +26,8 @@ interface TopbarProps {
  */
 export function Topbar({ title }: TopbarProps) {
   const { logout } = useAuth();
+  const t = useTranslations("common");
+  const tNav = useTranslations("nav");
 
   return (
     <header className="cf-scanlines sticky top-0 z-20 w-full bg-surface-200/95 backdrop-blur-sm border-b-2 border-amber-500">
@@ -42,9 +46,12 @@ export function Topbar({ title }: TopbarProps) {
         <div className="flex items-center gap-4">
           {/* Status Indicator */}
           <div className="hidden sm:flex items-center gap-2 font-mono text-xs">
-            <span className="text-amber-700">STATUS:</span>
-            <span className="text-status-success">ONLINE</span>
+            <span className="text-amber-700">{t("status").toUpperCase()}:</span>
+            <span className="text-status-success">{t("online").toUpperCase()}</span>
           </div>
+
+          {/* Language Switcher */}
+          <LanguageSwitcher />
 
           {/* User Menu */}
           <DropdownMenu>
@@ -71,7 +78,7 @@ export function Topbar({ title }: TopbarProps) {
                 className="gap-2 cursor-pointer text-status-error focus:text-status-error focus:bg-status-error-muted"
               >
                 <LogOut className="h-4 w-4" aria-hidden="true" />
-                <span className="font-mono text-xs">LOGOUT</span>
+                <span className="font-mono text-xs">{tNav("logout").toUpperCase()}</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

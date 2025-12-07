@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,6 +29,8 @@ export function RevokeKeyDialog({
   onClose,
 }: RevokeKeyDialogProps) {
   const revokeMutation = useRevokeAPIKey();
+  const t = useTranslations("keys");
+  const tCommon = useTranslations("common");
 
   const handleRevoke = async () => {
     if (!apiKey) return;
@@ -50,10 +53,10 @@ export function RevokeKeyDialog({
             <div className="w-10 h-10 rounded-[var(--shape-corner-medium)] bg-[rgb(var(--md-sys-color-error-container))] flex items-center justify-center">
               <AlertTriangle className="h-5 w-5 text-[rgb(var(--md-sys-color-on-error-container))]" />
             </div>
-            撤销 API Key
+            {t("revokeKeyTitle")}
           </DialogTitle>
           <DialogDescription>
-            此操作无法撤销，确定要撤销以下 API Key 吗？
+            {t("revokeKeyDesc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -62,7 +65,7 @@ export function RevokeKeyDialog({
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="type-label-large text-[rgb(var(--md-sys-color-on-error-container))]">
-                  名称：
+                  {tCommon("name")}:
                 </span>
                 <span className="type-body-medium text-[rgb(var(--md-sys-color-on-error-container))]">
                   {apiKey.name}
@@ -70,7 +73,7 @@ export function RevokeKeyDialog({
               </div>
               <div className="flex justify-between">
                 <span className="type-label-large text-[rgb(var(--md-sys-color-on-error-container))]">
-                  Key 前缀：
+                  {t("tableKeyPrefix")}:
                 </span>
                 <code className="type-body-medium font-mono text-[rgb(var(--md-sys-color-on-error-container))]">
                   {apiKey.key_prefix}
@@ -79,7 +82,7 @@ export function RevokeKeyDialog({
               {apiKey.description && (
                 <div className="flex justify-between">
                   <span className="type-label-large text-[rgb(var(--md-sys-color-on-error-container))]">
-                    描述：
+                    {tCommon("description")}:
                   </span>
                   <span className="type-body-medium text-[rgb(var(--md-sys-color-on-error-container))] max-w-xs text-right truncate">
                     {apiKey.description}
@@ -92,7 +95,7 @@ export function RevokeKeyDialog({
           <div className="flex items-start gap-3 bg-[rgb(var(--md-sys-color-warning-container))] rounded-[var(--shape-corner-medium)] p-3">
             <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5 text-[rgb(var(--md-sys-color-on-warning-container))]" />
             <p className="type-body-small text-[rgb(var(--md-sys-color-on-warning-container))]">
-              撤销后，使用此 Key 的所有客户端将立即失去访问权限
+              {t("revokeKeyWarning")}
             </p>
           </div>
         </div>
@@ -103,14 +106,14 @@ export function RevokeKeyDialog({
             onClick={onClose}
             disabled={revokeMutation.isPending}
           >
-            取消
+            {tCommon("cancel")}
           </Button>
           <Button
             variant="destructive"
             onClick={handleRevoke}
             disabled={revokeMutation.isPending}
           >
-            {revokeMutation.isPending ? "撤销中..." : "确认撤销"}
+            {revokeMutation.isPending ? t("revoking") : t("revoke")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname } from "@/i18n/navigation";
 import { useAuth } from "@/providers/auth-provider";
 import { Sidebar } from "@/components/admin/sidebar";
 
