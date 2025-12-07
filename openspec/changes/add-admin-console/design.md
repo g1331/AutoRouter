@@ -358,6 +358,29 @@ API Client 检测到 401
 
 无需数据迁移，纯新增功能。
 
+## UI Theme: Cassette Futurism
+
+**更新于 2025-12-07**: UI 设计风格已从 Material Design 3 更换为 Cassette Futurism（磁带未来主义）。
+
+### 设计理念
+
+灵感来自 1980-90 年代科幻作品中的终端界面（《银翼杀手》《异形》《2001 太空漫游》）：
+
+- **主色调**：琥珀色 (#FFBF00) - 复古 CRT 显示器风格
+- **背景色**：深黑色 (#0A0A0A) - 高对比度
+- **字体**：JetBrains Mono (代码)、VT323 (数字)、Inter (正文)
+- **效果**：边框发光、扫描线、噪点纹理
+
+### 设计 Tokens
+
+详见 `apps/web/docs/tokens.md`
+
+### 无障碍性
+
+- 所有动画尊重 `prefers-reduced-motion`
+- 所有交互元素有 `focus-visible` 焦点环
+- 高对比度模式支持 `prefers-contrast: more`
+
 ## Future Enhancements（Phase 2）
 
 1. **请求日志查看**：

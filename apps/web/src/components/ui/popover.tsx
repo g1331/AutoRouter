@@ -12,7 +12,9 @@ const PopoverTrigger = PopoverPrimitive.Trigger;
 const PopoverAnchor = PopoverPrimitive.Anchor;
 
 /**
- * M3 Popover Content
+ * Cassette Futurism Popover Content
+ *
+ * Terminal-style popover with amber border and glow effect.
  */
 const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
@@ -24,8 +26,21 @@ const PopoverContent = React.forwardRef<
       align={align}
       sideOffset={sideOffset}
       className={cn(
-        "z-50 w-72 rounded-[var(--shape-corner-medium)] bg-[rgb(var(--md-sys-color-surface-container))] p-4 text-[rgb(var(--md-sys-color-on-surface))] shadow-[var(--md-elevation-2)] outline-none",
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[--radix-popover-content-transform-origin]",
+        // Layout
+        "z-50 w-72 p-4",
+        // Cassette Futurism styling
+        "rounded-cf-sm border-2 border-amber-500 bg-surface-300",
+        "shadow-cf-glow-subtle",
+        "font-mono text-sm text-amber-500",
+        // Animations
+        "data-[state=open]:animate-in data-[state=closed]:animate-out",
+        "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+        "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+        "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2",
+        "data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        "origin-[--radix-popover-content-transform-origin]",
+        // Focus
+        "outline-none focus:outline-none",
         className
       )}
       {...props}

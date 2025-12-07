@@ -29,7 +29,8 @@ const SelectTrigger = React.forwardRef<
       "transition-all duration-cf-normal ease-cf-standard",
       "data-[placeholder]:text-amber-700",
       "hover:shadow-cf-glow-subtle",
-      "focus:outline-none focus:shadow-cf-glow-subtle",
+      "focus:outline-none focus:shadow-cf-glow-subtle focus:border-amber-400",
+      "focus-visible:ring-cf focus-visible:ring-amber-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface-100",
       "disabled:cursor-not-allowed disabled:bg-disabled-bg disabled:text-disabled-text disabled:border-disabled-border",
       "[&>span]:line-clamp-1",
       className
@@ -153,7 +154,7 @@ const SelectItem = React.forwardRef<
       "rounded-cf-sm py-3 pl-4 pr-10",
       "font-mono text-sm text-amber-500 outline-none",
       "transition-colors duration-cf-fast ease-cf-standard",
-      "focus:bg-surface-400",
+      "focus:bg-surface-400 focus:shadow-cf-glow-subtle",
       "data-[disabled]:pointer-events-none data-[disabled]:text-disabled-text",
       className
     )}

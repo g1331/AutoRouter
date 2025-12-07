@@ -163,9 +163,14 @@ const config: Config = {
           "0%": { transform: "translateX(-100%)" },
           "100%": { transform: "translateX(100%)" },
         },
+        scanline: {
+          "0%": { transform: "translateY(-100%)" },
+          "100%": { transform: "translateY(100%)" },
+        },
       },
       animation: {
         shimmer: "shimmer 2s infinite",
+        scanline: "scanline 1.5s ease-in-out infinite",
       },
     },
   },
