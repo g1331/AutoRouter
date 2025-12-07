@@ -29,6 +29,7 @@ dist/
 # Env
 .env
 .env.*
+!.env.example
 
 # Mac/Win
 .DS_Store
