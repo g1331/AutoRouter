@@ -65,13 +65,13 @@ export default function LoginPage() {
   if (token) return null;
 
   return (
-    <div className="cf-noise min-h-screen flex items-center justify-center p-6 bg-black-900">
+    <div className="cf-noise min-h-screen grid place-items-center px-6 py-12 bg-black-900">
       {/* CRT Scanlines overlay */}
       <div className="cf-scanlines fixed inset-0 pointer-events-none" />
 
       <div className="w-full max-w-sm relative z-10">
         {/* Terminal Window */}
-        <div className="cf-panel bg-surface-200 rounded-cf-md border-2 border-amber-500 shadow-cf-glow overflow-hidden">
+        <div className="cf-panel bg-black-900/80 backdrop-blur-xs rounded-cf-md border-2 border-amber-500/80 shadow-cf-glow overflow-hidden">
           {/* Terminal Header */}
           <div className="flex items-center gap-2 px-4 py-3 bg-black-900 border-b border-amber-500/50">
             <div className="flex gap-1.5">

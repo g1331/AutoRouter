@@ -6,9 +6,8 @@
  * References: Blade Runner, Alien, 2001: A Space Odyssey
  */
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../../tailwind.config.ts";
 
 /* ============================================
    CSS Variables - Cassette Futurism Tokens

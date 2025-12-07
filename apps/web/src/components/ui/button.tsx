@@ -22,7 +22,7 @@ const buttonVariants = cva(
     "focus-visible:outline-none focus-visible:ring-cf focus-visible:ring-amber-500",
     "focus-visible:ring-offset-cf focus-visible:ring-offset-black-900",
     "disabled:pointer-events-none disabled:cursor-not-allowed",
-    "disabled:bg-disabled-bg disabled:text-disabled-text disabled:border-disabled-border",
+    "disabled:bg-amber-700/30 disabled:text-amber-100/60 disabled:border-amber-700/50",
     "disabled:shadow-none disabled:hover:shadow-none",
     "[&_svg]:pointer-events-none [&_svg]:size-[18px] [&_svg]:shrink-0",
   ].join(" "),
@@ -30,17 +30,17 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-amber-500 text-black-900 border-amber-500 hover:shadow-cf-glow-subtle active:bg-amber-600",
+          "bg-amber-500 text-black-900 border-amber-500 hover:bg-amber-400 hover:shadow-cf-glow-subtle active:bg-amber-600",
         primary:
-          "bg-amber-500 text-black-900 border-amber-500 hover:shadow-cf-glow-subtle active:bg-amber-600",
+          "bg-amber-500 text-black-900 border-amber-500 hover:bg-amber-400 hover:shadow-cf-glow-subtle active:bg-amber-600",
         secondary:
-          "bg-transparent text-amber-500 border-amber-500 hover:bg-surface-400 hover:shadow-cf-glow-subtle active:bg-surface-500",
+          "bg-black-900/60 text-amber-400 border-amber-400 hover:bg-black-900/70 hover:border-amber-300 hover:text-amber-300 active:bg-black-900",
         outline:
-          "bg-transparent text-amber-500 border-amber-500 hover:bg-surface-400 hover:shadow-cf-glow-subtle active:bg-surface-500",
+          "bg-transparent text-amber-400 border-amber-400 hover:bg-black-900/60 hover:text-amber-300 hover:border-amber-300 active:bg-black-900/70",
         tonal:
-          "bg-surface-400 text-amber-500 border-surface-400 hover:border-amber-500 hover:shadow-cf-glow-subtle active:bg-surface-500",
+          "bg-black-900/50 text-amber-300 border-amber-500/40 hover:bg-black-900/60 hover:border-amber-300 active:bg-black-900/70",
         ghost:
-          "bg-transparent text-amber-500 border-transparent hover:bg-surface-400 hover:shadow-cf-glow-subtle active:bg-surface-500",
+          "bg-transparent text-amber-400 border-transparent hover:bg-black-900/50 hover:text-amber-300 active:text-amber-200",
         destructive:
           "bg-status-error text-black-900 border-status-error hover:shadow-cf-glow-error active:brightness-90",
         danger:
