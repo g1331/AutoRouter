@@ -71,7 +71,7 @@ export default function DashboardPage() {
                     {t("apiKeysCount")}
                   </p>
                   {keysLoading ? (
-                    <Skeleton className="h-16 w-24" />
+                    <Skeleton variant="counter" placeholder="---" />
                   ) : (
                     <p className="font-display text-5xl text-amber-500 cf-glow-text">
                       {String(keyCount).padStart(3, "0")}
@@ -97,7 +97,7 @@ export default function DashboardPage() {
                     {t("upstreamsCount")}
                   </p>
                   {upstreamsLoading ? (
-                    <Skeleton className="h-16 w-24" />
+                    <Skeleton variant="counter" placeholder="---" />
                   ) : (
                     <p className="font-display text-5xl text-amber-500 cf-glow-text">
                       {String(upstreamCount).padStart(3, "0")}
