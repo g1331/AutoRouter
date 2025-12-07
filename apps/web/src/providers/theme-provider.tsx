@@ -4,16 +4,16 @@ import { ThemeProvider as NextThemesProvider } from "next-themes";
 import type { ThemeProviderProps } from "next-themes";
 
 /**
- * Material You Theme Provider
- * Wraps the app with next-themes for dark mode support
+ * Cassette Futurism Theme Provider
+ * Wraps the app with next-themes for light/dark mode support
+ * with CRT-style switching animation
  */
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   return (
     <NextThemesProvider
       attribute="class"
-      defaultTheme="system"
+      defaultTheme="dark"
       enableSystem
-      disableTransitionOnChange
       {...props}
     >
       {children}

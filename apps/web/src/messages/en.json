@@ -176,5 +176,11 @@
   "language": {
     "switch": "Switch Language",
     "current": "Current Language"
+  },
+  "theme": {
+    "toggle": "Toggle Theme",
+    "light": "Light Mode",
+    "dark": "Dark Mode",
+    "system": "System"
   }
 }

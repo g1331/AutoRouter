@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/providers/auth-provider";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 interface TopbarProps {
   title: string;
@@ -52,6 +53,9 @@ export function Topbar({ title }: TopbarProps) {
 
           {/* Language Switcher */}
           <LanguageSwitcher />
+
+          {/* Theme Toggle */}
+          <ThemeToggle />
 
           {/* User Menu */}
           <DropdownMenu>

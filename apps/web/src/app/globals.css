@@ -132,6 +132,205 @@
 }
 
 /* ============================================
+   Light Theme - Vintage Paper CRT Mode
+   ============================================ */
+
+.light {
+  color-scheme: light;
+
+  /* === Amber Scale (Primary) - Darkened for WCAG 4.5:1 contrast on light backgrounds === */
+  --cf-amber-50: #FFF2D6;
+  --cf-amber-100: #FFE8B8;
+  --cf-amber-200: #FFDD9C;
+  --cf-amber-300: #E8A800;
+  --cf-amber-400: #C99200;
+  --cf-amber-500: #8B5A00;  /* Darkened from #D69500 for ~6.5:1 contrast ratio */
+  --cf-amber-600: #7A4E00;
+  --cf-amber-700: #684200;
+  --cf-amber-800: #573700;
+  --cf-amber-900: #462C00;
+
+  /* === Paper / Surface Scale (Sepia-tinted) === */
+  --cf-black-900: #FDF8EF;
+  --cf-black-800: #F5EDE0;
+  --cf-black-700: #EBE2D3;
+  --cf-black-600: #DFD4C3;
+  --cf-black-500: #D1C5B2;
+
+  --cf-surface-100: #FDF8EF;
+  --cf-surface-200: #F8F1E5;
+  --cf-surface-300: #F0E8D8;
+  --cf-surface-400: #E5DAC6;
+  --cf-surface-500: #D8CCB5;
+  --cf-surface-600: #C9BC9F;
+
+  /* === Status Colors (Contrast-adjusted for light bg) === */
+  --cf-status-success: #0D7A35;
+  --cf-status-success-muted: rgba(13, 122, 53, 0.15);
+  --cf-status-warning: #B86E00;
+  --cf-status-warning-muted: rgba(184, 110, 0, 0.15);
+  --cf-status-error: #C41E1E;
+  --cf-status-error-muted: rgba(196, 30, 30, 0.15);
+  --cf-status-info: #0A6499;
+  --cf-status-info-muted: rgba(10, 100, 153, 0.15);
+
+  /* === Functional Tokens === */
+  --cf-disabled-bg: #F0E8D8;
+  --cf-disabled-text: #8A7A5A;
+  --cf-disabled-border: #DDD0B8;
+  --cf-divider: #D8C9AC;
+  --cf-divider-subtle: #E8DCC6;
+  --cf-overlay: rgba(253, 248, 239, 0.85);
+  --cf-overlay-light: rgba(253, 248, 239, 0.6);
+
+  /* === Focus States (Using darker amber for light mode) === */
+  --cf-focus-ring: #8B5A00;
+  --cf-focus-glow: 0 0 0 3px rgba(139, 90, 0, 0.3);
+
+  /* === Glow Effects (Using darker amber for light mode) === */
+  --cf-glow-subtle: 0 0 4px rgba(139, 90, 0, 0.4);
+  --cf-glow-medium: 0 0 8px rgba(139, 90, 0, 0.5);
+  --cf-glow-strong: 0 0 12px rgba(139, 90, 0, 0.6), 0 0 24px rgba(139, 90, 0, 0.25);
+
+  /* === Shadcn/ui Compatibility Mappings === */
+  --background: var(--cf-surface-100);
+  --foreground: #2A1F0A;
+  --card: var(--cf-surface-200);
+  --card-foreground: #2A1F0A;
+  --popover: var(--cf-surface-200);
+  --popover-foreground: #2A1F0A;
+  --primary: var(--cf-amber-500);
+  --primary-foreground: #FFFAF0;
+  --secondary: var(--cf-surface-400);
+  --secondary-foreground: #3D2E12;
+  --muted: var(--cf-surface-400);
+  --muted-foreground: #6B5A3A;
+  --accent: var(--cf-amber-600);
+  --accent-foreground: #FFFAF0;
+  --destructive: var(--cf-status-error);
+  --destructive-foreground: #FFFAF0;
+  --border: var(--cf-divider);
+  --input: rgba(42, 31, 10, 0.2);
+  --ring: var(--cf-focus-ring);
+
+  /* Sidebar compatibility */
+  --sidebar: var(--cf-surface-200);
+  --sidebar-foreground: #2A1F0A;
+  --sidebar-primary: var(--cf-amber-500);
+  --sidebar-primary-foreground: #FFFAF0;
+  --sidebar-accent: var(--cf-surface-300);
+  --sidebar-accent-foreground: #2A1F0A;
+  --sidebar-border: var(--cf-divider);
+  --sidebar-ring: var(--cf-focus-ring);
+}
+
+/* ============================================
+   Theme Switch Animation - CRT Power Cycle
+   ============================================ */
+
+@keyframes cf-theme-flash {
+  0% {
+    opacity: 0.95;
+    filter: blur(3px) brightness(1.4);
+  }
+  30% {
+    opacity: 0.7;
+    filter: blur(1px) brightness(1.2);
+  }
+  60% {
+    opacity: 0.3;
+    filter: blur(0.5px) brightness(1);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(0) brightness(1);
+  }
+}
+
+@keyframes cf-theme-scanline {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes cf-toggle-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px var(--cf-amber-500), inset 0 0 4px rgba(255, 191, 0, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 16px var(--cf-amber-500), inset 0 0 8px rgba(255, 191, 0, 0.4);
+  }
+}
+
+@keyframes cf-toggle-scanline {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(200%);
+  }
+}
+
+/* Theme switch overlay - CRT power cycle effect */
+html.theme-switching::before,
+html.theme-switching::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 99999;
+}
+
+html.theme-switching::before {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(255, 191, 0, 0.4) 0%,
+    rgba(255, 191, 0, 0.2) 30%,
+    rgba(0, 0, 0, 0.6) 100%
+  );
+  animation: cf-theme-flash 500ms ease-out forwards;
+}
+
+html.theme-switching::after {
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    rgba(255, 191, 0, 0.5) 2px,
+    rgba(255, 191, 0, 0.5) 4px
+  );
+  animation: cf-theme-scanline 600ms ease-in-out forwards;
+}
+
+/* Light mode overlay uses darker colors */
+html.light.theme-switching::before {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(214, 149, 0, 0.5) 0%,
+    rgba(214, 149, 0, 0.25) 30%,
+    rgba(253, 248, 239, 0.8) 100%
+  );
+}
+
+html.light.theme-switching::after {
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    rgba(214, 149, 0, 0.6) 2px,
+    rgba(214, 149, 0, 0.6) 4px
+  );
+}
+
+/* ============================================
    Base Styles
    ============================================ */
 
@@ -485,6 +684,12 @@
   .cf-cursor-blink::after {
     animation: none;
     opacity: 1;
+  }
+
+  /* Disable theme switch animation */
+  html.theme-switching::before,
+  html.theme-switching::after {
+    display: none;
   }
 
   *,
