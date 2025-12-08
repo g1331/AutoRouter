@@ -69,11 +69,6 @@ jobs:
           command = "uvx"
           args = ["code-index-mcp"]
 
-          [mcp_servers.codex]
-          command = "uvx"
-          args = ["--from", "git+https://github.com/GuDaStudio/codexmcp.git", "codexmcp"]
-          env = {{ OPENAI_BASE_URL = "{os.environ['CODEX_BASE_URL']}", OPENAI_API_KEY = "{os.environ['CODEX_API_KEY']}" }}
-
           [mcp_servers.auggie-mcp]
           command = "auggie"
           args = ["--mcp"]
