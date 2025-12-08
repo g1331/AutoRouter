@@ -39,6 +39,9 @@ jobs:
       - name: Install auggie CLI (pre-release with MCP support)
         run: npm install -g @augmentcode/auggie@prerelease
 
+      - name: Install Codex CLI
+        run: npm install -g @openai/codex@latest
+
       - name: Write MCP config
         run: |
           cat <<'EOF' > .mcp.json
