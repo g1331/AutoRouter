@@ -99,8 +99,10 @@ jobs:
           EOF
 
       - name: Run Claude Code
-        uses: anthropics/claude-code-action@beta
+        uses: anthropics/claude-code-action@v1
         with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
             你是仓库专属机器人（中文沟通，代码/命令保持原文）。遵循高质量提示最佳实践：目标清晰、步骤化推理、示例/清单输出、允许承认不确定性。
             工作流要求：
@@ -111,20 +113,11 @@ jobs:
             5) 实施与自检：确认后再修改代码，完成后推送/更新 PR，PR 需链接 Issue；在 PR 描述中给出变更摘要、受影响范围、自检清单（含测试/静态检查命令及结果）；@${{ github.event.issue.user.login }} 请求审阅。
             6) PR 迭代：在 PR 评论中被 @ 时，先阅读最新提交和讨论，在同一 PR/分支继续修复，不另开分支；保持清晰的变更日志和自检更新。
             7) 不确定时明确说明缺少哪些信息，不编造；必要时用最小 reproducer 或伪代码说明思路，待确认后再实施。
-          mcp_config: ".mcp.json"
           trigger_phrase: "@autorouter-bot"
-          settings: |
-            { "alwaysThinkingEnabled": true }
-          allowed_tools: |
-            mcp__tavily-remote-mcp
-            mcp__context7
-            mcp__code-index
-            mcp__codex
-            mcp__auggie-mcp
-            mcp__chrome-devtools
-            Edit
-            Replace
-            Bash(git:*,uv:*,npm:*,pnpm:*)
-          claude_args: "--enable-pr true"
+          claude_args: |
+            --enable-pr
+            --mcp-config .mcp.json
+            --allowedTools mcp__tavily-remote-mcp,mcp__context7,mcp__code-index,mcp__codex,mcp__auggie-mcp,mcp__chrome-devtools,Edit,Replace,Bash(git:*,uv:*,npm:*,pnpm:*)
+            --settings '{"alwaysThinkingEnabled":true}'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
