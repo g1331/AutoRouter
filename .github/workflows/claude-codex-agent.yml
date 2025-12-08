@@ -1,0 +1,130 @@
+name: claude-codex-agent
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  handle-issue:
+    if: contains(github.event.comment.body, '@bot')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: read
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+      TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+      CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
+      CODEX_BASE_URL: ${{ secrets.CODEX_BASE_URL }}
+      AUGMENT_API_TOKEN: ${{ secrets.AUGMENT_API_TOKEN }}
+      AUGMENT_API_URL: ${{ secrets.AUGMENT_API_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22 (for auggie / npx MCPs)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install uv (for uvx-based MCPs)
+        run: |
+          python -m pip install --user uv
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install auggie CLI (pre-release with MCP support)
+        run: npm install -g @augmentcode/auggie@prerelease
+
+      - name: Write MCP config
+        run: |
+          cat <<'EOF' > .mcp.json
+          {
+            "mcpServers": {
+              "tavily-remote-mcp": {
+                "type": "http",
+                "url": "https://mcp.tavily.com/mcp/?tavilyApiKey=${TAVILY_API_KEY}"
+              },
+              "context7": {
+                "type": "stdio",
+                "command": "npx",
+                "args": [
+                  "-y",
+                  "@upstash/context7-mcp"
+                ]
+              },
+              "code-index": {
+                "type": "stdio",
+                "command": "uvx",
+                "args": [
+                  "code-index-mcp"
+                ]
+              },
+              "codex": {
+                "type": "stdio",
+                "command": "uvx",
+                "args": [
+                  "--from",
+                  "git+https://github.com/GuDaStudio/codexmcp.git",
+                  "codexmcp"
+                ],
+                "env": {
+                  "OPENAI_BASE_URL": "${CODEX_BASE_URL}",
+                  "OPENAI_API_KEY": "${CODEX_API_KEY}"
+                }
+              },
+              "auggie-mcp": {
+                "type": "stdio",
+                "command": "auggie",
+                "args": [
+                  "--mcp"
+                ],
+                "env": {
+                  "AUGMENT_API_TOKEN": "${AUGMENT_API_TOKEN}",
+                  "AUGMENT_API_URL": "${AUGMENT_API_URL}"
+                }
+              },
+              "chrome-devtools": {
+                "type": "stdio",
+                "command": "npx",
+                "args": [
+                  "chrome-devtools-mcp@latest"
+                ]
+              }
+            }
+          }
+          EOF
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            你是仓库专属机器人（中文沟通，代码/命令保持原文）。遵循高质量提示最佳实践：目标清晰、步骤化推理、示例/清单输出、允许承认不确定性。
+            工作流要求：
+            1) 需求澄清：每次 @bot 触发，先输出「需求摘要」「不确定点」「待确认清单」，格式为有序列表。未获确认前只评论提问，不修改代码。
+            2) Bug 处理：识别为缺陷时，优先调用工具顺序：auggie → code-index → codex（必要时 tavily/context7）。产出三段式说明：「复现路径」「根因定位」「修复方案」，并 @${{ github.event.issue.user.login }} 请求确认。
+            3) 方案迭代：用户要求改方案时，更新三段式说明并再次确认，直到收到明确“可以实施”才进入编码。
+            4) 分支策略：先检测是否已有与该 Issue 关联的工作分支（同号 fix/${{ github.event.issue.number }} 或讨论中提到的分支）；如存在则在原分支继续提交；仅在不存在时创建新分支 fix/${{ github.event.issue.number }}。务必说明当前基点（commit）与本次工作基于的分支头，避免回滚他人改动。
+            5) 实施与自检：确认后再修改代码，完成后推送/更新 PR，PR 需链接 Issue；在 PR 描述中给出变更摘要、受影响范围、自检清单（含测试/静态检查命令及结果）；@${{ github.event.issue.user.login }} 请求审阅。
+            6) PR 迭代：在 PR 评论中被 @ 时，先阅读最新提交和讨论，在同一 PR/分支继续修复，不另开分支；保持清晰的变更日志和自检更新。
+            7) 不确定时明确说明缺少哪些信息，不编造；必要时用最小 reproducer 或伪代码说明思路，待确认后再实施。
+          mcp_config: ".mcp.json"
+          trigger_phrase: "@bot"
+          settings: |
+            { "alwaysThinkingEnabled": true }
+          allowed_tools: |
+            mcp__tavily-remote-mcp
+            mcp__context7
+            mcp__code-index
+            mcp__codex
+            mcp__auggie-mcp
+            mcp__chrome-devtools
+            Edit
+            Replace
+            Bash(git:*,uv:*,npm:*,pnpm:*)
+          claude_args: "--enable-pr true"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
