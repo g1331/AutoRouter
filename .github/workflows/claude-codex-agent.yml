@@ -42,6 +42,53 @@ jobs:
       - name: Install Codex CLI
         run: npm install -g @openai/codex@latest
 
+      - name: Configure Codex MCP servers
+        env:
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          CODEX_BASE_URL: ${{ secrets.CODEX_BASE_URL }}
+          CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
+          AUGMENT_API_TOKEN: ${{ secrets.AUGMENT_API_TOKEN }}
+          AUGMENT_API_URL: ${{ secrets.AUGMENT_API_URL }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          config = f"""
+          [features]
+          rmcp_client = true
+
+          [mcp_servers.tavily-remote-mcp]
+          url = "https://mcp.tavily.com/mcp/?tavilyApiKey={os.environ['TAVILY_API_KEY']}"
+
+          [mcp_servers.context7]
+          command = "npx"
+          args = ["-y", "@upstash/context7-mcp"]
+
+          [mcp_servers.code-index]
+          command = "uvx"
+          args = ["code-index-mcp"]
+
+          [mcp_servers.codex]
+          command = "uvx"
+          args = ["--from", "git+https://github.com/GuDaStudio/codexmcp.git", "codexmcp"]
+          env = {{ OPENAI_BASE_URL = "{os.environ['CODEX_BASE_URL']}", OPENAI_API_KEY = "{os.environ['CODEX_API_KEY']}" }}
+
+          [mcp_servers.auggie-mcp]
+          command = "auggie"
+          args = ["--mcp"]
+          env = {{ AUGMENT_API_TOKEN = "{os.environ['AUGMENT_API_TOKEN']}", AUGMENT_API_URL = "{os.environ['AUGMENT_API_URL']}" }}
+
+          [mcp_servers.chrome-devtools]
+          command = "npx"
+          args = ["chrome-devtools-mcp@latest"]
+          """
+
+          cfg_dir = Path.home() / ".codex"
+          cfg_dir.mkdir(parents=True, exist_ok=True)
+          (cfg_dir / "config.toml").write_text(config.strip() + "\n", encoding="utf-8")
+          PY
+
       - name: Write MCP config
         run: |
           cat <<'EOF' > .mcp.json
