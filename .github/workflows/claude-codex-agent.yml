@@ -76,7 +76,7 @@ jobs:
 
           [mcp_servers.chrome-devtools]
           command = "npx"
-          args = ["chrome-devtools-mcp@latest"]
+          args = ["chrome-devtools-mcp@latest", "--headless", "--no-sandbox"]
           """
 
           cfg_dir = Path.home() / ".codex"
@@ -136,7 +136,9 @@ jobs:
                 "type": "stdio",
                 "command": "npx",
                 "args": [
-                  "chrome-devtools-mcp@latest"
+                  "chrome-devtools-mcp@latest",
+                  "--headless",
+                  "--no-sandbox"
                 ]
               }
             }
