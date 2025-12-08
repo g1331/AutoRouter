@@ -13,6 +13,7 @@ jobs:
       pull-requests: write
       issues: write
       actions: read
+      id-token: write
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
@@ -98,7 +99,7 @@ jobs:
           EOF
 
       - name: Run Claude Code
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@beta
         with:
           prompt: |
             你是仓库专属机器人（中文沟通，代码/命令保持原文）。遵循高质量提示最佳实践：目标清晰、步骤化推理、示例/清单输出、允许承认不确定性。
