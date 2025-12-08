@@ -6,7 +6,7 @@ on:
 
 jobs:
   handle-issue:
-    if: contains(github.event.comment.body, '@bot')
+    if: contains(github.event.comment.body, '@agent')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -112,7 +112,7 @@ jobs:
             6) PR 迭代：在 PR 评论中被 @ 时，先阅读最新提交和讨论，在同一 PR/分支继续修复，不另开分支；保持清晰的变更日志和自检更新。
             7) 不确定时明确说明缺少哪些信息，不编造；必要时用最小 reproducer 或伪代码说明思路，待确认后再实施。
           mcp_config: ".mcp.json"
-          trigger_phrase: "@bot"
+          trigger_phrase: "@agent"
           settings: |
             { "alwaysThinkingEnabled": true }
           allowed_tools: |
