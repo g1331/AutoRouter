@@ -262,7 +262,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          LABELS=$(gh issue view ${{ github.event.issue.number }} --json labels --jq '.labels[].name')
+          LABELS=$(gh issue view ${{ github.event.issue.number }} --repo ${{ github.repository }} --json labels --jq '.labels[].name')
           if echo "$LABELS" | grep -q "needs-info"; then
             echo "has_needs_info=true" >> $GITHUB_OUTPUT
           else
