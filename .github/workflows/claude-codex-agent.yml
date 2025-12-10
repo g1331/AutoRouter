@@ -1,12 +1,83 @@
 name: claude-codex-agent
 
 on:
+  issues:
+    types: [opened]
   issue_comment:
     types: [created]
 
+env:
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+  TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+  CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
+  CODEX_BASE_URL: ${{ secrets.CODEX_BASE_URL }}
+  AUGMENT_API_TOKEN: ${{ secrets.AUGMENT_API_TOKEN }}
+  AUGMENT_API_URL: ${{ secrets.AUGMENT_API_URL }}
+
 jobs:
-  handle-issue:
-    if: contains(github.event.comment.body, '@autorouter-bot')
+  # ============================================================
+  # Job 1: 新issue自动分类和初步分析
+  # ============================================================
+  triage:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check if creator is collaborator
+        id: check-collaborator
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh api repos/${{ github.repository }}/collaborators/${{ github.event.issue.user.login }} --silent 2>/dev/null; then
+            echo "is_collaborator=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_collaborator=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Claude Code for triage
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_args: |
+            --allowedTools Bash(gh:*)
+            --append-system-prompt "你是issue分类机器人（中文沟通）。当前issue创建者 ${{ github.event.issue.user.login }} ${{ steps.check-collaborator.outputs.is_collaborator == 'true' && '是' || '不是' }}仓库协作者。
+
+            你的任务：
+            1. 分析issue内容，添加分类标签（只能选一个）：
+               - bug: 报告问题/错误
+               - feature: 功能请求
+               - question: 疑问/讨论
+               - documentation: 文档相关
+
+            2. 判断信息是否充足（对于bug：是否有复现步骤、环境信息、错误日志等）
+
+            3. 根据情况添加状态标签并评论：
+               a) 信息不足 → 添加 needs-info 标签，评论列出需要补充的具体信息
+               b) 信息充足且创建者是协作者 → 添加 approved 标签，评论确认将开始处理
+               c) 信息充足但创建者非协作者 → 添加 awaiting-approval 标签，评论说明需要等待维护者审批（可使用 /approve 命令）
+
+            使用 gh 命令操作：
+            - 添加标签: gh issue edit ${{ github.event.issue.number }} --add-label \"标签名\"
+            - 评论: gh issue comment ${{ github.event.issue.number }} --body \"内容\"
+
+            注意：只做分类和状态标记，不要尝试修复问题。"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================================
+  # Job 2: 审批通过后自动开始工作
+  # ============================================================
+  auto-approve:
+    if: |
+      github.event_name == 'issue_comment' &&
+      contains(github.event.comment.body, '/approve')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -14,14 +85,257 @@ jobs:
       issues: write
       actions: read
       id-token: write
-    env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
-      TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
-      CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
-      CODEX_BASE_URL: ${{ secrets.CODEX_BASE_URL }}
-      AUGMENT_API_TOKEN: ${{ secrets.AUGMENT_API_TOKEN }}
-      AUGMENT_API_URL: ${{ secrets.AUGMENT_API_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check if commenter is collaborator
+        id: check-collaborator
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh api repos/${{ github.repository }}/collaborators/${{ github.actor }} --silent 2>/dev/null; then
+            echo "is_collaborator=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_collaborator=false" >> $GITHUB_OUTPUT
+            echo "::warning::User ${{ github.actor }} is not a collaborator, ignoring /approve command"
+          fi
+
+      - name: Update labels on approval
+        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue edit ${{ github.event.issue.number }} --remove-label "awaiting-approval" 2>/dev/null || true
+          gh issue edit ${{ github.event.issue.number }} --remove-label "needs-info" 2>/dev/null || true
+          gh issue edit ${{ github.event.issue.number }} --add-label "approved"
+          gh issue edit ${{ github.event.issue.number }} --add-label "in-progress"
+
+      - name: Setup Node 22 (for auggie / npx MCPs)
+        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install uv (for uvx-based MCPs)
+        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        run: |
+          python -m pip install --user uv
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install auggie CLI (pre-release with MCP support)
+        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        run: npm install -g @augmentcode/auggie@prerelease
+
+      - name: Install Codex CLI
+        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        run: npm install -g @openai/codex@latest
+
+      - name: Configure Codex MCP servers
+        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          config = f"""
+          [features]
+          rmcp_client = true
+
+          [mcp_servers.tavily-remote-mcp]
+          url = "https://mcp.tavily.com/mcp/?tavilyApiKey={os.environ['TAVILY_API_KEY']}"
+
+          [mcp_servers.context7]
+          command = "npx"
+          args = ["-y", "@upstash/context7-mcp"]
+
+          [mcp_servers.code-index]
+          command = "uvx"
+          args = ["code-index-mcp"]
+
+          [mcp_servers.auggie-mcp]
+          command = "auggie"
+          args = ["--mcp"]
+          env = {{ AUGMENT_API_TOKEN = "{os.environ['AUGMENT_API_TOKEN']}", AUGMENT_API_URL = "{os.environ['AUGMENT_API_URL']}" }}
+
+          [mcp_servers.chrome-devtools]
+          command = "npx"
+          args = ["chrome-devtools-mcp@latest", "--headless", "--no-sandbox", "--isolated=true"]
+          """
+
+          cfg_dir = Path.home() / ".codex"
+          cfg_dir.mkdir(parents=True, exist_ok=True)
+          (cfg_dir / "config.toml").write_text(config.strip() + "\n", encoding="utf-8")
+          PY
+
+      - name: Write MCP config
+        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        run: |
+          cat <<'EOF' > .mcp.json
+          {
+            "mcpServers": {
+              "tavily-remote-mcp": {
+                "type": "http",
+                "url": "https://mcp.tavily.com/mcp/?tavilyApiKey=${TAVILY_API_KEY}"
+              },
+              "context7": {
+                "type": "stdio",
+                "command": "npx",
+                "args": ["-y", "@upstash/context7-mcp"]
+              },
+              "code-index": {
+                "type": "stdio",
+                "command": "uvx",
+                "args": ["code-index-mcp"]
+              },
+              "codex": {
+                "type": "stdio",
+                "command": "uvx",
+                "args": ["--from", "git+https://github.com/GuDaStudio/codexmcp.git", "codexmcp"],
+                "env": {
+                  "OPENAI_BASE_URL": "${CODEX_BASE_URL}",
+                  "OPENAI_API_KEY": "${CODEX_API_KEY}"
+                }
+              },
+              "auggie-mcp": {
+                "type": "stdio",
+                "command": "auggie",
+                "args": ["--mcp"],
+                "env": {
+                  "AUGMENT_API_TOKEN": "${AUGMENT_API_TOKEN}",
+                  "AUGMENT_API_URL": "${AUGMENT_API_URL}"
+                }
+              },
+              "chrome-devtools": {
+                "type": "stdio",
+                "command": "npx",
+                "args": ["chrome-devtools-mcp@latest", "--headless", "--no-sandbox", "--isolated=true"]
+              }
+            }
+          }
+          EOF
+
+      - name: Run Claude Code to fix issue
+        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_args: |
+            --mcp-config .mcp.json
+            --allowedTools mcp__tavily-remote-mcp,mcp__context7,mcp__code-index,mcp__codex,mcp__auggie-mcp,mcp__chrome-devtools,Edit,Replace,Bash(git:*,uv:*,npm:*,pnpm:*,gh:*,pytest:*,ruff:*,mypy:*)
+            --append-system-prompt "你是仓库专属机器人（中文沟通，代码/命令保持原文）。issue #${{ github.event.issue.number }} 已获审批，现在开始处理。
+
+            工作流程：
+            1. 仔细阅读issue内容，理解需求
+            2. 使用 auggie → code-index → codex 分析代码库，定位相关代码
+            3. 如果是bug：给出「复现路径 / 根因定位 / 修复方案」
+            4. 创建分支（命名规则：{fix|feat|docs}/{简短描述}，如 fix/api-timeout-handling）
+            5. 实现修复/功能
+            6. 运行测试和静态检查（pytest, ruff, mypy）
+            7. 提交代码并创建PR，PR描述中关联issue（Closes #${{ github.event.issue.number }}）
+            8. 移除 in-progress 标签
+
+            分支命名：基于issue内容生成，格式 {fix|feat|docs}/{3-5个英文单词slug}，全小写连字符分隔。
+
+            禁止泄露tokens/花费/定价信息。"
+            --settings '{"alwaysThinkingEnabled":true}'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================================
+  # Job 3: 用户回复 needs-info 后重新分析
+  # ============================================================
+  handle-info-reply:
+    if: |
+      github.event_name == 'issue_comment' &&
+      !contains(github.event.comment.body, '/approve') &&
+      !contains(github.event.comment.body, '@autorouter-bot')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check if issue has needs-info label
+        id: check-label
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LABELS=$(gh issue view ${{ github.event.issue.number }} --json labels --jq '.labels[].name')
+          if echo "$LABELS" | grep -q "needs-info"; then
+            echo "has_needs_info=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_needs_info=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check if commenter is issue author
+        id: check-author
+        run: |
+          if [ "${{ github.event.comment.user.login }}" == "${{ github.event.issue.user.login }}" ]; then
+            echo "is_author=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_author=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout
+        if: steps.check-label.outputs.has_needs_info == 'true' && steps.check-author.outputs.is_author == 'true'
+        uses: actions/checkout@v4
+
+      - name: Check if author is collaborator
+        if: steps.check-label.outputs.has_needs_info == 'true' && steps.check-author.outputs.is_author == 'true'
+        id: check-collaborator
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh api repos/${{ github.repository }}/collaborators/${{ github.event.issue.user.login }} --silent 2>/dev/null; then
+            echo "is_collaborator=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_collaborator=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Claude Code to re-analyze
+        if: steps.check-label.outputs.has_needs_info == 'true' && steps.check-author.outputs.is_author == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_args: |
+            --allowedTools Bash(gh:*)
+            --append-system-prompt "你是issue分类机器人（中文沟通）。issue作者补充了信息，请重新分析。
+
+            issue创建者 ${{ github.event.issue.user.login }} ${{ steps.check-collaborator.outputs.is_collaborator == 'true' && '是' || '不是' }}仓库协作者。
+
+            你的任务：
+            1. 阅读issue原文和所有评论
+            2. 判断信息现在是否充足
+
+            3. 根据情况更新标签并评论：
+               a) 信息仍不足 → 保持 needs-info 标签，评论说明还需要什么
+               b) 信息充足且作者是协作者 → 移除 needs-info，添加 approved，评论确认将开始处理
+               c) 信息充足但作者非协作者 → 移除 needs-info，添加 awaiting-approval，评论说明需要等待维护者审批
+
+            使用 gh 命令操作：
+            - 移除标签: gh issue edit ${{ github.event.issue.number }} --remove-label \"标签名\"
+            - 添加标签: gh issue edit ${{ github.event.issue.number }} --add-label \"标签名\"
+            - 评论: gh issue comment ${{ github.event.issue.number }} --body \"内容\""
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================================
+  # Job 4: 手动 @autorouter-bot 触发
+  # ============================================================
+  manual:
+    if: |
+      github.event_name == 'issue_comment' &&
+      contains(github.event.comment.body, '@autorouter-bot') &&
+      !contains(github.event.comment.body, '/approve')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,12 +357,6 @@ jobs:
         run: npm install -g @openai/codex@latest
 
       - name: Configure Codex MCP servers
-        env:
-          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
-          CODEX_BASE_URL: ${{ secrets.CODEX_BASE_URL }}
-          CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
-          AUGMENT_API_TOKEN: ${{ secrets.AUGMENT_API_TOKEN }}
-          AUGMENT_API_URL: ${{ secrets.AUGMENT_API_URL }}
         run: |
           python - <<'PY'
           import os
@@ -96,26 +404,17 @@ jobs:
               "context7": {
                 "type": "stdio",
                 "command": "npx",
-                "args": [
-                  "-y",
-                  "@upstash/context7-mcp"
-                ]
+                "args": ["-y", "@upstash/context7-mcp"]
               },
               "code-index": {
                 "type": "stdio",
                 "command": "uvx",
-                "args": [
-                  "code-index-mcp"
-                ]
+                "args": ["code-index-mcp"]
               },
               "codex": {
                 "type": "stdio",
                 "command": "uvx",
-                "args": [
-                  "--from",
-                  "git+https://github.com/GuDaStudio/codexmcp.git",
-                  "codexmcp"
-                ],
+                "args": ["--from", "git+https://github.com/GuDaStudio/codexmcp.git", "codexmcp"],
                 "env": {
                   "OPENAI_BASE_URL": "${CODEX_BASE_URL}",
                   "OPENAI_API_KEY": "${CODEX_API_KEY}"
@@ -124,9 +423,7 @@ jobs:
               "auggie-mcp": {
                 "type": "stdio",
                 "command": "auggie",
-                "args": [
-                  "--mcp"
-                ],
+                "args": ["--mcp"],
                 "env": {
                   "AUGMENT_API_TOKEN": "${AUGMENT_API_TOKEN}",
                   "AUGMENT_API_URL": "${AUGMENT_API_URL}"
@@ -135,12 +432,7 @@ jobs:
               "chrome-devtools": {
                 "type": "stdio",
                 "command": "npx",
-                "args": [
-                  "chrome-devtools-mcp@latest",
-                  "--headless",
-                  "--no-sandbox",
-                  "--isolated=true"
-                ]
+                "args": ["chrome-devtools-mcp@latest", "--headless", "--no-sandbox", "--isolated=true"]
               }
             }
           }
@@ -154,8 +446,18 @@ jobs:
           trigger_phrase: "@autorouter-bot"
           claude_args: |
             --mcp-config .mcp.json
-            --allowedTools mcp__tavily-remote-mcp,mcp__context7,mcp__code-index,mcp__codex,mcp__auggie-mcp,mcp__chrome-devtools,Edit,Replace,Bash(git:*,uv:*,npm:*,pnpm:*)
-            --append-system-prompt "你是仓库专属机器人（中文沟通，代码/命令保持原文）。遵循高质量提示最佳实践：目标清晰、步骤化推理、示例/清单输出、允许承认不确定性。每次响应 @autorouter-bot 的评论时，请读取评论正文和上下文，确保：1) 先输出「需求摘要」「不确定点」「待确认清单」并在获得明确同意前仅提问；2) 如果评论描述的是 Bug，请依次使用 auggie → code-index → codex（必要时 tavily/context7）定位并给出「复现路径 / 根因定位 / 修复方案」三段说明，然后 @${{ github.event.issue.user.login }} 征求确认；3) 记录当前工作的分支、基点 commit，以及是否已有 fix/${{ github.event.issue.number }} 等分支需要继续使用；4) 获得确认后再改代码并运行相应测试/静态检查，完成后推送 PR 并附自检结果；5) 禁止在回复中泄露 tokens/花费/定价等信息；6) 在 PR 评论中再次被 @ 时，仅更新当前 PR 并同步最新自检。"
+            --allowedTools mcp__tavily-remote-mcp,mcp__context7,mcp__code-index,mcp__codex,mcp__auggie-mcp,mcp__chrome-devtools,Edit,Replace,Bash(git:*,uv:*,npm:*,pnpm:*,gh:*,pytest:*,ruff:*,mypy:*)
+            --append-system-prompt "你是仓库专属机器人（中文沟通，代码/命令保持原文）。遵循高质量提示最佳实践：目标清晰、步骤化推理、示例/清单输出、允许承认不确定性。
+
+            每次响应 @autorouter-bot 的评论时：
+            1. 先输出「需求摘要」「不确定点」「待确认清单」，在获得明确同意前仅提问
+            2. 如果是Bug，依次使用 auggie → code-index → codex 定位，给出「复现路径 / 根因定位 / 修复方案」
+            3. 获得确认后再改代码，创建分支（命名：{fix|feat|docs}/{简短描述}，如 fix/api-timeout-handling）
+            4. 运行测试/静态检查，完成后推送PR并附自检结果
+            5. 禁止泄露tokens/花费/定价信息
+            6. 在PR评论中再次被@时，仅更新当前PR并同步最新自检
+
+            分支命名：基于内容生成，格式 {fix|feat|docs}/{3-5个英文单词slug}，全小写连字符分隔。"
             --settings '{"alwaysThinkingEnabled":true}'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
