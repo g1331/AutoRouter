@@ -45,11 +45,11 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          claude_args: |
-            --allowedTools Bash(gh:*)
-            --append-system-prompt "你是issue分类机器人（中文沟通）。当前issue创建者 ${{ github.event.issue.user.login }} ${{ steps.check-collaborator.outputs.is_collaborator == 'true' && '是' || '不是' }}仓库协作者。
+          prompt: |
+            你是issue分类机器人（中文沟通）。当前issue创建者 ${{ github.event.issue.user.login }} ${{ steps.check-collaborator.outputs.is_collaborator == 'true' && '是' || '不是' }}仓库协作者。
 
-            你的任务：
+            请分析这个issue并执行以下任务：
+
             1. 分析issue内容，添加分类标签（只能选一个）：
                - bug: 报告问题/错误
                - feature: 功能请求
@@ -64,10 +64,11 @@ jobs:
                c) 信息充足但创建者非协作者 → 添加 awaiting-approval 标签，评论说明需要等待维护者审批（可使用 /approve 命令）
 
             使用 gh 命令操作：
-            - 添加标签: gh issue edit ${{ github.event.issue.number }} --add-label \"标签名\"
-            - 评论: gh issue comment ${{ github.event.issue.number }} --body \"内容\"
+            - 添加标签: gh issue edit ${{ github.event.issue.number }} --add-label "标签名"
+            - 评论: gh issue comment ${{ github.event.issue.number }} --body "内容"
 
-            注意：只做分类和状态标记，不要尝试修复问题。"
+            注意：只做分类和状态标记，不要尝试修复问题。
+          claude_args: --allowedTools Bash(gh:*)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -299,9 +300,8 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          claude_args: |
-            --allowedTools Bash(gh:*)
-            --append-system-prompt "你是issue分类机器人（中文沟通）。issue作者补充了信息，请重新分析。
+          prompt: |
+            你是issue分类机器人（中文沟通）。issue作者补充了信息，请重新分析。
 
             issue创建者 ${{ github.event.issue.user.login }} ${{ steps.check-collaborator.outputs.is_collaborator == 'true' && '是' || '不是' }}仓库协作者。
 
@@ -315,9 +315,10 @@ jobs:
                c) 信息充足但作者非协作者 → 移除 needs-info，添加 awaiting-approval，评论说明需要等待维护者审批
 
             使用 gh 命令操作：
-            - 移除标签: gh issue edit ${{ github.event.issue.number }} --remove-label \"标签名\"
-            - 添加标签: gh issue edit ${{ github.event.issue.number }} --add-label \"标签名\"
-            - 评论: gh issue comment ${{ github.event.issue.number }} --body \"内容\""
+            - 移除标签: gh issue edit ${{ github.event.issue.number }} --remove-label "标签名"
+            - 添加标签: gh issue edit ${{ github.event.issue.number }} --add-label "标签名"
+            - 评论: gh issue comment ${{ github.event.issue.number }} --body "内容"
+          claude_args: --allowedTools Bash(gh:*)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
