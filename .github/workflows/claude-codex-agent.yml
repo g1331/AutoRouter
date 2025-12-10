@@ -2,7 +2,7 @@ name: claude-codex-agent
 
 on:
   issues:
-    types: [opened]
+    types: [opened, reopened]
   issue_comment:
     types: [created]
 
