@@ -43,3 +43,4 @@ data.db
 # Claude
 .claude/settings.local.json
 .mcp.json
+CLAUDE.local.md
