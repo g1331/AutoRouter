@@ -7,13 +7,15 @@ This service records all proxy requests to the database for:
 - Debugging and troubleshooting
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from loguru import logger
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.db_models import RequestLog
+from app.models.schemas import PaginatedRequestLogsResponse, RequestLogResponse
 
 
 async def log_request(
@@ -62,7 +64,7 @@ async def log_request(
         status_code=status_code,
         duration_ms=duration_ms,
         error_message=error_message,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
 
     db.add(log_entry)
@@ -131,3 +133,97 @@ def extract_model_name(request_body: dict | None, response_body: dict | None) ->
             return str(model)
 
     return None
+
+
+async def list_request_logs(
+    db: AsyncSession,
+    page: int = 1,
+    page_size: int = 20,
+    api_key_id: UUID | None = None,
+    upstream_id: UUID | None = None,
+    status_code: int | None = None,
+    start_time: datetime | None = None,
+    end_time: datetime | None = None,
+) -> PaginatedRequestLogsResponse:
+    """List request logs with pagination and optional filtering.
+
+    Args:
+        db: Database session
+        page: Page number (1-indexed)
+        page_size: Number of items per page (max 100)
+        api_key_id: Filter by API key ID
+        upstream_id: Filter by upstream ID
+        status_code: Filter by HTTP status code
+        start_time: Filter by start time (inclusive)
+        end_time: Filter by end time (inclusive)
+
+    Returns:
+        PaginatedRequestLogsResponse: Paginated list of request logs
+    """
+    # Validate pagination params
+    page = max(1, page)
+    page_size = min(100, max(1, page_size))
+
+    # Build query with filters
+    query = select(RequestLog)
+    count_query = select(func.count()).select_from(RequestLog)
+
+    if api_key_id is not None:
+        query = query.where(RequestLog.api_key_id == api_key_id)
+        count_query = count_query.where(RequestLog.api_key_id == api_key_id)
+
+    if upstream_id is not None:
+        query = query.where(RequestLog.upstream_id == upstream_id)
+        count_query = count_query.where(RequestLog.upstream_id == upstream_id)
+
+    if status_code is not None:
+        query = query.where(RequestLog.status_code == status_code)
+        count_query = count_query.where(RequestLog.status_code == status_code)
+
+    if start_time is not None:
+        query = query.where(RequestLog.created_at >= start_time)
+        count_query = count_query.where(RequestLog.created_at >= start_time)
+
+    if end_time is not None:
+        query = query.where(RequestLog.created_at <= end_time)
+        count_query = count_query.where(RequestLog.created_at <= end_time)
+
+    # Count total with filters
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
+
+    # Query paginated results (ordered by created_at desc - newest first)
+    offset = (page - 1) * page_size
+    query = query.order_by(RequestLog.created_at.desc()).limit(page_size).offset(offset)
+    result = await db.execute(query)
+    logs = result.scalars().all()
+
+    # Convert to response schema
+    items = [
+        RequestLogResponse(
+            id=log.id,
+            api_key_id=log.api_key_id,
+            upstream_id=log.upstream_id,
+            method=log.method,
+            path=log.path,
+            model=log.model,
+            prompt_tokens=log.prompt_tokens,
+            completion_tokens=log.completion_tokens,
+            total_tokens=log.total_tokens,
+            status_code=log.status_code,
+            duration_ms=log.duration_ms,
+            error_message=log.error_message,
+            created_at=log.created_at,
+        )
+        for log in logs
+    ]
+
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 1
+
+    return PaginatedRequestLogsResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )

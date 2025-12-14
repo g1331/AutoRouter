@@ -3,6 +3,7 @@
 All endpoints require admin authentication (Bearer token from ADMIN_TOKEN env var).
 """
 
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -13,14 +14,14 @@ from app.core.deps import get_db, verify_admin_token
 from app.models.schemas import (
     APIKeyCreate,
     APIKeyCreateResponse,
-    APIKeyResponse,
     PaginatedAPIKeysResponse,
+    PaginatedRequestLogsResponse,
     PaginatedUpstreamsResponse,
     UpstreamCreate,
     UpstreamResponse,
     UpstreamUpdate,
 )
-from app.services import key_manager, upstream_service
+from app.services import key_manager, request_logger, upstream_service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -266,3 +267,74 @@ async def delete_upstream(
     except ValueError as e:
         logger.warning(f"Failed to delete upstream: {e}")
         raise HTTPException(status_code=404, detail={"error": "not_found", "message": str(e)}) from e
+
+
+# ============================================================================
+# Request Log Endpoints
+# ============================================================================
+
+
+@router.get(
+    "/logs",
+    response_model=PaginatedRequestLogsResponse,
+    dependencies=[Depends(verify_admin_token)],
+    summary="List request logs",
+    description="Retrieve a paginated list of request logs with optional filtering.",
+)
+async def list_request_logs(
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page (max 100)"),
+    api_key_id: UUID | None = Query(None, description="Filter by API key ID"),
+    upstream_id: UUID | None = Query(None, description="Filter by upstream ID"),
+    status_code: int | None = Query(None, description="Filter by HTTP status code"),
+    start_time: str | None = Query(None, description="Filter by start time (ISO 8601 format)"),
+    end_time: str | None = Query(None, description="Filter by end time (ISO 8601 format)"),
+    db: AsyncSession = Depends(get_db),
+) -> PaginatedRequestLogsResponse:
+    """List request logs with pagination and optional filtering.
+
+    Args:
+        page: Page number (1-indexed)
+        page_size: Number of items per page
+        api_key_id: Filter by API key ID
+        upstream_id: Filter by upstream ID
+        status_code: Filter by HTTP status code
+        start_time: Filter by start time (ISO 8601 format)
+        end_time: Filter by end time (ISO 8601 format)
+        db: Database session
+
+    Returns:
+        PaginatedRequestLogsResponse: Paginated list of request logs
+    """
+    # Parse datetime strings if provided
+    parsed_start_time = None
+    parsed_end_time = None
+
+    if start_time:
+        try:
+            parsed_start_time = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+        except ValueError as e:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "invalid_request", "message": f"Invalid start_time format: {start_time}"},
+            ) from e
+
+    if end_time:
+        try:
+            parsed_end_time = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
+        except ValueError as e:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "invalid_request", "message": f"Invalid end_time format: {end_time}"},
+            ) from e
+
+    return await request_logger.list_request_logs(
+        db=db,
+        page=page,
+        page_size=page_size,
+        api_key_id=api_key_id,
+        upstream_id=upstream_id,
+        status_code=status_code,
+        start_time=parsed_start_time,
+        end_time=parsed_end_time,
+    )

@@ -2,25 +2,25 @@
 
 ## 1. Backend - Request Logs Query API
 
-- [ ] 1.1 在 `request_logger.py` 添加 `list_request_logs` 查询方法
+- [x] 1.1 在 `request_logger.py` 添加 `list_request_logs` 查询方法
   - 支持分页（page, page_size）
   - 支持筛选（api_key_id, upstream_id, status_code, start_time, end_time）
   - 返回 `PaginatedRequestLogsResponse`
 
-- [ ] 1.2 在 `admin.py` 添加 `GET /admin/logs` 端点
+- [x] 1.2 在 `admin.py` 添加 `GET /admin/logs` 端点
   - 需要 Admin Token 认证
   - Query 参数支持筛选条件
   - 调用 `request_logger.list_request_logs`
 
-- [ ] 1.3 添加后端单元测试 `tests/test_request_logs.py`
+- [x] 1.3 添加后端单元测试 `tests/test_request_logs.py`
   - 测试分页功能
   - 测试筛选功能
   - 测试权限验证
 
-- [ ] 1.4 验证后端
-  - 运行 `uv run pytest tests/test_request_logs.py`
-  - 运行 `uv run pyright`
-  - 运行 `uv run ruff check`
+- [x] 1.4 验证后端
+  - 运行 `uv run pytest tests/test_request_logs.py` (10 passed)
+  - 运行 `uv run pyright` (新增代码无错误)
+  - 运行 `uv run ruff check` (通过)
 
 ## 2. Frontend - Request Logs Hook & Component
 
