@@ -41,6 +41,12 @@
   - 运行 `pnpm lint` (通过，新代码无警告)
   - 运行 `pnpm exec tsc --noEmit` (通过)
 
+- [ ] 2.5 添加组件单元测试 `tests/components/logs-table.test.tsx`
+  - 测试空状态展示
+  - 测试状态码颜色编码
+  - 测试 Token 格式化显示
+  - 测试日期格式化
+
 ## 3. Frontend - Page & Navigation
 
 - [ ] 3.1 创建 `/logs` 页面
@@ -56,8 +62,10 @@
   - `messages/zh.json`: 添加日志相关文案
 
 - [ ] 3.4 验证前端集成
-  - 运行 `pnpm --filter web lint`
-  - 运行 `pnpm --filter web build`
+  - 运行 `pnpm lint`
+  - 运行 `pnpm exec tsc --noEmit`
+  - 运行 `pnpm test` (Vitest)
+  - 运行 `pnpm build`
 
 ## 4. End-to-End Validation
 
