@@ -8,7 +8,7 @@ export default defineConfig([
   ...nextVitals,
   ...nextTs,
   {
-    files: ["**/*.{ts,tsx,js,jsx}"],
+    files: ["src/**/*.{ts,tsx,js,jsx}"],
     name: "custom-rules",
     plugins: {
       "@typescript-eslint": tseslint,
@@ -29,6 +29,23 @@ export default defineConfig([
         },
       ],
       "import/no-cycle": "off",
+    },
+  },
+  {
+    files: ["tests/**/*.{ts,tsx}"],
+    name: "test-rules",
+    plugins: {
+      "@typescript-eslint": tseslint,
+    },
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        project: "./tsconfig.test.json",
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      "no-console": "off",
     },
   },
   // Override default ignores of eslint-config-next.

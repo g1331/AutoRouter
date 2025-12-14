@@ -41,11 +41,12 @@
   - 运行 `pnpm lint` (通过，新代码无警告)
   - 运行 `pnpm exec tsc --noEmit` (通过)
 
-- [ ] 2.5 添加组件单元测试 `tests/components/logs-table.test.tsx`
+- [x] 2.5 添加组件单元测试 `tests/components/logs-table.test.tsx`
   - 测试空状态展示
   - 测试状态码颜色编码
   - 测试 Token 格式化显示
   - 测试日期格式化
+  - 运行 `pnpm test:run` (25 passed)
 
 ## 3. Frontend - Page & Navigation
 

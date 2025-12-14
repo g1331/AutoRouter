@@ -37,6 +37,6 @@ describe("Button", () => {
   it("has focus-visible ring for accessibility", () => {
     render(<Button>Focusable</Button>);
     const button = screen.getByRole("button", { name: /focusable/i });
-    expect(button).toHaveClass("focus-visible:ring-cf");
+    expect(button).toHaveClass("focus-visible:ring-amber-500");
   });
 });
