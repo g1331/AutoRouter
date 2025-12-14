@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
-import { LayoutDashboard, Key, Server } from "lucide-react";
+import { LayoutDashboard, Key, Server, ScrollText } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -26,6 +26,7 @@ export function Sidebar() {
     },
     { href: "/keys", icon: Key, labelKey: "apiKeys" as const },
     { href: "/upstreams", icon: Server, labelKey: "upstreams" as const },
+    { href: "/logs", icon: ScrollText, labelKey: "logs" as const },
   ];
 
   return (

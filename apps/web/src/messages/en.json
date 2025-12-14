@@ -40,6 +40,7 @@
     "dashboard": "Dashboard",
     "apiKeys": "API Keys",
     "upstreams": "Upstreams",
+    "logs": "Logs",
     "logout": "Logout"
   },
   "auth": {
@@ -121,6 +122,21 @@
     "neverExpires": "Never",
     "expired": "Expired",
     "expiresIn": "Expires in {days} days"
+  },
+  "logs": {
+    "title": "Request Logs",
+    "pageTitle": "REQUEST LOGS",
+    "management": "REQUEST LOGS",
+    "managementDesc": "View and analyze API request history",
+    "noLogs": "NO LOGS FOUND",
+    "noLogsDesc": "Request logs will appear here once API calls are made",
+    "tableTime": "Time",
+    "tableMethod": "Method",
+    "tablePath": "Path",
+    "tableModel": "Model",
+    "tableTokens": "Tokens",
+    "tableStatus": "Status",
+    "tableDuration": "Duration"
   },
   "upstreams": {
     "title": "Upstreams",

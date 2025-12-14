@@ -40,6 +40,7 @@
     "dashboard": "仪表盘",
     "apiKeys": "API Keys",
     "upstreams": "Upstreams",
+    "logs": "Logs",
     "logout": "登出"
   },
   "auth": {
@@ -121,6 +122,21 @@
     "neverExpires": "永不过期",
     "expired": "已过期",
     "expiresIn": "{days} 天后过期"
+  },
+  "logs": {
+    "title": "请求日志",
+    "pageTitle": "REQUEST LOGS",
+    "management": "REQUEST LOGS",
+    "managementDesc": "查看和分析 API 请求历史记录",
+    "noLogs": "NO LOGS FOUND",
+    "noLogsDesc": "API 请求日志将在发起调用后显示在这里",
+    "tableTime": "时间",
+    "tableMethod": "方法",
+    "tablePath": "路径",
+    "tableModel": "模型",
+    "tableTokens": "Token",
+    "tableStatus": "状态",
+    "tableDuration": "耗时"
   },
   "upstreams": {
     "title": "Upstreams",

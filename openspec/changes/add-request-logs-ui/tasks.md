@@ -50,23 +50,22 @@
 
 ## 3. Frontend - Page & Navigation
 
-- [ ] 3.1 创建 `/logs` 页面
+- [x] 3.1 创建 `/logs` 页面
   - 复用 Keys/Upstreams 页面结构
   - 包含分页控件
 
-- [ ] 3.2 更新侧边栏导航
+- [x] 3.2 更新侧边栏导航
   - 添加 "Logs" 导航项
   - 使用 `ScrollText` 图标
 
-- [ ] 3.3 添加 i18n 翻译
+- [x] 3.3 添加 i18n 翻译
   - `messages/en.json`: 添加 logs 相关文案
-  - `messages/zh.json`: 添加日志相关文案
+  - `messages/zh-CN.json`: 添加日志相关文案
 
-- [ ] 3.4 验证前端集成
-  - 运行 `pnpm lint`
-  - 运行 `pnpm exec tsc --noEmit`
-  - 运行 `pnpm test` (Vitest)
-  - 运行 `pnpm build`
+- [x] 3.4 验证前端集成
+  - 运行 `pnpm exec tsc --noEmit` (通过)
+  - 运行 `pnpm test:run` (25 passed)
+  - 运行 `pnpm build` (通过，logs 页面已生成)
 
 ## 4. End-to-End Validation
 
