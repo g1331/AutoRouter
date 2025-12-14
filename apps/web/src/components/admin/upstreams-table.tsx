@@ -114,6 +114,7 @@ export function UpstreamsTable({
                   <Button
                     variant="ghost"
                     size="icon"
+                    type="button"
                     className="h-8 w-8 text-amber-500 hover:bg-amber-500/10"
                     onClick={() => onEdit(upstream)}
                     aria-label={`${tCommon("edit")}: ${upstream.name}`}
@@ -123,6 +124,7 @@ export function UpstreamsTable({
                   <Button
                     variant="ghost"
                     size="icon"
+                    type="button"
                     className="h-8 w-8 text-status-error hover:bg-status-error-muted"
                     onClick={() => onDelete(upstream)}
                     aria-label={`${tCommon("delete")}: ${upstream.name}`}

@@ -73,7 +73,20 @@ export function useDeleteUpstream() {
 
   return useMutation({
     mutationFn: (id: string) => apiClient.delete(`/admin/upstreams/${id}`),
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
+      // Immediately remove from cache to show deletion before refetch
+      queryClient.setQueriesData<PaginatedUpstreamsResponse>(
+        { queryKey: ["upstreams"] },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            items: old.items.filter((upstream) => upstream.id !== id),
+            total: old.total - 1,
+          };
+        }
+      );
+
       queryClient.invalidateQueries({ queryKey: ["upstreams"] });
       queryClient.invalidateQueries({ queryKey: ["stats", "upstreams"] });
       toast.success("Upstream 已删除");

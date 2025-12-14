@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/providers/auth-provider";
 import type {
-  APIKey,
   APIKeyCreate,
   APIKeyCreateResponse,
   PaginatedAPIKeysResponse,
@@ -44,21 +43,34 @@ export function useCreateAPIKey() {
 }
 
 /**
- * Revoke API key
+ * Delete API key
  */
 export function useRevokeAPIKey() {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (keyId: string) => apiClient.delete(`/admin/keys/${keyId}`),
-    onSuccess: () => {
+    mutationFn: (keyId: string) => apiClient.delete<void>(`/admin/keys/${keyId}`),
+    onSuccess: (_data, keyId) => {
+      // Immediately remove from cache to show deletion before refetch
+      queryClient.setQueriesData<PaginatedAPIKeysResponse>(
+        { queryKey: ["api-keys"] },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            items: old.items.filter((key) => key.id !== keyId),
+            total: old.total - 1,
+          };
+        }
+      );
+
       queryClient.invalidateQueries({ queryKey: ["api-keys"] });
       queryClient.invalidateQueries({ queryKey: ["stats", "keys"] });
-      toast.success("API Key 已撤销");
+      toast.success("API Key 已删除");
     },
     onError: (error: Error) => {
-      toast.error(`撤销失败: ${error.message}`);
+      toast.error(`删除失败: ${error.message}`);
     },
   });
 }

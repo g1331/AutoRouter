@@ -199,7 +199,10 @@ async def update_upstream(
 
 
 async def delete_upstream(db: AsyncSession, upstream_id: UUID) -> None:
-    """Soft-delete an upstream (mark as inactive).
+    """Delete an upstream from the database.
+
+    This permanently removes the upstream record. Associated API key permissions
+    are automatically removed via CASCADE delete.
 
     Args:
         db: Database session
@@ -214,11 +217,11 @@ async def delete_upstream(db: AsyncSession, upstream_id: UUID) -> None:
     if not upstream:
         raise ValueError(f"Upstream not found: {upstream_id}")
 
-    upstream.is_active = False
-    upstream.updated_at = datetime.now(timezone.utc)
+    upstream_name = upstream.name
+    await db.delete(upstream)
     await db.commit()
 
-    logger.info(f"Soft-deleted upstream: {upstream.name}")
+    logger.info(f"Deleted upstream: {upstream_name}")
 
 
 async def list_upstreams(
@@ -240,14 +243,19 @@ async def list_upstreams(
     page = max(1, page)
     page_size = min(100, max(1, page_size))
 
-    # Count total
-    total_result = await db.execute(select(func.count()).select_from(Upstream))
+    # Count total upstreams
+    total_result = await db.execute(
+        select(func.count()).select_from(Upstream)
+    )
     total = total_result.scalar() or 0
 
     # Query paginated results (ordered by created_at desc)
     offset = (page - 1) * page_size
     result = await db.execute(
-        select(Upstream).order_by(Upstream.created_at.desc()).limit(page_size).offset(offset)
+        select(Upstream)
+        .order_by(Upstream.created_at.desc())
+        .limit(page_size)
+        .offset(offset)
     )
     upstreams = result.scalars().all()
 

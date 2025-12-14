@@ -99,26 +99,26 @@ async def list_api_keys(
     "/keys/{key_id}",
     status_code=204,
     dependencies=[Depends(verify_admin_token)],
-    summary="Revoke an API key",
-    description="Mark an API key as inactive. Existing requests with this key will fail after cache TTL (5 min).",
+    summary="Delete an API key",
+    description="Permanently delete an API key from the database.",
 )
-async def revoke_api_key(
+async def delete_api_key_endpoint(
     key_id: UUID,
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """Revoke (deactivate) an API key.
+    """Delete an API key.
 
     Args:
-        key_id: ID of the API key to revoke
+        key_id: ID of the API key to delete
         db: Database session
 
     Raises:
         HTTPException(404): API key not found
     """
     try:
-        await key_manager.revoke_api_key(db=db, key_id=key_id)
+        await key_manager.delete_api_key(db=db, key_id=key_id)
     except ValueError as e:
-        logger.warning(f"Failed to revoke API key: {e}")
+        logger.warning(f"Failed to delete API key: {e}")
         raise HTTPException(status_code=404, detail={"error": "not_found", "message": str(e)}) from e
 
 
@@ -247,13 +247,13 @@ async def update_upstream(
     status_code=204,
     dependencies=[Depends(verify_admin_token)],
     summary="Delete an upstream",
-    description="Soft-delete an upstream (mark as inactive). API keys referencing this upstream will fail with 503.",
+    description="Permanently delete an upstream from the database. API keys referencing this upstream will lose access to it.",
 )
 async def delete_upstream(
     upstream_id: UUID,
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """Soft-delete an upstream.
+    """Delete an upstream.
 
     Args:
         upstream_id: ID of the upstream to delete

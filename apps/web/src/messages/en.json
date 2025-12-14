@@ -121,7 +121,9 @@
     "tableExpires": "Expires",
     "neverExpires": "Never",
     "expired": "Expired",
-    "expiresIn": "Expires in {days} days"
+    "expiresIn": "Expires in {days} days",
+    "active": "Active",
+    "inactive": "Revoked"
   },
   "logs": {
     "title": "Request Logs",

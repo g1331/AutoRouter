@@ -32,6 +32,12 @@ export function RevokeKeyDialog({
   const t = useTranslations("keys");
   const tCommon = useTranslations("common");
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      onClose();
+    }
+  };
+
   const handleRevoke = async () => {
     if (!apiKey) return;
 
@@ -46,7 +52,7 @@ export function RevokeKeyDialog({
   if (!apiKey) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">

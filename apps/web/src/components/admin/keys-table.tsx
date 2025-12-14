@@ -147,6 +147,7 @@ export function KeysTable({ keys, onRevoke }: KeysTableProps) {
                 <Button
                   variant="ghost"
                   size="icon"
+                  type="button"
                   className="h-8 w-8 text-status-error hover:bg-status-error-muted"
                   onClick={() => onRevoke(key)}
                   aria-label={`${t("revokeKey")}: ${key.name}`}

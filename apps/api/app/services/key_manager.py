@@ -63,14 +63,14 @@ async def create_api_key(
         APIKeyCreateResponse: Created API key with full key_value (shown only once)
 
     Raises:
-        ValueError: If upstream_ids is empty or contains invalid/inactive upstreams
+        ValueError: If upstream_ids is empty or contains invalid upstream IDs
     """
     if not upstream_ids:
         raise ValueError("At least one upstream must be specified")
 
-    # Validate all upstreams exist and are active
+    # Validate all upstreams exist (is_active check removed - inactive upstreams can still be associated)
     result = await db.execute(
-        select(Upstream).where(Upstream.id.in_(upstream_ids), Upstream.is_active == True)  # noqa: E712
+        select(Upstream).where(Upstream.id.in_(upstream_ids))
     )
     valid_upstreams = result.scalars().all()
 
@@ -78,7 +78,7 @@ async def create_api_key(
         # Find invalid IDs
         valid_ids = {u.id for u in valid_upstreams}
         invalid_ids = [str(uid) for uid in upstream_ids if uid not in valid_ids]
-        raise ValueError(f"Invalid or inactive upstream IDs: {invalid_ids}")
+        raise ValueError(f"Invalid upstream IDs: {invalid_ids}")
 
     # Generate API key
     key_value = generate_api_key()
@@ -132,12 +132,15 @@ async def create_api_key(
     )
 
 
-async def revoke_api_key(db: AsyncSession, key_id: UUID) -> None:
-    """Revoke an API key (mark as inactive) and clear from cache.
+async def delete_api_key(db: AsyncSession, key_id: UUID) -> None:
+    """Delete an API key from the database.
+
+    This permanently removes the API key record. Associated upstream permissions
+    are automatically removed via CASCADE delete.
 
     Args:
         db: Database session
-        key_id: ID of the API key to revoke
+        key_id: ID of the API key to delete
 
     Raises:
         ValueError: If API key not found
@@ -148,19 +151,17 @@ async def revoke_api_key(db: AsyncSession, key_id: UUID) -> None:
     if not api_key:
         raise ValueError(f"API key not found: {key_id}")
 
-    # Mark as inactive
-    api_key.is_active = False
-    api_key.updated_at = datetime.now(timezone.utc)
+    key_prefix = api_key.key_prefix
+    key_name = api_key.name
+    await db.delete(api_key)
     await db.commit()
 
     # Note: Cache invalidation strategy:
     # - We can't call clear_api_key_cache(plaintext_key) because we don't have the plaintext
     # - The cache will expire naturally after TTL (5 minutes max)
-    # - get_current_api_key() includes a double-check that verifies is_active even on cache hit
-    # - This ensures revoked keys fail immediately on next auth check, despite cache
-    # - If immediate revocation is critical, call clear_all_api_key_cache() to flush all keys
+    # - If immediate invalidation is critical, call clear_all_api_key_cache() to flush all keys
 
-    logger.info(f"Revoked API key: {api_key.key_prefix}, name='{api_key.name}'")
+    logger.info(f"Deleted API key: {key_prefix}, name='{key_name}'")
 
 
 async def list_api_keys(
@@ -182,14 +183,19 @@ async def list_api_keys(
     page = max(1, page)
     page_size = min(100, max(1, page_size))
 
-    # Count total
-    total_result = await db.execute(select(func.count()).select_from(APIKey))
+    # Count total keys
+    total_result = await db.execute(
+        select(func.count()).select_from(APIKey)
+    )
     total = total_result.scalar() or 0
 
     # Query paginated results (ordered by created_at desc)
     offset = (page - 1) * page_size
     result = await db.execute(
-        select(APIKey).order_by(APIKey.created_at.desc()).limit(page_size).offset(offset)
+        select(APIKey)
+        .order_by(APIKey.created_at.desc())
+        .limit(page_size)
+        .offset(offset)
     )
     api_keys = result.scalars().all()
 

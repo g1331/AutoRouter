@@ -121,7 +121,9 @@
     "tableExpires": "过期时间",
     "neverExpires": "永不过期",
     "expired": "已过期",
-    "expiresIn": "{days} 天后过期"
+    "expiresIn": "{days} 天后过期",
+    "active": "有效",
+    "inactive": "已撤销"
   },
   "logs": {
     "title": "请求日志",
