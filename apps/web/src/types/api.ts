@@ -70,6 +70,27 @@ export interface UpstreamResponse {
 // Type alias for convenience
 export type Upstream = UpstreamResponse;
 
+// ========== Request Log 相关类型 ==========
+
+export interface RequestLogResponse {
+  id: string; // UUID
+  api_key_id: string | null; // UUID
+  upstream_id: string | null; // UUID
+  method: string | null;
+  path: string | null;
+  model: string | null;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  status_code: number | null;
+  duration_ms: number | null;
+  error_message: string | null;
+  created_at: string; // ISO 8601 date string
+}
+
+// Type alias for convenience
+export type RequestLog = RequestLogResponse;
+
 // ========== 分页相关类型 ==========
 
 export interface PaginatedResponse<T> {
@@ -82,6 +103,7 @@ export interface PaginatedResponse<T> {
 
 export type PaginatedAPIKeysResponse = PaginatedResponse<APIKeyResponse>;
 export type PaginatedUpstreamsResponse = PaginatedResponse<UpstreamResponse>;
+export type PaginatedRequestLogsResponse = PaginatedResponse<RequestLogResponse>;
 
 // ========== 错误响应类型 ==========
 

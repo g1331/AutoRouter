@@ -24,22 +24,22 @@
 
 ## 2. Frontend - Request Logs Hook & Component
 
-- [ ] 2.1 添加 TypeScript 类型定义 `types/api.ts`
+- [x] 2.1 添加 TypeScript 类型定义 `types/api.ts`
   - `RequestLog` 接口
   - `PaginatedRequestLogs` 接口
 
-- [ ] 2.2 创建 `use-request-logs.ts` hook
+- [x] 2.2 创建 `use-request-logs.ts` hook
   - 使用 React Query 获取日志列表
   - 支持分页和筛选参数
 
-- [ ] 2.3 创建 `logs-table.tsx` 组件
+- [x] 2.3 创建 `logs-table.tsx` 组件
   - Cassette Futurism 风格表格
-  - 显示字段：时间、API Key（前缀）、Upstream、模型、Token 用量、状态码、耗时
+  - 显示字段：时间、方法、路径、模型、Token 用量、状态码、耗时
   - 状态码颜色区分（成功/失败）
 
-- [ ] 2.4 验证前端组件
-  - 运行 `pnpm --filter web lint`
-  - 运行 `pnpm --filter web type-check`
+- [x] 2.4 验证前端组件
+  - 运行 `pnpm lint` (通过，新代码无警告)
+  - 运行 `pnpm exec tsc --noEmit` (通过)
 
 ## 3. Frontend - Page & Navigation
 
