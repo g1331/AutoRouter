@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { useCreateAPIKey } from "@/hooks/use-api-keys";
-import { useUpstreams } from "@/hooks/use-upstreams";
+import { useAllUpstreams } from "@/hooks/use-upstreams";
 import type { APIKeyCreateResponse } from "@/types/api";
 import { ShowKeyDialog } from "./show-key-dialog";
 import { getDateLocale } from "@/lib/date-locale";
@@ -56,10 +56,7 @@ export function CreateKeyDialog() {
   const locale = useLocale();
   const dateLocale = getDateLocale(locale);
 
-  const { data: upstreamsData, isLoading: upstreamsLoading } = useUpstreams(
-    1,
-    100
-  );
+  const { data: upstreams, isLoading: upstreamsLoading } = useAllUpstreams();
 
   const createKeySchema = z.object({
     name: z.string().min(1, t("keyNameRequired")).max(100),
@@ -160,12 +157,12 @@ export function CreateKeyDialog() {
                         <div className="type-body-medium text-[rgb(var(--md-sys-color-on-surface-variant))] text-center py-4">
                           {tCommon("loading")}
                         </div>
-                      ) : upstreamsData?.items.length === 0 ? (
+                      ) : !upstreams || upstreams.length === 0 ? (
                         <div className="type-body-medium text-[rgb(var(--md-sys-color-on-surface-variant))] text-center py-4">
                           {tCommon("noData")}
                         </div>
                       ) : (
-                        upstreamsData?.items.map((upstream) => (
+                        upstreams.map((upstream) => (
                           <FormField
                             key={upstream.id}
                             control={form.control}

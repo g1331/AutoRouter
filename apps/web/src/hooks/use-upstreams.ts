@@ -24,6 +24,46 @@ export function useUpstreams(page: number = 1, pageSize: number = 10) {
 }
 
 /**
+ * Fetch all upstreams (for dropdowns/selection lists)
+ */
+export function useAllUpstreams() {
+  const { apiClient } = useAuth();
+
+  return useQuery({
+    queryKey: ["upstreams", "all"],
+    queryFn: async () => {
+      // Fetch first page to get total count
+      const firstPage = await apiClient.get<PaginatedUpstreamsResponse>(
+        `/admin/upstreams?page=1&page_size=100`
+      );
+
+      // If all items fit in first page, return them
+      if (firstPage.items.length >= firstPage.total) {
+        return firstPage.items;
+      }
+
+      // Otherwise, fetch remaining pages in parallel
+      const totalPages = Math.ceil(firstPage.total / 100);
+      const remainingPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
+
+      const remainingPagesData = await Promise.all(
+        remainingPages.map(page =>
+          apiClient.get<PaginatedUpstreamsResponse>(
+            `/admin/upstreams?page=${page}&page_size=100`
+          )
+        )
+      );
+
+      // Combine all items
+      return [
+        ...firstPage.items,
+        ...remainingPagesData.flatMap(response => response.items),
+      ];
+    },
+  });
+}
+
+/**
  * Create new upstream
  */
 export function useCreateUpstream() {
