@@ -268,10 +268,13 @@ jobs:
             4. 创建分支（命名规则：{fix|feat|docs}/{简短描述}，如 fix/api-timeout-handling）
             5. 实现修复/功能
             6. 运行测试和静态检查（pytest, ruff, mypy）
-            7. 提交代码并创建PR，PR描述中关联issue（Closes #${{ github.event.issue.number }}）
+            7. 使用 gh pr create 命令创建 Pull Request，PR 描述中必须包含 \"Closes #${{ github.event.issue.number }}\"
             8. 移除 in-progress 标签
 
             分支命名：基于issue内容生成，格式 {fix|feat|docs}/{3-5个英文单词slug}，全小写连字符分隔。
+
+            创建PR示例命令：
+            gh pr create --title \"fix: 修复描述\" --body \"修复内容\\n\\nCloses #${{ github.event.issue.number }}\" --base master
 
             禁止泄露tokens/花费/定价信息。"
             --settings '{"alwaysThinkingEnabled":true}'
@@ -581,11 +584,15 @@ jobs:
             1. 先输出「需求摘要」「不确定点」「待确认清单」，在获得明确同意前仅提问
             2. 如果是Bug，依次使用 auggie → code-index → codex 定位，给出「复现路径 / 根因定位 / 修复方案」
             3. 获得确认后再改代码，创建分支（命名：{fix|feat|docs}/{简短描述}，如 fix/api-timeout-handling）
-            4. 运行测试/静态检查，完成后推送PR并附自检结果
-            5. 禁止泄露tokens/花费/定价信息
-            6. 在PR评论中再次被@时，仅更新当前PR并同步最新自检
+            4. 运行测试/静态检查
+            5. 使用 gh pr create 命令创建 Pull Request，PR 描述中必须包含 \"Closes #Issue号\"
+            6. 禁止泄露tokens/花费/定价信息
+            7. 在PR评论中再次被@时，仅更新当前PR并同步最新自检
 
-            分支命名：基于内容生成，格式 {fix|feat|docs}/{3-5个英文单词slug}，全小写连字符分隔。"
+            分支命名：基于内容生成，格式 {fix|feat|docs}/{3-5个英文单词slug}，全小写连字符分隔。
+
+            创建PR示例命令：
+            gh pr create --title \"fix: 修复描述\" --body \"修复内容\\n\\nCloses #Issue号\" --base master"
             --settings '{"alwaysThinkingEnabled":true}'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
