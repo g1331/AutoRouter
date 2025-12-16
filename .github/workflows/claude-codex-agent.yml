@@ -17,14 +17,17 @@ env:
 
 jobs:
   # ============================================================
-  # Job 1: 新issue自动分类和初步分析
+  # Job 1: 新issue自动分类（协作者信息充足时直接修复）
   # ============================================================
   triage:
     if: github.event_name == 'issues'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
+      pull-requests: write
       issues: write
+      actions: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,13 +43,15 @@ jobs:
             echo "is_collaborator=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Run Claude Code for triage
+      # === 非协作者：只做分类 ===
+      - name: Run Claude Code for triage (non-collaborator)
+        if: steps.check-collaborator.outputs.is_collaborator != 'true'
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
-            你是issue分类机器人（中文沟通）。当前issue创建者 ${{ github.event.issue.user.login }} ${{ steps.check-collaborator.outputs.is_collaborator == 'true' && '是' || '不是' }}仓库协作者。
+            你是issue分类机器人（中文沟通）。当前issue创建者 ${{ github.event.issue.user.login }} 不是仓库协作者。
 
             请分析这个issue并执行以下任务：
 
@@ -60,8 +65,7 @@ jobs:
 
             3. 根据情况添加状态标签并评论：
                a) 信息不足 → 添加 needs-info 标签，评论列出需要补充的具体信息
-               b) 信息充足且创建者是协作者 → 添加 approved 标签，评论确认将开始处理
-               c) 信息充足但创建者非协作者 → 添加 awaiting-approval 标签，评论说明需要等待维护者审批（可使用 /approve 命令）
+               b) 信息充足 → 添加 awaiting-approval 标签，评论说明需要等待维护者审批（可使用 /approve 命令）
 
             使用 gh 命令操作：
             - 添加标签: gh issue edit ${{ github.event.issue.number }} --add-label "标签名"
@@ -71,6 +75,239 @@ jobs:
           claude_args: --allowedTools Bash(gh:*)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # === 协作者：配置 MCP 环境 ===
+      - name: Setup Node 22 (for auggie / npx MCPs)
+        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install uv (for uvx-based MCPs)
+        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        run: |
+          python -m pip install --user uv
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install auggie CLI (pre-release with MCP support)
+        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        run: npm install -g @augmentcode/auggie@prerelease
+
+      - name: Install Codex CLI
+        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        run: npm install -g @openai/codex@latest
+
+      - name: Configure Codex MCP servers
+        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          config = f"""
+          [features]
+          rmcp_client = true
+
+          [mcp_servers.tavily-remote-mcp]
+          url = "https://mcp.tavily.com/mcp/?tavilyApiKey={os.environ['TAVILY_API_KEY']}"
+
+          [mcp_servers.context7]
+          command = "npx"
+          args = ["-y", "@upstash/context7-mcp"]
+
+          [mcp_servers.code-index]
+          command = "uvx"
+          args = ["code-index-mcp"]
+
+          [mcp_servers.auggie-mcp]
+          command = "auggie"
+          args = ["--mcp"]
+          env = {{ AUGMENT_API_TOKEN = "{os.environ['AUGMENT_API_TOKEN']}", AUGMENT_API_URL = "{os.environ['AUGMENT_API_URL']}" }}
+
+          [mcp_servers.chrome-devtools]
+          command = "npx"
+          args = ["chrome-devtools-mcp@latest", "--headless", "--no-sandbox", "--isolated=true"]
+          """
+
+          cfg_dir = Path.home() / ".codex"
+          cfg_dir.mkdir(parents=True, exist_ok=True)
+          (cfg_dir / "config.toml").write_text(config.strip() + "\n", encoding="utf-8")
+          PY
+
+      - name: Write MCP config
+        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        run: |
+          cat <<'EOF' > .mcp.json
+          {
+            "mcpServers": {
+              "tavily-remote-mcp": {
+                "type": "http",
+                "url": "https://mcp.tavily.com/mcp/?tavilyApiKey=${TAVILY_API_KEY}"
+              },
+              "context7": {
+                "type": "stdio",
+                "command": "npx",
+                "args": ["-y", "@upstash/context7-mcp"]
+              },
+              "code-index": {
+                "type": "stdio",
+                "command": "uvx",
+                "args": ["code-index-mcp"]
+              },
+              "codex": {
+                "type": "stdio",
+                "command": "uvx",
+                "args": ["--from", "git+https://github.com/GuDaStudio/codexmcp.git", "codexmcp"],
+                "env": {
+                  "OPENAI_BASE_URL": "${CODEX_BASE_URL}",
+                  "OPENAI_API_KEY": "${CODEX_API_KEY}"
+                }
+              },
+              "auggie-mcp": {
+                "type": "stdio",
+                "command": "auggie",
+                "args": ["--mcp"],
+                "env": {
+                  "AUGMENT_API_TOKEN": "${AUGMENT_API_TOKEN}",
+                  "AUGMENT_API_URL": "${AUGMENT_API_URL}"
+                }
+              },
+              "chrome-devtools": {
+                "type": "stdio",
+                "command": "npx",
+                "args": ["chrome-devtools-mcp@latest", "--headless", "--no-sandbox", "--isolated=true"]
+              }
+            }
+          }
+          EOF
+
+      - name: Configure Claude permissions
+        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        timeout-minutes: 2
+        run: |
+          mkdir -p ~/.claude
+          cat > ~/.claude/settings.json << 'EOF'
+          {
+            "permissions": {
+              "allow": [
+                "mcp__tavily-remote-mcp__*",
+                "mcp__context7__*",
+                "mcp__code-index__*",
+                "mcp__codex__*",
+                "mcp__auggie-mcp__*",
+                "mcp__chrome-devtools__*",
+                "Edit",
+                "Replace",
+                "Bash(git:*)",
+                "Bash(uv:*)",
+                "Bash(npm:*)",
+                "Bash(pnpm:*)",
+                "Bash(gh:*)",
+                "Bash(pytest:*)",
+                "Bash(ruff:*)",
+                "Bash(mypy:*)"
+              ],
+              "ask": []
+            },
+            "enableAllProjectMcpServers": true
+          }
+          EOF
+
+      # === 协作者：智能分类 + 自动修复 ===
+      - name: Run Claude Code for triage and auto-fix (collaborator)
+        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        timeout-minutes: 25
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          use_sticky_comment: true
+          branch_prefix: ""
+          claude_args: |
+            --mcp-config .mcp.json
+            --mcp-debug
+            --append-system-prompt "你是仓库专属机器人（中文沟通，代码/命令保持原文）。issue #${{ github.event.issue.number }} 由协作者 ${{ github.event.issue.user.login }} 创建。
+
+            ## 第一阶段：分类分析
+
+            1. 分析issue内容，添加分类标签（只能选一个）：
+               - bug: 报告问题/错误
+               - feature: 功能请求
+               - question: 疑问/讨论
+               - documentation: 文档相关
+
+            2. 判断信息是否充足（对于bug：是否有复现步骤、环境信息、错误日志等）
+
+            3. 根据信息充足程度决定下一步：
+               a) 信息不足 → 添加 needs-info 标签，评论列出需要补充的信息，**然后停止**
+               b) 信息充足 → 添加 approved + in-progress 标签，**继续第二阶段**
+
+            ## 第二阶段：自动修复（仅信息充足时执行）
+
+            1. 使用 auggie → code-index → codex 分析代码库，定位相关代码
+            2. 如果是bug：给出「复现路径 / 根因定位 / 修复方案」
+            3. 创建分支（命名规则：{fix|feat|docs}/{简短描述}，如 fix/api-timeout-handling）
+            4. 实现修复/功能
+            5. 运行测试和静态检查（pytest, ruff, mypy）
+            6. 使用 gh pr create 命令创建 Pull Request，PR 描述中必须包含 \"Closes #${{ github.event.issue.number }}\"
+            7. 移除 in-progress 标签
+
+            分支命名：基于issue内容生成，格式 {fix|feat|docs}/{3-5个英文单词slug}，全小写连字符分隔。
+
+            创建PR示例命令：
+            gh pr create --title \"fix: 修复描述\" --body \"修复内容\\n\\nCloses #${{ github.event.issue.number }}\" --base master
+
+            禁止泄露tokens/花费/定价信息。"
+            --settings '{"alwaysThinkingEnabled":true}'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Append status on cancellation
+        if: cancelled() && steps.check-collaborator.outputs.is_collaborator == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments \
+            --jq '.[-1].id')
+          CURRENT_BODY=$(gh api repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
+            --jq -r '.body')
+          gh api -X PATCH repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
+            -f body="${CURRENT_BODY}
+
+          ---
+
+          ⏸️ **工作流已取消** ($(date -u '+%Y-%m-%d %H:%M:%S UTC'))
+
+          工作流已被手动取消或超时（25分钟）。
+
+          查看 [运行日志](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) 了解详情。"
+          gh issue edit ${{ github.event.issue.number }} --remove-label "in-progress" 2>/dev/null || true
+
+      - name: Append status on failure
+        if: failure() && steps.check-collaborator.outputs.is_collaborator == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments \
+            --jq '.[-1].id')
+          CURRENT_BODY=$(gh api repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
+            --jq -r '.body')
+          gh api -X PATCH repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
+            -f body="${CURRENT_BODY}
+
+          ---
+
+          ❌ **操作失败** ($(date -u '+%Y-%m-%d %H:%M:%S UTC'))
+
+          工作流执行过程中遇到错误。
+
+          查看 [运行日志](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) 了解详情。
+
+          可能的原因：
+          - MCP server 初始化失败
+          - 代码执行错误
+          - 测试失败"
+          gh issue edit ${{ github.event.issue.number }} --remove-label "in-progress" 2>/dev/null || true
 
   # ============================================================
   # Job 2: 审批通过后自动开始工作
