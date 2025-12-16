@@ -255,6 +255,7 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          use_sticky_comment: true
           claude_args: |
             --mcp-config .mcp.json
             --mcp-debug
@@ -276,6 +277,67 @@ jobs:
             --settings '{"alwaysThinkingEnabled":true}'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Append status on cancellation
+        if: cancelled() && steps.check-collaborator.outputs.is_collaborator == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 获取最新的评论（由 bot 创建）
+          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments \
+            --jq '.[-1].id')
+
+          # 获取现有评论内容
+          CURRENT_BODY=$(gh api repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
+            --jq -r '.body')
+
+          # 追加取消状态
+          gh api -X PATCH repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
+            -f body="${CURRENT_BODY}
+
+          ---
+
+          ⏸️ **工作流已取消** ($(date -u '+%Y-%m-%d %H:%M:%S UTC'))
+
+          工作流已被手动取消或超时（25分钟）。
+
+          查看 [运行日志](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) 了解详情。"
+
+          # 移除 in-progress 标签
+          gh issue edit ${{ github.event.issue.number }} --remove-label "in-progress" 2>/dev/null || true
+
+      - name: Append status on failure
+        if: failure() && steps.check-collaborator.outputs.is_collaborator == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 获取最新的评论（由 bot 创建）
+          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments \
+            --jq '.[-1].id')
+
+          # 获取现有评论内容
+          CURRENT_BODY=$(gh api repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
+            --jq -r '.body')
+
+          # 追加失败状态
+          gh api -X PATCH repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
+            -f body="${CURRENT_BODY}
+
+          ---
+
+          ❌ **操作失败** ($(date -u '+%Y-%m-%d %H:%M:%S UTC'))
+
+          工作流执行过程中遇到错误。
+
+          查看 [运行日志](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) 了解详情。
+
+          可能的原因：
+          - MCP server 初始化失败
+          - 代码执行错误
+          - 测试失败"
+
+          # 移除 in-progress 标签
+          gh issue edit ${{ github.event.issue.number }} --remove-label "in-progress" 2>/dev/null || true
 
   # ============================================================
   # Job 3: 用户回复 needs-info 后重新分析
@@ -527,3 +589,58 @@ jobs:
             --settings '{"alwaysThinkingEnabled":true}'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Append status on cancellation
+        if: cancelled()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 获取最新的评论（由 bot 创建）
+          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments \
+            --jq '.[-1].id')
+
+          # 获取现有评论内容
+          CURRENT_BODY=$(gh api repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
+            --jq -r '.body')
+
+          # 追加取消状态
+          gh api -X PATCH repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
+            -f body="${CURRENT_BODY}
+
+          ---
+
+          ⏸️ **工作流已取消** ($(date -u '+%Y-%m-%d %H:%M:%S UTC'))
+
+          工作流已被手动取消或超时（25分钟）。
+
+          查看 [运行日志](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) 了解详情。"
+
+      - name: Append status on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 获取最新的评论（由 bot 创建）
+          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments \
+            --jq '.[-1].id')
+
+          # 获取现有评论内容
+          CURRENT_BODY=$(gh api repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
+            --jq -r '.body')
+
+          # 追加失败状态
+          gh api -X PATCH repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
+            -f body="${CURRENT_BODY}
+
+          ---
+
+          ❌ **操作失败** ($(date -u '+%Y-%m-%d %H:%M:%S UTC'))
+
+          工作流执行过程中遇到错误。
+
+          查看 [运行日志](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) 了解详情。
+
+          可能的原因：
+          - MCP server 初始化失败
+          - 代码执行错误
+          - 测试失败"
