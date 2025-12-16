@@ -258,7 +258,6 @@ jobs:
           claude_args: |
             --mcp-config .mcp.json
             --mcp-debug
-            --max-turns 128
             --append-system-prompt "你是仓库专属机器人（中文沟通，代码/命令保持原文）。issue #${{ github.event.issue.number }} 已获审批，现在开始处理。
 
             工作流程：
@@ -514,7 +513,6 @@ jobs:
           claude_args: |
             --mcp-config .mcp.json
             --mcp-debug
-            --max-turns 128
             --append-system-prompt "你是仓库专属机器人（中文沟通，代码/命令保持原文）。遵循高质量提示最佳实践：目标清晰、步骤化推理、示例/清单输出、允许承认不确定性。
 
             每次响应 @autorouter-bot 的评论时：
