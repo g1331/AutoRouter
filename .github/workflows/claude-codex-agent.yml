@@ -223,10 +223,8 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           use_sticky_comment: true
           branch_prefix: ""
-          claude_args: |
-            --mcp-config .mcp.json
-            --mcp-debug
-            --append-system-prompt "你是仓库专属机器人（中文沟通，代码/命令保持原文）。issue #${{ github.event.issue.number }} 由协作者 ${{ github.event.issue.user.login }} 创建。
+          prompt: |
+            你是仓库专属机器人（中文沟通，代码/命令保持原文）。issue #${{ github.event.issue.number }} 由协作者 ${{ github.event.issue.user.login }} 创建。
 
             ## 第一阶段：分类分析
 
@@ -249,16 +247,19 @@ jobs:
             3. 创建分支（命名规则：{fix|feat|docs}/{简短描述}，如 fix/api-timeout-handling）
             4. 实现修复/功能
             5. 运行测试和静态检查（pytest, ruff, mypy）
-            6. 使用 gh pr create 命令创建 Pull Request，PR 描述中必须包含 \"Closes #${{ github.event.issue.number }}\"
+            6. 使用 gh pr create 命令创建 Pull Request，PR 描述中必须包含 "Closes #${{ github.event.issue.number }}"
             7. 移除 in-progress 标签
 
             分支命名：基于issue内容生成，格式 {fix|feat|docs}/{3-5个英文单词slug}，全小写连字符分隔。
 
             创建PR示例命令：
-            gh pr create --title \"fix: 修复描述\" --body \"修复内容\\n\\nCloses #${{ github.event.issue.number }}\" --base master
+            gh pr create --title "fix: 修复描述" --body "修复内容\n\nCloses #${{ github.event.issue.number }}" --base master
 
-            禁止泄露tokens/花费/定价信息。"
-            --settings '{"alwaysThinkingEnabled":true}'
+            禁止泄露tokens/花费/定价信息。
+          claude_args: |
+            --mcp-config .mcp.json
+            --mcp-debug
+          settings: '{"alwaysThinkingEnabled":true}'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
