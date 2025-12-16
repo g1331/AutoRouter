@@ -256,6 +256,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           use_sticky_comment: true
+          branch_prefix: ""
           claude_args: |
             --mcp-config .mcp.json
             --mcp-debug
