@@ -216,7 +216,7 @@ jobs:
       # === 协作者：智能分类 + 自动修复 ===
       - name: Run Claude Code for triage and auto-fix (collaborator)
         if: steps.check-collaborator.outputs.is_collaborator == 'true'
-        timeout-minutes: 25
+        timeout-minutes: 120
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -279,7 +279,7 @@ jobs:
 
           ⏸️ **工作流已取消** ($(date -u '+%Y-%m-%d %H:%M:%S UTC'))
 
-          工作流已被手动取消或超时（25分钟）。
+          工作流已被手动取消或超时（120分钟）。
 
           查看 [运行日志](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) 了解详情。"
           gh issue edit ${{ github.event.issue.number }} --remove-label "in-progress" 2>/dev/null || true
@@ -488,7 +488,7 @@ jobs:
 
       - name: Run Claude Code to fix issue
         if: steps.check-collaborator.outputs.is_collaborator == 'true'
-        timeout-minutes: 25
+        timeout-minutes: 120
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -541,7 +541,7 @@ jobs:
 
           ⏸️ **工作流已取消** ($(date -u '+%Y-%m-%d %H:%M:%S UTC'))
 
-          工作流已被手动取消或超时（25分钟）。
+          工作流已被手动取消或超时（120分钟）。
 
           查看 [运行日志](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) 了解详情。"
 
@@ -808,7 +808,7 @@ jobs:
           EOF
 
       - name: Run Claude Code
-        timeout-minutes: 25
+        timeout-minutes: 120
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -857,7 +857,7 @@ jobs:
 
           ⏸️ **工作流已取消** ($(date -u '+%Y-%m-%d %H:%M:%S UTC'))
 
-          工作流已被手动取消或超时（25分钟）。
+          工作流已被手动取消或超时（120分钟）。
 
           查看 [运行日志](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) 了解详情。"
 
