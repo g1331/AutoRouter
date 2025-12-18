@@ -218,10 +218,12 @@ jobs:
       - name: Configure Codex
         if: steps.check_perm.outputs.allowed == 'true'
         run: |
-          mkdir -p ~/.codex
+          # 使用独立目录避免 action 覆盖配置
+          CODEX_HOME_DIR="/tmp/codex-argus-home"
+          mkdir -p "$CODEX_HOME_DIR"
 
-          # 创建 config.toml（使用 model_provider，无缩进）
-          cat > ~/.codex/config.toml << EOF
+          # 创建 config.toml
+          cat > "$CODEX_HOME_DIR/config.toml" << TOML
           model = "gpt-5.2"
           model_provider = "codex-api"
           disable_response_storage = true
@@ -231,24 +233,19 @@ jobs:
           base_url = "${CODEX_BASE_URL}"
           wire_api = "responses"
           requires_openai_auth = true
-          EOF
-
-          # 移除行首空格（heredoc 缩进问题）
-          sed -i 's/^          //' ~/.codex/config.toml
+          TOML
 
           # 创建 auth.json
-          cat > ~/.codex/auth.json << EOF
+          cat > "$CODEX_HOME_DIR/auth.json" << JSON
           {
             "OPENAI_API_KEY": "${CODEX_API_KEY}"
           }
-          EOF
-          sed -i 's/^          //' ~/.codex/auth.json
+          JSON
+
+          echo "CODEX_HOME_DIR=$CODEX_HOME_DIR" >> $GITHUB_ENV
 
           echo "Codex config:"
-          cat ~/.codex/config.toml
-          echo "---"
-          echo "Auth json:"
-          cat ~/.codex/auth.json
+          cat "$CODEX_HOME_DIR/config.toml"
         env:
           CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
           CODEX_BASE_URL: ${{ secrets.CODEX_BASE_URL }}
@@ -261,9 +258,12 @@ jobs:
         id: review
         uses: openai/codex-action@v1
         with:
-          openai-api-key: ${{ secrets.CODEX_API_KEY }}
+          # 不传 openai-api-key，让 Codex 使用我们在 auth.json 中配置的密钥
+          # 这样 action 不会启动自己的代理，避免配置冲突
+          codex-home: /tmp/codex-argus-home
           prompt-file: .github/codex/prompts/review.md
           sandbox: read-only
+          safety-strategy: unsafe
           output-schema: |
             {
               "type": "object",
