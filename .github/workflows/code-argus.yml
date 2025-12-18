@@ -8,7 +8,7 @@ on:
 
 env:
   CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
-  CODEX_BASE_URL: ${{ vars.CODEX_BASE_URL }}
+  CODEX_BASE_URL: ${{ secrets.CODEX_BASE_URL }}
 
 jobs:
   review:
@@ -221,7 +221,7 @@ jobs:
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.CODEX_API_KEY }}
-          responses-api-endpoint: ${{ vars.CODEX_BASE_URL }}
+          responses-api-endpoint: ${{ secrets.CODEX_BASE_URL }}
           prompt-file: .github/codex/prompts/review.md
           sandbox: read-only
           output-schema: |
