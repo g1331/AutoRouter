@@ -213,126 +213,59 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # ============================================================
-      # Step 4: 配置 Codex CLI
-      # ============================================================
-      - name: Configure Codex
-        if: steps.check_perm.outputs.allowed == 'true'
-        run: |
-          # 使用独立目录避免 action 覆盖配置
-          CODEX_HOME_DIR="/tmp/codex-argus-home"
-          mkdir -p "$CODEX_HOME_DIR"
-
-          # 创建 config.toml
-          cat > "$CODEX_HOME_DIR/config.toml" << TOML
-          model = "gpt-5.2"
-          model_provider = "codex-api"
-          model_reasoning_effort = "xhigh"
-          disable_response_storage = true
-
-          [model_providers.codex-api]
-          name = "codex-api"
-          base_url = "${CODEX_BASE_URL}"
-          wire_api = "responses"
-          requires_openai_auth = true
-          TOML
-
-          # 创建 auth.json
-          cat > "$CODEX_HOME_DIR/auth.json" << JSON
-          {
-            "OPENAI_API_KEY": "${CODEX_API_KEY}"
-          }
-          JSON
-
-          echo "CODEX_HOME_DIR=$CODEX_HOME_DIR" >> $GITHUB_ENV
-
-          echo "Codex config:"
-          cat "$CODEX_HOME_DIR/config.toml"
-        env:
-          CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
-          CODEX_BASE_URL: ${{ secrets.CODEX_BASE_URL }}
-
-      # ============================================================
-      # Step 5: 安装 Codex CLI
-      # ============================================================
-      - name: Setup Node.js
-        if: steps.check_perm.outputs.allowed == 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install Codex CLI
-        if: steps.check_perm.outputs.allowed == 'true'
-        run: npm install -g @openai/codex
-
-      # ============================================================
-      # Step 6: 运行 Code-Argus Review
+      # Step 4: 运行 Code-Argus Review (使用官方 Action)
       # ============================================================
       - name: Run Code-Argus
         if: steps.check_perm.outputs.allowed == 'true'
         id: review
-        run: |
-          # 创建 output schema 文件
-          cat > /tmp/output-schema.json << 'SCHEMA_EOF'
-          {
-            "type": "object",
-            "properties": {
-              "summary": {
-                "type": "object",
-                "properties": {
-                  "total_issues": { "type": "integer" },
-                  "high": { "type": "integer" },
-                  "medium": { "type": "integer" },
-                  "low": { "type": "integer" },
-                  "focus_areas": { "type": "array", "items": { "type": "string" } }
-                },
-                "required": ["total_issues", "high", "medium", "low", "focus_areas"],
-                "additionalProperties": false
-              },
-              "comments": {
-                "type": "array",
-                "items": {
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.CODEX_API_KEY }}
+          responses-api-endpoint: ${{ secrets.CODEX_BASE_URL }}/v1/responses
+          model: gpt-5.2
+          effort: xhigh
+          sandbox: read-only
+          prompt-file: .github/codex/prompts/review.md
+          output-schema: |
+            {
+              "type": "object",
+              "properties": {
+                "summary": {
                   "type": "object",
                   "properties": {
-                    "file": { "type": "string" },
-                    "line_start": { "type": "integer" },
-                    "line_end": { "type": "integer" },
-                    "severity": { "type": "string", "enum": ["high", "medium", "low"] },
-                    "title": { "type": "string" },
-                    "description": { "type": "string" },
-                    "suggestion": { "type": "string" }
+                    "total_issues": { "type": "integer" },
+                    "high": { "type": "integer" },
+                    "medium": { "type": "integer" },
+                    "low": { "type": "integer" },
+                    "focus_areas": { "type": "array", "items": { "type": "string" } }
                   },
-                  "required": ["file", "line_start", "line_end", "severity", "title", "description", "suggestion"],
+                  "required": ["total_issues", "high", "medium", "low", "focus_areas"],
                   "additionalProperties": false
+                },
+                "comments": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "file": { "type": "string" },
+                      "line_start": { "type": "integer" },
+                      "line_end": { "type": "integer" },
+                      "severity": { "type": "string", "enum": ["high", "medium", "low"] },
+                      "title": { "type": "string" },
+                      "description": { "type": "string" },
+                      "suggestion": { "type": "string" }
+                    },
+                    "required": ["file", "line_start", "line_end", "severity", "title", "description", "suggestion"],
+                    "additionalProperties": false
+                  }
                 }
-              }
-            },
-            "required": ["summary", "comments"],
-            "additionalProperties": false
-          }
-          SCHEMA_EOF
-
-          # 读取 prompt 文件内容
-          PROMPT_CONTENT=$(cat .github/codex/prompts/review.md)
-
-          # 运行 codex exec（prompt 作为位置参数）
-          CODEX_HOME="$CODEX_HOME_DIR" codex exec \
-            --output-schema /tmp/output-schema.json \
-            --sandbox read-only \
-            "$PROMPT_CONTENT" \
-            > /tmp/review_output.txt 2>&1 || true
-
-          # 输出结果
-          cat /tmp/review_output.txt
-
-          # 设置 output
-          {
-            echo 'final-message<<EOF'
-            cat /tmp/review_output.txt
-            echo 'EOF'
-          } >> $GITHUB_OUTPUT
+              },
+              "required": ["summary", "comments"],
+              "additionalProperties": false
+            }
 
       # ============================================================
-      # Step 7: 解析并发布评论
+      # Step 5: 解析并发布评论
       # ============================================================
       - name: Post review comments
         if: steps.check_perm.outputs.allowed == 'true'
@@ -345,24 +278,16 @@ jobs:
             const output = process.env.REVIEW_OUTPUT || '';
             const prNumber = parseInt(process.env.PR_NUMBER, 10);
 
-            // 检查是否有 API 错误（只检测行首的真正错误标记，避免匹配模型思考内容）
-            const lines = output.split('\n');
-            const errorLines = lines.filter(line => {
-              const trimmed = line.trim();
-              return trimmed.includes('No available providers') ||
-                     trimmed.includes('Service Unavailable') ||
-                     trimmed.match(/^ERROR:/i) ||
-                     trimmed.match(/^mcp:.*failed/i) ||
-                     trimmed.match(/^unexpected status (5\d\d|4\d\d)/i);
-            });
+            console.log('Raw output length:', output.length);
+            console.log('Raw output (first 500 chars):', output.slice(0, 500));
 
-            if (errorLines.length > 0) {
-              console.log('API error detected:', errorLines.slice(0, 3).join('; '));
+            // 检查是否为空输出
+            if (!output || output.trim() === '') {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: prNumber,
-                body: `## Code-Argus Review\n\n❌ **API Error**: The review service encountered an error.\n\n\`\`\`\n${errorLines.slice(0, 5).join('\n')}\n\`\`\`\n\nPlease check the [workflow logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n\nComment \`code-argus review\` to retry.`
+                body: `## Code-Argus Review\n\n❌ No output received from review service.\n\nPlease check the [workflow logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n\nComment \`code-argus review\` to retry.`
               });
               return;
             }
@@ -370,70 +295,67 @@ jobs:
             let review;
 
             try {
-              let jsonStr = null;
+              // 官方 Action 使用 output-schema 时，final-message 应该直接是干净的 JSON
+              // 尝试直接解析
+              review = JSON.parse(output.trim());
+              console.log('Parsed review directly:', JSON.stringify(review.summary));
+            } catch (directParseError) {
+              console.log('Direct JSON parse failed:', directParseError.message);
 
-              // Method 1: Look for ```json code block
-              const codeBlockMatch = output.match(/```json\s*([\s\S]*?)\s*```/);
-              if (codeBlockMatch) {
-                jsonStr = codeBlockMatch[1];
-              }
+              // 如果直接解析失败，尝试提取 JSON
+              try {
+                let jsonStr = null;
 
-              // Method 2: Find JSON after "codex" marker (Codex outputs multi-line formatted JSON)
-              if (!jsonStr) {
-                const codexMarkerIndex = output.lastIndexOf('codex\n');
-                if (codexMarkerIndex > -1) {
-                  const afterCodex = output.substring(codexMarkerIndex + 6).trim();
-                  // Find the JSON object that starts with { and ends with }
-                  const jsonStartIndex = afterCodex.indexOf('{');
-                  if (jsonStartIndex > -1) {
-                    // Find matching closing brace by counting braces
-                    let braceCount = 0;
-                    let jsonEndIndex = -1;
-                    for (let i = jsonStartIndex; i < afterCodex.length; i++) {
-                      if (afterCodex[i] === '{') braceCount++;
-                      if (afterCodex[i] === '}') braceCount--;
-                      if (braceCount === 0) {
-                        jsonEndIndex = i + 1;
-                        break;
+                // Method 1: Find the last complete JSON object in the output
+                const jsonMatch = output.match(/\{[\s\S]*"summary"[\s\S]*"comments"[\s\S]*\}(?=[^}]*$)/);
+                if (jsonMatch) {
+                  jsonStr = jsonMatch[0];
+                }
+
+                // Method 2: Find JSON after "codex" marker
+                if (!jsonStr) {
+                  const codexMarkerIndex = output.lastIndexOf('codex\n');
+                  if (codexMarkerIndex > -1) {
+                    const afterCodex = output.substring(codexMarkerIndex + 6).trim();
+                    const jsonStartIndex = afterCodex.indexOf('{');
+                    if (jsonStartIndex > -1) {
+                      let braceCount = 0;
+                      let jsonEndIndex = -1;
+                      for (let i = jsonStartIndex; i < afterCodex.length; i++) {
+                        if (afterCodex[i] === '{') braceCount++;
+                        if (afterCodex[i] === '}') braceCount--;
+                        if (braceCount === 0) {
+                          jsonEndIndex = i + 1;
+                          break;
+                        }
+                      }
+                      if (jsonEndIndex > jsonStartIndex) {
+                        jsonStr = afterCodex.substring(jsonStartIndex, jsonEndIndex);
                       }
                     }
-                    if (jsonEndIndex > jsonStartIndex) {
-                      jsonStr = afterCodex.substring(jsonStartIndex, jsonEndIndex);
-                    }
                   }
                 }
-              }
 
-              // Method 3: Fallback - find single-line JSON starting with {"summary"
-              if (!jsonStr) {
-                const lines = output.split('\n');
-                for (let i = lines.length - 1; i >= 0; i--) {
-                  const line = lines[i].trim();
-                  if (line.startsWith('{"summary"')) {
-                    jsonStr = line;
-                    break;
-                  }
+                if (!jsonStr) {
+                  throw new Error('No JSON object found in output');
                 }
-              }
 
-              if (!jsonStr) {
-                throw new Error('No JSON output found');
+                console.log('Found JSON string length:', jsonStr.length);
+                review = JSON.parse(jsonStr);
+                console.log('Parsed review from extraction:', JSON.stringify(review.summary));
+              } catch (extractError) {
+                console.log('JSON extraction failed:', extractError.message);
+                console.log('Raw output (last 2000 chars):', output.slice(-2000));
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  body: `## Code-Argus Review\n\n❌ Failed to parse review output.\n\nPlease check the [workflow logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n\nComment \`code-argus review\` to retry.`
+                });
+                return;
               }
-
-              console.log('Found JSON string length:', jsonStr.length);
-              review = JSON.parse(jsonStr);
-              console.log('Parsed review:', JSON.stringify(review.summary));
-            } catch (e) {
-              console.log('Failed to parse JSON output:', e.message);
-              console.log('Raw output (last 2000 chars):', output.slice(-2000));
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: prNumber,
-                body: `## Code-Argus Review\n\n❌ Failed to parse review output.\n\nPlease check the [workflow logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n\nComment \`code-argus review\` to retry.`
-              });
-              return;
             }
+
             const severityEmoji = { high: '🔴', medium: '🟡', low: '🟢' };
 
             // 发布行内评论
@@ -505,7 +427,7 @@ jobs:
             });
 
       # ============================================================
-      # Step 8: 错误处理
+      # Step 6: 错误处理
       # ============================================================
       - name: Handle failure
         if: failure() && steps.check_perm.outputs.allowed == 'true'
