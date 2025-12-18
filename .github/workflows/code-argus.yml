@@ -213,7 +213,44 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # ============================================================
-      # Step 4: 运行 Code-Argus Review
+      # Step 4: 配置 Codex CLI
+      # ============================================================
+      - name: Configure Codex
+        if: steps.check_perm.outputs.allowed == 'true'
+        run: |
+          mkdir -p ~/.codex
+
+          # 创建 config.toml（使用 model_provider）
+          cat > ~/.codex/config.toml << 'EOF'
+          model = "gpt-5.2"
+          model_provider = "codex-api"
+          disable_response_storage = true
+
+          [model_providers.codex-api]
+          name = "codex-api"
+          base_url = "${CODEX_BASE_URL}"
+          wire_api = "responses"
+          requires_openai_auth = true
+          EOF
+
+          # 替换环境变量
+          sed -i "s|\${CODEX_BASE_URL}|${CODEX_BASE_URL}|g" ~/.codex/config.toml
+
+          # 创建 auth.json
+          cat > ~/.codex/auth.json << EOF
+          {
+            "codex-api": "${CODEX_API_KEY}"
+          }
+          EOF
+
+          echo "Codex config created:"
+          cat ~/.codex/config.toml
+        env:
+          CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
+          CODEX_BASE_URL: ${{ secrets.CODEX_BASE_URL }}
+
+      # ============================================================
+      # Step 5: 运行 Code-Argus Review
       # ============================================================
       - name: Run Code-Argus
         if: steps.check_perm.outputs.allowed == 'true'
@@ -221,7 +258,6 @@ jobs:
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.CODEX_API_KEY }}
-          responses-api-endpoint: ${{ secrets.CODEX_BASE_URL }}
           prompt-file: .github/codex/prompts/review.md
           sandbox: read-only
           output-schema: |
@@ -260,7 +296,7 @@ jobs:
             }
 
       # ============================================================
-      # Step 5: 解析并发布评论
+      # Step 6: 解析并发布评论
       # ============================================================
       - name: Post review comments
         if: steps.check_perm.outputs.allowed == 'true'
@@ -362,7 +398,7 @@ jobs:
             });
 
       # ============================================================
-      # Step 6: 错误处理
+      # Step 7: 错误处理
       # ============================================================
       - name: Handle failure
         if: failure() && steps.check_perm.outputs.allowed == 'true'
