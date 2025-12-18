@@ -340,9 +340,23 @@ jobs:
         with:
           script: |
             const output = process.env.REVIEW_OUTPUT || '';
+            const prNumber = parseInt(process.env.PR_NUMBER, 10);
+
+            // 检查是否有 API 错误
+            const errorMatch = output.match(/ERROR[:\s].*?(503|502|500|401|403|404).*?Service Unavailable|No available providers|error/i);
+            if (errorMatch || output.includes('No available providers') || output.includes('Service Unavailable')) {
+              console.log('API error detected in output');
+              const errorLines = output.split('\n').filter(line => line.includes('ERROR') || line.includes('error')).slice(0, 5);
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: `## Code-Argus Review\n\n❌ **API Error**: The review service encountered an error.\n\n\`\`\`\n${errorLines.join('\n') || 'Unknown error'}\n\`\`\`\n\nPlease check the [workflow logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n\nComment \`code-argus review\` to retry.`
+              });
+              return;
+            }
 
             let review;
-            const prNumber = parseInt(process.env.PR_NUMBER, 10);
 
             try {
               const jsonMatch = output.match(/```json\s*([\s\S]*?)\s*```/) ||
