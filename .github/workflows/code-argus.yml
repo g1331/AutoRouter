@@ -251,56 +251,81 @@ jobs:
           CODEX_BASE_URL: ${{ secrets.CODEX_BASE_URL }}
 
       # ============================================================
-      # Step 5: 运行 Code-Argus Review
+      # Step 5: 安装 Codex CLI
+      # ============================================================
+      - name: Setup Node.js
+        if: steps.check_perm.outputs.allowed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Codex CLI
+        if: steps.check_perm.outputs.allowed == 'true'
+        run: npm install -g @openai/codex
+
+      # ============================================================
+      # Step 6: 运行 Code-Argus Review
       # ============================================================
       - name: Run Code-Argus
         if: steps.check_perm.outputs.allowed == 'true'
         id: review
-        uses: openai/codex-action@v1
-        with:
-          # 不传 openai-api-key，让 Codex 使用我们在 auth.json 中配置的密钥
-          # 这样 action 不会启动自己的代理，避免配置冲突
-          codex-home: /tmp/codex-argus-home
-          prompt-file: .github/codex/prompts/review.md
-          sandbox: read-only
-          safety-strategy: unsafe
-          output-schema: |
-            {
-              "type": "object",
-              "properties": {
-                "summary": {
+        run: |
+          # 创建 output schema 文件
+          cat > /tmp/output-schema.json << 'SCHEMA_EOF'
+          {
+            "type": "object",
+            "properties": {
+              "summary": {
+                "type": "object",
+                "properties": {
+                  "total_issues": { "type": "integer" },
+                  "high": { "type": "integer" },
+                  "medium": { "type": "integer" },
+                  "low": { "type": "integer" },
+                  "focus_areas": { "type": "array", "items": { "type": "string" } }
+                },
+                "required": ["total_issues", "high", "medium", "low", "focus_areas"]
+              },
+              "comments": {
+                "type": "array",
+                "items": {
                   "type": "object",
                   "properties": {
-                    "total_issues": { "type": "integer" },
-                    "high": { "type": "integer" },
-                    "medium": { "type": "integer" },
-                    "low": { "type": "integer" },
-                    "focus_areas": { "type": "array", "items": { "type": "string" } }
+                    "file": { "type": "string" },
+                    "line_start": { "type": "integer" },
+                    "line_end": { "type": "integer" },
+                    "severity": { "type": "string", "enum": ["high", "medium", "low"] },
+                    "title": { "type": "string" },
+                    "description": { "type": "string" },
+                    "suggestion": { "type": "string" }
                   },
-                  "required": ["total_issues", "high", "medium", "low", "focus_areas"]
-                },
-                "comments": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "file": { "type": "string" },
-                      "line_start": { "type": "integer" },
-                      "line_end": { "type": "integer" },
-                      "severity": { "type": "string", "enum": ["high", "medium", "low"] },
-                      "title": { "type": "string" },
-                      "description": { "type": "string" },
-                      "suggestion": { "type": "string" }
-                    },
-                    "required": ["file", "line_start", "line_end", "severity", "title", "description", "suggestion"]
-                  }
+                  "required": ["file", "line_start", "line_end", "severity", "title", "description", "suggestion"]
                 }
-              },
-              "required": ["summary", "comments"]
-            }
+              }
+            },
+            "required": ["summary", "comments"]
+          }
+          SCHEMA_EOF
+
+          # 运行 codex exec
+          CODEX_HOME="$CODEX_HOME_DIR" codex exec \
+            --prompt-file .github/codex/prompts/review.md \
+            --output-schema /tmp/output-schema.json \
+            --sandbox read-only \
+            > /tmp/review_output.txt 2>&1 || true
+
+          # 输出结果
+          cat /tmp/review_output.txt
+
+          # 设置 output
+          {
+            echo 'final-message<<EOF'
+            cat /tmp/review_output.txt
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
 
       # ============================================================
-      # Step 6: 解析并发布评论
+      # Step 7: 解析并发布评论
       # ============================================================
       - name: Post review comments
         if: steps.check_perm.outputs.allowed == 'true'
@@ -402,7 +427,7 @@ jobs:
             });
 
       # ============================================================
-      # Step 7: 错误处理
+      # Step 8: 错误处理
       # ============================================================
       - name: Handle failure
         if: failure() && steps.check_perm.outputs.allowed == 'true'
