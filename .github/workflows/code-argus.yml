@@ -285,7 +285,8 @@ jobs:
                   "low": { "type": "integer" },
                   "focus_areas": { "type": "array", "items": { "type": "string" } }
                 },
-                "required": ["total_issues", "high", "medium", "low", "focus_areas"]
+                "required": ["total_issues", "high", "medium", "low", "focus_areas"],
+                "additionalProperties": false
               },
               "comments": {
                 "type": "array",
@@ -300,11 +301,13 @@ jobs:
                     "description": { "type": "string" },
                     "suggestion": { "type": "string" }
                   },
-                  "required": ["file", "line_start", "line_end", "severity", "title", "description", "suggestion"]
+                  "required": ["file", "line_start", "line_end", "severity", "title", "description", "suggestion"],
+                  "additionalProperties": false
                 }
               }
             },
-            "required": ["summary", "comments"]
+            "required": ["summary", "comments"],
+            "additionalProperties": false
           }
           SCHEMA_EOF
 
