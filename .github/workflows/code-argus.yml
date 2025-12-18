@@ -307,11 +307,14 @@ jobs:
           }
           SCHEMA_EOF
 
-          # 运行 codex exec
+          # 读取 prompt 文件内容
+          PROMPT_CONTENT=$(cat .github/codex/prompts/review.md)
+
+          # 运行 codex exec（prompt 作为位置参数）
           CODEX_HOME="$CODEX_HOME_DIR" codex exec \
-            --prompt-file .github/codex/prompts/review.md \
             --output-schema /tmp/output-schema.json \
             --sandbox read-only \
+            "$PROMPT_CONTENT" \
             > /tmp/review_output.txt 2>&1 || true
 
           # 输出结果
