@@ -221,7 +221,8 @@ jobs:
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.CODEX_API_KEY }}
-          responses-api-endpoint: ${{ secrets.CODEX_BASE_URL }}
+          # CODEX_BASE_URL 格式: https://xxx.com/v1，需要加 /responses
+          responses-api-endpoint: ${{ secrets.CODEX_BASE_URL }}/responses
           model: gpt-5.2
           effort: xhigh
           sandbox: read-only
