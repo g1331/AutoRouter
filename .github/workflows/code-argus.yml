@@ -226,6 +226,7 @@ jobs:
           cat > "$CODEX_HOME_DIR/config.toml" << TOML
           model = "gpt-5.2"
           model_provider = "codex-api"
+          model_reasoning_effort = "xhigh"
           disable_response_storage = true
 
           [model_providers.codex-api]
