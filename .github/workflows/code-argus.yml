@@ -370,18 +370,38 @@ jobs:
             let review;
 
             try {
-              const jsonMatch = output.match(/```json\s*([\s\S]*?)\s*```/) ||
-                               output.match(/\{[\s\S]*"summary"[\s\S]*\}/);
-              const jsonStr = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : output;
+              let jsonStr = null;
+
+              // Method 1: Look for ```json code block
+              const codeBlockMatch = output.match(/```json\s*([\s\S]*?)\s*```/);
+              if (codeBlockMatch) {
+                jsonStr = codeBlockMatch[1];
+              } else {
+                // Method 2: Find the last line that starts with {"summary"
+                // This avoids matching JSON-like content in the model's thinking
+                const lines = output.split('\n');
+                for (let i = lines.length - 1; i >= 0; i--) {
+                  const line = lines[i].trim();
+                  if (line.startsWith('{"summary"')) {
+                    jsonStr = line;
+                    break;
+                  }
+                }
+              }
+
+              if (!jsonStr) {
+                throw new Error('No JSON output found');
+              }
+
               review = JSON.parse(jsonStr);
             } catch (e) {
               console.log('Failed to parse JSON output:', e.message);
-              console.log('Raw output:', output);
+              console.log('Raw output (last 2000 chars):', output.slice(-2000));
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: prNumber,
-                body: `## Code-Argus Review\n\n${output}`
+                body: `## Code-Argus Review\n\n❌ Failed to parse review output.\n\nPlease check the [workflow logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n\nComment \`code-argus review\` to retry.`
               });
               return;
             }
