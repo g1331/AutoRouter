@@ -220,8 +220,8 @@ jobs:
         run: |
           mkdir -p ~/.codex
 
-          # 创建 config.toml（使用 model_provider）
-          cat > ~/.codex/config.toml << 'EOF'
+          # 创建 config.toml（使用 model_provider，无缩进）
+          cat > ~/.codex/config.toml << EOF
           model = "gpt-5.2"
           model_provider = "codex-api"
           disable_response_storage = true
@@ -233,8 +233,8 @@ jobs:
           requires_openai_auth = true
           EOF
 
-          # 替换环境变量
-          sed -i "s|\${CODEX_BASE_URL}|${CODEX_BASE_URL}|g" ~/.codex/config.toml
+          # 移除行首空格（heredoc 缩进问题）
+          sed -i 's/^          //' ~/.codex/config.toml
 
           # 创建 auth.json
           cat > ~/.codex/auth.json << EOF
@@ -242,9 +242,13 @@ jobs:
             "OPENAI_API_KEY": "${CODEX_API_KEY}"
           }
           EOF
+          sed -i 's/^          //' ~/.codex/auth.json
 
-          echo "Codex config created:"
+          echo "Codex config:"
           cat ~/.codex/config.toml
+          echo "---"
+          echo "Auth json:"
+          cat ~/.codex/auth.json
         env:
           CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
           CODEX_BASE_URL: ${{ secrets.CODEX_BASE_URL }}
