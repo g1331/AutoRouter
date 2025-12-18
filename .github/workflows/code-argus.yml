@@ -345,11 +345,19 @@ jobs:
             const output = process.env.REVIEW_OUTPUT || '';
             const prNumber = parseInt(process.env.PR_NUMBER, 10);
 
-            // 检查是否有 API 错误
-            const errorMatch = output.match(/ERROR[:\s].*?(503|502|500|401|403|404).*?Service Unavailable|No available providers|error/i);
-            if (errorMatch || output.includes('No available providers') || output.includes('Service Unavailable')) {
+            // 检查是否有 API 错误（只检测真正的 API 错误，不检测思考过程中的 error 词汇）
+            const hasApiError = output.includes('No available providers') ||
+                                output.includes('Service Unavailable') ||
+                                output.match(/ERROR:.*?(503|502|500|401|403|404)/i) ||
+                                output.match(/unexpected status (5\d\d|4\d\d)/i);
+            if (hasApiError) {
               console.log('API error detected in output');
-              const errorLines = output.split('\n').filter(line => line.includes('ERROR') || line.includes('error')).slice(0, 5);
+              const errorLines = output.split('\n').filter(line =>
+                line.includes('ERROR:') ||
+                line.includes('No available providers') ||
+                line.includes('Service Unavailable') ||
+                line.match(/unexpected status/i)
+              ).slice(0, 5);
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
