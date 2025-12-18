@@ -376,9 +376,36 @@ jobs:
               const codeBlockMatch = output.match(/```json\s*([\s\S]*?)\s*```/);
               if (codeBlockMatch) {
                 jsonStr = codeBlockMatch[1];
-              } else {
-                // Method 2: Find the last line that starts with {"summary"
-                // This avoids matching JSON-like content in the model's thinking
+              }
+
+              // Method 2: Find JSON after "codex" marker (Codex outputs multi-line formatted JSON)
+              if (!jsonStr) {
+                const codexMarkerIndex = output.lastIndexOf('codex\n');
+                if (codexMarkerIndex > -1) {
+                  const afterCodex = output.substring(codexMarkerIndex + 6).trim();
+                  // Find the JSON object that starts with { and ends with }
+                  const jsonStartIndex = afterCodex.indexOf('{');
+                  if (jsonStartIndex > -1) {
+                    // Find matching closing brace by counting braces
+                    let braceCount = 0;
+                    let jsonEndIndex = -1;
+                    for (let i = jsonStartIndex; i < afterCodex.length; i++) {
+                      if (afterCodex[i] === '{') braceCount++;
+                      if (afterCodex[i] === '}') braceCount--;
+                      if (braceCount === 0) {
+                        jsonEndIndex = i + 1;
+                        break;
+                      }
+                    }
+                    if (jsonEndIndex > jsonStartIndex) {
+                      jsonStr = afterCodex.substring(jsonStartIndex, jsonEndIndex);
+                    }
+                  }
+                }
+              }
+
+              // Method 3: Fallback - find single-line JSON starting with {"summary"
+              if (!jsonStr) {
                 const lines = output.split('\n');
                 for (let i = lines.length - 1; i >= 0; i--) {
                   const line = lines[i].trim();
@@ -393,7 +420,9 @@ jobs:
                 throw new Error('No JSON output found');
               }
 
+              console.log('Found JSON string length:', jsonStr.length);
               review = JSON.parse(jsonStr);
+              console.log('Parsed review:', JSON.stringify(review.summary));
             } catch (e) {
               console.log('Failed to parse JSON output:', e.message);
               console.log('Raw output (last 2000 chars):', output.slice(-2000));
