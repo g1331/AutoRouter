@@ -345,24 +345,24 @@ jobs:
             const output = process.env.REVIEW_OUTPUT || '';
             const prNumber = parseInt(process.env.PR_NUMBER, 10);
 
-            // 检查是否有 API 错误（只检测真正的 API 错误，不检测思考过程中的 error 词汇）
-            const hasApiError = output.includes('No available providers') ||
-                                output.includes('Service Unavailable') ||
-                                output.match(/ERROR:.*?(503|502|500|401|403|404)/i) ||
-                                output.match(/unexpected status (5\d\d|4\d\d)/i);
-            if (hasApiError) {
-              console.log('API error detected in output');
-              const errorLines = output.split('\n').filter(line =>
-                line.includes('ERROR:') ||
-                line.includes('No available providers') ||
-                line.includes('Service Unavailable') ||
-                line.match(/unexpected status/i)
-              ).slice(0, 5);
+            // 检查是否有 API 错误（只检测行首的真正错误标记，避免匹配模型思考内容）
+            const lines = output.split('\n');
+            const errorLines = lines.filter(line => {
+              const trimmed = line.trim();
+              return trimmed.includes('No available providers') ||
+                     trimmed.includes('Service Unavailable') ||
+                     trimmed.match(/^ERROR:/i) ||
+                     trimmed.match(/^mcp:.*failed/i) ||
+                     trimmed.match(/^unexpected status (5\d\d|4\d\d)/i);
+            });
+
+            if (errorLines.length > 0) {
+              console.log('API error detected:', errorLines.slice(0, 3).join('; '));
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: prNumber,
-                body: `## Code-Argus Review\n\n❌ **API Error**: The review service encountered an error.\n\n\`\`\`\n${errorLines.join('\n') || 'Unknown error'}\n\`\`\`\n\nPlease check the [workflow logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n\nComment \`code-argus review\` to retry.`
+                body: `## Code-Argus Review\n\n❌ **API Error**: The review service encountered an error.\n\n\`\`\`\n${errorLines.slice(0, 5).join('\n')}\n\`\`\`\n\nPlease check the [workflow logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n\nComment \`code-argus review\` to retry.`
               });
               return;
             }
