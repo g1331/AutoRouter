@@ -239,7 +239,7 @@ jobs:
           # 创建 auth.json
           cat > ~/.codex/auth.json << EOF
           {
-            "codex-api": "${CODEX_API_KEY}"
+            "OPENAI_API_KEY": "${CODEX_API_KEY}"
           }
           EOF
 
