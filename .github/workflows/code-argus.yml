@@ -12,6 +12,9 @@ env:
 
 jobs:
   review:
+    concurrency:
+      group: code-argus-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     # PR 自动触发 或 PR 评论中包含触发关键词
     if: |
