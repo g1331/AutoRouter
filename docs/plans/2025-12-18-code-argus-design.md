@@ -40,26 +40,20 @@
 
 ### 权限控制
 
-仅 collaborators 可触发手动 review
+所有触发（自动/手动）都会检查权限，仅 collaborators (admin/write) 可执行 review
 
 ### 工作流程
 
 ```
 1. PR 创建 / 评论触发
         ↓
-2. 检查权限（是否 collaborator）
+2. [prepare] 检查权限 + 获取 PR 元信息
         ↓
-3. 获取 PR diff + 代码库上下文
+3. [agent] Checkout 代码 + 准备 prompt
         ↓
-4. 读取配置（.github/reviewbot.yaml + CLAUDE.md）
+4. [agent] Codex 深度分析（可探索代码库上下文）
         ↓
-5. 调用 Codex 进行深度分析
-        ↓
-6. 按严重性排序，筛选最重要的问题
-        ↓
-7. 发布行内评论（带 Suggested Changes）
-        ↓
-8. 发布总结评论
+5. [publish] 发布 PR Review（总结 + 行内评论）
 ```
 
 ---
@@ -113,58 +107,42 @@ Review completed. **3** suggestions posted.
 
 `.github/reviewbot.yaml`
 
-### 完整配置示例
+### 当前支持的配置
 
 ```yaml
 # Code-Argus 配置文件
+# 位置: .github/reviewbot.yaml
 
-# 基础设置
 language: auto          # auto | zh-CN | en-US（默认跟随 PR）
 max_comments: 10        # 软上限，超过只保留最重要的
 min_severity: low       # 最低显示级别: high | medium | low
+```
 
+> **注意**：配置文件解析依赖 `yq` 工具。若 runner 没有安装 `yq`，将使用默认值。
+
+### 未来计划支持的配置（v1.1+）
+
+```yaml
 # 触发设置
 triggers:
-  on_pr_open: true      # PR 创建时自动触发
-  keywords:             # 手动触发关键词
-    - "code-argus review"
-    - "argus review"
-    - "code-argus 审查"
-
-# 权限控制
-permissions:
-  allowed_users:
-    - collaborators     # collaborators | contributors | everyone
+  on_pr_open: true
+  keywords: ["code-argus review", "argus review"]
 
 # Review 重点
 focus:
-  correctness: true     # 正确性/Bug
-  security: true        # 安全问题
-  architecture: true    # 架构/设计
-  testing: true         # 测试覆盖
-  performance: false    # 性能问题（默认关闭）
-  style: false          # 代码风格（永远关闭）
+  correctness: true
+  security: true
+  architecture: true
+  testing: true
 
 # 自定义规则
 areas:
   api:
-    globs: ["src/api/**", "routes/**"]
+    globs: ["src/api/**"]
     rules:
       - id: auth_required
         description: "所有 API 端点必须有身份验证"
         severity: high
-  database:
-    globs: ["src/db/**", "models/**"]
-    rules:
-      - id: no_raw_sql
-        description: "禁止拼接 SQL，使用参数化查询"
-        severity: high
-```
-
-### 配置优先级
-
-```
-.github/reviewbot.yaml > CLAUDE.md / AGENTS.md > 默认配置
 ```
 
 ---
@@ -177,12 +155,15 @@ areas:
 
 ### 所需 Secrets/Variables
 
-| 名称 | 类型 | 说明 |
-|------|------|------|
-| `CODEX_API_KEY` | Secret | API 密钥 |
-| `CODEX_BASE_URL` | Variable | 可选，自定义 endpoint（默认 OpenAI 官方） |
+| 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `CODEX_API_KEY` | Secret | 是 | API 密钥 |
+| `CODEX_BASE_URL` | Secret | 是 | API 端点（格式：`https://api.example.com/v1`） |
+| `CODEX_MODEL` | Variable | 否 | 模型名称（默认：`gpt-5.2-codex`） |
 
-### Workflow 示例
+### Workflow 结构
+
+当前实现采用 3 个 jobs 的架构：
 
 ```yaml
 name: Code-Argus Review
@@ -193,59 +174,56 @@ on:
   issue_comment:
     types: [created]
 
+concurrency:
+  group: code-argus-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
-  review:
+  # Job 1: 权限检查 + PR 元信息
+  prepare:
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'pull_request' ||
-      (github.event.issue.pull_request &&
-       contains(github.event.comment.body, 'argus review'))
-
-    permissions:
-      contents: read
-      pull-requests: write
-
+    outputs:
+      allowed: ${{ steps.check_perm.outputs.allowed }}
+      pr_number: ${{ steps.prmeta.outputs.number }}
+      base_ref: ${{ steps.prmeta.outputs.base_ref }}
     steps:
       - name: Check permissions
-        id: check_perm
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              username: context.actor
-            });
-            return ['admin', 'write'].includes(data.permission);
+        # 检查是否为 collaborator (admin/write)
+      - name: Get PR metadata
+        # 获取 PR 号和 base 分支
 
+  # Job 2: Codex 分析
+  agent:
+    needs: prepare
+    if: needs.prepare.outputs.allowed == 'true'
+    timeout-minutes: 45
+    outputs:
+      review_output: ${{ steps.review.outputs.final-message }}
+    steps:
       - name: Checkout
-        if: steps.check_perm.outputs.result == 'true'
-        uses: actions/checkout@v4
-        with:
-          ref: refs/pull/${{ github.event.pull_request.number || github.event.issue.number }}/merge
-
-      - name: Fetch PR refs
-        run: |
-          git fetch --no-tags origin \
-            ${{ github.event.pull_request.base.ref }} \
-            +refs/pull/${{ github.event.pull_request.number }}/head
-
+      - name: Load config
+        # 读取 .github/reviewbot.yaml
+      - name: Prepare prompt file
+        # 生成包含 diff 的 prompt
       - name: Run Code-Argus
-        id: review
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.CODEX_API_KEY }}
-          responses-api-endpoint: ${{ vars.CODEX_BASE_URL }}
-          prompt: |
-            You are Code-Argus, an expert code reviewer...
-            (自定义 prompt)
+          responses-api-endpoint: ${{ secrets.CODEX_BASE_URL }}/responses
+          model: ${{ steps.config.outputs.model }}
+          effort: xhigh
+          sandbox: read-only
+          prompt-file: .github/codex/prompts/review.md
+          output-schema: |
+            { ... }  # 结构化 JSON schema
 
+  # Job 3: 发布评论
+  publish:
+    needs: [prepare, agent]
+    if: needs.prepare.outputs.allowed == 'true' && always()
+    steps:
       - name: Post review comments
-        uses: actions/github-script@v7
-        with:
-          script: |
-            // 解析 steps.review.outputs.final-message
-            // 发布评论到 PR
+        # 使用 pulls.createReview 发布总结 + 行内评论
 ```
 
 ### 文件结构
@@ -272,63 +250,54 @@ You are Code-Argus, an expert code reviewer focused on high-impact issues.
 
 1. **High signal-to-noise**: Only comment if it would likely change a merge decision
 2. **No style nits**: Never comment on formatting, naming conventions, or subjective preferences
-3. **Actionable feedback**: Every comment must include a concrete fix using GitHub suggested changes format
+3. **Actionable feedback**: Every comment must include a concrete fix
 
 ## Review Focus Areas
 
-Analyze the PR for:
 - **Correctness**: Logic errors, edge cases, null handling, race conditions
 - **Security**: XSS, injection, auth bypass, sensitive data exposure
 - **Architecture**: Breaking changes, API compatibility, cross-system impact
 - **Testing**: Missing tests for critical paths, inadequate coverage
 
-## Output Format
-
-For each issue, output in this exact format:
-
-{
-  "file": "path/to/file.ts",
-  "line_start": 42,
-  "line_end": 45,
-  "severity": "high|medium|low",
-  "title": "Brief issue title",
-  "description": "Why this is a problem",
-  "suggestion": "// Fixed code here"
-}
+Do NOT comment on:
+- Code style, formatting, or naming conventions
+- Minor optimizations that don't affect functionality
+- Personal preferences or "nice to have" suggestions
 
 ## Instructions
 
-1. Review ONLY the changes in this PR (diff between base and head)
-2. Limit to most important issues
-3. Respond in the same language as the PR description
-4. If no significant issues found, respond with empty array
+1. You MAY read any file in the repository and run searches to understand context
+2. Review ONLY the changes in this PR (diff provided below); use other files only for context and impact verification
+3. Sort issues by severity (high first), then limit to max_comments
+4. If language is 'auto', respond in the same language as the PR title/description
+5. If no significant issues found, return empty comments array
+6. Output ONLY the JSON object, no other text
 ```
+
+> **关键设计**：通过 `You MAY read any file in the repository` 授权 Agent 探索代码库，
+> 即使使用 `output-schema` 约束最终输出格式，Agent 内部仍可多轮调用工具读取文件、搜索代码。
 
 ---
 
 ## 错误处理与边界情况
 
-### 错误处理策略
+### 当前实现的错误处理
 
 | 场景 | 处理方式 |
 |------|----------|
-| API Key 无效 | 发评论提示配置错误，workflow 失败 |
+| 无权限触发 | 静默忽略，不执行 review |
+| Agent 执行失败 | 发评论提示失败，附带 workflow logs 链接 |
+| 输出为空 | 发评论提示无输出，可重试 |
+| JSON 解析失败 | 发评论提示解析失败，可重试 |
+| 无问题发现 | 发总结："No significant issues found." |
+
+### 未来计划的错误处理（v1.1+）
+
+| 场景 | 计划处理方式 |
+|------|----------|
 | API 超时/限流 | 重试 3 次，间隔指数退避 |
-| PR 过大（>500 文件） | 只审查前 100 个变更文件，总结中说明 |
-| 无权限触发 | 静默忽略，不发任何评论 |
-| 配置文件格式错误 | 使用默认配置，发评论警告 |
-| Codex 返回空结果 | 发总结："Review completed. No issues found." |
-
-### 跳过的文件类型
-
-```yaml
-skip_patterns:
-  - "*.lock"
-  - "*.min.js"
-  - "dist/**"
-  - "vendor/**"
-  - "**/*.generated.*"
-```
+| PR 过大（>500 文件） | 只审查前 100 个变更文件 |
+| 跳过特定文件类型 | `*.lock`, `*.min.js`, `dist/**` 等 |
 
 ---
 
@@ -342,97 +311,34 @@ skip_patterns:
 | 评论关键词触发 | ✅ | `code-argus review` / `argus review` / `code-argus 审查` |
 | 行内评论 + Suggested Changes | ✅ | GitHub 原生 suggestion 代码块 |
 | 总结评论 | ✅ | 统计 + 关注领域 |
-| 自定义 API endpoint | ✅ | 通过 `CODEX_BASE_URL` secret |
+| 自定义 API endpoint | ✅ | 通过 `CODEX_BASE_URL` Secret |
+| 模型可配置 | ✅ | 通过 `CODEX_MODEL` Variable |
+| 代码库上下文探索 | ✅ | Agent 可读取仓库任意文件 |
 | 基础配置文件支持 | ⚠️ | 仅支持 `language`, `max_comments`, `min_severity` |
 | 仅 collaborators 权限 | ✅ | admin/write 权限检查 |
+| 并发控制 | ✅ | `cancel-in-progress` 避免重复 review |
 
-#### v1.0 已知限制
+#### 技术发现：output-schema 与 Agent 探索
 
-当前实现使用 `output-schema` 强制 Codex 返回结构化 JSON，这导致：
-
-1. **单轮分析**：Codex 无法进行多轮 Agent 探索
-2. **缺乏代码库上下文**：只能分析 diff，无法读取相关文件、追踪依赖
-3. **可能遗漏问题**：
-   - 破坏性变更（修改被其他地方调用的函数签名）
-   - API 兼容性问题（修改公共接口）
-   - 跨文件影响（修改共享状态、配置）
-
-### v1.1 - 两阶段 Review（设计中）
-
-#### 问题背景
-
-`output-schema` 参数强制 Codex 在单次调用中返回符合 schema 的 JSON，这限制了 Agent 的探索能力。对于真正高质量的代码审查，需要：
-
-- 读取被修改函数的调用方
-- 检查类型定义和接口兼容性
-- 分析配置文件和环境变量影响
-- 理解业务逻辑上下文
-
-#### 解决方案：两阶段 Review
+在开发过程中，我们最初误以为 `output-schema` 会限制 Agent 的探索能力（只能单轮返回）。
+经过测试验证：
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     阶段 1: Agent 深度分析                       │
-│                                                                 │
-│  输入: PR diff + 完整代码库访问                                   │
-│  模式: 无 output-schema，允许多轮工具调用                         │
-│  能力:                                                          │
-│    - 读取相关文件 (imports, dependencies)                        │
-│    - 搜索函数调用方 (grep, codebase search)                      │
-│    - 分析类型定义和接口                                          │
-│    - 检查测试覆盖                                                │
-│  输出: 自由格式的深度分析报告                                     │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│                   阶段 2: 结构化格式输出                          │
-│                                                                 │
-│  输入: 阶段 1 的分析报告                                         │
-│  模式: 使用 output-schema 强制 JSON 格式                         │
-│  能力:                                                          │
-│    - 提取关键问题                                                │
-│    - 按严重性排序                                                │
-│    - 生成 suggestion 代码块                                      │
-│  输出: 结构化 JSON (summary + comments)                          │
-└─────────────────────────────────────────────────────────────────┘
+误解: output-schema = 单轮，无法探索代码库
+实际: output-schema 只约束最终输出格式，Agent 内部仍可多轮调用工具
 ```
 
-#### 实现方案
+**解决方案**：在 prompt 中明确授权 `You MAY read any file in the repository`，
+Agent 就会在需要时读取相关文件、搜索代码，最终输出符合 schema 的 JSON。
 
-**方案 A: 双 Codex 调用（推荐）**
+这意味着**不需要两阶段设计**，单次 Codex 调用即可实现：
+- Agent 自由探索代码库上下文
+- 结构化 JSON 输出
 
-```yaml
-# 阶段 1: Agent 探索
-- name: Deep Analysis
-  id: analysis
-  uses: openai/codex-action@v1
-  with:
-    prompt: |
-      Analyze this PR deeply. You can read any file in the codebase.
-      Focus on: breaking changes, security, cross-file impact.
-      Output a detailed analysis report.
-    # 注意: 不使用 output-schema
-
-# 阶段 2: 结构化输出
-- name: Format Results
-  uses: openai/codex-action@v1
-  with:
-    prompt: |
-      Based on this analysis, extract issues in JSON format:
-      ${{ steps.analysis.outputs.final-message }}
-    output-schema: |
-      { "type": "object", "properties": { ... } }
-```
-
-**方案 B: 单 Codex + 后处理**
-
-使用单次 Agent 调用，在 workflow 中用 JavaScript 解析输出并提取 JSON。
-
-#### v1.1 功能清单
+### v1.1 - 配置增强（计划中）
 
 | 功能 | 优先级 | 说明 |
 |------|--------|------|
-| 两阶段 Review | P0 | 解决代码库上下文缺失问题 |
 | 自定义 review 关注点 | P1 | 配置文件中定义 focus areas |
 | 自定义触发关键词 | P2 | 配置文件中定义 triggers |
 | 自定义规则（areas + rules） | P2 | 按文件路径定义特定规则 |
@@ -452,10 +358,12 @@ skip_patterns:
 |------|------|
 | 名称 | Code-Argus |
 | 技术栈 | GitHub Action + openai/codex-action |
-| 模型 | OpenAI Codex（支持自定义 endpoint） |
-| 触发 | PR 创建自动 + `argus review` 手动 |
-| 输出 | 行内评论（Suggested Changes）+ 总结 |
+| 架构 | 3 jobs: prepare → agent → publish |
+| 模型 | 可配置（默认 `gpt-5.2-codex`） |
+| 触发 | PR 创建自动 + 手动（`code-argus review` / `argus review` / `code-argus 审查`） |
+| 输出 | PR Review（总结 + 行内 Suggested Changes） |
 | 重点 | 正确性/安全/架构/测试，不做风格 |
-| 配置 | `.github/reviewbot.yaml` + CLAUDE.md |
+| 上下文 | Agent 可探索完整代码库 |
+| 配置 | `.github/reviewbot.yaml`（3 项） |
 | 语言 | 默认跟随 PR，可配置 |
-| 权限 | 仅 collaborators |
+| 权限 | 仅 collaborators (admin/write) |

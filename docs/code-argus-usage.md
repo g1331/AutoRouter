@@ -127,6 +127,8 @@ min_severity: low
 | `max_comments` | `10` | 最多发布的评论数量 |
 | `min_severity` | `low` | 最低显示的严重性级别 |
 
+> **注意**：配置文件解析依赖 `yq` 工具。若 runner 没有安装 `yq`，将使用默认值。
+
 ---
 
 ## 工作流程
@@ -134,17 +136,15 @@ min_severity: low
 ```
 1. PR 创建 / 评论触发
         ↓
-2. 检查权限（是否 collaborator）
+2. [prepare] 检查权限 + 获取 PR 元信息
         ↓
-3. 获取 PR diff
+3. [agent] 读取配置 + 准备 prompt
         ↓
-4. 读取配置（.github/reviewbot.yaml）
+4. [agent] Codex 深度分析
+   - 可读取仓库任意文件理解上下文
+   - 可搜索代码追踪依赖和调用方
         ↓
-5. 调用 Codex 进行深度分析
-        ↓
-6. 发布行内评论（带 Suggested Changes）
-        ↓
-7. 发布总结评论
+5. [publish] 发布 PR Review（总结 + 行内评论）
 ```
 
 ---
@@ -167,9 +167,10 @@ min_severity: low
 | 项目 | 值 |
 |------|-----|
 | Action | `openai/codex-action@v1` |
-| Model | `gpt-5.2-codex` |
+| Model | 可配置（默认 `gpt-5.2-codex`） |
 | Reasoning Effort | `xhigh` |
 | Sandbox | `read-only` |
+| 上下文能力 | Agent 可读取仓库任意文件 |
 
 ---
 
@@ -201,8 +202,11 @@ Code-Argus 基于 OpenAI Codex，支持所有主流编程语言。
 - 评论关键词手动触发
 - 行内评论 + GitHub Suggested Changes
 - 总结评论 + 统计
+- **代码库上下文探索**（Agent 可读取仓库文件）
 - 基础配置文件支持（3 项）
 - 自定义 API 端点支持
+- 模型可配置（`CODEX_MODEL` Variable）
+- 并发控制（避免重复 review）
 
 ### v1.1 (计划中)
 
