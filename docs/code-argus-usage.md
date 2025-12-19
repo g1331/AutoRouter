@@ -106,6 +106,10 @@ Comment `code-argus review` to re-trigger review
 # en-US: 英文
 language: auto
 
+# 使用的模型（可选）
+# 默认: gpt-5.2-codex
+model: gpt-5.2-codex
+
 # 最大评论数量（超过只保留最重要的）
 max_comments: 10
 
@@ -118,6 +122,7 @@ min_severity: low
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
 | `language` | `auto` | 响应语言，`auto` 跟随 PR 语言 |
+| `model` | `gpt-5.2-codex` | 使用的模型 |
 | `max_comments` | `10` | 最多发布的评论数量 |
 | `min_severity` | `low` | 最低显示的严重性级别 |
 
@@ -161,7 +166,7 @@ min_severity: low
 | 项目 | 值 |
 |------|-----|
 | Action | `openai/codex-action@v1` |
-| Model | `gpt-5.2` |
+| Model | `gpt-5.2-codex` |
 | Reasoning Effort | `xhigh` |
 | Sandbox | `read-only` |
 
