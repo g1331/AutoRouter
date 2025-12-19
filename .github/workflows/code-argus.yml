@@ -10,11 +10,18 @@ env:
   CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
   CODEX_BASE_URL: ${{ secrets.CODEX_BASE_URL }}
 
+concurrency:
+  group: code-argus-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
 jobs:
-  review:
-    concurrency:
-      group: code-argus-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
-      cancel-in-progress: true
+  prepare:
+    name: Prepare
     runs-on: ubuntu-latest
     # PR 自动触发 或 PR 评论中包含触发关键词
     if: |
@@ -24,10 +31,10 @@ jobs:
         contains(github.event.comment.body, 'argus review') ||
         contains(github.event.comment.body, 'code-argus 审查')))
 
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: write
+    outputs:
+      allowed: ${{ steps.check_perm.outputs.allowed }}
+      pr_number: ${{ steps.prmeta.outputs.number }}
+      base_ref: ${{ steps.prmeta.outputs.base_ref }}
 
     steps:
       # ============================================================
@@ -51,9 +58,9 @@ jobs:
               }
               return allowed;
             } catch (error) {
-                console.log(`Permission check failed: ${error.message}`);
-                core.setOutput('allowed', false);
-                return false;
+              console.log(`Permission check failed: ${error.message}`);
+              core.setOutput('allowed', false);
+              return false;
             }
 
       - name: Add reaction to trigger comment
@@ -72,82 +79,102 @@ jobs:
               console.log(`Failed to add reaction: ${error.message}`);
             }
 
+      - name: Get PR metadata
+        if: steps.check_perm.outputs.allowed == 'true'
+        id: prmeta
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request?.number ?? context.payload.issue?.number;
+            if (!prNumber) {
+              core.setOutput('number', '');
+              core.setOutput('base_ref', '');
+              return;
+            }
+
+            // pull_request 事件可直接拿到 base.ref；issue_comment 事件需要额外查询
+            let baseRef = context.payload.pull_request?.base?.ref;
+            if (!baseRef) {
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber
+              });
+              baseRef = pr.base.ref;
+            }
+
+            core.setOutput('number', prNumber.toString());
+            core.setOutput('base_ref', baseRef || '');
+
+      - name: Post review started status
+        if: steps.check_perm.outputs.allowed == 'true' && steps.prmeta.outputs.number != ''
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ steps.prmeta.outputs.number }}
+        with:
+          script: |
+            try {
+              const prNumber = parseInt(process.env.PR_NUMBER, 10);
+              if (!prNumber || Number.isNaN(prNumber)) return;
+
+              const marker = '<!-- code-argus-status -->';
+              const body = `${marker}\n## Code-Argus Review\n\n审查已开始，预计需要几分钟。完成后会发布 review summary。`;
+
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                per_page: 100
+              });
+
+              const existing = comments.find((comment) => comment.body && comment.body.includes(marker));
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                  body
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  body
+                });
+              }
+            } catch (error) {
+              console.log(`Failed to post status comment: ${error.message}`);
+            }
+
+  agent:
+    name: Agent
+    runs-on: ubuntu-latest
+    needs: prepare
+    if: needs.prepare.outputs.allowed == 'true'
+    timeout-minutes: 45
+
+    outputs:
+      review_output: ${{ steps.review.outputs.final-message }}
+
+    steps:
       # ============================================================
       # Step 2: Checkout PR 代码
       # ============================================================
       - name: Checkout
-        if: steps.check_perm.outputs.allowed == 'true'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Get PR number
-        if: steps.check_perm.outputs.allowed == 'true'
-        id: pr
-        run: |
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            echo "number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
-            echo "base=${{ github.event.pull_request.base.ref }}" >> $GITHUB_OUTPUT
-          else
-            echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
-            BASE=$(gh pr view ${{ github.event.issue.number }} --json baseRefName --jq '.baseRefName')
-            echo "base=$BASE" >> $GITHUB_OUTPUT
-          fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Post review started status
-        if: steps.check_perm.outputs.allowed == 'true'
-        uses: actions/github-script@v7
-        env:
-          PR_NUMBER: ${{ steps.pr.outputs.number }}
-        with:
-          script: |
-            const prNumber = parseInt(process.env.PR_NUMBER, 10);
-            if (!prNumber || Number.isNaN(prNumber)) {
-              console.log('PR number not available, skipping status comment.');
-              return;
-            }
-
-            const marker = '<!-- code-argus-status -->';
-            const body = `${marker}\n## Code-Argus Review\n\n审查已开始，预计需要几分钟。完成后会发布总结评论。`;
-
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
-              per_page: 100
-            });
-
-            const existing = comments.find((comment) => comment.body && comment.body.includes(marker));
-
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: prNumber,
-                body
-              });
-            }
-
       - name: Fetch PR refs
-        if: steps.check_perm.outputs.allowed == 'true'
         run: |
-          git fetch --no-tags origin ${{ steps.pr.outputs.base }}
-          git fetch --no-tags origin +refs/pull/${{ steps.pr.outputs.number }}/head:refs/remotes/origin/pr-head
+          git fetch --no-tags origin ${{ needs.prepare.outputs.base_ref }}
+          git fetch --no-tags origin +refs/pull/${{ needs.prepare.outputs.pr_number }}/head:refs/remotes/origin/pr-head
 
       # ============================================================
       # Step 3: 准备 Review 输入
       # ============================================================
       - name: Load config
-        if: steps.check_perm.outputs.allowed == 'true'
         id: config
         run: |
           MAX_COMMENTS=10
@@ -166,26 +193,35 @@ jobs:
           echo "min_severity=$MIN_SEVERITY" >> $GITHUB_OUTPUT
           echo "language=$LANGUAGE" >> $GITHUB_OUTPUT
 
+      - name: Fetch PR title/body
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ needs.prepare.outputs.pr_number }}
+        with:
+          script: |
+            const fs = require('fs');
+            const prNumber = parseInt(process.env.PR_NUMBER, 10);
+            if (!prNumber || Number.isNaN(prNumber)) {
+              fs.writeFileSync('/tmp/pr_title.txt', '', 'utf8');
+              fs.writeFileSync('/tmp/pr_body.txt', '', 'utf8');
+              return;
+            }
+
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber
+            });
+
+            fs.writeFileSync('/tmp/pr_title.txt', pr.title || '', 'utf8');
+            fs.writeFileSync('/tmp/pr_body.txt', pr.body || '', 'utf8');
+
       - name: Prepare prompt file
-        if: steps.check_perm.outputs.allowed == 'true'
         run: |
           mkdir -p .github/codex/prompts
 
           # 获取 diff 并保存到临时文件（避免 shell 变量长度限制）
-          git diff origin/${{ steps.pr.outputs.base }}...origin/pr-head > /tmp/pr_diff.txt
-
-          # 获取 PR 信息
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            gh pr view ${{ github.event.pull_request.number }} --json title,body \
-              --jq '.title' > /tmp/pr_title.txt
-            gh pr view ${{ github.event.pull_request.number }} --json title,body \
-              --jq '.body // ""' > /tmp/pr_body.txt
-          else
-            gh pr view ${{ steps.pr.outputs.number }} --json title,body \
-              --jq '.title' > /tmp/pr_title.txt
-            gh pr view ${{ steps.pr.outputs.number }} --json title,body \
-              --jq '.body // ""' > /tmp/pr_body.txt
-          fi
+          git diff origin/${{ needs.prepare.outputs.base_ref }}...origin/pr-head > /tmp/pr_diff.txt
 
           # 生成 prompt 文件
           cat > .github/codex/prompts/review.md << 'PROMPT_EOF'
@@ -271,14 +307,11 @@ jobs:
           echo '```diff' >> .github/codex/prompts/review.md
           cat /tmp/pr_diff.txt >> .github/codex/prompts/review.md
           echo '```' >> .github/codex/prompts/review.md
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # ============================================================
       # Step 4: 运行 Code-Argus Review (使用官方 Action)
       # ============================================================
       - name: Run Code-Argus
-        if: steps.check_perm.outputs.allowed == 'true'
         id: review
         uses: openai/codex-action@v1
         with:
@@ -327,19 +360,68 @@ jobs:
               "additionalProperties": false
             }
 
-      # ============================================================
-      # Step 5: 解析并发布评论
-      # ============================================================
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    needs: [prepare, agent]
+    if: needs.prepare.outputs.allowed == 'true' && always()
+
+    steps:
       - name: Post review comments
-        if: steps.check_perm.outputs.allowed == 'true'
         uses: actions/github-script@v7
         env:
-          REVIEW_OUTPUT: ${{ steps.review.outputs.final-message }}
-          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          REVIEW_OUTPUT: ${{ needs.agent.outputs.review_output }}
+          PR_NUMBER: ${{ needs.prepare.outputs.pr_number }}
+          AGENT_RESULT: ${{ needs.agent.result }}
         with:
           script: |
-            const output = process.env.REVIEW_OUTPUT || '';
             const prNumber = parseInt(process.env.PR_NUMBER, 10);
+            if (!prNumber || Number.isNaN(prNumber)) return;
+
+            const agentResult = process.env.AGENT_RESULT || '';
+            const output = process.env.REVIEW_OUTPUT || '';
+
+            if (agentResult !== 'success') {
+              // Agent 阶段失败/被取消：更新状态并提示日志
+              try {
+                const marker = '<!-- code-argus-status -->';
+                const statusBody = `${marker}\n## Code-Argus Review\n\n审查失败。请查看 workflow logs。`;
+
+                const { data: comments } = await github.rest.issues.listComments({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  per_page: 100
+                });
+
+                const existing = comments.find((comment) => comment.body && comment.body.includes(marker));
+                if (existing) {
+                  await github.rest.issues.updateComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    comment_id: existing.id,
+                    body: statusBody
+                  });
+                } else {
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: prNumber,
+                    body: statusBody
+                  });
+                }
+              } catch (e) {
+                console.log(`Failed to update status comment: ${e.message}`);
+              }
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: `## Code-Argus Review\n\n❌ Review failed. Please check the [workflow logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n\nComment \`code-argus review\` to retry.`
+              });
+              return;
+            }
 
             console.log('Raw output length:', output.length);
             console.log('Raw output (first 500 chars):', output.slice(0, 500));
@@ -359,7 +441,6 @@ jobs:
 
             try {
               // 官方 Action 使用 output-schema 时，final-message 应该直接是干净的 JSON
-              // 尝试直接解析
               review = JSON.parse(output.trim());
               console.log('Parsed review directly:', JSON.stringify(review.summary));
             } catch (directParseError) {
@@ -558,7 +639,6 @@ jobs:
               });
 
               const existing = comments.find((comment) => comment.body && comment.body.includes(marker));
-
               if (existing) {
                 await github.rest.issues.updateComment({
                   owner: context.repo.owner,
@@ -577,55 +657,3 @@ jobs:
             } catch (e) {
               console.log(`Failed to update status comment: ${e.message}`);
             }
-
-      # ============================================================
-      # Step 6: 错误处理
-      # ============================================================
-      - name: Handle failure
-        if: failure() && steps.check_perm.outputs.allowed == 'true'
-        uses: actions/github-script@v7
-        env:
-          PR_NUMBER: ${{ steps.pr.outputs.number }}
-        with:
-          script: |
-            const prNumber = parseInt(process.env.PR_NUMBER, 10);
-            if (!prNumber || isNaN(prNumber)) return;
-
-            try {
-              const marker = '<!-- code-argus-status -->';
-              const statusBody = `${marker}\n## Code-Argus Review\n\n审查失败。请查看 workflow logs。`;
-
-              const { data: comments } = await github.rest.issues.listComments({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: prNumber,
-                per_page: 100
-              });
-
-              const existing = comments.find((comment) => comment.body && comment.body.includes(marker));
-
-              if (existing) {
-                await github.rest.issues.updateComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  comment_id: existing.id,
-                  body: statusBody
-                });
-              } else {
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: prNumber,
-                  body: statusBody
-                });
-              }
-            } catch (e) {
-              console.log(`Failed to update status comment: ${e.message}`);
-            }
-
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
-              body: `## Code-Argus Review\n\n❌ Review failed. Please check the [workflow logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n\nComment \`code-argus review\` to retry.`
-            });
