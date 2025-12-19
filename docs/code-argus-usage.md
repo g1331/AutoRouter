@@ -17,7 +17,7 @@ Code-Argus 是一个高质量的 AI 代码审查机器人，专注于发现真�
 
 ## 快速开始
 
-### 1. 配置 Secrets
+### 1. 配置 Secrets / Variables
 
 在仓库的 **Settings → Secrets and variables → Actions** 中添加：
 
@@ -25,6 +25,12 @@ Code-Argus 是一个高质量的 AI 代码审查机器人，专注于发现真�
 |-------------|------|
 | `CODEX_API_KEY` | OpenAI API 密钥 |
 | `CODEX_BASE_URL` | API 端点（格式：`https://api.example.com/v1`） |
+
+（可选）Variables：
+
+| Variable 名称 | 默认值 | 说明 |
+|--------------|--------|------|
+| `CODEX_MODEL` | `gpt-5.2-codex` | 使用的模型 |
 
 ### 2. 触发 Review
 
@@ -106,10 +112,6 @@ Comment `code-argus review` to re-trigger review
 # en-US: 英文
 language: auto
 
-# 使用的模型（可选）
-# 默认: gpt-5.2-codex
-model: gpt-5.2-codex
-
 # 最大评论数量（超过只保留最重要的）
 max_comments: 10
 
@@ -122,7 +124,6 @@ min_severity: low
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
 | `language` | `auto` | 响应语言，`auto` 跟随 PR 语言 |
-| `model` | `gpt-5.2-codex` | 使用的模型 |
 | `max_comments` | `10` | 最多发布的评论数量 |
 | `min_severity` | `low` | 最低显示的严重性级别 |
 

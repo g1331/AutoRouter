@@ -9,6 +9,7 @@ on:
 env:
   CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
   CODEX_BASE_URL: ${{ secrets.CODEX_BASE_URL }}
+  CODEX_MODEL: ${{ vars.CODEX_MODEL }}
 
 concurrency:
   group: code-argus-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
@@ -139,14 +140,13 @@ jobs:
           MAX_COMMENTS=10
           MIN_SEVERITY=low
           LANGUAGE=auto
-          MODEL=gpt-5.2-codex
+          MODEL="${CODEX_MODEL:-gpt-5.2-codex}"
 
           if [ -f ".github/reviewbot.yaml" ]; then
             if command -v yq &> /dev/null; then
               MAX_COMMENTS=$(yq '.max_comments // 10' .github/reviewbot.yaml)
               MIN_SEVERITY=$(yq '.min_severity // "low"' .github/reviewbot.yaml)
               LANGUAGE=$(yq '.language // "auto"' .github/reviewbot.yaml)
-              MODEL=$(yq '.model // "gpt-5.2-codex"' .github/reviewbot.yaml)
             fi
           fi
 
