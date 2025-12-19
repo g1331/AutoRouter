@@ -224,7 +224,7 @@ jobs:
           openai-api-key: ${{ secrets.CODEX_API_KEY }}
           # CODEX_BASE_URL 格式: https://xxx.com/v1，需要加 /responses
           responses-api-endpoint: ${{ secrets.CODEX_BASE_URL }}/responses
-          model: gpt-5.2
+          model: gpt-5.2-codex
           effort: xhigh
           sandbox: read-only
           prompt-file: .github/codex/prompts/review.md
