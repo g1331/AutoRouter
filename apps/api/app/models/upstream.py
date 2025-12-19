@@ -19,9 +19,7 @@ class UpstreamConfig(BaseModel):
     provider: Provider = Field(..., description="Provider type (openai or anthropic)")
     base_url: HttpUrl = Field(..., description="Base URL for the upstream API")
     api_key: SecretStr = Field(..., description="API key for authentication")
-    is_default: bool = Field(
-        default=False, description="Whether this is the default upstream"
-    )
+    is_default: bool = Field(default=False, description="Whether this is the default upstream")
     timeout: int = Field(default=60, description="Request timeout in seconds", ge=1)
 
 
@@ -66,9 +64,7 @@ class UpstreamManager:
 
         if name not in self.upstreams:
             available = list(self.upstreams.keys())
-            raise KeyError(
-                f"Upstream '{name}' not found. Available upstreams: {available}"
-            )
+            raise KeyError(f"Upstream '{name}' not found. Available upstreams: {available}")
 
         return self.upstreams[name]
 

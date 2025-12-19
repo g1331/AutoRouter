@@ -22,7 +22,7 @@ class InterceptHandler(logging.Handler):
             level = record.levelno
 
         # Find caller from where the logged message originated
-        frame = sys._getframe(6)
+        frame = sys._getframe(6)  # pyright: ignore[reportPrivateUsage]
         depth = 6
         while frame and frame.f_code.co_filename == logging.__file__:
             if frame.f_back:
@@ -31,9 +31,7 @@ class InterceptHandler(logging.Handler):
             else:
                 break
 
-        logger.opt(depth=depth, exception=record.exc_info).log(
-            level, record.getMessage()
-        )
+        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
 
 
 def setup_logging(log_level: str = "INFO") -> None:

@@ -1,7 +1,6 @@
 """Tests for proxy routes."""
 
-import json
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
@@ -121,9 +120,7 @@ class TestProxyRoutes:
         assert "available_upstreams" in data["detail"]
 
     @patch("app.services.proxy_client.forward_request")
-    def test_proxy_all_http_methods(
-        self, mock_forward: AsyncMock, test_app_with_manager: FastAPI
-    ):
+    def test_proxy_all_http_methods(self, mock_forward: AsyncMock, test_app_with_manager: FastAPI):
         """Should support GET, POST, PUT, DELETE, PATCH methods."""
         client = TestClient(test_app_with_manager)
         mock_forward.return_value = (
@@ -142,9 +139,7 @@ class TestProxyErrorHandling:
     """Tests for error handling in proxy routes."""
 
     @patch("app.services.proxy_client.forward_request")
-    def test_upstream_timeout_error(
-        self, mock_forward: AsyncMock, test_app_with_manager: FastAPI
-    ):
+    def test_upstream_timeout_error(self, mock_forward: AsyncMock, test_app_with_manager: FastAPI):
         """Should return 504 on upstream timeout."""
         from app.core.exceptions import UpstreamTimeoutError
 

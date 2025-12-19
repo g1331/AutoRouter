@@ -68,15 +68,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     db.add(db_upstream)
 
                 await db.commit()
-                logger.info(f"Imported {len(settings.upstreams)} upstreams from environment to database")
+                logger.info(
+                    f"Imported {len(settings.upstreams)} upstreams from environment to database"
+                )
 
                 # Reload from database
                 db_upstreams = await load_upstreams_from_db(db)
 
             # Convert database upstreams to UpstreamConfig objects for UpstreamManager
             if db_upstreams:
+                from pydantic import HttpUrl, SecretStr, TypeAdapter
+
                 from app.core.encryption import decrypt_upstream_key
-                from pydantic import SecretStr
+
+                http_url_adapter: TypeAdapter[HttpUrl] = TypeAdapter(HttpUrl)
 
                 for db_upstream in db_upstreams:
                     # Decrypt the API key
@@ -85,7 +90,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     upstream_config = UpstreamConfig(
                         name=db_upstream.name,
                         provider=Provider(db_upstream.provider),
-                        base_url=db_upstream.base_url,
+                        base_url=http_url_adapter.validate_python(db_upstream.base_url),
                         api_key=SecretStr(decrypted_key),
                         is_default=db_upstream.is_default,
                         timeout=db_upstream.timeout,

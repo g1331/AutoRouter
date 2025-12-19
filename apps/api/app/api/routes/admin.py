@@ -67,7 +67,9 @@ async def create_api_key(
         return api_key
     except ValueError as e:
         logger.warning(f"Failed to create API key: {e}")
-        raise HTTPException(status_code=400, detail={"error": "invalid_request", "message": str(e)}) from e
+        raise HTTPException(
+            status_code=400, detail={"error": "invalid_request", "message": str(e)}
+        ) from e
 
 
 @router.get(
@@ -119,7 +121,9 @@ async def delete_api_key_endpoint(
         await key_manager.delete_api_key(db=db, key_id=key_id)
     except ValueError as e:
         logger.warning(f"Failed to delete API key: {e}")
-        raise HTTPException(status_code=404, detail={"error": "not_found", "message": str(e)}) from e
+        raise HTTPException(
+            status_code=404, detail={"error": "not_found", "message": str(e)}
+        ) from e
 
 
 # ============================================================================
@@ -165,7 +169,9 @@ async def create_upstream(
         return upstream
     except ValueError as e:
         logger.warning(f"Failed to create upstream: {e}")
-        raise HTTPException(status_code=400, detail={"error": "invalid_request", "message": str(e)}) from e
+        raise HTTPException(
+            status_code=400, detail={"error": "invalid_request", "message": str(e)}
+        ) from e
 
 
 @router.get(
@@ -237,9 +243,13 @@ async def update_upstream(
     except ValueError as e:
         error_msg = str(e)
         if "not found" in error_msg.lower():
-            raise HTTPException(status_code=404, detail={"error": "not_found", "message": error_msg}) from e
+            raise HTTPException(
+                status_code=404, detail={"error": "not_found", "message": error_msg}
+            ) from e
         else:
-            raise HTTPException(status_code=400, detail={"error": "invalid_request", "message": error_msg}) from e
+            raise HTTPException(
+                status_code=400, detail={"error": "invalid_request", "message": error_msg}
+            ) from e
 
 
 @router.delete(
@@ -266,7 +276,9 @@ async def delete_upstream(
         await upstream_service.delete_upstream(db=db, upstream_id=upstream_id)
     except ValueError as e:
         logger.warning(f"Failed to delete upstream: {e}")
-        raise HTTPException(status_code=404, detail={"error": "not_found", "message": str(e)}) from e
+        raise HTTPException(
+            status_code=404, detail={"error": "not_found", "message": str(e)}
+        ) from e
 
 
 # ============================================================================
@@ -316,7 +328,10 @@ async def list_request_logs(
         except ValueError as e:
             raise HTTPException(
                 status_code=400,
-                detail={"error": "invalid_request", "message": f"Invalid start_time format: {start_time}"},
+                detail={
+                    "error": "invalid_request",
+                    "message": f"Invalid start_time format: {start_time}",
+                },
             ) from e
 
     if end_time:
@@ -325,7 +340,10 @@ async def list_request_logs(
         except ValueError as e:
             raise HTTPException(
                 status_code=400,
-                detail={"error": "invalid_request", "message": f"Invalid end_time format: {end_time}"},
+                detail={
+                    "error": "invalid_request",
+                    "message": f"Invalid end_time format: {end_time}",
+                },
             ) from e
 
     return await request_logger.list_request_logs(

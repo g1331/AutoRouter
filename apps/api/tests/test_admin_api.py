@@ -1,10 +1,8 @@
 """Integration tests for Admin API endpoints."""
 
-import pytest
-from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from fastapi.testclient import TestClient
+import pytest
 from sqlalchemy import select
 
 from app.models.db_models import APIKey, Upstream
@@ -34,9 +32,7 @@ async def test_create_upstream(db_session):
     assert "***" in result.api_key_masked
 
     # Verify database record
-    db_upstream = await db_session.execute(
-        select(Upstream).where(Upstream.name == "test-openai")
-    )
+    db_upstream = await db_session.execute(select(Upstream).where(Upstream.name == "test-openai"))
     upstream = db_upstream.scalar_one()
     assert upstream.api_key_encrypted != "sk-test-key-123"  # Should be encrypted
 
@@ -44,9 +40,10 @@ async def test_create_upstream(db_session):
 @pytest.mark.asyncio
 async def test_create_upstream_duplicate_name(db_session):
     """Test creating upstream with duplicate name."""
+    from fastapi import HTTPException
+
     from app.api.routes.admin import create_upstream as create_upstream_endpoint
     from app.models.schemas import UpstreamCreate
-    from fastapi import HTTPException
 
     body = UpstreamCreate(
         name="duplicate",
@@ -128,9 +125,10 @@ async def test_create_api_key_via_admin(db_session):
 @pytest.mark.asyncio
 async def test_create_api_key_invalid_upstream(db_session):
     """Test creating API key with invalid upstream ID."""
+    from fastapi import HTTPException
+
     from app.api.routes.admin import create_api_key as create_api_key_endpoint
     from app.models.schemas import APIKeyCreate
-    from fastapi import HTTPException
 
     body = APIKeyCreate(
         name="invalid-key",
@@ -145,9 +143,9 @@ async def test_create_api_key_invalid_upstream(db_session):
 
 
 @pytest.mark.asyncio
-async def test_revoke_api_key_via_admin(db_session):
-    """Test revoking API key via Admin API."""
-    from app.api.routes.admin import revoke_api_key as revoke_api_key_endpoint
+async def test_delete_api_key_via_admin(db_session):
+    """Test deleting API key via Admin API."""
+    from app.api.routes.admin import delete_api_key_endpoint
     from app.services.key_manager import create_api_key
     from app.services.upstream_service import create_upstream
 
@@ -166,22 +164,23 @@ async def test_revoke_api_key_via_admin(db_session):
         upstream_ids=[upstream.id],
     )
 
-    # Revoke the key
-    await revoke_api_key_endpoint(key_id=api_key.id, db=db_session)
+    # Delete the key
+    await delete_api_key_endpoint(key_id=api_key.id, db=db_session)
 
-    # Verify key is inactive
+    # Verify key is deleted
     db_key = await db_session.get(APIKey, api_key.id)
-    assert db_key.is_active is False
+    assert db_key is None
 
 
 @pytest.mark.asyncio
-async def test_revoke_nonexistent_key_via_admin(db_session):
-    """Test revoking non-existent key via Admin API."""
-    from app.api.routes.admin import revoke_api_key as revoke_api_key_endpoint
+async def test_delete_nonexistent_key_via_admin(db_session):
+    """Test deleting non-existent key via Admin API."""
     from fastapi import HTTPException
 
+    from app.api.routes.admin import delete_api_key_endpoint
+
     with pytest.raises(HTTPException) as exc_info:
-        await revoke_api_key_endpoint(key_id=uuid4(), db=db_session)
+        await delete_api_key_endpoint(key_id=uuid4(), db=db_session)
 
     assert exc_info.value.status_code == 404
 

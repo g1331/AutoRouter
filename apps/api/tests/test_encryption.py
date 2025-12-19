@@ -4,9 +4,9 @@ import pytest
 from cryptography.fernet import Fernet
 
 from app.core.encryption import (
-    EncryptionError,
     decrypt_upstream_key,
     encrypt_upstream_key,
+    EncryptionError,
     generate_encryption_key,
 )
 

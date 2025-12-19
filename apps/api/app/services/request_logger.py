@@ -7,7 +7,8 @@ This service records all proxy requests to the database for:
 - Debugging and troubleshooting
 """
 
-from datetime import UTC, datetime
+from datetime import datetime, UTC
+from typing import Any
 from uuid import UUID, uuid4
 
 from loguru import logger
@@ -78,7 +79,20 @@ async def log_request(
     return log_entry
 
 
-def extract_token_usage(response_body: dict | None) -> tuple[int, int, int]:
+def _get_int_value(data: dict[str, Any], key: str, default: int = 0) -> int:
+    """Safely extract an integer value from a dict with type safety."""
+    value = data.get(key, default)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, (float, str)):
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return default
+    return default
+
+
+def extract_token_usage(response_body: dict[str, Any] | None) -> tuple[int, int, int]:
     """Extract token usage from OpenAI/Anthropic response.
 
     Handles different response formats from various providers.
@@ -89,28 +103,31 @@ def extract_token_usage(response_body: dict | None) -> tuple[int, int, int]:
     Returns:
         tuple: (prompt_tokens, completion_tokens, total_tokens)
     """
-    if not response_body or not isinstance(response_body, dict):
+    if not response_body:
         return (0, 0, 0)
 
     # OpenAI format: response.usage.{prompt_tokens, completion_tokens, total_tokens}
-    usage = response_body.get("usage", {})
-    if usage:
-        prompt_tokens = usage.get("prompt_tokens", 0)
-        completion_tokens = usage.get("completion_tokens", 0)
-        total_tokens = usage.get("total_tokens", prompt_tokens + completion_tokens)
-        return (prompt_tokens, completion_tokens, total_tokens)
+    raw_usage = response_body.get("usage")
+    if isinstance(raw_usage, dict):
+        usage: dict[str, Any] = raw_usage
+        prompt_tokens = _get_int_value(usage, "prompt_tokens")
+        completion_tokens = _get_int_value(usage, "completion_tokens")
+        total_tokens = _get_int_value(usage, "total_tokens", prompt_tokens + completion_tokens)
+        if prompt_tokens or completion_tokens or total_tokens:
+            return (prompt_tokens, completion_tokens, total_tokens)
 
-    # Anthropic format: response.usage.{input_tokens, output_tokens}
-    if "usage" in response_body:
-        usage = response_body["usage"]
-        input_tokens = usage.get("input_tokens", 0)
-        output_tokens = usage.get("output_tokens", 0)
-        return (input_tokens, output_tokens, input_tokens + output_tokens)
+        # Anthropic format: response.usage.{input_tokens, output_tokens}
+        input_tokens = _get_int_value(usage, "input_tokens")
+        output_tokens = _get_int_value(usage, "output_tokens")
+        if input_tokens or output_tokens:
+            return (input_tokens, output_tokens, input_tokens + output_tokens)
 
     return (0, 0, 0)
 
 
-def extract_model_name(request_body: dict | None, response_body: dict | None) -> str | None:
+def extract_model_name(
+    request_body: dict[str, Any] | None, response_body: dict[str, Any] | None
+) -> str | None:
     """Extract model name from request or response.
 
     Args:
@@ -121,13 +138,13 @@ def extract_model_name(request_body: dict | None, response_body: dict | None) ->
         str | None: Model name if found
     """
     # Try request body first (most reliable)
-    if request_body and isinstance(request_body, dict):
+    if request_body:
         model = request_body.get("model")
         if model:
             return str(model)
 
     # Fallback to response body
-    if response_body and isinstance(response_body, dict):
+    if response_body:
         model = response_body.get("model")
         if model:
             return str(model)

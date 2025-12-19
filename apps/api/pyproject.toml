@@ -44,6 +44,7 @@ include = ["app"]
 typeCheckingMode = "strict"
 reportMissingImports = true
 reportMissingTypeStubs = false
+reportUnusedImport = "none"  # Avoid duplication with Ruff (F401) which can auto-fix.
 reportUnknownVariableType = "warning"
 reportUnknownMemberType = "warning"
 

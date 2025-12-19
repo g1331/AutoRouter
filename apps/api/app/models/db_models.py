@@ -7,14 +7,13 @@ This module defines the SQLAlchemy ORM models for:
 - RequestLog: Request audit logs for analytics and billing
 """
 
-from datetime import datetime
+from datetime import datetime, UTC
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
-    Index,
     Integer,
     String,
     Text,
@@ -23,6 +22,11 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+
+def _utcnow() -> datetime:
+    """Return current UTC datetime (timezone-aware)."""
+    return datetime.now(UTC)
 
 
 class APIKey(Base):
@@ -51,18 +55,16 @@ class APIKey(Base):
     user_id: Mapped[UUID | None] = mapped_column(nullable=True)  # Reserved for Phase 2
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        DateTime, default=_utcnow, onupdate=_utcnow, nullable=False
     )
 
     # Relationships
     upstreams: Mapped[list["APIKeyUpstream"]] = relationship(
         "APIKeyUpstream", back_populates="api_key", cascade="all, delete-orphan"
     )
-    request_logs: Mapped[list["RequestLog"]] = relationship(
-        "RequestLog", back_populates="api_key"
-    )
+    request_logs: Mapped[list["RequestLog"]] = relationship("RequestLog", back_populates="api_key")
 
     def __repr__(self) -> str:
         return f"<APIKey(id={self.id}, name='{self.name}', prefix='{self.key_prefix}', active={self.is_active})>"
@@ -96,18 +98,16 @@ class Upstream(Base):
     timeout: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
     config: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON stored as text
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        DateTime, default=_utcnow, onupdate=_utcnow, nullable=False
     )
 
     # Relationships
     api_keys: Mapped[list["APIKeyUpstream"]] = relationship(
         "APIKeyUpstream", back_populates="upstream", cascade="all, delete-orphan"
     )
-    request_logs: Mapped[list["RequestLog"]] = relationship(
-        "RequestLog", back_populates="upstream"
-    )
+    request_logs: Mapped[list["RequestLog"]] = relationship("RequestLog", back_populates="upstream")
 
     def __repr__(self) -> str:
         return f"<Upstream(id={self.id}, name='{self.name}', provider='{self.provider}', active={self.is_active})>"
@@ -134,16 +134,14 @@ class APIKeyUpstream(Base):
     upstream_id: Mapped[UUID] = mapped_column(
         ForeignKey("upstreams.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
 
     # Relationships
     api_key: Mapped["APIKey"] = relationship("APIKey", back_populates="upstreams")
     upstream: Mapped["Upstream"] = relationship("Upstream", back_populates="api_keys")
 
     # Constraints
-    __table_args__ = (
-        UniqueConstraint("api_key_id", "upstream_id", name="uq_api_key_upstream"),
-    )
+    __table_args__ = (UniqueConstraint("api_key_id", "upstream_id", name="uq_api_key_upstream"),)
 
     def __repr__(self) -> str:
         return f"<APIKeyUpstream(api_key_id={self.api_key_id}, upstream_id={self.upstream_id})>"
@@ -187,7 +185,7 @@ class RequestLog(Base):
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, nullable=False, index=True
+        DateTime, default=_utcnow, nullable=False, index=True
     )
 
     # Relationships

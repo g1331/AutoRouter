@@ -7,8 +7,9 @@ This service handles:
 - Listing and retrieving keys
 """
 
+import base64
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from uuid import UUID, uuid4
 
 import bcrypt
@@ -16,7 +17,6 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import clear_api_key_cache
 from app.models.db_models import APIKey, APIKeyUpstream, Upstream
 from app.models.schemas import APIKeyCreateResponse, APIKeyResponse, PaginatedAPIKeysResponse
 
@@ -37,8 +37,6 @@ def generate_api_key() -> str:
     # Generate 32 random bytes
     random_bytes = secrets.token_bytes(32)
     # Encode as base64 (URL-safe, no padding)
-    import base64
-
     random_b64 = base64.urlsafe_b64encode(random_bytes).decode("utf-8").rstrip("=")
     return f"sk-auto-{random_b64}"
 
@@ -69,9 +67,7 @@ async def create_api_key(
         raise ValueError("At least one upstream must be specified")
 
     # Validate all upstreams exist (is_active check removed - inactive upstreams can still be associated)
-    result = await db.execute(
-        select(Upstream).where(Upstream.id.in_(upstream_ids))
-    )
+    result = await db.execute(select(Upstream).where(Upstream.id.in_(upstream_ids)))
     valid_upstreams = result.scalars().all()
 
     if len(valid_upstreams) != len(upstream_ids):
@@ -96,8 +92,8 @@ async def create_api_key(
         description=description,
         is_active=True,
         expires_at=expires_at,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     db.add(api_key)
     await db.flush()  # Get the ID
@@ -108,14 +104,16 @@ async def create_api_key(
             id=uuid4(),
             api_key_id=api_key.id,
             upstream_id=upstream_id,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         db.add(permission)
 
     await db.commit()
     await db.refresh(api_key)
 
-    logger.info(f"Created API key: {api_key.key_prefix}, name='{name}', upstreams={len(upstream_ids)}")
+    logger.info(
+        f"Created API key: {api_key.key_prefix}, name='{name}', upstreams={len(upstream_ids)}"
+    )
 
     # Return response with full key_value (only shown once)
     return APIKeyCreateResponse(
@@ -184,18 +182,13 @@ async def list_api_keys(
     page_size = min(100, max(1, page_size))
 
     # Count total keys
-    total_result = await db.execute(
-        select(func.count()).select_from(APIKey)
-    )
+    total_result = await db.execute(select(func.count()).select_from(APIKey))
     total = total_result.scalar() or 0
 
     # Query paginated results (ordered by created_at desc)
     offset = (page - 1) * page_size
     result = await db.execute(
-        select(APIKey)
-        .order_by(APIKey.created_at.desc())
-        .limit(page_size)
-        .offset(offset)
+        select(APIKey).order_by(APIKey.created_at.desc()).limit(page_size).offset(offset)
     )
     api_keys = result.scalars().all()
 
@@ -206,7 +199,7 @@ async def list_api_keys(
         upstream_result = await db.execute(
             select(APIKeyUpstream.upstream_id).where(APIKeyUpstream.api_key_id == api_key.id)
         )
-        upstream_ids = [row for row in upstream_result.scalars()]
+        upstream_ids = list(upstream_result.scalars())
 
         items.append(
             APIKeyResponse(

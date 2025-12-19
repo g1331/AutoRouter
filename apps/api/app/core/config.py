@@ -8,9 +8,7 @@ from app.models.upstream import UpstreamConfig
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8"
-    )
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     environment: str = "development"
     version: str = "0.1.0"
@@ -23,7 +21,7 @@ class Settings(BaseSettings):
     proxy_prefix: str = "/proxy"
     upstreams: list[UpstreamConfig] = []
 
-    # Debug mode - 显示所有请求头（仅用于调试 AI 工具请求格式）
+    # Debug mode - 显示所有请求头 (仅用于调试 AI 工具请求格式)
     debug_log_headers: bool = False
 
     # Encryption settings
@@ -51,7 +49,7 @@ class Settings(BaseSettings):
             v = json.loads(v)
 
         if isinstance(v, list):
-            return [UpstreamConfig(**item) if isinstance(item, dict) else item for item in v]
+            return [UpstreamConfig.model_validate(item) for item in v]
 
         return v
 

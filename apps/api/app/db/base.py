@@ -11,15 +11,15 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import (
+    async_sessionmaker,
     AsyncEngine,
     AsyncSession,
-    async_sessionmaker,
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
 
 if TYPE_CHECKING:
-    from app.core.config import Settings
+    pass
 
 
 class Base(DeclarativeBase):
@@ -27,8 +27,6 @@ class Base(DeclarativeBase):
 
     All database models should inherit from this class.
     """
-
-    pass
 
 
 def _get_database_url() -> str:

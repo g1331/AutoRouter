@@ -8,7 +8,7 @@ This service handles:
 - Loading upstreams from database
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from uuid import UUID, uuid4
 
 from loguru import logger
@@ -18,6 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.encryption import decrypt_upstream_key, encrypt_upstream_key
 from app.models.db_models import Upstream
 from app.models.schemas import PaginatedUpstreamsResponse, UpstreamResponse
+
+# Minimum length of API key required for masking
+_MIN_KEY_LENGTH_FOR_MASKING = 7
 
 
 def mask_api_key(api_key: str) -> str:
@@ -31,7 +34,7 @@ def mask_api_key(api_key: str) -> str:
     Returns:
         str: Masked key (e.g., 'sk-***1234')
     """
-    if len(api_key) <= 7:
+    if len(api_key) <= _MIN_KEY_LENGTH_FOR_MASKING:
         return "***"
 
     prefix = api_key[:3] if api_key.startswith("sk-") else api_key[:2]
@@ -86,14 +89,16 @@ async def create_upstream(
         timeout=timeout,
         is_active=True,
         config=config,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
     db.add(upstream)
     await db.commit()
     await db.refresh(upstream)
 
-    logger.info(f"Created upstream: {upstream.name}, provider={upstream.provider}, default={is_default}")
+    logger.info(
+        f"Created upstream: {upstream.name}, provider={upstream.provider}, default={is_default}"
+    )
 
     # Return response with masked API key
     return UpstreamResponse(
@@ -174,7 +179,7 @@ async def update_upstream(
     if config is not None:
         upstream.config = config
 
-    upstream.updated_at = datetime.now(timezone.utc)
+    upstream.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(upstream)
 
@@ -244,18 +249,13 @@ async def list_upstreams(
     page_size = min(100, max(1, page_size))
 
     # Count total upstreams
-    total_result = await db.execute(
-        select(func.count()).select_from(Upstream)
-    )
+    total_result = await db.execute(select(func.count()).select_from(Upstream))
     total = total_result.scalar() or 0
 
     # Query paginated results (ordered by created_at desc)
     offset = (page - 1) * page_size
     result = await db.execute(
-        select(Upstream)
-        .order_by(Upstream.created_at.desc())
-        .limit(page_size)
-        .offset(offset)
+        select(Upstream).order_by(Upstream.created_at.desc()).limit(page_size).offset(offset)
     )
     upstreams = result.scalars().all()
 

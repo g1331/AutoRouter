@@ -2,8 +2,7 @@
 
 import asyncio
 import os
-from collections.abc import AsyncGenerator
-from typing import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 
 # Set test environment variables BEFORE importing app modules
 from cryptography.fernet import Fernet
@@ -23,7 +22,6 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
 from app.db.base import Base
-from app.main import create_app
 from app.models.upstream import Provider, UpstreamConfig, UpstreamManager
 
 
@@ -80,11 +78,10 @@ def app_with_upstreams(
     settings.upstreams = [sample_openai_upstream, sample_anthropic_upstream]
 
     # Create app WITHOUT lifespan for testing
+    from collections.abc import AsyncIterator
     from contextlib import asynccontextmanager
-    from typing import AsyncIterator
 
     import httpx
-    from loguru import logger
 
     from app.api.routes import health, proxy
     from app.models.upstream import UpstreamManager

@@ -34,14 +34,10 @@ def filter_headers(headers: dict[str, str]) -> dict[str, str]:
     Returns:
         Filtered headers safe to forward
     """
-    return {
-        k: v for k, v in headers.items() if k.lower() not in HOP_BY_HOP_HEADERS
-    }
+    return {k: v for k, v in headers.items() if k.lower() not in HOP_BY_HOP_HEADERS}
 
 
-def inject_auth_header(
-    headers: dict[str, str], upstream: UpstreamConfig
-) -> dict[str, str]:
+def inject_auth_header(headers: dict[str, str], upstream: UpstreamConfig) -> dict[str, str]:
     """Inject authentication header based on provider type.
 
     Args:
@@ -94,9 +90,7 @@ def extract_usage(data: dict[str, Any]) -> dict[str, int] | None:
     return None
 
 
-async def stream_sse_response(
-    response: httpx.Response, request_id: str
-) -> AsyncIterator[bytes]:
+async def stream_sse_response(response: httpx.Response, request_id: str) -> AsyncIterator[bytes]:
     """Stream SSE response chunks and extract token usage.
 
     Args:
@@ -194,10 +188,10 @@ async def forward_request(
         f"  User-Agent: {original_headers.get('user-agent', 'N/A')}"
     )
 
-    # 记录原始请求头中的认证信息（脱敏显示）
+    # 记录原始请求头中的认证信息 (脱敏显示)
     auth_header = original_headers.get("authorization", "")
     if auth_header:
-        # 脱敏：只显示前缀和后4位
+        # 脱敏: 只显示前缀和后4位
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
             masked_token = f"{token[:15]}...{token[-4:]}" if len(token) > 20 else "***"
@@ -211,7 +205,7 @@ async def forward_request(
         masked = f"{x_api_key[:10]}...{x_api_key[-4:]}" if len(x_api_key) > 15 else "***"
         logger.info(f"  [AUTH] Original x-api-key: {masked}")
 
-    # 记录请求体概要（JSON 格式）
+    # 记录请求体概要 (JSON 格式)
     if body:
         try:
             body_json = json.loads(body)
@@ -225,10 +219,11 @@ async def forward_request(
         except json.JSONDecodeError:
             logger.info(f"  [BODY] Request Body: {len(body)} bytes (non-JSON)")
 
-    # Debug mode - 显示所有请求头（通过环境变量 DEBUG_LOG_HEADERS=true 启用）
+    # Debug mode - 显示所有请求头 (通过环境变量 DEBUG_LOG_HEADERS=true 启用)
     from app.core.config import settings
+
     if settings.debug_log_headers:
-        logger.debug(f"  [DEBUG] All Request Headers:")
+        logger.debug("  [DEBUG] All Request Headers:")
         for key, value in original_headers.items():
             # 脱敏处理敏感信息
             if key.lower() in ["authorization", "x-api-key", "api-key"]:

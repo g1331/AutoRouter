@@ -1,7 +1,10 @@
 """Proxy routes for forwarding requests to upstream AI services."""
 
+import contextlib
+import json
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, UTC
+from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
@@ -64,7 +67,7 @@ async def proxy_request(
     """
     # Generate request ID
     request_id = str(uuid.uuid4())
-    request_start_time = datetime.now(timezone.utc)
+    request_start_time = datetime.now(UTC)
 
     # Get upstream manager and httpx client from app state
     upstream_manager: UpstreamManager = request.app.state.upstream_manager
@@ -133,14 +136,12 @@ async def proxy_request(
 
     # Parse request body for model extraction
     request_body = None
-    try:
+    with contextlib.suppress(Exception):
         request_body = await request.json()
-    except Exception:
-        pass  # Request may not have JSON body
 
     # Forward request
     response_status: int | None = None
-    response_body: dict | None = None
+    response_body: dict[str, Any] | None = None
     error_msg: str | None = None
 
     try:
@@ -154,19 +155,20 @@ async def proxy_request(
         response_status = status_code
 
         # Parse response body for token extraction (if not streaming)
-        if not hasattr(body, "__aiter__"):
-            try:
-                import json
-                response_body = json.loads(body)
-            except Exception:
-                pass  # Response may not be JSON
+        if isinstance(body, bytes):
+            with contextlib.suppress(Exception):
+                parsed = json.loads(body)
+                if isinstance(parsed, dict):
+                    response_body = parsed
 
         # Calculate duration
-        duration_ms = int((datetime.now(timezone.utc) - request_start_time).total_seconds() * 1000)
+        duration_ms = int((datetime.now(UTC) - request_start_time).total_seconds() * 1000)
 
         # Extract model and token usage
         model_name = request_logger.extract_model_name(request_body, response_body)
-        prompt_tokens, completion_tokens, total_tokens = request_logger.extract_token_usage(response_body)
+        prompt_tokens, completion_tokens, total_tokens = request_logger.extract_token_usage(
+            response_body
+        )
 
         # Log the request
         await request_logger.log_request(
@@ -186,7 +188,7 @@ async def proxy_request(
         await db.commit()
 
         # Return streaming response if body is async iterator
-        if hasattr(body, "__aiter__"):
+        if not isinstance(body, bytes):
             # Note: For streaming responses, token usage cannot be extracted
             # This is a known limitation - tokens will be 0 for streaming
             return StreamingResponse(
@@ -194,17 +196,17 @@ async def proxy_request(
                 status_code=status_code,
                 headers=headers,
             )
-        else:
-            return Response(
-                content=body,
-                status_code=status_code,
-                headers=headers,
-            )
+
+        return Response(
+            content=body,
+            status_code=status_code,
+            headers=headers,
+        )
 
     except UpstreamTimeoutError as e:
         error_msg = str(e)
         response_status = 504
-        duration_ms = int((datetime.now(timezone.utc) - request_start_time).total_seconds() * 1000)
+        duration_ms = int((datetime.now(UTC) - request_start_time).total_seconds() * 1000)
 
         # Log failed request
         await request_logger.log_request(
@@ -224,12 +226,14 @@ async def proxy_request(
         await db.commit()
 
         logger.error(f"Request {request_id}: timeout - {e}")
-        raise HTTPException(status_code=504, detail={"error": "gateway_timeout", "message": error_msg}) from e
+        raise HTTPException(
+            status_code=504, detail={"error": "gateway_timeout", "message": error_msg}
+        ) from e
 
     except UpstreamConnectionError as e:
         error_msg = str(e)
         response_status = 502
-        duration_ms = int((datetime.now(timezone.utc) - request_start_time).total_seconds() * 1000)
+        duration_ms = int((datetime.now(UTC) - request_start_time).total_seconds() * 1000)
 
         # Log failed request
         await request_logger.log_request(
@@ -249,12 +253,14 @@ async def proxy_request(
         await db.commit()
 
         logger.error(f"Request {request_id}: connection error - {e}")
-        raise HTTPException(status_code=502, detail={"error": "bad_gateway", "message": error_msg}) from e
+        raise HTTPException(
+            status_code=502, detail={"error": "bad_gateway", "message": error_msg}
+        ) from e
 
     except Exception as e:
         error_msg = str(e)
         response_status = 500
-        duration_ms = int((datetime.now(timezone.utc) - request_start_time).total_seconds() * 1000)
+        duration_ms = int((datetime.now(UTC) - request_start_time).total_seconds() * 1000)
 
         # Log failed request
         await request_logger.log_request(
@@ -274,4 +280,6 @@ async def proxy_request(
         await db.commit()
 
         logger.exception(f"Request {request_id}: unexpected error")
-        raise HTTPException(status_code=500, detail={"error": "internal_error", "message": error_msg}) from e
+        raise HTTPException(
+            status_code=500, detail={"error": "internal_error", "message": error_msg}
+        ) from e

@@ -7,7 +7,8 @@ This module provides:
 - clear_api_key_cache: Utility for cache invalidation on key revocation
 """
 
-from datetime import datetime, timezone
+import secrets
+from datetime import datetime, UTC
 from typing import Annotated
 
 import bcrypt
@@ -25,6 +26,9 @@ from app.models.db_models import APIKey
 # Maps plaintext_key -> APIKey object
 # TTL=300s (5 minutes), maxsize=10000
 _api_key_cache: TTLCache[str, APIKey] = TTLCache(maxsize=10000, ttl=300)
+
+# API key prefix length for database lookup optimization
+_KEY_PREFIX_LENGTH = 12
 
 
 async def get_current_api_key(
@@ -63,7 +67,10 @@ async def get_current_api_key(
     if not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=401,
-            detail={"error": "invalid_authorization", "message": "Authorization header must use Bearer scheme"},
+            detail={
+                "error": "invalid_authorization",
+                "message": "Authorization header must use Bearer scheme",
+            },
         )
 
     key_value = authorization[7:]  # Remove "Bearer " prefix
@@ -72,7 +79,7 @@ async def get_current_api_key(
     if key_value in _api_key_cache:
         api_key = _api_key_cache[key_value]
         # Double-check: ensure still active and not expired (防止撤销后缓存未清除)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if api_key.is_active and (not api_key.expires_at or api_key.expires_at > now):
             logger.debug(f"API key cache hit: {api_key.key_prefix}")
             return api_key
@@ -83,7 +90,9 @@ async def get_current_api_key(
 
     # Cache miss - query database
     # Optimization: narrow down by key_prefix to reduce bcrypt operations
-    key_prefix = key_value[:12] if len(key_value) >= 12 else key_value
+    key_prefix = (
+        key_value[:_KEY_PREFIX_LENGTH] if len(key_value) >= _KEY_PREFIX_LENGTH else key_value
+    )
 
     result = await db.execute(
         select(APIKey).where(
@@ -112,7 +121,7 @@ async def get_current_api_key(
         )
 
     # Check expiration
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if matched_key.expires_at and matched_key.expires_at < now:
         logger.warning(f"Expired API key used: {matched_key.key_prefix}")
         raise HTTPException(
@@ -142,7 +151,6 @@ def verify_admin_token(
         - Always returns 403 (not 401) to avoid revealing endpoint existence
         - Uses constant-time comparison via secrets.compare_digest
     """
-    import secrets
 
     # Check if admin token is configured
     if not settings.admin_token:
@@ -171,7 +179,7 @@ def verify_admin_token(
 
     # Constant-time comparison to prevent timing attacks
     if not secrets.compare_digest(token, settings.admin_token):
-        logger.warning(f"Invalid admin token attempt from Authorization header")
+        logger.warning("Invalid admin token attempt from Authorization header")
         raise HTTPException(
             status_code=403,
             detail={"error": "forbidden", "message": "Admin access required"},
@@ -206,9 +214,9 @@ def clear_all_api_key_cache() -> None:
 
 
 __all__ = [
-    "get_db",
-    "get_current_api_key",
-    "verify_admin_token",
-    "clear_api_key_cache",
     "clear_all_api_key_cache",
+    "clear_api_key_cache",
+    "get_current_api_key",
+    "get_db",
+    "verify_admin_token",
 ]

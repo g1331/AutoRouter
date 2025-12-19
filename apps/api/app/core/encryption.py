@@ -25,8 +25,6 @@ from app.core.config import settings
 class EncryptionError(Exception):
     """Raised when encryption/decryption operations fail."""
 
-    pass
-
 
 def _load_encryption_key() -> bytes:
     """Load and validate the encryption key from environment.
@@ -75,7 +73,7 @@ def _load_encryption_key() -> bytes:
     # No encryption key provided - fail fast
     logger.critical(
         "ENCRYPTION_KEY is required but not provided. "
-        "Generate a key with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\" "
+        'Generate a key with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" '
         "and set it via ENCRYPTION_KEY or ENCRYPTION_KEY_FILE environment variable."
     )
     sys.exit(1)
@@ -122,7 +120,9 @@ def decrypt_upstream_key(encrypted_key: str) -> str:
         decrypted_bytes = _fernet.decrypt(encrypted_key.encode("utf-8"))
         return decrypted_bytes.decode("utf-8")
     except InvalidToken:
-        logger.error("Failed to decrypt upstream key: Invalid token (wrong encryption key or tampered data)")
+        logger.error(
+            "Failed to decrypt upstream key: Invalid token (wrong encryption key or tampered data)"
+        )
         raise EncryptionError("Decryption failed: Invalid token") from None
     except Exception as e:
         logger.error(f"Failed to decrypt upstream key: {e}")

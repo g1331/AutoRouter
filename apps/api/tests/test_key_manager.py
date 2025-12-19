@@ -1,18 +1,18 @@
 """Unit tests for key manager service."""
 
-import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from uuid import uuid4
 
 import bcrypt
+import pytest
 from sqlalchemy import select
 
 from app.models.db_models import APIKey, APIKeyUpstream, Upstream
 from app.services.key_manager import (
     create_api_key,
+    delete_api_key,
     generate_api_key,
     list_api_keys,
-    revoke_api_key,
 )
 
 
@@ -97,7 +97,7 @@ async def test_create_api_key_with_expiration(db_session):
     db_session.add(upstream)
     await db_session.commit()
 
-    expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+    expires_at = datetime.now(UTC) + timedelta(days=30)
 
     result = await create_api_key(
         db=db_session,
@@ -109,7 +109,7 @@ async def test_create_api_key_with_expiration(db_session):
     assert result.expires_at is not None
     # Make expires_at timezone-aware for comparison
     if result.expires_at.tzinfo is None:
-        result_expires = result.expires_at.replace(tzinfo=timezone.utc)
+        result_expires = result.expires_at.replace(tzinfo=UTC)
     else:
         result_expires = result.expires_at
     assert abs((result_expires - expires_at).total_seconds()) < 1
@@ -162,8 +162,8 @@ async def test_create_api_key_inactive_upstream(db_session):
 
 
 @pytest.mark.asyncio
-async def test_revoke_api_key(db_session):
-    """Test revoking an API key."""
+async def test_delete_api_key(db_session):
+    """Test deleting an API key."""
     # Create upstream and key
     upstream = Upstream(
         id=uuid4(),
@@ -182,21 +182,21 @@ async def test_revoke_api_key(db_session):
         upstream_ids=[upstream.id],
     )
 
-    # Revoke the key
-    await revoke_api_key(db=db_session, key_id=result.id)
+    # Delete the key
+    await delete_api_key(db=db_session, key_id=result.id)
 
-    # Verify key is inactive
+    # Verify key is deleted (not just inactive)
     db_key = await db_session.get(APIKey, result.id)
-    assert db_key.is_active is False
+    assert db_key is None
 
 
 @pytest.mark.asyncio
-async def test_revoke_nonexistent_key(db_session):
-    """Test revoking a non-existent key."""
+async def test_delete_nonexistent_key(db_session):
+    """Test deleting a non-existent key."""
     invalid_id = uuid4()
 
     with pytest.raises(ValueError, match="API key not found"):
-        await revoke_api_key(db=db_session, key_id=invalid_id)
+        await delete_api_key(db=db_session, key_id=invalid_id)
 
 
 @pytest.mark.asyncio

@@ -8,7 +8,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-
 # ============================================================================
 # API Key Schemas
 # ============================================================================
@@ -27,7 +26,9 @@ class APIKeyCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="Name of the API key")
     description: str | None = Field(None, description="Optional description")
     upstream_ids: list[UUID] = Field(
-        ..., min_length=1, description="List of upstream IDs this key can access (at least one required)"
+        ...,
+        min_length=1,
+        description="List of upstream IDs this key can access (at least one required)",
     )
     expires_at: datetime | None = Field(None, description="Optional expiration timestamp (UTC)")
 
@@ -90,7 +91,9 @@ class UpstreamCreate(BaseModel):
     """
 
     name: str = Field(..., min_length=1, max_length=64, description="Unique upstream name")
-    provider: str = Field(..., min_length=1, max_length=32, description="Provider type (openai, anthropic, etc.)")
+    provider: str = Field(
+        ..., min_length=1, max_length=32, description="Provider type (openai, anthropic, etc.)"
+    )
     base_url: str = Field(..., description="Base URL for the upstream API")
     api_key: str = Field(..., min_length=1, description="Upstream API key (will be encrypted)")
     is_default: bool = Field(False, description="Whether this is the default upstream")
@@ -107,7 +110,9 @@ class UpstreamUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=64, description="Upstream name")
     provider: str | None = Field(None, min_length=1, max_length=32, description="Provider type")
     base_url: str | None = Field(None, description="Base URL")
-    api_key: str | None = Field(None, min_length=1, description="New API key (will be re-encrypted)")
+    api_key: str | None = Field(
+        None, min_length=1, description="New API key (will be re-encrypted)"
+    )
     is_default: bool | None = Field(None, description="Default upstream flag")
     timeout: int | None = Field(None, ge=1, le=300, description="Request timeout")
     is_active: bool | None = Field(None, description="Active status")

@@ -1,10 +1,5 @@
 """Tests for proxy_client service."""
 
-import json
-from unittest.mock import AsyncMock, Mock
-
-import httpx
-import pytest
 from pydantic import HttpUrl, SecretStr
 
 from app.models.upstream import Provider, UpstreamConfig

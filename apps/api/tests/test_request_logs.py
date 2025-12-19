@@ -1,12 +1,11 @@
 """Tests for Request Logs API endpoints."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
 
-from app.models.db_models import RequestLog
 from app.services import request_logger
 
 
@@ -42,9 +41,7 @@ async def test_list_request_logs_pagination(db_session):
     await db_session.commit()
 
     # List first page
-    result = await request_logger.list_request_logs(
-        db=db_session, page=1, page_size=3
-    )
+    result = await request_logger.list_request_logs(db=db_session, page=1, page_size=3)
 
     assert result.total == 5
     assert result.page == 1
@@ -53,9 +50,7 @@ async def test_list_request_logs_pagination(db_session):
     assert len(result.items) == 3
 
     # List second page
-    result = await request_logger.list_request_logs(
-        db=db_session, page=2, page_size=3
-    )
+    result = await request_logger.list_request_logs(db=db_session, page=2, page_size=3)
 
     assert result.page == 2
     assert len(result.items) == 2
@@ -124,9 +119,7 @@ async def test_list_request_logs_filter_by_api_key(db_session):
     await db_session.commit()
 
     # Filter by specific API key
-    result = await request_logger.list_request_logs(
-        db=db_session, api_key_id=api_key_id
-    )
+    result = await request_logger.list_request_logs(db=db_session, api_key_id=api_key_id)
 
     assert result.total == 1
     assert result.items[0].api_key_id == api_key_id
@@ -167,9 +160,7 @@ async def test_list_request_logs_filter_by_upstream(db_session):
     )
     await db_session.commit()
 
-    result = await request_logger.list_request_logs(
-        db=db_session, upstream_id=upstream_id
-    )
+    result = await request_logger.list_request_logs(db=db_session, upstream_id=upstream_id)
 
     assert result.total == 1
     assert result.items[0].upstream_id == upstream_id
@@ -209,16 +200,12 @@ async def test_list_request_logs_filter_by_status_code(db_session):
     await db_session.commit()
 
     # Filter by status code 200
-    result = await request_logger.list_request_logs(
-        db=db_session, status_code=200
-    )
+    result = await request_logger.list_request_logs(db=db_session, status_code=200)
     assert result.total == 1
     assert result.items[0].status_code == 200
 
     # Filter by status code 400
-    result = await request_logger.list_request_logs(
-        db=db_session, status_code=400
-    )
+    result = await request_logger.list_request_logs(db=db_session, status_code=400)
     assert result.total == 1
     assert result.items[0].status_code == 400
 
@@ -226,7 +213,7 @@ async def test_list_request_logs_filter_by_status_code(db_session):
 @pytest.mark.asyncio
 async def test_list_request_logs_filter_by_time_range(db_session):
     """Test filtering logs by time range."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     one_hour_ago = now - timedelta(hours=1)
     two_hours_ago = now - timedelta(hours=2)
 
@@ -247,22 +234,16 @@ async def test_list_request_logs_filter_by_time_range(db_session):
     await db_session.commit()
 
     # Filter with start_time in the past (should find logs)
-    result = await request_logger.list_request_logs(
-        db=db_session, start_time=one_hour_ago
-    )
+    result = await request_logger.list_request_logs(db=db_session, start_time=one_hour_ago)
     assert result.total == 1
 
     # Filter with start_time in the future (should find no logs)
     future = now + timedelta(hours=1)
-    result = await request_logger.list_request_logs(
-        db=db_session, start_time=future
-    )
+    result = await request_logger.list_request_logs(db=db_session, start_time=future)
     assert result.total == 0
 
     # Filter with end_time in the past (should find no logs)
-    result = await request_logger.list_request_logs(
-        db=db_session, end_time=two_hours_ago
-    )
+    result = await request_logger.list_request_logs(db=db_session, end_time=two_hours_ago)
     assert result.total == 0
 
 
@@ -347,7 +328,7 @@ async def test_list_request_logs_endpoint_with_iso_time(db_session):
     await db_session.commit()
 
     # Call endpoint with ISO time
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     one_hour_ago = (now - timedelta(hours=1)).isoformat()
 
     result = await list_logs_endpoint(

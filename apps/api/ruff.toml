@@ -23,6 +23,28 @@ ignore = [
     "E501"  # handled by formatter
 ]
 
+[lint.flake8-bugbear]
+# FastAPI dependency injection helpers are commonly used as default arguments.
+# Treat these calls as immutable to avoid false-positive B008 violations.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Header",
+    "fastapi.Cookie",
+    "fastapi.Body",
+    "fastapi.Form",
+    "fastapi.File",
+    "fastapi.Security",
+]
+
+[lint.per-file-ignores]
+"tests/**/*.py" = ["PLR2004", "PLC0415"] # Magic numbers and in-function imports are common in tests.
+"app/api/routes/*.py" = ["PLR0913", "PLR0915"] # FastAPI endpoints legitimately take many parameters and have complex logic.
+"app/db/base.py" = ["PLC0415"] # Lazy imports to avoid circular dependency.
+"app/main.py" = ["PLC0415", "PLR0915"] # Lazy imports for conditional loading and complex lifespan logic.
+"app/services/*.py" = ["PLR0913", "PLR0912", "PLR0915", "PLC0415", "PLR2004"] # Service functions need many params, complex logic, lazy imports, and debug constants.
+
 [format]
 quote-style = "double"
 line-ending = "lf"
