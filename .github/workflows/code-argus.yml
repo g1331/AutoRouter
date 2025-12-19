@@ -140,7 +140,7 @@ jobs:
           MAX_COMMENTS=10
           MIN_SEVERITY=low
           LANGUAGE=auto
-          MODEL="${CODEX_MODEL:-gpt-5.2-codex}"
+          MODEL="${CODEX_MODEL:-gpt-5.2}"
 
           if [ -f ".github/reviewbot.yaml" ]; then
             if command -v yq &> /dev/null; then
