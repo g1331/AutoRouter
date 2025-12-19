@@ -188,11 +188,12 @@ jobs:
 
           ## Instructions
 
-          1. Review ONLY the changes in this PR (diff provided below)
-          2. Sort issues by severity (high first), then limit to max_comments
-          3. If language is 'auto', respond in the same language as the PR title/description
-          4. If no significant issues found, return empty comments array
-          5. Output ONLY the JSON object, no other text
+          1. You MAY read any file in the repository and run searches to understand context
+          2. Review ONLY the changes in this PR (diff provided below); use other files only for context and impact verification
+          3. Sort issues by severity (high first), then limit to max_comments
+          4. If language is 'auto', respond in the same language as the PR title/description
+          5. If no significant issues found, return empty comments array
+          6. Output ONLY the JSON object, no other text
 
           ## PR Information
 
