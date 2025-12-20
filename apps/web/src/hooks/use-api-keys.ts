@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { useAuth } from "@/providers/auth-provider";
 import type {
   APIKeyCreate,
@@ -6,6 +7,7 @@ import type {
   APIKeyRevealResponse,
   PaginatedAPIKeysResponse,
 } from "@/types/api";
+import { ApiError } from "@/lib/api";
 import { toast } from "sonner";
 
 /**
@@ -48,12 +50,22 @@ export function useCreateAPIKey() {
  */
 export function useRevealAPIKey() {
   const { apiClient } = useAuth();
+  const t = useTranslations("keys");
+  const tCommon = useTranslations("common");
 
   return useMutation({
     mutationFn: (keyId: string) =>
       apiClient.post<APIKeyRevealResponse>(`/admin/keys/${keyId}/reveal`),
     onError: (error: Error) => {
-      toast.error(`查看失败: ${error.message}`);
+      if (error instanceof ApiError) {
+        const detail =
+          error.detail as { error?: string; message?: string } | undefined;
+        if (detail?.error === "legacy_key") {
+          toast.error(t("legacyKey"));
+          return;
+        }
+      }
+      toast.error(tCommon("error"));
     },
   });
 }

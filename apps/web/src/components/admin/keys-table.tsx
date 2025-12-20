@@ -43,9 +43,9 @@ export function KeysTable({ keys, onRevoke }: KeysTableProps) {
   const dateLocale = getDateLocale(locale);
 
   const maskKey = (keyPrefix: string) => {
-    if (keyPrefix.length <= 12) return keyPrefix;
+    if (keyPrefix.length <= 10) return keyPrefix;
     const start = keyPrefix.slice(0, 8);
-    const end = keyPrefix.slice(-4);
+    const end = keyPrefix.slice(-2);
     return `${start}***${end}`;
   };
 

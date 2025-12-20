@@ -7,10 +7,12 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db, verify_admin_token
+from app.core.encryption import EncryptionError
 from app.models.schemas import (
     APIKeyCreate,
     APIKeyCreateResponse,
@@ -109,7 +111,7 @@ async def list_api_keys(
 async def reveal_api_key_endpoint(
     key_id: UUID,
     db: AsyncSession = Depends(get_db),
-) -> APIKeyRevealResponse:
+) -> JSONResponse:
     """Reveal the full decrypted API key value.
 
     Args:
@@ -117,26 +119,87 @@ async def reveal_api_key_endpoint(
         db: Database session
 
     Returns:
-        APIKeyRevealResponse: Key details with decrypted value
+        JSONResponse: Key details with decrypted value and no-cache headers
 
     Raises:
         HTTPException(404): API key not found
         HTTPException(400): Legacy key without encryption
+        HTTPException(500): Decryption failed
     """
     try:
-        return await key_manager.reveal_api_key(db=db, key_id=key_id)
+        result = await key_manager.reveal_api_key(db=db, key_id=key_id)
+
+        # Log successful reveal operation to audit trail
+        await request_logger.log_request(
+            db=db,
+            api_key_id=key_id,
+            upstream_id=None,
+            method="REVEAL",
+            path=f"/admin/keys/{key_id}/reveal",
+            model=None,
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            status_code=200,
+            duration_ms=None,
+        )
+        await db.commit()
+
+        # Return with no-cache headers to prevent caching sensitive data
+        return JSONResponse(
+            content=result.model_dump(mode="json"),
+            headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+        )
     except ValueError as e:
         error_msg = str(e)
-        if "not found" in error_msg:
-            logger.warning(f"Failed to reveal API key: {e}")
-            raise HTTPException(
-                status_code=404, detail={"error": "not_found", "message": error_msg}
-            ) from e
-        else:
-            logger.warning(f"Cannot reveal legacy API key: {e}")
-            raise HTTPException(
-                status_code=400, detail={"error": "legacy_key", "message": error_msg}
-            ) from e
+        status_code = 404 if "not found" in error_msg else 400
+        error_code = "not_found" if status_code == 404 else "legacy_key"
+
+        # Log failed reveal attempt to audit trail
+        await request_logger.log_request(
+            db=db,
+            api_key_id=None if status_code == 404 else key_id,
+            upstream_id=None,
+            method="REVEAL",
+            path=f"/admin/keys/{key_id}/reveal",
+            model=None,
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            status_code=status_code,
+            duration_ms=None,
+            error_message=error_msg,
+        )
+        await db.commit()
+
+        logger.warning(f"Reveal API key failed: {e}")
+        raise HTTPException(
+            status_code=status_code,
+            detail={"error": error_code, "message": error_msg},
+        ) from e
+    except EncryptionError as e:
+        # Log decryption failure to audit trail
+        await request_logger.log_request(
+            db=db,
+            api_key_id=key_id,
+            upstream_id=None,
+            method="REVEAL",
+            path=f"/admin/keys/{key_id}/reveal",
+            model=None,
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            status_code=500,
+            duration_ms=None,
+            error_message=str(e),
+        )
+        await db.commit()
+
+        logger.error(f"Failed to decrypt API key for reveal: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "decrypt_failed", "message": "Failed to decrypt API key"},
+        ) from e
 
 
 @router.delete(
