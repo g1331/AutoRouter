@@ -682,18 +682,36 @@ jobs:
             const currentRound = parseInt(process.env.CURRENT_ROUND, 10) || 1;
             const maxRounds = parseInt(process.env.MAX_FIX_ROUNDS, 10) || 3;
 
-            // 检查是否有最近的 Code-Argus 审查
-            const { data: comments } = await github.rest.issues.listComments({
+            // 检查是否有最近的 Code-Argus 审查（检查 PR Reviews 和 Issue Comments）
+            let hasRecentReview = false;
+
+            // 先检查 PR Reviews（Code-Argus 主要通过这个发布）
+            const { data: reviews } = await github.rest.pulls.listReviews({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: prNumber,
+              pull_number: prNumber,
               per_page: 50
             });
 
-            const hasRecentReview = comments.some(c =>
-              c.body?.includes('## Code-Argus Review') &&
-              c.body?.includes('issue(s) found')
+            hasRecentReview = reviews.some(r =>
+              r.body?.includes('## Code-Argus Review') &&
+              (r.body?.includes('issue(s) found') || r.body?.includes('suggestion(s) posted'))
             );
+
+            // 如果 PR Reviews 没找到，再检查 Issue Comments
+            if (!hasRecentReview) {
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                per_page: 50
+              });
+
+              hasRecentReview = comments.some(c =>
+                c.body?.includes('## Code-Argus Review') &&
+                (c.body?.includes('issue(s) found') || c.body?.includes('suggestion(s) posted'))
+              );
+            }
 
             if (!hasRecentReview) {
               await github.rest.issues.createComment({
