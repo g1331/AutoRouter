@@ -132,6 +132,9 @@ jobs:
           git fetch --no-tags origin ${{ needs.prepare.outputs.base_ref }}
           git fetch --no-tags origin +refs/pull/${{ needs.prepare.outputs.pr_number }}/head:refs/remotes/origin/pr-head
 
+      - name: Checkout PR head
+        run: git checkout origin/pr-head
+
       # ============================================================
       # Step 3: 准备 Review 输入
       # ============================================================
