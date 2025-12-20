@@ -108,7 +108,7 @@ Users need to view complete API keys after creation, not just the prefix. Curren
   - Show "Legacy key - regenerate to enable reveal" for bcrypt-only keys
 
 ### Feature Flag
-- Environment variable: `ALLOW_KEY_REVEAL` (default: `true`)
+- Environment variable: `ALLOW_KEY_REVEAL` (default: `false`)
 - If `false`: Return 403 on reveal endpoint (safety switch)
 
 ## Approval

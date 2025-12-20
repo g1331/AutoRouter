@@ -51,13 +51,18 @@ export function KeysTable({ keys, onRevoke }: KeysTableProps) {
 
   const toggleKeyVisibility = async (keyId: string) => {
     if (visibleKeyIds.has(keyId)) {
-      const newSet = new Set(visibleKeyIds);
-      newSet.delete(keyId);
-      setVisibleKeyIds(newSet);
+      setVisibleKeyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(keyId);
+        return next;
+      });
 
-      const newMap = new Map(revealedKeys);
-      newMap.delete(keyId);
-      setRevealedKeys(newMap);
+      setRevealedKeys((prev) => {
+        const next = new Map(prev);
+        next.delete(keyId);
+        return next;
+      });
+
       return;
     }
 
@@ -70,7 +75,7 @@ export function KeysTable({ keys, onRevoke }: KeysTableProps) {
       }
     }
 
-    setVisibleKeyIds(new Set(visibleKeyIds).add(keyId));
+    setVisibleKeyIds((prev) => new Set(prev).add(keyId));
   };
 
   const copyKey = async (keyId: string, keyPrefix: string) => {

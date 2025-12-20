@@ -273,6 +273,12 @@ async def reveal_api_key(db: AsyncSession, key_id: UUID) -> APIKeyRevealResponse
 
     decrypted_key = decrypt_upstream_key(api_key.key_value_encrypted)
 
+    # Verify decrypted key matches stored hash
+    if not bcrypt.checkpw(decrypted_key.encode("utf-8"), api_key.key_hash.encode("utf-8")):
+        from app.core.encryption import EncryptionError
+
+        raise EncryptionError("Decrypted API key does not match stored hash")
+
     logger.info(f"Revealed API key: {api_key.key_prefix}, name='{api_key.name}'")
 
     return APIKeyRevealResponse(

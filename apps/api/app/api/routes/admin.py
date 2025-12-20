@@ -250,6 +250,29 @@ async def reveal_api_key_endpoint(
             status_code=500,
             detail={"error": "decrypt_failed", "message": "Failed to decrypt API key"},
         ) from e
+    except Exception as e:
+        # Log any unexpected errors to audit trail
+        await request_logger.log_request(
+            db=db,
+            api_key_id=key_id,
+            upstream_id=None,
+            method="REVEAL",
+            path=f"/admin/keys/{key_id}/reveal",
+            model=None,
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            status_code=500,
+            duration_ms=None,
+            error_message=str(e),
+        )
+        await db.commit()
+
+        logger.exception(f"Unexpected error during API key reveal (key_id={key_id}): {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "internal_error", "message": "Internal server error"},
+        ) from e
 
 
 @router.delete(
