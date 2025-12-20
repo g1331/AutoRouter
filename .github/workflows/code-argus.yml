@@ -682,54 +682,7 @@ jobs:
             const currentRound = parseInt(process.env.CURRENT_ROUND, 10) || 1;
             const maxRounds = parseInt(process.env.MAX_FIX_ROUNDS, 10) || 3;
 
-            // 检查是否有最近的 Code-Argus 审查（检查 PR Reviews 和 Issue Comments）
-            let hasRecentReview = false;
-
-            // 先检查 PR Reviews（Code-Argus 主要通过这个发布）
-            const { data: reviews } = await github.rest.pulls.listReviews({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: prNumber,
-              per_page: 50
-            });
-
-            hasRecentReview = reviews.some(r =>
-              r.body?.includes('## Code-Argus Review') &&
-              (r.body?.includes('issue(s) found') || r.body?.includes('suggestion(s) posted'))
-            );
-
-            // 如果 PR Reviews 没找到，再检查 Issue Comments
-            if (!hasRecentReview) {
-              const { data: comments } = await github.rest.issues.listComments({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: prNumber,
-                per_page: 50
-              });
-
-              hasRecentReview = comments.some(c =>
-                c.body?.includes('## Code-Argus Review') &&
-                (c.body?.includes('issue(s) found') || c.body?.includes('suggestion(s) posted'))
-              );
-            }
-
-            if (!hasRecentReview) {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: prNumber,
-                body: [
-                  '## Code-Argus Fix-Now',
-                  '',
-                  '⚠️ **No recent review found.** Please run `code-argus review` first.',
-                  '',
-                  'The `fix-now` command requires a previous review to know what issues to fix.'
-                ].join('\n')
-              });
-              return;
-            }
-
-            // 获取 PR head ref
+            // 获取 PR head ref（agent 会自己读取 PR reviews 来了解需要修复什么）
             const { data: pr } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
