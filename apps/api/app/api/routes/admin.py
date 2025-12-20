@@ -177,15 +177,13 @@ async def reveal_api_key_endpoint(
             content=result.model_dump(mode="json"),
             headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
         )
-    except ValueError as e:
+    except key_manager.APIKeyNotFoundError as e:
         error_msg = str(e)
-        status_code = 404 if "not found" in error_msg else 400
-        error_code = "not_found" if status_code == 404 else "legacy_key"
 
         # Log failed reveal attempt to audit trail
         await request_logger.log_request(
             db=db,
-            api_key_id=None if status_code == 404 else key_id,
+            api_key_id=None,
             upstream_id=None,
             method="REVEAL",
             path=f"/admin/keys/{key_id}/reveal",
@@ -193,7 +191,7 @@ async def reveal_api_key_endpoint(
             prompt_tokens=0,
             completion_tokens=0,
             total_tokens=0,
-            status_code=status_code,
+            status_code=404,
             duration_ms=None,
             error_message=error_msg,
         )
@@ -201,8 +199,33 @@ async def reveal_api_key_endpoint(
 
         logger.warning(f"Reveal API key failed: {e}")
         raise HTTPException(
-            status_code=status_code,
-            detail={"error": error_code, "message": error_msg},
+            status_code=404,
+            detail={"error": "not_found", "message": error_msg},
+        ) from e
+    except key_manager.LegacyAPIKeyError as e:
+        error_msg = str(e)
+
+        # Log failed reveal attempt to audit trail
+        await request_logger.log_request(
+            db=db,
+            api_key_id=key_id,
+            upstream_id=None,
+            method="REVEAL",
+            path=f"/admin/keys/{key_id}/reveal",
+            model=None,
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            status_code=400,
+            duration_ms=None,
+            error_message=error_msg,
+        )
+        await db.commit()
+
+        logger.warning(f"Reveal API key failed: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "legacy_key", "message": error_msg},
         ) from e
     except EncryptionError as e:
         # Log decryption failure to audit trail

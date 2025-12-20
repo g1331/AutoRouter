@@ -28,6 +28,14 @@ from app.models.schemas import (
 )
 
 
+class APIKeyNotFoundError(ValueError):
+    """Raised when the requested API key does not exist."""
+
+
+class LegacyAPIKeyError(ValueError):
+    """Raised when attempting to reveal a bcrypt-only API key."""
+
+
 def generate_api_key() -> str:
     """Generate a random API key with format: sk-auto-{32-byte-base64-random}
 
@@ -248,16 +256,17 @@ async def reveal_api_key(db: AsyncSession, key_id: UUID) -> APIKeyRevealResponse
         APIKeyRevealResponse: Key details with decrypted value
 
     Raises:
-        ValueError: If API key not found or is a legacy key without encryption
+        APIKeyNotFoundError: If API key not found
+        LegacyAPIKeyError: If API key has no encrypted value
     """
     result = await db.execute(select(APIKey).where(APIKey.id == key_id))
     api_key = result.scalar_one_or_none()
 
     if not api_key:
-        raise ValueError(f"API key not found: {key_id}")
+        raise APIKeyNotFoundError(f"API key not found: {key_id}")
 
     if not api_key.key_value_encrypted:
-        raise ValueError(
+        raise LegacyAPIKeyError(
             f"Legacy API key cannot be revealed (key_prefix={api_key.key_prefix}). "
             "Please regenerate this key to enable reveal functionality."
         )
