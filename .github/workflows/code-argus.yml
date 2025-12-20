@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write  # 需要 write 权限来触发 repository_dispatch
   issues: write
   pull-requests: write
 
