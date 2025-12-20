@@ -614,11 +614,13 @@ jobs:
             const maxRounds = parseInt(process.env.MAX_FIX_ROUNDS, 10) || 3;
 
             // 发送评论触发 @autorouter-bot
-            const triggerComment = `[Code-Argus Auto-Fix Round ${currentRound}/${maxRounds}]
-
-@autorouter-bot 请根据上方 Code-Argus review 反馈修复代码问题。
-
-修复完成后，请评论 \`code-argus fix\` 触发下一轮审查。`;
+            const triggerComment = [
+              `[Code-Argus Auto-Fix Round ${currentRound}/${maxRounds}]`,
+              '',
+              '@autorouter-bot 请根据上方 Code-Argus review 反馈修复代码问题。',
+              '',
+              '修复完成后，请评论 `code-argus fix` 触发下一轮审查。'
+            ].join('\n');
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
