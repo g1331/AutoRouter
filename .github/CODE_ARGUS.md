@@ -1,17 +1,17 @@
-# Code-Argus: AI-Powered Code Review & Auto-Fix
+# Code-Argus: AI-Powered Code Review
 
-Code-Argus 是一个基于 AI 的代码审查系统，能够自动发现代码问题并提供修复建议。支持自动修复模式，可在多轮循环中自动修复发现的问题。
+Code-Argus 是一个基于 AI 的代码审查系统，能够自动发现代码问题并提供修复建议。与 `@autorouter-bot` 配合使用可实现问题的自动修复。
 
 ## 功能特性
 
 - **智能代码审查**: 使用 AI 模型分析 PR 变更，识别潜在问题
-- **自动修复循环**: 发现问题后自动修复，然后重新审查，直到无问题或达到最大轮次
 - **多语言支持**: 自动适配 PR 描述的语言（中文/英文）
 - **行内建议**: 提供 GitHub 原生的 suggestion 格式，一键应用修复
+- **Bot 集成**: 审查发现问题时提供 `@autorouter-bot` 触发提示
 
 ## 触发方式
 
-### 1. 自动触发（仅审查）
+### 1. 自动触发
 
 - PR 创建时自动触发审查
 - PR 重新打开时自动触发审查
@@ -22,21 +22,20 @@ Code-Argus 是一个基于 AI 的代码审查系统，能够自动发现代码�
 
 | 命令 | 功能 |
 |------|------|
-| `code-argus review` | 仅审查，不自动修复 |
+| `code-argus review` | 触发代码审查 |
 | `argus review` | 同上（简写） |
 | `code-argus 审查` | 同上（中文） |
-| `code-argus fix` | 审查 + 自动修复循环 |
-| `argus fix` | 同上（简写） |
-| `code-argus 修复` | 同上（中文） |
 
-### 3. 手动触发（GitHub Actions UI）
+### 3. 自动修复
 
-1. 进入 Actions → Code-Argus Review
-2. 点击 "Run workflow"
-3. 填写参数：
-   - `pr_number`: PR 编号（必填）
-   - `current_round`: 当前轮次（默认 1）
-   - `auto_fix`: 是否启用自动修复（默认 true）
+当 Code-Argus 发现问题时，会在审查评论中提供提示：
+
+```
+💡 Tip: Comment the following to trigger auto-fix:
+@autorouter-bot 请根据上方 Code-Argus review 反馈修复代码问题
+```
+
+复制该命令到 PR 评论即可触发 `@autorouter-bot` 进行自动修复。
 
 ## 配置
 
@@ -47,11 +46,9 @@ Code-Argus 是一个基于 AI 的代码审查系统，能够自动发现代码�
 **Secrets（必需）**:
 - `CODEX_API_KEY`: OpenAI/Codex API 密钥
 - `CODEX_BASE_URL`: API 基础 URL（格式: `https://xxx.com/v1`）
-- `ANTHROPIC_API_KEY`: Anthropic API 密钥（用于自动修复）
 
 **Variables（可选）**:
 - `CODEX_MODEL`: 审查使用的模型（默认: `gpt-5.2`）
-- `MAX_FIX_ROUNDS`: 最大自动修复轮次（默认: `3`）
 
 ### 仓库配置文件
 
@@ -72,7 +69,7 @@ language: auto
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      触发 (PR/评论/手动)                      │
+│                      触发 (PR 创建/重开/评论)                  │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -80,42 +77,37 @@ language: auto
 │  Prepare Job                                                 │
 │  - 权限检查（仅 collaborators 可触发）                         │
 │  - 获取 PR 元数据                                             │
-│  - 确定审查轮次和模式                                          │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Review Job (Round N)                                        │
-│  - Checkout PR 代码                                          │
+│  Review Job                                                  │
+│  - Checkout PR 代码（确保读取 PR head 而非 base）              │
 │  - 生成 diff 并调用 Codex 审查                                 │
-│  - 解析审查结果                                               │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  Publish Job                                                 │
-│  - 发布审查评论到 PR                                          │
-│  - 判断是否需要自动修复                                        │
+│  - 发布审查评论到 PR（行内 suggestion）                        │
+│  - 如有问题，提供 @autorouter-bot 触发提示                     │
 └─────────────────────────────────────────────────────────────┘
                               │
                     ┌─────────┴─────────┐
                     │                   │
-            无问题/达上限          有问题且启用自动修复
+                无问题               有问题
                     │                   │
                     ▼                   ▼
               ┌─────────┐    ┌─────────────────────────┐
-              │  结束   │    │  Auto-Fix Job            │
-              └─────────┘    │  - Claude 自动修复代码    │
-                             │  - 提交并推送修复         │
-                             │  - 触发下一轮审查         │
+              │  结束   │    │  用户选择是否触发修复      │
+              └─────────┘    │  @autorouter-bot ...     │
                              └─────────────────────────┘
                                         │
-                                        │ (轮次 < MAX_FIX_ROUNDS)
                                         ▼
-                              ┌─────────────────┐
-                              │  Review Job     │
-                              │  (Round N+1)    │
-                              └─────────────────┘
+                             ┌─────────────────────────┐
+                             │  claude-codex-agent     │
+                             │  自动修复并创建 PR       │
+                             └─────────────────────────┘
 ```
 
 ## 审查重点
@@ -143,10 +135,10 @@ Code-Argus 专注于高影响力的问题：
 
 ## 示例
 
-### 审查结果示例
+### 审查结果示例（有问题）
 
 ```
-## Code-Argus Review (Round 1/3)
+## Code-Argus Review
 
 Review completed. **3** issue(s) found.
 
@@ -157,23 +149,27 @@ Review completed. **3** issue(s) found.
 
 **Focus areas**: security, correctness
 
-🔧 **Auto-fix enabled**: Starting fix in next job...
+---
+💡 **Tip**: Comment the following to trigger auto-fix:
+```
+@autorouter-bot 请根据上方 Code-Argus review 反馈修复代码问题
+```
 
 ---
-Comment `code-argus review` to re-review | `code-argus fix` to auto-fix
+Comment `code-argus review` to re-trigger review
 ```
 
-### 自动修复完成示例
+### 审查结果示例（无问题）
 
 ```
-## Code-Argus Review (Round 2/3)
+## Code-Argus Review
 
 ✅ Review completed. **No significant issues found.**
 
 The changes look good from a correctness, security, and architecture perspective.
 
 ---
-Comment `code-argus review` to re-review | `code-argus fix` to auto-fix
+Comment `code-argus review` to re-trigger review
 ```
 
 ## 故障排除
@@ -188,15 +184,16 @@ Comment `code-argus review` to re-review | `code-argus fix` to auto-fix
    - API 调用可能超时，尝试重新触发
    - 检查 API 配额是否充足
 
-3. **自动修复未触发**
-   - 确认使用了 `code-argus fix` 而不是 `code-argus review`
-   - 检查当前轮次是否已达到 `MAX_FIX_ROUNDS`
-
-4. **权限被拒绝**
+3. **权限被拒绝**
    - 仅仓库 collaborators（write 权限以上）可触发审查
    - 检查触发用户的权限级别
 
+4. **自动修复未生效**
+   - 确认已在 PR 评论中正确触发 `@autorouter-bot`
+   - 检查 `claude-codex-agent` workflow 是否正常运行
+
 ## 相关文件
 
-- Workflow 定义: `.github/workflows/code-argus.yml`
-- 配置文件: `.github/reviewbot.yaml`（可选）
+- Code-Argus Workflow: `.github/workflows/code-argus.yml`
+- Auto-Fix Agent: `.github/workflows/claude-codex-agent.yml`
+- 审查配置: `.github/reviewbot.yaml`（可选）

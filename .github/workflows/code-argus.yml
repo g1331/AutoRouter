@@ -5,64 +5,38 @@ on:
     types: [opened, reopened]
   issue_comment:
     types: [created]
-  workflow_dispatch:
-    inputs:
-      pr_number:
-        description: 'PR number to review'
-        required: true
-        type: number
-      current_round:
-        description: 'Current review round (1-based)'
-        required: false
-        default: 1
-        type: number
-      auto_fix:
-        description: 'Enable auto-fix mode'
-        required: false
-        default: true
-        type: boolean
 
 env:
   CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
   CODEX_BASE_URL: ${{ secrets.CODEX_BASE_URL }}
   CODEX_MODEL: ${{ vars.CODEX_MODEL }}
-  # 最大自动修复轮次（默认 3）
-  MAX_FIX_ROUNDS: ${{ vars.MAX_FIX_ROUNDS || '3' }}
 
 concurrency:
-  group: code-argus-${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.pr_number || github.run_id }}
+  group: code-argus-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
   issues: write
   pull-requests: write
-  actions: write
 
 jobs:
   prepare:
     name: Prepare
     runs-on: ubuntu-latest
-    # PR 自动触发 或 PR 评论中包含触发关键词（排除 bot 用户避免循环触发）或 workflow_dispatch
+    # PR 自动触发 或 PR 评论中包含触发关键词（排除 bot 用户避免循环触发）
     if: |
-      github.event_name == 'workflow_dispatch' ||
-      (github.actor != 'github-actions[bot]' &&
-       (github.event_name == 'pull_request' ||
-        (github.event.issue.pull_request &&
-         (contains(github.event.comment.body, 'code-argus review') ||
-          contains(github.event.comment.body, 'code-argus fix') ||
-          contains(github.event.comment.body, 'argus review') ||
-          contains(github.event.comment.body, 'argus fix') ||
-          contains(github.event.comment.body, 'code-argus 审查') ||
-          contains(github.event.comment.body, 'code-argus 修复')))))
+      github.actor != 'github-actions[bot]' &&
+      (github.event_name == 'pull_request' ||
+       (github.event.issue.pull_request &&
+        (contains(github.event.comment.body, 'code-argus review') ||
+         contains(github.event.comment.body, 'argus review') ||
+         contains(github.event.comment.body, 'code-argus 审查'))))
 
     outputs:
       allowed: ${{ steps.check_perm.outputs.allowed }}
       pr_number: ${{ steps.prmeta.outputs.number }}
       base_ref: ${{ steps.prmeta.outputs.base_ref }}
-      head_ref: ${{ steps.prmeta.outputs.head_ref }}
-      current_round: ${{ steps.round.outputs.current }}
-      auto_fix: ${{ steps.mode.outputs.auto_fix }}
 
     steps:
       # ============================================================
@@ -73,12 +47,6 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            // workflow_dispatch 已经经过权限验证
-            if (context.eventName === 'workflow_dispatch') {
-              core.setOutput('allowed', true);
-              return true;
-            }
-
             try {
               const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
                 owner: context.repo.owner,
@@ -113,66 +81,36 @@ jobs:
               console.log(`Failed to add reaction: ${error.message}`);
             }
 
-      - name: Determine current round
-        id: round
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "current=${{ github.event.inputs.current_round }}" >> $GITHUB_OUTPUT
-          else
-            echo "current=1" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Determine auto-fix mode
-        id: mode
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "auto_fix=${{ github.event.inputs.auto_fix }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event_name }}" = "issue_comment" ]; then
-            COMMENT_BODY="${{ github.event.comment.body }}"
-            if echo "$COMMENT_BODY" | grep -qiE "(code-argus fix|argus fix|code-argus 修复)"; then
-              echo "auto_fix=true" >> $GITHUB_OUTPUT
-            else
-              echo "auto_fix=false" >> $GITHUB_OUTPUT
-            fi
-          else
-            # PR opened/reopened - 默认只 review 不修复
-            echo "auto_fix=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Get PR metadata
         if: steps.check_perm.outputs.allowed == 'true'
         id: prmeta
         uses: actions/github-script@v7
-        env:
-          INPUT_PR_NUMBER: ${{ github.event.inputs.pr_number }}
         with:
           script: |
-            let prNumber;
-            if (context.eventName === 'workflow_dispatch') {
-              prNumber = parseInt(process.env.INPUT_PR_NUMBER, 10);
-            } else {
-              prNumber = context.payload.pull_request?.number ?? context.payload.issue?.number;
-            }
+            const prNumber = context.payload.pull_request?.number ?? context.payload.issue?.number;
 
             if (!prNumber) {
               core.setOutput('number', '');
               core.setOutput('base_ref', '');
-              core.setOutput('head_ref', '');
               return;
             }
 
-            const { data: pr } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: prNumber
-            });
+            // pull_request 事件可直接拿到 base.ref；issue_comment 事件需要额外查询
+            let baseRef = context.payload.pull_request?.base?.ref;
+            if (!baseRef) {
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber
+              });
+              baseRef = pr.base.ref;
+            }
 
             core.setOutput('number', prNumber.toString());
-            core.setOutput('base_ref', pr.base.ref || '');
-            core.setOutput('head_ref', pr.head.ref || '');
+            core.setOutput('base_ref', baseRef || '');
 
   review:
-    name: Review (Round ${{ needs.prepare.outputs.current_round }})
+    name: Review
     runs-on: ubuntu-latest
     needs: prepare
     if: needs.prepare.outputs.allowed == 'true'
@@ -180,8 +118,6 @@ jobs:
 
     outputs:
       review_output: ${{ steps.review.outputs.final-message }}
-      issues_found: ${{ steps.parse.outputs.issues_found }}
-      issues_json: ${{ steps.parse.outputs.issues_json }}
 
     steps:
       # ============================================================
@@ -391,44 +327,19 @@ jobs:
               "additionalProperties": false
             }
 
-      - name: Parse review output
-        id: parse
-        run: |
-          OUTPUT='${{ steps.review.outputs.final-message }}'
-
-          # 尝试解析 JSON
-          if echo "$OUTPUT" | jq -e '.summary.total_issues' > /dev/null 2>&1; then
-            ISSUES=$(echo "$OUTPUT" | jq -r '.summary.total_issues')
-            echo "issues_found=$ISSUES" >> $GITHUB_OUTPUT
-            # 转义 JSON 用于后续传递
-            echo "issues_json<<EOF" >> $GITHUB_OUTPUT
-            echo "$OUTPUT" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-          else
-            echo "issues_found=0" >> $GITHUB_OUTPUT
-            echo "issues_json={}" >> $GITHUB_OUTPUT
-          fi
-
   publish:
     name: Publish
     runs-on: ubuntu-latest
     needs: [prepare, review]
     if: needs.prepare.outputs.allowed == 'true' && always()
 
-    outputs:
-      needs_fix: ${{ steps.post.outputs.needs_fix }}
-
     steps:
       - name: Post review comments
-        id: post
         uses: actions/github-script@v7
         env:
           REVIEW_OUTPUT: ${{ needs.review.outputs.review_output }}
           PR_NUMBER: ${{ needs.prepare.outputs.pr_number }}
           REVIEW_RESULT: ${{ needs.review.result }}
-          CURRENT_ROUND: ${{ needs.prepare.outputs.current_round }}
-          AUTO_FIX: ${{ needs.prepare.outputs.auto_fix }}
-          MAX_FIX_ROUNDS: ${{ env.MAX_FIX_ROUNDS }}
         with:
           script: |
             const prNumber = parseInt(process.env.PR_NUMBER, 10);
@@ -436,18 +347,14 @@ jobs:
 
             const reviewResult = process.env.REVIEW_RESULT || '';
             const output = process.env.REVIEW_OUTPUT || '';
-            const currentRound = parseInt(process.env.CURRENT_ROUND, 10) || 1;
-            const autoFix = process.env.AUTO_FIX === 'true';
-            const maxRounds = parseInt(process.env.MAX_FIX_ROUNDS, 10) || 3;
 
             if (reviewResult !== 'success') {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: prNumber,
-                body: `## Code-Argus Review (Round ${currentRound})\n\n❌ Review failed. Please check the [workflow logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n\nComment \`code-argus review\` to retry.`
+                body: `## Code-Argus Review\n\n❌ Review failed. Please check the [workflow logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n\nComment \`code-argus review\` to retry.`
               });
-              core.setOutput('needs_fix', 'false');
               return;
             }
 
@@ -457,9 +364,8 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: prNumber,
-                body: `## Code-Argus Review (Round ${currentRound})\n\n❌ No output received from review service.\n\nComment \`code-argus review\` to retry.`
+                body: `## Code-Argus Review\n\n❌ No output received from review service.\n\nComment \`code-argus review\` to retry.`
               });
-              core.setOutput('needs_fix', 'false');
               return;
             }
 
@@ -483,9 +389,8 @@ jobs:
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   issue_number: prNumber,
-                  body: `## Code-Argus Review (Round ${currentRound})\n\n❌ Failed to parse review output.\n\nComment \`code-argus review\` to retry.`
+                  body: `## Code-Argus Review\n\n❌ Failed to parse review output.\n\nComment \`code-argus review\` to retry.`
                 });
-                core.setOutput('needs_fix', 'false');
                 return;
               }
             }
@@ -532,12 +437,11 @@ jobs:
 
             // 生成总结
             const summary = review.summary || { total_issues: 0, high: 0, medium: 0, low: 0, focus_areas: [] };
-            let summaryBody = `## Code-Argus Review (Round ${currentRound}/${maxRounds})\n\n`;
+            let summaryBody = `## Code-Argus Review\n\n`;
 
             if (summary.total_issues === 0) {
               summaryBody += `✅ Review completed. **No significant issues found.**\n\n`;
               summaryBody += `The changes look good from a correctness, security, and architecture perspective.\n`;
-              core.setOutput('needs_fix', 'false');
             } else {
               summaryBody += `Review completed. **${summary.total_issues}** issue(s) found.\n\n`;
               summaryBody += `| Severity | Count |\n`;
@@ -550,20 +454,14 @@ jobs:
                 summaryBody += `\n**Focus areas**: ${summary.focus_areas.join(', ')}\n`;
               }
 
-              // 判断是否需要自动修复
-              if (autoFix && currentRound < maxRounds) {
-                summaryBody += `\n🔧 **Auto-fix enabled**: Starting fix in next job...\n`;
-                core.setOutput('needs_fix', 'true');
-              } else if (autoFix && currentRound >= maxRounds) {
-                summaryBody += `\n⚠️ **Max rounds reached** (${maxRounds}). Please fix remaining issues manually.\n`;
-                core.setOutput('needs_fix', 'false');
-              } else {
-                core.setOutput('needs_fix', 'false');
-              }
+              // 添加自动修复提示
+              summaryBody += `\n---\n`;
+              summaryBody += `💡 **Tip**: Comment the following to trigger auto-fix:\n`;
+              summaryBody += `\`\`\`\n@autorouter-bot 请根据上方 Code-Argus review 反馈修复代码问题\n\`\`\`\n`;
             }
 
             summaryBody += `\n---\n`;
-            summaryBody += `Comment \`code-argus review\` to re-review | \`code-argus fix\` to auto-fix`;
+            summaryBody += `Comment \`code-argus review\` to re-trigger review`;
 
             // 提交 Review
             let reviewCreated = false;
@@ -628,67 +526,3 @@ jobs:
                 });
               }
             }
-
-  auto-fix:
-    name: Auto-Fix (Round ${{ needs.prepare.outputs.current_round }})
-    runs-on: ubuntu-latest
-    needs: [prepare, review, publish]
-    if: |
-      needs.prepare.outputs.allowed == 'true' &&
-      needs.publish.outputs.needs_fix == 'true'
-    timeout-minutes: 30
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ needs.prepare.outputs.head_ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Run Claude Code to fix issues
-        uses: anthropics/claude-code-action@v1
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          prompt: |
-            你是 Code-Argus Auto-Fix Agent。请根据以下 review 结果修复代码问题。
-
-            ## Review 结果 (Round ${{ needs.prepare.outputs.current_round }})
-
-            ${{ needs.review.outputs.issues_json }}
-
-            ## 修复指南
-
-            1. 仔细阅读每个 issue 的 description 和 suggestion
-            2. 按照 suggestion 修改代码
-            3. 如果 suggestion 不完整或不正确，使用你的判断进行合理修复
-            4. 修复完成后，运行相关的 lint/type check 确保没有引入新问题
-            5. 提交修复：git add -A && git commit -m "fix: address Code-Argus review feedback (round ${{ needs.prepare.outputs.current_round }})"
-            6. 推送到 PR 分支：git push
-
-            ## 注意事项
-
-            - 只修复 review 中指出的问题，不要做额外的更改
-            - 确保修复不会破坏现有功能
-            - 如果某个 issue 无法修复，在 commit message 中说明原因
-          claude_args: --allowedTools Bash(git:*) Edit Write Read Glob Grep
-
-      - name: Trigger next review round
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CURRENT_ROUND: ${{ needs.prepare.outputs.current_round }}
-          PR_NUMBER: ${{ needs.prepare.outputs.pr_number }}
-        run: |
-          NEXT_ROUND=$((CURRENT_ROUND + 1))
-          echo "Triggering review round $NEXT_ROUND for PR #$PR_NUMBER"
-
-          gh workflow run code-argus.yml \
-            --field pr_number="$PR_NUMBER" \
-            --field current_round="$NEXT_ROUND" \
-            --field auto_fix=true
