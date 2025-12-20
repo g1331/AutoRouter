@@ -10,14 +10,13 @@ env:
   CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
   CODEX_BASE_URL: ${{ secrets.CODEX_BASE_URL }}
   CODEX_MODEL: ${{ vars.CODEX_MODEL }}
-  MAX_FIX_ROUNDS: ${{ vars.MAX_FIX_ROUNDS || '3' }}
 
 concurrency:
   group: code-argus-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
   cancel-in-progress: true
 
 permissions:
-  contents: write  # 需要 write 权限来触发 repository_dispatch
+  contents: read
   issues: write
   pull-requests: write
 
@@ -31,22 +30,13 @@ jobs:
       (github.event_name == 'pull_request' ||
        (github.event.issue.pull_request &&
         (contains(github.event.comment.body, 'code-argus review') ||
-         contains(github.event.comment.body, 'code-argus fix-now') ||
-         contains(github.event.comment.body, 'code-argus fix') ||
          contains(github.event.comment.body, 'argus review') ||
-         contains(github.event.comment.body, 'argus fix-now') ||
-         contains(github.event.comment.body, 'argus fix') ||
-         contains(github.event.comment.body, 'code-argus 审查') ||
-         contains(github.event.comment.body, 'code-argus 立即修复') ||
-         contains(github.event.comment.body, 'code-argus 修复'))))
+         contains(github.event.comment.body, 'code-argus 审查'))))
 
     outputs:
       allowed: ${{ steps.check_perm.outputs.allowed }}
       pr_number: ${{ steps.prmeta.outputs.number }}
       base_ref: ${{ steps.prmeta.outputs.base_ref }}
-      auto_fix: ${{ steps.mode.outputs.auto_fix }}
-      fix_now: ${{ steps.mode.outputs.fix_now }}
-      current_round: ${{ steps.round.outputs.current }}
 
     steps:
       # ============================================================
@@ -119,66 +109,11 @@ jobs:
             core.setOutput('number', prNumber.toString());
             core.setOutput('base_ref', baseRef || '');
 
-      - name: Determine auto-fix mode
-        id: mode
-        if: steps.check_perm.outputs.allowed == 'true'
-        run: |
-          if [ "${{ github.event_name }}" = "issue_comment" ]; then
-            COMMENT_BODY="${{ github.event.comment.body }}"
-            # 检测 fix-now 模式（跳过审查直接修复）
-            if echo "$COMMENT_BODY" | grep -qiE "(code-argus fix-now|argus fix-now|code-argus 立即修复)"; then
-              echo "fix_now=true" >> $GITHUB_OUTPUT
-              echo "auto_fix=true" >> $GITHUB_OUTPUT
-            elif echo "$COMMENT_BODY" | grep -qiE "(code-argus fix|argus fix|code-argus 修复)"; then
-              echo "fix_now=false" >> $GITHUB_OUTPUT
-              echo "auto_fix=true" >> $GITHUB_OUTPUT
-            else
-              echo "fix_now=false" >> $GITHUB_OUTPUT
-              echo "auto_fix=false" >> $GITHUB_OUTPUT
-            fi
-          else
-            # PR opened/reopened - 默认只 review 不修复
-            echo "fix_now=false" >> $GITHUB_OUTPUT
-            echo "auto_fix=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Determine current round
-        id: round
-        if: steps.check_perm.outputs.allowed == 'true' && steps.mode.outputs.auto_fix == 'true'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const prNumber = context.payload.issue?.number;
-            if (!prNumber) {
-              core.setOutput('current', '1');
-              return;
-            }
-
-            // 统计 PR 评论中已有的 Auto-Fix Round 标记数量
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
-              per_page: 100
-            });
-
-            let maxRound = 0;
-            const roundPattern = /\[Code-Argus Auto-Fix Round (\d+)/;
-            for (const comment of comments) {
-              const match = comment.body?.match(roundPattern);
-              if (match) {
-                maxRound = Math.max(maxRound, parseInt(match[1], 10));
-              }
-            }
-
-            core.setOutput('current', (maxRound + 1).toString());
-
   review:
     name: Review
     runs-on: ubuntu-latest
     needs: prepare
-    # 跳过 fix-now 模式（直接使用上次审查结果）
-    if: needs.prepare.outputs.allowed == 'true' && needs.prepare.outputs.fix_now != 'true'
+    if: needs.prepare.outputs.allowed == 'true'
     timeout-minutes: 45
 
     outputs:
@@ -400,15 +335,11 @@ jobs:
 
     steps:
       - name: Post review comments
-        id: post
         uses: actions/github-script@v7
         env:
           REVIEW_OUTPUT: ${{ needs.review.outputs.review_output }}
           PR_NUMBER: ${{ needs.prepare.outputs.pr_number }}
           REVIEW_RESULT: ${{ needs.review.result }}
-          AUTO_FIX: ${{ needs.prepare.outputs.auto_fix }}
-          CURRENT_ROUND: ${{ needs.prepare.outputs.current_round || '1' }}
-          MAX_FIX_ROUNDS: ${{ env.MAX_FIX_ROUNDS }}
         with:
           script: |
             const prNumber = parseInt(process.env.PR_NUMBER, 10);
@@ -416,9 +347,6 @@ jobs:
 
             const reviewResult = process.env.REVIEW_RESULT || '';
             const output = process.env.REVIEW_OUTPUT || '';
-            const autoFix = process.env.AUTO_FIX === 'true';
-            const currentRound = parseInt(process.env.CURRENT_ROUND, 10) || 1;
-            const maxRounds = parseInt(process.env.MAX_FIX_ROUNDS, 10) || 3;
 
             if (reviewResult !== 'success') {
               await github.rest.issues.createComment({
@@ -509,9 +437,7 @@ jobs:
 
             // 生成总结
             const summary = review.summary || { total_issues: 0, high: 0, medium: 0, low: 0, focus_areas: [] };
-            const roundInfo = autoFix ? ` (Round ${currentRound}/${maxRounds})` : '';
-            let summaryBody = `## Code-Argus Review${roundInfo}\n\n`;
-            let shouldTriggerFix = false;
+            let summaryBody = `## Code-Argus Review\n\n`;
 
             if (summary.total_issues === 0) {
               summaryBody += `✅ Review completed. **No significant issues found.**\n\n`;
@@ -528,25 +454,14 @@ jobs:
                 summaryBody += `\n**Focus areas**: ${summary.focus_areas.join(', ')}\n`;
               }
 
-              // 根据模式决定行为
-              if (autoFix && currentRound <= maxRounds) {
-                summaryBody += `\n🔧 **Auto-fix mode**: Triggering @autorouter-bot to fix issues...\n`;
-                shouldTriggerFix = true;
-              } else if (autoFix && currentRound > maxRounds) {
-                summaryBody += `\n⚠️ **Max rounds reached** (${maxRounds}). Please fix remaining issues manually.\n`;
-              } else {
-                // 非 auto-fix 模式，显示手动触发提示
-                summaryBody += `\n---\n`;
-                summaryBody += `💡 **Tip**: Comment the following to trigger auto-fix:\n`;
-                summaryBody += `\`\`\`\n@autorouter-bot 请根据上方 Code-Argus review 反馈修复代码问题\n\`\`\`\n`;
-              }
+              // 添加自动修复提示
+              summaryBody += `\n---\n`;
+              summaryBody += `💡 **Tip**: Comment the following to trigger auto-fix:\n`;
+              summaryBody += `\`\`\`\n@autorouter-bot 请根据上方 Code-Argus review 反馈修复代码问题\n\`\`\`\n`;
             }
 
             summaryBody += `\n---\n`;
-            summaryBody += `Comment \`code-argus review\` to re-trigger review | \`code-argus fix\` for auto-fix loop`;
-
-            // 输出是否需要触发修复
-            core.setOutput('should_trigger_fix', shouldTriggerFix.toString());
+            summaryBody += `Comment \`code-argus review\` to re-trigger review`;
 
             // 提交 Review
             let reviewCreated = false;
@@ -611,107 +526,3 @@ jobs:
                 });
               }
             }
-
-      - name: Trigger auto-fix via repository_dispatch
-        if: steps.post.outputs.should_trigger_fix == 'true'
-        uses: actions/github-script@v7
-        env:
-          PR_NUMBER: ${{ needs.prepare.outputs.pr_number }}
-          CURRENT_ROUND: ${{ needs.prepare.outputs.current_round || '1' }}
-          MAX_FIX_ROUNDS: ${{ env.MAX_FIX_ROUNDS }}
-          HEAD_REF: ${{ needs.prepare.outputs.head_ref }}
-        with:
-          script: |
-            const prNumber = parseInt(process.env.PR_NUMBER, 10);
-            const currentRound = parseInt(process.env.CURRENT_ROUND, 10) || 1;
-            const maxRounds = parseInt(process.env.MAX_FIX_ROUNDS, 10) || 3;
-
-            // 获取 PR head ref
-            const { data: pr } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: prNumber
-            });
-
-            // 发送 repository_dispatch 触发 claude-codex-agent
-            await github.rest.repos.createDispatchEvent({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              event_type: 'code-argus-fix',
-              client_payload: {
-                pr_number: prNumber,
-                current_round: currentRound,
-                max_rounds: maxRounds,
-                head_ref: pr.head.ref
-              }
-            });
-
-            // 添加通知评论
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
-              body: [
-                `🔧 **Code-Argus Auto-Fix** (Round ${currentRound}/${maxRounds})`,
-                '',
-                '正在触发自动修复...',
-                '',
-                `查看 [Actions](https://github.com/${context.repo.owner}/${context.repo.repo}/actions) 跟踪进度。`
-              ].join('\n')
-            });
-
-  # ============================================================
-  # fix-now: 跳过审查，直接触发修复
-  # ============================================================
-  fix-now:
-    name: Fix Now
-    runs-on: ubuntu-latest
-    needs: prepare
-    if: needs.prepare.outputs.allowed == 'true' && needs.prepare.outputs.fix_now == 'true'
-
-    steps:
-      - name: Trigger fix directly
-        uses: actions/github-script@v7
-        env:
-          PR_NUMBER: ${{ needs.prepare.outputs.pr_number }}
-          CURRENT_ROUND: ${{ needs.prepare.outputs.current_round || '1' }}
-          MAX_FIX_ROUNDS: ${{ env.MAX_FIX_ROUNDS }}
-        with:
-          script: |
-            const prNumber = parseInt(process.env.PR_NUMBER, 10);
-            const currentRound = parseInt(process.env.CURRENT_ROUND, 10) || 1;
-            const maxRounds = parseInt(process.env.MAX_FIX_ROUNDS, 10) || 3;
-
-            // 获取 PR head ref（agent 会自己读取 PR reviews 来了解需要修复什么）
-            const { data: pr } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: prNumber
-            });
-
-            // 发送 repository_dispatch 触发修复
-            await github.rest.repos.createDispatchEvent({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              event_type: 'code-argus-fix',
-              client_payload: {
-                pr_number: prNumber,
-                current_round: currentRound,
-                max_rounds: maxRounds,
-                head_ref: pr.head.ref
-              }
-            });
-
-            // 添加通知评论
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
-              body: [
-                `🔧 **Code-Argus Fix-Now** (Round ${currentRound}/${maxRounds})`,
-                '',
-                '正在触发自动修复（跳过审查）...',
-                '',
-                `查看 [Actions](https://github.com/${context.repo.owner}/${context.repo.repo}/actions) 跟踪进度。`
-              ].join('\n')
-            });
