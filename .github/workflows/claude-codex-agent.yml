@@ -89,9 +89,9 @@ jobs:
           python -m pip install --user uv
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Install auggie CLI (pre-release with MCP support)
+      - name: Install auggie CLI
         if: steps.check-collaborator.outputs.is_collaborator == 'true'
-        run: npm install -g @augmentcode/auggie@prerelease
+        run: npm install -g @augmentcode/auggie@latest
 
       - name: Install Codex CLI
         if: steps.check-collaborator.outputs.is_collaborator == 'true'
@@ -362,9 +362,9 @@ jobs:
           python -m pip install --user uv
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Install auggie CLI (pre-release with MCP support)
+      - name: Install auggie CLI
         if: steps.check-collaborator.outputs.is_collaborator == 'true'
-        run: npm install -g @augmentcode/auggie@prerelease
+        run: npm install -g @augmentcode/auggie@latest
 
       - name: Install Codex CLI
         if: steps.check-collaborator.outputs.is_collaborator == 'true'
@@ -688,8 +688,8 @@ jobs:
           python -m pip install --user uv
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Install auggie CLI (pre-release with MCP support)
-        run: npm install -g @augmentcode/auggie@prerelease
+      - name: Install auggie CLI
+        run: npm install -g @augmentcode/auggie@latest
 
       - name: Install Codex CLI
         run: npm install -g @openai/codex@latest
