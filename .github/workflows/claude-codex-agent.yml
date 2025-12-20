@@ -926,27 +926,63 @@ jobs:
           ref: ${{ github.event.client_payload.head_ref }}
           fetch-depth: 0
 
-      - name: Setup Node 22
+      - name: Setup Node 22 (for auggie / npx MCPs)
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Install uv
+      - name: Install uv (for uvx-based MCPs)
         run: |
           python -m pip install --user uv
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Install CLI tools
-        run: |
-          npm install -g @anthropic-ai/claude-code@latest
-          npm install -g @augmentcode/auggie@latest
+      - name: Install auggie CLI
+        run: npm install -g @augmentcode/auggie@latest
 
-      - name: Configure Claude
-        run: |
-          mkdir -p ~/.claude
+      - name: Install Codex CLI
+        run: npm install -g @openai/codex@latest
 
-          # MCP 配置
-          cat > ~/.claude/.mcp.json << EOF
+      - name: Configure Codex MCP servers
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          config = f"""
+          [features]
+          rmcp_client = true
+
+          [mcp_servers.tavily-remote-mcp]
+          url = "https://mcp.tavily.com/mcp/?tavilyApiKey={os.environ['TAVILY_API_KEY']}"
+
+          [mcp_servers.context7]
+          command = "npx"
+          args = ["-y", "@upstash/context7-mcp"]
+
+          [mcp_servers.code-index]
+          command = "uvx"
+          args = ["code-index-mcp"]
+
+          [mcp_servers.auggie-mcp]
+          command = "auggie"
+          args = ["--mcp"]
+          env = {{ AUGMENT_API_TOKEN = "{os.environ['AUGMENT_API_TOKEN']}", AUGMENT_API_URL = "{os.environ['AUGMENT_API_URL']}" }}
+
+          [mcp_servers.chrome-devtools]
+          command = "npx"
+          args = ["chrome-devtools-mcp@latest", "--headless", "--no-sandbox", "--isolated=true"]
+          """
+
+          cfg_dir = Path.home() / ".codex"
+          cfg_dir.mkdir(parents=True, exist_ok=True)
+          (cfg_dir / "config.toml").write_text(config.strip() + "\n", encoding="utf-8")
+          PY
+
+      - name: Write MCP config
+        id: mcp-config
+        run: |
+          # 生成 MCP 配置 JSON（使用实际环境变量值）
+          MCP_JSON=$(cat <<EOF
           {
             "mcpServers": {
               "tavily-remote-mcp": {
@@ -958,6 +994,20 @@ jobs:
                 "command": "npx",
                 "args": ["-y", "@upstash/context7-mcp"]
               },
+              "code-index": {
+                "type": "stdio",
+                "command": "uvx",
+                "args": ["code-index-mcp"]
+              },
+              "codex": {
+                "type": "stdio",
+                "command": "uvx",
+                "args": ["--from", "git+https://github.com/GuDaStudio/codexmcp.git", "codexmcp"],
+                "env": {
+                  "OPENAI_BASE_URL": "${CODEX_BASE_URL}",
+                  "OPENAI_API_KEY": "${CODEX_API_KEY}"
+                }
+              },
               "auggie-mcp": {
                 "type": "stdio",
                 "command": "auggie",
@@ -966,28 +1016,45 @@ jobs:
                   "AUGMENT_API_TOKEN": "${AUGMENT_API_TOKEN}",
                   "AUGMENT_API_URL": "${AUGMENT_API_URL}"
                 }
+              },
+              "chrome-devtools": {
+                "type": "stdio",
+                "command": "npx",
+                "args": ["chrome-devtools-mcp@latest", "--headless", "--no-sandbox", "--isolated=true"]
               }
             }
           }
           EOF
+          )
+          # 压缩为单行并输出到 GITHUB_OUTPUT
+          echo "mcp_config=$(echo "$MCP_JSON" | jq -c .)" >> $GITHUB_OUTPUT
 
-          # 权限配置
+      - name: Configure Claude permissions
+        timeout-minutes: 2
+        run: |
+          mkdir -p ~/.claude
           cat > ~/.claude/settings.json << 'EOF'
           {
             "permissions": {
               "allow": [
                 "mcp__tavily-remote-mcp__*",
                 "mcp__context7__*",
+                "mcp__code-index__*",
+                "mcp__codex__*",
                 "mcp__auggie-mcp__*",
+                "mcp__chrome-devtools__*",
                 "Edit",
-                "Write",
+                "Replace",
                 "Bash(git:*)",
                 "Bash(uv:*)",
+                "Bash(npm:*)",
+                "Bash(pnpm:*)",
                 "Bash(gh:*)",
+                "Bash(pytest:*)",
                 "Bash(ruff:*)",
                 "Bash(mypy:*)"
               ],
-              "deny": []
+              "ask": []
             },
             "enableAllProjectMcpServers": true
           }
@@ -995,37 +1062,31 @@ jobs:
 
       - name: Run Claude Code for Code-Argus fix
         timeout-minutes: 60
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          use_sticky_comment: false
+          mcp_config: ${{ steps.mcp-config.outputs.mcp_config }}
+          prompt: |
+            你是仓库专属机器人（中文沟通，代码/命令保持原文）。
+
+            ## 任务
+            Code-Argus 自动修复 (Round ${{ github.event.client_payload.current_round }}/${{ github.event.client_payload.max_rounds }})
+
+            请修复 PR #${{ github.event.client_payload.pr_number }} 中 Code-Argus 审查发现的问题。
+
+            ## 步骤
+            1. 运行 gh api repos/${{ github.repository }}/pulls/${{ github.event.client_payload.pr_number }}/reviews 查看审查评论
+            2. 找到最近的 Code-Argus Review（包含 issue(s) found 或 suggestion(s) posted），分析问题
+            3. 定位并修复代码
+            4. 运行 uv run ruff check --fix 和 uv run mypy 检查
+            5. git add/commit/push 提交推送
+            6. 完成后在 PR 评论 code-argus review 触发下一轮审查
+
+            禁止泄露 tokens/花费信息。
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          PR_NUMBER="${{ github.event.client_payload.pr_number }}"
-          CURRENT_ROUND="${{ github.event.client_payload.current_round }}"
-          MAX_ROUNDS="${{ github.event.client_payload.max_rounds }}"
-
-          # 发送开始通知
-          gh pr comment "$PR_NUMBER" --body "## Code-Argus Auto-Fix (Round ${CURRENT_ROUND}/${MAX_ROUNDS})
-
-          正在运行自动修复...
-
-          查看 [Actions](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) 跟踪进度。"
-
-          # 运行 Claude CLI
-          claude --print "你是仓库专属机器人（中文沟通，代码/命令保持原文）。
-
-          ## 任务
-          Code-Argus 自动修复 (Round ${CURRENT_ROUND}/${MAX_ROUNDS})
-
-          请修复 PR #${PR_NUMBER} 中 Code-Argus 审查发现的问题。
-
-          ## 步骤
-          1. 运行 gh api repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews 查看审查评论
-          2. 找到最近的 Code-Argus Review（包含 issue(s) found 或 suggestion(s) posted），分析问题
-          3. 定位并修复代码
-          4. 运行 uv run ruff check --fix 和 uv run mypy 检查
-          5. git add/commit/push 提交推送
-          6. 完成后评论 code-argus review 触发下一轮审查
-
-          禁止泄露 tokens/花费信息。"
 
       - name: Handle failure
         if: failure()
