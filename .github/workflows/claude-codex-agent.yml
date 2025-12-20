@@ -136,8 +136,10 @@ jobs:
 
       - name: Write MCP config
         if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        id: mcp-config
         run: |
-          cat <<'EOF' > .mcp.json
+          # 生成 MCP 配置 JSON（使用实际环境变量值）
+          MCP_JSON=$(cat <<EOF
           {
             "mcpServers": {
               "tavily-remote-mcp": {
@@ -180,6 +182,9 @@ jobs:
             }
           }
           EOF
+          )
+          # 压缩为单行并输出到 GITHUB_OUTPUT
+          echo "mcp_config=$(echo "$MCP_JSON" | jq -c .)" >> $GITHUB_OUTPUT
 
       - name: Configure Claude permissions
         if: steps.check-collaborator.outputs.is_collaborator == 'true'
@@ -217,12 +222,13 @@ jobs:
       - name: Run Claude Code for triage and auto-fix (collaborator)
         if: steps.check-collaborator.outputs.is_collaborator == 'true'
         timeout-minutes: 120
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           use_sticky_comment: true
           branch_prefix: ""
+          mcp_config: ${{ steps.mcp-config.outputs.mcp_config }}
           prompt: |
             你是仓库专属机器人（中文沟通，代码/命令保持原文）。issue #${{ github.event.issue.number }} 由协作者 ${{ github.event.issue.user.login }} 创建。
 
@@ -256,9 +262,7 @@ jobs:
             gh pr create --title "fix: 修复描述" --body "修复内容\n\nCloses #${{ github.event.issue.number }}" --base master
 
             禁止泄露tokens/花费/定价信息。
-          claude_args: |
-            --mcp-config .mcp.json
-            --mcp-debug
+          claude_args: --mcp-debug
           settings: '{"alwaysThinkingEnabled":true}'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -409,8 +413,10 @@ jobs:
 
       - name: Write MCP config
         if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        id: mcp-config
         run: |
-          cat <<'EOF' > .mcp.json
+          # 生成 MCP 配置 JSON（使用实际环境变量值）
+          MCP_JSON=$(cat <<EOF
           {
             "mcpServers": {
               "tavily-remote-mcp": {
@@ -453,6 +459,9 @@ jobs:
             }
           }
           EOF
+          )
+          # 压缩为单行并输出到 GITHUB_OUTPUT
+          echo "mcp_config=$(echo "$MCP_JSON" | jq -c .)" >> $GITHUB_OUTPUT
 
       - name: Configure Claude permissions
         if: steps.check-collaborator.outputs.is_collaborator == 'true'
@@ -489,14 +498,14 @@ jobs:
       - name: Run Claude Code to fix issue
         if: steps.check-collaborator.outputs.is_collaborator == 'true'
         timeout-minutes: 120
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           use_sticky_comment: true
           branch_prefix: ""
+          mcp_config: ${{ steps.mcp-config.outputs.mcp_config }}
           claude_args: |
-            --mcp-config .mcp.json
             --mcp-debug
             --append-system-prompt "你是仓库专属机器人（中文沟通，代码/命令保持原文）。issue #${{ github.event.issue.number }} 已获审批，现在开始处理。
 
@@ -731,8 +740,10 @@ jobs:
           PY
 
       - name: Write MCP config
+        id: mcp-config
         run: |
-          cat <<'EOF' > .mcp.json
+          # 生成 MCP 配置 JSON（使用实际环境变量值）
+          MCP_JSON=$(cat <<EOF
           {
             "mcpServers": {
               "tavily-remote-mcp": {
@@ -775,6 +786,9 @@ jobs:
             }
           }
           EOF
+          )
+          # 压缩为单行并输出到 GITHUB_OUTPUT
+          echo "mcp_config=$(echo "$MCP_JSON" | jq -c .)" >> $GITHUB_OUTPUT
 
       - name: Configure Claude permissions
         timeout-minutes: 2
@@ -809,13 +823,13 @@ jobs:
 
       - name: Run Claude Code
         timeout-minutes: 120
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           trigger_phrase: "@autorouter-bot"
+          mcp_config: ${{ steps.mcp-config.outputs.mcp_config }}
           claude_args: |
-            --mcp-config .mcp.json
             --mcp-debug
             --append-system-prompt "你是仓库专属机器人（中文沟通，代码/命令保持原文）。遵循高质量提示最佳实践：目标清晰、步骤化推理、示例/清单输出、允许承认不确定性。
 
