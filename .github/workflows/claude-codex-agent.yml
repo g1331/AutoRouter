@@ -938,13 +938,15 @@ jobs:
 
       - name: Install CLI tools
         run: |
+          npm install -g @anthropic-ai/claude-code@latest
           npm install -g @augmentcode/auggie@latest
-          npm install -g @openai/codex@latest
 
-      - name: Write MCP config
-        id: mcp-config
+      - name: Configure Claude
         run: |
-          MCP_JSON=$(cat <<EOF
+          mkdir -p ~/.claude
+
+          # MCP 配置
+          cat > ~/.claude/.mcp.json << EOF
           {
             "mcpServers": {
               "tavily-remote-mcp": {
@@ -968,12 +970,8 @@ jobs:
             }
           }
           EOF
-          )
-          echo "mcp_config=$(echo "$MCP_JSON" | jq -c .)" >> $GITHUB_OUTPUT
 
-      - name: Configure Claude permissions
-        run: |
-          mkdir -p ~/.claude
+          # 权限配置
           cat > ~/.claude/settings.json << 'EOF'
           {
             "permissions": {
@@ -982,15 +980,14 @@ jobs:
                 "mcp__context7__*",
                 "mcp__auggie-mcp__*",
                 "Edit",
-                "Replace",
+                "Write",
                 "Bash(git:*)",
                 "Bash(uv:*)",
                 "Bash(gh:*)",
-                "Bash(pytest:*)",
                 "Bash(ruff:*)",
                 "Bash(mypy:*)"
               ],
-              "ask": []
+              "deny": []
             },
             "enableAllProjectMcpServers": true
           }
@@ -998,31 +995,37 @@ jobs:
 
       - name: Run Claude Code for Code-Argus fix
         timeout-minutes: 60
-        uses: anthropics/claude-code-action@beta
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          use_sticky_comment: true
-          mcp_config: ${{ steps.mcp-config.outputs.mcp_config }}
-          prompt: |
-            你是仓库专属机器人（中文沟通，代码/命令保持原文）。
-
-            ## 任务
-            Code-Argus 自动修复 (Round ${{ github.event.client_payload.current_round }}/${{ github.event.client_payload.max_rounds }})
-
-            请修复 PR #${{ github.event.client_payload.pr_number }} 中 Code-Argus 审查发现的问题。
-
-            ## 步骤
-            1. 运行 `gh pr view ${{ github.event.client_payload.pr_number }} --comments` 查看审查评论
-            2. 找到最近的 Code-Argus Review，分析问题
-            3. 定位并修复代码
-            4. 运行 ruff/mypy 检查
-            5. 提交推送
-            6. 完成后评论 `code-argus fix` 触发下一轮
-
-            禁止泄露 tokens/花费信息。
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ github.event.client_payload.pr_number }}"
+          CURRENT_ROUND="${{ github.event.client_payload.current_round }}"
+          MAX_ROUNDS="${{ github.event.client_payload.max_rounds }}"
+
+          # 发送开始通知
+          gh pr comment "$PR_NUMBER" --body "## Code-Argus Auto-Fix (Round ${CURRENT_ROUND}/${MAX_ROUNDS})
+
+          正在运行自动修复...
+
+          查看 [Actions](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) 跟踪进度。"
+
+          # 运行 Claude CLI
+          claude --print "你是仓库专属机器人（中文沟通，代码/命令保持原文）。
+
+          ## 任务
+          Code-Argus 自动修复 (Round ${CURRENT_ROUND}/${MAX_ROUNDS})
+
+          请修复 PR #${PR_NUMBER} 中 Code-Argus 审查发现的问题。
+
+          ## 步骤
+          1. 运行 gh api repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews 查看审查评论
+          2. 找到最近的 Code-Argus Review（包含 issue(s) found 或 suggestion(s) posted），分析问题
+          3. 定位并修复代码
+          4. 运行 uv run ruff check --fix 和 uv run mypy 检查
+          5. git add/commit/push 提交推送
+          6. 完成后评论 code-argus review 触发下一轮审查
+
+          禁止泄露 tokens/花费信息。"
 
       - name: Handle failure
         if: failure()
