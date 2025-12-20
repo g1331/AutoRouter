@@ -18,7 +18,7 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.encryption import encrypt_upstream_key, decrypt_upstream_key
+from app.core.encryption import decrypt_upstream_key, encrypt_upstream_key
 from app.models.db_models import APIKey, APIKeyUpstream, Upstream
 from app.models.schemas import (
     APIKeyCreateResponse,

@@ -43,9 +43,9 @@ export function KeysTable({ keys, onRevoke }: KeysTableProps) {
   const dateLocale = getDateLocale(locale);
 
   const maskKey = (keyPrefix: string) => {
-    if (keyPrefix.length <= 10) return keyPrefix;
+    if (keyPrefix.length < 12) return keyPrefix;
     const start = keyPrefix.slice(0, 8);
-    const end = keyPrefix.slice(-2);
+    const end = keyPrefix.slice(-4);
     return `${start}***${end}`;
   };
 
@@ -64,7 +64,7 @@ export function KeysTable({ keys, onRevoke }: KeysTableProps) {
     if (!revealedKeys.has(keyId)) {
       try {
         const response = await revealKey(keyId);
-        setRevealedKeys(new Map(revealedKeys).set(keyId, response.key_value));
+        setRevealedKeys((prev) => new Map(prev).set(keyId, response.key_value));
       } catch {
         return;
       }

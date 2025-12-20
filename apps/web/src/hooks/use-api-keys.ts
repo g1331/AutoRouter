@@ -31,6 +31,7 @@ export function useAPIKeys(page: number = 1, pageSize: number = 10) {
 export function useCreateAPIKey() {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
+  const t = useTranslations("keys");
 
   return useMutation({
     mutationFn: (data: APIKeyCreate) =>
@@ -40,7 +41,7 @@ export function useCreateAPIKey() {
       queryClient.invalidateQueries({ queryKey: ["stats", "keys"] });
     },
     onError: (error: Error) => {
-      toast.error(`创建失败: ${error.message}`);
+      toast.error(`${t("createFailed")}: ${error.message}`);
     },
   });
 }
@@ -76,6 +77,7 @@ export function useRevealAPIKey() {
 export function useRevokeAPIKey() {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
+  const t = useTranslations("keys");
 
   return useMutation({
     mutationFn: (keyId: string) => apiClient.delete<void>(`/admin/keys/${keyId}`),
@@ -95,10 +97,10 @@ export function useRevokeAPIKey() {
 
       queryClient.invalidateQueries({ queryKey: ["api-keys"] });
       queryClient.invalidateQueries({ queryKey: ["stats", "keys"] });
-      toast.success("API Key 已删除");
+      toast.success(t("revokeSuccess"));
     },
     onError: (error: Error) => {
-      toast.error(`删除失败: ${error.message}`);
+      toast.error(`${t("revokeFailed")}: ${error.message}`);
     },
   });
 }
