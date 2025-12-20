@@ -123,7 +123,10 @@
     "expired": "已过期",
     "expiresIn": "{days} 天后过期",
     "active": "有效",
-    "inactive": "已撤销"
+    "inactive": "已撤销",
+    "revealKey": "显示密钥",
+    "hideKey": "隐藏密钥",
+    "legacyKey": "旧版密钥 - 需重新生成以启用查看"
   },
   "logs": {
     "title": "请求日志",

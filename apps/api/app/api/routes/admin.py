@@ -14,6 +14,7 @@ from app.core.deps import get_db, verify_admin_token
 from app.models.schemas import (
     APIKeyCreate,
     APIKeyCreateResponse,
+    APIKeyRevealResponse,
     PaginatedAPIKeysResponse,
     PaginatedRequestLogsResponse,
     PaginatedUpstreamsResponse,
@@ -95,6 +96,47 @@ async def list_api_keys(
         PaginatedAPIKeysResponse: Paginated list of API keys
     """
     return await key_manager.list_api_keys(db=db, page=page, page_size=page_size)
+
+
+@router.post(
+    "/keys/{key_id}/reveal",
+    response_model=APIKeyRevealResponse,
+    dependencies=[Depends(verify_admin_token)],
+    summary="Reveal full API key value",
+    description="Decrypt and return the full API key value. Only works for keys created with encryption. "
+    "Legacy keys (bcrypt-only) cannot be revealed.",
+)
+async def reveal_api_key_endpoint(
+    key_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> APIKeyRevealResponse:
+    """Reveal the full decrypted API key value.
+
+    Args:
+        key_id: ID of the API key to reveal
+        db: Database session
+
+    Returns:
+        APIKeyRevealResponse: Key details with decrypted value
+
+    Raises:
+        HTTPException(404): API key not found
+        HTTPException(400): Legacy key without encryption
+    """
+    try:
+        return await key_manager.reveal_api_key(db=db, key_id=key_id)
+    except ValueError as e:
+        error_msg = str(e)
+        if "not found" in error_msg:
+            logger.warning(f"Failed to reveal API key: {e}")
+            raise HTTPException(
+                status_code=404, detail={"error": "not_found", "message": error_msg}
+            ) from e
+        else:
+            logger.warning(f"Cannot reveal legacy API key: {e}")
+            raise HTTPException(
+                status_code=400, detail={"error": "legacy_key", "message": error_msg}
+            ) from e
 
 
 @router.delete(

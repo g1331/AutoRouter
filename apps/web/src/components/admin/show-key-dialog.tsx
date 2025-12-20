@@ -31,7 +31,7 @@ export function ShowKeyDialog({ apiKey, open, onClose }: ShowKeyDialogProps) {
 
   const copyKey = async () => {
     try {
-      await navigator.clipboard.writeText(apiKey.key);
+      await navigator.clipboard.writeText(apiKey.key_value);
       setCopied(true);
       toast.success(t("keyCopied"));
       setTimeout(() => setCopied(false), 2000);
@@ -73,7 +73,7 @@ export function ShowKeyDialog({ apiKey, open, onClose }: ShowKeyDialogProps) {
             </label>
             <div className="flex gap-2">
               <div className="flex-1 bg-[rgb(var(--md-sys-color-inverse-surface))] rounded-[var(--shape-corner-medium)] p-4 font-mono type-body-medium text-[rgb(var(--md-sys-color-success))] break-all">
-                {apiKey.key}
+                {apiKey.key_value}
               </div>
               <Button variant="outline" size="icon" onClick={copyKey}>
                 {copied ? (

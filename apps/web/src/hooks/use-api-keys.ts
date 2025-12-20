@@ -3,6 +3,7 @@ import { useAuth } from "@/providers/auth-provider";
 import type {
   APIKeyCreate,
   APIKeyCreateResponse,
+  APIKeyRevealResponse,
   PaginatedAPIKeysResponse,
 } from "@/types/api";
 import { toast } from "sonner";
@@ -38,6 +39,21 @@ export function useCreateAPIKey() {
     },
     onError: (error: Error) => {
       toast.error(`创建失败: ${error.message}`);
+    },
+  });
+}
+
+/**
+ * Reveal API key full value
+ */
+export function useRevealAPIKey() {
+  const { apiClient } = useAuth();
+
+  return useMutation({
+    mutationFn: (keyId: string) =>
+      apiClient.post<APIKeyRevealResponse>(`/admin/keys/${keyId}/reveal`),
+    onError: (error: Error) => {
+      toast.error(`查看失败: ${error.message}`);
     },
   });
 }
