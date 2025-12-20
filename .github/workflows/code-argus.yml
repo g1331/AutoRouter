@@ -31,10 +31,13 @@ jobs:
       (github.event_name == 'pull_request' ||
        (github.event.issue.pull_request &&
         (contains(github.event.comment.body, 'code-argus review') ||
+         contains(github.event.comment.body, 'code-argus fix-now') ||
          contains(github.event.comment.body, 'code-argus fix') ||
          contains(github.event.comment.body, 'argus review') ||
+         contains(github.event.comment.body, 'argus fix-now') ||
          contains(github.event.comment.body, 'argus fix') ||
          contains(github.event.comment.body, 'code-argus 审查') ||
+         contains(github.event.comment.body, 'code-argus 立即修复') ||
          contains(github.event.comment.body, 'code-argus 修复'))))
 
     outputs:
@@ -42,6 +45,7 @@ jobs:
       pr_number: ${{ steps.prmeta.outputs.number }}
       base_ref: ${{ steps.prmeta.outputs.base_ref }}
       auto_fix: ${{ steps.mode.outputs.auto_fix }}
+      fix_now: ${{ steps.mode.outputs.fix_now }}
       current_round: ${{ steps.round.outputs.current }}
 
     steps:
@@ -121,13 +125,20 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "issue_comment" ]; then
             COMMENT_BODY="${{ github.event.comment.body }}"
-            if echo "$COMMENT_BODY" | grep -qiE "(code-argus fix|argus fix|code-argus 修复)"; then
+            # 检测 fix-now 模式（跳过审查直接修复）
+            if echo "$COMMENT_BODY" | grep -qiE "(code-argus fix-now|argus fix-now|code-argus 立即修复)"; then
+              echo "fix_now=true" >> $GITHUB_OUTPUT
+              echo "auto_fix=true" >> $GITHUB_OUTPUT
+            elif echo "$COMMENT_BODY" | grep -qiE "(code-argus fix|argus fix|code-argus 修复)"; then
+              echo "fix_now=false" >> $GITHUB_OUTPUT
               echo "auto_fix=true" >> $GITHUB_OUTPUT
             else
+              echo "fix_now=false" >> $GITHUB_OUTPUT
               echo "auto_fix=false" >> $GITHUB_OUTPUT
             fi
           else
             # PR opened/reopened - 默认只 review 不修复
+            echo "fix_now=false" >> $GITHUB_OUTPUT
             echo "auto_fix=false" >> $GITHUB_OUTPUT
           fi
 
@@ -166,7 +177,8 @@ jobs:
     name: Review
     runs-on: ubuntu-latest
     needs: prepare
-    if: needs.prepare.outputs.allowed == 'true'
+    # 跳过 fix-now 模式（直接使用上次审查结果）
+    if: needs.prepare.outputs.allowed == 'true' && needs.prepare.outputs.fix_now != 'true'
     timeout-minutes: 45
 
     outputs:
@@ -616,6 +628,73 @@ jobs:
             // 发送评论触发 @autorouter-bot
             const triggerComment = [
               `[Code-Argus Auto-Fix Round ${currentRound}/${maxRounds}]`,
+              '',
+              '@autorouter-bot 请根据上方 Code-Argus review 反馈修复代码问题。',
+              '',
+              '修复完成后，请评论 `code-argus fix` 触发下一轮审查。'
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: triggerComment
+            });
+
+  # ============================================================
+  # fix-now: 跳过审查，直接触发修复
+  # ============================================================
+  fix-now:
+    name: Fix Now
+    runs-on: ubuntu-latest
+    needs: prepare
+    if: needs.prepare.outputs.allowed == 'true' && needs.prepare.outputs.fix_now == 'true'
+
+    steps:
+      - name: Trigger fix directly
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ needs.prepare.outputs.pr_number }}
+          CURRENT_ROUND: ${{ needs.prepare.outputs.current_round || '1' }}
+          MAX_FIX_ROUNDS: ${{ env.MAX_FIX_ROUNDS }}
+        with:
+          script: |
+            const prNumber = parseInt(process.env.PR_NUMBER, 10);
+            const currentRound = parseInt(process.env.CURRENT_ROUND, 10) || 1;
+            const maxRounds = parseInt(process.env.MAX_FIX_ROUNDS, 10) || 3;
+
+            // 检查是否有最近的 Code-Argus 审查
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              per_page: 50
+            });
+
+            const hasRecentReview = comments.some(c =>
+              c.body?.includes('## Code-Argus Review') &&
+              c.body?.includes('issue(s) found')
+            );
+
+            if (!hasRecentReview) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: [
+                  '## Code-Argus Fix-Now',
+                  '',
+                  '⚠️ **No recent review found.** Please run `code-argus review` first.',
+                  '',
+                  'The `fix-now` command requires a previous review to know what issues to fix.'
+                ].join('\n')
+              });
+              return;
+            }
+
+            // 直接触发 @autorouter-bot
+            const triggerComment = [
+              `[Code-Argus Fix-Now Round ${currentRound}/${maxRounds}]`,
               '',
               '@autorouter-bot 请根据上方 Code-Argus review 反馈修复代码问题。',
               '',

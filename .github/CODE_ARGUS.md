@@ -26,21 +26,19 @@ Code-Argus 是一个基于 AI 的代码审查系统，能够自动发现代码�
 | `argus review` | 同上（简写） |
 | `code-argus 审查` | 同上（中文） |
 
-### 3. 自动修复循环
-
-使用 `code-argus fix` 命令触发自动迭代修复：
+### 3. 自动修复
 
 | 命令 | 功能 |
 |------|------|
-| `code-argus fix` | 触发自动修复循环 |
-| `argus fix` | 同上（简写） |
-| `code-argus 修复` | 同上（中文） |
+| `code-argus fix` | 审查 + 自动修复循环 |
+| `code-argus fix-now` | 跳过审查，直接触发修复（需要先有审查结果） |
+| `argus fix` / `argus fix-now` | 同上（简写） |
+| `code-argus 修复` / `code-argus 立即修复` | 同上（中文） |
 
 **流程说明**：
-1. Code-Argus 审查代码，发现问题
-2. 自动发送评论触发 `@autorouter-bot` 进行修复
-3. Bot 修复完成后评论 `code-argus fix` 触发下一轮审查
-4. 循环直到无问题或达到最大轮次（默认 3 轮）
+
+- **fix**: 先审查，发现问题后自动触发修复，循环直到无问题或达到最大轮次
+- **fix-now**: 跳过审查，直接根据上次审查结果触发修复（适用于刚审查完的情况）
 
 **手动模式**：使用 `code-argus review` 仅审查不自动修复，审查结果会提供手动触发提示。
 
