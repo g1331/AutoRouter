@@ -3,6 +3,7 @@
 All endpoints require admin authentication (Bearer token from ADMIN_TOKEN env var).
 """
 
+import os
 from datetime import datetime
 from uuid import UUID
 
@@ -27,6 +28,10 @@ from app.models.schemas import (
 from app.services import key_manager, request_logger, upstream_service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+_ALLOW_KEY_REVEAL = (
+    os.getenv("ALLOW_KEY_REVEAL", "true").strip().lower() in {"1", "true", "yes", "on"}
+)
 
 
 # ============================================================================
@@ -122,10 +127,32 @@ async def reveal_api_key_endpoint(
         JSONResponse: Key details with decrypted value and no-cache headers
 
     Raises:
+        HTTPException(403): Key reveal disabled by ALLOW_KEY_REVEAL
         HTTPException(404): API key not found
         HTTPException(400): Legacy key without encryption
         HTTPException(500): Decryption failed
     """
+    if not _ALLOW_KEY_REVEAL:
+        await request_logger.log_request(
+            db=db,
+            api_key_id=None,
+            upstream_id=None,
+            method="REVEAL",
+            path=f"/admin/keys/{key_id}/reveal",
+            model=None,
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            status_code=403,
+            duration_ms=None,
+            error_message="Key reveal disabled by ALLOW_KEY_REVEAL",
+        )
+        await db.commit()
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "forbidden", "message": "Key reveal is disabled"},
+        )
+
     try:
         result = await key_manager.reveal_api_key(db=db, key_id=key_id)
 

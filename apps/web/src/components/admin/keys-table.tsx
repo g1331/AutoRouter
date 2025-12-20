@@ -54,17 +54,23 @@ export function KeysTable({ keys, onRevoke }: KeysTableProps) {
       const newSet = new Set(visibleKeyIds);
       newSet.delete(keyId);
       setVisibleKeyIds(newSet);
-    } else {
-      if (!revealedKeys.has(keyId)) {
-        try {
-          const response = await revealKey(keyId);
-          setRevealedKeys(new Map(revealedKeys).set(keyId, response.key_value));
-        } catch {
-          return;
-        }
-      }
-      setVisibleKeyIds(new Set(visibleKeyIds).add(keyId));
+
+      const newMap = new Map(revealedKeys);
+      newMap.delete(keyId);
+      setRevealedKeys(newMap);
+      return;
     }
+
+    if (!revealedKeys.has(keyId)) {
+      try {
+        const response = await revealKey(keyId);
+        setRevealedKeys(new Map(revealedKeys).set(keyId, response.key_value));
+      } catch {
+        return;
+      }
+    }
+
+    setVisibleKeyIds(new Set(visibleKeyIds).add(keyId));
   };
 
   const copyKey = async (keyId: string, keyPrefix: string) => {
