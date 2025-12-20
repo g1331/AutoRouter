@@ -24,13 +24,14 @@ jobs:
   prepare:
     name: Prepare
     runs-on: ubuntu-latest
-    # PR 自动触发 或 PR 评论中包含触发关键词
+    # PR 自动触发 或 PR 评论中包含触发关键词（排除 bot 用户避免循环触发）
     if: |
-      github.event_name == 'pull_request' ||
-      (github.event.issue.pull_request &&
-       (contains(github.event.comment.body, 'code-argus review') ||
-        contains(github.event.comment.body, 'argus review') ||
-        contains(github.event.comment.body, 'code-argus 审查')))
+      github.actor != 'github-actions[bot]' &&
+      (github.event_name == 'pull_request' ||
+       (github.event.issue.pull_request &&
+        (contains(github.event.comment.body, 'code-argus review') ||
+         contains(github.event.comment.body, 'argus review') ||
+         contains(github.event.comment.body, 'code-argus 审查'))))
 
     outputs:
       allowed: ${{ steps.check_perm.outputs.allowed }}
