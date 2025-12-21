@@ -59,7 +59,24 @@ def setup_logging(log_level: str = "INFO") -> None:
     logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
 
     # Intercept specific loggers
-    for logger_name in ["uvicorn", "uvicorn.access", "uvicorn.error", "fastapi"]:
+    loggers_to_intercept = [
+        # Web framework
+        "uvicorn",
+        "uvicorn.access",
+        "uvicorn.error",
+        "fastapi",
+        # SQLAlchemy
+        "sqlalchemy",
+        "sqlalchemy.engine",
+        "sqlalchemy.engine.Engine",
+        "sqlalchemy.pool",
+        "sqlalchemy.orm",
+        "sqlalchemy.dialects",
+        # HTTP client
+        "httpx",
+        "httpcore",
+    ]
+    for logger_name in loggers_to_intercept:
         logging_logger = logging.getLogger(logger_name)
         logging_logger.handlers = [InterceptHandler()]
         logging_logger.propagate = False
