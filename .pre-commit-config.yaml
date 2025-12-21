@@ -16,18 +16,24 @@ repos:
 
   # ============================================================
   # Python (apps/api)
+  # Uses local hooks to ensure consistent versions with CI
   # ============================================================
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.0
-    hooks:
-      - id: ruff
-        args: [--fix]
-        files: ^apps/api/
-      - id: ruff-format
-        files: ^apps/api/
-
   - repo: local
     hooks:
+      - id: ruff
+        name: ruff
+        entry: bash -c 'cd apps/api && uv run ruff check --fix "$@"' --
+        language: system
+        files: ^apps/api/.*\.py$
+        types: [python]
+
+      - id: ruff-format
+        name: ruff-format
+        entry: bash -c 'cd apps/api && uv run ruff format "$@"' --
+        language: system
+        files: ^apps/api/.*\.py$
+        types: [python]
+
       - id: pyright
         name: pyright (api)
         entry: bash -c 'cd apps/api && uv run pyright'
