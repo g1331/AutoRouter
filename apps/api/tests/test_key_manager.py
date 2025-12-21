@@ -131,7 +131,7 @@ async def test_create_api_key_invalid_upstream(db_session):
     """Test creating API key with invalid upstream ID."""
     invalid_id = uuid4()
 
-    with pytest.raises(ValueError, match="Invalid or inactive upstream IDs"):
+    with pytest.raises(ValueError, match="Invalid upstream IDs"):
         await create_api_key(
             db=db_session,
             name="invalid-key",
@@ -141,7 +141,11 @@ async def test_create_api_key_invalid_upstream(db_session):
 
 @pytest.mark.asyncio
 async def test_create_api_key_inactive_upstream(db_session):
-    """Test creating API key with inactive upstream."""
+    """Test creating API key with inactive upstream is allowed.
+
+    Note: Inactive upstreams can still be associated with API keys.
+    This allows pre-configuring keys before activating upstreams.
+    """
     upstream = Upstream(
         id=uuid4(),
         name="inactive-upstream",
@@ -153,12 +157,14 @@ async def test_create_api_key_inactive_upstream(db_session):
     db_session.add(upstream)
     await db_session.commit()
 
-    with pytest.raises(ValueError, match="Invalid or inactive upstream IDs"):
-        await create_api_key(
-            db=db_session,
-            name="invalid-key",
-            upstream_ids=[upstream.id],
-        )
+    # Should succeed - inactive upstreams can be associated
+    result = await create_api_key(
+        db=db_session,
+        name="key-for-inactive",
+        upstream_ids=[upstream.id],
+    )
+    assert result.key_value.startswith("sk-auto-")
+    assert upstream.id in result.upstream_ids
 
 
 @pytest.mark.asyncio

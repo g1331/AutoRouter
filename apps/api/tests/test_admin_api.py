@@ -139,7 +139,7 @@ async def test_create_api_key_invalid_upstream(db_session):
         await create_api_key_endpoint(body=body, db=db_session)
 
     assert exc_info.value.status_code == 400
-    assert "Invalid or inactive upstream IDs" in str(exc_info.value.detail)
+    assert "Invalid upstream IDs" in str(exc_info.value.detail)
 
 
 @pytest.mark.asyncio
@@ -221,7 +221,7 @@ async def test_update_upstream(db_session):
 
 @pytest.mark.asyncio
 async def test_delete_upstream(db_session):
-    """Test deleting (soft-delete) upstream via Admin API."""
+    """Test deleting (hard-delete) upstream via Admin API."""
     from app.api.routes.admin import delete_upstream as delete_upstream_endpoint
     from app.services.upstream_service import create_upstream
 
@@ -237,6 +237,6 @@ async def test_delete_upstream(db_session):
     # Delete upstream
     await delete_upstream_endpoint(upstream_id=upstream.id, db=db_session)
 
-    # Verify soft-delete
+    # Verify hard-delete (upstream is removed from database)
     db_upstream = await db_session.get(Upstream, upstream.id)
-    assert db_upstream.is_active is False
+    assert db_upstream is None

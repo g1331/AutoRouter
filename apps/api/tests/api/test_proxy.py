@@ -1,6 +1,6 @@
 """Tests for proxy routes."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -9,11 +9,36 @@ from fastapi.testclient import TestClient
 from pydantic import HttpUrl, SecretStr
 
 from app.api.routes import proxy
+from app.core.deps import get_current_api_key, get_db
+from app.models.db_models import APIKey
 from app.models.upstream import Provider, UpstreamConfig, UpstreamManager
 
 
 @pytest.fixture
-def test_app_with_manager() -> FastAPI:
+def mock_api_key() -> APIKey:
+    """Create a mock API key for testing."""
+    api_key = MagicMock(spec=APIKey)
+    api_key.id = 1
+    api_key.key_prefix = "sk-test-1234"
+    api_key.is_active = True
+    api_key.expires_at = None
+    return api_key
+
+
+@pytest.fixture
+def mock_db_session() -> AsyncMock:
+    """Create a mock database session."""
+    session = AsyncMock()
+    # Mock execute to return empty result (no upstream in DB - backward compat mode)
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    session.execute.return_value = mock_result
+    session.commit = AsyncMock()
+    return session
+
+
+@pytest.fixture
+def test_app_with_manager(mock_api_key: APIKey, mock_db_session: AsyncMock) -> FastAPI:
     """Create test app with upstream manager in state."""
     app = FastAPI()
     app.include_router(proxy.router, prefix="/proxy")
@@ -36,6 +61,10 @@ def test_app_with_manager() -> FastAPI:
 
     app.state.upstream_manager = UpstreamManager([upstream1, upstream2])
     app.state.httpx_client = httpx.AsyncClient()
+
+    # Override dependencies for testing
+    app.dependency_overrides[get_current_api_key] = lambda: mock_api_key
+    app.dependency_overrides[get_db] = lambda: mock_db_session
 
     return app
 
