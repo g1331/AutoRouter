@@ -16,8 +16,9 @@ export default defineConfig({
     include: ["tests/components/**/*.test.{ts,tsx}", "tests/unit/**/*.test.{ts,tsx}"],
     coverage: {
       provider: "v8",
-      reporter: ["text", "html"],
-      include: ["src/components/**/*.tsx"],
+      reporter: ["text", "html", "lcov"],
+      include: ["src/components/**/*.tsx", "src/lib/**/*.ts", "src/hooks/**/*.ts"],
+      reportsDirectory: "./coverage",
     },
   },
   resolve: {

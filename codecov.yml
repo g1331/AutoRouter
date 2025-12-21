@@ -1,0 +1,52 @@
+# Codecov Configuration
+# Reference: https://docs.codecov.com/docs/codecov-yaml
+
+coverage:
+  # Overall project coverage settings
+  status:
+    project:
+      default:
+        # Coverage must not drop by more than 2%
+        threshold: 2%
+        # Don't fail CI if coverage drops (informational only for now)
+        informational: true
+    patch:
+      default:
+        # New code should have at least 50% coverage
+        target: 50%
+        informational: true
+
+  # Coverage precision (2 decimal places)
+  precision: 2
+  round: down
+
+# Flags to separate backend/frontend coverage
+flags:
+  python:
+    paths:
+      - apps/api/
+    carryforward: true
+  typescript:
+    paths:
+      - apps/web/src/
+    carryforward: true
+
+# PR comment settings
+comment:
+  # Post comment on PR
+  layout: "header, diff, flags, components"
+  # Comment behavior
+  behavior: default
+  # Only comment if coverage changes
+  require_changes: true
+
+# Ignore files from coverage
+ignore:
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/*.spec.ts"
+  - "**/tests/**"
+  - "**/__tests__/**"
+  - "**/migrations/**"
+  - "**/node_modules/**"
+  - "**/.venv/**"

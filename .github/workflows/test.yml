@@ -1,0 +1,126 @@
+name: Test
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "apps/**"
+      - ".github/workflows/test.yml"
+  pull_request:
+    branches: [master]
+    paths:
+      - "apps/**"
+      - ".github/workflows/test.yml"
+
+concurrency:
+  group: test-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ============================================================
+  # Python Backend Tests (apps/api)
+  # ============================================================
+  python:
+    name: Python Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "apps/api/uv.lock"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra dev --group dev
+
+      - name: Run tests with coverage
+        run: |
+          uv run pytest \
+            --cov=app \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            -v
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: apps/api/coverage.xml
+          flags: python
+          name: python-coverage
+          fail_ci_if_error: false
+
+  # ============================================================
+  # TypeScript Frontend Tests (apps/web)
+  # ============================================================
+  typescript:
+    name: TypeScript Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: |
+          if [[ "${{ github.actor }}" == "dependabot[bot]" ]]; then
+            pnpm install --no-frozen-lockfile
+          else
+            pnpm install --frozen-lockfile
+          fi
+
+      - name: Run tests with coverage
+        run: pnpm test:run --coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: apps/web/coverage/lcov.info
+          flags: typescript
+          name: typescript-coverage
+          fail_ci_if_error: false
+
+  # ============================================================
+  # Summary Status Check
+  # ============================================================
+  test-status:
+    name: Test Status
+    runs-on: ubuntu-latest
+    needs: [python, typescript]
+    if: always()
+    steps:
+      - name: Check all jobs
+        run: |
+          if [[ "${{ needs.python.result }}" == "failure" ]] || \
+             [[ "${{ needs.typescript.result }}" == "failure" ]]; then
+            echo "::error::One or more test suites failed"
+            exit 1
+          fi
+          echo "All tests passed!"
