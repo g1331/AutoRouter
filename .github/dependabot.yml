@@ -1,0 +1,91 @@
+# Dependabot configuration for AutoRouter
+# Reference: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+# Best practices adopted from:
+# - tiangolo/full-stack-fastapi-template (Python uv + Node.js)
+# - apache/superset (Python + React monorepo)
+# - fastapi/fastapi (commit message conventions)
+
+version: 2
+updates:
+  # ============================================================
+  # GitHub Actions - Security critical, update daily
+  # ============================================================
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: daily
+    commit-message:
+      prefix: "⬆ ci"
+    labels:
+      - dependencies
+      - github-actions
+    open-pull-requests-limit: 5
+
+  # ============================================================
+  # Python Backend (apps/api) - Using uv package manager
+  # ============================================================
+  - package-ecosystem: uv
+    directory: /apps/api
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "⬆ api"
+    labels:
+      - dependencies
+      - python
+    open-pull-requests-limit: 10
+    # Group minor/patch updates to reduce PR noise
+    groups:
+      python-minor:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  # ============================================================
+  # TypeScript Frontend (apps/web) - Using pnpm
+  # ============================================================
+  - package-ecosystem: npm
+    directory: /apps/web
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "⬆ web"
+    labels:
+      - dependencies
+      - npm
+    open-pull-requests-limit: 10
+    versioning-strategy: increase
+    # Group updates to reduce PR noise
+    groups:
+      npm-minor:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # Add packages to ignore if they cause issues
+      # Example:
+      # - dependency-name: "some-problematic-package"
+      #   versions: [">=2.0.0"]
+
+  # ============================================================
+  # Docker (if Dockerfiles exist)
+  # ============================================================
+  - package-ecosystem: docker
+    directories:
+      - /apps/api
+      - /apps/web
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "⬆ docker"
+    labels:
+      - dependencies
+      - docker
+    open-pull-requests-limit: 5
