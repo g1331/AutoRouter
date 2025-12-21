@@ -26,6 +26,15 @@ repos:
       - id: ruff-format
         files: ^apps/api/
 
+  - repo: local
+    hooks:
+      - id: pyright
+        name: pyright (api)
+        entry: bash -c 'cd apps/api && uv run pyright'
+        language: system
+        files: ^apps/api/.*\.py$
+        pass_filenames: false
+
   # ============================================================
   # TypeScript (apps/web)
   # ============================================================
@@ -43,3 +52,10 @@ repos:
         entry: bash -c 'cd apps/web && pnpm exec eslint --fix "${@#apps/web/}"' --
         language: system
         files: ^apps/web/src/.*\.(js|jsx|ts|tsx)$
+
+      - id: tsc-web
+        name: tsc (web)
+        entry: bash -c 'cd apps/web && pnpm exec tsc --noEmit'
+        language: system
+        files: ^apps/web/.*\.(ts|tsx)$
+        pass_filenames: false
