@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # Admin authentication
     admin_token: str | None = None
 
+    # Allow revealing full API key values in admin console
+    allow_key_reveal: bool = False
+
     # Request log retention
     log_retention_days: int = 90
 

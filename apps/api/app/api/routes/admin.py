@@ -3,7 +3,6 @@
 All endpoints require admin authentication (Bearer token from ADMIN_TOKEN env var).
 """
 
-import os
 from datetime import datetime
 from uuid import UUID
 
@@ -12,6 +11,7 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.deps import get_db, verify_admin_token
 from app.core.encryption import EncryptionError
 from app.models.schemas import (
@@ -31,13 +31,6 @@ from app.models.schemas import (
 from app.services import key_manager, request_logger, stats_service, upstream_service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-
-_ALLOW_KEY_REVEAL = os.getenv("ALLOW_KEY_REVEAL", "false").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
 
 
 # ============================================================================
@@ -138,7 +131,7 @@ async def reveal_api_key_endpoint(
         HTTPException(400): Legacy key without encryption
         HTTPException(500): Decryption failed
     """
-    if not _ALLOW_KEY_REVEAL:
+    if not settings.allow_key_reveal:
         await request_logger.log_request(
             db=db,
             api_key_id=None,
