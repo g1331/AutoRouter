@@ -51,7 +51,7 @@ jobs:
       # ============================================================
       - name: Set PR context
         id: context
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             let prNumber, headSha, baseRef;
@@ -110,7 +110,7 @@ jobs:
           echo "model=$MODEL" >> $GITHUB_OUTPUT
 
       - name: Fetch PR title/body
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           PR_NUMBER: ${{ steps.context.outputs.pr_number }}
         with:
