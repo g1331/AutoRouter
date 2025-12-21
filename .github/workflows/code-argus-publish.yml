@@ -31,7 +31,7 @@ jobs:
       # Step 1: Download review artifact
       # ============================================================
       - name: Download review artifact
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         id: download
         with:
           script: |
@@ -87,7 +87,7 @@ jobs:
       # ============================================================
       - name: Post review
         if: steps.download.outputs.found == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           PR_NUMBER: ${{ steps.artifact.outputs.pr_number }}
           HEAD_SHA: ${{ steps.artifact.outputs.head_sha }}
@@ -325,7 +325,7 @@ jobs:
       # ============================================================
       - name: Handle missing artifact
         if: steps.download.outputs.found != 'true' && github.event.workflow_run.conclusion == 'success'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
         with:
