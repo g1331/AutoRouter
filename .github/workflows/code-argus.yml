@@ -236,11 +236,22 @@ jobs:
               "high": 0,
               "medium": 0,
               "low": 0,
-              "focus_areas": []
+              "focus_areas": [],
+              "pr_summary": "One-sentence summary of what this PR does",
+              "changes": [
+                "First major change or feature added",
+                "Second major change or feature added"
+              ],
+              "technical_notes": "Optional technical notes about implementation details, trade-offs, or important considerations (can be empty string if none)"
             },
             "comments": []
           }
           ```
+
+          ### Summary Fields (REQUIRED)
+          - `pr_summary`: A concise one-sentence summary of the PR's purpose and impact
+          - `changes`: Array of 2-6 bullet points describing the main changes (use imperative mood: "Add...", "Update...", "Fix...")
+          - `technical_notes`: Any important technical details reviewers should know (leave empty string if none)
 
           Each comment in the array should have:
           - `file`: path to the file (e.g., "src/api/routes.ts")
@@ -301,9 +312,12 @@ jobs:
                     "high": { "type": "integer" },
                     "medium": { "type": "integer" },
                     "low": { "type": "integer" },
-                    "focus_areas": { "type": "array", "items": { "type": "string" } }
+                    "focus_areas": { "type": "array", "items": { "type": "string" } },
+                    "pr_summary": { "type": "string" },
+                    "changes": { "type": "array", "items": { "type": "string" } },
+                    "technical_notes": { "type": "string" }
                   },
-                  "required": ["total_issues", "high", "medium", "low", "focus_areas"],
+                  "required": ["total_issues", "high", "medium", "low", "focus_areas", "pr_summary", "changes", "technical_notes"],
                   "additionalProperties": false
                 },
                 "comments": {
@@ -398,6 +412,32 @@ jobs:
 
             const severityEmoji = { high: '🔴', medium: '🟡', low: '🟢' };
 
+            // 生成 PR Summary 部分（可折叠）
+            let prSummarySection = '';
+            if (review.summary) {
+              const s = review.summary;
+              prSummarySection = `<details open>\n<summary>🤖 <strong>Code-Argus PR Summary</strong></summary>\n\n`;
+
+              if (s.pr_summary) {
+                prSummarySection += `**Summary**: ${s.pr_summary}\n\n`;
+              }
+
+              if (s.changes && s.changes.length > 0) {
+                prSummarySection += `**Changes**:\n`;
+                for (const change of s.changes) {
+                  prSummarySection += `- ${change}\n`;
+                }
+                prSummarySection += `\n`;
+              }
+
+              if (s.technical_notes && s.technical_notes.trim() !== '') {
+                prSummarySection += `**Technical Notes**: ${s.technical_notes}\n\n`;
+              }
+
+              prSummarySection += `🤖 Was this summary useful? React with 👍 or 👎\n`;
+              prSummarySection += `</details>\n\n---\n\n`;
+            }
+
             const { data: pr } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -438,7 +478,8 @@ jobs:
 
             // 生成总结
             const summary = review.summary || { total_issues: 0, high: 0, medium: 0, low: 0, focus_areas: [] };
-            let summaryBody = `## Code-Argus Review\n\n`;
+            let summaryBody = prSummarySection;  // 先添加 PR Summary
+            summaryBody += `## Code-Argus Review\n\n`;
 
             if (summary.total_issues === 0) {
               summaryBody += `✅ Review completed. **No significant issues found.**\n\n`;
@@ -462,7 +503,7 @@ jobs:
             }
 
             summaryBody += `\n---\n`;
-            summaryBody += `Comment \`code-argus review\` to re-trigger review`;
+            summaryBody += `Comment \`code-argus review\` to re-trigger review.`;
 
             // 提交 Review
             let reviewCreated = false;
