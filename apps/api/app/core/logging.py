@@ -70,6 +70,8 @@ def setup_logging(log_level: str = "INFO") -> None:
         "sqlalchemy.engine",
         "sqlalchemy.engine.Engine",
         "sqlalchemy.pool",
+        "sqlalchemy.pool.impl.QueuePool",
+        "sqlalchemy.pool.impl.AsyncAdaptedQueuePool",
         "sqlalchemy.orm",
         "sqlalchemy.dialects",
         # HTTP client
