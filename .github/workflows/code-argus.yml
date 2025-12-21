@@ -262,14 +262,37 @@ jobs:
           - `description`: why this is a problem
           - `suggestion`: the fixed code (will be shown as GitHub suggested change)
 
+          ### CRITICAL: GitHub API Constraints for Inline Comments
+
+          GitHub only allows review comments on lines that are **actually part of the PR diff**. Your comments will FAIL if they violate these rules:
+
+          1. **`file` MUST be a file that appears in the PR diff** (listed in "## PR Diff" section below)
+             - Files not modified by this PR cannot receive comments
+             - Example: If `.env.example` is not in the diff, you CANNOT comment on it
+
+          2. **`line_start` and `line_end` MUST point to lines with `+` prefix in the diff**
+             - These are the NEW/MODIFIED lines in the PR
+             - Lines with `-` prefix (deleted lines) or unchanged context lines CANNOT receive comments
+             - The line number should be the actual line number in the NEW version of the file
+
+          3. **`suggestion` MUST be valid replacement code for the exact lines specified**
+             - It replaces the content from `line_start` to `line_end`
+             - Must maintain proper indentation matching the original code
+
+          **If you find an issue in code NOT in the diff:**
+          - Do NOT create a comment for it
+          - Instead, mention it in `summary.technical_notes` field
+          - Example: "Note: Related code in `config.py:45` may also need updating but is outside this PR's scope"
+
           ## Instructions
 
           1. You MAY read any file in the repository and run searches to understand context
-          2. Review ONLY the changes in this PR (diff provided below); use other files only for context and impact verification
+          2. Review ONLY the changes in this PR (diff provided below); comments MUST target lines within the diff
           3. Sort issues by severity (high first), then limit to max_comments
           4. If language is 'auto', respond in the same language as the PR title/description
           5. If no significant issues found, return empty comments array
           6. Output ONLY the JSON object, no other text
+          7. VERIFY each comment's file and line are in the diff before including it
 
           ## PR Information
 
