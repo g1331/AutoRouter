@@ -39,8 +39,10 @@ jobs:
   review:
     name: Review
     runs-on: ubuntu-latest
-    # Skip bot-triggered events to prevent loops
-    if: github.actor != 'github-actions[bot]'
+    # Skip bot-triggered events (GitHub Actions bot, Dependabot, etc.)
+    if: |
+      github.actor != 'github-actions[bot]' &&
+      github.actor != 'dependabot[bot]'
     timeout-minutes: 45
 
     steps:
