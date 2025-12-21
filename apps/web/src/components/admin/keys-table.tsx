@@ -78,9 +78,19 @@ export function KeysTable({ keys, onRevoke }: KeysTableProps) {
     setVisibleKeyIds((prev) => new Set(prev).add(keyId));
   };
 
-  const copyKey = async (keyId: string, keyPrefix: string) => {
+  const copyKey = async (keyId: string) => {
     try {
-      const keyValue = revealedKeys.get(keyId) || keyPrefix;
+      let keyValue = revealedKeys.get(keyId);
+
+      if (!keyValue) {
+        try {
+          const response = await revealKey(keyId);
+          keyValue = response.key_value;
+        } catch {
+          return;
+        }
+      }
+
       await navigator.clipboard.writeText(keyValue);
       setCopiedId(keyId);
       toast.success(tCommon("copied"));
@@ -173,7 +183,7 @@ export function KeysTable({ keys, onRevoke }: KeysTableProps) {
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7"
-                    onClick={() => copyKey(key.id, key.key_prefix)}
+                    onClick={() => copyKey(key.id)}
                     aria-label={
                       copiedId === key.id ? tCommon("copied") : tCommon("copy")
                     }
