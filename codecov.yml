@@ -37,8 +37,8 @@ comment:
   layout: "header, diff, flags, components"
   # Comment behavior
   behavior: default
-  # Always comment (not just when coverage changes)
-  require_changes: false
+  # Only comment when coverage changes
+  require_changes: true
 
 # Ignore files from coverage
 ignore:
