@@ -27,7 +27,7 @@ Users need to view complete API keys after creation, not just the prefix. Curren
 
 ### In Scope
 1. **Database Migration**: Add `key_value_encrypted` column (Fernet encryption)
-2. **Backend API**: New `GET /admin/keys/{id}/reveal` endpoint
+2. **Backend API**: New `POST /admin/keys/{id}/reveal` endpoint
 3. **Encryption**: Reuse existing Fernet utilities (from upstream keys)
 4. **Frontend UI**: Masked display, toggle visibility, copy complete key
 5. **Audit Logging**: Record all key reveal operations to `request_logs`
