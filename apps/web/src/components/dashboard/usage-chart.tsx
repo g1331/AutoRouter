@@ -262,7 +262,7 @@ export function UsageChart({ data, isLoading, timeRange }: UsageChartProps) {
                   <Area
                     key={name}
                     type="monotone"
-                    dataKey={name}
+                    dataKey={(point: ChartDataPoint) => point[name] as number}
                     name={name}
                     stroke={getUpstreamColor(index)}
                     strokeWidth={2}

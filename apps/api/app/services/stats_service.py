@@ -143,10 +143,19 @@ async def get_timeseries_stats(
     start_time = _get_time_range_start(range_type)
     granularity = _get_granularity(range_type)
 
-    # SQLite-compatible date truncation
-    # For 'hour': "%Y-%m-%d %H:00:00", for 'day': "%Y-%m-%d 00:00:00"
-    date_format = "%Y-%m-%d %H:00:00" if granularity == "hour" else "%Y-%m-%d 00:00:00"
-    time_bucket = func.strftime(date_format, RequestLog.created_at)
+    # SQLite/PostgreSQL-compatible date truncation
+    dialect_name = db.bind.dialect.name if db.bind is not None else ''
+    if dialect_name == 'postgresql':
+        bucket = 'hour' if granularity == 'hour' else 'day'
+        time_bucket = func.to_char(
+            func.date_trunc(bucket, RequestLog.created_at),
+            'YYYY-MM-DD HH24:MI:SS',
+        )
+        date_format = "%Y-%m-%d %H:%M:%S"
+    else:
+        # For 'hour': '%Y-%m-%d %H:00:00', for 'day': '%Y-%m-%d 00:00:00'
+        date_format = "%Y-%m-%d %H:00:00" if granularity == "hour" else "%Y-%m-%d 00:00:00"
+        time_bucket = func.strftime(date_format, RequestLog.created_at)
 
     # Query aggregated data grouped by upstream and time bucket
     query = (
@@ -183,11 +192,8 @@ async def get_timeseries_stats(
         if upstream_id not in upstream_data:
             upstream_data[upstream_id] = []
 
-        # Parse the time bucket string back to datetime
-        try:
-            timestamp = datetime.strptime(row.time_bucket, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
-        except ValueError:
-            timestamp = datetime.strptime(row.time_bucket, "%Y-%m-%d %H:00:00").replace(tzinfo=UTC)
+        # Parse the time bucket string back to datetime using the same format used in strftime
+        timestamp = datetime.strptime(row.time_bucket, date_format).replace(tzinfo=UTC)
 
         upstream_data[upstream_id].append(
             TimeseriesDataPoint(
