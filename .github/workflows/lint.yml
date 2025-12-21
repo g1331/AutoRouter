@@ -81,7 +81,14 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          if [[ "${{ github.actor }}" == "dependabot[bot]" ]]; then
+            # Dependabot doesn't always update pnpm-lock.yaml correctly
+            # Allow regeneration for Dependabot PRs
+            pnpm install --no-frozen-lockfile
+          else
+            pnpm install --frozen-lockfile
+          fi
 
       - name: ESLint
         run: pnpm lint
