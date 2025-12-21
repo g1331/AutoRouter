@@ -68,11 +68,10 @@ updates:
         update-types:
           - minor
           - patch
-    ignore:
-      # Add packages to ignore if they cause issues
-      # Example:
-      # - dependency-name: "some-problematic-package"
-      #   versions: [">=2.0.0"]
+    # To ignore specific packages, uncomment and modify:
+    # ignore:
+    #   - dependency-name: "some-problematic-package"
+    #     versions: [">=2.0.0"]
 
   # ============================================================
   # Docker (if Dockerfiles exist)
