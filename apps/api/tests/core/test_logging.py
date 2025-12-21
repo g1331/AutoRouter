@@ -42,6 +42,10 @@ class TestSetupLogging:
             lg = logging.getLogger(name)
             original_states[name] = (lg.handlers.copy(), lg.propagate)
 
+        root = logging.getLogger()
+        original_root_handlers = root.handlers.copy()
+        original_root_level = root.level
+
         yield
 
         # Restore original states
@@ -49,6 +53,10 @@ class TestSetupLogging:
             lg = logging.getLogger(name)
             lg.handlers = handlers
             lg.propagate = propagate
+
+        root = logging.getLogger()
+        root.handlers = original_root_handlers
+        root.setLevel(original_root_level)
 
     @pytest.mark.parametrize(
         "logger_name",
