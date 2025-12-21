@@ -30,7 +30,7 @@ jobs:
       id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Check if creator is collaborator
         id: check-collaborator
@@ -330,7 +330,7 @@ jobs:
       id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Check if commenter is collaborator
         id: check-collaborator
@@ -626,7 +626,7 @@ jobs:
 
       - name: Checkout
         if: steps.check-label.outputs.has_needs_info == 'true' && steps.check-author.outputs.is_author == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Check if author is collaborator
         if: steps.check-label.outputs.has_needs_info == 'true' && steps.check-author.outputs.is_author == 'true'
@@ -685,7 +685,7 @@ jobs:
       id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node 22 (for auggie / npx MCPs)
         uses: actions/setup-node@v4
