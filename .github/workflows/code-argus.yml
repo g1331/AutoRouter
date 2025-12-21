@@ -73,6 +73,18 @@ jobs:
               return;
             }
 
+            // Check if PR is still open (skip review for closed PRs)
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber
+            });
+
+            if (pr.state !== 'open') {
+              core.setFailed(`PR #${prNumber} is ${pr.state}, skipping review`);
+              return;
+            }
+
             core.setOutput('pr_number', prNumber.toString());
             core.setOutput('head_sha', headSha);
             core.setOutput('base_ref', baseRef);
