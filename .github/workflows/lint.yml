@@ -16,6 +16,10 @@ concurrency:
   group: lint-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
+# Explicit permissions following principle of least privilege
+permissions:
+  contents: read
+
 jobs:
   # ============================================================
   # Python Backend (apps/api)

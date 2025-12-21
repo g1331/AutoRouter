@@ -38,6 +38,7 @@ jobs:
       allowed: ${{ steps.check_perm.outputs.allowed }}
       pr_number: ${{ steps.prmeta.outputs.number }}
       base_ref: ${{ steps.prmeta.outputs.base_ref }}
+      head_sha: ${{ steps.prmeta.outputs.head_sha }}
 
     steps:
       # ============================================================
@@ -93,22 +94,28 @@ jobs:
             if (!prNumber) {
               core.setOutput('number', '');
               core.setOutput('base_ref', '');
+              core.setOutput('head_sha', '');
               return;
             }
 
-            // pull_request 事件可直接拿到 base.ref；issue_comment 事件需要额外查询
+            // pull_request 事件可直接拿到 base.ref 和 head.sha；issue_comment 事件需要额外查询
             let baseRef = context.payload.pull_request?.base?.ref;
-            if (!baseRef) {
+            let headSha = context.payload.pull_request?.head?.sha;
+
+            if (!baseRef || !headSha) {
               const { data: pr } = await github.rest.pulls.get({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 pull_number: prNumber
               });
-              baseRef = pr.base.ref;
+              baseRef = baseRef || pr.base.ref;
+              headSha = headSha || pr.head.sha;
             }
 
             core.setOutput('number', prNumber.toString());
             core.setOutput('base_ref', baseRef || '');
+            // Pin to exact SHA to prevent TOCTOU attacks (force-push between permission check and checkout)
+            core.setOutput('head_sha', headSha || '');
 
   review:
     name: Review
@@ -122,20 +129,18 @@ jobs:
 
     steps:
       # ============================================================
-      # Step 2: Checkout PR 代码
+      # Step 2: Checkout PR 代码 (使用固定 SHA 防止 TOCTOU 攻击)
       # ============================================================
-      - name: Checkout
+      - name: Checkout PR at pinned SHA
         uses: actions/checkout@v4
         with:
+          # Pin to exact SHA captured during permission check to prevent TOCTOU attacks
+          # If PR is force-pushed after trigger, we still review the authorized version
+          ref: ${{ needs.prepare.outputs.head_sha }}
           fetch-depth: 0
 
-      - name: Fetch PR refs
-        run: |
-          git fetch --no-tags origin ${{ needs.prepare.outputs.base_ref }}
-          git fetch --no-tags origin +refs/pull/${{ needs.prepare.outputs.pr_number }}/head:refs/remotes/origin/pr-head
-
-      - name: Checkout PR head
-        run: git checkout origin/pr-head
+      - name: Fetch base branch for diff
+        run: git fetch --no-tags origin ${{ needs.prepare.outputs.base_ref }}
 
       # ============================================================
       # Step 3: 准备 Review 输入
@@ -189,7 +194,8 @@ jobs:
           mkdir -p .github/codex/prompts
 
           # 获取 diff 并保存到临时文件（避免 shell 变量长度限制）
-          git diff origin/${{ needs.prepare.outputs.base_ref }}...origin/pr-head > /tmp/pr_diff.txt
+          # HEAD is the pinned PR SHA, compare against base branch
+          git diff origin/${{ needs.prepare.outputs.base_ref }}...HEAD > /tmp/pr_diff.txt
 
           # 生成 prompt 文件
           cat > .github/codex/prompts/review.md << 'PROMPT_EOF'
