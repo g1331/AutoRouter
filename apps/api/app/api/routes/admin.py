@@ -17,11 +17,14 @@ from app.models.schemas import (
     PaginatedAPIKeysResponse,
     PaginatedRequestLogsResponse,
     PaginatedUpstreamsResponse,
+    StatsLeaderboardResponse,
+    StatsOverviewResponse,
+    StatsTimeseriesResponse,
     UpstreamCreate,
     UpstreamResponse,
     UpstreamUpdate,
 )
-from app.services import key_manager, request_logger, upstream_service
+from app.services import key_manager, request_logger, stats_service, upstream_service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -355,4 +358,106 @@ async def list_request_logs(
         status_code=status_code,
         start_time=parsed_start_time,
         end_time=parsed_end_time,
+    )
+
+
+# ============================================================================
+# Statistics Endpoints
+# ============================================================================
+
+
+@router.get(
+    "/stats/overview",
+    response_model=StatsOverviewResponse,
+    dependencies=[Depends(verify_admin_token)],
+    summary="Get dashboard overview statistics",
+    description="Returns high-level metrics for today including request count, "
+    "average response time, token usage, and success rate.",
+)
+async def get_stats_overview(
+    db: AsyncSession = Depends(get_db),
+) -> StatsOverviewResponse:
+    """Get overview statistics for the dashboard.
+
+    Returns:
+        StatsOverviewResponse: Today's metrics including requests, tokens, and success rate
+    """
+    return await stats_service.get_overview_stats(db=db)
+
+
+@router.get(
+    "/stats/timeseries",
+    response_model=StatsTimeseriesResponse,
+    dependencies=[Depends(verify_admin_token)],
+    summary="Get time series statistics",
+    description="Returns time series data grouped by upstream for chart visualization. "
+    "Supports different time ranges (today, 7d, 30d) with automatic granularity selection.",
+)
+async def get_stats_timeseries(
+    range: str = Query(
+        "7d",
+        description="Time range: 'today', '7d', or '30d'",
+        pattern="^(today|7d|30d)$",
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> StatsTimeseriesResponse:
+    """Get time series statistics grouped by upstream.
+
+    Args:
+        range: Time range (today, 7d, 30d)
+        db: Database session
+
+    Returns:
+        StatsTimeseriesResponse: Time series data for chart visualization
+    """
+    # Validate and cast range to the expected type
+    if range not in ("today", "7d", "30d"):
+        range = "7d"
+
+    return await stats_service.get_timeseries_stats(
+        db=db,
+        range_type=range,  # type: ignore[arg-type]
+    )
+
+
+@router.get(
+    "/stats/leaderboard",
+    response_model=StatsLeaderboardResponse,
+    dependencies=[Depends(verify_admin_token)],
+    summary="Get leaderboard statistics",
+    description="Returns top performers across different dimensions: "
+    "API keys, upstreams, and models ranked by usage.",
+)
+async def get_stats_leaderboard(
+    range: str = Query(
+        "7d",
+        description="Time range: 'today', '7d', or '30d'",
+        pattern="^(today|7d|30d)$",
+    ),
+    limit: int = Query(
+        5,
+        ge=1,
+        le=50,
+        description="Maximum number of items per category (1-50)",
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> StatsLeaderboardResponse:
+    """Get leaderboard statistics for top performers.
+
+    Args:
+        range: Time range (today, 7d, 30d)
+        limit: Maximum items per category (default 5, max 50)
+        db: Database session
+
+    Returns:
+        StatsLeaderboardResponse: Top API keys, upstreams, and models
+    """
+    # Validate and cast range to the expected type
+    if range not in ("today", "7d", "30d"):
+        range = "7d"
+
+    return await stats_service.get_leaderboard_stats(
+        db=db,
+        range_type=range,  # type: ignore[arg-type]
+        limit=limit,
     )
