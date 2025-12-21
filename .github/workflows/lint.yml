@@ -41,7 +41,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --group dev
+        run: uv sync --extra dev --group dev
 
       - name: Ruff Check (Lint)
         run: uv run ruff check --output-format=github .
@@ -68,8 +68,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
