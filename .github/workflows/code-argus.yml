@@ -83,7 +83,7 @@ jobs:
       # Step 2: Checkout PR code at pinned SHA
       # ============================================================
       - name: Checkout PR at pinned SHA
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           # Use immutable SHA reference to prevent TOCTOU attacks
           ref: ${{ steps.context.outputs.head_sha }}
