@@ -1,0 +1,117 @@
+name: Code-Argus Comment Trigger
+
+# ============================================================
+# SECURITY MODEL:
+# This workflow handles issue_comment triggers securely by:
+# 1. NOT checking out any code (no untrusted code execution)
+# 2. Only performing API calls to check permissions and dispatch
+# 3. Using repository_dispatch to trigger the actual review workflow
+#
+# This is part of the workflow_run pattern recommended by GitHub Security Lab
+# to prevent privilege escalation attacks via issue_comment.
+# ============================================================
+
+on:
+  issue_comment:
+    types: [created]
+
+# Minimal permissions needed to dispatch and react
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  trigger:
+    name: Trigger Review
+    runs-on: ubuntu-latest
+    # Only run for PR comments with trigger keywords, exclude bots
+    if: |
+      github.actor != 'github-actions[bot]' &&
+      github.event.issue.pull_request &&
+      !contains(github.event.comment.body, '@autorouter-bot') &&
+      (contains(github.event.comment.body, 'code-argus review') ||
+       contains(github.event.comment.body, 'argus review') ||
+       contains(github.event.comment.body, 'code-argus 审查'))
+
+    steps:
+      # ============================================================
+      # Step 1: Check collaborator permissions
+      # ============================================================
+      - name: Check permissions
+        id: check_perm
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: context.actor
+              });
+              const allowed = ['admin', 'write'].includes(data.permission);
+              core.setOutput('allowed', allowed);
+              if (!allowed) {
+                console.log(`User ${context.actor} has ${data.permission} permission, skipping review`);
+              }
+              return allowed;
+            } catch (error) {
+              console.log(`Permission check failed: ${error.message}`);
+              core.setOutput('allowed', false);
+              return false;
+            }
+
+      # ============================================================
+      # Step 2: Add reaction to indicate processing
+      # ============================================================
+      - name: Add reaction
+        if: steps.check_perm.outputs.allowed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.reactions.createForIssueComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: context.payload.comment.id,
+                content: 'eyes'
+              });
+            } catch (error) {
+              console.log(`Failed to add reaction: ${error.message}`);
+            }
+
+      # ============================================================
+      # Step 3: Get PR metadata and dispatch review
+      # ============================================================
+      - name: Get PR and dispatch review
+        if: steps.check_perm.outputs.allowed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.issue.number;
+
+            // Fetch PR details to get head SHA and base ref
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber
+            });
+
+            const headSha = pr.head.sha;
+            const baseRef = pr.base.ref;
+
+            console.log(`Dispatching review for PR #${prNumber}, SHA: ${headSha}, Base: ${baseRef}`);
+
+            // Dispatch repository event to trigger the review workflow
+            await github.rest.repos.createDispatchEvent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              event_type: 'code-argus-review',
+              client_payload: {
+                pr_number: prNumber,
+                head_sha: headSha,
+                base_ref: baseRef,
+                triggered_by: context.actor
+              }
+            });
+
+            console.log('Review workflow dispatched successfully');
