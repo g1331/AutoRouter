@@ -109,13 +109,27 @@ export function useDeleteUpstream() {
     mutationFn: (id: string) => apiClient.delete(`/admin/upstreams/${id}`),
     onSuccess: (_data, id) => {
       // Immediately remove from cache to show deletion before refetch
-      queryClient.setQueriesData<PaginatedUpstreamsResponse>({ queryKey: ["upstreams"] }, (old) => {
+      // Update paginated queries (format: PaginatedUpstreamsResponse with items array)
+      queryClient.setQueriesData<PaginatedUpstreamsResponse>(
+        {
+          queryKey: ["upstreams"],
+          predicate: (query) =>
+            query.queryKey[0] === "upstreams" && typeof query.queryKey[1] === "number", // matches ["upstreams", page, pageSize]
+        },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            items: old.items.filter((upstream) => upstream.id !== id),
+            total: old.total - 1,
+          };
+        }
+      );
+
+      // Update "all" query (format: Upstream[] array)
+      queryClient.setQueryData<Upstream[]>(["upstreams", "all"], (old) => {
         if (!old) return old;
-        return {
-          ...old,
-          items: old.items.filter((upstream) => upstream.id !== id),
-          total: old.total - 1,
-        };
+        return old.filter((upstream) => upstream.id !== id);
       });
 
       queryClient.invalidateQueries({ queryKey: ["upstreams"] });
