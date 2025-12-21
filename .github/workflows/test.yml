@@ -52,6 +52,8 @@ jobs:
             --cov=app \
             --cov-report=xml \
             --cov-report=term-missing \
+            --junitxml=junit.xml \
+            -o junit_family=legacy \
             -v
 
       - name: Upload coverage to Codecov
@@ -62,6 +64,14 @@ jobs:
           flags: python
           name: python-coverage
           fail_ci_if_error: false
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: apps/api/junit.xml
+          flags: python
 
   # ============================================================
   # TypeScript Frontend Tests (apps/web)
@@ -96,7 +106,7 @@ jobs:
           fi
 
       - name: Run tests with coverage
-        run: pnpm test:run --coverage
+        run: pnpm test:run --coverage --reporter=junit --outputFile=test-report.junit.xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -106,6 +116,14 @@ jobs:
           flags: typescript
           name: typescript-coverage
           fail_ci_if_error: false
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: apps/web/test-report.junit.xml
+          flags: typescript
 
   # ============================================================
   # Summary Status Check
