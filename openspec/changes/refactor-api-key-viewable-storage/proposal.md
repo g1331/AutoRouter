@@ -6,7 +6,7 @@ Users need to view complete API keys after creation, not just the prefix. Curren
 
 ### User Request
 > "不应该只能在创建的时候查看,后续应该都能查看,默认在页面显示时中间显示*,点击icon后显示完整的key,需要按钮方便复制"
-> 
+>
 > Translation: "Should not only be viewable at creation time, should be viewable anytime later. Default display should mask the middle with *, click icon to show full key, need a copy button."
 
 ### Current Behavior (Issue)
@@ -122,6 +122,6 @@ Users need to view complete API keys after creation, not just the prefix. Curren
 ---
 
 **Related Issues**: #5
-**Related Specs**: 
+**Related Specs**:
 - `specs/api-key-auth/spec.md` (MODIFIED)
 - `specs/admin-console-keys/spec.md` (MODIFIED)

@@ -105,4 +105,3 @@
 - ✅ API keys are never logged in plaintext
 - ✅ Default upstream selection works when header absent
 - ✅ Dynamic proxy_prefix configuration is respected
-

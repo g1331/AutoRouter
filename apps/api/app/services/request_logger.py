@@ -84,7 +84,7 @@ def _get_int_value(data: dict[str, Any], key: str, default: int = 0) -> int:
     value = data.get(key, default)
     if isinstance(value, int):
         return value
-    if isinstance(value, (float, str)):
+    if isinstance(value, float | str):
         try:
             return int(value)
         except (ValueError, TypeError):

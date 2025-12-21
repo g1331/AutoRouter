@@ -44,7 +44,9 @@ export function LogsTable({ logs }: LogsTableProps) {
 
     return (
       <Badge
-        variant={isSuccess ? "success" : isClientError ? "warning" : isServerError ? "error" : "default"}
+        variant={
+          isSuccess ? "success" : isClientError ? "warning" : isServerError ? "error" : "default"
+        }
       >
         {statusCode}
       </Badge>
@@ -84,9 +86,7 @@ export function LogsTable({ logs }: LogsTableProps) {
         <div className="w-16 h-16 rounded-cf-sm bg-surface-300 border border-divider flex items-center justify-center mb-4">
           <ScrollText className="w-8 h-8 text-amber-700" aria-hidden="true" />
         </div>
-        <h3 className="font-mono text-lg text-amber-500 mb-2">
-          {t("noLogs")}
-        </h3>
+        <h3 className="font-mono text-lg text-amber-500 mb-2">{t("noLogs")}</h3>
         <p className="font-sans text-sm text-amber-700">{t("noLogsDesc")}</p>
       </div>
     );
@@ -132,16 +132,10 @@ export function LogsTable({ logs }: LogsTableProps) {
                 {log.model || <span className="text-amber-700">-</span>}
               </TableCell>
               <TableCell>
-                {formatTokens(
-                  log.prompt_tokens,
-                  log.completion_tokens,
-                  log.total_tokens
-                )}
+                {formatTokens(log.prompt_tokens, log.completion_tokens, log.total_tokens)}
               </TableCell>
               <TableCell>{formatStatusCode(log.status_code)}</TableCell>
-              <TableCell className="font-mono text-xs">
-                {formatDuration(log.duration_ms)}
-              </TableCell>
+              <TableCell className="font-mono text-xs">{formatDuration(log.duration_ms)}</TableCell>
             </TableRow>
           ))}
         </TableBody>

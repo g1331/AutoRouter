@@ -1,6 +1,13 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useSyncExternalStore,
+  useState,
+  useCallback,
+} from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { createApiClient } from "@/lib/api";
 import { toast } from "sonner";
@@ -23,56 +30,72 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /**
+ * 订阅 sessionStorage 变化
+ */
+function subscribeToStorage(callback: () => void) {
+  window.addEventListener("storage", callback);
+  return () => window.removeEventListener("storage", callback);
+}
+
+/**
+ * 获取 sessionStorage 中的 token
+ */
+function getStorageSnapshot() {
+  return sessionStorage.getItem(STORAGE_KEY);
+}
+
+/**
+ * SSR 时返回 null
+ */
+function getServerSnapshot() {
+  return null;
+}
+
+/**
  * Auth Provider
  * 提供认证状态和 API 客户端
  */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setTokenState] = useState<string | null>(null);
+  const token = useSyncExternalStore(subscribeToStorage, getStorageSnapshot, getServerSnapshot);
   const [isHydrated, setIsHydrated] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
 
-  // 从 sessionStorage 恢复 token（仅客户端）
+  // 标记 hydration 完成（这是 hydration 场景的标准模式）
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = sessionStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setTokenState(stored);
-      }
-      setIsHydrated(true);
-    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration flag is a valid use case
+    setIsHydrated(true);
   }, []);
 
-  // 设置 token
-  const setToken = (newToken: string) => {
-    setTokenState(newToken);
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem(STORAGE_KEY, newToken);
-    }
-  };
+  // 设置 token（写入 sessionStorage 会触发 useSyncExternalStore 更新）
+  const setToken = useCallback((newToken: string) => {
+    sessionStorage.setItem(STORAGE_KEY, newToken);
+    // 手动触发 storage 事件以更新同一窗口的状态
+    window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY }));
+  }, []);
+
+  // 清除 token
+  const clearToken = useCallback(() => {
+    sessionStorage.removeItem(STORAGE_KEY);
+    window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY }));
+  }, []);
 
   // 登出
-  const logout = () => {
-    setTokenState(null);
-    if (typeof window !== "undefined") {
-      sessionStorage.removeItem(STORAGE_KEY);
-    }
+  const logout = useCallback(() => {
+    clearToken();
     router.push("/login");
     toast.info("已登出");
-  };
+  }, [clearToken, router]);
 
   // 处理 401 错误
-  const handleUnauthorized = () => {
+  const handleUnauthorized = useCallback(() => {
     // 避免在登录页面重复重定向
     if (pathname === "/login") return;
 
-    setTokenState(null);
-    if (typeof window !== "undefined") {
-      sessionStorage.removeItem(STORAGE_KEY);
-    }
+    clearToken();
     toast.error("认证已过期，请重新登录");
     router.push("/login");
-  };
+  }, [clearToken, pathname, router]);
 
   // 创建 API 客户端
   const apiClient = createApiClient({

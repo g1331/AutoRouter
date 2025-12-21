@@ -3,8 +3,7 @@
  * 封装 fetch API，自动注入 Authorization header，统一错误处理
  */
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
 /**
  * API 错误类
@@ -47,10 +46,7 @@ export function createApiClient(options: ApiClientOptions) {
   /**
    * 发起 API 请求
    */
-  async function request<T>(
-    path: string,
-    init?: RequestInit
-  ): Promise<T> {
+  async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const token = getToken();
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -87,9 +83,7 @@ export function createApiClient(options: ApiClientOptions) {
         }
 
         throw new ApiError(
-          typeof errorDetail === "string"
-            ? errorDetail
-            : "请求失败",
+          typeof errorDetail === "string" ? errorDetail : "请求失败",
           response.status,
           errorDetail
         );
@@ -109,10 +103,7 @@ export function createApiClient(options: ApiClientOptions) {
       }
 
       // 网络错误
-      throw new ApiError(
-        error instanceof Error ? error.message : "网络请求失败",
-        0
-      );
+      throw new ApiError(error instanceof Error ? error.message : "网络请求失败", 0);
     }
   }
 

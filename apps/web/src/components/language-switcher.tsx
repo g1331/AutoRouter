@@ -40,12 +40,7 @@ export function LanguageSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-9 gap-2"
-          aria-label={t("switch")}
-        >
+        <Button variant="ghost" size="sm" className="h-9 gap-2" aria-label={t("switch")}>
           <Globe className="h-4 w-4 text-amber-500" aria-hidden="true" />
           <span className="hidden sm:inline font-mono text-xs text-amber-500">
             {localeNames[locale]}

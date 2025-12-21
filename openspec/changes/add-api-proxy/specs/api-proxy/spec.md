@@ -197,4 +197,3 @@ The system SHALL support configurable routing prefix for the proxy endpoints.
 #### Scenario: Configuration prefix takes effect on restart
 - **WHEN** administrator changes `PROXY_PREFIX` environment variable and restarts application
 - **THEN** new prefix is used; old prefix is no longer routed
-

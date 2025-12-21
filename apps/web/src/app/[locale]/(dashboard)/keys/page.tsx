@@ -41,9 +41,7 @@ export default function KeysPage() {
                 {t("management")}
               </h3>
             </div>
-            <p className="font-sans text-sm text-amber-700">
-              {t("managementDesc")}
-            </p>
+            <p className="font-sans text-sm text-amber-700">{t("managementDesc")}</p>
           </div>
           <CreateKeyDialog />
         </div>
@@ -53,9 +51,7 @@ export default function KeysPage() {
           <div className="flex items-center justify-center py-16">
             <div className="flex flex-col items-center gap-4">
               <div className="w-10 h-10 border-2 border-amber-700 border-t-amber-500 rounded-full animate-spin" />
-              <p className="font-mono text-sm text-amber-700">
-                {tCommon("loading")}
-              </p>
+              <p className="font-mono text-sm text-amber-700">{tCommon("loading")}</p>
             </div>
           </div>
         ) : (
@@ -67,13 +63,9 @@ export default function KeysPage() {
               <div className="flex items-center justify-between bg-surface-200 rounded-cf-sm px-6 py-4 border border-divider">
                 <div className="font-mono text-sm text-amber-700">
                   {tCommon("items")}{" "}
-                  <span className="text-amber-500 font-display">
-                    {data.total}
-                  </span>{" "}
-                  , {tCommon("page")}{" "}
-                  <span className="text-amber-500">{data.page}</span>{" "}
-                  {tCommon("of")}{" "}
-                  <span className="text-amber-500">{data.total_pages}</span>
+                  <span className="text-amber-500 font-display">{data.total}</span> ,{" "}
+                  {tCommon("page")} <span className="text-amber-500">{data.page}</span>{" "}
+                  {tCommon("of")} <span className="text-amber-500">{data.total_pages}</span>
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -104,11 +96,7 @@ export default function KeysPage() {
       </div>
 
       {/* Revoke Confirmation Dialog */}
-      <RevokeKeyDialog
-        apiKey={revokeKey}
-        open={!!revokeKey}
-        onClose={() => setRevokeKey(null)}
-      />
+      <RevokeKeyDialog apiKey={revokeKey} open={!!revokeKey} onClose={() => setRevokeKey(null)} />
     </>
   );
 }

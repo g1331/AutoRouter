@@ -43,9 +43,7 @@ export function useRequestLogs(
         params.set("end_time", filters.end_time);
       }
 
-      return apiClient.get<PaginatedRequestLogsResponse>(
-        `/admin/logs?${params.toString()}`
-      );
+      return apiClient.get<PaginatedRequestLogsResponse>(`/admin/logs?${params.toString()}`);
     },
   });
 }

@@ -50,9 +50,7 @@ export default function DashboardPage() {
             <Cpu className="w-4 h-4" />
             <span>{t("controlPanel")}</span>
           </div>
-          <p className="font-sans text-sm text-amber-500">
-            {t("controlPanelDesc")}
-          </p>
+          <p className="font-sans text-sm text-amber-500">{t("controlPanelDesc")}</p>
         </div>
 
         {/* Overview Stats Cards */}
@@ -75,11 +73,7 @@ export default function DashboardPage() {
             <TimeRangeSelector value={timeRange} onChange={setTimeRange} />
           </div>
 
-          <UsageChart
-            data={timeseries}
-            isLoading={timeseriesLoading}
-            timeRange={timeRange}
-          />
+          <UsageChart data={timeseries} isLoading={timeseriesLoading} timeRange={timeRange} />
         </div>
 
         {/* Leaderboard Section */}
@@ -109,9 +103,7 @@ export default function DashboardPage() {
                       <p className="font-mono text-sm text-amber-500">
                         {t("manageApiKeys").toUpperCase()}
                       </p>
-                      <p className="font-sans text-xs text-amber-700">
-                        {t("manageApiKeysDesc")}
-                      </p>
+                      <p className="font-sans text-xs text-amber-700">{t("manageApiKeysDesc")}</p>
                     </div>
                   </div>
                   <ArrowRight className="w-5 h-5 text-amber-700 group-hover:text-amber-500 group-hover:translate-x-1 transition-all" />
@@ -148,15 +140,11 @@ export default function DashboardPage() {
         {/* System Log Footer */}
         <div className="mt-8 p-4 rounded-cf-sm bg-surface-200 border border-divider font-mono text-xs">
           <div className="flex items-center gap-3 text-amber-700">
-            <span className="text-status-success">
-              [{tCommon("sysOk").split("::")[0]}]
-            </span>
+            <span className="text-status-success">[{tCommon("sysOk").split("::")[0]}]</span>
             <span>{t("systemInitialized")}</span>
           </div>
           <div className="flex items-center gap-3 text-amber-700 mt-1">
-            <span className="text-status-success">
-              [{tCommon("sysOk").split("::")[0]}]
-            </span>
+            <span className="text-status-success">[{tCommon("sysOk").split("::")[0]}]</span>
             <span>{t("allServicesOnline")}</span>
           </div>
         </div>

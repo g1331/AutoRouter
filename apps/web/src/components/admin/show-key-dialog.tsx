@@ -50,9 +50,7 @@ export function ShowKeyDialog({ apiKey, open, onClose }: ShowKeyDialogProps) {
             </div>
             {t("keyCreated")}
           </DialogTitle>
-          <DialogDescription>
-            {t("keyCreatedDesc")}
-          </DialogDescription>
+          <DialogDescription>{t("keyCreatedDesc")}</DialogDescription>
         </DialogHeader>
 
         {/* Warning Banner */}

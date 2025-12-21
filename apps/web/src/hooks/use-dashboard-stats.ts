@@ -50,8 +50,7 @@ export function useStatsTimeseries(range: TimeRange = "7d") {
 
   return useQuery({
     queryKey: ["stats", "timeseries", range],
-    queryFn: () =>
-      apiClient.get<StatsTimeseriesResponse>(`/admin/stats/timeseries?range=${range}`),
+    queryFn: () => apiClient.get<StatsTimeseriesResponse>(`/admin/stats/timeseries?range=${range}`),
     staleTime: 30_000, // 30 seconds
     refetchInterval: 60_000, // Auto-refresh every minute
   });

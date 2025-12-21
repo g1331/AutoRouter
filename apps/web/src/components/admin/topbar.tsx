@@ -35,9 +35,7 @@ export function Topbar({ title }: TopbarProps) {
       <div className="flex items-center justify-between h-14 px-6">
         {/* Page Title */}
         <div className="flex items-center gap-3">
-          <span className="font-mono text-xs text-amber-700 hidden sm:inline">
-            {">>"}
-          </span>
+          <span className="font-mono text-xs text-amber-700 hidden sm:inline">{">>"}</span>
           <h1 className="font-mono text-lg font-medium tracking-wide text-amber-500 cf-glow-text">
             {title.toUpperCase()}
           </h1>
@@ -60,20 +58,11 @@ export function Topbar({ title }: TopbarProps) {
           {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-9 gap-2"
-                aria-label="User menu"
-              >
+              <Button variant="ghost" size="sm" className="h-9 gap-2" aria-label="User menu">
                 <div className="w-7 h-7 rounded-cf-sm bg-amber-500 flex items-center justify-center">
-                  <span className="font-mono text-sm font-bold text-black-900">
-                    A
-                  </span>
+                  <span className="font-mono text-sm font-bold text-black-900">A</span>
                 </div>
-                <span className="hidden sm:inline font-mono text-xs text-amber-500">
-                  ADMIN
-                </span>
+                <span className="hidden sm:inline font-mono text-xs text-amber-500">ADMIN</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">

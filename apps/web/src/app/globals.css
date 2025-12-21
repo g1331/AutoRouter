@@ -17,53 +17,53 @@
   color-scheme: dark;
 
   /* === Amber Scale (Primary) === */
-  --cf-amber-50: #FFF8E1;
-  --cf-amber-100: #FFECB3;
-  --cf-amber-200: #FFE082;
-  --cf-amber-300: #FFD54F;
-  --cf-amber-400: #FFCA28;
-  --cf-amber-500: #FFBF00;
-  --cf-amber-600: #FFB300;
-  --cf-amber-700: #FFA000;
-  --cf-amber-800: #FF8F00;
-  --cf-amber-900: #FF6F00;
+  --cf-amber-50: #fff8e1;
+  --cf-amber-100: #ffecb3;
+  --cf-amber-200: #ffe082;
+  --cf-amber-300: #ffd54f;
+  --cf-amber-400: #ffca28;
+  --cf-amber-500: #ffbf00;
+  --cf-amber-600: #ffb300;
+  --cf-amber-700: #ffa000;
+  --cf-amber-800: #ff8f00;
+  --cf-amber-900: #ff6f00;
 
   /* === Black Scale (Backgrounds) === */
-  --cf-black-900: #0A0A0A;
+  --cf-black-900: #0a0a0a;
   --cf-black-800: #121212;
-  --cf-black-700: #1A1A1A;
+  --cf-black-700: #1a1a1a;
   --cf-black-600: #242424;
-  --cf-black-500: #2E2E2E;
+  --cf-black-500: #2e2e2e;
 
   /* === Surface Scale (Semantic) === */
-  --cf-surface-100: #0A0A0A;
+  --cf-surface-100: #0a0a0a;
   --cf-surface-200: #121212;
-  --cf-surface-300: #1A1A1A;
+  --cf-surface-300: #1a1a1a;
   --cf-surface-400: #242424;
-  --cf-surface-500: #2E2E2E;
-  --cf-surface-600: #3A3A3A;
+  --cf-surface-500: #2e2e2e;
+  --cf-surface-600: #3a3a3a;
 
   /* === Status Colors === */
-  --cf-status-success: #00FF41;
+  --cf-status-success: #00ff41;
   --cf-status-success-muted: rgba(0, 255, 65, 0.15);
-  --cf-status-warning: #FFBF00;
+  --cf-status-warning: #ffbf00;
   --cf-status-warning-muted: rgba(255, 191, 0, 0.15);
-  --cf-status-error: #FF3131;
+  --cf-status-error: #ff3131;
   --cf-status-error-muted: rgba(255, 49, 49, 0.15);
-  --cf-status-info: #00D4FF;
+  --cf-status-info: #00d4ff;
   --cf-status-info-muted: rgba(0, 212, 255, 0.15);
 
   /* === Functional Tokens === */
-  --cf-disabled-bg: #1A1A1A;
+  --cf-disabled-bg: #1a1a1a;
   --cf-disabled-text: #666666;
   --cf-disabled-border: #333333;
   --cf-divider: #333333;
-  --cf-divider-subtle: #1F1F1F;
+  --cf-divider-subtle: #1f1f1f;
   --cf-overlay: rgba(0, 0, 0, 0.7);
   --cf-overlay-light: rgba(0, 0, 0, 0.5);
 
   /* === Focus States === */
-  --cf-focus-ring: #FFBF00;
+  --cf-focus-ring: #ffbf00;
   --cf-focus-ring-width: 2px;
   --cf-focus-ring-offset: 2px;
   --cf-focus-glow: 0 0 0 3px rgba(255, 191, 0, 0.3);
@@ -139,52 +139,52 @@
   color-scheme: light;
 
   /* === Amber Scale (Primary) - Darkened for WCAG 4.5:1 contrast on light backgrounds === */
-  --cf-amber-50: #FFF2D6;
-  --cf-amber-100: #FFE8B8;
-  --cf-amber-200: #FFDD9C;
-  --cf-amber-300: #E8A800;
-  --cf-amber-400: #C99200;
-  --cf-amber-500: #8B5A00;  /* Darkened from #D69500 for ~6.5:1 contrast ratio */
-  --cf-amber-600: #7A4E00;
+  --cf-amber-50: #fff2d6;
+  --cf-amber-100: #ffe8b8;
+  --cf-amber-200: #ffdd9c;
+  --cf-amber-300: #e8a800;
+  --cf-amber-400: #c99200;
+  --cf-amber-500: #8b5a00; /* Darkened from #D69500 for ~6.5:1 contrast ratio */
+  --cf-amber-600: #7a4e00;
   --cf-amber-700: #684200;
   --cf-amber-800: #573700;
-  --cf-amber-900: #462C00;
+  --cf-amber-900: #462c00;
 
   /* === Paper / Surface Scale (Sepia-tinted) === */
-  --cf-black-900: #FDF8EF;
-  --cf-black-800: #F5EDE0;
-  --cf-black-700: #EBE2D3;
-  --cf-black-600: #DFD4C3;
-  --cf-black-500: #D1C5B2;
+  --cf-black-900: #fdf8ef;
+  --cf-black-800: #f5ede0;
+  --cf-black-700: #ebe2d3;
+  --cf-black-600: #dfd4c3;
+  --cf-black-500: #d1c5b2;
 
-  --cf-surface-100: #FDF8EF;
-  --cf-surface-200: #F8F1E5;
-  --cf-surface-300: #F0E8D8;
-  --cf-surface-400: #E5DAC6;
-  --cf-surface-500: #D8CCB5;
-  --cf-surface-600: #C9BC9F;
+  --cf-surface-100: #fdf8ef;
+  --cf-surface-200: #f8f1e5;
+  --cf-surface-300: #f0e8d8;
+  --cf-surface-400: #e5dac6;
+  --cf-surface-500: #d8ccb5;
+  --cf-surface-600: #c9bc9f;
 
   /* === Status Colors (Contrast-adjusted for light bg) === */
-  --cf-status-success: #0D7A35;
+  --cf-status-success: #0d7a35;
   --cf-status-success-muted: rgba(13, 122, 53, 0.15);
-  --cf-status-warning: #B86E00;
+  --cf-status-warning: #b86e00;
   --cf-status-warning-muted: rgba(184, 110, 0, 0.15);
-  --cf-status-error: #C41E1E;
+  --cf-status-error: #c41e1e;
   --cf-status-error-muted: rgba(196, 30, 30, 0.15);
-  --cf-status-info: #0A6499;
+  --cf-status-info: #0a6499;
   --cf-status-info-muted: rgba(10, 100, 153, 0.15);
 
   /* === Functional Tokens === */
-  --cf-disabled-bg: #F0E8D8;
-  --cf-disabled-text: #8A7A5A;
-  --cf-disabled-border: #DDD0B8;
-  --cf-divider: #D8C9AC;
-  --cf-divider-subtle: #E8DCC6;
+  --cf-disabled-bg: #f0e8d8;
+  --cf-disabled-text: #8a7a5a;
+  --cf-disabled-border: #ddd0b8;
+  --cf-divider: #d8c9ac;
+  --cf-divider-subtle: #e8dcc6;
   --cf-overlay: rgba(253, 248, 239, 0.85);
   --cf-overlay-light: rgba(253, 248, 239, 0.6);
 
   /* === Focus States (Using darker amber for light mode) === */
-  --cf-focus-ring: #8B5A00;
+  --cf-focus-ring: #8b5a00;
   --cf-focus-glow: 0 0 0 3px rgba(139, 90, 0, 0.3);
 
   /* === Glow Effects (Using darker amber for light mode) === */
@@ -194,32 +194,32 @@
 
   /* === Shadcn/ui Compatibility Mappings === */
   --background: var(--cf-surface-100);
-  --foreground: #2A1F0A;
+  --foreground: #2a1f0a;
   --card: var(--cf-surface-200);
-  --card-foreground: #2A1F0A;
+  --card-foreground: #2a1f0a;
   --popover: var(--cf-surface-200);
-  --popover-foreground: #2A1F0A;
+  --popover-foreground: #2a1f0a;
   --primary: var(--cf-amber-500);
-  --primary-foreground: #FFFAF0;
+  --primary-foreground: #fffaf0;
   --secondary: var(--cf-surface-400);
-  --secondary-foreground: #3D2E12;
+  --secondary-foreground: #3d2e12;
   --muted: var(--cf-surface-400);
-  --muted-foreground: #6B5A3A;
+  --muted-foreground: #6b5a3a;
   --accent: var(--cf-amber-600);
-  --accent-foreground: #FFFAF0;
+  --accent-foreground: #fffaf0;
   --destructive: var(--cf-status-error);
-  --destructive-foreground: #FFFAF0;
+  --destructive-foreground: #fffaf0;
   --border: var(--cf-divider);
   --input: rgba(42, 31, 10, 0.2);
   --ring: var(--cf-focus-ring);
 
   /* Sidebar compatibility */
   --sidebar: var(--cf-surface-200);
-  --sidebar-foreground: #2A1F0A;
+  --sidebar-foreground: #2a1f0a;
   --sidebar-primary: var(--cf-amber-500);
-  --sidebar-primary-foreground: #FFFAF0;
+  --sidebar-primary-foreground: #fffaf0;
   --sidebar-accent: var(--cf-surface-300);
-  --sidebar-accent-foreground: #2A1F0A;
+  --sidebar-accent-foreground: #2a1f0a;
   --sidebar-border: var(--cf-divider);
   --sidebar-ring: var(--cf-focus-ring);
 }
@@ -262,11 +262,16 @@
 }
 
 @keyframes cf-toggle-glow {
-  0%, 100% {
-    box-shadow: 0 0 8px var(--cf-amber-500), inset 0 0 4px rgba(255, 191, 0, 0.2);
+  0%,
+  100% {
+    box-shadow:
+      0 0 8px var(--cf-amber-500),
+      inset 0 0 4px rgba(255, 191, 0, 0.2);
   }
   50% {
-    box-shadow: 0 0 16px var(--cf-amber-500), inset 0 0 8px rgba(255, 191, 0, 0.4);
+    box-shadow:
+      0 0 16px var(--cf-amber-500),
+      inset 0 0 8px rgba(255, 191, 0, 0.4);
   }
 }
 
@@ -350,7 +355,9 @@ html.light.theme-switching::after {
     background: var(--cf-black-900);
     color: var(--cf-amber-500);
     font-family: var(--cf-font-sans);
-    font-feature-settings: "liga" 1, "calt" 1;
+    font-feature-settings:
+      "liga" 1,
+      "calt" 1;
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -440,7 +447,9 @@ html.light.theme-switching::after {
   }
 
   .cf-glow-text-strong {
-    text-shadow: 0 0 8px currentColor, 0 0 16px currentColor;
+    text-shadow:
+      0 0 8px currentColor,
+      0 0 16px currentColor;
   }
 
   /* Blinking cursor - login page only */
@@ -450,8 +459,14 @@ html.light.theme-switching::after {
   }
 
   @keyframes cf-blink {
-    0%, 50% { opacity: 1; }
-    51%, 100% { opacity: 0; }
+    0%,
+    50% {
+      opacity: 1;
+    }
+    51%,
+    100% {
+      opacity: 0;
+    }
   }
 
   /* Panel with glow border */
@@ -707,8 +722,8 @@ html.light.theme-switching::after {
 
 @media (prefers-contrast: more) {
   :root {
-    --cf-amber-500: #FFD700;
-    --cf-divider: #4A4A4A;
+    --cf-amber-500: #ffd700;
+    --cf-divider: #4a4a4a;
     --cf-disabled-text: #888888;
   }
 

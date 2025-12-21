@@ -53,10 +53,7 @@ function CustomTooltip({
       <p className="font-mono text-xs text-amber-700 mb-2">{label}</p>
       {payload.map((entry, index) => (
         <div key={index} className="flex items-center gap-2 mb-1">
-          <div
-            className="w-3 h-3 rounded-full"
-            style={{ backgroundColor: entry.color }}
-          />
+          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
           <span className="font-mono text-xs text-amber-500">
             {entry.name}: {formatNumber(entry.value)}
           </span>
@@ -67,21 +64,14 @@ function CustomTooltip({
 }
 
 // Custom legend component
-function CustomLegend({
-  payload,
-}: {
-  payload?: Array<{ value: string; color: string }>;
-}) {
+function CustomLegend({ payload }: { payload?: Array<{ value: string; color: string }> }) {
   if (!payload?.length) return null;
 
   return (
     <div className="flex flex-wrap justify-center gap-4 mt-4">
       {payload.map((entry, index) => (
         <div key={index} className="flex items-center gap-2">
-          <div
-            className="w-3 h-3 rounded-full"
-            style={{ backgroundColor: entry.color }}
-          />
+          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
           <span className="font-mono text-xs text-amber-700">{entry.value}</span>
         </div>
       ))}
@@ -111,9 +101,7 @@ export function UsageChart({ data, isLoading, timeRange }: UsageChartProps) {
           // Format time based on granularity
           const date = parseISO(point.timestamp);
           const formattedTime =
-            data.granularity === "hour"
-              ? format(date, "HH:mm")
-              : format(date, "MM/dd");
+            data.granularity === "hour" ? format(date, "HH:mm") : format(date, "MM/dd");
 
           timestampMap.set(key, {
             timestamp: key,
@@ -162,9 +150,7 @@ export function UsageChart({ data, isLoading, timeRange }: UsageChartProps) {
             <h3 className="font-mono text-sm text-amber-500 uppercase tracking-wider">
               {t("stats.usageStatistics")}
             </h3>
-            <p className="font-mono text-xs text-amber-700 mt-1">
-              {t("stats.usageDescription")}
-            </p>
+            <p className="font-mono text-xs text-amber-700 mt-1">{t("stats.usageDescription")}</p>
           </div>
           <div className="flex gap-6">
             <div>
@@ -196,43 +182,21 @@ export function UsageChart({ data, isLoading, timeRange }: UsageChartProps) {
             <div className="w-full h-full flex items-center justify-center">
               <div className="text-center">
                 <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                <p className="font-mono text-xs text-amber-700">
-                  {t("stats.loading")}
-                </p>
+                <p className="font-mono text-xs text-amber-700">{t("stats.loading")}</p>
               </div>
             </div>
           ) : chartData.length === 0 ? (
             <div className="w-full h-full flex items-center justify-center">
-              <p className="font-mono text-sm text-amber-700">
-                {t("stats.noData")}
-              </p>
+              <p className="font-mono text-sm text-amber-700">{t("stats.noData")}</p>
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={chartData}
-                margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-              >
+              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   {upstreamNames.map((name, index) => (
-                    <linearGradient
-                      key={name}
-                      id={`gradient-${index}`}
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
-                      <stop
-                        offset="5%"
-                        stopColor={getUpstreamColor(index)}
-                        stopOpacity={0.4}
-                      />
-                      <stop
-                        offset="95%"
-                        stopColor={getUpstreamColor(index)}
-                        stopOpacity={0}
-                      />
+                    <linearGradient key={name} id={`gradient-${index}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={getUpstreamColor(index)} stopOpacity={0.4} />
+                      <stop offset="95%" stopColor={getUpstreamColor(index)} stopOpacity={0} />
                     </linearGradient>
                   ))}
                 </defs>

@@ -87,7 +87,8 @@ export function ThemeToggle() {
             <span
               className="absolute inset-x-0 h-[200%] animate-[cf-toggle-scanline_2s_linear_infinite]"
               style={{
-                background: "linear-gradient(to bottom, transparent 0%, transparent 45%, rgba(255, 191, 0, 0.15) 50%, transparent 55%, transparent 100%)",
+                background:
+                  "linear-gradient(to bottom, transparent 0%, transparent 45%, rgba(255, 191, 0, 0.15) 50%, transparent 55%, transparent 100%)",
               }}
             />
           </span>
@@ -97,19 +98,16 @@ export function ThemeToggle() {
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
             style={{
-              background: "radial-gradient(circle at center, rgba(255, 191, 0, 0.1) 0%, transparent 70%)",
+              background:
+                "radial-gradient(circle at center, rgba(255, 191, 0, 0.1) 0%, transparent 70%)",
             }}
           />
 
           {/* Sun icon (light mode) */}
-          <Sun
-            className="h-4 w-4 rotate-0 scale-100 transition-transform duration-300 dark:-rotate-90 dark:scale-0"
-          />
+          <Sun className="h-4 w-4 rotate-0 scale-100 transition-transform duration-300 dark:-rotate-90 dark:scale-0" />
 
           {/* Moon icon (dark mode) */}
-          <Moon
-            className="absolute h-4 w-4 rotate-90 scale-0 transition-transform duration-300 dark:rotate-0 dark:scale-100"
-          />
+          <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-transform duration-300 dark:rotate-0 dark:scale-100" />
 
           <span className="sr-only">{t("toggle")}</span>
         </Button>
@@ -126,9 +124,7 @@ export function ThemeToggle() {
           >
             <Sun className="h-4 w-4" />
             <span>{t("light")}</span>
-            {theme === "light" && (
-              <Check className="ml-auto h-4 w-4 text-status-success" />
-            )}
+            {theme === "light" && <Check className="ml-auto h-4 w-4 text-status-success" />}
           </DropdownMenuRadioItem>
 
           <DropdownMenuRadioItem
@@ -137,9 +133,7 @@ export function ThemeToggle() {
           >
             <Moon className="h-4 w-4" />
             <span>{t("dark")}</span>
-            {theme === "dark" && (
-              <Check className="ml-auto h-4 w-4 text-status-success" />
-            )}
+            {theme === "dark" && <Check className="ml-auto h-4 w-4 text-status-success" />}
           </DropdownMenuRadioItem>
 
           <DropdownMenuRadioItem
@@ -148,9 +142,7 @@ export function ThemeToggle() {
           >
             <Monitor className="h-4 w-4" />
             <span>{t("system")}</span>
-            {theme === "system" && (
-              <Check className="ml-auto h-4 w-4 text-status-success" />
-            )}
+            {theme === "system" && <Check className="ml-auto h-4 w-4 text-status-success" />}
           </DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>

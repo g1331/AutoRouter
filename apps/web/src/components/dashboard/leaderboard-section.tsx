@@ -51,13 +51,7 @@ interface LeaderboardTableProps {
   emptyMessage: string;
 }
 
-function LeaderboardTable({
-  title,
-  icon,
-  items,
-  isLoading,
-  emptyMessage,
-}: LeaderboardTableProps) {
+function LeaderboardTable({ title, icon, items, isLoading, emptyMessage }: LeaderboardTableProps) {
   const t = useTranslations("dashboard");
 
   return (
@@ -68,9 +62,7 @@ function LeaderboardTable({
           <div className="w-8 h-8 rounded-cf-sm bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
             {icon}
           </div>
-          <h4 className="font-mono text-xs uppercase tracking-wider text-amber-500">
-            {title}
-          </h4>
+          <h4 className="font-mono text-xs uppercase tracking-wider text-amber-500">{title}</h4>
         </div>
 
         {/* Content */}
@@ -84,9 +76,7 @@ function LeaderboardTable({
             ))}
           </div>
         ) : items.length === 0 ? (
-          <p className="font-mono text-xs text-amber-700 text-center py-4">
-            {emptyMessage}
-          </p>
+          <p className="font-mono text-xs text-amber-700 text-center py-4">{emptyMessage}</p>
         ) : (
           <div className="space-y-2">
             {items.map((item) => (
@@ -97,9 +87,7 @@ function LeaderboardTable({
                 <div className="flex items-center gap-3 min-w-0">
                   <RankBadge rank={item.rank} />
                   <div className="min-w-0">
-                    <p className="font-mono text-xs text-amber-500 truncate">
-                      {item.name}
-                    </p>
+                    <p className="font-mono text-xs text-amber-500 truncate">{item.name}</p>
                     {item.subtitle && (
                       <p className="font-mono text-[10px] text-amber-700 truncate">
                         {item.subtitle}

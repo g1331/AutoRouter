@@ -30,11 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { useCreateAPIKey } from "@/hooks/use-api-keys";
 import { useAllUpstreams } from "@/hooks/use-upstreams";
@@ -47,9 +43,7 @@ import { getDateLocale } from "@/lib/date-locale";
  */
 export function CreateKeyDialog() {
   const [open, setOpen] = useState(false);
-  const [createdKey, setCreatedKey] = useState<APIKeyCreateResponse | null>(
-    null
-  );
+  const [createdKey, setCreatedKey] = useState<APIKeyCreateResponse | null>(null);
   const createMutation = useCreateAPIKey();
   const t = useTranslations("keys");
   const tCommon = useTranslations("common");
@@ -106,9 +100,7 @@ export function CreateKeyDialog() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{t("createKeyTitle")}</DialogTitle>
-            <DialogDescription>
-              {t("createKeyDesc")}
-            </DialogDescription>
+            <DialogDescription>{t("createKeyDesc")}</DialogDescription>
           </DialogHeader>
 
           <Form {...form}>
@@ -134,11 +126,7 @@ export function CreateKeyDialog() {
                   <FormItem>
                     <FormLabel>{t("keyDescription")}</FormLabel>
                     <FormControl>
-                      <Textarea
-                        placeholder={t("keyDescriptionPlaceholder")}
-                        rows={3}
-                        {...field}
-                      />
+                      <Textarea placeholder={t("keyDescriptionPlaceholder")} rows={3} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -175,9 +163,7 @@ export function CreateKeyDialog() {
                                     onCheckedChange={(checked) => {
                                       const updated = checked
                                         ? [...(field.value || []), upstream.id]
-                                        : field.value?.filter(
-                                            (id) => id !== upstream.id
-                                          );
+                                        : field.value?.filter((id) => id !== upstream.id);
                                       field.onChange(updated);
                                     }}
                                   />
@@ -217,8 +203,7 @@ export function CreateKeyDialog() {
                             variant="outline"
                             className={cn(
                               "pl-3 text-left font-normal justify-start",
-                              !field.value &&
-                                "text-[rgb(var(--md-sys-color-on-surface-variant))]"
+                              !field.value && "text-[rgb(var(--md-sys-color-on-surface-variant))]"
                             )}
                           >
                             {field.value ? (
@@ -246,11 +231,7 @@ export function CreateKeyDialog() {
               />
 
               <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setOpen(false)}
-                >
+                <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                   {tCommon("cancel")}
                 </Button>
                 <Button type="submit" disabled={createMutation.isPending}>

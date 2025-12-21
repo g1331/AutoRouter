@@ -46,11 +46,7 @@ export function Sidebar() {
             strokeWidth={2.5}
             aria-hidden="true"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M13 10V3L4 14h7v7l9-11h-7z"
-            />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
         </div>
         <div className="hidden lg:flex flex-col flex-1 min-w-0">
@@ -69,8 +65,7 @@ export function Sidebar() {
           const Icon = item.icon;
           const label = t(item.labelKey).toUpperCase();
           const isActive =
-            pathname === item.href ||
-            (item.href !== "/" && pathname?.startsWith(item.href + "/"));
+            pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href + "/"));
 
           return (
             <Link

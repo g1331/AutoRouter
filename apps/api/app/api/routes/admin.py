@@ -32,9 +32,12 @@ from app.services import key_manager, request_logger, stats_service, upstream_se
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
-_ALLOW_KEY_REVEAL = (
-    os.getenv("ALLOW_KEY_REVEAL", "false").strip().lower() in {"1", "true", "yes", "on"}
-)
+_ALLOW_KEY_REVEAL = os.getenv("ALLOW_KEY_REVEAL", "false").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 
 # ============================================================================

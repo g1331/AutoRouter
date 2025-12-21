@@ -44,9 +44,7 @@ export function StatsCards({
                   {formatNumber(todayRequests)}
                 </p>
               )}
-              <p className="font-mono text-xs text-amber-700 mt-2">
-                {t("stats.requests")}
-              </p>
+              <p className="font-mono text-xs text-amber-700 mt-2">{t("stats.requests")}</p>
             </div>
             <div className="w-12 h-12 rounded-cf-sm bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
               <Activity className="w-6 h-6 text-amber-500" />
@@ -70,9 +68,7 @@ export function StatsCards({
                   {formatDuration(avgResponseTimeMs)}
                 </p>
               )}
-              <p className="font-mono text-xs text-amber-700 mt-2">
-                {t("stats.latency")}
-              </p>
+              <p className="font-mono text-xs text-amber-700 mt-2">{t("stats.latency")}</p>
             </div>
             <div className="w-12 h-12 rounded-cf-sm bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
               <Clock className="w-6 h-6 text-amber-500" />
@@ -96,9 +92,7 @@ export function StatsCards({
                   {formatNumber(totalTokensToday)}
                 </p>
               )}
-              <p className="font-mono text-xs text-amber-700 mt-2">
-                {t("stats.tokens")}
-              </p>
+              <p className="font-mono text-xs text-amber-700 mt-2">{t("stats.tokens")}</p>
             </div>
             <div className="w-12 h-12 rounded-cf-sm bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
               <Zap className="w-6 h-6 text-amber-500" />

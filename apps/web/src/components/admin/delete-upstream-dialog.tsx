@@ -23,11 +23,7 @@ interface DeleteUpstreamDialogProps {
 /**
  * M3 Delete Upstream Confirmation Dialog
  */
-export function DeleteUpstreamDialog({
-  upstream,
-  open,
-  onClose,
-}: DeleteUpstreamDialogProps) {
+export function DeleteUpstreamDialog({ upstream, open, onClose }: DeleteUpstreamDialogProps) {
   const deleteMutation = useDeleteUpstream();
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
@@ -61,9 +57,7 @@ export function DeleteUpstreamDialog({
             </div>
             {t("deleteUpstreamTitle")}
           </DialogTitle>
-          <DialogDescription>
-            {t("deleteUpstreamDesc")}
-          </DialogDescription>
+          <DialogDescription>{t("deleteUpstreamDesc")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 py-4">
@@ -115,18 +109,10 @@ export function DeleteUpstreamDialog({
         </div>
 
         <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={onClose}
-            disabled={deleteMutation.isPending}
-          >
+          <Button variant="outline" onClick={onClose} disabled={deleteMutation.isPending}>
             {tCommon("cancel")}
           </Button>
-          <Button
-            variant="destructive"
-            onClick={handleDelete}
-            disabled={deleteMutation.isPending}
-          >
+          <Button variant="destructive" onClick={handleDelete} disabled={deleteMutation.isPending}>
             {deleteMutation.isPending ? t("deleting") : tCommon("delete")}
           </Button>
         </DialogFooter>

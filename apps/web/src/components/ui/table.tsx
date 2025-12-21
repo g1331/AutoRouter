@@ -10,21 +10,17 @@ import { cn } from "@/lib/utils";
  * - Uppercase monospace headers
  * - Row hover and selection states
  */
-const Table = React.forwardRef<
-  HTMLTableElement,
-  React.HTMLAttributes<HTMLTableElement>
->(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-auto rounded-cf-sm border-2 border-amber-500 bg-surface-200">
-    <table
-      ref={ref}
-      className={cn(
-        "w-full caption-bottom text-sm font-mono text-amber-500",
-        className
-      )}
-      {...props}
-    />
-  </div>
-));
+const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
+  ({ className, ...props }, ref) => (
+    <div className="relative w-full overflow-auto rounded-cf-sm border-2 border-amber-500 bg-surface-200">
+      <table
+        ref={ref}
+        className={cn("w-full caption-bottom text-sm font-mono text-amber-500", className)}
+        {...props}
+      />
+    </div>
+  )
+);
 Table.displayName = "Table";
 
 const TableHeader = React.forwardRef<
@@ -69,23 +65,22 @@ const TableFooter = React.forwardRef<
 ));
 TableFooter.displayName = "TableFooter";
 
-const TableRow = React.forwardRef<
-  HTMLTableRowElement,
-  React.HTMLAttributes<HTMLTableRowElement>
->(({ className, ...props }, ref) => (
-  <tr
-    ref={ref}
-    className={cn(
-      "border-b border-dashed border-divider",
-      "border-l-2 border-l-transparent",
-      "transition-colors duration-cf-normal ease-cf-standard",
-      "hover:bg-surface-400",
-      "data-[state=selected]:border-l-amber-500 data-[state=selected]:bg-surface-300",
-      className
-    )}
-    {...props}
-  />
-));
+const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(
+  ({ className, ...props }, ref) => (
+    <tr
+      ref={ref}
+      className={cn(
+        "border-b border-dashed border-divider",
+        "border-l-2 border-l-transparent",
+        "transition-colors duration-cf-normal ease-cf-standard",
+        "hover:bg-surface-400",
+        "data-[state=selected]:border-l-amber-500 data-[state=selected]:bg-surface-300",
+        className
+      )}
+      {...props}
+    />
+  )
+);
 TableRow.displayName = "TableRow";
 
 const TableHead = React.forwardRef<
@@ -133,13 +128,4 @@ const TableCaption = React.forwardRef<
 ));
 TableCaption.displayName = "TableCaption";
 
-export {
-  Table,
-  TableHeader,
-  TableBody,
-  TableFooter,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableCaption,
-};
+export { Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableCell, TableCaption };

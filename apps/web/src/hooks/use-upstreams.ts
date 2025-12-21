@@ -47,18 +47,13 @@ export function useAllUpstreams() {
       const remainingPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
 
       const remainingPagesData = await Promise.all(
-        remainingPages.map(page =>
-          apiClient.get<PaginatedUpstreamsResponse>(
-            `/admin/upstreams?page=${page}&page_size=100`
-          )
+        remainingPages.map((page) =>
+          apiClient.get<PaginatedUpstreamsResponse>(`/admin/upstreams?page=${page}&page_size=100`)
         )
       );
 
       // Combine all items
-      return [
-        ...firstPage.items,
-        ...remainingPagesData.flatMap(response => response.items),
-      ];
+      return [...firstPage.items, ...remainingPagesData.flatMap((response) => response.items)];
     },
   });
 }
@@ -71,8 +66,7 @@ export function useCreateUpstream() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: UpstreamCreate) =>
-      apiClient.post<Upstream>("/admin/upstreams", data),
+    mutationFn: (data: UpstreamCreate) => apiClient.post<Upstream>("/admin/upstreams", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["upstreams"] });
       queryClient.invalidateQueries({ queryKey: ["stats", "upstreams"] });
@@ -115,17 +109,14 @@ export function useDeleteUpstream() {
     mutationFn: (id: string) => apiClient.delete(`/admin/upstreams/${id}`),
     onSuccess: (_data, id) => {
       // Immediately remove from cache to show deletion before refetch
-      queryClient.setQueriesData<PaginatedUpstreamsResponse>(
-        { queryKey: ["upstreams"] },
-        (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            items: old.items.filter((upstream) => upstream.id !== id),
-            total: old.total - 1,
-          };
-        }
-      );
+      queryClient.setQueriesData<PaginatedUpstreamsResponse>({ queryKey: ["upstreams"] }, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          items: old.items.filter((upstream) => upstream.id !== id),
+          total: old.total - 1,
+        };
+      });
 
       queryClient.invalidateQueries({ queryKey: ["upstreams"] });
       queryClient.invalidateQueries({ queryKey: ["stats", "upstreams"] });

@@ -11,9 +11,7 @@ test.describe("Accessibility", () => {
   test("login page should have no accessibility violations", async ({ page }) => {
     await page.goto("/login");
 
-    const results = await new AxeBuilder({ page })
-      .withTags(["wcag2a", "wcag2aa"])
-      .analyze();
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
 
     expect(results.violations).toEqual([]);
   });
@@ -22,9 +20,7 @@ test.describe("Accessibility", () => {
     // Login first (mock or real auth)
     await page.goto("/dashboard");
 
-    const results = await new AxeBuilder({ page })
-      .withTags(["wcag2a", "wcag2aa"])
-      .analyze();
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
 
     expect(results.violations).toEqual([]);
   });
@@ -32,9 +28,7 @@ test.describe("Accessibility", () => {
   test("keys page should have no accessibility violations", async ({ page }) => {
     await page.goto("/keys");
 
-    const results = await new AxeBuilder({ page })
-      .withTags(["wcag2a", "wcag2aa"])
-      .analyze();
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
 
     expect(results.violations).toEqual([]);
   });
@@ -42,9 +36,7 @@ test.describe("Accessibility", () => {
   test("upstreams page should have no accessibility violations", async ({ page }) => {
     await page.goto("/upstreams");
 
-    const results = await new AxeBuilder({ page })
-      .withTags(["wcag2a", "wcag2aa"])
-      .analyze();
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
 
     expect(results.violations).toEqual([]);
   });

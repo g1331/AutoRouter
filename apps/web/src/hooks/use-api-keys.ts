@@ -19,9 +19,7 @@ export function useAPIKeys(page: number = 1, pageSize: number = 10) {
   return useQuery({
     queryKey: ["api-keys", page, pageSize],
     queryFn: () =>
-      apiClient.get<PaginatedAPIKeysResponse>(
-        `/admin/keys?page=${page}&page_size=${pageSize}`
-      ),
+      apiClient.get<PaginatedAPIKeysResponse>(`/admin/keys?page=${page}&page_size=${pageSize}`),
   });
 }
 
@@ -34,8 +32,7 @@ export function useCreateAPIKey() {
   const t = useTranslations("keys");
 
   return useMutation({
-    mutationFn: (data: APIKeyCreate) =>
-      apiClient.post<APIKeyCreateResponse>("/admin/keys", data),
+    mutationFn: (data: APIKeyCreate) => apiClient.post<APIKeyCreateResponse>("/admin/keys", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["api-keys"] });
       queryClient.invalidateQueries({ queryKey: ["stats", "keys"] });
@@ -59,8 +56,7 @@ export function useRevealAPIKey() {
       apiClient.post<APIKeyRevealResponse>(`/admin/keys/${keyId}/reveal`),
     onError: (error: Error) => {
       if (error instanceof ApiError) {
-        const detail =
-          error.detail as { error?: string; message?: string } | undefined;
+        const detail = error.detail as { error?: string; message?: string } | undefined;
         if (detail?.error === "legacy_key") {
           toast.error(t("legacyKey"));
           return;
@@ -83,17 +79,14 @@ export function useRevokeAPIKey() {
     mutationFn: (keyId: string) => apiClient.delete<void>(`/admin/keys/${keyId}`),
     onSuccess: (_data, keyId) => {
       // Immediately remove from cache to show deletion before refetch
-      queryClient.setQueriesData<PaginatedAPIKeysResponse>(
-        { queryKey: ["api-keys"] },
-        (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            items: old.items.filter((key) => key.id !== keyId),
-            total: old.total - 1,
-          };
-        }
-      );
+      queryClient.setQueriesData<PaginatedAPIKeysResponse>({ queryKey: ["api-keys"] }, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          items: old.items.filter((key) => key.id !== keyId),
+          total: old.total - 1,
+        };
+      });
 
       queryClient.invalidateQueries({ queryKey: ["api-keys"] });
       queryClient.invalidateQueries({ queryKey: ["stats", "keys"] });

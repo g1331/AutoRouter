@@ -52,10 +52,7 @@ interface RootLayoutProps {
   params?: Promise<{ locale?: string }>;
 }
 
-export default async function RootLayout({
-  children,
-  params,
-}: RootLayoutProps) {
+export default async function RootLayout({ children, params }: RootLayoutProps) {
   const resolvedParams = await params;
   const locale = resolvedParams?.locale || "zh-CN";
 
@@ -67,10 +64,7 @@ export default async function RootLayout({
     >
       <head>
         {/* VT323 pixel font loaded via Google Fonts link for better weight control */}
-        <link
-          href="https://fonts.googleapis.com/css2?family=VT323&display=swap"
-          rel="stylesheet"
-        />
+        <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet" />
       </head>
       <body className={inter.className}>{children}</body>
     </html>

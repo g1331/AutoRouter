@@ -27,10 +27,7 @@ const ScanlineLoader = React.forwardRef<HTMLDivElement, ScanlineLoaderProps>(
     return (
       <div
         ref={ref}
-        className={cn(
-          "flex flex-col items-center justify-center gap-3",
-          className
-        )}
+        className={cn("flex flex-col items-center justify-center gap-3", className)}
         role="status"
         aria-label={text || "Loading"}
         {...props}
@@ -60,9 +57,7 @@ const ScanlineLoader = React.forwardRef<HTMLDivElement, ScanlineLoaderProps>(
 
         {/* Loading text */}
         {text && (
-          <p className="font-mono text-sm text-amber-700 uppercase tracking-wider">
-            {text}
-          </p>
+          <p className="font-mono text-sm text-amber-700 uppercase tracking-wider">{text}</p>
         )}
       </div>
     );

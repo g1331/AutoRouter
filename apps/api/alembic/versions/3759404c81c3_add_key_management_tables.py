@@ -1,7 +1,7 @@
 """add key management tables
 
 Revision ID: 3759404c81c3
-Revises: 
+Revises:
 Create Date: 2025-11-29 12:43:49.897640
 
 """

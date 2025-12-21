@@ -144,12 +144,12 @@ async def get_timeseries_stats(
     granularity = _get_granularity(range_type)
 
     # SQLite/PostgreSQL-compatible date truncation
-    dialect_name = db.bind.dialect.name if db.bind is not None else ''
-    if dialect_name == 'postgresql':
-        bucket = 'hour' if granularity == 'hour' else 'day'
+    dialect_name = db.bind.dialect.name if db.bind is not None else ""
+    if dialect_name == "postgresql":
+        bucket = "hour" if granularity == "hour" else "day"
         time_bucket = func.to_char(
             func.date_trunc(bucket, RequestLog.created_at),
-            'YYYY-MM-DD HH24:MI:SS',
+            "YYYY-MM-DD HH24:MI:SS",
         )
         date_format = "%Y-%m-%d %H:%M:%S"
     else:

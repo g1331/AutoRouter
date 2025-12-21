@@ -30,21 +30,14 @@ interface UpstreamsTableProps {
  * - Provider-specific badge colors
  * - Amber accents and glow effects
  */
-export function UpstreamsTable({
-  upstreams,
-  onEdit,
-  onDelete,
-}: UpstreamsTableProps) {
+export function UpstreamsTable({ upstreams, onEdit, onDelete }: UpstreamsTableProps) {
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
   const locale = useLocale();
   const dateLocale = getDateLocale(locale);
 
   const formatProvider = (provider: string) => {
-    const providerMap: Record<
-      string,
-      { label: string; variant: BadgeProps["variant"] }
-    > = {
+    const providerMap: Record<string, { label: string; variant: BadgeProps["variant"] }> = {
       openai: { label: "OpenAI", variant: "success" },
       anthropic: { label: "Anthropic", variant: "secondary" },
       azure: { label: "Azure", variant: "info" },
@@ -65,12 +58,8 @@ export function UpstreamsTable({
         <div className="w-16 h-16 rounded-cf-sm bg-surface-300 border border-divider flex items-center justify-center mb-4">
           <Server className="w-8 h-8 text-amber-700" aria-hidden="true" />
         </div>
-        <h3 className="font-mono text-lg text-amber-500 mb-2">
-          {t("noUpstreams")}
-        </h3>
-        <p className="font-sans text-sm text-amber-700">
-          {t("noUpstreamsDesc")}
-        </p>
+        <h3 className="font-mono text-lg text-amber-500 mb-2">{t("noUpstreams")}</h3>
+        <p className="font-sans text-sm text-amber-700">{t("noUpstreamsDesc")}</p>
       </div>
     );
   }
@@ -99,9 +88,7 @@ export function UpstreamsTable({
                 </code>
               </TableCell>
               <TableCell className="max-w-xs truncate">
-                {upstream.description || (
-                  <span className="text-amber-700">-</span>
-                )}
+                {upstream.description || <span className="text-amber-700">-</span>}
               </TableCell>
               <TableCell>
                 {formatDistanceToNow(new Date(upstream.created_at), {

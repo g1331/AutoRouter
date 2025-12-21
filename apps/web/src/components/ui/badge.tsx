@@ -23,31 +23,22 @@ const badgeVariants = cva(
     variants: {
       variant: {
         // Default amber
-        default:
-          "bg-amber-500 text-black-900 border-amber-500",
+        default: "bg-amber-500 text-black-900 border-amber-500",
         // Secondary / muted
-        secondary:
-          "bg-surface-400 text-amber-500 border-surface-500",
+        secondary: "bg-surface-400 text-amber-500 border-surface-500",
         // Outlined
-        outline:
-          "bg-transparent text-amber-500 border-amber-500",
+        outline: "bg-transparent text-amber-500 border-amber-500",
         // Success status
-        success:
-          "bg-status-success-muted text-status-success border-status-success",
+        success: "bg-status-success-muted text-status-success border-status-success",
         // Warning status
-        warning:
-          "bg-status-warning-muted text-status-warning border-status-warning",
+        warning: "bg-status-warning-muted text-status-warning border-status-warning",
         // Error / Destructive status
-        error:
-          "bg-status-error-muted text-status-error border-status-error",
-        destructive:
-          "bg-status-error-muted text-status-error border-status-error",
+        error: "bg-status-error-muted text-status-error border-status-error",
+        destructive: "bg-status-error-muted text-status-error border-status-error",
         // Info status
-        info:
-          "bg-status-info-muted text-status-info border-status-info",
+        info: "bg-status-info-muted text-status-info border-status-info",
         // Neutral / muted
-        neutral:
-          "bg-surface-300 text-amber-700 border-divider",
+        neutral: "bg-surface-300 text-amber-700 border-divider",
       },
     },
     defaultVariants: {
@@ -61,9 +52,7 @@ export interface BadgeProps
     VariantProps<typeof badgeVariants> {}
 
 function Badge({ className, variant, ...props }: BadgeProps) {
-  return (
-    <div className={cn(badgeVariants({ variant }), className)} {...props} />
-  );
+  return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
 }
 
 export { Badge, badgeVariants };

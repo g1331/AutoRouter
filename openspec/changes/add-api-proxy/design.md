@@ -191,4 +191,3 @@ This is a new capability; no migration needed.
    - **Decision**: No; keep proxy transparent
 3. Should proxy_prefix support hot-reload (signal-based)?
    - **Decision**: No; config changes require restart (standard practice)
-

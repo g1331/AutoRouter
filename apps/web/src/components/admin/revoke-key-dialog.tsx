@@ -23,11 +23,7 @@ interface RevokeKeyDialogProps {
 /**
  * M3 Revoke API Key Confirmation Dialog
  */
-export function RevokeKeyDialog({
-  apiKey,
-  open,
-  onClose,
-}: RevokeKeyDialogProps) {
+export function RevokeKeyDialog({ apiKey, open, onClose }: RevokeKeyDialogProps) {
   const revokeMutation = useRevokeAPIKey();
   const t = useTranslations("keys");
   const tCommon = useTranslations("common");
@@ -61,9 +57,7 @@ export function RevokeKeyDialog({
             </div>
             {t("revokeKeyTitle")}
           </DialogTitle>
-          <DialogDescription>
-            {t("revokeKeyDesc")}
-          </DialogDescription>
+          <DialogDescription>{t("revokeKeyDesc")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 py-4">
@@ -107,18 +101,10 @@ export function RevokeKeyDialog({
         </div>
 
         <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={onClose}
-            disabled={revokeMutation.isPending}
-          >
+          <Button variant="outline" onClick={onClose} disabled={revokeMutation.isPending}>
             {tCommon("cancel")}
           </Button>
-          <Button
-            variant="destructive"
-            onClick={handleRevoke}
-            disabled={revokeMutation.isPending}
-          >
+          <Button variant="destructive" onClick={handleRevoke} disabled={revokeMutation.isPending}>
             {revokeMutation.isPending ? t("revoking") : t("revoke")}
           </Button>
         </DialogFooter>

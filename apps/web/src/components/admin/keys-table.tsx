@@ -126,12 +126,8 @@ export function KeysTable({ keys, onRevoke }: KeysTableProps) {
         <div className="w-16 h-16 rounded-cf-sm bg-surface-300 border border-divider flex items-center justify-center mb-4">
           <Key className="w-8 h-8 text-amber-700" aria-hidden="true" />
         </div>
-        <h3 className="font-mono text-lg text-amber-500 mb-2">
-          {t("noKeys")}
-        </h3>
-        <p className="font-sans text-sm text-amber-700">
-          {t("noKeysDesc")}
-        </p>
+        <h3 className="font-mono text-lg text-amber-500 mb-2">{t("noKeys")}</h3>
+        <p className="font-sans text-sm text-amber-700">{t("noKeysDesc")}</p>
       </div>
     );
   }
@@ -167,11 +163,7 @@ export function KeysTable({ keys, onRevoke }: KeysTableProps) {
                     className="h-7 w-7"
                     onClick={() => toggleKeyVisibility(key.id)}
                     disabled={isRevealing}
-                    aria-label={
-                      visibleKeyIds.has(key.id)
-                        ? t("hideKey")
-                        : t("revealKey")
-                    }
+                    aria-label={visibleKeyIds.has(key.id) ? t("hideKey") : t("revealKey")}
                   >
                     {visibleKeyIds.has(key.id) ? (
                       <EyeOff className="h-3.5 w-3.5" aria-hidden="true" />
@@ -184,15 +176,10 @@ export function KeysTable({ keys, onRevoke }: KeysTableProps) {
                     size="icon"
                     className="h-7 w-7"
                     onClick={() => copyKey(key.id)}
-                    aria-label={
-                      copiedId === key.id ? tCommon("copied") : tCommon("copy")
-                    }
+                    aria-label={copiedId === key.id ? tCommon("copied") : tCommon("copy")}
                   >
                     {copiedId === key.id ? (
-                      <Check
-                        className="h-3.5 w-3.5 text-status-success"
-                        aria-hidden="true"
-                      />
+                      <Check className="h-3.5 w-3.5 text-status-success" aria-hidden="true" />
                     ) : (
                       <Copy className="h-3.5 w-3.5" aria-hidden="true" />
                     )}
@@ -200,9 +187,7 @@ export function KeysTable({ keys, onRevoke }: KeysTableProps) {
                 </div>
               </TableCell>
               <TableCell className="max-w-xs truncate">
-                {key.description || (
-                  <span className="text-amber-700">-</span>
-                )}
+                {key.description || <span className="text-amber-700">-</span>}
               </TableCell>
               <TableCell>
                 <Badge variant="info">{key.upstream_ids.length}</Badge>

@@ -66,9 +66,7 @@ const ErrorState = React.forwardRef<HTMLDivElement, ErrorStateProps>(
         </h3>
 
         {/* Error description */}
-        <p className="font-sans text-sm text-amber-700 max-w-md mb-6">
-          {description}
-        </p>
+        <p className="font-sans text-sm text-amber-700 max-w-md mb-6">{description}</p>
 
         {/* Retry button */}
         {onRetry && (
@@ -78,13 +76,7 @@ const ErrorState = React.forwardRef<HTMLDivElement, ErrorStateProps>(
             disabled={isRetrying}
             className="gap-2 border-status-error text-status-error hover:bg-status-error-muted"
           >
-            <RefreshCw
-              className={cn(
-                "w-4 h-4",
-                isRetrying && "animate-spin"
-              )}
-              aria-hidden="true"
-            />
+            <RefreshCw className={cn("w-4 h-4", isRetrying && "animate-spin")} aria-hidden="true" />
             {isRetrying ? "RETRYING..." : "RETRY"}
           </Button>
         )}

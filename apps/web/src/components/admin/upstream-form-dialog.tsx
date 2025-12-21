@@ -133,12 +133,8 @@ export function UpstreamFormDialog({
   const dialogContent = (
     <DialogContent className="max-w-2xl">
       <DialogHeader>
-        <DialogTitle>
-          {isEdit ? t("editUpstreamTitle") : t("createUpstreamTitle")}
-        </DialogTitle>
-        <DialogDescription>
-          {t("createUpstreamDesc")}
-        </DialogDescription>
+        <DialogTitle>{isEdit ? t("editUpstreamTitle") : t("createUpstreamTitle")}</DialogTitle>
+        <DialogDescription>{t("createUpstreamDesc")}</DialogDescription>
       </DialogHeader>
 
       <Form {...form}>
@@ -188,11 +184,7 @@ export function UpstreamFormDialog({
               <FormItem>
                 <FormLabel>{t("baseUrl")} *</FormLabel>
                 <FormControl>
-                  <Input
-                    type="url"
-                    placeholder={t("baseUrlPlaceholder")}
-                    {...field}
-                  />
+                  <Input type="url" placeholder={t("baseUrlPlaceholder")} {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -206,15 +198,9 @@ export function UpstreamFormDialog({
               <FormItem>
                 <FormLabel>{t("apiKey")} *</FormLabel>
                 <FormControl>
-                  <Input
-                    type="password"
-                    placeholder={t("apiKeyPlaceholder")}
-                    {...field}
-                  />
+                  <Input type="password" placeholder={t("apiKeyPlaceholder")} {...field} />
                 </FormControl>
-                <FormDescription>
-                  {isEdit ? t("apiKeyEditHint") : undefined}
-                </FormDescription>
+                <FormDescription>{isEdit ? t("apiKeyEditHint") : undefined}</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -227,11 +213,7 @@ export function UpstreamFormDialog({
               <FormItem>
                 <FormLabel>{t("upstreamDescription")}</FormLabel>
                 <FormControl>
-                  <Textarea
-                    placeholder={t("upstreamDescriptionPlaceholder")}
-                    rows={3}
-                    {...field}
-                  />
+                  <Textarea placeholder={t("upstreamDescriptionPlaceholder")} rows={3} {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -239,17 +221,10 @@ export function UpstreamFormDialog({
           />
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {tCommon("cancel")}
             </Button>
-            <Button
-              type="submit"
-              disabled={createMutation.isPending || updateMutation.isPending}
-            >
+            <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
               {createMutation.isPending || updateMutation.isPending
                 ? isEdit
                   ? t("updating")

@@ -38,4 +38,3 @@ The application needs a flexible API proxy layer to:
 
 - **Breaking Changes**: None - existing `/api/health` endpoint unchanged
 - **Dependencies Added**: `httpx>=0.27.0`, `loguru>=0.7.0`
-

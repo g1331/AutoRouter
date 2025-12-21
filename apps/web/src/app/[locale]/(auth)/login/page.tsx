@@ -100,19 +100,13 @@ export default function LoginPage() {
             {/* Logo & Brand */}
             <div className="flex items-center gap-3 mb-8">
               <div className="w-12 h-12 rounded-cf-sm bg-amber-500 flex items-center justify-center shadow-cf-glow-subtle">
-                <Zap
-                  className="w-6 h-6 text-black-900"
-                  strokeWidth={2.5}
-                  aria-hidden="true"
-                />
+                <Zap className="w-6 h-6 text-black-900" strokeWidth={2.5} aria-hidden="true" />
               </div>
               <div>
                 <h1 className="font-mono text-lg font-medium text-amber-500 tracking-wide cf-glow-text">
                   {t("title")}
                 </h1>
-                <p className="font-mono text-xs text-amber-700">
-                  {t("subtitle").toUpperCase()}
-                </p>
+                <p className="font-mono text-xs text-amber-700">{t("subtitle").toUpperCase()}</p>
               </div>
             </div>
 

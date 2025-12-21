@@ -12,19 +12,13 @@ export type CalendarProps = DayPickerProps;
 /**
  * M3 Date Picker Calendar
  */
-function Calendar({
-  className,
-  classNames,
-  showOutsideDays = true,
-  ...props
-}: CalendarProps) {
+function Calendar({ className, classNames, showOutsideDays = true, ...props }: CalendarProps) {
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
       className={cn("p-3", className)}
       classNames={{
-        months:
-          "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
+        months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
         month: "space-y-4",
         month_caption:
           "flex justify-center pt-1 relative items-center type-title-small text-[rgb(var(--md-sys-color-on-surface))]",
@@ -74,8 +68,7 @@ function Calendar({
           "aria-selected:text-[rgb(var(--md-sys-color-on-primary-container))]",
           "aria-selected:opacity-30"
         ),
-        disabled:
-          "text-[rgb(var(--md-sys-color-on-surface)_/_0.38)] cursor-not-allowed",
+        disabled: "text-[rgb(var(--md-sys-color-on-surface)_/_0.38)] cursor-not-allowed",
         range_middle: cn(
           "aria-selected:bg-[rgb(var(--md-sys-color-primary-container))]",
           "aria-selected:text-[rgb(var(--md-sys-color-on-primary-container))]"
@@ -86,9 +79,7 @@ function Calendar({
       components={{
         Chevron: ({ orientation }) => {
           const Icon = orientation === "left" ? ChevronLeft : ChevronRight;
-          return (
-            <Icon className="h-5 w-5 text-[rgb(var(--md-sys-color-on-surface-variant))]" />
-          );
+          return <Icon className="h-5 w-5 text-[rgb(var(--md-sys-color-on-surface-variant))]" />;
         },
       }}
       {...props}

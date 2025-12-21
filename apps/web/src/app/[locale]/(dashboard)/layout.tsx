@@ -13,11 +13,7 @@ import { Sidebar } from "@/components/admin/sidebar";
  * - Sidebar navigation
  * - Noise texture background effect
  */
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { token } = useAuth();
@@ -37,9 +33,7 @@ export default function DashboardLayout({
   return (
     <div className="cf-noise flex h-screen overflow-hidden bg-black-900">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto bg-surface-100">
-        {children}
-      </main>
+      <main className="flex-1 overflow-y-auto bg-surface-100">{children}</main>
     </div>
   );
 }
