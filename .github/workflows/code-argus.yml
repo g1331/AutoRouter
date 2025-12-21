@@ -323,7 +323,7 @@ jobs:
           echo '${{ steps.review.outputs.final-message }}' > /tmp/review-results/review_output.json
 
       - name: Upload review artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: code-argus-review-${{ steps.context.outputs.pr_number }}
           path: /tmp/review-results/
