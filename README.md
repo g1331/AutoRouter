@@ -1,5 +1,13 @@
 # AutoRouter
 
+[![License](https://img.shields.io/github/license/g1331/AutoRouter?color=blue)](LICENSE)
+[![Lint](https://github.com/g1331/AutoRouter/actions/workflows/lint.yml/badge.svg)](https://github.com/g1331/AutoRouter/actions/workflows/lint.yml)
+[![Python](https://img.shields.io/badge/python-3.12-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![Node.js](https://img.shields.io/badge/node.js-22-green?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![GitHub Stars](https://img.shields.io/github/stars/g1331/AutoRouter?style=flat&logo=github)](https://github.com/g1331/AutoRouter/stargazers)
+[![GitHub Issues](https://img.shields.io/github/issues/g1331/AutoRouter)](https://github.com/g1331/AutoRouter/issues)
+[![Last Commit](https://img.shields.io/github/last-commit/g1331/AutoRouter)](https://github.com/g1331/AutoRouter/commits/master)
+
 企业级 AI API Gateway，提供 API Key 分发、多上游路由和请求管理功能。
 
 ## 截图
@@ -50,7 +58,7 @@
 
 ```bash
 # 克隆项目
-git clone https://github.com/your-username/autorouter.git
+git clone https://github.com/g1331/AutoRouter.git
 cd autorouter
 
 # 后端
