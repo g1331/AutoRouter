@@ -29,10 +29,25 @@ jobs:
       actions: read
       id-token: write
     steps:
+      - name: Check if issue is still open
+        id: check-issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          STATE=$(gh issue view ${{ github.event.issue.number }} --repo ${{ github.repository }} --json state --jq '.state')
+          if [ "$STATE" != "OPEN" ]; then
+            echo "Issue #${{ github.event.issue.number }} is $STATE, skipping"
+            echo "is_open=false" >> $GITHUB_OUTPUT
+          else
+            echo "is_open=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Checkout
+        if: steps.check-issue.outputs.is_open == 'true'
         uses: actions/checkout@v6
 
       - name: Check if creator is collaborator
+        if: steps.check-issue.outputs.is_open == 'true'
         id: check-collaborator
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -45,7 +60,7 @@ jobs:
 
       # === 非协作者：只做分类 ===
       - name: Run Claude Code for triage (non-collaborator)
-        if: steps.check-collaborator.outputs.is_collaborator != 'true'
+        if: steps.check-issue.outputs.is_open == 'true' && steps.check-collaborator.outputs.is_collaborator != 'true'
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -78,7 +93,7 @@ jobs:
 
       # === 协作者：配置 MCP 环境 ===
       - name: Setup Node 22 (for auggie / npx MCPs)
-        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        if: steps.check-issue.outputs.is_open == 'true' && steps.check-collaborator.outputs.is_collaborator == 'true'
         uses: actions/setup-node@v6
         with:
           node-version: 22
