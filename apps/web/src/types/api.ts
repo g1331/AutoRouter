@@ -28,7 +28,14 @@ export interface APIKeyResponse {
 export type APIKey = APIKeyResponse;
 
 export interface APIKeyCreateResponse extends APIKeyResponse {
-  key: string; // 完整 key，仅在创建时返回一次
+  key_value: string; // 完整 key，仅在创建时返回一次
+}
+
+export interface APIKeyRevealResponse {
+  id: string; // UUID
+  key_value: string; // 完整解密后的 key
+  key_prefix: string;
+  name: string;
 }
 
 // ========== Upstream 相关类型 ==========

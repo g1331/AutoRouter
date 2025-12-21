@@ -2,8 +2,9 @@
 
 This service handles:
 - Generating random API keys
-- Creating and storing keys with bcrypt hashing
+- Creating and storing keys with bcrypt hashing and Fernet encryption
 - Revoking keys and cache invalidation
+- Revealing encrypted keys
 - Listing and retrieving keys
 """
 
@@ -17,8 +18,22 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.encryption import decrypt_upstream_key, encrypt_upstream_key
 from app.models.db_models import APIKey, APIKeyUpstream, Upstream
-from app.models.schemas import APIKeyCreateResponse, APIKeyResponse, PaginatedAPIKeysResponse
+from app.models.schemas import (
+    APIKeyCreateResponse,
+    APIKeyResponse,
+    APIKeyRevealResponse,
+    PaginatedAPIKeysResponse,
+)
+
+
+class APIKeyNotFoundError(ValueError):
+    """Raised when the requested API key does not exist."""
+
+
+class LegacyAPIKeyError(ValueError):
+    """Raised when attempting to reveal a bcrypt-only API key."""
 
 
 def generate_api_key() -> str:
@@ -80,13 +95,17 @@ async def create_api_key(
     key_value = generate_api_key()
     key_prefix = key_value[:12]  # 'sk-auto-xxxx'
 
-    # Hash the key with bcrypt (work factor 12 is default)
+    # Hash the key with bcrypt (work factor 12 is default, for backward compatibility)
     key_hash = bcrypt.hashpw(key_value.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+    # Encrypt the key with Fernet (for reveal functionality)
+    key_value_encrypted = encrypt_upstream_key(key_value)
 
     # Create API key record
     api_key = APIKey(
         id=uuid4(),
         key_hash=key_hash,
+        key_value_encrypted=key_value_encrypted,
         key_prefix=key_prefix,
         name=name,
         description=description,
@@ -223,4 +242,48 @@ async def list_api_keys(
         page=page,
         page_size=page_size,
         total_pages=total_pages,
+    )
+
+
+async def reveal_api_key(db: AsyncSession, key_id: UUID) -> APIKeyRevealResponse:
+    """Reveal the full decrypted API key value.
+
+    Args:
+        db: Database session
+        key_id: ID of the API key to reveal
+
+    Returns:
+        APIKeyRevealResponse: Key details with decrypted value
+
+    Raises:
+        APIKeyNotFoundError: If API key not found
+        LegacyAPIKeyError: If API key has no encrypted value
+    """
+    result = await db.execute(select(APIKey).where(APIKey.id == key_id))
+    api_key = result.scalar_one_or_none()
+
+    if not api_key:
+        raise APIKeyNotFoundError(f"API key not found: {key_id}")
+
+    if not api_key.key_value_encrypted:
+        raise LegacyAPIKeyError(
+            f"Legacy API key cannot be revealed (key_prefix={api_key.key_prefix}). "
+            "Please regenerate this key to enable reveal functionality."
+        )
+
+    decrypted_key = decrypt_upstream_key(api_key.key_value_encrypted)
+
+    # Verify decrypted key matches stored hash
+    if not bcrypt.checkpw(decrypted_key.encode("utf-8"), api_key.key_hash.encode("utf-8")):
+        from app.core.encryption import EncryptionError
+
+        raise EncryptionError("Decrypted API key does not match stored hash")
+
+    logger.info(f"Revealed API key: {api_key.key_prefix}, name='{api_key.name}'")
+
+    return APIKeyRevealResponse(
+        id=api_key.id,
+        key_value=decrypted_key,
+        key_prefix=api_key.key_prefix,
+        name=api_key.name,
     )

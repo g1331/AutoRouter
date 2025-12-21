@@ -34,7 +34,8 @@ class APIKey(Base):
 
     Attributes:
         id: Unique identifier
-        key_hash: bcrypt hash of the API key (for secure storage)
+        key_hash: bcrypt hash of the API key (for secure storage, legacy)
+        key_value_encrypted: Fernet-encrypted API key (for reveal functionality)
         key_prefix: First 12 characters of the key (for display, e.g., 'sk-auto-xxxx')
         name: Human-readable name for the key
         description: Optional description of the key's purpose
@@ -49,6 +50,7 @@ class APIKey(Base):
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     key_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False, index=True)
+    key_value_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     key_prefix: Mapped[str] = mapped_column(String(16), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)

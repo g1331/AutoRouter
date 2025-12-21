@@ -72,6 +72,20 @@ class APIKeyCreateResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class APIKeyRevealResponse(BaseModel):
+    """Schema for API key reveal response.
+
+    Returns the full decrypted key value. Only available for keys with encryption.
+    """
+
+    id: UUID
+    key_value: str = Field(..., description="Full decrypted API key value")
+    key_prefix: str
+    name: str
+
+    model_config = {"from_attributes": True}
+
+
 # ============================================================================
 # Upstream Schemas
 # ============================================================================

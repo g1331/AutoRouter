@@ -3,17 +3,21 @@
 All endpoints require admin authentication (Bearer token from ADMIN_TOKEN env var).
 """
 
+import os
 from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db, verify_admin_token
+from app.core.encryption import EncryptionError
 from app.models.schemas import (
     APIKeyCreate,
     APIKeyCreateResponse,
+    APIKeyRevealResponse,
     PaginatedAPIKeysResponse,
     PaginatedRequestLogsResponse,
     PaginatedUpstreamsResponse,
@@ -27,6 +31,10 @@ from app.models.schemas import (
 from app.services import key_manager, request_logger, stats_service, upstream_service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+_ALLOW_KEY_REVEAL = (
+    os.getenv("ALLOW_KEY_REVEAL", "false").strip().lower() in {"1", "true", "yes", "on"}
+)
 
 
 # ============================================================================
@@ -98,6 +106,176 @@ async def list_api_keys(
         PaginatedAPIKeysResponse: Paginated list of API keys
     """
     return await key_manager.list_api_keys(db=db, page=page, page_size=page_size)
+
+
+@router.post(
+    "/keys/{key_id}/reveal",
+    response_model=APIKeyRevealResponse,
+    dependencies=[Depends(verify_admin_token)],
+    summary="Reveal full API key value",
+    description="Decrypt and return the full API key value. Only works for keys created with encryption. "
+    "Legacy keys (bcrypt-only) cannot be revealed.",
+)
+async def reveal_api_key_endpoint(
+    key_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    """Reveal the full decrypted API key value.
+
+    Args:
+        key_id: ID of the API key to reveal
+        db: Database session
+
+    Returns:
+        JSONResponse: Key details with decrypted value and no-cache headers
+
+    Raises:
+        HTTPException(403): Key reveal disabled by ALLOW_KEY_REVEAL
+        HTTPException(404): API key not found
+        HTTPException(400): Legacy key without encryption
+        HTTPException(500): Decryption failed
+    """
+    if not _ALLOW_KEY_REVEAL:
+        await request_logger.log_request(
+            db=db,
+            api_key_id=None,
+            upstream_id=None,
+            method="REVEAL",
+            path=f"/admin/keys/{key_id}/reveal",
+            model=None,
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            status_code=403,
+            duration_ms=None,
+            error_message="Key reveal disabled by ALLOW_KEY_REVEAL",
+        )
+        await db.commit()
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "forbidden", "message": "Key reveal is disabled"},
+        )
+
+    try:
+        result = await key_manager.reveal_api_key(db=db, key_id=key_id)
+
+        # Log successful reveal operation to audit trail
+        await request_logger.log_request(
+            db=db,
+            api_key_id=key_id,
+            upstream_id=None,
+            method="REVEAL",
+            path=f"/admin/keys/{key_id}/reveal",
+            model=None,
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            status_code=200,
+            duration_ms=None,
+        )
+        await db.commit()
+
+        # Return with no-cache headers to prevent caching sensitive data
+        return JSONResponse(
+            content=result.model_dump(mode="json"),
+            headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+        )
+    except key_manager.APIKeyNotFoundError as e:
+        error_msg = str(e)
+
+        # Log failed reveal attempt to audit trail
+        await request_logger.log_request(
+            db=db,
+            api_key_id=None,
+            upstream_id=None,
+            method="REVEAL",
+            path=f"/admin/keys/{key_id}/reveal",
+            model=None,
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            status_code=404,
+            duration_ms=None,
+            error_message=error_msg,
+        )
+        await db.commit()
+
+        logger.warning(f"Reveal API key failed: {e}")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "not_found", "message": error_msg},
+        ) from e
+    except key_manager.LegacyAPIKeyError as e:
+        error_msg = str(e)
+
+        # Log failed reveal attempt to audit trail
+        await request_logger.log_request(
+            db=db,
+            api_key_id=key_id,
+            upstream_id=None,
+            method="REVEAL",
+            path=f"/admin/keys/{key_id}/reveal",
+            model=None,
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            status_code=400,
+            duration_ms=None,
+            error_message=error_msg,
+        )
+        await db.commit()
+
+        logger.warning(f"Reveal API key failed: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "legacy_key", "message": error_msg},
+        ) from e
+    except EncryptionError as e:
+        # Log decryption failure to audit trail
+        await request_logger.log_request(
+            db=db,
+            api_key_id=key_id,
+            upstream_id=None,
+            method="REVEAL",
+            path=f"/admin/keys/{key_id}/reveal",
+            model=None,
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            status_code=500,
+            duration_ms=None,
+            error_message=str(e),
+        )
+        await db.commit()
+
+        logger.error(f"Failed to decrypt API key for reveal: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "decrypt_failed", "message": "Failed to decrypt API key"},
+        ) from e
+    except Exception as e:
+        # Log any unexpected errors to audit trail
+        await request_logger.log_request(
+            db=db,
+            api_key_id=key_id,
+            upstream_id=None,
+            method="REVEAL",
+            path=f"/admin/keys/{key_id}/reveal",
+            model=None,
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            status_code=500,
+            duration_ms=None,
+            error_message=str(e),
+        )
+        await db.commit()
+
+        logger.exception(f"Unexpected error during API key reveal (key_id={key_id}): {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "internal_error", "message": "Internal server error"},
+        ) from e
 
 
 @router.delete(

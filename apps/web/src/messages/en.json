@@ -150,7 +150,10 @@
     "expired": "Expired",
     "expiresIn": "Expires in {days} days",
     "active": "Active",
-    "inactive": "Revoked"
+    "inactive": "Revoked",
+    "revealKey": "Reveal key",
+    "hideKey": "Hide key",
+    "legacyKey": "Legacy key - regenerate to enable reveal"
   },
   "logs": {
     "title": "Request Logs",

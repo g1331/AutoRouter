@@ -2,9 +2,10 @@
 
 import { formatDistanceToNow } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
-import { Trash2, Copy, Check, Key } from "lucide-react";
+import { Trash2, Copy, Check, Key, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import type { APIKey } from "@/types/api";
+import { useRevealAPIKey } from "@/hooks/use-api-keys";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -33,14 +34,64 @@ interface KeysTableProps {
  */
 export function KeysTable({ keys, onRevoke }: KeysTableProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [visibleKeyIds, setVisibleKeyIds] = useState<Set<string>>(new Set());
+  const [revealedKeys, setRevealedKeys] = useState<Map<string, string>>(new Map());
+  const { mutateAsync: revealKey, isPending: isRevealing } = useRevealAPIKey();
   const t = useTranslations("keys");
   const tCommon = useTranslations("common");
   const locale = useLocale();
   const dateLocale = getDateLocale(locale);
 
-  const copyKeyPrefix = async (keyPrefix: string, keyId: string) => {
+  const maskKey = (keyPrefix: string) => {
+    if (keyPrefix.length < 12) return keyPrefix;
+    const start = keyPrefix.slice(0, 8);
+    const end = keyPrefix.slice(-4);
+    return `${start}***${end}`;
+  };
+
+  const toggleKeyVisibility = async (keyId: string) => {
+    if (visibleKeyIds.has(keyId)) {
+      setVisibleKeyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(keyId);
+        return next;
+      });
+
+      setRevealedKeys((prev) => {
+        const next = new Map(prev);
+        next.delete(keyId);
+        return next;
+      });
+
+      return;
+    }
+
+    if (!revealedKeys.has(keyId)) {
+      try {
+        const response = await revealKey(keyId);
+        setRevealedKeys((prev) => new Map(prev).set(keyId, response.key_value));
+      } catch {
+        return;
+      }
+    }
+
+    setVisibleKeyIds((prev) => new Set(prev).add(keyId));
+  };
+
+  const copyKey = async (keyId: string) => {
     try {
-      await navigator.clipboard.writeText(keyPrefix);
+      let keyValue = revealedKeys.get(keyId);
+
+      if (!keyValue) {
+        try {
+          const response = await revealKey(keyId);
+          keyValue = response.key_value;
+        } catch {
+          return;
+        }
+      }
+
+      await navigator.clipboard.writeText(keyValue);
       setCopiedId(keyId);
       toast.success(tCommon("copied"));
       setTimeout(() => setCopiedId(null), 2000);
@@ -106,13 +157,33 @@ export function KeysTable({ keys, onRevoke }: KeysTableProps) {
               <TableCell>
                 <div className="flex items-center gap-2">
                   <code className="px-2 py-1 bg-surface-300 text-amber-500 rounded-cf-sm font-mono text-xs border border-divider">
-                    {key.key_prefix}
+                    {visibleKeyIds.has(key.id)
+                      ? revealedKeys.get(key.id) || key.key_prefix
+                      : maskKey(key.key_prefix)}
                   </code>
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7"
-                    onClick={() => copyKeyPrefix(key.key_prefix, key.id)}
+                    onClick={() => toggleKeyVisibility(key.id)}
+                    disabled={isRevealing}
+                    aria-label={
+                      visibleKeyIds.has(key.id)
+                        ? t("hideKey")
+                        : t("revealKey")
+                    }
+                  >
+                    {visibleKeyIds.has(key.id) ? (
+                      <EyeOff className="h-3.5 w-3.5" aria-hidden="true" />
+                    ) : (
+                      <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => copyKey(key.id)}
                     aria-label={
                       copiedId === key.id ? tCommon("copied") : tCommon("copy")
                     }
