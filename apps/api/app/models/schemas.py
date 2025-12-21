@@ -201,3 +201,94 @@ class PaginatedRequestLogsResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+
+# ============================================================================
+# Statistics Schemas
+# ============================================================================
+
+
+class StatsOverviewResponse(BaseModel):
+    """Dashboard overview statistics.
+
+    Provides high-level metrics for the current day.
+    """
+
+    today_requests: int = Field(..., description="Total requests today")
+    avg_response_time_ms: float = Field(..., description="Average response time in ms")
+    total_tokens_today: int = Field(..., description="Total tokens consumed today")
+    success_rate_today: float = Field(..., description="Success rate percentage (0-100)")
+
+
+class TimeseriesDataPoint(BaseModel):
+    """Single data point in a timeseries.
+
+    Represents aggregated metrics for a specific time bucket.
+    """
+
+    timestamp: datetime = Field(..., description="Start of the time bucket (UTC)")
+    request_count: int = Field(..., description="Number of requests in this bucket")
+    total_tokens: int = Field(..., description="Total tokens consumed in this bucket")
+    avg_duration_ms: float = Field(..., description="Average response time in ms")
+
+
+class UpstreamTimeseriesData(BaseModel):
+    """Timeseries data grouped by upstream.
+
+    Contains all data points for a single upstream provider.
+    """
+
+    upstream_id: UUID | None = Field(..., description="Upstream ID (null for unknown)")
+    upstream_name: str = Field(..., description="Upstream display name")
+    data: list[TimeseriesDataPoint] = Field(..., description="Time-ordered data points")
+
+
+class StatsTimeseriesResponse(BaseModel):
+    """Timeseries statistics response.
+
+    Contains data series grouped by upstream for chart visualization.
+    """
+
+    range: str = Field(..., description="Time range (today, 7d, 30d)")
+    granularity: str = Field(..., description="Data granularity (hour, day)")
+    series: list[UpstreamTimeseriesData] = Field(..., description="Data series by upstream")
+
+
+class LeaderboardAPIKeyItem(BaseModel):
+    """API Key leaderboard entry."""
+
+    id: UUID
+    name: str = Field(..., description="API key name")
+    key_prefix: str = Field(..., description="Key prefix (e.g., 'sk-auto-xxxx')")
+    request_count: int = Field(..., description="Total requests made")
+    total_tokens: int = Field(..., description="Total tokens consumed")
+
+
+class LeaderboardUpstreamItem(BaseModel):
+    """Upstream leaderboard entry."""
+
+    id: UUID
+    name: str = Field(..., description="Upstream name")
+    provider: str = Field(..., description="Provider type (openai, anthropic)")
+    request_count: int = Field(..., description="Total requests handled")
+    total_tokens: int = Field(..., description="Total tokens processed")
+
+
+class LeaderboardModelItem(BaseModel):
+    """Model leaderboard entry."""
+
+    model: str = Field(..., description="Model name (e.g., gpt-4o, claude-3)")
+    request_count: int = Field(..., description="Total requests using this model")
+    total_tokens: int = Field(..., description="Total tokens consumed by this model")
+
+
+class StatsLeaderboardResponse(BaseModel):
+    """Leaderboard statistics response.
+
+    Contains top performers across different dimensions.
+    """
+
+    range: str = Field(..., description="Time range for the leaderboard")
+    api_keys: list[LeaderboardAPIKeyItem] = Field(..., description="Top API keys by usage")
+    upstreams: list[LeaderboardUpstreamItem] = Field(..., description="Top upstreams by usage")
+    models: list[LeaderboardModelItem] = Field(..., description="Top models by usage")

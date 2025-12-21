@@ -112,3 +112,62 @@ export interface ErrorDetail {
   message: string;
   request_id?: string;
 }
+
+// ========== 统计相关类型 ==========
+
+export type TimeRange = "today" | "7d" | "30d";
+
+export interface StatsOverviewResponse {
+  today_requests: number;
+  avg_response_time_ms: number;
+  total_tokens_today: number;
+  success_rate_today: number;
+}
+
+export interface TimeseriesDataPoint {
+  timestamp: string; // ISO 8601 date string
+  request_count: number;
+  total_tokens: number;
+  avg_duration_ms: number;
+}
+
+export interface UpstreamTimeseriesData {
+  upstream_id: string | null; // UUID
+  upstream_name: string;
+  data: TimeseriesDataPoint[];
+}
+
+export interface StatsTimeseriesResponse {
+  range: string;
+  granularity: string;
+  series: UpstreamTimeseriesData[];
+}
+
+export interface LeaderboardAPIKeyItem {
+  id: string; // UUID
+  name: string;
+  key_prefix: string;
+  request_count: number;
+  total_tokens: number;
+}
+
+export interface LeaderboardUpstreamItem {
+  id: string; // UUID
+  name: string;
+  provider: string;
+  request_count: number;
+  total_tokens: number;
+}
+
+export interface LeaderboardModelItem {
+  model: string;
+  request_count: number;
+  total_tokens: number;
+}
+
+export interface StatsLeaderboardResponse {
+  range: string;
+  api_keys: LeaderboardAPIKeyItem[];
+  upstreams: LeaderboardUpstreamItem[];
+  models: LeaderboardModelItem[];
+}

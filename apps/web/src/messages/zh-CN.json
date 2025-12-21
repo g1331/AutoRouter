@@ -77,7 +77,34 @@
     "configureUpstreams": "配置 Upstreams",
     "configureUpstreamsDesc": "添加或修改 AI 服务提供商",
     "systemInitialized": "System initialized successfully",
-    "allServicesOnline": "All services online"
+    "allServicesOnline": "All services online",
+    "stats": {
+      "todayRequests": "TODAY REQUESTS",
+      "avgResponseTime": "AVG RESPONSE",
+      "totalTokens": "TOKENS TODAY",
+      "requests": "REQUESTS",
+      "latency": "LATENCY",
+      "tokens": "TOKENS",
+      "usageStatistics": "USAGE STATISTICS",
+      "usageDescription": "按上游服务提供商分组的使用趋势",
+      "totalRequests": "总请求数",
+      "totalTokensUsed": "总 Token",
+      "loading": "加载中...",
+      "noData": "暂无数据",
+      "leaderboard": "LEADERBOARD",
+      "apiKeyRanking": "API KEY RANKING",
+      "upstreamRanking": "UPSTREAM RANKING",
+      "modelRanking": "MODEL RANKING",
+      "noApiKeys": "暂无 API Key 数据",
+      "noUpstreams": "暂无 Upstream 数据",
+      "noModels": "暂无模型数据",
+      "tokensShort": "tok"
+    },
+    "timeRange": {
+      "today": "TODAY",
+      "7d": "7 DAYS",
+      "30d": "30 DAYS"
+    }
   },
   "keys": {
     "title": "API Keys",
