@@ -216,7 +216,16 @@ jobs:
                 "Read",
                 "Glob",
                 "Grep",
-                "mcp__*"
+                "WebSearch",
+                "WebFetch",
+                "Task",
+                "TodoWrite",
+                "mcp__tavily-remote-mcp__*",
+                "mcp__context7__*",
+                "mcp__code-index__*",
+                "mcp__codex__*",
+                "mcp__auggie-mcp__*",
+                "mcp__chrome-devtools__*"
               ],
               "deny": []
             },
@@ -483,7 +492,16 @@ jobs:
                 "Read",
                 "Glob",
                 "Grep",
-                "mcp__*"
+                "WebSearch",
+                "WebFetch",
+                "Task",
+                "TodoWrite",
+                "mcp__tavily-remote-mcp__*",
+                "mcp__context7__*",
+                "mcp__code-index__*",
+                "mcp__codex__*",
+                "mcp__auggie-mcp__*",
+                "mcp__chrome-devtools__*"
               ],
               "deny": []
             },
@@ -799,7 +817,16 @@ jobs:
                 "Read",
                 "Glob",
                 "Grep",
-                "mcp__*"
+                "WebSearch",
+                "WebFetch",
+                "Task",
+                "TodoWrite",
+                "mcp__tavily-remote-mcp__*",
+                "mcp__context7__*",
+                "mcp__code-index__*",
+                "mcp__codex__*",
+                "mcp__auggie-mcp__*",
+                "mcp__chrome-devtools__*"
               ],
               "deny": []
             },
