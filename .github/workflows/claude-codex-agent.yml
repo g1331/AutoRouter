@@ -237,13 +237,13 @@ jobs:
       - name: Run Claude Code for triage and auto-fix (collaborator)
         if: steps.check-collaborator.outputs.is_collaborator == 'true'
         timeout-minutes: 120
-        uses: anthropics/claude-code-action@beta
+        uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           use_sticky_comment: true
           branch_prefix: ""
-          mcp_config: ${{ steps.mcp-config.outputs.mcp_config }}
+          claude_args: --mcp-config '${{ steps.mcp-config.outputs.mcp_config }}'
           prompt: |
             你是仓库专属机器人（中文沟通，代码/命令保持原文）。issue #${{ github.event.issue.number }} 由协作者 ${{ github.event.issue.user.login }} 创建。
 
@@ -277,7 +277,6 @@ jobs:
             gh pr create --title "fix: 修复描述" --body "修复内容\n\nCloses #${{ github.event.issue.number }}" --base master
 
             禁止泄露tokens/花费/定价信息。
-          claude_args: --mcp-debug
           settings: '{"alwaysThinkingEnabled":true}'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -513,16 +512,15 @@ jobs:
       - name: Run Claude Code to fix issue
         if: steps.check-collaborator.outputs.is_collaborator == 'true'
         timeout-minutes: 120
-        uses: anthropics/claude-code-action@beta
+        uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           use_sticky_comment: true
           branch_prefix: ""
-          mcp_config: ${{ steps.mcp-config.outputs.mcp_config }}
-          claude_args: |
-            --mcp-debug
-            --append-system-prompt "你是仓库专属机器人（中文沟通，代码/命令保持原文）。issue #${{ github.event.issue.number }} 已获审批，现在开始处理。
+          claude_args: --mcp-config '${{ steps.mcp-config.outputs.mcp_config }}'
+          prompt: |
+            你是仓库专属机器人（中文沟通，代码/命令保持原文）。issue #${{ github.event.issue.number }} 已获审批，现在开始处理。
 
             工作流程：
             1. 仔细阅读issue内容，理解需求
@@ -531,16 +529,16 @@ jobs:
             4. 创建分支（命名规则：{fix|feat|docs}/{简短描述}，如 fix/api-timeout-handling）
             5. 实现修复/功能
             6. 运行测试和静态检查（pytest, ruff, mypy）
-            7. 使用 gh pr create 命令创建 Pull Request，PR 描述中必须包含 \"Closes #${{ github.event.issue.number }}\"
+            7. 使用 gh pr create 命令创建 Pull Request，PR 描述中必须包含 "Closes #${{ github.event.issue.number }}"
             8. 移除 in-progress 标签
 
             分支命名：基于issue内容生成，格式 {fix|feat|docs}/{3-5个英文单词slug}，全小写连字符分隔。
 
             创建PR示例命令：
-            gh pr create --title \"fix: 修复描述\" --body \"修复内容\\n\\nCloses #${{ github.event.issue.number }}\" --base master
+            gh pr create --title "fix: 修复描述" --body "修复内容\n\nCloses #${{ github.event.issue.number }}" --base master
 
-            禁止泄露tokens/花费/定价信息。"
-            --settings '{"alwaysThinkingEnabled":true}'
+            禁止泄露tokens/花费/定价信息。
+          settings: '{"alwaysThinkingEnabled":true}'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -838,30 +836,29 @@ jobs:
 
       - name: Run Claude Code
         timeout-minutes: 120
-        uses: anthropics/claude-code-action@beta
+        uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           trigger_phrase: "@autorouter-bot"
-          mcp_config: ${{ steps.mcp-config.outputs.mcp_config }}
-          claude_args: |
-            --mcp-debug
-            --append-system-prompt "你是仓库专属机器人（中文沟通，代码/命令保持原文）。遵循高质量提示最佳实践：目标清晰、步骤化推理、示例/清单输出、允许承认不确定性。
+          claude_args: --mcp-config '${{ steps.mcp-config.outputs.mcp_config }}'
+          prompt: |
+            你是仓库专属机器人（中文沟通，代码/命令保持原文）。遵循高质量提示最佳实践：目标清晰、步骤化推理、示例/清单输出、允许承认不确定性。
 
             每次响应 @autorouter-bot 的评论时：
             1. 先输出「需求摘要」「不确定点」「待确认清单」，在获得明确同意前仅提问
             2. 如果是Bug，依次使用 auggie → code-index → codex 定位，给出「复现路径 / 根因定位 / 修复方案」
             3. 获得确认后再改代码，创建分支（命名：{fix|feat|docs}/{简短描述}，如 fix/api-timeout-handling）
             4. 运行测试/静态检查
-            5. 使用 gh pr create 命令创建 Pull Request，PR 描述中必须包含 \"Closes #Issue号\"
+            5. 使用 gh pr create 命令创建 Pull Request，PR 描述中必须包含 "Closes #Issue号"
             6. 禁止泄露tokens/花费/定价信息
             7. 在PR评论中再次被@时，仅更新当前PR并同步最新自检
 
             分支命名：基于内容生成，格式 {fix|feat|docs}/{3-5个英文单词slug}，全小写连字符分隔。
 
             创建PR示例命令：
-            gh pr create --title \"fix: 修复描述\" --body \"修复内容\\n\\nCloses #Issue号\" --base master"
-            --settings '{"alwaysThinkingEnabled":true}'
+            gh pr create --title "fix: 修复描述" --body "修复内容\n\nCloses #Issue号" --base master
+          settings: '{"alwaysThinkingEnabled":true}'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
