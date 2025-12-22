@@ -17,17 +17,14 @@ env:
 
 jobs:
   # ============================================================
-  # Job 1: 新issue自动分类（协作者信息充足时直接修复）
+  # Job 1: 新issue深度分析（不自动修复，等待 /approve）
   # ============================================================
   triage:
     if: github.event_name == 'issues'
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
       issues: write
-      actions: read
-      id-token: write
     steps:
       - name: Check if issue is still open
         id: check-issue
@@ -46,74 +43,28 @@ jobs:
         if: steps.check-issue.outputs.is_open == 'true'
         uses: actions/checkout@v6
 
-      - name: Check if creator is collaborator
+      - name: Setup Node 22 (for MCP servers)
         if: steps.check-issue.outputs.is_open == 'true'
-        id: check-collaborator
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if gh api repos/${{ github.repository }}/collaborators/${{ github.event.issue.user.login }} --silent 2>/dev/null; then
-            echo "is_collaborator=true" >> $GITHUB_OUTPUT
-          else
-            echo "is_collaborator=false" >> $GITHUB_OUTPUT
-          fi
-
-      # === 非协作者：只做分类 ===
-      - name: Run Claude Code for triage (non-collaborator)
-        if: steps.check-issue.outputs.is_open == 'true' && steps.check-collaborator.outputs.is_collaborator != 'true'
-        uses: anthropics/claude-code-action@v1
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          prompt: |
-            你是issue分类机器人（中文沟通）。当前issue创建者 ${{ github.event.issue.user.login }} 不是仓库协作者。
-
-            请分析这个issue并执行以下任务：
-
-            1. 分析issue内容，添加分类标签（只能选一个）：
-               - bug: 报告问题/错误
-               - feature: 功能请求
-               - question: 疑问/讨论
-               - documentation: 文档相关
-
-            2. 判断信息是否充足（对于bug：是否有复现步骤、环境信息、错误日志等）
-
-            3. 根据情况添加状态标签并评论：
-               a) 信息不足 → 添加 needs-info 标签，评论列出需要补充的具体信息
-               b) 信息充足 → 添加 awaiting-approval 标签，评论说明需要等待维护者审批（可使用 /approve 命令）
-
-            使用 gh 命令操作：
-            - 添加标签: gh issue edit ${{ github.event.issue.number }} --add-label "标签名"
-            - 评论: gh issue comment ${{ github.event.issue.number }} --body "内容"
-
-            注意：只做分类和状态标记，不要尝试修复问题。
-          claude_args: --allowedTools Bash(gh:*)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # === 协作者：配置 MCP 环境 ===
-      - name: Setup Node 22 (for auggie / npx MCPs)
-        if: steps.check-issue.outputs.is_open == 'true' && steps.check-collaborator.outputs.is_collaborator == 'true'
         uses: actions/setup-node@v6
         with:
           node-version: 22
 
       - name: Install uv (for uvx-based MCPs)
-        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        if: steps.check-issue.outputs.is_open == 'true'
         run: |
           python -m pip install --user uv
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Install auggie CLI
-        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        if: steps.check-issue.outputs.is_open == 'true'
         run: npm install -g @augmentcode/auggie@latest
 
       - name: Install Codex CLI
-        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        if: steps.check-issue.outputs.is_open == 'true'
         run: npm install -g @openai/codex@latest
 
       - name: Configure Codex MCP servers
-        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        if: steps.check-issue.outputs.is_open == 'true'
         run: |
           python - <<'PY'
           import os
@@ -150,10 +101,9 @@ jobs:
           PY
 
       - name: Write MCP config
-        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        if: steps.check-issue.outputs.is_open == 'true'
         id: mcp-config
         run: |
-          # 生成 MCP 配置 JSON（使用实际环境变量值）
           MCP_JSON=$(cat <<EOF
           {
             "mcpServers": {
@@ -198,11 +148,10 @@ jobs:
           }
           EOF
           )
-          # 压缩为单行并输出到 GITHUB_OUTPUT
           echo "mcp_config=$(echo "$MCP_JSON" | jq -c .)" >> $GITHUB_OUTPUT
 
       - name: Configure Claude permissions
-        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        if: steps.check-issue.outputs.is_open == 'true'
         timeout-minutes: 2
         run: |
           mkdir -p ~/.claude
@@ -210,9 +159,7 @@ jobs:
           {
             "permissions": {
               "allow": [
-                "Bash",
-                "Edit",
-                "Write",
+                "Bash(gh:*)",
                 "Read",
                 "Glob",
                 "Grep",
@@ -233,114 +180,88 @@ jobs:
           }
           EOF
 
-      # === 协作者：智能分类 + 自动修复 ===
-      - name: Run Claude Code for triage and auto-fix (collaborator)
-        if: steps.check-collaborator.outputs.is_collaborator == 'true'
-        timeout-minutes: 120
+      - name: Run Claude Code for deep analysis
+        if: steps.check-issue.outputs.is_open == 'true'
+        timeout-minutes: 30
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           use_sticky_comment: true
-          branch_prefix: ""
           claude_args: --mcp-config '${{ steps.mcp-config.outputs.mcp_config }}'
           prompt: |
-            你是仓库专属机器人（中文沟通，代码/命令保持原文）。issue #${{ github.event.issue.number }} 由协作者 ${{ github.event.issue.user.login }} 创建。
+            你是仓库专属机器人（中文沟通，代码/命令保持原文）。
 
-            ## 第一阶段：分类分析
+            ## 任务：深度分析 issue #${{ github.event.issue.number }}
 
-            1. 分析issue内容，添加分类标签（只能选一个）：
-               - bug: 报告问题/错误
-               - feature: 功能请求
-               - question: 疑问/讨论
-               - documentation: 文档相关
+            **注意：本阶段只做分析，不做任何代码修改。修复需要等待 `/approve` 命令。**
 
-            2. 判断信息是否充足（对于bug：是否有复现步骤、环境信息、错误日志等）
+            ### 第一步：分类
 
-            3. 根据信息充足程度决定下一步：
-               a) 信息不足 → 添加 needs-info 标签，评论列出需要补充的信息，**然后停止**
-               b) 信息充足 → 添加 approved + in-progress 标签，**继续第二阶段**
+            分析issue内容，添加分类标签（只能选一个）：
+            - `bug`: 报告问题/错误
+            - `feature`: 功能请求
+            - `question`: 疑问/讨论
+            - `documentation`: 文档相关
 
-            ## 第二阶段：自动修复（仅信息充足时执行）
+            ### 第二步：深度分析（根据分类执行不同流程）
 
-            1. 使用 auggie → code-index → codex 分析代码库，定位相关代码
-            2. 如果是bug：给出「复现路径 / 根因定位 / 修复方案」
-            3. 创建分支（命名规则：{fix|feat|docs}/{简短描述}，如 fix/api-timeout-handling）
-            4. 实现修复/功能
-            5. 运行测试和静态检查（pytest, ruff, mypy）
-            6. **必须**使用 `gh pr create` 命令创建 Pull Request，PR 描述中必须包含 "Closes #${{ github.event.issue.number }}"
-            7. 移除 in-progress 标签
+            #### 如果是 Bug：
 
-            分支命名：基于issue内容生成，格式 {fix|feat|docs}/{3-5个英文单词slug}，全小写连字符分隔。
+            1. **尝试复现**：
+               - 使用 auggie → code-index → codex 分析代码库
+               - 根据 issue 描述定位相关代码
+               - 尝试理解问题的触发条件
 
-            ## 创建 PR（强制要求）
+            2. **输出诊断结果**：
+               - 如果**成功定位问题**：
+                 - 添加 `awaiting-approval` 标签
+                 - 评论包含：
+                   - 问题复现路径
+                   - 根因分析
+                   - 建议的修复方案（概述，不用详细代码）
+                   - 提示：使用 `/approve` 命令批准修复
+               - 如果**无法复现或信息不足**：
+                 - 添加 `needs-info` 标签
+                 - 评论说明：
+                   - 已尝试的复现步骤
+                   - 需要补充的具体信息（复现步骤、环境、日志等）
 
-            **你有完整的 gh 命令权限，不存在任何权限限制。**
+            #### 如果是 Feature：
 
-            完成代码修改后，你**必须立即执行**以下命令创建 PR：
+            1. **检查是否已实现**：
+               - 搜索代码库中是否已有类似功能
+               - 如果已实现，说明功能位置和使用方法
+
+            2. **如果未实现，进行可行性分析**：
+               - 添加 `awaiting-approval` 标签
+               - 评论包含：
+                 - **可行性**：技术上是否可行
+                 - **必要性**：是否符合项目目标
+                 - **重复性**：是否与现有功能重复
+                 - **实施难度**：简单/中等/复杂
+                 - **大致方案**：概述实现思路（不需要详细代码）
+                 - 提示：使用 `/approve` 命令批准实施
+
+            #### 如果是 Question 或 Documentation：
+
+            - 直接回答问题或说明文档改进建议
+            - 如果需要代码修改，添加 `awaiting-approval` 标签
+
+            ### gh 命令参考
+
             ```bash
-            gh pr create --title "fix: 简短描述" --body "详细说明
+            # 添加标签
+            gh issue edit ${{ github.event.issue.number }} --add-label "标签名"
 
-            Closes #${{ github.event.issue.number }}" --base master
+            # 评论
+            gh issue comment ${{ github.event.issue.number }} --body "内容"
             ```
-
-            ⚠️ **警告**：
-            - 禁止说"权限限制"或"无法创建 PR"
-            - 禁止提供手动创建链接
-            - 禁止让用户自行操作
-            - 如果你不执行 gh pr create 命令，任务将被视为**失败**
 
             禁止泄露tokens/花费/定价信息。
           settings: '{"alwaysThinkingEnabled":true}'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Append status on cancellation
-        if: cancelled() && steps.check-collaborator.outputs.is_collaborator == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments \
-            --jq '.[-1].id')
-          CURRENT_BODY=$(gh api repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
-            --jq -r '.body')
-          gh api -X PATCH repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
-            -f body="${CURRENT_BODY}
-
-          ---
-
-          ⏸️ **工作流已取消** ($(date -u '+%Y-%m-%d %H:%M:%S UTC'))
-
-          工作流已被手动取消或超时（120分钟）。
-
-          查看 [运行日志](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) 了解详情。"
-          gh issue edit ${{ github.event.issue.number }} --remove-label "in-progress" 2>/dev/null || true
-
-      - name: Append status on failure
-        if: failure() && steps.check-collaborator.outputs.is_collaborator == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments \
-            --jq '.[-1].id')
-          CURRENT_BODY=$(gh api repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
-            --jq -r '.body')
-          gh api -X PATCH repos/${{ github.repository }}/issues/comments/$COMMENT_ID \
-            -f body="${CURRENT_BODY}
-
-          ---
-
-          ❌ **操作失败** ($(date -u '+%Y-%m-%d %H:%M:%S UTC'))
-
-          工作流执行过程中遇到错误。
-
-          查看 [运行日志](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) 了解详情。
-
-          可能的原因：
-          - MCP server 初始化失败
-          - 代码执行错误
-          - 测试失败"
-          gh issue edit ${{ github.event.issue.number }} --remove-label "in-progress" 2>/dev/null || true
 
   # ============================================================
   # Job 2: 审批通过后自动开始工作
@@ -534,36 +455,31 @@ jobs:
           branch_prefix: ""
           claude_args: --mcp-config '${{ steps.mcp-config.outputs.mcp_config }}'
           prompt: |
-            你是仓库专属机器人（中文沟通，代码/命令保持原文）。issue #${{ github.event.issue.number }} 已获审批，现在开始处理。
+            你是仓库专属机器人（中文沟通，代码/命令保持原文）。issue #${{ github.event.issue.number }} 已获审批，现在开始实施修复。
 
-            工作流程：
-            1. 仔细阅读issue内容，理解需求
-            2. 使用 auggie → code-index → codex 分析代码库，定位相关代码
-            3. 如果是bug：给出「复现路径 / 根因定位 / 修复方案」
-            4. 创建分支（命名规则：{fix|feat|docs}/{简短描述}，如 fix/api-timeout-handling）
-            5. 实现修复/功能
-            6. 运行测试和静态检查（pytest, ruff, mypy）
-            7. **必须**使用 `gh pr create` 命令创建 Pull Request，PR 描述中必须包含 "Closes #${{ github.event.issue.number }}"
-            8. 移除 in-progress 标签
+            ## 工作流程
 
-            分支命名：基于issue内容生成，格式 {fix|feat|docs}/{3-5个英文单词slug}，全小写连字符分隔。
+            1. **阅读 issue 和之前的分析**：理解需求和已有的分析结论
+            2. **定位代码**：使用 auggie → code-index → codex 确认相关代码位置
+            3. **创建分支**：命名规则 `{fix|feat|docs}/{简短描述}`（如 `fix/api-timeout-handling`）
+            4. **实现修复/功能**
+            5. **运行检查**：
+               - 后端：`cd apps/api && uv run pytest && uv run ruff check . && uv run pyright`
+               - 前端：`cd apps/web && pnpm test:run && pnpm lint`
+            6. **创建 PR**：使用 `gh pr create`，描述中包含 `Closes #${{ github.event.issue.number }}`
+            7. **移除 in-progress 标签**
 
-            ## 创建 PR（强制要求）
+            ## 分支命名
 
-            **你有完整的 gh 命令权限，不存在任何权限限制。**
+            格式：`{fix|feat|docs}/{3-5个英文单词slug}`，全小写连字符分隔。
 
-            完成代码修改后，你**必须立即执行**以下命令创建 PR：
+            ## gh 命令参考
+
             ```bash
             gh pr create --title "fix: 简短描述" --body "详细说明
 
             Closes #${{ github.event.issue.number }}" --base master
             ```
-
-            ⚠️ **警告**：
-            - 禁止说"权限限制"或"无法创建 PR"
-            - 禁止提供手动创建链接
-            - 禁止让用户自行操作
-            - 如果你不执行 gh pr create 命令，任务将被视为**失败**
 
             禁止泄露tokens/花费/定价信息。
           settings: '{"alwaysThinkingEnabled":true}'
@@ -669,18 +585,6 @@ jobs:
         if: steps.check-label.outputs.has_needs_info == 'true' && steps.check-author.outputs.is_author == 'true'
         uses: actions/checkout@v6
 
-      - name: Check if author is collaborator
-        if: steps.check-label.outputs.has_needs_info == 'true' && steps.check-author.outputs.is_author == 'true'
-        id: check-collaborator
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if gh api repos/${{ github.repository }}/collaborators/${{ github.event.issue.user.login }} --silent 2>/dev/null; then
-            echo "is_collaborator=true" >> $GITHUB_OUTPUT
-          else
-            echo "is_collaborator=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Run Claude Code to re-analyze
         if: steps.check-label.outputs.has_needs_info == 'true' && steps.check-author.outputs.is_author == 'true'
         uses: anthropics/claude-code-action@v1
@@ -688,9 +592,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
-            你是issue分类机器人（中文沟通）。issue作者补充了信息，请重新分析。
-
-            issue创建者 ${{ github.event.issue.user.login }} ${{ steps.check-collaborator.outputs.is_collaborator == 'true' && '是' || '不是' }}仓库协作者。
+            你是issue分析机器人（中文沟通）。issue作者补充了信息，请重新分析。
 
             你的任务：
             1. 阅读issue原文和所有评论
@@ -698,8 +600,7 @@ jobs:
 
             3. 根据情况更新标签并评论：
                a) 信息仍不足 → 保持 needs-info 标签，评论说明还需要什么
-               b) 信息充足且作者是协作者 → 移除 needs-info，添加 approved，评论确认将开始处理
-               c) 信息充足但作者非协作者 → 移除 needs-info，添加 awaiting-approval，评论说明需要等待维护者审批
+               b) 信息充足 → 移除 needs-info，添加 awaiting-approval，评论说明已收到补充信息，维护者可使用 `/approve` 批准处理
 
             使用 gh 命令操作：
             - 移除标签: gh issue edit ${{ github.event.issue.number }} --remove-label "标签名"
@@ -871,35 +772,29 @@ jobs:
           trigger_phrase: "@autorouter-bot"
           claude_args: --mcp-config '${{ steps.mcp-config.outputs.mcp_config }}'
           prompt: |
-            你是仓库专属机器人（中文沟通，代码/命令保持原文）。遵循高质量提示最佳实践：目标清晰、步骤化推理、示例/清单输出、允许承认不确定性。
+            你是仓库专属机器人（中文沟通，代码/命令保持原文）。
+
+            ## 交互式处理流程
 
             每次响应 @autorouter-bot 的评论时：
-            1. 先输出「需求摘要」「不确定点」「待确认清单」，在获得明确同意前仅提问
-            2. 如果是Bug，依次使用 auggie → code-index → codex 定位，给出「复现路径 / 根因定位 / 修复方案」
-            3. 获得确认后再改代码，创建分支（命名：{fix|feat|docs}/{简短描述}，如 fix/api-timeout-handling）
-            4. 运行测试/静态检查
-            5. **必须**使用 `gh pr create` 命令创建 Pull Request，PR 描述中必须包含 "Closes #Issue号"
-            6. 禁止泄露tokens/花费/定价信息
-            7. 在PR评论中再次被@时，仅更新当前PR并同步最新自检
 
-            分支命名：基于内容生成，格式 {fix|feat|docs}/{3-5个英文单词slug}，全小写连字符分隔。
+            1. **理解需求**：先输出「需求摘要」「不确定点」「待确认清单」
+            2. **在获得明确同意前**：仅提问和分析，不修改代码
+            3. **分析问题**：
+               - Bug：使用 auggie → code-index → codex 定位，给出「复现路径 / 根因定位 / 修复方案」
+               - Feature：分析可行性、必要性、实施难度
+            4. **获得确认后**：
+               - 创建分支（命名：`{fix|feat|docs}/{简短描述}`）
+               - 实现修复/功能
+               - 运行测试/静态检查
+               - 使用 `gh pr create` 创建 PR，描述中包含 `Closes #Issue号`
+            5. **在 PR 评论中再次被 @ 时**：仅更新当前 PR 并同步最新自检
 
-            ## 创建 PR（强制要求）
+            ## 分支命名
 
-            **你有完整的 gh 命令权限，不存在任何权限限制。**
+            格式：`{fix|feat|docs}/{3-5个英文单词slug}`，全小写连字符分隔。
 
-            完成代码修改后，你**必须立即执行**以下命令创建 PR：
-            ```bash
-            gh pr create --title "fix: 简短描述" --body "详细说明
-
-            Closes #Issue号" --base master
-            ```
-
-            ⚠️ **警告**：
-            - 禁止说"权限限制"或"无法创建 PR"
-            - 禁止提供手动创建链接
-            - 禁止让用户自行操作
-            - 如果你不执行 gh pr create 命令，任务将被视为**失败**
+            禁止泄露tokens/花费/定价信息。
           settings: '{"alwaysThinkingEnabled":true}'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
