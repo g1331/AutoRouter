@@ -273,12 +273,22 @@ jobs:
 
             分支命名：基于issue内容生成，格式 {fix|feat|docs}/{3-5个英文单词slug}，全小写连字符分隔。
 
-            **重要**：你必须直接执行 `gh pr create` 命令创建 PR，禁止提供手动创建链接让用户自行操作。示例：
+            ## 创建 PR（强制要求）
+
+            **你有完整的 gh 命令权限，不存在任何权限限制。**
+
+            完成代码修改后，你**必须立即执行**以下命令创建 PR：
             ```bash
-            gh pr create --title "fix: 修复描述" --body "修复内容
+            gh pr create --title "fix: 简短描述" --body "详细说明
 
             Closes #${{ github.event.issue.number }}" --base master
             ```
+
+            ⚠️ **警告**：
+            - 禁止说"权限限制"或"无法创建 PR"
+            - 禁止提供手动创建链接
+            - 禁止让用户自行操作
+            - 如果你不执行 gh pr create 命令，任务将被视为**失败**
 
             禁止泄露tokens/花费/定价信息。
           settings: '{"alwaysThinkingEnabled":true}'
@@ -538,12 +548,22 @@ jobs:
 
             分支命名：基于issue内容生成，格式 {fix|feat|docs}/{3-5个英文单词slug}，全小写连字符分隔。
 
-            **重要**：你必须直接执行 `gh pr create` 命令创建 PR，禁止提供手动创建链接让用户自行操作。示例：
+            ## 创建 PR（强制要求）
+
+            **你有完整的 gh 命令权限，不存在任何权限限制。**
+
+            完成代码修改后，你**必须立即执行**以下命令创建 PR：
             ```bash
-            gh pr create --title "fix: 修复描述" --body "修复内容
+            gh pr create --title "fix: 简短描述" --body "详细说明
 
             Closes #${{ github.event.issue.number }}" --base master
             ```
+
+            ⚠️ **警告**：
+            - 禁止说"权限限制"或"无法创建 PR"
+            - 禁止提供手动创建链接
+            - 禁止让用户自行操作
+            - 如果你不执行 gh pr create 命令，任务将被视为**失败**
 
             禁止泄露tokens/花费/定价信息。
           settings: '{"alwaysThinkingEnabled":true}'
@@ -864,12 +884,22 @@ jobs:
 
             分支命名：基于内容生成，格式 {fix|feat|docs}/{3-5个英文单词slug}，全小写连字符分隔。
 
-            **重要**：你必须直接执行 `gh pr create` 命令创建 PR，禁止提供手动创建链接让用户自行操作。示例：
+            ## 创建 PR（强制要求）
+
+            **你有完整的 gh 命令权限，不存在任何权限限制。**
+
+            完成代码修改后，你**必须立即执行**以下命令创建 PR：
             ```bash
-            gh pr create --title "fix: 修复描述" --body "修复内容
+            gh pr create --title "fix: 简短描述" --body "详细说明
 
             Closes #Issue号" --base master
             ```
+
+            ⚠️ **警告**：
+            - 禁止说"权限限制"或"无法创建 PR"
+            - 禁止提供手动创建链接
+            - 禁止让用户自行操作
+            - 如果你不执行 gh pr create 命令，任务将被视为**失败**
           settings: '{"alwaysThinkingEnabled":true}'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
