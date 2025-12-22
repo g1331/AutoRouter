@@ -23,10 +23,6 @@
 [![GitHub Issues](https://img.shields.io/github/issues/g1331/AutoRouter)](https://github.com/g1331/AutoRouter/issues)
 [![Last Commit](https://img.shields.io/github/last-commit/g1331/AutoRouter)](https://github.com/g1331/AutoRouter/commits/master)
 
-<br>
-
-[English](./README_EN.md) · **简体中文**
-
 </div>
 
 ---
