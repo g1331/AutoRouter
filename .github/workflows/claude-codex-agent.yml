@@ -210,24 +210,15 @@ jobs:
           {
             "permissions": {
               "allow": [
-                "mcp__tavily-remote-mcp__*",
-                "mcp__context7__*",
-                "mcp__code-index__*",
-                "mcp__codex__*",
-                "mcp__auggie-mcp__*",
-                "mcp__chrome-devtools__*",
+                "Bash",
                 "Edit",
-                "Replace",
-                "Bash(git:*)",
-                "Bash(uv:*)",
-                "Bash(npm:*)",
-                "Bash(pnpm:*)",
-                "Bash(gh:*)",
-                "Bash(pytest:*)",
-                "Bash(ruff:*)",
-                "Bash(mypy:*)"
+                "Write",
+                "Read",
+                "Glob",
+                "Grep",
+                "mcp__*"
               ],
-              "ask": []
+              "deny": []
             },
             "enableAllProjectMcpServers": true
           }
@@ -486,24 +477,15 @@ jobs:
           {
             "permissions": {
               "allow": [
-                "mcp__tavily-remote-mcp__*",
-                "mcp__context7__*",
-                "mcp__code-index__*",
-                "mcp__codex__*",
-                "mcp__auggie-mcp__*",
-                "mcp__chrome-devtools__*",
+                "Bash",
                 "Edit",
-                "Replace",
-                "Bash(git:*)",
-                "Bash(uv:*)",
-                "Bash(npm:*)",
-                "Bash(pnpm:*)",
-                "Bash(gh:*)",
-                "Bash(pytest:*)",
-                "Bash(ruff:*)",
-                "Bash(mypy:*)"
+                "Write",
+                "Read",
+                "Glob",
+                "Grep",
+                "mcp__*"
               ],
-              "ask": []
+              "deny": []
             },
             "enableAllProjectMcpServers": true
           }
@@ -811,24 +793,15 @@ jobs:
           {
             "permissions": {
               "allow": [
-                "mcp__tavily-remote-mcp__*",
-                "mcp__context7__*",
-                "mcp__code-index__*",
-                "mcp__codex__*",
-                "mcp__auggie-mcp__*",
-                "mcp__chrome-devtools__*",
+                "Bash",
                 "Edit",
-                "Replace",
-                "Bash(git:*)",
-                "Bash(uv:*)",
-                "Bash(npm:*)",
-                "Bash(pnpm:*)",
-                "Bash(gh:*)",
-                "Bash(pytest:*)",
-                "Bash(ruff:*)",
-                "Bash(mypy:*)"
+                "Write",
+                "Read",
+                "Glob",
+                "Grep",
+                "mcp__*"
               ],
-              "ask": []
+              "deny": []
             },
             "enableAllProjectMcpServers": true
           }
