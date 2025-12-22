@@ -482,7 +482,7 @@ jobs:
             ```
 
             禁止泄露tokens/花费/定价信息。
-          settings: '{"alwaysThinkingEnabled":true}'
+          settings: '{"alwaysThinkingEnabled":true,"attribution":{"commit":"","pr":""}}'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -795,7 +795,7 @@ jobs:
             格式：`{fix|feat|docs}/{3-5个英文单词slug}`，全小写连字符分隔。
 
             禁止泄露tokens/花费/定价信息。
-          settings: '{"alwaysThinkingEnabled":true}'
+          settings: '{"alwaysThinkingEnabled":true,"attribution":{"commit":"","pr":""}}'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
