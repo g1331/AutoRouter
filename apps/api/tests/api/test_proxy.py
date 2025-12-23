@@ -34,6 +34,8 @@ def mock_db_session() -> AsyncMock:
     mock_result.scalar_one_or_none.return_value = None
     session.execute.return_value = mock_result
     session.commit = AsyncMock()
+    # db.add() is synchronous, use MagicMock to avoid "coroutine never awaited" warning
+    session.add = MagicMock()
     return session
 
 

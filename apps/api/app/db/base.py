@@ -4,14 +4,18 @@ This module provides:
 - AsyncEngine configuration for SQLAlchemy 2.0
 - AsyncSession factory for dependency injection
 - Base declarative model for ORM classes
+- WAL mode configuration for SQLite (improved concurrency)
 """
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
+from loguru import logger
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
+    AsyncConnection,
     AsyncEngine,
     AsyncSession,
     create_async_engine,
@@ -110,13 +114,53 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
+def _is_file_database() -> bool:
+    """Check if the database is file-based (not in-memory).
+
+    WAL mode only works with file-based SQLite databases.
+    In-memory databases (:memory:) do not support WAL.
+    """
+    url = _get_database_url()
+    # In-memory databases contain ":memory:" or are empty path
+    return ":memory:" not in url and "mode=memory" not in url
+
+
+async def _configure_sqlite_wal(conn: AsyncConnection) -> None:
+    """Configure SQLite WAL mode for better concurrency.
+
+    WAL (Write-Ahead Logging) provides:
+    - Concurrent reads during writes (readers don't block writers)
+    - Better write performance (sequential appends vs random writes)
+    - Improved crash recovery
+
+    PRAGMA settings:
+    - journal_mode=WAL: Enable write-ahead logging
+    - synchronous=NORMAL: Balance between safety and performance
+    - busy_timeout=5000: Wait up to 5s for locks instead of failing immediately
+    """
+    await conn.execute(text("PRAGMA journal_mode=WAL"))
+    await conn.execute(text("PRAGMA synchronous=NORMAL"))
+    await conn.execute(text("PRAGMA busy_timeout=5000"))
+
+    # Verify WAL mode is enabled
+    result = await conn.execute(text("PRAGMA journal_mode"))
+    mode = result.scalar()
+    logger.info(f"SQLite journal mode: {mode}")
+
+
 async def init_db() -> None:
     """Initialize database by creating all tables.
 
     This should be called during application startup.
     Note: In production, use Alembic migrations instead.
+
+    For file-based SQLite databases, WAL mode is enabled for better concurrency.
     """
     async with engine.begin() as conn:
+        # Configure WAL mode for file-based SQLite databases
+        if _is_file_database():
+            await _configure_sqlite_wal(conn)
+
         await conn.run_sync(Base.metadata.create_all)
 
 
