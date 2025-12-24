@@ -39,6 +39,8 @@ Thumbs.db
 
 # Project data
 data.db
+data.db-shm
+data.db-wal
 
 # Claude
 .claude/settings.local.json
