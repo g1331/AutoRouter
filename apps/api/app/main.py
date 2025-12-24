@@ -1,18 +1,17 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from uuid import uuid4
 
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
+from pydantic import HttpUrl, SecretStr, TypeAdapter
 
 from app.api.routes import admin, health, proxy
 from app.core.config import settings
-from app.core.encryption import encrypt_upstream_key
+from app.core.encryption import decrypt_upstream_key
 from app.core.logging import setup_logging
 from app.db.base import close_db, get_db_session, init_db
-from app.models.db_models import Upstream as DBUpstream
 from app.models.upstream import Provider, UpstreamConfig, UpstreamManager
 from app.services.upstream_service import load_upstreams_from_db
 
@@ -23,7 +22,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     Handles startup and shutdown of resources:
     - Database initialization
-    - Upstream loading from database (with env fallback)
+    - Upstream loading from database
     - UpstreamManager initialization
     - HTTP client
     """
@@ -39,48 +38,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.error(f"Failed to initialize database: {e}")
         raise
 
-    # Load upstreams from database or import from environment variables
+    # Load upstreams from database
     upstream_configs: list[UpstreamConfig] = []
 
     try:
         async with get_db_session() as db:
             db_upstreams = await load_upstreams_from_db(db)
 
-            # If database is empty and env upstreams exist, import them
-            if not db_upstreams and settings.upstreams:
-                logger.info(
-                    f"Database has no upstreams, importing {len(settings.upstreams)} from environment variables"
-                )
-                for env_upstream in settings.upstreams:
-                    # Encrypt the API key before storing
-                    encrypted_key = encrypt_upstream_key(env_upstream.api_key.get_secret_value())
-
-                    db_upstream = DBUpstream(
-                        id=uuid4(),
-                        name=env_upstream.name,
-                        provider=env_upstream.provider.value,
-                        base_url=str(env_upstream.base_url),
-                        api_key_encrypted=encrypted_key,
-                        is_default=env_upstream.is_default,
-                        timeout=env_upstream.timeout,
-                        is_active=True,
-                    )
-                    db.add(db_upstream)
-
-                await db.commit()
-                logger.info(
-                    f"Imported {len(settings.upstreams)} upstreams from environment to database"
-                )
-
-                # Reload from database
-                db_upstreams = await load_upstreams_from_db(db)
-
             # Convert database upstreams to UpstreamConfig objects for UpstreamManager
             if db_upstreams:
-                from pydantic import HttpUrl, SecretStr, TypeAdapter
-
-                from app.core.encryption import decrypt_upstream_key
-
                 http_url_adapter: TypeAdapter[HttpUrl] = TypeAdapter(HttpUrl)
 
                 for db_upstream in db_upstreams:
@@ -98,15 +64,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     upstream_configs.append(upstream_config)
 
                 logger.info(f"Loaded {len(upstream_configs)} upstreams from database")
+            else:
+                logger.warning("No upstreams found in database - proxy will not work")
 
     except Exception as e:
         logger.error(f"Failed to load upstreams from database: {e}")
-        # Fallback to environment variables
-        if settings.upstreams:
-            logger.warning("Falling back to environment variable upstreams")
-            upstream_configs = settings.upstreams
-        else:
-            logger.error("No database upstreams and no environment upstreams - proxy will not work")
+        raise
 
     # Initialize httpx client
     httpx_client = httpx.AsyncClient()
