@@ -69,10 +69,7 @@ export async function logRequest(input: LogRequestInput): Promise<RequestLog> {
     })
     .returning();
 
-  console.debug(
-    `Request logged: api_key_id=${input.apiKeyId}, upstream_id=${input.upstreamId}, ` +
-      `status=${input.statusCode}, tokens=${input.totalTokens}, duration=${input.durationMs}ms`
-  );
+  // Request logged to database - details available via admin API
 
   return logEntry;
 }

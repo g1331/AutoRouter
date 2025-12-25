@@ -138,7 +138,8 @@ export function decrypt(token: string): string {
     const ciphertext = data.subarray(25, data.length - 32);
     const hmac = data.subarray(data.length - 32);
 
-    // Verify HMAC
+    // Verify HMAC (message authentication, not password hashing)
+    // lgtm[js/insufficient-password-hash] - This is HMAC for token verification, not password hashing
     const tokenBase = data.subarray(0, data.length - 32);
     const expectedHmac = createHmac("sha256", _signingKey!).update(tokenBase).digest();
 

@@ -248,7 +248,7 @@ export async function revealApiKey(keyId: string): Promise<ApiKeyRevealResult> {
     throw new EncryptionError("Decrypted API key does not match stored hash");
   }
 
-  console.log(`Revealed API key: ${apiKey.keyPrefix}, name='${apiKey.name}'`);
+  // Note: Intentionally not logging key details to avoid security warnings
 
   return {
     id: apiKey.id,
