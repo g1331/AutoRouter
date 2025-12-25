@@ -64,6 +64,7 @@ AutoRouter/
 **选择**: Drizzle ORM
 
 **理由**:
+
 - TypeScript 原生，类型安全
 - 支持 PostgreSQL
 - 迁移工具内置
@@ -71,6 +72,7 @@ AutoRouter/
 - 社区活跃，与 Next.js 生态契合
 
 **替代方案考虑**:
+
 - Prisma: 更成熟但有运行时开销，类型生成需要额外步骤
 - Knex: 灵活但类型支持较弱
 - TypeORM: 装饰器风格与 Next.js 不太契合
@@ -80,12 +82,14 @@ AutoRouter/
 **选择**: 仅支持 PostgreSQL，移除 SQLite 支持
 
 **理由**:
+
 - 简化数据库适配层
 - PostgreSQL 在生产环境更可靠
 - 与 claude-code-hub 保持一致
 - Docker Compose 内置 PostgreSQL 容器
 
 **影响**:
+
 - 开发环境需要 PostgreSQL（可用 Docker 容器）
 - 现有 SQLite 数据需迁移
 
@@ -94,11 +98,13 @@ AutoRouter/
 **选择**: 扁平化项目结构，使用 `src/` 目录
 
 **理由**:
+
 - 符合 Next.js 官方推荐
 - 简化配置和路径
 - 与 Vercel 部署最佳实践一致
 
 **结构规范**:
+
 ```
 src/
 ├── app/              # Next.js App Router
@@ -119,6 +125,7 @@ src/
 **选择**: Next.js API Routes + Web Streams API
 
 **实现模式**:
+
 ```typescript
 // src/app/api/proxy/v1/[...path]/route.ts
 export async function POST(request: Request) {
@@ -149,14 +156,15 @@ export async function POST(request: Request) {
 ```
 
 **关键配置**:
+
 ```typescript
 // next.config.ts
 export default {
-  output: 'standalone',
+  output: "standalone",
   experimental: {
     serverActions: true,
-  }
-}
+  },
+};
 ```
 
 ### Decision 5: Authentication
@@ -167,17 +175,18 @@ export default {
 - API Key 认证: 自定义 API Key 验证
 
 **实现**:
+
 ```typescript
 // src/lib/utils/auth.ts
 export async function verifyAdminToken(request: Request) {
-  const auth = request.headers.get('Authorization');
-  const token = auth?.replace('Bearer ', '');
+  const auth = request.headers.get("Authorization");
+  const token = auth?.replace("Bearer ", "");
   return token === process.env.ADMIN_TOKEN;
 }
 
 export async function verifyApiKey(request: Request, db: DB) {
-  const auth = request.headers.get('Authorization');
-  const key = auth?.replace('Bearer ', '');
+  const auth = request.headers.get("Authorization");
+  const key = auth?.replace("Bearer ", "");
   // bcrypt 验证逻辑
 }
 ```
@@ -199,6 +208,7 @@ export async function verifyApiKey(request: Request, db: DB) {
 **选择**: Next.js Standalone + PostgreSQL
 
 **docker-compose.yaml**:
+
 ```yaml
 services:
   app:
@@ -230,6 +240,7 @@ volumes:
 ```
 
 **Dockerfile**:
+
 ```dockerfile
 FROM node:22-slim AS build
 WORKDIR /app
@@ -252,48 +263,48 @@ CMD ["node", "server.js"]
 
 ### Routes
 
-| Python Route | TypeScript Route |
-|-------------|------------------|
-| `app/api/routes/proxy.py` | `src/app/api/proxy/v1/[...path]/route.ts` |
-| `app/api/routes/admin.py` | `src/app/api/admin/*/route.ts` |
-| `app/api/routes/health.py` | `src/app/api/health/route.ts` |
+| Python Route               | TypeScript Route                          |
+| -------------------------- | ----------------------------------------- |
+| `app/api/routes/proxy.py`  | `src/app/api/proxy/v1/[...path]/route.ts` |
+| `app/api/routes/admin.py`  | `src/app/api/admin/*/route.ts`            |
+| `app/api/routes/health.py` | `src/app/api/health/route.ts`             |
 
 ### Services
 
-| Python Service | TypeScript Service |
-|----------------|-------------------|
-| `app/services/proxy_client.py` | `src/lib/services/proxy-client.ts` |
-| `app/services/key_manager.py` | `src/lib/services/key-manager.ts` |
+| Python Service                     | TypeScript Service                     |
+| ---------------------------------- | -------------------------------------- |
+| `app/services/proxy_client.py`     | `src/lib/services/proxy-client.ts`     |
+| `app/services/key_manager.py`      | `src/lib/services/key-manager.ts`      |
 | `app/services/upstream_service.py` | `src/lib/services/upstream-service.ts` |
-| `app/services/stats_service.py` | `src/lib/services/stats-service.ts` |
-| `app/services/request_logger.py` | `src/lib/services/request-logger.ts` |
+| `app/services/stats_service.py`    | `src/lib/services/stats-service.ts`    |
+| `app/services/request_logger.py`   | `src/lib/services/request-logger.ts`   |
 
 ### Models
 
-| Python Model | TypeScript Model |
-|-------------|------------------|
-| `app/models/db_models.py` | `src/lib/db/schema.ts` |
-| `app/models/schemas.py` | `src/types/api.ts` + Zod schemas |
-| `app/models/upstream.py` | `src/types/upstream.ts` |
+| Python Model              | TypeScript Model                 |
+| ------------------------- | -------------------------------- |
+| `app/models/db_models.py` | `src/lib/db/schema.ts`           |
+| `app/models/schemas.py`   | `src/types/api.ts` + Zod schemas |
+| `app/models/upstream.py`  | `src/types/upstream.ts`          |
 
 ### Core Utils
 
-| Python Util | TypeScript Util |
-|------------|-----------------|
-| `app/core/config.py` | `src/lib/utils/config.ts` |
+| Python Util              | TypeScript Util               |
+| ------------------------ | ----------------------------- |
+| `app/core/config.py`     | `src/lib/utils/config.ts`     |
 | `app/core/encryption.py` | `src/lib/utils/encryption.ts` |
-| `app/core/deps.py` | `src/lib/utils/auth.ts` |
-| `app/core/logging.py` | Next.js 内置 + pino (可选) |
+| `app/core/deps.py`       | `src/lib/utils/auth.ts`       |
+| `app/core/logging.py`    | Next.js 内置 + pino (可选)    |
 
 ## API Compatibility
 
 保持 API 路径兼容:
 
-| 原路径 | 新路径 | 备注 |
-|-------|-------|------|
+| 原路径        | 新路径            | 备注     |
+| ------------- | ----------------- | -------- |
 | `/proxy/v1/*` | `/api/proxy/v1/*` | 路径变更 |
-| `/admin/*` | `/api/admin/*` | 路径变更 |
-| `/api/health` | `/api/health` | 保持不变 |
+| `/admin/*`    | `/api/admin/*`    | 路径变更 |
+| `/api/health` | `/api/health`     | 保持不变 |
 
 **注意**: 代理路径从 `/proxy/v1/` 变更为 `/api/proxy/v1/`，需要更新用户文档。
 

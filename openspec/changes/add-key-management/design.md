@@ -5,17 +5,20 @@
 AutoRouter 需要从一个简单的代理服务演进为企业级的 AI Gateway，核心是实现 **key 分发和权限控制**。
 
 **约束**：
+
 - 必须保持现有 API 的向后兼容性
 - 数据库已配置（SQLite + SQLAlchemy），但尚未使用
 - FastAPI 框架，支持依赖注入和中间件
 
 **参考实现**：
+
 - LiteLLM - 开源 AI Gateway，提供 key management 和 budget controls
 - Kong Gateway - API Gateway 的权限控制模式
 
 ## Goals / Non-Goals
 
 **Goals**:
+
 - ✅ 客户端使用我们分发的 key，无需知道真实上游 API key
 - ✅ 基于 key 的权限控制（哪些 key 可以访问哪些上游）
 - ✅ 运行时动态修改上游配置（无需重启服务）
@@ -23,6 +26,7 @@ AutoRouter 需要从一个简单的代理服务演进为企业级的 AI Gateway�
 - ✅ 上游 API key 加密存储
 
 **Non-Goals** (Phase 2/3):
+
 - ❌ 复杂的用户系统（暂时不实现用户注册登录）
 - ❌ 配额和限流（Phase 2 实现）
 - ❌ 多路径前缀路由（Phase 3 实现）
@@ -33,17 +37,20 @@ AutoRouter 需要从一个简单的代理服务演进为企业级的 AI Gateway�
 ### 1. Key 验证方式：哈希存储的 Bearer Token
 
 **选择**：使用随机生成的 Bearer token，哈希后存储在数据库
+
 - 格式：`sk-auto-<32字节base64随机字符>`（模仿 OpenAI key 格式）
 - 存储：使用 bcrypt 哈希（work factor=12），仅存储哈希值
 - 验证：每次请求计算哈希并查询数据库，带 LRU 缓存优化
 - 显示：仅保留前缀 `sk-auto-xxxx` 用于管理界面显示
 
 **替代方案**：
+
 - JWT Token：无需每次查数据库，但难以撤销，且包含敏感信息
 - 明文存储：性能稍好，但数据库泄露会暴露所有 key
 - API Key + Secret：增加复杂度，但收益不大
 
 **选择理由**：
+
 - 安全：数据库泄露不会暴露实际 key 值
 - 可撤销：修改 is_active 字段即可
 - 性能可控：LRU 缓存减少数据库查询（TTL 5分钟，撤销时清除）
@@ -52,6 +59,7 @@ AutoRouter 需要从一个简单的代理服务演进为企业级的 AI Gateway�
 ### 2. 数据库 Schema 设计
 
 **api_keys 表**：
+
 ```sql
 CREATE TABLE api_keys (
     id UUID PRIMARY KEY,
@@ -71,6 +79,7 @@ CREATE INDEX idx_api_keys_is_active ON api_keys(is_active);
 ```
 
 **upstreams 表**：
+
 ```sql
 CREATE TABLE upstreams (
     id UUID PRIMARY KEY,
@@ -91,6 +100,7 @@ CREATE INDEX idx_upstreams_is_active ON upstreams(is_active);
 ```
 
 **api_key_upstreams 表**（join table，替代 JSON）：
+
 ```sql
 CREATE TABLE api_key_upstreams (
     id UUID PRIMARY KEY,
@@ -105,6 +115,7 @@ CREATE INDEX idx_api_key_upstreams_upstream_id ON api_key_upstreams(upstream_id)
 ```
 
 **request_logs 表**：
+
 ```sql
 CREATE TABLE request_logs (
     id UUID PRIMARY KEY,
@@ -132,22 +143,26 @@ CREATE INDEX idx_request_logs_created_at ON request_logs(created_at);
 ### 3. 上游 API Key 加密
 
 **选择**：使用 `cryptography.fernet.Fernet` 对称加密
+
 - 加密 key **必须**通过环境变量 `ENCRYPTION_KEY` 提供（32字节 base64 URL-safe）
 - 如果未提供，应用启动失败（fail-fast），避免明文存储或不可恢复的数据
 - 支持从文件读取：`ENCRYPTION_KEY_FILE=/path/to/key.txt`
 
 **原因**：
+
 - 对称加密足够（只有服务端需要解密）
 - Fernet 提供认证加密（AEAD），防止篡改
 - Fail-fast 避免运维错误（自动生成的 key 重启后会丢失）
 
 **密钥管理**：
+
 - 生成：`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
 - 存储：使用 secrets management 服务（HashiCorp Vault, AWS Secrets Manager）或加密文件
 - 备份：**必须**在首次部署时备份，丢失 key 会导致所有上游不可用
 - 轮换：后续支持双 key 轮换机制（逐步解密旧 key，加密为新 key）
 
 **风险**：
+
 - `ENCRYPTION_KEY` 泄露会导致所有上游 key 泄露
 - **缓解**：文档中强调必须安全存储，定期轮换，监控访问日志
 
@@ -230,13 +245,15 @@ async def proxy_request(
 ```
 
 **原因**：
+
 - 缓存减少 90%+ 数据库查询（热 keys）
 - TTL 确保撤销后 5 分钟内生效
 - 撤销时主动清除缓存，立即生效
 - Admin API 可以使用不同的认证方式
 - 易于测试（依赖注入可以 mock）
 
-**性能指标**（目标）**：
+**性能指标**（目标）\*\*：
+
 - 无缓存：每请求 +5-10ms（数据库查询 + bcrypt）
 - 有缓存：每请求 <1ms（内存查询）
 - P99 延迟增加 <10ms
@@ -244,6 +261,7 @@ async def proxy_request(
 ### 5. 向后兼容策略 + 动态刷新
 
 **Startup 逻辑**：
+
 ```python
 from app.core.encryption import encrypt_upstream_key
 
@@ -294,6 +312,7 @@ class RefreshableUpstreamManager(UpstreamManager):
 ```
 
 **数据库不可用时的 fallback**：
+
 ```python
 try:
     upstreams = await load_upstreams_from_db()
@@ -308,6 +327,7 @@ except DatabaseConnectionError:
 ### 6. Admin API 保护
 
 **Phase 1**：使用简单的 Bearer token（环境变量 `ADMIN_TOKEN`）
+
 ```python
 def verify_admin_token(authorization: str | None = Header(None, alias="Authorization")):
     """验证 admin token，统一返回 403 避免泄露端点存在"""
@@ -331,6 +351,7 @@ async def create_api_key(...):
 ```
 
 **Phase 2**（后续改进）：
+
 - 实现独立的 admin 用户系统
 - 使用 OAuth2 / OIDC
 - 基于角色的访问控制 (RBAC)
@@ -340,11 +361,13 @@ async def create_api_key(...):
 **问题**：request_logs 表会无限增长，影响查询性能和存储
 
 **策略**：
+
 - **保留期限**：默认保留 90 天，可通过环境变量 `LOG_RETENTION_DAYS` 配置
 - **清理机制**：定时任务（每天凌晨 2点）删除过期记录
 - **归档选项**（Phase 2）：导出到 CSV/Parquet 文件后删除
 
 **实现**：
+
 ```python
 # app/services/log_cleaner.py
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -365,16 +388,19 @@ scheduler.start()
 ```
 
 **时区说明**：
+
 - 清理作业使用 **UTC 时区**，每天 UTC 02:00 执行
 - 避免夏令时问题，确保全球部署一致性
 - 操作员可根据需要调整 cron 表达式
 
 **索引优化**：
+
 - SQLite 不直接支持 PARTITION BY，但可以定期创建归档表
 - 为 created_at 创建索引加速删除操作
 
 **缓存失效补充**：
 当上游元数据变更时（如通过 Admin API 修改），系统行为：
+
 - API key 缓存：仅在 revocation 时主动清除，其他情况依赖 TTL
 - Upstream 缓存：Admin API 修改后调用 `upstream_manager.refresh_from_db()` 立即生效
 - 如需立即清除所有 API key 缓存（罕见）：重启服务或实现 admin 端点 `POST /admin/cache/clear`
@@ -382,6 +408,7 @@ scheduler.start()
 ## Risks / Trade-offs
 
 ### Risk 1: 数据库性能瓶颈
+
 - **风险**：每个请求都查询数据库验证 key
 - **已缓解**：
   - ✅ 实现了 LRU 缓存（TTL 5分钟）
@@ -390,6 +417,7 @@ scheduler.start()
   - P99 延迟预期 <10ms
 
 ### Risk 2: ENCRYPTION_KEY 管理
+
 - **风险**：丢失 ENCRYPTION_KEY 会导致无法解密上游 API keys
 - **缓解**：
   - 文档中明确说明必须备份
@@ -397,6 +425,7 @@ scheduler.start()
   - 考虑后续集成 HashiCorp Vault 等 secrets 管理服务
 
 ### Risk 3: 数据库迁移失败
+
 - **风险**：Alembic migration 可能失败，导致服务无法启动
 - **缓解**：
   - 提供回滚脚本
@@ -406,17 +435,21 @@ scheduler.start()
 ## Migration Plan
 
 ### 数据迁移
+
 1. 运行 `alembic upgrade head` 创建新表
 2. 如果环境变量中有 `UPSTREAMS`，自动导入到数据库
 3. 保留环境变量作为 fallback，不立即移除
 
 ### 配置迁移
+
 **旧方式**（仍然支持）：
+
 ```env
 UPSTREAMS='[{"name":"openai","provider":"openai",...}]'
 ```
 
 **新方式**：
+
 ```bash
 # 通过 Admin API 添加
 curl -X POST http://localhost:8000/admin/upstreams \
@@ -425,7 +458,9 @@ curl -X POST http://localhost:8000/admin/upstreams \
 ```
 
 ### 回滚计划
+
 如果需要回滚：
+
 1. 设置环境变量 `USE_ENV_UPSTREAMS=true` 强制使用环境变量
 2. 或运行 `alembic downgrade -1` 回退数据库
 

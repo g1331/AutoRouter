@@ -3,6 +3,7 @@
 ## Why
 
 后端已实现请求日志记录功能（`RequestLog` 模型），用于审计和分析代理请求。但目前：
+
 1. 后端没有暴露日志查询 API
 2. 前端没有日志展示界面
 
@@ -11,11 +12,13 @@
 ## What Changes
 
 ### Backend
+
 - 新增 `GET /admin/logs` 分页查询端点
 - 支持按 API Key、Upstream、状态码、时间范围筛选
 - 复用已有的 `RequestLogResponse` 和 `PaginatedRequestLogsResponse` schema
 
 ### Frontend
+
 - 新增 `/logs` 页面展示请求日志
 - 新增 `LogsTable` 组件（复古终端风格）
 - 新增 `useRequestLogs` hook

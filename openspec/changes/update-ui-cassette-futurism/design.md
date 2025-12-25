@@ -5,12 +5,14 @@
 AutoRouter 的前端管理界面需要从 Material Design 3 风格迁移到磁带未来主义（Cassette Futurism）风格，以建立独特的产品视觉语言。
 
 **约束**：
+
 - 保持现有的组件库（shadcn/ui）和技术栈不变
 - 不影响现有功能
 - 保持可访问性（a11y）标准
 - 性能影响最小化（CRT 效果需要谨慎使用）
 
 **参考实现**：
+
 - 《银翼杀手》船载终端界面
 - 《异形》Nostromo 飞船界面
 - 《2001太空漫游》HAL 9000 界面
@@ -20,12 +22,14 @@ AutoRouter 的前端管理界面需要从 Material Design 3 风格迁移到磁�
 ## Goals / Non-Goals
 
 **Goals**:
+
 - 建立完整的磁带未来主义设计系统
 - 替换所有现有 UI 组件的视觉风格
 - 保持良好的可读性和可用性
 - 实现适度的 CRT 效果（不影响性能）
 
 **Non-Goals**:
+
 - 不实现全屏 CRT 滤镜（性能考虑）
 - 不添加声音效果
 - 不改变现有的交互逻辑
@@ -36,6 +40,7 @@ AutoRouter 的前端管理界面需要从 Material Design 3 风格迁移到磁�
 ### 1. 配色方案：琥珀色单色调（Amber Monochrome）
 
 **选择**：
+
 ```
 主色调 (Primary): 琥珀色 #FFBF00
 - Amber-50:  #FFF8E1
@@ -91,17 +96,20 @@ AutoRouter 的前端管理界面需要从 Material Design 3 风格迁移到磁�
 ```
 
 **对比度验证** (WCAG 2.1 AA):
+
 - Amber-500 (#FFBF00) on Black-900 (#0A0A0A): 12.6:1 (AAA)
 - Disabled-text (#666666) on Black-900: 4.8:1 (AA)
 - Success (#00FF41) on Black-900: 15.3:1 (AAA)
 - Error (#FF3131) on Black-900: 5.2:1 (AA)
 
 **替代方案**：
+
 - 绿色单色调（Phosphor Green）：更有终端感，但可能过于"黑客风"
 - 青色单色调（Cyan）：更科幻，但与产品调性不符
 - 多色调：会削弱复古终端的统一感
 
 **选择理由**：
+
 - 琥珀色是经典 CRT 显示器的颜色，辨识度高
 - 暖色调更舒适，长时间使用不易视觉疲劳
 - 与黑色背景形成强烈对比，可读性好
@@ -110,28 +118,33 @@ AutoRouter 的前端管理界面需要从 Material Design 3 风格迁移到磁�
 ### 2. 字体系统：分场景使用
 
 **选择**：
+
 ```css
 /* 等宽字体：用于数据、代码、UI chrome（导航、标签、按钮） */
---font-mono: "JetBrains Mono", "IBM Plex Mono", "Fira Code",
-             "Noto Sans Mono CJK SC", "Source Han Mono SC", monospace;
+--font-mono:
+  "JetBrains Mono", "IBM Plex Mono", "Fira Code", "Noto Sans Mono CJK SC", "Source Han Mono SC",
+  monospace;
 
 /* 显示字体：用于大标题、数字统计 */
 --font-display: "VT323", "Press Start 2P", monospace;
 
 /* 正文字体：用于长文本、描述、帮助文字 */
---font-sans: "Inter", "Noto Sans SC", "Source Han Sans SC",
-             system-ui, -apple-system, sans-serif;
+--font-sans: "Inter", "Noto Sans SC", "Source Han Sans SC", system-ui, -apple-system, sans-serif;
 ```
 
 **字体加载策略**：
+
 ```css
 /* next/font 配置 */
-font-display: swap;  /* 避免 FOIT */
-subsets: ["latin", "latin-ext"];
+font-display: swap; /* 避免 FOIT */
+subsets:
+  [ "latin",
+  "latin-ext"];
 /* CJK 子集按需加载，避免首屏加载过大 */
 ```
 
 **字体规格（含行高）**：
+
 ```
 Display Large:  VT323, 48px/1.2, 400
 Display Medium: VT323, 36px/1.2, 400
@@ -164,6 +177,7 @@ Caption:        Inter (sans), 11px/1.4, 400
 | 错误消息、提示 | sans | 友好感 |
 
 **选择理由**：
+
 - 区分 mono/sans 避免长文本可读性问题
 - JetBrains Mono 可读性优秀，支持连字
 - Inter 是现代 sans 字体，CJK 覆盖好
@@ -172,12 +186,13 @@ Caption:        Inter (sans), 11px/1.4, 400
 ### 3. 形状系统：直角 + 斜切角
 
 **选择**：
+
 ```css
 /* 边角 */
 --corner-none: 0;
 --corner-small: 2px;
 --corner-medium: 4px;
---corner-bevel: 8px 0;  /* 斜切角 */
+--corner-bevel: 8px 0; /* 斜切角 */
 
 /* 边框 */
 --border-thin: 1px solid var(--amber-500);
@@ -191,10 +206,12 @@ Caption:        Inter (sans), 11px/1.4, 400
 ```
 
 **替代方案**：
+
 - 圆角：与 Material Design 风格重叠
 - 纯直角：过于生硬，缺乏特色
 
 **选择理由**：
+
 - 斜切角是科幻 UI 的典型特征
 - 直角保持工业感
 - 发光效果增强科技感
@@ -211,12 +228,14 @@ Caption:        Inter (sans), 11px/1.4, 400
 | 闪烁光标 | 仅 Login 页面输入框 | 1s 周期 |
 
 **禁止使用的场景**：
+
 - 表格内容区域（影响数据可读性）
 - 表单输入区域（影响输入体验）
 - 长文本段落（影响阅读）
 - 移动端（性能考虑）
 
 **实现**：
+
 ```css
 /* 扫描线 - 仅用于特定元素 */
 .scanlines::before {
@@ -252,8 +271,14 @@ Caption:        Inter (sans), 11px/1.4, 400
 
 /* 闪烁光标 */
 @keyframes blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
 }
 .cursor-blink::after {
   content: "_";
@@ -262,6 +287,7 @@ Caption:        Inter (sans), 11px/1.4, 400
 ```
 
 **无障碍支持 (a11y)**：
+
 ```css
 /* 减少动画偏好 */
 @media (prefers-reduced-motion: reduce) {
@@ -294,17 +320,18 @@ Caption:        Inter (sans), 11px/1.4, 400
 
   .glow-text {
     text-shadow: none;
-    font-weight: 600;  /* 增加字重补偿 */
+    font-weight: 600; /* 增加字重补偿 */
   }
 
   :root {
-    --cf-amber-500: #FFD700;  /* 更亮的黄色 */
-    --cf-divider: #4A4A4A;    /* 更明显的分隔线 */
+    --cf-amber-500: #ffd700; /* 更亮的黄色 */
+    --cf-divider: #4a4a4a; /* 更明显的分隔线 */
   }
 }
 ```
 
 **最小效果模式**（可选 UI 开关）：
+
 ```typescript
 // 用户可在设置中切换
 const [minimalEffects, setMinimalEffects] = useState(
@@ -314,6 +341,7 @@ const [minimalEffects, setMinimalEffects] = useState(
 // 应用到根元素
 <html data-minimal-effects={minimalEffects}>
 ```
+
 ```css
 [data-minimal-effects="true"] .scanlines::before,
 [data-minimal-effects="true"] .noise::after,
@@ -324,11 +352,13 @@ const [minimalEffects, setMinimalEffects] = useState(
 ```
 
 **不使用的效果**（性能考虑）：
+
 - 全屏 CRT 弯曲效果（需要 WebGL）
 - 色彩偏移/RGB 分离（CSS filter 性能差）
 - 持续动画噪点（GPU 负担）
 
 **选择理由**：
+
 - 扫描线和噪点通过 CSS 实现，性能开销小
 - 发光效果使用 text-shadow，浏览器支持好
 - 不使用 filter 或 WebGL，保证兼容性
@@ -337,6 +367,7 @@ const [minimalEffects, setMinimalEffects] = useState(
 ### 5. 组件设计规范
 
 **面板 (Panel)**：
+
 ```
 - 背景: Black-700
 - 边框: 2px solid Amber-500
@@ -346,6 +377,7 @@ const [minimalEffects, setMinimalEffects] = useState(
 ```
 
 **按钮 (Button)**：
+
 ```
 Primary:
 - 背景: Amber-500
@@ -365,6 +397,7 @@ Danger:
 ```
 
 **输入框 (Input)**：
+
 ```
 - 背景: Black-800
 - 文字: Amber-500
@@ -374,6 +407,7 @@ Danger:
 ```
 
 **表格 (Table)**：
+
 ```
 - 无边框，纯文字
 - 表头: Amber-500, uppercase, 小字号
@@ -382,6 +416,7 @@ Danger:
 ```
 
 **徽章 (Badge)**：
+
 ```
 - 背景: 状态色/20
 - 文字: 状态色
@@ -390,6 +425,7 @@ Danger:
 ```
 
 **侧边栏 (Sidebar)**：
+
 ```
 - 背景: Black-900
 - 宽度: 240px (展开) / 64px (收起)
@@ -401,6 +437,7 @@ Danger:
 ### 6. 动画规范
 
 **选择**：
+
 ```css
 /* 时长 */
 --duration-fast: 100ms;
@@ -413,18 +450,21 @@ Danger:
 
 /* 过渡 */
 .transition-colors {
-  transition: color var(--duration-fast) var(--easing-standard),
-              background-color var(--duration-fast) var(--easing-standard),
-              border-color var(--duration-fast) var(--easing-standard);
+  transition:
+    color var(--duration-fast) var(--easing-standard),
+    background-color var(--duration-fast) var(--easing-standard),
+    border-color var(--duration-fast) var(--easing-standard);
 }
 
 .transition-glow {
-  transition: box-shadow var(--duration-normal) var(--easing-standard),
-              text-shadow var(--duration-normal) var(--easing-standard);
+  transition:
+    box-shadow var(--duration-normal) var(--easing-standard),
+    text-shadow var(--duration-normal) var(--easing-standard);
 }
 ```
 
 **不使用**：
+
 - 复杂的进入/退出动画
 - 持续循环动画（除光标闪烁）
 - transform 动画（与复古感不符）
@@ -469,13 +509,13 @@ apps/web/src/
 
 ## Risks / Trade-offs
 
-| 风险 | 影响 | 缓解措施 |
-|------|------|----------|
-| 可读性下降 | 用户难以阅读内容 | 使用高对比度配色，测试 WCAG 2.1 AA |
-| 性能影响 | CRT 效果导致卡顿 | 仅在静态元素使用 CSS 效果，避免 filter |
-| 学习曲线 | 用户不熟悉界面 | 保持交互逻辑不变，仅改变视觉 |
-| 维护成本 | 自定义设计系统维护困难 | 保持组件化，文档完善 |
-| 浏览器兼容 | CSS 效果不兼容旧浏览器 | 使用渐进增强，关键功能不依赖效果 |
+| 风险       | 影响                   | 缓解措施                               |
+| ---------- | ---------------------- | -------------------------------------- |
+| 可读性下降 | 用户难以阅读内容       | 使用高对比度配色，测试 WCAG 2.1 AA     |
+| 性能影响   | CRT 效果导致卡顿       | 仅在静态元素使用 CSS 效果，避免 filter |
+| 学习曲线   | 用户不熟悉界面         | 保持交互逻辑不变，仅改变视觉           |
+| 维护成本   | 自定义设计系统维护困难 | 保持组件化，文档完善                   |
+| 浏览器兼容 | CSS 效果不兼容旧浏览器 | 使用渐进增强，关键功能不依赖效果       |
 
 ## Open Questions
 

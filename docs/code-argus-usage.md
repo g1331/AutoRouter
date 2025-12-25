@@ -21,27 +21,27 @@ Code-Argus 是一个高质量的 AI 代码审查机器人，专注于发现真�
 
 在仓库的 **Settings → Secrets and variables → Actions** 中添加：
 
-| Secret 名称 | 说明 |
-|-------------|------|
-| `CODEX_API_KEY` | OpenAI API 密钥 |
+| Secret 名称      | 说明                                           |
+| ---------------- | ---------------------------------------------- |
+| `CODEX_API_KEY`  | OpenAI API 密钥                                |
 | `CODEX_BASE_URL` | API 端点（格式：`https://api.example.com/v1`） |
 
 （可选）Variables：
 
-| Variable 名称 | 默认值 | 说明 |
-|--------------|--------|------|
+| Variable 名称 | 默认值          | 说明       |
+| ------------- | --------------- | ---------- |
 | `CODEX_MODEL` | `gpt-5.2-codex` | 使用的模型 |
 
 ### 2. 触发 Review
 
 Code-Argus 会在以下情况自动触发：
 
-| 触发方式 | 说明 |
-|----------|------|
-| PR 创建 | 自动触发（`opened`, `reopened`） |
-| 评论 `code-argus review` | 手动触发 |
-| 评论 `argus review` | 手动触发 |
-| 评论 `code-argus 审查` | 手动触发（中文） |
+| 触发方式                 | 说明                             |
+| ------------------------ | -------------------------------- |
+| PR 创建                  | 自动触发（`opened`, `reopened`） |
+| 评论 `code-argus review` | 手动触发                         |
+| 评论 `argus review`      | 手动触发                         |
+| 评论 `code-argus 审查`   | 手动触发（中文）                 |
 
 > **注意**：仅仓库 collaborators（admin/write 权限）可触发 review。
 
@@ -53,7 +53,7 @@ Code-Argus 会在以下情况自动触发：
 
 每个问题会在对应代码行添加评论：
 
-```markdown
+````markdown
 ## 🔴 [HIGH] SQL injection in get_user_by_id
 
 Building SQL with f-strings allows SQL injection via `user_id`.
@@ -65,7 +65,9 @@ def get_user_by_id(user_id: str, db_connection) -> dict:
     result = db_connection.execute(query, (user_id,))
     return result.fetchone()
 ```
-```
+````
+
+````
 
 点击 **"Commit suggestion"** 即可一键应用修复。
 
@@ -95,7 +97,7 @@ Review completed. **6** suggestion(s) posted.
 
 ---
 Comment `code-argus review` to re-trigger review
-```
+````
 
 ---
 
@@ -121,11 +123,11 @@ min_severity: low
 
 ### 配置项说明
 
-| 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| `language` | `auto` | 响应语言，`auto` 跟随 PR 语言 |
-| `max_comments` | `10` | 最多发布的评论数量 |
-| `min_severity` | `low` | 最低显示的严重性级别 |
+| 配置项         | 默认值 | 说明                          |
+| -------------- | ------ | ----------------------------- |
+| `language`     | `auto` | 响应语言，`auto` 跟随 PR 语言 |
+| `max_comments` | `10`   | 最多发布的评论数量            |
+| `min_severity` | `low`  | 最低显示的严重性级别          |
 
 > **注意**：配置文件解析依赖 `yq` 工具。若 runner 没有安装 `yq`，将使用默认值。
 
@@ -151,12 +153,12 @@ min_severity: low
 
 ## 错误处理
 
-| 场景 | 表现 |
-|------|------|
-| 无权限触发 | 静默忽略，不发任何评论 |
-| API 错误 | 发评论提示错误，附带 workflow logs 链接 |
-| 解析失败 | 发评论提示解析失败，可重试 |
-| 无问题发现 | 发总结："No significant issues found." |
+| 场景       | 表现                                    |
+| ---------- | --------------------------------------- |
+| 无权限触发 | 静默忽略，不发任何评论                  |
+| API 错误   | 发评论提示错误，附带 workflow logs 链接 |
+| 解析失败   | 发评论提示解析失败，可重试              |
+| 无问题发现 | 发总结："No significant issues found."  |
 
 遇到错误时，可以评论 `code-argus review` 重新触发。
 
@@ -164,13 +166,13 @@ min_severity: low
 
 ## 技术规格
 
-| 项目 | 值 |
-|------|-----|
-| Action | `openai/codex-action@v1` |
-| Model | 可配置（默认 `gpt-5.2-codex`） |
-| Reasoning Effort | `xhigh` |
-| Sandbox | `read-only` |
-| 上下文能力 | Agent 可读取仓库任意文件 |
+| 项目             | 值                             |
+| ---------------- | ------------------------------ |
+| Action           | `openai/codex-action@v1`       |
+| Model            | 可配置（默认 `gpt-5.2-codex`） |
+| Reasoning Effort | `xhigh`                        |
+| Sandbox          | `read-only`                    |
+| 上下文能力       | Agent 可读取仓库任意文件       |
 
 ---
 

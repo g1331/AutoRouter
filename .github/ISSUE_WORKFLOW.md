@@ -4,10 +4,10 @@
 
 ## 触发事件
 
-| 事件 | 说明 |
-|------|------|
-| `issues: opened` | 新 issue 创建时 |
-| `issues: reopened` | issue 重新打开时 |
+| 事件                     | 说明                  |
+| ------------------------ | --------------------- |
+| `issues: opened`         | 新 issue 创建时       |
+| `issues: reopened`       | issue 重新打开时      |
 | `issue_comment: created` | issue/PR 下有新评论时 |
 
 ## Jobs 概览
@@ -113,16 +113,16 @@
 
 ## 状态标签
 
-| 标签 | 颜色 | 含义 |
-|------|------|------|
-| `bug` | 红色 | 问题报告 |
-| `feature` | 青色 | 功能请求 |
-| `question` | 紫色 | 疑问讨论 |
-| `documentation` | 蓝色 | 文档相关 |
-| `needs-info` | 黄色 | 信息不足，等待用户补充 |
+| 标签                | 颜色 | 含义                           |
+| ------------------- | ---- | ------------------------------ |
+| `bug`               | 红色 | 问题报告                       |
+| `feature`           | 青色 | 功能请求                       |
+| `question`          | 紫色 | 疑问讨论                       |
+| `documentation`     | 蓝色 | 文档相关                       |
+| `needs-info`        | 黄色 | 信息不足，等待用户补充         |
 | `awaiting-approval` | 浅红 | 分析完成，等待 `/approve` 批准 |
-| `approved` | 绿色 | 已审批，正在或即将处理 |
-| `in-progress` | 蓝色 | 正在处理中 |
+| `approved`          | 绿色 | 已审批，正在或即将处理         |
+| `in-progress`       | 蓝色 | 正在处理中                     |
 
 ## 典型流程
 
@@ -171,11 +171,11 @@
 
 基于 issue 内容自动生成，格式：`{type}/{slug}`
 
-| 类型 | 示例 |
-|------|------|
-| bug 修复 | `fix/api-timeout-handling` |
-| 新功能 | `feat/export-csv-support` |
-| 文档 | `docs/update-readme-install` |
+| 类型     | 示例                         |
+| -------- | ---------------------------- |
+| bug 修复 | `fix/api-timeout-handling`   |
+| 新功能   | `feat/export-csv-support`    |
+| 文档     | `docs/update-readme-install` |
 
 ## 设计理念
 

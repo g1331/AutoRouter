@@ -41,6 +41,7 @@
 #### Scenario: 状态标识
 
 **Given** 数据库中有 3 个 keys：
+
 - Key A：is_active=true, expires_at=null
 - Key B：is_active=false
 - Key C：is_active=true, expires_at=昨天
@@ -122,6 +123,7 @@
 **And** 数据库中存在 2 个 upstreams（openai, anthropic）
 
 **When** 管理员填写表单：
+
 - 名称：`test-key`
 - 描述：`Test API Key`
 - Upstreams：选中 `openai`
@@ -130,6 +132,7 @@
 **And** 点击 "创建" 按钮
 
 **Then** 应调用 `POST /admin/keys`，请求 body 为：
+
 ```json
 {
   "name": "test-key",
@@ -178,6 +181,7 @@
 **When** 管理员提交空表单
 
 **Then** 应显示验证错误：
+
 - 名称：required 提示 "请输入名称"
 - Upstreams：required 提示 "至少选择一个 Upstream"
 
@@ -238,6 +242,7 @@
 **And** 对话框标题为 "撤销 API Key"
 
 **And** 对话框内容应显示：
+
 - Key prefix（如 `sk-auto-****`）
 - Key 名称
 - 警告文字 "撤销后此 Key 将立即失效，无法恢复"

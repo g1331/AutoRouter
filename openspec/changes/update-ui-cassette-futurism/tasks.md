@@ -9,7 +9,7 @@
 
 - [x] 1.2 重写 CSS 变量系统
   - 创建 `apps/web/src/app/globals.css` 的磁带未来主义版本
-  - 定义颜色变量 (--cf-amber-*, --cf-black-*, --cf-surface-*, --cf-status-*)
+  - 定义颜色变量 (--cf-amber-_, --cf-black-_, --cf-surface-_, --cf-status-_)
   - 定义功能性 token (disabled, divider, overlay, focus)
   - 定义字体变量 (--cf-font-mono, --cf-font-display, --cf-font-sans)
   - 定义边框和效果变量

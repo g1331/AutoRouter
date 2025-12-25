@@ -10,58 +10,32 @@ repos:
         args: ['--maxkb=500']
       - id: check-yaml
       - id: check-toml
+      - id: check-json
       - id: end-of-file-fixer
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
 
   # ============================================================
-  # Python (apps/api)
-  # Uses local hooks to ensure consistent versions with CI
+  # TypeScript / Next.js
   # ============================================================
   - repo: local
     hooks:
-      - id: ruff
-        name: ruff
-        entry: bash -c 'cd apps/api && uv run ruff check --fix "${@#apps/api/}"' --
+      - id: prettier
+        name: prettier
+        entry: pnpm exec prettier --write
         language: system
-        files: ^apps/api/.*\.py$
-        types: [python]
+        files: \.(js|jsx|ts|tsx|css|json|md)$
+        exclude: (node_modules|\.next|drizzle)/
 
-      - id: ruff-format
-        name: ruff-format
-        entry: bash -c 'cd apps/api && uv run ruff format "${@#apps/api/}"' --
+      - id: eslint
+        name: eslint
+        entry: pnpm exec eslint --fix
         language: system
-        files: ^apps/api/.*\.py$
-        types: [python]
+        files: ^src/.*\.(js|jsx|ts|tsx)$
 
-      - id: pyright
-        name: pyright (api)
-        entry: bash -c 'cd apps/api && uv run pyright'
+      - id: tsc
+        name: tsc
+        entry: pnpm exec tsc --noEmit
         language: system
-        files: ^apps/api/.*\.py$
-        pass_filenames: false
-
-  # ============================================================
-  # TypeScript (apps/web)
-  # ============================================================
-  - repo: local
-    hooks:
-      - id: prettier-web
-        name: prettier (web)
-        entry: bash -c 'cd apps/web && pnpm exec prettier --write "${@#apps/web/}"' --
-        language: system
-        files: ^apps/web/.*\.(js|jsx|ts|tsx|css|json|md)$
-        exclude: ^apps/web/(node_modules|\.next)/
-
-      - id: eslint-web
-        name: eslint (web)
-        entry: bash -c 'cd apps/web && pnpm exec eslint --fix "${@#apps/web/}"' --
-        language: system
-        files: ^apps/web/src/.*\.(js|jsx|ts|tsx)$
-
-      - id: tsc-web
-        name: tsc (web)
-        entry: bash -c 'cd apps/web && pnpm exec tsc --noEmit'
-        language: system
-        files: ^apps/web/.*\.(ts|tsx)$
+        files: \.(ts|tsx)$
         pass_filenames: false

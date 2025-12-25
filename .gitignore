@@ -46,3 +46,6 @@ data.db-wal
 .claude/settings.local.json
 .mcp.json
 CLAUDE.local.md
+
+# Drizzle
+drizzle/
