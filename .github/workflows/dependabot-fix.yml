@@ -6,8 +6,7 @@ name: Dependabot Fix Lockfile
 on:
   pull_request:
     paths:
-      - "apps/web/package.json"
-      - "apps/api/pyproject.toml"
+      - "package.json"
 
 permissions:
   contents: write

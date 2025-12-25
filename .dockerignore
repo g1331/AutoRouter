@@ -1,0 +1,42 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs
+.next
+out
+dist
+build
+
+# Development
+*.log
+.env*.local
+.env.development
+.env.test
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Git
+.git
+.gitignore
+
+# Old monorepo
+apps/
+
+# Docker
+Dockerfile*
+docker-compose*.yaml
+.dockerignore
+
+# Testing
+coverage
+.nyc_output
+
+# Misc
+*.md
+!README.md
+LICENSE

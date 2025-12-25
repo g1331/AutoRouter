@@ -5,12 +5,14 @@
 AutoRouter 已完成后端 API Key 管理功能，但缺少配套的可视化管理界面。当前管理员必须通过 curl/Postman 手动调用 Admin API，操作繁琐且易出错。
 
 **约束**：
+
 - 必须复用后端现有的 Admin API（不修改后端）
 - 基于现有的 Next.js 16 脚手架（`apps/web`）
 - 认证基于单一 Admin Token（无用户系统）
 - 支持分页（后端已实现 page/page_size 参数）
 
 **参考实现**：
+
 - Supabase Dashboard - 清晰的 API Keys 管理界面
 - Vercel Dashboard - 简洁的项目管理和统计展示
 - Railway Dashboard - 友好的环境变量和配置管理
@@ -18,6 +20,7 @@ AutoRouter 已完成后端 API Key 管理功能，但缺少配套的可视化管
 ## Goals / Non-Goals
 
 **Goals**:
+
 - ✅ 提供直观的 Web UI 管理 API Keys 和 Upstreams
 - ✅ 实现安全的认证流程（Admin Token）
 - ✅ 完整的 CRUD 操作（创建、查看、编辑、删除）
@@ -25,6 +28,7 @@ AutoRouter 已完成后端 API Key 管理功能，但缺少配套的可视化管
 - ✅ 响应式设计（至少支持桌面端）
 
 **Non-Goals** (后续版本):
+
 - ❌ 多用户系统（当前仅单一 Admin Token）
 - ❌ 请求日志查看（虽然后端已有 request_logs 表）
 - ❌ 实时监控和 Dashboard 图表
@@ -36,6 +40,7 @@ AutoRouter 已完成后端 API Key 管理功能，但缺少配套的可视化管
 ### 1. 技术栈：shadcn/ui + TanStack Query
 
 **选择**：
+
 - **UI 组件库**：shadcn/ui（基于 Radix UI + Tailwind CSS）
 - **数据获取**：TanStack Query (React Query v5)
 - **表单处理**：React Hook Form + Zod
@@ -43,11 +48,13 @@ AutoRouter 已完成后端 API Key 管理功能，但缺少配套的可视化管
 - **状态管理**：React Context（仅认证状态）
 
 **替代方案**：
+
 - Ant Design / Material-UI：过于重量级，不符合项目简洁风格
 - SWR：功能不如 TanStack Query 完善（mutation、pagination、optimistic updates）
 - Zustand：当前状态简单，无需独立状态管理库
 
 **选择理由**：
+
 - shadcn/ui 提供企业级 UI 组件，可完全自定义，无运行时依赖
 - TanStack Query 专为服务端状态设计，自动处理缓存、重试、分页、乐观更新
 - React Hook Form 性能优秀，与 shadcn/ui 无缝集成
@@ -56,17 +63,20 @@ AutoRouter 已完成后端 API Key 管理功能，但缺少配套的可视化管
 ### 2. 认证方案：sessionStorage + React Context
 
 **选择**：
+
 - Admin Token 存储在 **sessionStorage**（不使用 localStorage 或 cookie）
 - 通过 React Context 提供全局访问
 - 页面刷新时从 sessionStorage 恢复 token
 - 关闭浏览器后自动清除
 
 **替代方案**：
+
 - localStorage：持久化存储，但关闭浏览器后仍存在（安全风险）
 - httpOnly Cookie：更安全，但需要后端支持（当前后端无 session 管理）
 - 内存存储：页面刷新后丢失（用户体验差）
 
 **选择理由**：
+
 - sessionStorage 平衡了安全性和用户体验（关闭浏览器清除，刷新保留）
 - 无需修改后端（后端仅验证 Bearer token，无 session 管理）
 - React Context 提供便捷的全局访问，无需 props drilling
@@ -74,6 +84,7 @@ AutoRouter 已完成后端 API Key 管理功能，但缺少配套的可视化管
 ### 3. 路由结构：App Router + Route Groups
 
 **选择**：
+
 ```
 app/
 ├── (auth)/                # 认证相关（无布局）
@@ -92,6 +103,7 @@ app/
 ```
 
 **选择理由**：
+
 - Route Groups 分离认证和管理后台布局（`(auth)` vs `(dashboard)`）
 - 认证守卫在 `(dashboard)/layout.tsx` 统一处理，避免每个页面重复代码
 - 符合 Next.js App Router 最佳实践
@@ -99,6 +111,7 @@ app/
 ### 4. API 客户端设计
 
 **选择**：
+
 ```typescript
 // src/lib/api.ts
 export function createApiClient(getToken: () => string | null) {
@@ -106,7 +119,7 @@ export function createApiClient(getToken: () => string | null) {
     async fetch<T>(path: string, options?: RequestInit): Promise<T> {
       const token = getToken();
       const headers = {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         ...(token && { Authorization: `Bearer ${token}` }),
         ...options?.headers,
       };
@@ -118,12 +131,12 @@ export function createApiClient(getToken: () => string | null) {
 
       if (response.status === 401) {
         // 触发登出逻辑
-        throw new UnauthorizedError('Token expired or invalid');
+        throw new UnauthorizedError("Token expired or invalid");
       }
 
       if (!response.ok) {
         const error = await response.json();
-        throw new ApiError(error.detail || 'Request failed', response.status);
+        throw new ApiError(error.detail || "Request failed", response.status);
       }
 
       return response.json();
@@ -133,6 +146,7 @@ export function createApiClient(getToken: () => string | null) {
 ```
 
 **选择理由**：
+
 - 封装 fetch API，自动注入 Authorization header
 - 统一处理 401 错误（自动清除 token 并重定向）
 - 统一错误格式（ApiError）
@@ -141,12 +155,14 @@ export function createApiClient(getToken: () => string | null) {
 ### 5. 数据获取策略：TanStack Query + Custom Hooks
 
 **选择**：
+
 ```typescript
 // src/hooks/use-api-keys.ts
 export function useApiKeys(page: number, pageSize: number) {
   return useQuery({
-    queryKey: ['api-keys', page, pageSize],
-    queryFn: () => apiClient.fetch<PaginatedResponse<APIKey>>(`/admin/keys?page=${page}&page_size=${pageSize}`),
+    queryKey: ["api-keys", page, pageSize],
+    queryFn: () =>
+      apiClient.fetch<PaginatedResponse<APIKey>>(`/admin/keys?page=${page}&page_size=${pageSize}`),
     staleTime: 30_000, // 30秒内不重新获取
   });
 }
@@ -154,16 +170,18 @@ export function useApiKeys(page: number, pageSize: number) {
 export function useCreateApiKey() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: APIKeyCreate) => apiClient.fetch('/admin/keys', { method: 'POST', body: JSON.stringify(data) }),
+    mutationFn: (data: APIKeyCreate) =>
+      apiClient.fetch("/admin/keys", { method: "POST", body: JSON.stringify(data) }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['api-keys'] });
-      toast.success('API Key 创建成功');
+      queryClient.invalidateQueries({ queryKey: ["api-keys"] });
+      toast.success("API Key 创建成功");
     },
   });
 }
 ```
 
 **选择理由**：
+
 - Custom hooks 封装数据获取逻辑，页面组件保持简洁
 - TanStack Query 自动处理缓存、loading、error 状态
 - mutation 成功后自动 invalidate cache 并刷新列表
@@ -172,12 +190,13 @@ export function useCreateApiKey() {
 ### 6. 表单验证：Zod Schema
 
 **选择**：
+
 ```typescript
 // API Key 创建表单验证
 const apiKeyCreateSchema = z.object({
-  name: z.string().min(1, '名称不能为空').max(255, '名称过长'),
+  name: z.string().min(1, "名称不能为空").max(255, "名称过长"),
   description: z.string().optional(),
-  upstream_ids: z.array(z.string().uuid()).min(1, '至少选择一个 Upstream'),
+  upstream_ids: z.array(z.string().uuid()).min(1, "至少选择一个 Upstream"),
   expires_at: z.date().optional(),
 });
 
@@ -185,6 +204,7 @@ type APIKeyCreateForm = z.infer<typeof apiKeyCreateSchema>;
 ```
 
 **选择理由**：
+
 - Zod 提供强类型验证，与 TypeScript 无缝集成
 - 验证规则与后端 Pydantic schema 一致
 - React Hook Form 原生支持 Zod resolver
@@ -193,11 +213,13 @@ type APIKeyCreateForm = z.infer<typeof apiKeyCreateSchema>;
 ### 7. 组件结构：Composition Pattern
 
 **选择**：
+
 - **Presentational Components**（`src/components/ui/`）：shadcn/ui 提供，纯 UI 展示
 - **Container Components**（`src/components/admin/`）：业务逻辑，组合 UI 组件
 - **Page Components**（`src/app/.../page.tsx`）：数据获取，组合 Container Components
 
 **示例**：
+
 ```typescript
 // page.tsx（数据获取）
 export default function KeysPage() {
@@ -222,6 +244,7 @@ function KeysTable({ data, isLoading }) {
 ```
 
 **选择理由**：
+
 - 职责分离：数据获取、业务逻辑、UI 展示分离
 - 可测试性：每个层级可独立测试
 - 可复用性：UI 组件可跨页面复用
@@ -348,10 +371,12 @@ API Client 检测到 401
 ## Migration Path
 
 当前系统：
+
 - 无前端管理界面
 - 管理员通过 curl/Postman 调用 Admin API
 
 迁移后：
+
 - 提供 Web UI 管理界面
 - 保留 Admin API（向后兼容）
 - 管理员可选择 UI 或 API 方式管理

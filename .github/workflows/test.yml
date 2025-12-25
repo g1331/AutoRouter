@@ -4,12 +4,18 @@ on:
   push:
     branches: [master]
     paths:
-      - "apps/**"
+      - "src/**"
+      - "tests/**"
+      - "*.json"
+      - "*.ts"
       - ".github/workflows/test.yml"
   pull_request:
     branches: [master]
     paths:
-      - "apps/**"
+      - "src/**"
+      - "tests/**"
+      - "*.json"
+      - "*.ts"
       - ".github/workflows/test.yml"
 
 concurrency:
@@ -21,67 +27,11 @@ permissions:
 
 jobs:
   # ============================================================
-  # Python Backend Tests (apps/api)
-  # ============================================================
-  python:
-    name: Python Tests
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/api
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-          cache-dependency-glob: "apps/api/uv.lock"
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --extra dev --group dev
-
-      - name: Run tests with coverage
-        run: |
-          uv run pytest \
-            --cov=app \
-            --cov-report=xml \
-            --cov-report=term-missing \
-            --junitxml=junit.xml \
-            -o junit_family=legacy \
-            -v
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: apps/api/coverage.xml
-          flags: python
-          name: python-coverage
-          fail_ci_if_error: false
-
-      - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v1
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: apps/api/junit.xml
-          flags: python
-
-  # ============================================================
-  # TypeScript Frontend Tests (apps/web)
+  # TypeScript / Next.js Tests
   # ============================================================
   typescript:
     name: TypeScript Tests
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/web
 
     steps:
       - name: Checkout
@@ -95,7 +45,6 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
         run: |
@@ -112,7 +61,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: apps/web/coverage/lcov.info
+          files: coverage/lcov.info
           flags: typescript
           name: typescript-coverage
           fail_ci_if_error: false
@@ -122,7 +71,7 @@ jobs:
         uses: codecov/test-results-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: apps/web/test-report.junit.xml
+          files: test-report.junit.xml
           flags: typescript
 
   # ============================================================
@@ -131,14 +80,13 @@ jobs:
   test-status:
     name: Test Status
     runs-on: ubuntu-latest
-    needs: [python, typescript]
+    needs: [typescript]
     if: always()
     steps:
       - name: Check all jobs
         run: |
-          if [[ "${{ needs.python.result }}" == "failure" ]] || \
-             [[ "${{ needs.typescript.result }}" == "failure" ]]; then
-            echo "::error::One or more test suites failed"
+          if [[ "${{ needs.typescript.result }}" == "failure" ]]; then
+            echo "::error::Tests failed"
             exit 1
           fi
           echo "All tests passed!"

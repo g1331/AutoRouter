@@ -9,12 +9,14 @@
 #### Scenario: 显示统计卡片
 
 **Given** 数据库中存在：
+
 - 10 个 API Keys（8 个 active，2 个 inactive）
 - 3 个 Upstreams（2 个 active，1 个 inactive）
 
 **When** 管理员访问 `/dashboard` 页面
 
 **Then** 应显示 2 个统计卡片：
+
 - "API Keys"：显示总数 10
 - "Upstreams"：显示总数 3
 
@@ -71,6 +73,7 @@ Dashboard 应提供快捷操作入口，方便管理员快速创建资源。
 **When** 页面加载完成
 
 **Then** 应显示 2 个快捷操作按钮：
+
 - "创建 API Key"
 - "添加 Upstream"
 
@@ -111,6 +114,7 @@ Dashboard 应提供清晰的导航，方便管理员访问其他页面。
 **Then** 应显示侧边栏（Sidebar）
 
 **And** 侧边栏应包含导航链接：
+
 - "Dashboard"（当前高亮）
 - "API Keys"
 - "Upstreams"
@@ -138,6 +142,7 @@ Dashboard 应提供清晰的导航，方便管理员访问其他页面。
 **Then** 应显示顶部栏（Topbar）
 
 **And** 顶部栏应包含：
+
 - 页面标题 "Dashboard"
 - 用户菜单（右侧）
 

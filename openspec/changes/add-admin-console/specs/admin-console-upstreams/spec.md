@@ -31,6 +31,7 @@
 #### Scenario: Provider 显示
 
 **Given** 数据库中有 2 个 upstreams：
+
 - Upstream A：provider = `openai`
 - Upstream B：provider = `anthropic`
 
@@ -43,6 +44,7 @@
 #### Scenario: 默认标记
 
 **Given** 数据库中有 3 个 upstreams：
+
 - Upstream A：is_default = true
 - Upstream B：is_default = false
 - Upstream C：is_default = false
@@ -56,6 +58,7 @@
 #### Scenario: 状态显示
 
 **Given** 数据库中有 2 个 upstreams：
+
 - Upstream A：is_active = true
 - Upstream B：is_active = false
 
@@ -106,6 +109,7 @@
 **And** 对话框标题为 "添加 Upstream"
 
 **And** 对话框应包含表单字段：
+
 - 名称（必填）
 - Provider（下拉选择：OpenAI, Anthropic）
 - Base URL（必填）
@@ -118,6 +122,7 @@
 **Given** 管理员在创建对话框中
 
 **When** 管理员填写表单：
+
 - 名称：`my-openai`
 - Provider：`OpenAI`
 - Base URL：`https://api.openai.com`
@@ -128,6 +133,7 @@
 **And** 点击 "创建" 按钮
 
 **Then** 应调用 `POST /admin/upstreams`，请求 body 为：
+
 ```json
 {
   "name": "my-openai",
@@ -154,6 +160,7 @@
 **When** 管理员提交空表单
 
 **Then** 应显示验证错误：
+
 - 名称：required 提示 "请输入名称"
 - Provider：required 提示 "请选择 Provider"
 - Base URL：required 提示 "请输入 Base URL"
@@ -220,6 +227,7 @@
 **Given** 管理员在 upstreams 列表页面
 
 **And** 列表中有一个 upstream，数据为：
+
 - 名称：`my-openai`
 - Provider：`openai`
 - Base URL：`https://api.openai.com`
@@ -233,6 +241,7 @@
 **And** 对话框标题为 "编辑 Upstream"
 
 **And** 表单字段应预填充现有数据：
+
 - 名称：`my-openai`（禁用，不可编辑）
 - Provider：`OpenAI`
 - Base URL：`https://api.openai.com`
@@ -245,6 +254,7 @@
 **Given** 管理员在编辑对话框中
 
 **When** 管理员修改字段：
+
 - Base URL：`https://api.openai.com/v2`
 - Timeout：120
 - API Key：留空
@@ -252,6 +262,7 @@
 **And** 点击 "保存" 按钮
 
 **Then** 应调用 `PUT /admin/upstreams/{upstream_id}`，请求 body 为：
+
 ```json
 {
   "base_url": "https://api.openai.com/v2",
@@ -274,6 +285,7 @@
 **Given** 管理员在编辑对话框中
 
 **When** 管理员修改字段：
+
 - Base URL：保持不变
 - API Key：`sk-new-key-456`
 - Timeout：保持不变
@@ -281,6 +293,7 @@
 **And** 点击 "保存" 按钮
 
 **Then** 应调用 `PUT /admin/upstreams/{upstream_id}`，请求 body 包含：
+
 ```json
 {
   "api_key": "sk-new-key-456"
@@ -334,6 +347,7 @@
 **And** 对话框标题为 "删除 Upstream"
 
 **And** 对话框内容应显示：
+
 - Upstream 名称
 - 警告文字 "删除后，使用此 Upstream 的 API Keys 将无法访问该服务"
 - 二次确认文字 "此操作无法撤销"

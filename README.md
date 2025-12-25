@@ -7,17 +7,20 @@
 <p>一个极简的多上游 AI API 代理</p>
 
 <!-- Badges: Status -->
+
 [![Lint](https://github.com/g1331/AutoRouter/actions/workflows/lint.yml/badge.svg)](https://github.com/g1331/AutoRouter/actions/workflows/lint.yml)
 [![Test](https://github.com/g1331/AutoRouter/actions/workflows/test.yml/badge.svg)](https://github.com/g1331/AutoRouter/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/g1331/AutoRouter/graph/badge.svg)](https://codecov.io/gh/g1331/AutoRouter)
 
 <!-- Badges: Tech -->
-[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=next.js&logoColor=white)](https://nextjs.org/)
+
+[![Next.js](https://img.shields.io/badge/Next.js-15-000000?logo=next.js&logoColor=white)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 
 <!-- Badges: Community -->
+
 [![License](https://img.shields.io/github/license/g1331/AutoRouter?color=blue)](LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/g1331/AutoRouter?style=flat&logo=github)](https://github.com/g1331/AutoRouter/stargazers)
 [![GitHub Issues](https://img.shields.io/github/issues/g1331/AutoRouter)](https://github.com/g1331/AutoRouter/issues)
@@ -123,60 +126,50 @@
 
 ### 环境要求
 
-| 依赖 | 版本 | 说明 |
-|------|------|------|
-| Python | 3.12+ | 推荐使用 [uv](https://github.com/astral-sh/uv) 管理 |
-| Node.js | 22+ | 推荐使用 [pnpm](https://pnpm.io/) 管理 |
+| 依赖       | 版本 | 说明                                   |
+| ---------- | ---- | -------------------------------------- |
+| Node.js    | 22+  | 推荐使用 [pnpm](https://pnpm.io/) 管理 |
+| PostgreSQL | 16+  | 生产环境必需                           |
 
-### 安装步骤
+### Docker 部署 (推荐)
 
 ```bash
 # 1. 克隆项目
 git clone https://github.com/g1331/AutoRouter.git
 cd AutoRouter
-```
 
-<details>
-<summary><b>后端启动 (apps/api)</b></summary>
-
-```bash
-cd apps/api
-
-# 复制环境变量
+# 2. 配置环境变量
 cp .env.example .env
+# 编辑 .env 文件，设置 ADMIN_TOKEN 和 ENCRYPTION_KEY
 
-# 生成加密密钥 (填入 .env)
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# 3. 启动服务
+docker compose up -d
 
-# 安装依赖
-uv sync
-
-# 数据库迁移
-uv run alembic upgrade head
-
-# 启动服务
-uv run uvicorn app.main:app --port 8000 --reload
+# 4. 访问 http://localhost:3000
 ```
 
-</details>
-
-<details>
-<summary><b>前端启动 (apps/web)</b></summary>
+### 本地开发
 
 ```bash
-cd apps/web
+# 1. 克隆项目
+git clone https://github.com/g1331/AutoRouter.git
+cd AutoRouter
 
-# 复制环境变量
+# 2. 复制环境变量
 cp .env.example .env.local
 
-# 安装依赖
+# 3. 生成加密密钥 (填入 .env.local)
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+
+# 4. 安装依赖
 pnpm install
 
-# 启动开发服务器
+# 5. 数据库迁移
+pnpm db:push
+
+# 6. 启动开发服务器
 pnpm dev
 ```
-
-</details>
 
 启动后访问 http://localhost:3000，使用 `ADMIN_TOKEN` 登录。
 
@@ -184,19 +177,14 @@ pnpm dev
 
 ## 配置说明
 
-### 后端环境变量 (`apps/api/.env`)
+### 环境变量 (`.env` 或 `.env.local`)
 
-| 变量 | 必填 | 说明 |
-|------|:----:|------|
-| `ENCRYPTION_KEY` | ✓ | Fernet 加密密钥，用于加密上游 API Key |
-| `ADMIN_TOKEN` | ✓ | 管理后台登录令牌 |
-| `DATABASE_URL` | | 数据库连接串，默认 SQLite |
-
-### 前端环境变量 (`apps/web/.env.local`)
-
-| 变量 | 必填 | 说明 |
-|------|:----:|------|
-| `NEXT_PUBLIC_API_URL` | ✓ | 后端 API 地址，如 `http://localhost:8000` |
+| 变量                 | 必填 | 说明                                  |
+| -------------------- | :--: | ------------------------------------- |
+| `DATABASE_URL`       |  ✓   | PostgreSQL 连接串                     |
+| `ENCRYPTION_KEY`     |  ✓   | Fernet 加密密钥，用于加密上游 API Key |
+| `ADMIN_TOKEN`        |  ✓   | 管理后台登录令牌                      |
+| `LOG_RETENTION_DAYS` |      | 日志保留天数，默认 90 天              |
 
 ---
 
@@ -204,26 +192,25 @@ pnpm dev
 
 ```
 AutoRouter/
-├── apps/
-│   ├── api/                # FastAPI 后端
-│   │   ├── app/
-│   │   │   ├── api/        # 路由层
-│   │   │   ├── models/     # 数据模型
-│   │   │   ├── services/   # 业务逻辑
-│   │   │   └── core/       # 核心配置
-│   │   ├── alembic/        # 数据库迁移
-│   │   └── tests/          # 测试用例
-│   │
-│   └── web/                # Next.js 前端
-│       ├── src/
-│       │   ├── app/        # App Router 页面
-│       │   ├── components/ # React 组件
-│       │   ├── hooks/      # 自定义 Hooks
-│       │   └── i18n/       # 国际化配置
-│       └── messages/       # 翻译文件
-│
-├── docs/                   # 文档资源
-└── openspec/               # 设计规范
+├── src/
+│   ├── app/                 # Next.js App Router
+│   │   ├── [locale]/        # 国际化页面路由
+│   │   └── api/             # API Routes
+│   │       ├── admin/       # 管理 API
+│   │       ├── proxy/       # 代理 API
+│   │       └── health/      # 健康检查
+│   ├── components/          # React 组件
+│   ├── hooks/               # 自定义 Hooks
+│   ├── lib/
+│   │   ├── db/              # Drizzle ORM 配置
+│   │   ├── services/        # 业务逻辑服务
+│   │   └── utils/           # 工具函数
+│   ├── messages/            # 翻译文件
+│   └── i18n/                # 国际化配置
+├── tests/                   # 测试用例
+├── drizzle/                 # 数据库迁移
+├── docs/                    # 文档资源
+└── openspec/                # 设计规范
 ```
 
 ---
@@ -234,14 +221,6 @@ AutoRouter/
 <summary><b>代码检查</b></summary>
 
 ```bash
-# Python
-cd apps/api
-uv run ruff check .        # Lint
-uv run ruff format .       # Format
-uv run pyright             # Type check
-
-# TypeScript
-cd apps/web
 pnpm lint                  # ESLint
 pnpm format                # Prettier
 pnpm exec tsc --noEmit     # Type check
@@ -253,13 +232,20 @@ pnpm exec tsc --noEmit     # Type check
 <summary><b>运行测试</b></summary>
 
 ```bash
-# Python
-cd apps/api
-uv run pytest --cov=app
+pnpm test                  # Watch 模式
+pnpm test:run              # 单次运行
+pnpm test:run --coverage   # 覆盖率报告
+```
 
-# TypeScript
-cd apps/web
-pnpm test:run --coverage
+</details>
+
+<details>
+<summary><b>数据库操作</b></summary>
+
+```bash
+pnpm db:generate           # 生成迁移文件
+pnpm db:push               # 推送 Schema 到数据库
+pnpm db:studio             # 打开 Drizzle Studio
 ```
 
 </details>

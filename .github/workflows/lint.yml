@@ -4,12 +4,20 @@ on:
   push:
     branches: [master]
     paths:
-      - "apps/**"
+      - "src/**"
+      - "tests/**"
+      - "*.json"
+      - "*.ts"
+      - "*.mjs"
       - ".github/workflows/**"
   pull_request:
     branches: [master]
     paths:
-      - "apps/**"
+      - "src/**"
+      - "tests/**"
+      - "*.json"
+      - "*.ts"
+      - "*.mjs"
       - ".github/workflows/**"
 
 concurrency:
@@ -22,49 +30,11 @@ permissions:
 
 jobs:
   # ============================================================
-  # Python Backend (apps/api)
-  # ============================================================
-  python:
-    name: Python
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/api
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-          cache-dependency-glob: "apps/api/uv.lock"
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --extra dev --group dev
-
-      - name: Ruff Check (Lint)
-        run: uv run ruff check --output-format=github .
-
-      - name: Ruff Format Check
-        run: uv run ruff format --check .
-
-      - name: Pyright (Type Check)
-        run: uv run pyright
-
-  # ============================================================
-  # TypeScript Frontend (apps/web)
+  # TypeScript / Next.js
   # ============================================================
   typescript:
     name: TypeScript
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/web
 
     steps:
       - name: Checkout
@@ -78,7 +48,6 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
         run: |
@@ -112,7 +81,7 @@ jobs:
       - name: Run actionlint
         uses: raven-actions/actionlint@v2
         with:
-          shellcheck: false  # Disable shellcheck to avoid info-level warnings (SC2086 etc.)
+          shellcheck: false # Disable shellcheck to avoid info-level warnings (SC2086 etc.)
 
   # ============================================================
   # Summary Status Check
@@ -120,13 +89,12 @@ jobs:
   lint-status:
     name: Lint Status
     runs-on: ubuntu-latest
-    needs: [python, typescript, actionlint]
+    needs: [typescript, actionlint]
     if: always()
     steps:
       - name: Check all jobs
         run: |
-          if [[ "${{ needs.python.result }}" == "failure" ]] || \
-             [[ "${{ needs.typescript.result }}" == "failure" ]] || \
+          if [[ "${{ needs.typescript.result }}" == "failure" ]] || \
              [[ "${{ needs.actionlint.result }}" == "failure" ]]; then
             echo "::error::One or more lint checks failed"
             exit 1

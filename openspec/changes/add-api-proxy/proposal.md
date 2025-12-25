@@ -3,6 +3,7 @@
 ## Why
 
 The application needs a flexible API proxy layer to:
+
 1. Support multiple AI service providers (OpenAI, Anthropic) with independent configurations
 2. Allow users to select which upstream service to use at request time via headers
 3. Maintain detailed logging and token usage tracking for cost analysis

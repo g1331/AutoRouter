@@ -20,15 +20,11 @@ coverage:
   precision: 2
   round: down
 
-# Flags to separate backend/frontend coverage
+# Flags for coverage tracking
 flags:
-  python:
-    paths:
-      - apps/api/
-    carryforward: true
   typescript:
     paths:
-      - apps/web/src/
+      - src/
     carryforward: true
 
 # PR comment settings
@@ -49,6 +45,5 @@ ignore:
   - "**/*.spec.ts"
   - "**/tests/**"
   - "**/__tests__/**"
-  - "**/migrations/**"
   - "**/node_modules/**"
-  - "**/.venv/**"
+  - "**/drizzle/**"
