@@ -44,7 +44,6 @@ jobs:
       github.actor != 'github-actions[bot]' &&
       github.actor != 'dependabot[bot]'
     timeout-minutes: 45
-
     steps:
       # ============================================================
       # Step 1: Determine PR context

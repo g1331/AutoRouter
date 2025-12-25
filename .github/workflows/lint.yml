@@ -81,7 +81,7 @@ jobs:
       - name: Run actionlint
         uses: raven-actions/actionlint@v2
         with:
-          shellcheck: false  # Disable shellcheck to avoid info-level warnings (SC2086 etc.)
+          shellcheck: false # Disable shellcheck to avoid info-level warnings (SC2086 etc.)
 
   # ============================================================
   # Summary Status Check
