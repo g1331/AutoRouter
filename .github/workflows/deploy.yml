@@ -105,14 +105,29 @@ jobs:
             # Configuration
             DEPLOY_DIR="${{ secrets.DEPLOY_DIR || '/opt/autorouter' }}"
             IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.version }}"
+            COMPOSE_URL="https://raw.githubusercontent.com/g1331/AutoRouter/master/docker-compose.yml"
 
             echo "Deploying $IMAGE to $DEPLOY_DIR"
 
+            # Create deploy directory if not exists
+            mkdir -p "$DEPLOY_DIR"
+            cd "$DEPLOY_DIR"
+
+            # Download docker-compose.yml if not exists
+            if [ ! -f docker-compose.yml ]; then
+              echo "Downloading docker-compose.yml..."
+              curl -fsSL -o docker-compose.yml "$COMPOSE_URL"
+            fi
+
+            # Check .env exists
+            if [ ! -f .env ]; then
+              echo "ERROR: .env file not found in $DEPLOY_DIR"
+              echo "Please create .env with required variables (see .env.example)"
+              exit 1
+            fi
+
             # Pull new image (public repo, no login needed)
             docker pull "$IMAGE"
-
-            # Update and restart with docker-compose
-            cd "$DEPLOY_DIR"
 
             # Update image tag in .env
             sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=${{ needs.build.outputs.version }}|" .env 2>/dev/null || echo "IMAGE_TAG=${{ needs.build.outputs.version }}" >> .env
