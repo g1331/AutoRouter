@@ -148,6 +148,49 @@ docker compose up -d
 # 4. 访问 http://localhost:3000
 ```
 
+### 生产环境 CI/CD 部署
+
+项目支持通过 GitHub Actions 自动构建并部署到云服务器。
+
+**1. 配置 GitHub Secrets**
+
+在仓库 Settings → Secrets and variables → Actions 中添加：
+
+| Secret            | 说明                                  |
+| ----------------- | ------------------------------------- |
+| `SERVER_HOST`     | 服务器 IP 或域名                      |
+| `SERVER_USER`     | SSH 用户名                            |
+| `SSH_PRIVATE_KEY` | SSH 私钥内容                          |
+| `SERVER_PORT`     | SSH 端口 (可选，默认 22)              |
+| `DEPLOY_DIR`      | 部署目录 (可选，默认 /opt/autorouter) |
+| `GHCR_TOKEN`      | GitHub PAT (私有仓库需要)             |
+
+**2. 服务器初始化**
+
+```bash
+# 创建部署目录
+mkdir -p /opt/autorouter && cd /opt/autorouter
+
+# 下载 docker-compose.yml
+curl -O https://raw.githubusercontent.com/g1331/AutoRouter/master/docker-compose.yml
+
+# 创建 .env 文件 (参考 .env.example)
+nano .env
+
+# 首次启动
+docker compose up -d
+```
+
+**3. 触发部署**
+
+```bash
+# 打 tag 触发自动部署
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+或在 GitHub Actions 页面手动触发 "Build and Deploy" workflow。
+
 ### 本地开发
 
 ```bash
