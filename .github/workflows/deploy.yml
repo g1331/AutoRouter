@@ -12,7 +12,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  # Docker image names must be lowercase
+  IMAGE_NAME: g1331/autorouter
 
 concurrency:
   group: deploy-${{ github.ref }}
@@ -107,10 +108,7 @@ jobs:
 
             echo "Deploying $IMAGE to $DEPLOY_DIR"
 
-            # Login to GHCR (if private repo)
-            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin || true
-
-            # Pull new image
+            # Pull new image (public repo, no login needed)
             docker pull "$IMAGE"
 
             # Update and restart with docker-compose
