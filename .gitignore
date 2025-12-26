@@ -49,4 +49,4 @@ data.db-wal
 CLAUDE.local.md
 
 # Drizzle
-drizzle/
+# drizzle/ - migrations need to be committed for Docker deployment
