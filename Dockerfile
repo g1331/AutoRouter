@@ -54,6 +54,9 @@ RUN chown nextjs:nodejs .next
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Copy postgres package for migrations (standalone doesn't include all node_modules)
+COPY --from=deps /app/node_modules/postgres ./node_modules/postgres
+
 # Copy drizzle migrations
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
 
