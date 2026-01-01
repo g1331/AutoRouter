@@ -30,10 +30,11 @@ export function errorResponse(message: string, status: number = 400): NextRespon
  */
 export function getPaginationParams(request: NextRequest): { page: number; pageSize: number } {
   const url = new URL(request.url);
-  const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
-  const pageSize = Math.min(
-    100,
-    Math.max(1, parseInt(url.searchParams.get("page_size") || "20", 10))
-  );
+  const parsedPage = parseInt(url.searchParams.get("page") || "1", 10);
+  const parsedPageSize = parseInt(url.searchParams.get("page_size") || "20", 10);
+
+  const page = Math.max(1, isNaN(parsedPage) ? 1 : parsedPage);
+  const pageSize = Math.min(100, Math.max(1, isNaN(parsedPageSize) ? 20 : parsedPageSize));
+
   return { page, pageSize };
 }

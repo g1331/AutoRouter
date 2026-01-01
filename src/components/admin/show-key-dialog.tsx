@@ -73,7 +73,12 @@ export function ShowKeyDialog({ apiKey, open, onClose }: ShowKeyDialogProps) {
               <div className="flex-1 bg-[rgb(var(--md-sys-color-inverse-surface))] rounded-[var(--shape-corner-medium)] p-4 font-mono type-body-medium text-[rgb(var(--md-sys-color-success))] break-all">
                 {apiKey.key_value}
               </div>
-              <Button variant="outline" size="icon" onClick={copyKey}>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={copyKey}
+                aria-label={copied ? t("keyCopied") : t("copyKey")}
+              >
                 {copied ? (
                   <Check className="h-4 w-4 text-[rgb(var(--md-sys-color-success))]" />
                 ) : (

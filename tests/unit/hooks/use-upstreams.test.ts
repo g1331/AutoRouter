@@ -7,10 +7,16 @@ import type { PaginatedUpstreamsResponse, Upstream } from "@/types/api";
 /**
  * Mock auth provider
  */
+const mockGet = vi.fn();
+const mockPost = vi.fn();
+const mockPut = vi.fn();
 const mockDelete = vi.fn();
 vi.mock("@/providers/auth-provider", () => ({
   useAuth: () => ({
     apiClient: {
+      get: mockGet,
+      post: mockPost,
+      put: mockPut,
       delete: mockDelete,
     },
   }),
@@ -203,5 +209,285 @@ describe("useDeleteUpstream", () => {
     });
 
     expect(result.current.error?.message).toBe("Network error");
+  });
+});
+
+describe("useUpstreams", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should fetch upstreams with default pagination", async () => {
+    const mockResponse: PaginatedUpstreamsResponse = {
+      items: [sampleUpstream],
+      total: 1,
+      page: 1,
+      page_size: 10,
+      total_pages: 1,
+    };
+    mockGet.mockResolvedValueOnce(mockResponse);
+
+    const { useUpstreams } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useUpstreams(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(mockGet).toHaveBeenCalledWith("/admin/upstreams?page=1&page_size=10");
+    expect(result.current.data).toEqual(mockResponse);
+  });
+
+  it("should fetch upstreams with custom pagination", async () => {
+    const mockResponse: PaginatedUpstreamsResponse = {
+      items: [],
+      total: 0,
+      page: 2,
+      page_size: 25,
+      total_pages: 0,
+    };
+    mockGet.mockResolvedValueOnce(mockResponse);
+
+    const { useUpstreams } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useUpstreams(2, 25), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(mockGet).toHaveBeenCalledWith("/admin/upstreams?page=2&page_size=25");
+  });
+
+  it("should handle fetch error", async () => {
+    mockGet.mockRejectedValueOnce(new Error("Network error"));
+
+    const { useUpstreams } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useUpstreams(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true);
+    });
+
+    expect(result.current.error?.message).toBe("Network error");
+  });
+});
+
+describe("useAllUpstreams", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should fetch all upstreams when they fit in first page", async () => {
+    const mockResponse: PaginatedUpstreamsResponse = {
+      items: [sampleUpstream, sampleUpstream2],
+      total: 2,
+      page: 1,
+      page_size: 100,
+      total_pages: 1,
+    };
+    mockGet.mockResolvedValueOnce(mockResponse);
+
+    const { useAllUpstreams } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useAllUpstreams(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(mockGet).toHaveBeenCalledWith("/admin/upstreams?page=1&page_size=100");
+    expect(result.current.data).toEqual(mockResponse.items);
+  });
+
+  it("should fetch multiple pages when total exceeds first page", async () => {
+    // Create 100 items for first page
+    const firstPageItems = Array(100)
+      .fill(null)
+      .map((_, i) => ({
+        ...sampleUpstream,
+        id: `upstream-${i}`,
+        name: `Upstream ${i}`,
+      }));
+
+    // Create 50 items for second page
+    const secondPageItems = Array(50)
+      .fill(null)
+      .map((_, i) => ({
+        ...sampleUpstream,
+        id: `upstream-${100 + i}`,
+        name: `Upstream ${100 + i}`,
+      }));
+
+    const firstPage: PaginatedUpstreamsResponse = {
+      items: firstPageItems,
+      total: 150,
+      page: 1,
+      page_size: 100,
+      total_pages: 2,
+    };
+
+    const secondPage: PaginatedUpstreamsResponse = {
+      items: secondPageItems,
+      total: 150,
+      page: 2,
+      page_size: 100,
+      total_pages: 2,
+    };
+
+    mockGet.mockResolvedValueOnce(firstPage);
+    mockGet.mockResolvedValueOnce(secondPage);
+
+    const { useAllUpstreams } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useAllUpstreams(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(mockGet).toHaveBeenCalledTimes(2);
+    expect(mockGet).toHaveBeenNthCalledWith(1, "/admin/upstreams?page=1&page_size=100");
+    expect(mockGet).toHaveBeenNthCalledWith(2, "/admin/upstreams?page=2&page_size=100");
+    expect(result.current.data).toHaveLength(150);
+  });
+
+  it("should handle fetch error", async () => {
+    mockGet.mockRejectedValueOnce(new Error("Failed to fetch"));
+
+    const { useAllUpstreams } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useAllUpstreams(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true);
+    });
+
+    expect(result.current.error?.message).toBe("Failed to fetch");
+  });
+});
+
+describe("useCreateUpstream", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should create upstream successfully", async () => {
+    const newUpstream = {
+      id: "new-upstream",
+      name: "New Upstream",
+      provider: "openai",
+      base_url: "https://api.example.com",
+    };
+    mockPost.mockResolvedValueOnce(newUpstream);
+
+    const { useCreateUpstream } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useCreateUpstream(), { wrapper });
+
+    result.current.mutate({
+      name: "New Upstream",
+      provider: "openai",
+      base_url: "https://api.example.com",
+      api_key: "sk-test",
+    });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(mockPost).toHaveBeenCalledWith("/admin/upstreams", {
+      name: "New Upstream",
+      provider: "openai",
+      base_url: "https://api.example.com",
+      api_key: "sk-test",
+    });
+  });
+
+  it("should handle create error", async () => {
+    mockPost.mockRejectedValueOnce(new Error("Creation failed"));
+
+    const { useCreateUpstream } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useCreateUpstream(), { wrapper });
+
+    result.current.mutate({
+      name: "Test",
+      provider: "openai",
+      base_url: "https://api.example.com",
+      api_key: "sk-test",
+    });
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true);
+    });
+  });
+});
+
+describe("useUpdateUpstream", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should update upstream successfully", async () => {
+    const updatedUpstream = {
+      ...sampleUpstream,
+      name: "Updated Name",
+    };
+    mockPut.mockResolvedValueOnce(updatedUpstream);
+
+    const { useUpdateUpstream } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useUpdateUpstream(), { wrapper });
+
+    result.current.mutate({
+      id: "upstream-1",
+      data: {
+        name: "Updated Name",
+        provider: "openai",
+        base_url: "https://api.openai.com",
+        api_key: "sk-new",
+      },
+    });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(mockPut).toHaveBeenCalledWith("/admin/upstreams/upstream-1", {
+      name: "Updated Name",
+      provider: "openai",
+      base_url: "https://api.openai.com",
+      api_key: "sk-new",
+    });
+  });
+
+  it("should handle update error", async () => {
+    mockPut.mockRejectedValueOnce(new Error("Update failed"));
+
+    const { useUpdateUpstream } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useUpdateUpstream(), { wrapper });
+
+    result.current.mutate({
+      id: "upstream-1",
+      data: { name: "Updated" },
+    });
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true);
+    });
   });
 });
