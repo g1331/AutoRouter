@@ -7,6 +7,11 @@ import {
   useStatsTimeseries,
   useStatsLeaderboard,
 } from "@/hooks/use-dashboard-stats";
+import type {
+  StatsOverviewResponse,
+  StatsTimeseriesResponse,
+  StatsLeaderboardResponse,
+} from "@/types/api";
 
 // Mock API client
 const mockGet = vi.fn();
@@ -38,11 +43,11 @@ describe("use-dashboard-stats hooks", () => {
 
   describe("useStatsOverview", () => {
     it("fetches overview stats", async () => {
-      const mockResponse = {
-        total_requests: 1000,
-        average_response_time: 250,
-        total_tokens: 50000,
-        success_rate: 98.5,
+      const mockResponse: StatsOverviewResponse = {
+        today_requests: 1000,
+        avg_response_time_ms: 250,
+        total_tokens_today: 50000,
+        success_rate_today: 98.5,
       };
       mockGet.mockResolvedValueOnce(mockResponse);
 
@@ -67,8 +72,23 @@ describe("use-dashboard-stats hooks", () => {
 
   describe("useStatsTimeseries", () => {
     it("fetches timeseries with default range (7d)", async () => {
-      const mockResponse = {
-        data_points: [{ timestamp: "2024-01-01", requests: 100, tokens: 5000 }],
+      const mockResponse: StatsTimeseriesResponse = {
+        range: "7d",
+        granularity: "day",
+        series: [
+          {
+            upstream_id: "upstream-1",
+            upstream_name: "OpenAI",
+            data: [
+              {
+                timestamp: "2024-01-01T00:00:00Z",
+                request_count: 100,
+                total_tokens: 5000,
+                avg_duration_ms: 200,
+              },
+            ],
+          },
+        ],
       };
       mockGet.mockResolvedValueOnce(mockResponse);
 
@@ -81,7 +101,12 @@ describe("use-dashboard-stats hooks", () => {
     });
 
     it("fetches timeseries with today range", async () => {
-      mockGet.mockResolvedValueOnce({ data_points: [] });
+      const mockResponse: StatsTimeseriesResponse = {
+        range: "today",
+        granularity: "hour",
+        series: [],
+      };
+      mockGet.mockResolvedValueOnce(mockResponse);
 
       const { result } = renderHook(() => useStatsTimeseries("today"), { wrapper });
 
@@ -91,7 +116,12 @@ describe("use-dashboard-stats hooks", () => {
     });
 
     it("fetches timeseries with 30d range", async () => {
-      mockGet.mockResolvedValueOnce({ data_points: [] });
+      const mockResponse: StatsTimeseriesResponse = {
+        range: "30d",
+        granularity: "day",
+        series: [],
+      };
+      mockGet.mockResolvedValueOnce(mockResponse);
 
       const { result } = renderHook(() => useStatsTimeseries("30d"), { wrapper });
 
@@ -113,10 +143,27 @@ describe("use-dashboard-stats hooks", () => {
 
   describe("useStatsLeaderboard", () => {
     it("fetches leaderboard with default params", async () => {
-      const mockResponse = {
-        top_keys: [{ id: "key-1", name: "Key 1", requests: 500 }],
-        top_upstreams: [{ id: "up-1", name: "OpenAI", requests: 800 }],
-        top_models: [{ model: "gpt-4", requests: 600 }],
+      const mockResponse: StatsLeaderboardResponse = {
+        range: "7d",
+        api_keys: [
+          {
+            id: "key-1",
+            name: "Key 1",
+            key_prefix: "sk-test",
+            request_count: 500,
+            total_tokens: 12500,
+          },
+        ],
+        upstreams: [
+          {
+            id: "up-1",
+            name: "OpenAI",
+            provider: "openai",
+            request_count: 800,
+            total_tokens: 40000,
+          },
+        ],
+        models: [{ model: "gpt-4", request_count: 600, total_tokens: 30000 }],
       };
       mockGet.mockResolvedValueOnce(mockResponse);
 
@@ -129,7 +176,13 @@ describe("use-dashboard-stats hooks", () => {
     });
 
     it("fetches leaderboard with custom range", async () => {
-      mockGet.mockResolvedValueOnce({ top_keys: [], top_upstreams: [], top_models: [] });
+      const mockResponse: StatsLeaderboardResponse = {
+        range: "30d",
+        api_keys: [],
+        upstreams: [],
+        models: [],
+      };
+      mockGet.mockResolvedValueOnce(mockResponse);
 
       const { result } = renderHook(() => useStatsLeaderboard("30d"), { wrapper });
 
@@ -139,7 +192,13 @@ describe("use-dashboard-stats hooks", () => {
     });
 
     it("fetches leaderboard with custom limit", async () => {
-      mockGet.mockResolvedValueOnce({ top_keys: [], top_upstreams: [], top_models: [] });
+      const mockResponse: StatsLeaderboardResponse = {
+        range: "7d",
+        api_keys: [],
+        upstreams: [],
+        models: [],
+      };
+      mockGet.mockResolvedValueOnce(mockResponse);
 
       const { result } = renderHook(() => useStatsLeaderboard("7d", 10), { wrapper });
 
@@ -149,7 +208,13 @@ describe("use-dashboard-stats hooks", () => {
     });
 
     it("fetches leaderboard with today range and custom limit", async () => {
-      mockGet.mockResolvedValueOnce({ top_keys: [], top_upstreams: [], top_models: [] });
+      const mockResponse: StatsLeaderboardResponse = {
+        range: "today",
+        api_keys: [],
+        upstreams: [],
+        models: [],
+      };
+      mockGet.mockResolvedValueOnce(mockResponse);
 
       const { result } = renderHook(() => useStatsLeaderboard("today", 3), { wrapper });
 
