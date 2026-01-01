@@ -180,6 +180,16 @@ jobs:
           }
           EOF
 
+      - name: Load prompt
+        if: steps.check-issue.outputs.is_open == 'true'
+        id: prompt
+        run: |
+          export ISSUE_NUMBER=${{ github.event.issue.number }}
+          PROMPT=$(envsubst < .github/prompts/claude-agent/triage.md)
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          echo "$PROMPT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Run Claude Code for deep analysis
         if: steps.check-issue.outputs.is_open == 'true'
         timeout-minutes: 30
@@ -189,76 +199,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           use_sticky_comment: true
           claude_args: --mcp-config '${{ steps.mcp-config.outputs.mcp_config }}'
-          prompt: |
-            你是仓库专属机器人（中文沟通，代码/命令保持原文）。
-
-            ## 任务：深度分析 issue #${{ github.event.issue.number }}
-
-            **注意：本阶段只做分析，不做任何代码修改。修复需要等待 `/approve` 命令。**
-
-            ### 第一步：分类
-
-            分析issue内容，添加分类标签（只能选一个）：
-            - `bug`: 报告问题/错误
-            - `feature`: 功能请求
-            - `question`: 疑问/讨论
-            - `documentation`: 文档相关
-
-            ### 第二步：深度分析（根据分类执行不同流程）
-
-            #### 如果是 Bug：
-
-            1. **尝试复现**：
-               - 使用 auggie → code-index → codex 分析代码库
-               - 根据 issue 描述定位相关代码
-               - 尝试理解问题的触发条件
-
-            2. **输出诊断结果**：
-               - 如果**成功定位问题**：
-                 - 添加 `awaiting-approval` 标签
-                 - 评论包含：
-                   - 问题复现路径
-                   - 根因分析
-                   - 建议的修复方案（概述，不用详细代码）
-                   - 提示：使用 `/approve` 命令批准修复
-               - 如果**无法复现或信息不足**：
-                 - 添加 `needs-info` 标签
-                 - 评论说明：
-                   - 已尝试的复现步骤
-                   - 需要补充的具体信息（复现步骤、环境、日志等）
-
-            #### 如果是 Feature：
-
-            1. **检查是否已实现**：
-               - 搜索代码库中是否已有类似功能
-               - 如果已实现，说明功能位置和使用方法
-
-            2. **如果未实现，进行可行性分析**：
-               - 添加 `awaiting-approval` 标签
-               - 评论包含：
-                 - **可行性**：技术上是否可行
-                 - **必要性**：是否符合项目目标
-                 - **重复性**：是否与现有功能重复
-                 - **实施难度**：简单/中等/复杂
-                 - **大致方案**：概述实现思路（不需要详细代码）
-                 - 提示：使用 `/approve` 命令批准实施
-
-            #### 如果是 Question 或 Documentation：
-
-            - 直接回答问题或说明文档改进建议
-            - 如果需要代码修改，添加 `awaiting-approval` 标签
-
-            ### gh 命令参考
-
-            ```bash
-            # 添加标签
-            gh issue edit ${{ github.event.issue.number }} --add-label "标签名"
-
-            # 评论
-            gh issue comment ${{ github.event.issue.number }} --body "内容"
-            ```
-
-            禁止泄露tokens/花费/定价信息。
+          prompt: ${{ steps.prompt.outputs.content }}
           settings: '{"alwaysThinkingEnabled":true}'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -444,6 +385,16 @@ jobs:
           }
           EOF
 
+      - name: Load prompt
+        if: steps.check-collaborator.outputs.is_collaborator == 'true'
+        id: prompt
+        run: |
+          export ISSUE_NUMBER=${{ github.event.issue.number }}
+          PROMPT=$(envsubst < .github/prompts/claude-agent/auto-approve.md)
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          echo "$PROMPT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Run Claude Code to fix issue
         if: steps.check-collaborator.outputs.is_collaborator == 'true'
         timeout-minutes: 120
@@ -454,34 +405,7 @@ jobs:
           use_sticky_comment: true
           branch_prefix: ""
           claude_args: --mcp-config '${{ steps.mcp-config.outputs.mcp_config }}'
-          prompt: |
-            你是仓库专属机器人（中文沟通，代码/命令保持原文）。issue #${{ github.event.issue.number }} 已获审批，现在开始实施修复。
-
-            ## 工作流程
-
-            1. **阅读 issue 和之前的分析**：理解需求和已有的分析结论
-            2. **定位代码**：使用 auggie → code-index → codex 确认相关代码位置
-            3. **创建分支**：命名规则 `{fix|feat|docs}/{简短描述}`（如 `fix/api-timeout-handling`）
-            4. **实现修复/功能**
-            5. **运行检查**：
-               - 后端：`cd apps/api && uv run pytest && uv run ruff check . && uv run pyright`
-               - 前端：`cd apps/web && pnpm test:run && pnpm lint`
-            6. **创建 PR**：使用 `gh pr create`，描述中包含 `Closes #${{ github.event.issue.number }}`
-            7. **移除 in-progress 标签**
-
-            ## 分支命名
-
-            格式：`{fix|feat|docs}/{3-5个英文单词slug}`，全小写连字符分隔。
-
-            ## gh 命令参考
-
-            ```bash
-            gh pr create --title "fix: 简短描述" --body "详细说明
-
-            Closes #${{ github.event.issue.number }}" --base master
-            ```
-
-            禁止泄露tokens/花费/定价信息。
+          prompt: ${{ steps.prompt.outputs.content }}
           settings: '{"alwaysThinkingEnabled":true,"attribution":{"commit":"","pr":""}}'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -585,27 +509,23 @@ jobs:
         if: steps.check-label.outputs.has_needs_info == 'true' && steps.check-author.outputs.is_author == 'true'
         uses: actions/checkout@v6
 
+      - name: Load prompt
+        if: steps.check-label.outputs.has_needs_info == 'true' && steps.check-author.outputs.is_author == 'true'
+        id: prompt
+        run: |
+          export ISSUE_NUMBER=${{ github.event.issue.number }}
+          PROMPT=$(envsubst < .github/prompts/claude-agent/handle-info-reply.md)
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          echo "$PROMPT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Run Claude Code to re-analyze
         if: steps.check-label.outputs.has_needs_info == 'true' && steps.check-author.outputs.is_author == 'true'
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          prompt: |
-            你是issue分析机器人（中文沟通）。issue作者补充了信息，请重新分析。
-
-            你的任务：
-            1. 阅读issue原文和所有评论
-            2. 判断信息现在是否充足
-
-            3. 根据情况更新标签并评论：
-               a) 信息仍不足 → 保持 needs-info 标签，评论说明还需要什么
-               b) 信息充足 → 移除 needs-info，添加 awaiting-approval，评论说明已收到补充信息，维护者可使用 `/approve` 批准处理
-
-            使用 gh 命令操作：
-            - 移除标签: gh issue edit ${{ github.event.issue.number }} --remove-label "标签名"
-            - 添加标签: gh issue edit ${{ github.event.issue.number }} --add-label "标签名"
-            - 评论: gh issue comment ${{ github.event.issue.number }} --body "内容"
+          prompt: ${{ steps.prompt.outputs.content }}
           claude_args: --allowedTools Bash(gh:*)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -763,6 +683,15 @@ jobs:
           }
           EOF
 
+      - name: Load prompt
+        id: prompt
+        run: |
+          export ISSUE_NUMBER=${{ github.event.issue.number }}
+          PROMPT=$(envsubst < .github/prompts/claude-agent/manual.md)
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          echo "$PROMPT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Run Claude Code
         timeout-minutes: 120
         uses: anthropics/claude-code-action@v1
@@ -771,30 +700,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           trigger_phrase: "@autorouter-bot"
           claude_args: --mcp-config '${{ steps.mcp-config.outputs.mcp_config }}'
-          prompt: |
-            你是仓库专属机器人（中文沟通，代码/命令保持原文）。
-
-            ## 交互式处理流程
-
-            每次响应 @autorouter-bot 的评论时：
-
-            1. **理解需求**：先输出「需求摘要」「不确定点」「待确认清单」
-            2. **在获得明确同意前**：仅提问和分析，不修改代码
-            3. **分析问题**：
-               - Bug：使用 auggie → code-index → codex 定位，给出「复现路径 / 根因定位 / 修复方案」
-               - Feature：分析可行性、必要性、实施难度
-            4. **获得确认后**：
-               - 创建分支（命名：`{fix|feat|docs}/{简短描述}`）
-               - 实现修复/功能
-               - 运行测试/静态检查
-               - 使用 `gh pr create` 创建 PR，描述中包含 `Closes #Issue号`
-            5. **在 PR 评论中再次被 @ 时**：仅更新当前 PR 并同步最新自检
-
-            ## 分支命名
-
-            格式：`{fix|feat|docs}/{3-5个英文单词slug}`，全小写连字符分隔。
-
-            禁止泄露tokens/花费/定价信息。
+          prompt: ${{ steps.prompt.outputs.content }}
           settings: '{"alwaysThinkingEnabled":true,"attribution":{"commit":"","pr":""}}'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
