@@ -702,7 +702,6 @@ jobs:
           claude_args: --mcp-config '${{ steps.mcp-config.outputs.mcp_config }}'
           prompt: ${{ steps.prompt.outputs.content }}
           settings: '{"alwaysThinkingEnabled":true,"attribution":{"commit":"","pr":""}}'
-          show_full_output: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
