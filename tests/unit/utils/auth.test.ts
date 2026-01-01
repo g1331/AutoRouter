@@ -1,10 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   hashApiKey,
   verifyApiKey,
   extractApiKey,
   getKeyPrefix,
   generateApiKey,
+  validateAdminAuth,
+  revealApiKey,
 } from "@/lib/utils/auth";
 
 describe("auth utilities", () => {
@@ -117,6 +119,92 @@ describe("auth utilities", () => {
       const key = generateApiKey();
       const randomPart = key.slice(8);
       expect(randomPart).toMatch(/^[a-zA-Z0-9]+$/);
+    });
+  });
+
+  describe("validateAdminAuth", () => {
+    const originalEnv = process.env;
+
+    beforeEach(() => {
+      vi.resetModules();
+      process.env = { ...originalEnv };
+    });
+
+    afterEach(() => {
+      process.env = originalEnv;
+    });
+
+    it("should return false when no admin token configured", async () => {
+      // Reset modules to test with no ADMIN_TOKEN
+      delete process.env.ADMIN_TOKEN;
+      const { validateAdminAuth: freshValidateAdminAuth } = await import("@/lib/utils/auth");
+
+      const result = freshValidateAdminAuth("Bearer some-token");
+      expect(result).toBe(false);
+    });
+
+    it("should validate correct admin token", async () => {
+      process.env.ADMIN_TOKEN = "test-admin-token";
+      const { validateAdminAuth: freshValidateAdminAuth } = await import("@/lib/utils/auth");
+
+      const result = freshValidateAdminAuth("Bearer test-admin-token");
+      expect(result).toBe(true);
+    });
+
+    it("should reject incorrect admin token", async () => {
+      process.env.ADMIN_TOKEN = "test-admin-token";
+      const { validateAdminAuth: freshValidateAdminAuth } = await import("@/lib/utils/auth");
+
+      const result = freshValidateAdminAuth("Bearer wrong-token");
+      expect(result).toBe(false);
+    });
+
+    it("should handle null auth header", async () => {
+      process.env.ADMIN_TOKEN = "test-admin-token";
+      const { validateAdminAuth: freshValidateAdminAuth } = await import("@/lib/utils/auth");
+
+      const result = freshValidateAdminAuth(null);
+      expect(result).toBe(false);
+    });
+
+    it("should handle raw token without Bearer prefix", async () => {
+      process.env.ADMIN_TOKEN = "test-admin-token";
+      const { validateAdminAuth: freshValidateAdminAuth } = await import("@/lib/utils/auth");
+
+      const result = freshValidateAdminAuth("test-admin-token");
+      expect(result).toBe(true);
+    });
+  });
+
+  describe("revealApiKey", () => {
+    const originalEnv = process.env;
+
+    beforeEach(() => {
+      vi.resetModules();
+      process.env = { ...originalEnv };
+    });
+
+    afterEach(() => {
+      process.env = originalEnv;
+    });
+
+    it("should throw error for null encrypted key", async () => {
+      process.env.ALLOW_KEY_REVEAL = "true";
+      const { revealApiKey: freshRevealApiKey } = await import("@/lib/utils/auth");
+
+      await expect(freshRevealApiKey(null, "somehash")).rejects.toThrow(
+        "Cannot reveal legacy bcrypt-only key"
+      );
+    });
+
+    it("should throw error when key reveal is disabled", async () => {
+      // ALLOW_KEY_REVEAL defaults to false, ensure it's not set
+      delete process.env.ALLOW_KEY_REVEAL;
+      const { revealApiKey: freshRevealApiKey } = await import("@/lib/utils/auth");
+
+      await expect(freshRevealApiKey("encrypted-value", "somehash")).rejects.toThrow(
+        "Key reveal is disabled"
+      );
     });
   });
 });
