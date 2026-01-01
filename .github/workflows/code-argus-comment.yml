@@ -17,7 +17,7 @@ on:
 
 # Permissions needed to dispatch events and add reactions
 permissions:
-  contents: write  # Required for createDispatchEvent API
+  contents: write # Required for createDispatchEvent API
   issues: write
 
 jobs:
