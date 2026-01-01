@@ -15,9 +15,9 @@ on:
   issue_comment:
     types: [created]
 
-# Minimal permissions needed to dispatch and react
+# Permissions needed to dispatch events and add reactions
 permissions:
-  contents: read
+  contents: write  # Required for createDispatchEvent API
   issues: write
 
 jobs:
