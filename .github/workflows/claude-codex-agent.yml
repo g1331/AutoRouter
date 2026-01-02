@@ -687,6 +687,9 @@ jobs:
         id: prompt
         run: |
           export ISSUE_NUMBER=${{ github.event.issue.number }}
+          export ACTOR="${{ github.actor }}"
+          export COMMENT_BODY="${{ github.event.comment.body }}"
+          export IS_PR="${{ github.event.issue.pull_request != '' }}"
           PROMPT=$(envsubst < .github/prompts/claude-agent/manual.md)
           echo "content<<EOF" >> $GITHUB_OUTPUT
           echo "$PROMPT" >> $GITHUB_OUTPUT
@@ -702,7 +705,6 @@ jobs:
           claude_args: --mcp-config '${{ steps.mcp-config.outputs.mcp_config }}'
           prompt: ${{ steps.prompt.outputs.content }}
           settings: '{"alwaysThinkingEnabled":true,"attribution":{"commit":"","pr":""}}'
-          show_full_output: true  # DEBUG: 查看 Claude 实际行为
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
