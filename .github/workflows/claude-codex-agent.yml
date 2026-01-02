@@ -685,11 +685,12 @@ jobs:
 
       - name: Load prompt
         id: prompt
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ACTOR: ${{ github.actor }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          IS_PR: ${{ github.event.issue.pull_request != '' }}
         run: |
-          export ISSUE_NUMBER=${{ github.event.issue.number }}
-          export ACTOR="${{ github.actor }}"
-          export COMMENT_BODY="${{ github.event.comment.body }}"
-          export IS_PR="${{ github.event.issue.pull_request != '' }}"
           PROMPT=$(envsubst < .github/prompts/claude-agent/manual.md)
           echo "content<<EOF" >> $GITHUB_OUTPUT
           echo "$PROMPT" >> $GITHUB_OUTPUT
