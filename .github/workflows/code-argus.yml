@@ -331,11 +331,15 @@ jobs:
       # Step 5: Save results as artifact for publish workflow
       # ============================================================
       - name: Save review results
+        env:
+          PR_NUMBER: ${{ steps.context.outputs.pr_number }}
+          HEAD_SHA: ${{ steps.context.outputs.head_sha }}
+          REVIEW_OUTPUT: ${{ steps.review.outputs.final-message }}
         run: |
           mkdir -p /tmp/review-results
-          echo '${{ steps.context.outputs.pr_number }}' > /tmp/review-results/pr_number.txt
-          echo '${{ steps.context.outputs.head_sha }}' > /tmp/review-results/head_sha.txt
-          echo '${{ steps.review.outputs.final-message }}' > /tmp/review-results/review_output.json
+          echo "$PR_NUMBER" > /tmp/review-results/pr_number.txt
+          echo "$HEAD_SHA" > /tmp/review-results/head_sha.txt
+          echo "$REVIEW_OUTPUT" > /tmp/review-results/review_output.json
 
       - name: Upload review artifact
         uses: actions/upload-artifact@v6
