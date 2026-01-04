@@ -19,6 +19,7 @@ on:
 permissions:
   contents: write # Required for createDispatchEvent API
   issues: write
+  pull-requests: write # Required for reactions on PR comments
 
 jobs:
   trigger:
