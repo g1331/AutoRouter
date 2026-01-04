@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { VibeKanbanProvider } from "@/providers/vibe-kanban-provider";
 
 /**
  * Cassette Futurism Design System - Font Configuration
@@ -66,7 +67,10 @@ export default async function RootLayout({ children, params }: RootLayoutProps) 
         {/* VT323 pixel font loaded via Google Fonts link for better weight control */}
         <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet" />
       </head>
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        {children}
+        <VibeKanbanProvider />
+      </body>
     </html>
   );
 }
