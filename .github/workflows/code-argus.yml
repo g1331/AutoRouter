@@ -39,10 +39,12 @@ jobs:
   review:
     name: Review
     runs-on: ubuntu-latest
-    # Skip bot-triggered events (GitHub Actions bot, Dependabot, etc.)
+    # For repository_dispatch: trust it (permission already checked by comment workflow)
+    # For pull_request: skip bot-triggered events (GitHub Actions bot, Dependabot, etc.)
     if: |
-      github.actor != 'github-actions[bot]' &&
-      github.actor != 'dependabot[bot]'
+      github.event_name == 'repository_dispatch' ||
+      (github.actor != 'github-actions[bot]' &&
+       github.actor != 'dependabot[bot]')
     timeout-minutes: 45
     steps:
       # ============================================================
