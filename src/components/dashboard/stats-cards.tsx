@@ -58,7 +58,7 @@ function StatCard({
     <Card
       className={cn(
         "cf-panel cf-flicker-in cf-data-scan group",
-        "hover:cf-pulse-glow transition-all duration-300"
+        "hover:animate-[cf-pulse-glow_2s_ease-in-out_infinite] transition-all duration-300"
       )}
       style={{ animationDelay: `${delay}ms` }}
     >

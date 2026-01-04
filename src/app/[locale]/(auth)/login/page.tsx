@@ -42,9 +42,12 @@ function BootSequence({ onComplete }: { onComplete: () => void }) {
 
   useEffect(() => {
     if (visibleLines < BOOT_MESSAGES.length) {
+      const currentDelay = BOOT_MESSAGES[visibleLines]?.delay ?? 0;
+      const previousDelay = BOOT_MESSAGES[visibleLines - 1]?.delay ?? 0;
+      const stepDelay = Math.max(0, currentDelay - previousDelay);
       const timer = setTimeout(() => {
         setVisibleLines((prev) => prev + 1);
-      }, BOOT_MESSAGES[visibleLines]?.delay || 300);
+      }, stepDelay);
       return () => clearTimeout(timer);
     } else {
       const completeTimer = setTimeout(onComplete, 500);
