@@ -284,6 +284,8 @@ jobs:
           effort: xhigh
           sandbox: read-only
           prompt-file: .github/codex/prompts/review.md
+          # Allow bots for repository_dispatch (triggered by comment workflow as github-actions[bot])
+          allow-bots: ${{ github.event_name == 'repository_dispatch' }}
           output-schema: |
             {
               "type": "object",
