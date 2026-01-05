@@ -29,6 +29,8 @@ env:
   CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
   CODEX_BASE_URL: ${{ secrets.CODEX_BASE_URL }}
   CODEX_MODEL: ${{ vars.CODEX_MODEL }}
+  AUGMENT_API_TOKEN: ${{ secrets.AUGMENT_API_TOKEN }}
+  AUGMENT_API_URL: ${{ secrets.AUGMENT_API_URL }}
 
 concurrency:
   group: code-argus-${{ github.event.pull_request.number || github.event.client_payload.pr_number || github.run_id }}
@@ -111,6 +113,35 @@ jobs:
 
       - name: Fetch base branch for diff
         run: git fetch --no-tags origin ${{ steps.context.outputs.base_ref }}
+
+      # ============================================================
+      # Step 2.5: Setup MCP servers
+      # ============================================================
+      - name: Setup Node 22 (for auggie)
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Install auggie CLI
+        run: npm install -g @augmentcode/auggie@latest
+
+      - name: Configure Codex MCP servers
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          config = f"""
+          [mcp_servers.auggie-mcp]
+          command = "auggie"
+          args = ["--mcp"]
+          env = {{ AUGMENT_API_TOKEN = "{os.environ['AUGMENT_API_TOKEN']}", AUGMENT_API_URL = "{os.environ['AUGMENT_API_URL']}" }}
+          """
+
+          cfg_dir = Path.home() / ".codex"
+          cfg_dir.mkdir(parents=True, exist_ok=True)
+          (cfg_dir / "config.toml").write_text(config.strip() + "\n", encoding="utf-8")
+          PY
 
       # ============================================================
       # Step 3: Prepare review input
@@ -255,12 +286,20 @@ jobs:
           ## Instructions
 
           1. You MAY read any file in the repository and run searches to understand context
-          2. Review ONLY the changes in this PR (diff provided below); comments MUST target lines within the diff
-          3. Sort issues by severity (high first), then limit to max_comments
-          4. If language is 'auto', respond in the same language as the PR title/description
-          5. If no significant issues found, return empty comments array
-          6. Output ONLY the JSON object, no other text
-          7. VERIFY each comment's file and line are in the diff before including it
+          2. **IMPORTANT: Use codebase-retrieval for code understanding**
+             - Prioritize using `codebase-retrieval` tool to retrieve and understand code context
+             - Before analyzing code, use `codebase-retrieval` to get detailed information about:
+               - Related classes, methods, and functions
+               - Dependencies and imports
+               - Usage patterns and call sites
+             - Request all relevant symbols in a single call for efficiency
+             - Only fall back to file reading if `codebase-retrieval` is unavailable
+          3. Review ONLY the changes in this PR (diff provided below); comments MUST target lines within the diff
+          4. Sort issues by severity (high first), then limit to max_comments
+          5. If language is 'auto', respond in the same language as the PR title/description
+          6. If no significant issues found, return empty comments array
+          7. Output ONLY the JSON object, no other text
+          8. VERIFY each comment's file and line are in the diff before including it
 
           ## PR Information
 
@@ -293,6 +332,8 @@ jobs:
           prompt-file: .github/codex/prompts/review.md
           # Allow bots for repository_dispatch (triggered by comment workflow as github-actions[bot])
           allow-bots: ${{ github.event_name == 'repository_dispatch' }}
+          # Enable MCP server for codebase retrieval
+          codex-args: '["--mcp-server", "auggie-mcp"]'
           output-schema: |
             {
               "type": "object",
