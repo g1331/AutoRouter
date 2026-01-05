@@ -50,3 +50,5 @@ CLAUDE.local.md
 
 # Drizzle
 # drizzle/ - migrations need to be committed for Docker deployment
+
+next-env.d.ts
