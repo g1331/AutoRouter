@@ -41,6 +41,18 @@ function BootSequence({ onComplete }: { onComplete: () => void }) {
   const [visibleLines, setVisibleLines] = useState<number>(0);
 
   useEffect(() => {
+    // Check for reduced motion preference
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (prefersReducedMotion) {
+      // Skip boot sequence immediately if user prefers reduced motion
+      setVisibleLines(BOOT_MESSAGES.length);
+      onComplete();
+      return;
+    }
+
     if (visibleLines < BOOT_MESSAGES.length) {
       const currentDelay = BOOT_MESSAGES[visibleLines]?.delay ?? 0;
       const previousDelay = BOOT_MESSAGES[visibleLines - 1]?.delay ?? 0;
@@ -56,7 +68,7 @@ function BootSequence({ onComplete }: { onComplete: () => void }) {
   }, [visibleLines, onComplete]);
 
   return (
-    <div className="font-mono text-xs space-y-1">
+    <div className="font-mono text-xs space-y-1" role="status" aria-live="polite" aria-label="System initialization progress">
       {BOOT_MESSAGES.slice(0, visibleLines).map((msg, idx) => (
         <div
           key={idx}
@@ -66,15 +78,15 @@ function BootSequence({ onComplete }: { onComplete: () => void }) {
           )}
           style={{ animationDelay: `${idx * 100}ms` }}
         >
-          <span className="text-status-success">[OK]</span>
+          <span className="text-status-success" aria-label="Status OK">[OK]</span>
           <span>{msg.text}</span>
         </div>
       ))}
       {visibleLines < BOOT_MESSAGES.length && (
         <div className="flex items-center gap-2 text-amber-500">
-          <span className="animate-pulse">[ ]</span>
+          <span className="animate-pulse" aria-label="Loading">[ ]</span>
           <span>{BOOT_MESSAGES[visibleLines]?.text || "..."}</span>
-          <span className="cf-cursor-blink" />
+          <span className="cf-cursor-blink" aria-hidden="true" />
         </div>
       )}
     </div>
@@ -86,17 +98,17 @@ function BootSequence({ onComplete }: { onComplete: () => void }) {
  */
 function SystemStatus() {
   return (
-    <div className="flex items-center gap-4 font-mono text-[10px] text-amber-700">
+    <div className="flex items-center gap-4 font-mono text-[10px] text-amber-700" role="status" aria-label="System status">
       <div className="flex items-center gap-1.5">
-        <Cpu className="w-3 h-3" />
+        <Cpu className="w-3 h-3" aria-hidden="true" />
         <span>CPU: OK</span>
       </div>
       <div className="flex items-center gap-1.5">
-        <Shield className="w-3 h-3" />
+        <Shield className="w-3 h-3" aria-hidden="true" />
         <span>SEC: ACTIVE</span>
       </div>
       <div className="flex items-center gap-1.5">
-        <div className="cf-status-led cf-status-led-online" />
+        <div className="cf-status-led cf-status-led-online" role="img" aria-label="Online indicator" />
         <span>NET: ONLINE</span>
       </div>
     </div>

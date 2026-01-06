@@ -657,10 +657,6 @@ html.light.theme-switching::after {
   }
 
   /* CRT screen edge vignette */
-  .cf-vignette {
-    position: relative;
-  }
-
   .cf-vignette::before {
     content: "";
     position: absolute;
