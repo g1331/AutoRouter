@@ -11,6 +11,7 @@ on:
       - "*.mjs"
       - ".github/workflows/**"
   pull_request:
+    types: [opened, synchronize, reopened]  # Explicitly specify types to ensure all PR updates trigger
     branches: [master]
     paths:
       - "src/**"
