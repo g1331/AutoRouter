@@ -104,7 +104,7 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     })
     .returning();
 
-  console.log(`Created upstream: ${name}, provider=${provider}, default=${isDefault}`);
+  console.warn(`Created upstream: ${name}, provider=${provider}, default=${isDefault}`);
 
   return {
     id: newUpstream.id,
@@ -166,7 +166,7 @@ export async function updateUpstream(
     .where(eq(upstreams.id, upstreamId))
     .returning();
 
-  console.log(`Updated upstream: ${updated.name}`);
+  console.warn(`Updated upstream: ${updated.name}`);
 
   // Decrypt key for masking
   const decryptedKey = decrypt(updated.apiKeyEncrypted);
@@ -200,7 +200,7 @@ export async function deleteUpstream(upstreamId: string): Promise<void> {
 
   await db.delete(upstreams).where(eq(upstreams.id, upstreamId));
 
-  console.log(`Deleted upstream: ${existing.name}`);
+  console.warn(`Deleted upstream: ${existing.name}`);
 }
 
 /**

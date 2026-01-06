@@ -133,7 +133,7 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
     );
   }
 
-  console.log(`Created API key: ${keyPrefix}, name='${name}', upstreams=${upstreamIds.length}`);
+  console.warn(`Created API key: ${keyPrefix}, name='${name}', upstreams=${upstreamIds.length}`);
 
   return {
     id: newKey.id,
@@ -163,7 +163,7 @@ export async function deleteApiKey(keyId: string): Promise<void> {
 
   await db.delete(apiKeys).where(eq(apiKeys.id, keyId));
 
-  console.log(`Deleted API key: ${existing.keyPrefix}, name='${existing.name}'`);
+  console.warn(`Deleted API key: ${existing.keyPrefix}, name='${existing.name}'`);
 }
 
 /**

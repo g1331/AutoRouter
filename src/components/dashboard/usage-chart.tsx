@@ -22,12 +22,11 @@ import { format, parseISO } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { chartTheme, getUpstreamColor, formatNumber } from "./chart-theme";
-import type { StatsTimeseriesResponse, TimeRange } from "@/types/api";
+import type { StatsTimeseriesResponse } from "@/types/api";
 
 interface UsageChartProps {
   data: StatsTimeseriesResponse | undefined;
   isLoading: boolean;
-  timeRange: TimeRange;
 }
 
 interface ChartDataPoint {
@@ -79,7 +78,7 @@ function CustomLegend({ payload }: { payload?: Array<{ value: string; color: str
   );
 }
 
-export function UsageChart({ data, isLoading, timeRange }: UsageChartProps) {
+export function UsageChart({ data, isLoading }: UsageChartProps) {
   const t = useTranslations("dashboard");
 
   // Transform data for recharts

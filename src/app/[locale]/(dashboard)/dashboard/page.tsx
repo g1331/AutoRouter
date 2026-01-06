@@ -73,7 +73,7 @@ export default function DashboardPage() {
             <TimeRangeSelector value={timeRange} onChange={setTimeRange} />
           </div>
 
-          <UsageChart data={timeseries} isLoading={timeseriesLoading} timeRange={timeRange} />
+          <UsageChart data={timeseries} isLoading={timeseriesLoading} />
         </div>
 
         {/* Leaderboard Section */}

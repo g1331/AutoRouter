@@ -69,6 +69,8 @@ function BootSequence({ onComplete }: { onComplete: () => void }) {
       const completeTimer = setTimeout(onComplete, 500);
       return () => clearTimeout(completeTimer);
     }
+    // prefersReducedMotion is stable (useMemo with empty deps), safe to omit
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleLines, onComplete]);
 
   return (

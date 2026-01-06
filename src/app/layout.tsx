@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono, VT323 } from "next/font/google";
 import "./globals.css";
 import { VibeKanbanProvider } from "@/providers/vibe-kanban-provider";
 
@@ -8,7 +8,7 @@ import { VibeKanbanProvider } from "@/providers/vibe-kanban-provider";
  *
  * - Inter: Body text, descriptions (sans-serif with CJK fallback)
  * - JetBrains Mono: Data, UI chrome, code (monospace)
- * - VT323: Display numbers, titles (pixel font) - loaded via CSS for weight control
+ * - VT323: Display numbers, titles (pixel font)
  */
 
 const inter = Inter({
@@ -43,6 +43,13 @@ const jetbrainsMono = JetBrains_Mono({
   ],
 });
 
+const vt323 = VT323({
+  weight: "400",
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-pixel",
+});
+
 export const metadata: Metadata = {
   title: "AutoRouter Admin",
   description: "AI API Gateway Management Console",
@@ -61,12 +68,9 @@ export default async function RootLayout({ children, params }: RootLayoutProps) 
     <html
       lang={locale}
       suppressHydrationWarning
-      className={`${inter.variable} ${jetbrainsMono.variable}`}
+      className={`${inter.variable} ${jetbrainsMono.variable} ${vt323.variable}`}
     >
-      <head>
-        {/* VT323 pixel font loaded via Google Fonts link for better weight control */}
-        <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet" />
-      </head>
+      <head />
       <body className={inter.className}>
         {children}
         <VibeKanbanProvider />

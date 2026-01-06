@@ -5,8 +5,6 @@ import {
   extractApiKey,
   getKeyPrefix,
   generateApiKey,
-  validateAdminAuth,
-  revealApiKey,
 } from "@/lib/utils/auth";
 
 describe("auth utilities", () => {

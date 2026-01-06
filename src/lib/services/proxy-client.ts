@@ -193,7 +193,7 @@ export async function forwardRequest(
   const body = await request.arrayBuffer();
 
   // Log request info
-  console.log(
+  console.warn(
     `[IN] Request ${requestId}:`,
     `Method: ${request.method}`,
     `Path: ${path}`,
@@ -204,13 +204,13 @@ export async function forwardRequest(
   if (body.byteLength > 0) {
     try {
       const bodyJson = JSON.parse(new TextDecoder().decode(body));
-      console.log(
+      console.warn(
         `[BODY] model: ${bodyJson.model || "N/A"},`,
         `stream: ${bodyJson.stream || false},`,
         `messages: ${(bodyJson.messages || []).length} messages`
       );
     } catch {
-      console.log(`[BODY] ${body.byteLength} bytes (non-JSON)`);
+      console.warn(`[BODY] ${body.byteLength} bytes (non-JSON)`);
     }
   }
 
@@ -230,7 +230,7 @@ export async function forwardRequest(
     clearTimeout(timeoutId);
 
     // Log response metadata
-    console.log(
+    console.warn(
       `[OUT] Response ${requestId}:`,
       `status=${upstreamResponse.status},`,
       `content-type=${upstreamResponse.headers.get("content-type") || "unknown"}`
@@ -256,7 +256,7 @@ export async function forwardRequest(
       const transformedStream = upstreamResponse.body.pipeThrough(
         createSSETransformer((u) => {
           usage = u;
-          console.log(
+          console.warn(
             `Request ${requestId} usage:`,
             `prompt=${u.promptTokens},`,
             `completion=${u.completionTokens},`,
@@ -287,7 +287,7 @@ export async function forwardRequest(
           const extracted = extractUsage(data);
           if (extracted) {
             usage = extracted;
-            console.log(
+            console.warn(
               `Request ${requestId} usage:`,
               `prompt=${usage.promptTokens},`,
               `completion=${usage.completionTokens},`,
