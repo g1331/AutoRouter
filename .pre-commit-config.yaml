@@ -24,7 +24,7 @@ repos:
         name: prettier
         entry: pnpm exec prettier --write
         language: system
-        files: \.(js|jsx|ts|tsx|css|json|md)$
+        files: \.(js|jsx|ts|tsx|css|json|md|yml|yaml)$
         exclude: (node_modules|\.next|drizzle)/
 
       - id: eslint
