@@ -2,8 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateAdminAuth } from "@/lib/utils/auth";
 import { errorResponse } from "@/lib/utils/api-auth";
 import { getApiKeyById, deleteApiKey, ApiKeyNotFoundError } from "@/lib/services/key-manager";
+import { z } from "zod";
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+const updateApiKeySchema = z.object({
+  name: z.string().min(1).max(64).optional(),
+  description: z.string().nullable().optional(),
+  upstream_ids: z.array(z.string()).optional(),
+  is_active: z.boolean().optional(),
+  expires_at: z.string().nullable().optional(),
+});
 
 /**
  * GET /api/admin/keys/[id] - Get API key details
