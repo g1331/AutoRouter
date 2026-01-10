@@ -2,7 +2,7 @@
 
 import { formatDistanceToNow } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
-import { Trash2, Copy, Check, Key, Eye, EyeOff } from "lucide-react";
+import { Trash2, Copy, Check, Key, Eye, EyeOff, Pencil } from "lucide-react";
 import { useState } from "react";
 import type { APIKey } from "@/types/api";
 import { useRevealAPIKey } from "@/hooks/use-api-keys";
@@ -21,6 +21,7 @@ import { getDateLocale } from "@/lib/date-locale";
 
 interface KeysTableProps {
   keys: APIKey[];
+  onEdit: (key: APIKey) => void;
   onRevoke: (key: APIKey) => void;
 }
 
@@ -32,7 +33,7 @@ interface KeysTableProps {
  * - Amber accents and glow effects
  * - Status badges for expiry
  */
-export function KeysTable({ keys, onRevoke }: KeysTableProps) {
+export function KeysTable({ keys, onEdit, onRevoke }: KeysTableProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [visibleKeyIds, setVisibleKeyIds] = useState<Set<string>>(new Set());
   const [revealedKeys, setRevealedKeys] = useState<Map<string, string>>(new Map());
@@ -200,16 +201,28 @@ export function KeysTable({ keys, onRevoke }: KeysTableProps) {
                 })}
               </TableCell>
               <TableCell className="text-right">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  type="button"
-                  className="h-8 w-8 text-status-error hover:bg-status-error-muted"
-                  onClick={() => onRevoke(key)}
-                  aria-label={`${t("revokeKey")}: ${key.name}`}
-                >
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </Button>
+                <div className="flex items-center justify-end gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    type="button"
+                    className="h-8 w-8 text-amber-500 hover:bg-amber-500/10"
+                    onClick={() => onEdit(key)}
+                    aria-label={`${tCommon("edit")}: ${key.name}`}
+                  >
+                    <Pencil className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    type="button"
+                    className="h-8 w-8 text-status-error hover:bg-status-error-muted"
+                    onClick={() => onRevoke(key)}
+                    aria-label={`${t("revokeKey")}: ${key.name}`}
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                </div>
               </TableCell>
             </TableRow>
           ))}
