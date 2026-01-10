@@ -38,6 +38,14 @@ export interface APIKeyRevealResponse {
   name: string;
 }
 
+export interface APIKeyUpdate {
+  name?: string;
+  description?: string | null;
+  upstream_ids?: string[]; // UUID[]
+  is_active?: boolean;
+  expires_at?: string | null; // ISO 8601 date string
+}
+
 // ========== Upstream 相关类型 ==========
 
 export interface UpstreamCreate {
