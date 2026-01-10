@@ -25,6 +25,14 @@ export interface ApiKeyCreateInput {
   expiresAt?: Date | null;
 }
 
+export interface ApiKeyUpdateInput {
+  name?: string;
+  description?: string | null;
+  upstreamIds?: string[];
+  isActive?: boolean;
+  expiresAt?: Date | null;
+}
+
 export interface ApiKeyCreateResult {
   id: string;
   keyValue: string; // Full key - only returned on creation
