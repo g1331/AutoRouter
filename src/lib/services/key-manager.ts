@@ -158,6 +158,104 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
 }
 
 /**
+ * Update an existing API key.
+ */
+export async function updateApiKey(
+  keyId: string,
+  input: ApiKeyUpdateInput
+): Promise<ApiKeyListItem> {
+  const existing = await db.query.apiKeys.findFirst({
+    where: eq(apiKeys.id, keyId),
+  });
+
+  if (!existing) {
+    throw new ApiKeyNotFoundError(`API key not found: ${keyId}`);
+  }
+
+  // Check name uniqueness if changing name
+  if (input.name && input.name !== existing.name) {
+    const nameConflict = await db.query.apiKeys.findFirst({
+      where: eq(apiKeys.name, input.name),
+    });
+    if (nameConflict) {
+      throw new Error(`API key with name '${input.name}' already exists`);
+    }
+  }
+
+  // Validate upstream IDs if provided
+  let upstreamIds: string[] | undefined;
+  if (input.upstreamIds !== undefined) {
+    if (input.upstreamIds.length === 0) {
+      throw new Error("At least one upstream must be specified");
+    }
+
+    const validUpstreams = await db.query.upstreams.findMany({
+      where: inArray(upstreams.id, input.upstreamIds),
+    });
+
+    if (validUpstreams.length !== input.upstreamIds.length) {
+      const validIds = new Set(validUpstreams.map((u) => u.id));
+      const invalidIds = input.upstreamIds.filter((id) => !validIds.has(id));
+      throw new Error(`Invalid upstream IDs: ${invalidIds.join(", ")}`);
+    }
+
+    upstreamIds = input.upstreamIds;
+  }
+
+  // Build update values
+  const updateValues: Partial<typeof apiKeys.$inferInsert> = {
+    updatedAt: new Date(),
+  };
+
+  if (input.name !== undefined) updateValues.name = input.name;
+  if (input.description !== undefined) updateValues.description = input.description;
+  if (input.isActive !== undefined) updateValues.isActive = input.isActive;
+  if (input.expiresAt !== undefined) updateValues.expiresAt = input.expiresAt;
+
+  const [updated] = await db
+    .update(apiKeys)
+    .set(updateValues)
+    .where(eq(apiKeys.id, keyId))
+    .returning();
+
+  // Update upstream permissions if provided
+  if (upstreamIds !== undefined) {
+    // Delete existing permissions
+    await db.delete(apiKeyUpstreams).where(eq(apiKeyUpstreams.apiKeyId, keyId));
+
+    // Insert new permissions
+    const now = new Date();
+    await db.insert(apiKeyUpstreams).values(
+      upstreamIds.map((upstreamId) => ({
+        apiKeyId: keyId,
+        upstreamId,
+        createdAt: now,
+      }))
+    );
+  }
+
+  // Fetch final upstream IDs for response
+  const upstreamLinks = await db.query.apiKeyUpstreams.findMany({
+    where: eq(apiKeyUpstreams.apiKeyId, keyId),
+  });
+  const finalUpstreamIds = upstreamLinks.map((link) => link.upstreamId);
+
+  console.warn(`Updated API key: ${updated.keyPrefix}, name='${updated.name}'`);
+
+  return {
+    id: updated.id,
+    keyPrefix: updated.keyPrefix,
+    name: updated.name,
+    description: updated.description,
+    upstreamIds: finalUpstreamIds,
+    isActive: updated.isActive,
+    expiresAt: updated.expiresAt,
+    createdAt: updated.createdAt,
+    updatedAt: updated.updatedAt,
+  };
+}
+
+/**
  * Delete an API key from the database.
  */
 export async function deleteApiKey(keyId: string): Promise<void> {

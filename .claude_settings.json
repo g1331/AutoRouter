@@ -1,0 +1,39 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true
+  },
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read(./**)",
+      "Write(./**)",
+      "Edit(./**)",
+      "Glob(./**)",
+      "Grep(./**)",
+      "Read(D:\\Codebase\\AutoRouter\\.auto-claude\\worktrees\\tasks\\001-add-api-key-update-functionality/**)",
+      "Write(D:\\Codebase\\AutoRouter\\.auto-claude\\worktrees\\tasks\\001-add-api-key-update-functionality/**)",
+      "Edit(D:\\Codebase\\AutoRouter\\.auto-claude\\worktrees\\tasks\\001-add-api-key-update-functionality/**)",
+      "Glob(D:\\Codebase\\AutoRouter\\.auto-claude\\worktrees\\tasks\\001-add-api-key-update-functionality/**)",
+      "Grep(D:\\Codebase\\AutoRouter\\.auto-claude\\worktrees\\tasks\\001-add-api-key-update-functionality/**)",
+      "Read(D:\\Codebase\\AutoRouter\\.auto-claude\\worktrees\\tasks\\001-add-api-key-update-functionality\\.auto-claude\\specs\\001-add-api-key-update-functionality/**)",
+      "Write(D:\\Codebase\\AutoRouter\\.auto-claude\\worktrees\\tasks\\001-add-api-key-update-functionality\\.auto-claude\\specs\\001-add-api-key-update-functionality/**)",
+      "Edit(D:\\Codebase\\AutoRouter\\.auto-claude\\worktrees\\tasks\\001-add-api-key-update-functionality\\.auto-claude\\specs\\001-add-api-key-update-functionality/**)",
+      "Read(D:\\Codebase\\AutoRouter\\.auto-claude/**)",
+      "Write(D:\\Codebase\\AutoRouter\\.auto-claude/**)",
+      "Edit(D:\\Codebase\\AutoRouter\\.auto-claude/**)",
+      "Glob(D:\\Codebase\\AutoRouter\\.auto-claude/**)",
+      "Grep(D:\\Codebase\\AutoRouter\\.auto-claude/**)",
+      "Bash(*)",
+      "WebFetch(*)",
+      "WebSearch(*)",
+      "mcp__context7__resolve-library-id(*)",
+      "mcp__context7__get-library-docs(*)",
+      "mcp__graphiti-memory__search_nodes(*)",
+      "mcp__graphiti-memory__search_facts(*)",
+      "mcp__graphiti-memory__add_episode(*)",
+      "mcp__graphiti-memory__get_episodes(*)",
+      "mcp__graphiti-memory__get_entity_edge(*)"
+    ]
+  }
+}
