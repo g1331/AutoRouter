@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Plus } from "lucide-react";
 import { format } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -34,10 +34,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { useCreateAPIKey, useUpdateAPIKey } from "@/hooks/use-api-keys";
 import { useAllUpstreams } from "@/hooks/use-upstreams";
-import type { APIKey } from "@/types/api";
+import type { APIKey, APIKeyCreateResponse } from "@/types/api";
 import { getDateLocale } from "@/lib/date-locale";
+import { ShowKeyDialog } from "./show-key-dialog";
 
-interface EditKeyDialogProps {
+interface KeyFormDialogProps {
   apiKey?: APIKey | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -48,13 +49,13 @@ interface EditKeyDialogProps {
 /**
  * M3 API Key Form Dialog (Create/Edit)
  */
-export function EditKeyDialog({
+export function KeyFormDialog({
   apiKey,
   open,
   onOpenChange,
   trigger,
   onKeyCreated,
-}: EditKeyDialogProps) {
+}: KeyFormDialogProps) {
   const isEdit = !!apiKey;
   const createMutation = useCreateAPIKey();
   const updateMutation = useUpdateAPIKey();
@@ -301,5 +302,40 @@ export function EditKeyDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       {dialogContent}
     </Dialog>
+  );
+}
+
+/**
+ * M3 Create API Key Button with Dialog
+ */
+export function CreateKeyButton() {
+  const [open, setOpen] = useState(false);
+  const [createdKey, setCreatedKey] = useState<APIKeyCreateResponse | null>(null);
+  const t = useTranslations("keys");
+
+  return (
+    <>
+      <KeyFormDialog
+        open={open}
+        onOpenChange={setOpen}
+        trigger={
+          <Button>
+            <Plus className="h-4 w-4 mr-2" />
+            {t("createKey")}
+          </Button>
+        }
+        onKeyCreated={(keyValue) => {
+          setCreatedKey({ key_value: keyValue } as APIKeyCreateResponse);
+        }}
+      />
+
+      {createdKey && (
+        <ShowKeyDialog
+          apiKey={createdKey}
+          open={!!createdKey}
+          onClose={() => setCreatedKey(null)}
+        />
+      )}
+    </>
   );
 }
