@@ -38,6 +38,32 @@ vi.mock("@/lib/utils/encryption", () => ({
   decrypt: vi.fn((value: string) => value.replace("encrypted:", "")),
 }));
 
+// Mock DNS module for SSRF protection tests
+vi.mock("dns", () => ({
+  default: {},
+  promises: {
+    resolve4: vi.fn((hostname: string) => {
+      // Mock safe public IPs for common test domains
+      if (hostname === "api.openai.com" || hostname === "api.anthropic.com") {
+        return Promise.resolve(["8.8.8.8"]); // Safe public IP
+      }
+      // Mock private IPs for SSRF test cases
+      if (hostname === "internal.example.com") {
+        return Promise.resolve(["192.168.1.1"]); // Private IP
+      }
+      if (hostname === "metadata.example.com") {
+        return Promise.resolve(["169.254.169.254"]); // AWS metadata IP
+      }
+      // Default: resolve to safe public IP
+      return Promise.resolve(["1.1.1.1"]);
+    }),
+    resolve6: vi.fn(() => {
+      // Most test cases don't need IPv6, return empty or fail gracefully
+      return Promise.reject(new Error("No IPv6 addresses"));
+    }),
+  },
+}));
+
 describe("upstream-service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -122,6 +148,429 @@ describe("upstream-service", () => {
         expect(e).toBeInstanceOf(Error);
         expect((e as Error).message).toBe("test error");
       }
+    });
+  });
+
+  describe("testUpstreamConnection", () => {
+    const mockFetch = vi.fn();
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      global.fetch = mockFetch;
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("should successfully test OpenAI connection", async () => {
+      const { testUpstreamConnection } = await import("@/lib/services/upstream-service");
+
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        text: vi.fn().mockResolvedValue(""),
+      });
+
+      const result = await testUpstreamConnection({
+        provider: "openai",
+        baseUrl: "https://api.openai.com",
+        apiKey: "sk-test-key-12345678",
+        timeout: 10,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.message).toBe("Connection successful");
+      expect(result.statusCode).toBe(200);
+      expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+      expect(result.errorType).toBeUndefined();
+      expect(result.testedAt).toBeInstanceOf(Date);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        "https://api.openai.com/v1/models",
+        expect.objectContaining({
+          method: "GET",
+          headers: {
+            Authorization: "Bearer sk-test-key-12345678",
+          },
+        })
+      );
+    });
+
+    it("should successfully test Anthropic connection", async () => {
+      const { testUpstreamConnection } = await import("@/lib/services/upstream-service");
+
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        text: vi.fn().mockResolvedValue(""),
+      });
+
+      const result = await testUpstreamConnection({
+        provider: "anthropic",
+        baseUrl: "https://api.anthropic.com",
+        apiKey: "sk-ant-api03-test-key",
+        timeout: 10,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.message).toBe("Connection successful");
+      expect(result.statusCode).toBe(200);
+      expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+      expect(result.errorType).toBeUndefined();
+      expect(result.testedAt).toBeInstanceOf(Date);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        "https://api.anthropic.com/v1/models",
+        expect.objectContaining({
+          method: "GET",
+          headers: {
+            "x-api-key": "sk-ant-api03-test-key",
+            "anthropic-version": "2023-06-01",
+          },
+        })
+      );
+    });
+
+    it("should accept 201 status as successful", async () => {
+      const { testUpstreamConnection } = await import("@/lib/services/upstream-service");
+
+      mockFetch.mockResolvedValueOnce({
+        status: 201,
+        text: vi.fn().mockResolvedValue(""),
+      });
+
+      const result = await testUpstreamConnection({
+        provider: "openai",
+        baseUrl: "https://api.openai.com",
+        apiKey: "sk-test-key",
+        timeout: 10,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.statusCode).toBe(201);
+    });
+
+    it("should handle invalid API key with 401 status", async () => {
+      const { testUpstreamConnection } = await import("@/lib/services/upstream-service");
+
+      mockFetch.mockResolvedValueOnce({
+        status: 401,
+        text: vi.fn().mockResolvedValue(JSON.stringify({ error: "Invalid API key" })),
+      });
+
+      const result = await testUpstreamConnection({
+        provider: "openai",
+        baseUrl: "https://api.openai.com",
+        apiKey: "sk-invalid-key",
+        timeout: 10,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe("Authentication failed - invalid API key");
+      expect(result.statusCode).toBe(401);
+      expect(result.errorType).toBe("authentication");
+      expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+      expect(result.errorDetails).toContain("HTTP 401");
+      expect(result.testedAt).toBeInstanceOf(Date);
+    });
+
+    it("should handle 403 forbidden status", async () => {
+      const { testUpstreamConnection } = await import("@/lib/services/upstream-service");
+
+      mockFetch.mockResolvedValueOnce({
+        status: 403,
+        text: vi.fn().mockResolvedValue("Forbidden"),
+      });
+
+      const result = await testUpstreamConnection({
+        provider: "anthropic",
+        baseUrl: "https://api.anthropic.com",
+        apiKey: "sk-ant-invalid",
+        timeout: 10,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe("Authentication failed - invalid API key");
+      expect(result.statusCode).toBe(403);
+      expect(result.errorType).toBe("authentication");
+      expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it("should handle network errors (DNS failure, connection refused)", async () => {
+      const { testUpstreamConnection } = await import("@/lib/services/upstream-service");
+
+      mockFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
+
+      const result = await testUpstreamConnection({
+        provider: "openai",
+        baseUrl: "https://invalid.example.com",
+        apiKey: "sk-test-key",
+        timeout: 10,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe("Network error - could not reach upstream");
+      expect(result.statusCode).toBeNull();
+      expect(result.latencyMs).toBeNull();
+      expect(result.errorType).toBe("network");
+      expect(result.errorDetails).toBe("fetch failed");
+      expect(result.testedAt).toBeInstanceOf(Date);
+    });
+
+    it("should handle timeout errors", async () => {
+      const { testUpstreamConnection } = await import("@/lib/services/upstream-service");
+
+      const abortError = new Error("The operation was aborted");
+      abortError.name = "AbortError";
+      mockFetch.mockRejectedValueOnce(abortError);
+
+      const result = await testUpstreamConnection({
+        provider: "openai",
+        baseUrl: "https://api.openai.com",
+        apiKey: "sk-test-key",
+        timeout: 5,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe("Request timed out after 5 seconds");
+      expect(result.statusCode).toBeNull();
+      expect(result.latencyMs).toBeNull();
+      expect(result.errorType).toBe("timeout");
+      expect(result.errorDetails).toBe("Request exceeded 5s timeout");
+      expect(result.testedAt).toBeInstanceOf(Date);
+    });
+
+    it("should handle invalid base URL format", async () => {
+      const { testUpstreamConnection } = await import("@/lib/services/upstream-service");
+
+      const result = await testUpstreamConnection({
+        provider: "openai",
+        baseUrl: "not-a-valid-url",
+        apiKey: "sk-test-key",
+        timeout: 10,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe("Invalid base URL format");
+      expect(result.statusCode).toBeNull();
+      expect(result.latencyMs).toBeNull();
+      expect(result.errorType).toBe("unknown");
+      expect(result.errorDetails).toContain("not a valid URL");
+      expect(result.testedAt).toBeInstanceOf(Date);
+    });
+
+    it("should handle 404 endpoint not found error", async () => {
+      const { testUpstreamConnection } = await import("@/lib/services/upstream-service");
+
+      mockFetch.mockResolvedValueOnce({
+        status: 404,
+        text: vi.fn().mockResolvedValue("Not Found"),
+      });
+
+      const result = await testUpstreamConnection({
+        provider: "openai",
+        baseUrl: "https://api.openai.com/wrong",
+        apiKey: "sk-test-key",
+        timeout: 10,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe("Endpoint not found - check base URL");
+      expect(result.statusCode).toBe(404);
+      expect(result.errorType).toBe("invalid_response");
+      expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+      expect(result.errorDetails).toContain("404");
+      expect(result.errorDetails).toContain("base URL may be incorrect");
+    });
+
+    it("should handle 500 server errors", async () => {
+      const { testUpstreamConnection } = await import("@/lib/services/upstream-service");
+
+      mockFetch.mockResolvedValueOnce({
+        status: 500,
+        text: vi.fn().mockResolvedValue("Internal Server Error"),
+      });
+
+      const result = await testUpstreamConnection({
+        provider: "openai",
+        baseUrl: "https://api.openai.com",
+        apiKey: "sk-test-key",
+        timeout: 10,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe("Upstream server error");
+      expect(result.statusCode).toBe(500);
+      expect(result.errorType).toBe("invalid_response");
+      expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+      expect(result.errorDetails).toContain("HTTP 500");
+    });
+
+    it("should handle 503 service unavailable", async () => {
+      const { testUpstreamConnection } = await import("@/lib/services/upstream-service");
+
+      mockFetch.mockResolvedValueOnce({
+        status: 503,
+        text: vi.fn().mockResolvedValue("Service Unavailable"),
+      });
+
+      const result = await testUpstreamConnection({
+        provider: "anthropic",
+        baseUrl: "https://api.anthropic.com",
+        apiKey: "sk-ant-test",
+        timeout: 10,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe("Upstream server error");
+      expect(result.statusCode).toBe(503);
+      expect(result.errorType).toBe("invalid_response");
+    });
+
+    it("should handle unsupported provider", async () => {
+      const { testUpstreamConnection } = await import("@/lib/services/upstream-service");
+
+      const result = await testUpstreamConnection({
+        provider: "unsupported-provider",
+        baseUrl: "https://api.example.com",
+        apiKey: "test-key",
+        timeout: 10,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe("Unsupported provider: unsupported-provider");
+      expect(result.statusCode).toBeNull();
+      expect(result.latencyMs).toBeNull();
+      expect(result.errorType).toBe("unknown");
+      expect(result.errorDetails).toContain("Provider must be");
+    });
+
+    it("should handle unexpected status codes", async () => {
+      const { testUpstreamConnection } = await import("@/lib/services/upstream-service");
+
+      mockFetch.mockResolvedValueOnce({
+        status: 418,
+        text: vi.fn().mockResolvedValue("I'm a teapot"),
+      });
+
+      const result = await testUpstreamConnection({
+        provider: "openai",
+        baseUrl: "https://api.openai.com",
+        apiKey: "sk-test-key",
+        timeout: 10,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe("Unexpected response: HTTP 418");
+      expect(result.statusCode).toBe(418);
+      expect(result.errorType).toBe("unknown");
+      expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it("should normalize base URL by removing trailing slash", async () => {
+      const { testUpstreamConnection } = await import("@/lib/services/upstream-service");
+
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        text: vi.fn().mockResolvedValue(""),
+      });
+
+      await testUpstreamConnection({
+        provider: "openai",
+        baseUrl: "https://api.openai.com/",
+        apiKey: "sk-test-key",
+        timeout: 10,
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        "https://api.openai.com/v1/models",
+        expect.any(Object)
+      );
+    });
+
+    it("should use default timeout of 10 seconds when not specified", async () => {
+      const { testUpstreamConnection } = await import("@/lib/services/upstream-service");
+
+      const abortError = new Error("The operation was aborted");
+      abortError.name = "AbortError";
+      mockFetch.mockRejectedValueOnce(abortError);
+
+      const result = await testUpstreamConnection({
+        provider: "openai",
+        baseUrl: "https://api.openai.com",
+        apiKey: "sk-test-key",
+      });
+
+      expect(result.message).toBe("Request timed out after 10 seconds");
+      expect(result.errorDetails).toBe("Request exceeded 10s timeout");
+    });
+
+    it("should handle response text parsing errors gracefully", async () => {
+      const { testUpstreamConnection } = await import("@/lib/services/upstream-service");
+
+      mockFetch.mockResolvedValueOnce({
+        status: 401,
+        text: vi.fn().mockRejectedValue(new Error("Failed to read body")),
+      });
+
+      const result = await testUpstreamConnection({
+        provider: "openai",
+        baseUrl: "https://api.openai.com",
+        apiKey: "sk-invalid-key",
+        timeout: 10,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe("Authentication failed - invalid API key");
+      expect(result.statusCode).toBe(401);
+      expect(result.errorType).toBe("authentication");
+      expect(result.errorDetails).toBe("HTTP 401");
+    });
+
+    it("should handle unknown error types", async () => {
+      const { testUpstreamConnection } = await import("@/lib/services/upstream-service");
+
+      mockFetch.mockRejectedValueOnce("unexpected error string");
+
+      const result = await testUpstreamConnection({
+        provider: "openai",
+        baseUrl: "https://api.openai.com",
+        apiKey: "sk-test-key",
+        timeout: 10,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe("Test failed with unexpected error");
+      expect(result.statusCode).toBeNull();
+      expect(result.latencyMs).toBeNull();
+      expect(result.errorType).toBe("unknown");
+      expect(result.errorDetails).toBe("unexpected error string");
+    });
+
+    it("should measure latency accurately for successful requests", async () => {
+      const { testUpstreamConnection } = await import("@/lib/services/upstream-service");
+
+      mockFetch.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            setTimeout(() => {
+              resolve({
+                status: 200,
+                text: vi.fn().mockResolvedValue(""),
+              });
+            }, 50);
+          })
+      );
+
+      const result = await testUpstreamConnection({
+        provider: "openai",
+        baseUrl: "https://api.openai.com",
+        apiKey: "sk-test-key",
+        timeout: 10,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.latencyMs).toBeGreaterThanOrEqual(45); // Reduced threshold to avoid flakiness
+      expect(result.latencyMs).toBeLessThan(200);
     });
   });
 
