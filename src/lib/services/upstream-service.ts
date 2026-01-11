@@ -397,3 +397,212 @@ export async function getUpstreamByName(name: string): Promise<Upstream | null> 
 export function getDecryptedApiKey(upstream: Upstream): string {
   return decrypt(upstream.apiKeyEncrypted);
 }
+
+/**
+ * Test connection to an upstream provider.
+ * Makes a lightweight API call to verify connectivity and authentication.
+ *
+ * @param input - Test configuration with provider, baseUrl, apiKey, and optional timeout
+ * @returns Test result with success status, latency, and error details if applicable
+ *
+ * @example
+ * ```typescript
+ * const result = await testUpstreamConnection({
+ *   provider: "openai",
+ *   baseUrl: "https://api.openai.com",
+ *   apiKey: "sk-...",
+ *   timeout: 10
+ * });
+ *
+ * if (result.success) {
+ *   console.log(`Connected in ${result.latencyMs}ms`);
+ * } else {
+ *   console.error(result.message);
+ * }
+ * ```
+ */
+export async function testUpstreamConnection(
+  input: TestUpstreamInput
+): Promise<TestUpstreamResult> {
+  const { provider, baseUrl, apiKey, timeout = 10 } = input;
+  const testedAt = new Date();
+
+  // Validate provider
+  if (provider !== "openai" && provider !== "anthropic") {
+    return {
+      success: false,
+      message: `Unsupported provider: ${provider}`,
+      latencyMs: null,
+      statusCode: null,
+      errorType: "unknown",
+      errorDetails: `Provider must be "openai" or "anthropic", got "${provider}"`,
+      testedAt,
+    };
+  }
+
+  // Validate baseUrl
+  try {
+    new URL(baseUrl);
+  } catch {
+    return {
+      success: false,
+      message: "Invalid base URL format",
+      latencyMs: null,
+      statusCode: null,
+      errorType: "network",
+      errorDetails: `Base URL "${baseUrl}" is not a valid URL`,
+      testedAt,
+    };
+  }
+
+  // Prepare test endpoint and headers based on provider
+  const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
+  const testUrl = `${normalizedBaseUrl}/v1/models`;
+
+  const headers: Record<string, string> = {};
+
+  if (provider === "openai") {
+    headers["Authorization"] = `Bearer ${apiKey}`;
+  } else if (provider === "anthropic") {
+    headers["x-api-key"] = apiKey;
+    headers["anthropic-version"] = "2023-06-01";
+  }
+
+  // Create abort controller for timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout * 1000);
+
+  // Start latency measurement
+  const startTime = Date.now();
+
+  try {
+    // Make test request
+    const response = await fetch(testUrl, {
+      method: "GET",
+      headers,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    // Calculate latency
+    const latencyMs = Date.now() - startTime;
+
+    // Handle response status codes
+    if (response.status === 200 || response.status === 201) {
+      // Success
+      return {
+        success: true,
+        message: "Connection successful",
+        latencyMs,
+        statusCode: response.status,
+        testedAt,
+      };
+    } else if (response.status === 401 || response.status === 403) {
+      // Authentication error
+      let errorDetails = `HTTP ${response.status}`;
+      try {
+        const responseText = await response.text();
+        if (responseText) {
+          errorDetails += `: ${responseText.substring(0, 200)}`;
+        }
+      } catch {
+        // Ignore response body parsing errors
+      }
+
+      return {
+        success: false,
+        message: "Authentication failed - invalid API key",
+        latencyMs,
+        statusCode: response.status,
+        errorType: "authentication",
+        errorDetails,
+        testedAt,
+      };
+    } else if (response.status === 404) {
+      // Endpoint not found - likely wrong base URL
+      return {
+        success: false,
+        message: "Endpoint not found - check base URL",
+        latencyMs,
+        statusCode: response.status,
+        errorType: "invalid_response",
+        errorDetails: `GET ${testUrl} returned 404 - base URL may be incorrect`,
+        testedAt,
+      };
+    } else if (response.status >= 500) {
+      // Upstream server error
+      let errorDetails = `HTTP ${response.status}`;
+      try {
+        const responseText = await response.text();
+        if (responseText) {
+          errorDetails += `: ${responseText.substring(0, 200)}`;
+        }
+      } catch {
+        // Ignore response body parsing errors
+      }
+
+      return {
+        success: false,
+        message: "Upstream server error",
+        latencyMs,
+        statusCode: response.status,
+        errorType: "invalid_response",
+        errorDetails,
+        testedAt,
+      };
+    } else {
+      // Other unexpected status codes
+      return {
+        success: false,
+        message: `Unexpected response: HTTP ${response.status}`,
+        latencyMs,
+        statusCode: response.status,
+        errorType: "unknown",
+        errorDetails: `Received unexpected HTTP status ${response.status}`,
+        testedAt,
+      };
+    }
+  } catch (error) {
+    clearTimeout(timeoutId);
+
+    // Handle timeout
+    if (error instanceof Error && error.name === "AbortError") {
+      return {
+        success: false,
+        message: `Request timed out after ${timeout} seconds`,
+        latencyMs: null,
+        statusCode: null,
+        errorType: "timeout",
+        errorDetails: `Request exceeded ${timeout}s timeout`,
+        testedAt,
+      };
+    }
+
+    // Handle network errors (DNS failure, connection refused, SSL errors, etc.)
+    if (error instanceof TypeError) {
+      const errorMessage = error.message || "Unknown network error";
+      return {
+        success: false,
+        message: "Network error - could not reach upstream",
+        latencyMs: null,
+        statusCode: null,
+        errorType: "network",
+        errorDetails: errorMessage,
+        testedAt,
+      };
+    }
+
+    // Handle unknown errors
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return {
+      success: false,
+      message: "Test failed with unexpected error",
+      latencyMs: null,
+      statusCode: null,
+      errorType: "unknown",
+      errorDetails: errorMessage,
+      testedAt,
+    };
+  }
+}
