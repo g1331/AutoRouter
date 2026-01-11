@@ -54,6 +54,7 @@ describe("KeysTable", () => {
   };
 
   const mockOnRevoke = vi.fn();
+  const mockOnEdit = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -68,14 +69,14 @@ describe("KeysTable", () => {
 
   describe("Empty State", () => {
     it("renders empty state when no keys provided", () => {
-      render(<KeysTable keys={[]} onRevoke={mockOnRevoke} />);
+      render(<KeysTable keys={[]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       expect(screen.getByText("noKeys")).toBeInTheDocument();
       expect(screen.getByText("noKeysDesc")).toBeInTheDocument();
     });
 
     it("shows Key icon in empty state", () => {
-      render(<KeysTable keys={[]} onRevoke={mockOnRevoke} />);
+      render(<KeysTable keys={[]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       const emptyContainer = screen.getByText("noKeys").closest("div");
       expect(emptyContainer).toBeInTheDocument();
@@ -84,7 +85,7 @@ describe("KeysTable", () => {
 
   describe("Table Rendering", () => {
     it("renders table headers", () => {
-      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} />);
+      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       expect(screen.getByText("name")).toBeInTheDocument();
       expect(screen.getByText("tableKeyPrefix")).toBeInTheDocument();
@@ -96,21 +97,21 @@ describe("KeysTable", () => {
     });
 
     it("renders key data correctly", () => {
-      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} />);
+      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       expect(screen.getByText("Test API Key")).toBeInTheDocument();
       expect(screen.getByText("Test description")).toBeInTheDocument();
     });
 
     it("masks long key prefix", () => {
-      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} />);
+      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       // Key should be masked: first 8 chars + *** + last 4 chars
       expect(screen.getByText("sk-auto-***f456")).toBeInTheDocument();
     });
 
     it("shows upstream count badge", () => {
-      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} />);
+      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       expect(screen.getByText("2")).toBeInTheDocument();
     });
@@ -118,7 +119,7 @@ describe("KeysTable", () => {
 
   describe("Expiry Formatting", () => {
     it("renders never expires badge for null expiry", () => {
-      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} />);
+      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       expect(screen.getByText("neverExpires")).toBeInTheDocument();
     });
@@ -128,7 +129,7 @@ describe("KeysTable", () => {
         ...mockKey,
         expires_at: "2024-06-14T12:00:00Z", // Yesterday relative to FIXED_NOW
       };
-      render(<KeysTable keys={[expiredKey]} onRevoke={mockOnRevoke} />);
+      render(<KeysTable keys={[expiredKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       expect(screen.getByText("expired")).toBeInTheDocument();
     });
@@ -138,7 +139,7 @@ describe("KeysTable", () => {
         ...mockKey,
         expires_at: "2024-06-22T12:00:00Z", // 7 days from FIXED_NOW
       };
-      render(<KeysTable keys={[futureKey]} onRevoke={mockOnRevoke} />);
+      render(<KeysTable keys={[futureKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       // With fixed time, we can assert specific relative time
       // date-fns formatDistanceToNow should return "7 days" or similar
@@ -152,7 +153,7 @@ describe("KeysTable", () => {
 
   describe("Key Visibility Toggle", () => {
     it("shows eye icon for hidden key", () => {
-      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} />);
+      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       const revealButton = screen.getByLabelText("revealKey");
       expect(revealButton).toBeInTheDocument();
@@ -160,7 +161,7 @@ describe("KeysTable", () => {
 
     it("calls revealKey when toggle is clicked", async () => {
       mockRevealKey.mockResolvedValueOnce({ key_value: "sk-auto-fullkey123" });
-      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} />);
+      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       const revealButton = screen.getByLabelText("revealKey");
       fireEvent.click(revealButton);
@@ -172,7 +173,7 @@ describe("KeysTable", () => {
 
     it("shows full key after reveal", async () => {
       mockRevealKey.mockResolvedValueOnce({ key_value: "sk-auto-fullkey123" });
-      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} />);
+      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       const revealButton = screen.getByLabelText("revealKey");
       fireEvent.click(revealButton);
@@ -185,7 +186,7 @@ describe("KeysTable", () => {
 
   describe("Copy Key", () => {
     it("shows copy icon", () => {
-      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} />);
+      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       const copyButton = screen.getByLabelText("copy");
       expect(copyButton).toBeInTheDocument();
@@ -193,7 +194,7 @@ describe("KeysTable", () => {
 
     it("calls clipboard writeText when copy is clicked", async () => {
       mockRevealKey.mockResolvedValueOnce({ key_value: "sk-auto-secret" });
-      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} />);
+      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       const copyButton = screen.getByLabelText("copy");
       fireEvent.click(copyButton);
@@ -204,16 +205,66 @@ describe("KeysTable", () => {
     });
   });
 
+  describe("Edit Action", () => {
+    it("shows edit button for each key", () => {
+      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
+
+      const editButton = screen.getByLabelText("edit: Test API Key");
+      expect(editButton).toBeInTheDocument();
+    });
+
+    it("calls onEdit when edit button is clicked", () => {
+      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
+
+      const editButton = screen.getByLabelText("edit: Test API Key");
+      fireEvent.click(editButton);
+
+      expect(mockOnEdit).toHaveBeenCalledWith(mockKey);
+      expect(mockOnEdit).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows edit button for multiple keys", () => {
+      const keys = [
+        mockKey,
+        {
+          ...mockKey,
+          id: "test-id-2",
+          name: "Second API Key",
+        },
+      ];
+      render(<KeysTable keys={keys} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
+
+      expect(screen.getByLabelText("edit: Test API Key")).toBeInTheDocument();
+      expect(screen.getByLabelText("edit: Second API Key")).toBeInTheDocument();
+    });
+
+    it("calls onEdit with correct key when editing second key", () => {
+      const secondKey = {
+        ...mockKey,
+        id: "test-id-2",
+        name: "Second API Key",
+      };
+      const keys = [mockKey, secondKey];
+      render(<KeysTable keys={keys} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
+
+      const editButton = screen.getByLabelText("edit: Second API Key");
+      fireEvent.click(editButton);
+
+      expect(mockOnEdit).toHaveBeenCalledWith(secondKey);
+      expect(mockOnEdit).not.toHaveBeenCalledWith(mockKey);
+    });
+  });
+
   describe("Revoke Action", () => {
     it("shows delete button for each key", () => {
-      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} />);
+      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       const deleteButton = screen.getByLabelText("revokeKey: Test API Key");
       expect(deleteButton).toBeInTheDocument();
     });
 
     it("calls onRevoke when delete button is clicked", () => {
-      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} />);
+      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       const deleteButton = screen.getByLabelText("revokeKey: Test API Key");
       fireEvent.click(deleteButton);
@@ -233,7 +284,7 @@ describe("KeysTable", () => {
           key_prefix: "sk-auto-xyz789abc123",
         },
       ];
-      render(<KeysTable keys={keys} onRevoke={mockOnRevoke} />);
+      render(<KeysTable keys={keys} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       expect(screen.getByText("Test API Key")).toBeInTheDocument();
       expect(screen.getByText("Second API Key")).toBeInTheDocument();
@@ -243,7 +294,7 @@ describe("KeysTable", () => {
   describe("Null Description", () => {
     it("renders dash for null description", () => {
       const keyWithNoDesc = { ...mockKey, description: null };
-      render(<KeysTable keys={[keyWithNoDesc]} onRevoke={mockOnRevoke} />);
+      render(<KeysTable keys={[keyWithNoDesc]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       const dashes = screen.getAllByText("-");
       expect(dashes.length).toBeGreaterThan(0);
@@ -253,7 +304,7 @@ describe("KeysTable", () => {
   describe("Short Key Prefix", () => {
     it("does not mask short key prefix", () => {
       const shortKey = { ...mockKey, key_prefix: "sk-short" };
-      render(<KeysTable keys={[shortKey]} onRevoke={mockOnRevoke} />);
+      render(<KeysTable keys={[shortKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       // Short keys (< 12 chars) should not be masked
       expect(screen.getByText("sk-short")).toBeInTheDocument();
