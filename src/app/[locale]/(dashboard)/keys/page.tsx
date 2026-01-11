@@ -7,6 +7,7 @@ import { KeysTable } from "@/components/admin/keys-table";
 import { CreateKeyDialog } from "@/components/admin/create-key-dialog";
 import { RevokeKeyDialog } from "@/components/admin/revoke-key-dialog";
 import { Button } from "@/components/ui/button";
+import { TableSkeleton } from "@/components/ui/table-skeleton";
 import { ChevronLeft, ChevronRight, Key } from "lucide-react";
 import { useAPIKeys } from "@/hooks/use-api-keys";
 import type { APIKey } from "@/types/api";
@@ -48,11 +49,8 @@ export default function KeysPage() {
 
         {/* Table */}
         {isLoading ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-10 h-10 border-2 border-amber-700 border-t-amber-500 rounded-full animate-spin" />
-              <p className="font-mono text-sm text-amber-700">{tCommon("loading")}</p>
-            </div>
+          <div className="rounded-cf-sm border border-divider overflow-hidden">
+            <TableSkeleton columns={7} rows={10} />
           </div>
         ) : (
           <>
