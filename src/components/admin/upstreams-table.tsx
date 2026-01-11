@@ -2,7 +2,7 @@
 
 import { formatDistanceToNow } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
-import { Pencil, Trash2, Server } from "lucide-react";
+import { Pencil, Trash2, Server, Play } from "lucide-react";
 import type { Upstream } from "@/types/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +20,7 @@ interface UpstreamsTableProps {
   upstreams: Upstream[];
   onEdit: (upstream: Upstream) => void;
   onDelete: (upstream: Upstream) => void;
+  onTest: (upstream: Upstream) => void;
 }
 
 /**
@@ -30,7 +31,7 @@ interface UpstreamsTableProps {
  * - Provider-specific badge colors
  * - Amber accents and glow effects
  */
-export function UpstreamsTable({ upstreams, onEdit, onDelete }: UpstreamsTableProps) {
+export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: UpstreamsTableProps) {
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
   const locale = useLocale();
@@ -98,6 +99,16 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete }: UpstreamsTablePr
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex items-center justify-end gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    type="button"
+                    className="h-8 w-8 text-green-500 hover:bg-green-500/10"
+                    onClick={() => onTest(upstream)}
+                    aria-label={`${tCommon("test")}: ${upstream.name}`}
+                  >
+                    <Play className="h-4 w-4" aria-hidden="true" />
+                  </Button>
                   <Button
                     variant="ghost"
                     size="icon"

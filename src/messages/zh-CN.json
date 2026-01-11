@@ -27,6 +27,7 @@
     "items": "条",
     "noData": "暂无数据",
     "actions": "操作",
+    "test": "测试",
     "name": "名称",
     "description": "描述",
     "createdAt": "创建时间",
@@ -212,7 +213,18 @@
     "noUpstreams": "NO UPSTREAMS FOUND",
     "noUpstreamsDesc": "点击上方按钮添加第一个 Upstream",
     "tableProvider": "PROVIDER",
-    "tableBaseUrl": "BASE URL"
+    "tableBaseUrl": "BASE URL",
+    "testUpstream": "测试连接",
+    "testUpstreamTitle": "测试 Upstream 连接",
+    "testUpstreamDesc": "正在测试上游服务提供商连接",
+    "testing": "测试中...",
+    "testSuccess": "连接成功",
+    "testFailed": "连接失败",
+    "testLatency": "延迟",
+    "testStatusCode": "状态码",
+    "testErrorType": "错误类型",
+    "testErrorDetails": "错误详情",
+    "closeDialog": "关闭"
   },
   "errors": {
     "networkError": "网络错误，请检查连接",
