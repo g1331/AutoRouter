@@ -38,6 +38,32 @@ vi.mock("@/lib/utils/encryption", () => ({
   decrypt: vi.fn((value: string) => value.replace("encrypted:", "")),
 }));
 
+// Mock DNS module for SSRF protection tests
+vi.mock("dns", () => ({
+  default: {},
+  promises: {
+    resolve4: vi.fn((hostname: string) => {
+      // Mock safe public IPs for common test domains
+      if (hostname === "api.openai.com" || hostname === "api.anthropic.com") {
+        return Promise.resolve(["8.8.8.8"]); // Safe public IP
+      }
+      // Mock private IPs for SSRF test cases
+      if (hostname === "internal.example.com") {
+        return Promise.resolve(["192.168.1.1"]); // Private IP
+      }
+      if (hostname === "metadata.example.com") {
+        return Promise.resolve(["169.254.169.254"]); // AWS metadata IP
+      }
+      // Default: resolve to safe public IP
+      return Promise.resolve(["1.1.1.1"]);
+    }),
+    resolve6: vi.fn(() => {
+      // Most test cases don't need IPv6, return empty or fail gracefully
+      return Promise.reject(new Error("No IPv6 addresses"));
+    }),
+  },
+}));
+
 describe("upstream-service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
