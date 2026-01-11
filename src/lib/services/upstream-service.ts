@@ -15,7 +15,10 @@ export class UpstreamNotFoundError extends Error {
  * Error thrown when upstream connection test fails due to authentication issues.
  */
 export class UpstreamAuthenticationError extends Error {
-  constructor(message: string, public statusCode?: number) {
+  constructor(
+    message: string,
+    public statusCode?: number
+  ) {
     super(message);
     this.name = "UpstreamAuthenticationError";
   }
@@ -25,7 +28,10 @@ export class UpstreamAuthenticationError extends Error {
  * Error thrown when upstream connection test fails due to network issues.
  */
 export class UpstreamNetworkError extends Error {
-  constructor(message: string, public cause?: Error) {
+  constructor(
+    message: string,
+    public cause?: Error
+  ) {
     super(message);
     this.name = "UpstreamNetworkError";
   }
@@ -35,7 +41,10 @@ export class UpstreamNetworkError extends Error {
  * Error thrown when upstream connection test times out.
  */
 export class UpstreamTimeoutError extends Error {
-  constructor(message: string, public timeoutSeconds: number) {
+  constructor(
+    message: string,
+    public timeoutSeconds: number
+  ) {
     super(message);
     this.name = "UpstreamTimeoutError";
   }
