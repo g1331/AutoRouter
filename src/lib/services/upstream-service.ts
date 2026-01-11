@@ -30,7 +30,10 @@ function isIpSafe(ip: string): { safe: boolean; reason?: string } {
     }
     // Link-local 169.254.0.0/16 (AWS metadata)
     if (a === 169 && b === 254) {
-      return { safe: false, reason: "Link-local addresses (cloud metadata endpoints) are not allowed" };
+      return {
+        safe: false,
+        reason: "Link-local addresses (cloud metadata endpoints) are not allowed",
+      };
     }
     return { safe: true };
   }
