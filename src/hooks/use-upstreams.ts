@@ -150,6 +150,7 @@ export function useTestUpstream() {
   const { apiClient } = useAuth();
 
   return useMutation({
-    mutationFn: (id: string) => apiClient.post<TestUpstreamResponse>(`/admin/upstreams/${id}/test`, {}),
+    mutationFn: (id: string) =>
+      apiClient.post<TestUpstreamResponse>(`/admin/upstreams/${id}/test`, {}),
   });
 }

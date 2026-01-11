@@ -31,7 +31,11 @@ export default function UpstreamsPage() {
   const tCommon = useTranslations("common");
 
   const { data, isLoading } = useUpstreams(page, pageSize);
-  const { mutate: testUpstreamMutation, data: testResult, isPending: isTestLoading } = useTestUpstream();
+  const {
+    mutate: testUpstreamMutation,
+    data: testResult,
+    isPending: isTestLoading,
+  } = useTestUpstream();
 
   // Trigger test when testUpstream changes
   useEffect(() => {
