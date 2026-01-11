@@ -412,26 +412,97 @@ export function getDecryptedApiKey(upstream: Upstream): string {
 
 /**
  * Test connection to an upstream provider.
- * Makes a lightweight API call to verify connectivity and authentication.
  *
- * @param input - Test configuration with provider, baseUrl, apiKey, and optional timeout
- * @returns Test result with success status, latency, and error details if applicable
+ * Makes a lightweight API call to verify connectivity and authentication by calling
+ * the provider's `/v1/models` endpoint. This function does NOT throw errors - all
+ * failure scenarios are captured in the returned TestUpstreamResult object.
+ *
+ * **Supported Providers:**
+ * - **OpenAI**: Uses `Authorization: Bearer {apiKey}` header
+ * - **Anthropic**: Uses `x-api-key: {apiKey}` and `anthropic-version: 2023-06-01` headers
+ *
+ * **Test Process:**
+ * 1. Validates provider type and base URL format
+ * 2. Constructs test endpoint: `{baseUrl}/v1/models`
+ * 3. Makes GET request with provider-specific authentication headers
+ * 4. Measures response latency and validates status code
+ * 5. Returns structured result with success status and diagnostic information
+ *
+ * **Success Criteria:**
+ * - HTTP status 200 or 201 response from the upstream provider
+ * - Latency measurement captured in milliseconds
+ *
+ * **Error Conditions:**
+ * - **authentication**: Invalid API key (HTTP 401/403)
+ * - **network**: DNS failure, connection refused, SSL errors, or unreachable host
+ * - **timeout**: Request exceeds the specified timeout duration
+ * - **invalid_response**: Wrong base URL (404), upstream server error (5xx), or unexpected status
+ * - **unknown**: Unsupported provider, malformed URL, or unexpected errors
+ *
+ * @param input - Upstream test configuration
+ * @param input.provider - Provider type, must be "openai" or "anthropic"
+ * @param input.baseUrl - Base URL of the upstream API (e.g., "https://api.openai.com")
+ * @param input.apiKey - API key for authentication (plain text, not encrypted)
+ * @param input.timeout - Optional timeout in seconds (defaults to 10, max recommended 300)
+ *
+ * @returns Test result object containing:
+ * - `success`: Boolean indicating if the test passed (true for HTTP 200/201)
+ * - `message`: Human-readable status message for display
+ * - `latencyMs`: Response time in milliseconds (null if request failed before completion)
+ * - `statusCode`: HTTP status code from the response (null if network/timeout error)
+ * - `errorType`: Category of error for programmatic handling (only present on failure)
+ * - `errorDetails`: Detailed technical error message for debugging (only present on failure)
+ * - `testedAt`: Timestamp when the test was performed
  *
  * @example
  * ```typescript
- * const result = await testUpstreamConnection({
+ * // Test a new OpenAI configuration
+ * const openAiResult = await testUpstreamConnection({
  *   provider: "openai",
  *   baseUrl: "https://api.openai.com",
- *   apiKey: "sk-...",
+ *   apiKey: "sk-proj-...",
  *   timeout: 10
  * });
  *
- * if (result.success) {
- *   console.log(`Connected in ${result.latencyMs}ms`);
+ * if (openAiResult.success) {
+ *   console.log(`✓ Connected in ${openAiResult.latencyMs}ms`);
  * } else {
- *   console.error(result.message);
+ *   console.error(`✗ ${openAiResult.message}`);
+ *   console.error(`  Error type: ${openAiResult.errorType}`);
+ *   console.error(`  Details: ${openAiResult.errorDetails}`);
+ * }
+ *
+ * // Test Anthropic configuration with custom timeout
+ * const anthropicResult = await testUpstreamConnection({
+ *   provider: "anthropic",
+ *   baseUrl: "https://api.anthropic.com",
+ *   apiKey: "sk-ant-...",
+ *   timeout: 15
+ * });
+ *
+ * // Handle different error types
+ * if (!anthropicResult.success) {
+ *   switch (anthropicResult.errorType) {
+ *     case "authentication":
+ *       console.error("Invalid API key - please check credentials");
+ *       break;
+ *     case "network":
+ *       console.error("Network error - check URL and connectivity");
+ *       break;
+ *     case "timeout":
+ *       console.error("Request timed out - try increasing timeout");
+ *       break;
+ *     default:
+ *       console.error("Unexpected error:", anthropicResult.message);
+ *   }
  * }
  * ```
+ *
+ * @see {@link TestUpstreamInput} for input type definition
+ * @see {@link TestUpstreamResult} for detailed result structure
+ * @see {@link UpstreamAuthenticationError} for authentication error details
+ * @see {@link UpstreamNetworkError} for network error details
+ * @see {@link UpstreamTimeoutError} for timeout error details
  */
 export async function testUpstreamConnection(
   input: TestUpstreamInput
