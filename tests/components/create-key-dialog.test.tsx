@@ -16,9 +16,15 @@ vi.mock("@/lib/date-locale", () => ({
 
 // Mock hooks
 const mockCreateMutateAsync = vi.fn();
+const mockUpdateMutateAsync = vi.fn();
+
 vi.mock("@/hooks/use-api-keys", () => ({
   useCreateAPIKey: () => ({
     mutateAsync: mockCreateMutateAsync,
+    isPending: false,
+  }),
+  useUpdateAPIKey: () => ({
+    mutateAsync: mockUpdateMutateAsync,
     isPending: false,
   }),
 }));
@@ -43,6 +49,11 @@ vi.mock("@/hooks/use-upstreams", () => ({
     data: mockUpstreams,
     isLoading: false,
   }),
+}));
+
+// Mock ShowKeyDialog
+vi.mock("@/components/admin/show-key-dialog", () => ({
+  ShowKeyDialog: () => null,
 }));
 
 describe("CreateKeyDialog", () => {
