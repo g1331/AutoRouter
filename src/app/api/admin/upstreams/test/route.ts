@@ -7,9 +7,18 @@ import { z } from "zod";
 const testUpstreamSchema = z.object({
   name: z.string().min(1).max(64).optional(),
   provider: z.enum(["openai", "anthropic"]),
-  base_url: z.string().url(),
-  api_key: z.string().min(1),
-  timeout: z.number().int().positive().default(10),
+  base_url: z.string().url("Base URL must be a valid URL"),
+  api_key: z
+    .string()
+    .min(10, "API key must be at least 10 characters")
+    .max(512, "API key must not exceed 512 characters"),
+  timeout: z
+    .number()
+    .int("Timeout must be an integer")
+    .positive("Timeout must be greater than 0")
+    .max(300, "Timeout must not exceed 300 seconds")
+    .default(10)
+    .optional(),
 });
 
 /**
