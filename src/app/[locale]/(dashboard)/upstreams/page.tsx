@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { Topbar } from "@/components/admin/topbar";
 import { UpstreamsTable } from "@/components/admin/upstreams-table";
 import { UpstreamFormDialog } from "@/components/admin/upstream-form-dialog";
 import { DeleteUpstreamDialog } from "@/components/admin/delete-upstream-dialog";
+import { TestUpstreamDialog } from "@/components/admin/test-upstream-dialog";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Plus, Server } from "lucide-react";
-import { useUpstreams } from "@/hooks/use-upstreams";
+import { useUpstreams, useTestUpstream } from "@/hooks/use-upstreams";
 import type { Upstream } from "@/types/api";
 
 /**
@@ -24,14 +25,20 @@ export default function UpstreamsPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editUpstream, setEditUpstream] = useState<Upstream | null>(null);
   const [deleteUpstream, setDeleteUpstream] = useState<Upstream | null>(null);
-  // TODO: TestUpstreamDialog will be added in a future subtask
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [testUpstream, setTestUpstream] = useState<Upstream | null>(null);
   const pageSize = 10;
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
 
   const { data, isLoading } = useUpstreams(page, pageSize);
+  const { mutate: testUpstreamMutation, data: testResult, isPending: isTestLoading } = useTestUpstream();
+
+  // Trigger test when testUpstream changes
+  useEffect(() => {
+    if (testUpstream?.id) {
+      testUpstreamMutation(testUpstream.id);
+    }
+  }, [testUpstream, testUpstreamMutation]);
 
   return (
     <>
@@ -123,6 +130,15 @@ export default function UpstreamsPage() {
         upstream={deleteUpstream}
         open={!!deleteUpstream}
         onClose={() => setDeleteUpstream(null)}
+      />
+
+      {/* Test Upstream Dialog */}
+      <TestUpstreamDialog
+        upstream={testUpstream}
+        open={!!testUpstream}
+        onClose={() => setTestUpstream(null)}
+        testResult={testResult || null}
+        isLoading={isTestLoading}
       />
     </>
   );
