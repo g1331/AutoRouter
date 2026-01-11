@@ -20,7 +20,12 @@ function isUrlSafe(urlString: string): { safe: boolean; reason?: string } {
     const hostname = url.hostname.toLowerCase();
 
     // Block loopback addresses
-    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname.startsWith("127.")) {
+    if (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "::1" ||
+      hostname.startsWith("127.")
+    ) {
       return { safe: false, reason: "Loopback addresses are not allowed" };
     }
 
@@ -35,7 +40,10 @@ function isUrlSafe(urlString: string): { safe: boolean; reason?: string } {
       }
       // Link-local 169.254.0.0/16 (AWS metadata)
       if (a === 169 && b === 254) {
-        return { safe: false, reason: "Link-local addresses (cloud metadata endpoints) are not allowed" };
+        return {
+          safe: false,
+          reason: "Link-local addresses (cloud metadata endpoints) are not allowed",
+        };
       }
     }
 
@@ -56,7 +64,6 @@ function isUrlSafe(urlString: string): { safe: boolean; reason?: string } {
     return { safe: false, reason: "Invalid URL format" };
   }
 }
-
 
 /**
  * Error thrown when an upstream is not found in the database.

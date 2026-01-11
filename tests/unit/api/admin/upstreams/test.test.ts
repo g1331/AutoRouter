@@ -431,7 +431,10 @@ describe("POST /api/admin/upstreams/test", () => {
 });
 
 describe("POST /api/admin/upstreams/[id]/test", () => {
-  let POST: (request: NextRequest, context: { params: Promise<{ id: string }> }) => Promise<Response>;
+  let POST: (
+    request: NextRequest,
+    context: { params: Promise<{ id: string }> }
+  ) => Promise<Response>;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -446,7 +449,8 @@ describe("POST /api/admin/upstreams/[id]/test", () => {
 
   it("should successfully test existing upstream by ID", async () => {
     const { db } = await import("@/lib/db");
-    const { testUpstreamConnection, getDecryptedApiKey } = await import("@/lib/services/upstream-service");
+    const { testUpstreamConnection, getDecryptedApiKey } =
+      await import("@/lib/services/upstream-service");
 
     const mockUpstream = {
       id: "upstream-1",
@@ -558,7 +562,8 @@ describe("POST /api/admin/upstreams/[id]/test", () => {
 
   it("should return test failure result when connection test fails for existing upstream", async () => {
     const { db } = await import("@/lib/db");
-    const { testUpstreamConnection, getDecryptedApiKey } = await import("@/lib/services/upstream-service");
+    const { testUpstreamConnection, getDecryptedApiKey } =
+      await import("@/lib/services/upstream-service");
 
     const mockUpstream = {
       id: "upstream-1",
@@ -611,7 +616,8 @@ describe("POST /api/admin/upstreams/[id]/test", () => {
 
   it("should return test failure result when timeout occurs", async () => {
     const { db } = await import("@/lib/db");
-    const { testUpstreamConnection, getDecryptedApiKey } = await import("@/lib/services/upstream-service");
+    const { testUpstreamConnection, getDecryptedApiKey } =
+      await import("@/lib/services/upstream-service");
 
     const mockUpstream = {
       id: "upstream-1",
@@ -697,7 +703,8 @@ describe("POST /api/admin/upstreams/[id]/test", () => {
 
   it("should handle upstream with different provider (Anthropic)", async () => {
     const { db } = await import("@/lib/db");
-    const { testUpstreamConnection, getDecryptedApiKey } = await import("@/lib/services/upstream-service");
+    const { testUpstreamConnection, getDecryptedApiKey } =
+      await import("@/lib/services/upstream-service");
 
     const mockUpstream = {
       id: "upstream-2",

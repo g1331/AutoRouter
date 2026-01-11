@@ -146,7 +146,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // Return test results
     return NextResponse.json(formatTestUpstreamResponse(result));
   } catch (error) {
-    console.error("Failed to test upstream connection:", error instanceof Error ? error.message : "Unknown error");
+    console.error(
+      "Failed to test upstream connection:",
+      error instanceof Error ? error.message : "Unknown error"
+    );
     return errorResponse("Internal server error", 500);
   }
 }

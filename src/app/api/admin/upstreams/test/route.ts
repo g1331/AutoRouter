@@ -140,7 +140,10 @@ export async function POST(request: NextRequest) {
         400
       );
     }
-    console.error("Failed to test upstream connection:", error instanceof Error ? error.message : "Unknown error");
+    console.error(
+      "Failed to test upstream connection:",
+      error instanceof Error ? error.message : "Unknown error"
+    );
     return errorResponse("Internal server error", 500);
   }
 }
