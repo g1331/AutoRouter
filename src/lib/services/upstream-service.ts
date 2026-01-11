@@ -11,6 +11,36 @@ export class UpstreamNotFoundError extends Error {
   }
 }
 
+/**
+ * Error thrown when upstream connection test fails due to authentication issues.
+ */
+export class UpstreamAuthenticationError extends Error {
+  constructor(message: string, public statusCode?: number) {
+    super(message);
+    this.name = "UpstreamAuthenticationError";
+  }
+}
+
+/**
+ * Error thrown when upstream connection test fails due to network issues.
+ */
+export class UpstreamNetworkError extends Error {
+  constructor(message: string, public cause?: Error) {
+    super(message);
+    this.name = "UpstreamNetworkError";
+  }
+}
+
+/**
+ * Error thrown when upstream connection test times out.
+ */
+export class UpstreamTimeoutError extends Error {
+  constructor(message: string, public timeoutSeconds: number) {
+    super(message);
+    this.name = "UpstreamTimeoutError";
+  }
+}
+
 export interface UpstreamCreateInput {
   name: string;
   provider: string;
@@ -52,6 +82,41 @@ export interface PaginatedUpstreams {
   page: number;
   pageSize: number;
   totalPages: number;
+}
+
+/**
+ * Input for testing upstream connection.
+ * Can be used to test either a new configuration or an existing upstream.
+ */
+export interface TestUpstreamInput {
+  /** Provider type (openai or anthropic) */
+  provider: string;
+  /** Base URL of the upstream API */
+  baseUrl: string;
+  /** API key for authentication (plain text, will not be stored) */
+  apiKey: string;
+  /** Optional timeout in seconds (defaults to 10) */
+  timeout?: number;
+}
+
+/**
+ * Result of testing an upstream connection.
+ */
+export interface TestUpstreamResult {
+  /** Whether the test was successful */
+  success: boolean;
+  /** Human-readable status message */
+  message: string;
+  /** Response time in milliseconds (null if test failed before making request) */
+  latencyMs: number | null;
+  /** HTTP status code from the test request (null if network error) */
+  statusCode: number | null;
+  /** Error type for failed tests */
+  errorType?: "authentication" | "network" | "timeout" | "invalid_response" | "unknown";
+  /** Detailed error message for debugging */
+  errorDetails?: string;
+  /** Timestamp when the test was performed */
+  testedAt: Date;
 }
 
 /**
