@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Topbar } from "@/components/admin/topbar";
 import { LogsTable } from "@/components/admin/logs-table";
 import { Button } from "@/components/ui/button";
+import { TableSkeleton } from "@/components/ui/table-skeleton";
 import { ChevronLeft, ChevronRight, ScrollText } from "lucide-react";
 import { useRequestLogs } from "@/hooks/use-request-logs";
 
@@ -43,11 +44,8 @@ export default function LogsPage() {
 
         {/* Table */}
         {isLoading ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-10 h-10 border-2 border-amber-700 border-t-amber-500 rounded-full animate-spin" />
-              <p className="font-mono text-sm text-amber-700">{tCommon("loading")}</p>
-            </div>
+          <div className="rounded-cf-sm border border-divider overflow-hidden">
+            <TableSkeleton columns={7} rows={10} />
           </div>
         ) : (
           <>
