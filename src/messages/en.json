@@ -27,6 +27,7 @@
     "items": "items",
     "noData": "No data",
     "actions": "Actions",
+    "test": "Test",
     "name": "Name",
     "description": "Description",
     "createdAt": "Created",

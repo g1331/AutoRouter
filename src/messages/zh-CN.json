@@ -27,6 +27,7 @@
     "items": "条",
     "noData": "暂无数据",
     "actions": "操作",
+    "test": "测试",
     "name": "名称",
     "description": "描述",
     "createdAt": "创建时间",
