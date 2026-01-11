@@ -77,6 +77,30 @@ export interface UpstreamResponse {
 // Type alias for convenience
 export type Upstream = UpstreamResponse;
 
+/**
+ * Request body for testing upstream connection before saving
+ */
+export interface TestUpstreamRequest {
+  name?: string; // Optional name for the upstream
+  provider: "openai" | "anthropic";
+  base_url: string;
+  api_key: string;
+  timeout?: number; // Optional timeout in seconds (defaults to 10)
+}
+
+/**
+ * Response from upstream connection test endpoint
+ */
+export interface TestUpstreamResponse {
+  success: boolean; // Whether the test was successful
+  message: string; // Human-readable status message
+  latency_ms: number | null; // Response time in milliseconds (null if test failed before making request)
+  status_code: number | null; // HTTP status code from the test request (null if network error)
+  error_type?: "authentication" | "network" | "timeout" | "invalid_response" | "unknown"; // Error type for failed tests
+  error_details?: string; // Detailed error message for debugging
+  tested_at: string; // ISO 8601 date string of when the test was performed
+}
+
 // ========== Request Log 相关类型 ==========
 
 export interface RequestLogResponse {

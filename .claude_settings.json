@@ -1,0 +1,34 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true
+  },
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read(./**)",
+      "Write(./**)",
+      "Edit(./**)",
+      "Glob(./**)",
+      "Grep(./**)",
+      "Read(D:\\Codebase\\AutoRouter\\.auto-claude\\worktrees\\tasks\\002-add-upstream-connection-test/**)",
+      "Write(D:\\Codebase\\AutoRouter\\.auto-claude\\worktrees\\tasks\\002-add-upstream-connection-test/**)",
+      "Edit(D:\\Codebase\\AutoRouter\\.auto-claude\\worktrees\\tasks\\002-add-upstream-connection-test/**)",
+      "Glob(D:\\Codebase\\AutoRouter\\.auto-claude\\worktrees\\tasks\\002-add-upstream-connection-test/**)",
+      "Grep(D:\\Codebase\\AutoRouter\\.auto-claude\\worktrees\\tasks\\002-add-upstream-connection-test/**)",
+      "Read(D:\\Codebase\\AutoRouter\\.auto-claude\\worktrees\\tasks\\002-add-upstream-connection-test\\.auto-claude\\specs\\002-add-upstream-connection-test/**)",
+      "Write(D:\\Codebase\\AutoRouter\\.auto-claude\\worktrees\\tasks\\002-add-upstream-connection-test\\.auto-claude\\specs\\002-add-upstream-connection-test/**)",
+      "Edit(D:\\Codebase\\AutoRouter\\.auto-claude\\worktrees\\tasks\\002-add-upstream-connection-test\\.auto-claude\\specs\\002-add-upstream-connection-test/**)",
+      "Read(D:\\Codebase\\AutoRouter\\.auto-claude/**)",
+      "Write(D:\\Codebase\\AutoRouter\\.auto-claude/**)",
+      "Edit(D:\\Codebase\\AutoRouter\\.auto-claude/**)",
+      "Glob(D:\\Codebase\\AutoRouter\\.auto-claude/**)",
+      "Grep(D:\\Codebase\\AutoRouter\\.auto-claude/**)",
+      "Bash(*)",
+      "WebFetch(*)",
+      "WebSearch(*)",
+      "mcp__context7__resolve-library-id(*)",
+      "mcp__context7__get-library-docs(*)"
+    ]
+  }
+}
