@@ -4,6 +4,9 @@ import { encrypt, decrypt } from "../utils/encryption";
 
 const MIN_KEY_LENGTH_FOR_MASKING = 7;
 
+/**
+ * Error thrown when an upstream is not found in the database.
+ */
 export class UpstreamNotFoundError extends Error {
   constructor(message: string) {
     super(message);
