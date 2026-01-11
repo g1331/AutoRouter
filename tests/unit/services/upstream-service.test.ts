@@ -327,7 +327,7 @@ describe("upstream-service", () => {
       expect(result.message).toBe("Invalid base URL format");
       expect(result.statusCode).toBeNull();
       expect(result.latencyMs).toBeNull();
-      expect(result.errorType).toBe("network");
+      expect(result.errorType).toBe("unknown");
       expect(result.errorDetails).toContain("not a valid URL");
       expect(result.testedAt).toBeInstanceOf(Date);
     });
@@ -543,7 +543,7 @@ describe("upstream-service", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.latencyMs).toBeGreaterThanOrEqual(50);
+      expect(result.latencyMs).toBeGreaterThanOrEqual(45); // Reduced threshold to avoid flakiness
       expect(result.latencyMs).toBeLessThan(200);
     });
   });

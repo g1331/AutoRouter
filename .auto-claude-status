@@ -1,11 +1,11 @@
 {
   "active": true,
   "spec": "002-add-upstream-connection-test",
-  "state": "building",
+  "state": "complete",
   "subtasks": {
-    "completed": 1,
+    "completed": 16,
     "total": 16,
-    "in_progress": 1,
+    "in_progress": 0,
     "failed": 0
   },
   "phase": {
@@ -18,8 +18,8 @@
     "max": 1
   },
   "session": {
-    "number": 17,
-    "started_at": "2026-01-11T13:28:55.115659"
+    "number": 0,
+    "started_at": "2026-01-11T15:14:02.229725"
   },
-  "last_update": "2026-01-11T15:00:11.048687"
+  "last_update": "2026-01-11T15:14:02.311055"
 }

@@ -23,6 +23,15 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/lib/services/upstream-service", () => ({
   testUpstreamConnection: vi.fn(),
   getDecryptedApiKey: vi.fn(),
+  formatTestUpstreamResponse: vi.fn((result) => ({
+    success: result.success,
+    message: result.message,
+    latency_ms: result.latencyMs,
+    status_code: result.statusCode,
+    error_type: result.errorType,
+    error_details: result.errorDetails,
+    tested_at: result.testedAt.toISOString(),
+  })),
 }));
 
 describe("POST /api/admin/upstreams/test", () => {

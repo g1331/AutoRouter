@@ -5,51 +5,66 @@ import { encrypt, decrypt } from "../utils/encryption";
 const MIN_KEY_LENGTH_FOR_MASKING = 7;
 
 /**
+ * Validates a URL to prevent SSRF attacks.
+ * Blocks private IPs, loopback addresses, link-local addresses, and cloud metadata endpoints.
+ */
+function isUrlSafe(urlString: string): { safe: boolean; reason?: string } {
+  try {
+    const url = new URL(urlString);
+
+    // Only allow http and https
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return { safe: false, reason: "Only HTTP and HTTPS protocols are allowed" };
+    }
+
+    const hostname = url.hostname.toLowerCase();
+
+    // Block loopback addresses
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname.startsWith("127.")) {
+      return { safe: false, reason: "Loopback addresses are not allowed" };
+    }
+
+    // Block private IP ranges
+    const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+    const ipv4Match = hostname.match(ipv4Regex);
+    if (ipv4Match) {
+      const [, a, b] = ipv4Match.map(Number);
+      // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+      if (a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)) {
+        return { safe: false, reason: "Private IP addresses are not allowed" };
+      }
+      // Link-local 169.254.0.0/16 (AWS metadata)
+      if (a === 169 && b === 254) {
+        return { safe: false, reason: "Link-local addresses (cloud metadata endpoints) are not allowed" };
+      }
+    }
+
+    // Block IPv6 private addresses
+    if (hostname.includes(":")) {
+      // Block fc00::/7 (unique local addresses)
+      if (hostname.startsWith("fc") || hostname.startsWith("fd")) {
+        return { safe: false, reason: "IPv6 private addresses are not allowed" };
+      }
+      // Block fe80::/10 (link-local)
+      if (hostname.startsWith("fe80")) {
+        return { safe: false, reason: "IPv6 link-local addresses are not allowed" };
+      }
+    }
+
+    return { safe: true };
+  } catch {
+    return { safe: false, reason: "Invalid URL format" };
+  }
+}
+
+
+/**
  * Error thrown when an upstream is not found in the database.
  */
 export class UpstreamNotFoundError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "UpstreamNotFoundError";
-  }
-}
-
-/**
- * Error thrown when upstream connection test fails due to authentication issues.
- */
-export class UpstreamAuthenticationError extends Error {
-  constructor(
-    message: string,
-    public statusCode?: number
-  ) {
-    super(message);
-    this.name = "UpstreamAuthenticationError";
-  }
-}
-
-/**
- * Error thrown when upstream connection test fails due to network issues.
- */
-export class UpstreamNetworkError extends Error {
-  constructor(
-    message: string,
-    public cause?: Error
-  ) {
-    super(message);
-    this.name = "UpstreamNetworkError";
-  }
-}
-
-/**
- * Error thrown when upstream connection test times out.
- */
-export class UpstreamTimeoutError extends Error {
-  constructor(
-    message: string,
-    public timeoutSeconds: number
-  ) {
-    super(message);
-    this.name = "UpstreamTimeoutError";
   }
 }
 
@@ -181,8 +196,6 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     })
     .returning();
 
-  console.warn(`Created upstream: ${name}, provider=${provider}, default=${isDefault}`);
-
   return {
     id: newUpstream.id,
     name: newUpstream.name,
@@ -243,8 +256,6 @@ export async function updateUpstream(
     .where(eq(upstreams.id, upstreamId))
     .returning();
 
-  console.warn(`Updated upstream: ${updated.name}`);
-
   // Decrypt key for masking
   const decryptedKey = decrypt(updated.apiKeyEncrypted);
 
@@ -276,8 +287,6 @@ export async function deleteUpstream(upstreamId: string): Promise<void> {
   }
 
   await db.delete(upstreams).where(eq(upstreams.id, upstreamId));
-
-  console.warn(`Deleted upstream: ${existing.name}`);
 }
 
 /**
@@ -411,6 +420,21 @@ export function getDecryptedApiKey(upstream: Upstream): string {
 }
 
 /**
+ * Formats a TestUpstreamResult for API response (converts camelCase to snake_case).
+ */
+export function formatTestUpstreamResponse(result: TestUpstreamResult) {
+  return {
+    success: result.success,
+    message: result.message,
+    latency_ms: result.latencyMs,
+    status_code: result.statusCode,
+    error_type: result.errorType,
+    error_details: result.errorDetails,
+    tested_at: result.testedAt.toISOString(),
+  };
+}
+
+/**
  * Test connection to an upstream provider.
  *
  * Makes a lightweight API call to verify connectivity and authentication by calling
@@ -500,9 +524,6 @@ export function getDecryptedApiKey(upstream: Upstream): string {
  *
  * @see {@link TestUpstreamInput} for input type definition
  * @see {@link TestUpstreamResult} for detailed result structure
- * @see {@link UpstreamAuthenticationError} for authentication error details
- * @see {@link UpstreamNetworkError} for network error details
- * @see {@link UpstreamTimeoutError} for timeout error details
  */
 export async function testUpstreamConnection(
   input: TestUpstreamInput
@@ -523,23 +544,38 @@ export async function testUpstreamConnection(
     };
   }
 
-  // Validate baseUrl
+  // Validate baseUrl format
+  let parsedUrl: URL;
   try {
-    new URL(baseUrl);
+    parsedUrl = new URL(baseUrl);
   } catch {
     return {
       success: false,
       message: "Invalid base URL format",
       latencyMs: null,
       statusCode: null,
-      errorType: "network",
+      errorType: "unknown",
       errorDetails: `Base URL "${baseUrl}" is not a valid URL`,
       testedAt,
     };
   }
 
-  // Prepare test endpoint and headers based on provider
-  const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
+  // Check for SSRF vulnerabilities
+  const urlSafetyCheck = isUrlSafe(baseUrl);
+  if (!urlSafetyCheck.safe) {
+    return {
+      success: false,
+      message: "Invalid base URL",
+      latencyMs: null,
+      statusCode: null,
+      errorType: "unknown",
+      errorDetails: urlSafetyCheck.reason || "Base URL is not allowed",
+      testedAt,
+    };
+  }
+
+  // Normalize base URL to origin only (prevent path doubling)
+  const normalizedBaseUrl = parsedUrl.origin;
   const testUrl = `${normalizedBaseUrl}/v1/models`;
 
   const headers: Record<string, string> = {};

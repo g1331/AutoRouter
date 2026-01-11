@@ -3,6 +3,7 @@ import { validateAdminAuth } from "@/lib/utils/auth";
 import { errorResponse } from "@/lib/utils/api-auth";
 import {
   testUpstreamConnection,
+  formatTestUpstreamResponse,
   getDecryptedApiKey,
   type TestUpstreamInput,
 } from "@/lib/services/upstream-service";
@@ -143,17 +144,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const result = await testUpstreamConnection(input);
 
     // Return test results
-    return NextResponse.json({
-      success: result.success,
-      message: result.message,
-      latency_ms: result.latencyMs,
-      status_code: result.statusCode,
-      error_type: result.errorType,
-      error_details: result.errorDetails,
-      tested_at: result.testedAt.toISOString(),
-    });
+    return NextResponse.json(formatTestUpstreamResponse(result));
   } catch (error) {
-    console.error("Failed to test upstream connection:", error);
+    console.error("Failed to test upstream connection:", error instanceof Error ? error.message : "Unknown error");
     return errorResponse("Internal server error", 500);
   }
 }

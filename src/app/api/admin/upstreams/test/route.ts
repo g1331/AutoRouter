@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateAdminAuth } from "@/lib/utils/auth";
 import { errorResponse } from "@/lib/utils/api-auth";
-import { testUpstreamConnection, type TestUpstreamInput } from "@/lib/services/upstream-service";
+import {
+  testUpstreamConnection,
+  formatTestUpstreamResponse,
+  type TestUpstreamInput,
+} from "@/lib/services/upstream-service";
 import { z } from "zod";
 
 const testUpstreamSchema = z.object({
@@ -10,6 +14,7 @@ const testUpstreamSchema = z.object({
   base_url: z.string().url("Base URL must be a valid URL"),
   api_key: z
     .string()
+    .trim()
     .min(10, "API key must be at least 10 characters")
     .max(512, "API key must not exceed 512 characters"),
   timeout: z
@@ -127,15 +132,7 @@ export async function POST(request: NextRequest) {
 
     const result = await testUpstreamConnection(input);
 
-    return NextResponse.json({
-      success: result.success,
-      message: result.message,
-      latency_ms: result.latencyMs,
-      status_code: result.statusCode,
-      error_type: result.errorType,
-      error_details: result.errorDetails,
-      tested_at: result.testedAt.toISOString(),
-    });
+    return NextResponse.json(formatTestUpstreamResponse(result));
   } catch (error) {
     if (error instanceof z.ZodError) {
       return errorResponse(
@@ -143,7 +140,7 @@ export async function POST(request: NextRequest) {
         400
       );
     }
-    console.error("Failed to test upstream connection:", error);
+    console.error("Failed to test upstream connection:", error instanceof Error ? error.message : "Unknown error");
     return errorResponse("Internal server error", 500);
   }
 }
