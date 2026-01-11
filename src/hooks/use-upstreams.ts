@@ -5,6 +5,7 @@ import type {
   UpstreamCreate,
   UpstreamUpdate,
   PaginatedUpstreamsResponse,
+  TestUpstreamResponse,
 } from "@/types/api";
 import { toast } from "sonner";
 
@@ -139,5 +140,16 @@ export function useDeleteUpstream() {
     onError: (error: Error) => {
       toast.error(`删除失败: ${error.message}`);
     },
+  });
+}
+
+/**
+ * Test upstream connection
+ */
+export function useTestUpstream() {
+  const { apiClient } = useAuth();
+
+  return useMutation({
+    mutationFn: (id: string) => apiClient.post<TestUpstreamResponse>(`/admin/upstreams/${id}/test`, {}),
   });
 }
