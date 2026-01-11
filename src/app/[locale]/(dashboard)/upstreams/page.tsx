@@ -7,6 +7,7 @@ import { UpstreamsTable } from "@/components/admin/upstreams-table";
 import { UpstreamFormDialog } from "@/components/admin/upstream-form-dialog";
 import { DeleteUpstreamDialog } from "@/components/admin/delete-upstream-dialog";
 import { Button } from "@/components/ui/button";
+import { TableSkeleton } from "@/components/ui/table-skeleton";
 import { ChevronLeft, ChevronRight, Plus, Server } from "lucide-react";
 import { useUpstreams } from "@/hooks/use-upstreams";
 import type { Upstream } from "@/types/api";
@@ -53,11 +54,8 @@ export default function UpstreamsPage() {
 
         {/* Table */}
         {isLoading ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-10 h-10 border-2 border-amber-700 border-t-amber-500 rounded-full animate-spin" />
-              <p className="font-mono text-sm text-amber-700">{tCommon("loading")}</p>
-            </div>
+          <div className="rounded-cf-sm border border-divider overflow-hidden">
+            <TableSkeleton columns={6} rows={5} />
           </div>
         ) : (
           <>
