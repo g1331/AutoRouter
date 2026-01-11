@@ -52,3 +52,6 @@ CLAUDE.local.md
 # drizzle/ - migrations need to be committed for Docker deployment
 
 next-env.d.ts
+
+# Auto Claude data directory
+.auto-claude/
