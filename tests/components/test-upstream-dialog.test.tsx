@@ -427,7 +427,7 @@ describe("TestUpstreamDialog", () => {
     });
 
     it("calls onClose when dialog is closed via dialog overlay (not loading)", () => {
-      const { container } = render(
+      render(
         <TestUpstreamDialog
           upstream={mockUpstream}
           open={true}
