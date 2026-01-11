@@ -24,6 +24,9 @@ export default function UpstreamsPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editUpstream, setEditUpstream] = useState<Upstream | null>(null);
   const [deleteUpstream, setDeleteUpstream] = useState<Upstream | null>(null);
+  // TODO: TestUpstreamDialog will be added in a future subtask
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [testUpstream, setTestUpstream] = useState<Upstream | null>(null);
   const pageSize = 10;
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
@@ -65,6 +68,7 @@ export default function UpstreamsPage() {
               upstreams={data?.items || []}
               onEdit={setEditUpstream}
               onDelete={setDeleteUpstream}
+              onTest={setTestUpstream}
             />
 
             {/* Pagination */}
