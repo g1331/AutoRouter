@@ -185,14 +185,38 @@
     "tsx",
     "vitest"
   ],
-  "script_commands": ["bun", "npm", "pnpm", "yarn"],
+  "script_commands": [
+    "bun",
+    "npm",
+    "pnpm",
+    "yarn"
+  ],
   "custom_commands": [],
   "detected_stack": {
-    "languages": ["python", "javascript", "typescript", "php", "c"],
-    "package_managers": ["pnpm"],
-    "frameworks": ["nextjs", "react", "vitest", "eslint", "prettier", "drizzle"],
-    "databases": ["postgresql"],
-    "infrastructure": ["docker"],
+    "languages": [
+      "python",
+      "javascript",
+      "typescript",
+      "php",
+      "c"
+    ],
+    "package_managers": [
+      "pnpm"
+    ],
+    "frameworks": [
+      "nextjs",
+      "react",
+      "vitest",
+      "eslint",
+      "prettier",
+      "drizzle"
+    ],
+    "databases": [
+      "postgresql"
+    ],
+    "infrastructure": [
+      "docker"
+    ],
     "cloud_providers": [],
     "code_quality_tools": [],
     "version_managers": []
@@ -218,6 +242,6 @@
     "shell_scripts": []
   },
   "project_dir": "D:\\Codebase\\AutoRouter\\.auto-claude\\worktrees\\tasks\\001-add-api-key-update-functionality",
-  "created_at": "2026-01-10T23:51:23.000243",
+  "created_at": "2026-01-11T19:40:15.363600",
   "project_hash": "8dbee3a1cd49e004e69400881b60fa1e"
 }
