@@ -227,6 +227,28 @@ describe("key-manager", () => {
 
       expect(result.expiresAt).toEqual(expiresAt);
     });
+
+    it("should throw EncryptionError when encryption fails", async () => {
+      const { db } = await import("@/lib/db");
+      const { createApiKey } = await import("@/lib/services/key-manager");
+      const { encrypt, EncryptionError } = await import("@/lib/utils/encryption");
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        { id: "upstream-1", name: "OpenAI" },
+      ] as never);
+
+      // Mock encrypt to throw an error
+      vi.mocked(encrypt).mockImplementationOnce(() => {
+        throw new EncryptionError("Encryption failed: invalid key");
+      });
+
+      await expect(
+        createApiKey({
+          name: "Test Key",
+          upstreamIds: ["upstream-1"],
+        })
+      ).rejects.toThrow("Encryption failed: invalid key");
+    });
   });
 
   describe("deleteApiKey", () => {
@@ -408,6 +430,27 @@ describe("key-manager", () => {
       await expect(revealApiKey("key-1")).rejects.toThrow(
         "Decrypted API key does not match stored hash"
       );
+    });
+
+    it("should throw EncryptionError when decryption fails", async () => {
+      const { db } = await import("@/lib/db");
+      const { revealApiKey } = await import("@/lib/services/key-manager");
+      const { decrypt, EncryptionError } = await import("@/lib/utils/encryption");
+
+      vi.mocked(db.query.apiKeys.findFirst).mockResolvedValueOnce({
+        id: "key-1",
+        keyPrefix: "sk-auto-test",
+        keyValueEncrypted: "corrupted-encrypted-data",
+        keyHash: "hashed-key",
+        name: "Test Key",
+      } as never);
+
+      // Mock decrypt to throw an error
+      vi.mocked(decrypt).mockImplementationOnce(() => {
+        throw new EncryptionError("Decryption failed: invalid token");
+      });
+
+      await expect(revealApiKey("key-1")).rejects.toThrow("Decryption failed: invalid token");
     });
   });
 
