@@ -332,8 +332,7 @@ jobs:
           prompt-file: .github/codex/prompts/review.md
           # Allow bots for repository_dispatch (triggered by comment workflow as github-actions[bot])
           allow-bots: ${{ github.event_name == 'repository_dispatch' }}
-          # Enable MCP server for codebase retrieval
-          codex-args: '["--mcp-server", "auggie-mcp"]'
+          # MCP server is configured via ~/.codex/config.toml (see "Configure Codex MCP servers" step)
           output-schema: |
             {
               "type": "object",
