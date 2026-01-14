@@ -6,6 +6,10 @@ import {
   createUpstream,
   type UpstreamCreateInput,
 } from "@/lib/services/upstream-service";
+import {
+  transformPaginatedUpstreams,
+  transformUpstreamToApi,
+} from "@/lib/utils/api-transformers";
 import { z } from "zod";
 
 const createUpstreamSchema = z.object({
@@ -31,25 +35,7 @@ export async function GET(request: NextRequest) {
     const { page, pageSize } = getPaginationParams(request);
     const result = await listUpstreams(page, pageSize);
 
-    return NextResponse.json({
-      items: result.items.map((item) => ({
-        id: item.id,
-        name: item.name,
-        provider: item.provider,
-        base_url: item.baseUrl,
-        api_key_masked: item.apiKeyMasked,
-        is_default: item.isDefault,
-        timeout: item.timeout,
-        is_active: item.isActive,
-        config: item.config,
-        created_at: item.createdAt.toISOString(),
-        updated_at: item.updatedAt.toISOString(),
-      })),
-      total: result.total,
-      page: result.page,
-      page_size: result.pageSize,
-      total_pages: result.totalPages,
-    });
+    return NextResponse.json(transformPaginatedUpstreams(result));
   } catch (error) {
     console.error("Failed to list upstreams:", error);
     return errorResponse("Internal server error", 500);
@@ -81,22 +67,7 @@ export async function POST(request: NextRequest) {
 
     const result = await createUpstream(input);
 
-    return NextResponse.json(
-      {
-        id: result.id,
-        name: result.name,
-        provider: result.provider,
-        base_url: result.baseUrl,
-        api_key_masked: result.apiKeyMasked,
-        is_default: result.isDefault,
-        timeout: result.timeout,
-        is_active: result.isActive,
-        config: result.config,
-        created_at: result.createdAt.toISOString(),
-        updated_at: result.updatedAt.toISOString(),
-      },
-      { status: 201 }
-    );
+    return NextResponse.json(transformUpstreamToApi(result), { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return errorResponse(

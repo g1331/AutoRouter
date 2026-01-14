@@ -8,6 +8,7 @@ import {
   UpstreamNotFoundError,
   type UpstreamUpdateInput,
 } from "@/lib/services/upstream-service";
+import { transformUpstreamToApi } from "@/lib/utils/api-transformers";
 import { z } from "zod";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -40,19 +41,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return errorResponse("Upstream not found", 404);
     }
 
-    return NextResponse.json({
-      id: upstream.id,
-      name: upstream.name,
-      provider: upstream.provider,
-      base_url: upstream.baseUrl,
-      api_key_masked: upstream.apiKeyMasked,
-      is_default: upstream.isDefault,
-      timeout: upstream.timeout,
-      is_active: upstream.isActive,
-      config: upstream.config,
-      created_at: upstream.createdAt.toISOString(),
-      updated_at: upstream.updatedAt.toISOString(),
-    });
+    return NextResponse.json(transformUpstreamToApi(upstream));
   } catch (error) {
     console.error("Failed to get upstream:", error);
     return errorResponse("Internal server error", 500);
@@ -85,19 +74,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     const result = await updateUpstream(id, input);
 
-    return NextResponse.json({
-      id: result.id,
-      name: result.name,
-      provider: result.provider,
-      base_url: result.baseUrl,
-      api_key_masked: result.apiKeyMasked,
-      is_default: result.isDefault,
-      timeout: result.timeout,
-      is_active: result.isActive,
-      config: result.config,
-      created_at: result.createdAt.toISOString(),
-      updated_at: result.updatedAt.toISOString(),
-    });
+    return NextResponse.json(transformUpstreamToApi(result));
   } catch (error) {
     if (error instanceof UpstreamNotFoundError) {
       return errorResponse("Upstream not found", 404);
