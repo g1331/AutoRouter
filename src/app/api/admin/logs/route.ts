@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateAdminAuth } from "@/lib/utils/auth";
 import { getPaginationParams, errorResponse } from "@/lib/utils/api-auth";
 import { listRequestLogs, type ListRequestLogsFilter } from "@/lib/services/request-logger";
+import { transformPaginatedRequestLogs } from "@/lib/utils/api-transformers";
 
 /**
  * GET /api/admin/logs - List request logs
@@ -44,27 +45,7 @@ export async function GET(request: NextRequest) {
 
     const result = await listRequestLogs(page, pageSize, filters);
 
-    return NextResponse.json({
-      items: result.items.map((item) => ({
-        id: item.id,
-        api_key_id: item.apiKeyId,
-        upstream_id: item.upstreamId,
-        method: item.method,
-        path: item.path,
-        model: item.model,
-        prompt_tokens: item.promptTokens,
-        completion_tokens: item.completionTokens,
-        total_tokens: item.totalTokens,
-        status_code: item.statusCode,
-        duration_ms: item.durationMs,
-        error_message: item.errorMessage,
-        created_at: item.createdAt.toISOString(),
-      })),
-      total: result.total,
-      page: result.page,
-      page_size: result.pageSize,
-      total_pages: result.totalPages,
-    });
+    return NextResponse.json(transformPaginatedRequestLogs(result));
   } catch (error) {
     console.error("Failed to list request logs:", error);
     return errorResponse("Internal server error", 500);
