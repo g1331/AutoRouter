@@ -174,10 +174,7 @@ describe("upstream-connection-tester", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.openai.com/v1/models",
-        expect.anything()
-      );
+      expect(mockFetch).toHaveBeenCalledWith("https://api.openai.com/v1/models", expect.anything());
     });
 
     it("should normalize base URL with path to origin only", async () => {
@@ -194,10 +191,7 @@ describe("upstream-connection-tester", () => {
 
       expect(result.success).toBe(true);
       // Should use origin only, not append to path
-      expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.openai.com/v1/models",
-        expect.anything()
-      );
+      expect(mockFetch).toHaveBeenCalledWith("https://api.openai.com/v1/models", expect.anything());
     });
   });
 
@@ -993,7 +987,13 @@ describe("upstream-connection-tester", () => {
     });
 
     it("should handle all error types", () => {
-      const errorTypes = ["authentication", "network", "timeout", "invalid_response", "unknown"] as const;
+      const errorTypes = [
+        "authentication",
+        "network",
+        "timeout",
+        "invalid_response",
+        "unknown",
+      ] as const;
 
       errorTypes.forEach((errorType) => {
         const result: TestUpstreamResult = {

@@ -8,10 +8,7 @@ import type {
   ApiKeyRevealResult,
   PaginatedApiKeys,
 } from "@/lib/services/key-manager";
-import type {
-  RequestLogResponse,
-  PaginatedRequestLogs,
-} from "@/lib/services/request-logger";
+import type { RequestLogResponse, PaginatedRequestLogs } from "@/lib/services/request-logger";
 import type {
   StatsOverview,
   StatsTimeseries,

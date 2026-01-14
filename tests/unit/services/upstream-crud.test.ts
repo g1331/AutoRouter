@@ -115,19 +115,21 @@ describe("upstream-crud", () => {
 
       vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(null);
 
-      const mockReturning = vi.fn().mockResolvedValue([{
-        id: "test-id",
-        name: "test-upstream",
-        provider: "openai",
-        baseUrl: "https://api.openai.com",
-        apiKeyEncrypted: "encrypted:sk-test-key",
-        isDefault: false,
-        timeout: 60,
-        isActive: true,
-        config: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }]);
+      const mockReturning = vi.fn().mockResolvedValue([
+        {
+          id: "test-id",
+          name: "test-upstream",
+          provider: "openai",
+          baseUrl: "https://api.openai.com",
+          apiKeyEncrypted: "encrypted:sk-test-key",
+          isDefault: false,
+          timeout: 60,
+          isActive: true,
+          config: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
 
       vi.mocked(db.insert).mockReturnValue({
         values: vi.fn().mockReturnValue({
@@ -156,12 +158,14 @@ describe("upstream-crud", () => {
         name: "test-upstream",
       } as unknown as PartialUpstream);
 
-      await expect(createUpstream({
-        name: "test-upstream",
-        provider: "openai",
-        baseUrl: "https://api.openai.com",
-        apiKey: "sk-test-key",
-      })).rejects.toThrow("Upstream with name 'test-upstream' already exists");
+      await expect(
+        createUpstream({
+          name: "test-upstream",
+          provider: "openai",
+          baseUrl: "https://api.openai.com",
+          apiKey: "sk-test-key",
+        })
+      ).rejects.toThrow("Upstream with name 'test-upstream' already exists");
     });
   });
 
@@ -180,19 +184,21 @@ describe("upstream-crud", () => {
         } as unknown as PartialUpstream)
         .mockResolvedValueOnce(null);
 
-      const mockReturning = vi.fn().mockResolvedValue([{
-        id: "test-id",
-        name: "updated-upstream",
-        provider: "openai",
-        baseUrl: "https://api.openai.com",
-        apiKeyEncrypted: "encrypted:sk-test-key",
-        isDefault: false,
-        timeout: 60,
-        isActive: true,
-        config: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }]);
+      const mockReturning = vi.fn().mockResolvedValue([
+        {
+          id: "test-id",
+          name: "updated-upstream",
+          provider: "openai",
+          baseUrl: "https://api.openai.com",
+          apiKeyEncrypted: "encrypted:sk-test-key",
+          isDefault: false,
+          timeout: 60,
+          isActive: true,
+          config: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
 
       vi.mocked(db.update).mockReturnValue({
         set: vi.fn().mockReturnValue({
@@ -213,8 +219,9 @@ describe("upstream-crud", () => {
 
       vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(null);
 
-      await expect(updateUpstream("nonexistent-id", { name: "new-name" }))
-        .rejects.toThrow(UpstreamNotFoundError);
+      await expect(updateUpstream("nonexistent-id", { name: "new-name" })).rejects.toThrow(
+        UpstreamNotFoundError
+      );
     });
 
     it("should throw error if new name already exists", async () => {
@@ -231,8 +238,9 @@ describe("upstream-crud", () => {
           name: "existing-name",
         } as unknown as PartialUpstream);
 
-      await expect(updateUpstream("test-id", { name: "existing-name" }))
-        .rejects.toThrow("Upstream with name 'existing-name' already exists");
+      await expect(updateUpstream("test-id", { name: "existing-name" })).rejects.toThrow(
+        "Upstream with name 'existing-name' already exists"
+      );
     });
   });
 
@@ -262,8 +270,7 @@ describe("upstream-crud", () => {
 
       vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(null);
 
-      await expect(deleteUpstream("nonexistent-id"))
-        .rejects.toThrow(UpstreamNotFoundError);
+      await expect(deleteUpstream("nonexistent-id")).rejects.toThrow(UpstreamNotFoundError);
     });
   });
 

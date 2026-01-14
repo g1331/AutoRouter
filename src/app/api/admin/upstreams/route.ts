@@ -6,10 +6,7 @@ import {
   createUpstream,
   type UpstreamCreateInput,
 } from "@/lib/services/upstream-service";
-import {
-  transformPaginatedUpstreams,
-  transformUpstreamToApi,
-} from "@/lib/utils/api-transformers";
+import { transformPaginatedUpstreams, transformUpstreamToApi } from "@/lib/utils/api-transformers";
 import { z } from "zod";
 
 const createUpstreamSchema = z.object({
