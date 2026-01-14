@@ -534,5 +534,114 @@ describe("key-manager", () => {
       const result = await findAndVerifyApiKey("sk-auto-test-key");
       expect(result).toBeNull();
     });
+
+    it("should reject expired keys", async () => {
+      const { db } = await import("@/lib/db");
+      const { findAndVerifyApiKey } = await import("@/lib/services/key-manager");
+      const { verifyApiKey } = await import("@/lib/utils/auth");
+
+      const expiredDate = new Date(Date.now() - 86400000); // 1 day ago
+      const mockKey = {
+        id: "key-1",
+        keyPrefix: "sk-auto-test",
+        keyHash: "hashed-key",
+        name: "Expired Key",
+        isActive: true,
+        expiresAt: expiredDate,
+      };
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([mockKey] as never);
+      vi.mocked(verifyApiKey).mockResolvedValueOnce(true);
+
+      const result = await findAndVerifyApiKey("sk-auto-test-expired-key");
+      expect(result).toBeNull();
+    });
+
+    it("should accept keys expiring in future", async () => {
+      const { db } = await import("@/lib/db");
+      const { findAndVerifyApiKey } = await import("@/lib/services/key-manager");
+      const { verifyApiKey } = await import("@/lib/utils/auth");
+
+      const futureDate = new Date(Date.now() + 86400000); // 1 day from now
+      const mockKey = {
+        id: "key-1",
+        keyPrefix: "sk-auto-test",
+        keyHash: "hashed-key",
+        name: "Future Key",
+        isActive: true,
+        expiresAt: futureDate,
+      };
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([mockKey] as never);
+      vi.mocked(verifyApiKey).mockResolvedValueOnce(true);
+
+      const result = await findAndVerifyApiKey("sk-auto-test-future-key");
+      expect(result).toEqual(mockKey);
+    });
+
+    it("should handle keys with null expiresAt", async () => {
+      const { db } = await import("@/lib/db");
+      const { findAndVerifyApiKey } = await import("@/lib/services/key-manager");
+      const { verifyApiKey } = await import("@/lib/utils/auth");
+
+      const mockKey = {
+        id: "key-1",
+        keyPrefix: "sk-auto-test",
+        keyHash: "hashed-key",
+        name: "No Expiry Key",
+        isActive: true,
+        expiresAt: null,
+      };
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([mockKey] as never);
+      vi.mocked(verifyApiKey).mockResolvedValueOnce(true);
+
+      const result = await findAndVerifyApiKey("sk-auto-test-no-expiry");
+      expect(result).toEqual(mockKey);
+    });
+
+    it("should reject key expired by 1 millisecond", async () => {
+      const { db } = await import("@/lib/db");
+      const { findAndVerifyApiKey } = await import("@/lib/services/key-manager");
+      const { verifyApiKey } = await import("@/lib/utils/auth");
+
+      const expiredDate = new Date(Date.now() - 1); // 1ms ago
+      const mockKey = {
+        id: "key-1",
+        keyPrefix: "sk-auto-test",
+        keyHash: "hashed-key",
+        name: "Just Expired Key",
+        isActive: true,
+        expiresAt: expiredDate,
+      };
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([mockKey] as never);
+      vi.mocked(verifyApiKey).mockResolvedValueOnce(true);
+
+      const result = await findAndVerifyApiKey("sk-auto-test-just-expired");
+      expect(result).toBeNull();
+    });
+
+    it("should reject key that expires exactly now", async () => {
+      const { db } = await import("@/lib/db");
+      const { findAndVerifyApiKey } = await import("@/lib/services/key-manager");
+      const { verifyApiKey } = await import("@/lib/utils/auth");
+
+      const now = new Date();
+      const mockKey = {
+        id: "key-1",
+        keyPrefix: "sk-auto-test",
+        keyHash: "hashed-key",
+        name: "Expires Now Key",
+        isActive: true,
+        expiresAt: now,
+      };
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([mockKey] as never);
+      vi.mocked(verifyApiKey).mockResolvedValueOnce(true);
+
+      const result = await findAndVerifyApiKey("sk-auto-test-expires-now");
+      expect(result).toBeNull();
+    });
   });
 });

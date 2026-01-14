@@ -305,6 +305,10 @@ export async function findAndVerifyApiKey(keyValue: string): Promise<ApiKey | nu
     try {
       const isValid = await verifyApiKey(keyValue, candidate.keyHash);
       if (isValid) {
+        // Check if key has expired
+        if (candidate.expiresAt && candidate.expiresAt <= new Date()) {
+          return null;
+        }
         return candidate;
       }
     } catch {
