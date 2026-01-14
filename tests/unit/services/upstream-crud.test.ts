@@ -1,6 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { maskApiKey, UpstreamNotFoundError } from "@/lib/services/upstream-crud";
 
+// Type helpers for mocking Drizzle ORM query builder
+type MockInsertChain = {
+  values: ReturnType<typeof vi.fn>;
+};
+
+type MockUpdateChain = {
+  set: ReturnType<typeof vi.fn>;
+};
+
+type MockSelectChain = {
+  from: ReturnType<typeof vi.fn>;
+};
+
+type MockDeleteChain = {
+  where: ReturnType<typeof vi.fn>;
+};
+
+type PartialUpstream = {
+  id: string;
+  name: string;
+  [key: string]: unknown;
+};
+
 vi.mock("@/lib/db", () => ({
   db: {
     query: {
@@ -110,7 +133,7 @@ describe("upstream-crud", () => {
         values: vi.fn().mockReturnValue({
           returning: mockReturning,
         }),
-      } as any);
+      } as unknown as MockInsertChain);
 
       const result = await createUpstream({
         name: "test-upstream",
@@ -131,7 +154,7 @@ describe("upstream-crud", () => {
       vi.mocked(db.query.upstreams.findFirst).mockResolvedValue({
         id: "existing-id",
         name: "test-upstream",
-      } as any);
+      } as unknown as PartialUpstream);
 
       await expect(createUpstream({
         name: "test-upstream",
@@ -154,7 +177,7 @@ describe("upstream-crud", () => {
           provider: "openai",
           baseUrl: "https://api.openai.com",
           apiKeyEncrypted: "encrypted:sk-test-key",
-        } as any)
+        } as unknown as PartialUpstream)
         .mockResolvedValueOnce(null);
 
       const mockReturning = vi.fn().mockResolvedValue([{
@@ -177,7 +200,7 @@ describe("upstream-crud", () => {
             returning: mockReturning,
           }),
         }),
-      } as any);
+      } as unknown as MockUpdateChain);
 
       const result = await updateUpstream("test-id", { name: "updated-upstream" });
 
@@ -202,11 +225,11 @@ describe("upstream-crud", () => {
         .mockResolvedValueOnce({
           id: "test-id",
           name: "test-upstream",
-        } as any)
+        } as unknown as PartialUpstream)
         .mockResolvedValueOnce({
           id: "other-id",
           name: "existing-name",
-        } as any);
+        } as unknown as PartialUpstream);
 
       await expect(updateUpstream("test-id", { name: "existing-name" }))
         .rejects.toThrow("Upstream with name 'existing-name' already exists");
@@ -221,12 +244,12 @@ describe("upstream-crud", () => {
       vi.mocked(db.query.upstreams.findFirst).mockResolvedValue({
         id: "test-id",
         name: "test-upstream",
-      } as any);
+      } as unknown as PartialUpstream);
 
       const mockWhere = vi.fn().mockResolvedValue(undefined);
       vi.mocked(db.delete).mockReturnValue({
         where: mockWhere,
-      } as any);
+      } as unknown as MockDeleteChain);
 
       await deleteUpstream("test-id");
 
@@ -251,7 +274,7 @@ describe("upstream-crud", () => {
 
       vi.mocked(db.select).mockReturnValue({
         from: vi.fn().mockResolvedValue([{ value: 2 }]),
-      } as any);
+      } as unknown as MockSelectChain);
 
       vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
         {
@@ -280,7 +303,7 @@ describe("upstream-crud", () => {
           createdAt: new Date(),
           updatedAt: new Date(),
         },
-      ] as any);
+      ] as unknown as PartialUpstream[]);
 
       const result = await listUpstreams(1, 20);
 
@@ -298,7 +321,7 @@ describe("upstream-crud", () => {
 
       vi.mocked(db.select).mockReturnValue({
         from: vi.fn().mockResolvedValue([{ value: 1 }]),
-      } as any);
+      } as unknown as MockSelectChain);
 
       vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
         {
@@ -314,7 +337,7 @@ describe("upstream-crud", () => {
           createdAt: new Date(),
           updatedAt: new Date(),
         },
-      ] as any);
+      ] as unknown as PartialUpstream[]);
 
       vi.mocked(decrypt).mockImplementation(() => {
         throw new Error("Decryption failed");
@@ -346,7 +369,7 @@ describe("upstream-crud", () => {
         config: null,
         createdAt: new Date(),
         updatedAt: new Date(),
-      } as any);
+      } as unknown as PartialUpstream);
 
       const result = await getUpstreamById("test-id");
 
@@ -375,7 +398,7 @@ describe("upstream-crud", () => {
       vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
         { id: "id-1", isActive: true },
         { id: "id-2", isActive: true },
-      ] as any);
+      ] as unknown as PartialUpstream[]);
 
       const result = await loadActiveUpstreams();
 
@@ -391,7 +414,7 @@ describe("upstream-crud", () => {
       vi.mocked(db.query.upstreams.findFirst).mockResolvedValue({
         id: "default-id",
         isDefault: true,
-      } as any);
+      } as unknown as PartialUpstream);
 
       const result = await getDefaultUpstream();
 
@@ -419,7 +442,7 @@ describe("upstream-crud", () => {
       vi.mocked(db.query.upstreams.findFirst).mockResolvedValue({
         id: "test-id",
         name: "test-upstream",
-      } as any);
+      } as unknown as PartialUpstream);
 
       const result = await getUpstreamByName("test-upstream");
 
@@ -449,7 +472,7 @@ describe("upstream-crud", () => {
       const upstream = {
         id: "test-id",
         apiKeyEncrypted: "encrypted:sk-test-key",
-      } as any;
+      } as unknown as PartialUpstream;
 
       const result = getDecryptedApiKey(upstream);
 

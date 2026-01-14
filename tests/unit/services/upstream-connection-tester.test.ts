@@ -380,6 +380,7 @@ describe("upstream-connection-tester", () => {
 
       // Should not be blocked as it's outside the 172.16-31 range
       expect(mockFetch).toHaveBeenCalled();
+      expect(result.success).toBe(true);
     });
 
     it("should reject AWS metadata endpoint 169.254.169.254", async () => {
