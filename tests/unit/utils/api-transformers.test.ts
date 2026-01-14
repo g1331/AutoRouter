@@ -5,6 +5,7 @@ import {
   transformPaginatedUpstreams,
   transformApiKeyToApi,
   transformApiKeyCreateToApi,
+  transformApiKeyRevealToApi,
   transformPaginatedApiKeys,
   transformRequestLogToApi,
   transformPaginatedRequestLogs,
@@ -258,6 +259,26 @@ describe("api-transformers", () => {
 
       expect(result.expires_at).toBeNull();
       expect(result.key_value).toBe("ar_test_xyz");
+    });
+  });
+
+  describe("transformApiKeyRevealToApi", () => {
+    it("should transform revealed API key to API response format", () => {
+      const revealResult = {
+        id: "key-123",
+        keyValue: "ar_live_abc123xyz789fullkey",
+        keyPrefix: "ar_live_",
+        name: "Production Key",
+      };
+
+      const result = transformApiKeyRevealToApi(revealResult);
+
+      expect(result).toEqual({
+        id: "key-123",
+        key_value: "ar_live_abc123xyz789fullkey",
+        key_prefix: "ar_live_",
+        name: "Production Key",
+      });
     });
   });
 
