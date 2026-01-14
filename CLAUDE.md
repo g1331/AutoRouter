@@ -85,7 +85,10 @@ src/
 │   │   └── index.ts         # Database client
 │   ├── services/            # Business logic
 │   │   ├── key-manager.ts   # API key CRUD
-│   │   ├── upstream-service.ts  # Upstream CRUD
+│   │   ├── upstream-service.ts  # Upstream service (re-exports from focused modules)
+│   │   ├── upstream-crud.ts     # Upstream database CRUD operations
+│   │   ├── upstream-connection-tester.ts  # Upstream connection testing
+│   │   ├── upstream-ssrf-validator.ts     # SSRF protection (IP/URL/DNS validation)
 │   │   ├── proxy-client.ts  # HTTP proxy with SSE support
 │   │   ├── request-logger.ts    # Request logging
 │   │   └── stats-service.ts     # Statistics aggregation
