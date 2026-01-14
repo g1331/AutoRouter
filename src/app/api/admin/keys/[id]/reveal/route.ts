@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateAdminAuth } from "@/lib/utils/auth";
 import { errorResponse } from "@/lib/utils/api-auth";
 import { revealApiKey, ApiKeyNotFoundError, LegacyApiKeyError } from "@/lib/services/key-manager";
+import { transformApiKeyRevealToApi } from "@/lib/utils/api-transformers";
 import { config } from "@/lib/utils/config";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -24,12 +25,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const { id } = await context.params;
     const result = await revealApiKey(id);
 
-    return NextResponse.json({
-      id: result.id,
-      key_value: result.keyValue,
-      key_prefix: result.keyPrefix,
-      name: result.name,
-    });
+    return NextResponse.json(transformApiKeyRevealToApi(result));
   } catch (error) {
     if (error instanceof ApiKeyNotFoundError) {
       return errorResponse("API key not found", 404);

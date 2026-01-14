@@ -5,6 +5,7 @@ import type {
 import type {
   ApiKeyListItem,
   ApiKeyCreateResult,
+  ApiKeyRevealResult,
   PaginatedApiKeys,
 } from "@/lib/services/key-manager";
 import type {
@@ -126,6 +127,17 @@ export interface ApiKeyCreateApiResponse extends ApiKeyApiResponse {
   key_value: string;
 }
 
+/**
+ * API response format for revealed API key (snake_case).
+ * Only includes essential fields for security.
+ */
+export interface ApiKeyRevealApiResponse {
+  id: string;
+  key_value: string;
+  key_prefix: string;
+  name: string;
+}
+
 // ========== ApiKey Transformers ==========
 
 /**
@@ -162,6 +174,19 @@ export function transformApiKeyCreateToApi(result: ApiKeyCreateResult): ApiKeyCr
     expires_at: toISOStringOrNull(result.expiresAt),
     created_at: result.createdAt.toISOString(),
     updated_at: result.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * Transform a revealed API key to API response format.
+ * Only includes essential fields for security.
+ */
+export function transformApiKeyRevealToApi(result: ApiKeyRevealResult): ApiKeyRevealApiResponse {
+  return {
+    id: result.id,
+    key_value: result.keyValue,
+    key_prefix: result.keyPrefix,
+    name: result.name,
   };
 }
 

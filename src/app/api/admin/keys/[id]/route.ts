@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateAdminAuth } from "@/lib/utils/auth";
 import { errorResponse } from "@/lib/utils/api-auth";
 import { getApiKeyById, deleteApiKey, ApiKeyNotFoundError } from "@/lib/services/key-manager";
+import { transformApiKeyToApi } from "@/lib/utils/api-transformers";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -22,17 +23,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return errorResponse("API key not found", 404);
     }
 
-    return NextResponse.json({
-      id: apiKey.id,
-      key_prefix: apiKey.keyPrefix,
-      name: apiKey.name,
-      description: apiKey.description,
-      upstream_ids: apiKey.upstreamIds,
-      is_active: apiKey.isActive,
-      expires_at: apiKey.expiresAt?.toISOString() ?? null,
-      created_at: apiKey.createdAt.toISOString(),
-      updated_at: apiKey.updatedAt.toISOString(),
-    });
+    return NextResponse.json(transformApiKeyToApi(apiKey));
   } catch (error) {
     console.error("Failed to get API key:", error);
     return errorResponse("Internal server error", 500);
