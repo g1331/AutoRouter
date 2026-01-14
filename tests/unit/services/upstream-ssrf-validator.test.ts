@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { isIpSafe, isUrlSafe, resolveAndValidateHostname } from "@/lib/services/upstream-ssrf-validator";
+import {
+  isIpSafe,
+  isUrlSafe,
+  resolveAndValidateHostname,
+} from "@/lib/services/upstream-ssrf-validator";
 import * as dns from "dns";
 
 // Mock DNS module for hostname resolution tests
@@ -127,19 +131,25 @@ describe("upstream-ssrf-validator", () => {
       it("should block 169.254.0.0", () => {
         const result = isIpSafe("169.254.0.0");
         expect(result.safe).toBe(false);
-        expect(result.reason).toBe("Link-local addresses (cloud metadata endpoints) are not allowed");
+        expect(result.reason).toBe(
+          "Link-local addresses (cloud metadata endpoints) are not allowed"
+        );
       });
 
       it("should block 169.254.169.254 (AWS metadata)", () => {
         const result = isIpSafe("169.254.169.254");
         expect(result.safe).toBe(false);
-        expect(result.reason).toBe("Link-local addresses (cloud metadata endpoints) are not allowed");
+        expect(result.reason).toBe(
+          "Link-local addresses (cloud metadata endpoints) are not allowed"
+        );
       });
 
       it("should block 169.254.255.255", () => {
         const result = isIpSafe("169.254.255.255");
         expect(result.safe).toBe(false);
-        expect(result.reason).toBe("Link-local addresses (cloud metadata endpoints) are not allowed");
+        expect(result.reason).toBe(
+          "Link-local addresses (cloud metadata endpoints) are not allowed"
+        );
       });
 
       it("should allow 169.253.1.1 (outside link-local range)", () => {
@@ -425,13 +435,17 @@ describe("upstream-ssrf-validator", () => {
       it("should block http://169.254.169.254 (AWS metadata)", () => {
         const result = isUrlSafe("http://169.254.169.254");
         expect(result.safe).toBe(false);
-        expect(result.reason).toBe("Link-local addresses (cloud metadata endpoints) are not allowed");
+        expect(result.reason).toBe(
+          "Link-local addresses (cloud metadata endpoints) are not allowed"
+        );
       });
 
       it("should block http://169.254.169.254/latest/meta-data/", () => {
         const result = isUrlSafe("http://169.254.169.254/latest/meta-data/");
         expect(result.safe).toBe(false);
-        expect(result.reason).toBe("Link-local addresses (cloud metadata endpoints) are not allowed");
+        expect(result.reason).toBe(
+          "Link-local addresses (cloud metadata endpoints) are not allowed"
+        );
       });
     });
 

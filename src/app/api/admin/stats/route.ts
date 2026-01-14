@@ -7,6 +7,11 @@ import {
   getLeaderboardStats,
   type TimeRange,
 } from "@/lib/services/stats-service";
+import {
+  transformStatsOverviewToApi,
+  transformStatsTimeseriesToApi,
+  transformStatsLeaderboardToApi,
+} from "@/lib/utils/api-transformers";
 
 /**
  * GET /api/admin/stats - Get dashboard statistics
@@ -30,52 +35,13 @@ export async function GET(request: NextRequest) {
 
     if (type === "overview") {
       const stats = await getOverviewStats();
-      return NextResponse.json({
-        today_requests: stats.todayRequests,
-        avg_response_time_ms: stats.avgResponseTimeMs,
-        total_tokens_today: stats.totalTokensToday,
-        success_rate_today: stats.successRateToday,
-      });
+      return NextResponse.json(transformStatsOverviewToApi(stats));
     } else if (type === "timeseries") {
       const stats = await getTimeseriesStats(range);
-      return NextResponse.json({
-        range: stats.range,
-        granularity: stats.granularity,
-        series: stats.series.map((s) => ({
-          upstream_id: s.upstreamId,
-          upstream_name: s.upstreamName,
-          data: s.data.map((d) => ({
-            timestamp: d.timestamp.toISOString(),
-            request_count: d.requestCount,
-            total_tokens: d.totalTokens,
-            avg_duration_ms: d.avgDurationMs,
-          })),
-        })),
-      });
+      return NextResponse.json(transformStatsTimeseriesToApi(stats));
     } else if (type === "leaderboard") {
       const stats = await getLeaderboardStats(range, limit);
-      return NextResponse.json({
-        range: stats.range,
-        api_keys: stats.apiKeys.map((k) => ({
-          id: k.id,
-          name: k.name,
-          key_prefix: k.keyPrefix,
-          request_count: k.requestCount,
-          total_tokens: k.totalTokens,
-        })),
-        upstreams: stats.upstreams.map((u) => ({
-          id: u.id,
-          name: u.name,
-          provider: u.provider,
-          request_count: u.requestCount,
-          total_tokens: u.totalTokens,
-        })),
-        models: stats.models.map((m) => ({
-          model: m.model,
-          request_count: m.requestCount,
-          total_tokens: m.totalTokens,
-        })),
-      });
+      return NextResponse.json(transformStatsLeaderboardToApi(stats));
     }
 
     return errorResponse("Invalid type parameter", 400);
