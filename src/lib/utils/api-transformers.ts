@@ -11,6 +11,17 @@ import type {
   RequestLogResponse,
   PaginatedRequestLogs,
 } from "@/lib/services/request-logger";
+import type {
+  StatsOverview,
+  StatsTimeseries,
+  StatsLeaderboard,
+  TimeRange,
+  TimeseriesDataPoint,
+  UpstreamTimeseriesData,
+  LeaderboardApiKeyItem,
+  LeaderboardUpstreamItem,
+  LeaderboardModelItem,
+} from "@/lib/services/stats-service";
 
 // ========== Helper Utilities ==========
 
@@ -227,5 +238,198 @@ export function transformPaginatedRequestLogs(
     page: result.page,
     page_size: result.pageSize,
     total_pages: result.totalPages,
+  };
+}
+
+// ========== Stats API Response Types ==========
+
+/**
+ * API response format for overview stats (snake_case).
+ */
+export interface StatsOverviewApiResponse {
+  today_requests: number;
+  avg_response_time_ms: number;
+  total_tokens_today: number;
+  success_rate_today: number;
+}
+
+/**
+ * API response format for timeseries data point (snake_case).
+ */
+export interface TimeseriesDataPointApiResponse {
+  timestamp: string;
+  request_count: number;
+  total_tokens: number;
+  avg_duration_ms: number;
+}
+
+/**
+ * API response format for upstream timeseries data (snake_case).
+ */
+export interface UpstreamTimeseriesApiResponse {
+  upstream_id: string | null;
+  upstream_name: string;
+  data: TimeseriesDataPointApiResponse[];
+}
+
+/**
+ * API response format for timeseries stats (snake_case).
+ */
+export interface StatsTimeseriesApiResponse {
+  range: TimeRange;
+  granularity: "hour" | "day";
+  series: UpstreamTimeseriesApiResponse[];
+}
+
+/**
+ * API response format for leaderboard API key item (snake_case).
+ */
+export interface LeaderboardApiKeyApiResponse {
+  id: string;
+  name: string;
+  key_prefix: string;
+  request_count: number;
+  total_tokens: number;
+}
+
+/**
+ * API response format for leaderboard upstream item (snake_case).
+ */
+export interface LeaderboardUpstreamApiResponse {
+  id: string;
+  name: string;
+  provider: string;
+  request_count: number;
+  total_tokens: number;
+}
+
+/**
+ * API response format for leaderboard model item (snake_case).
+ */
+export interface LeaderboardModelApiResponse {
+  model: string;
+  request_count: number;
+  total_tokens: number;
+}
+
+/**
+ * API response format for leaderboard stats (snake_case).
+ */
+export interface StatsLeaderboardApiResponse {
+  range: TimeRange;
+  api_keys: LeaderboardApiKeyApiResponse[];
+  upstreams: LeaderboardUpstreamApiResponse[];
+  models: LeaderboardModelApiResponse[];
+}
+
+// ========== Stats Transformers ==========
+
+/**
+ * Transform a service layer overview stats to API response format.
+ * Converts camelCase properties to snake_case for API consistency.
+ */
+export function transformStatsOverviewToApi(stats: StatsOverview): StatsOverviewApiResponse {
+  return {
+    today_requests: stats.todayRequests,
+    avg_response_time_ms: stats.avgResponseTimeMs,
+    total_tokens_today: stats.totalTokensToday,
+    success_rate_today: stats.successRateToday,
+  };
+}
+
+/**
+ * Transform a timeseries data point to API response format.
+ */
+export function transformTimeseriesDataPointToApi(
+  dataPoint: TimeseriesDataPoint
+): TimeseriesDataPointApiResponse {
+  return {
+    timestamp: dataPoint.timestamp.toISOString(),
+    request_count: dataPoint.requestCount,
+    total_tokens: dataPoint.totalTokens,
+    avg_duration_ms: dataPoint.avgDurationMs,
+  };
+}
+
+/**
+ * Transform upstream timeseries data to API response format.
+ */
+export function transformUpstreamTimeseriesToApi(
+  series: UpstreamTimeseriesData
+): UpstreamTimeseriesApiResponse {
+  return {
+    upstream_id: series.upstreamId,
+    upstream_name: series.upstreamName,
+    data: series.data.map(transformTimeseriesDataPointToApi),
+  };
+}
+
+/**
+ * Transform a service layer timeseries stats to API response format.
+ * Converts camelCase properties to snake_case for API consistency.
+ */
+export function transformStatsTimeseriesToApi(stats: StatsTimeseries): StatsTimeseriesApiResponse {
+  return {
+    range: stats.range,
+    granularity: stats.granularity,
+    series: stats.series.map(transformUpstreamTimeseriesToApi),
+  };
+}
+
+/**
+ * Transform a leaderboard API key item to API response format.
+ */
+export function transformLeaderboardApiKeyToApi(
+  item: LeaderboardApiKeyItem
+): LeaderboardApiKeyApiResponse {
+  return {
+    id: item.id,
+    name: item.name,
+    key_prefix: item.keyPrefix,
+    request_count: item.requestCount,
+    total_tokens: item.totalTokens,
+  };
+}
+
+/**
+ * Transform a leaderboard upstream item to API response format.
+ */
+export function transformLeaderboardUpstreamToApi(
+  item: LeaderboardUpstreamItem
+): LeaderboardUpstreamApiResponse {
+  return {
+    id: item.id,
+    name: item.name,
+    provider: item.provider,
+    request_count: item.requestCount,
+    total_tokens: item.totalTokens,
+  };
+}
+
+/**
+ * Transform a leaderboard model item to API response format.
+ */
+export function transformLeaderboardModelToApi(
+  item: LeaderboardModelItem
+): LeaderboardModelApiResponse {
+  return {
+    model: item.model,
+    request_count: item.requestCount,
+    total_tokens: item.totalTokens,
+  };
+}
+
+/**
+ * Transform a service layer leaderboard stats to API response format.
+ * Converts camelCase properties to snake_case for API consistency.
+ */
+export function transformStatsLeaderboardToApi(
+  stats: StatsLeaderboard
+): StatsLeaderboardApiResponse {
+  return {
+    range: stats.range,
+    api_keys: stats.apiKeys.map(transformLeaderboardApiKeyToApi),
+    upstreams: stats.upstreams.map(transformLeaderboardUpstreamToApi),
+    models: stats.models.map(transformLeaderboardModelToApi),
   };
 }
