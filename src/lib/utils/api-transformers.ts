@@ -2,6 +2,11 @@ import type {
   UpstreamResponse as ServiceUpstreamResponse,
   PaginatedUpstreams,
 } from "@/lib/services/upstream-crud";
+import type {
+  ApiKeyListItem,
+  ApiKeyCreateResult,
+  PaginatedApiKeys,
+} from "@/lib/services/key-manager";
 
 // ========== Helper Utilities ==========
 
@@ -73,6 +78,86 @@ export function transformPaginatedUpstreams(
 ): PaginatedApiResponse<UpstreamApiResponse> {
   return {
     items: result.items.map(transformUpstreamToApi),
+    total: result.total,
+    page: result.page,
+    page_size: result.pageSize,
+    total_pages: result.totalPages,
+  };
+}
+
+// ========== ApiKey API Response Types ==========
+
+/**
+ * API response format for API key (snake_case).
+ * This matches the actual response format used by the API routes.
+ */
+export interface ApiKeyApiResponse {
+  id: string;
+  key_prefix: string;
+  name: string;
+  description: string | null;
+  upstream_ids: string[];
+  is_active: boolean;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * API response format for newly created API key (snake_case).
+ * Includes key_value which is only returned on creation.
+ */
+export interface ApiKeyCreateApiResponse extends ApiKeyApiResponse {
+  key_value: string;
+}
+
+// ========== ApiKey Transformers ==========
+
+/**
+ * Transform a service layer API key to API response format.
+ * Converts camelCase properties to snake_case for API consistency.
+ */
+export function transformApiKeyToApi(apiKey: ApiKeyListItem): ApiKeyApiResponse {
+  return {
+    id: apiKey.id,
+    key_prefix: apiKey.keyPrefix,
+    name: apiKey.name,
+    description: apiKey.description,
+    upstream_ids: apiKey.upstreamIds,
+    is_active: apiKey.isActive,
+    expires_at: toISOStringOrNull(apiKey.expiresAt),
+    created_at: apiKey.createdAt.toISOString(),
+    updated_at: apiKey.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * Transform a newly created API key to API response format.
+ * Includes the full key value which is only available on creation.
+ */
+export function transformApiKeyCreateToApi(result: ApiKeyCreateResult): ApiKeyCreateApiResponse {
+  return {
+    id: result.id,
+    key_value: result.keyValue,
+    key_prefix: result.keyPrefix,
+    name: result.name,
+    description: result.description,
+    upstream_ids: result.upstreamIds,
+    is_active: result.isActive,
+    expires_at: toISOStringOrNull(result.expiresAt),
+    created_at: result.createdAt.toISOString(),
+    updated_at: result.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * Transform paginated API key results to API response format.
+ */
+export function transformPaginatedApiKeys(
+  result: PaginatedApiKeys
+): PaginatedApiResponse<ApiKeyApiResponse> {
+  return {
+    items: result.items.map(transformApiKeyToApi),
     total: result.total,
     page: result.page,
     page_size: result.pageSize,
