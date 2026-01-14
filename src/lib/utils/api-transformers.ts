@@ -7,6 +7,10 @@ import type {
   ApiKeyCreateResult,
   PaginatedApiKeys,
 } from "@/lib/services/key-manager";
+import type {
+  RequestLogResponse,
+  PaginatedRequestLogs,
+} from "@/lib/services/request-logger";
 
 // ========== Helper Utilities ==========
 
@@ -158,6 +162,67 @@ export function transformPaginatedApiKeys(
 ): PaginatedApiResponse<ApiKeyApiResponse> {
   return {
     items: result.items.map(transformApiKeyToApi),
+    total: result.total,
+    page: result.page,
+    page_size: result.pageSize,
+    total_pages: result.totalPages,
+  };
+}
+
+// ========== RequestLog API Response Types ==========
+
+/**
+ * API response format for request log (snake_case).
+ * This matches the actual response format used by the API routes.
+ */
+export interface RequestLogApiResponse {
+  id: string;
+  api_key_id: string | null;
+  upstream_id: string | null;
+  method: string | null;
+  path: string | null;
+  model: string | null;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  status_code: number | null;
+  duration_ms: number | null;
+  error_message: string | null;
+  created_at: string;
+}
+
+// ========== RequestLog Transformers ==========
+
+/**
+ * Transform a service layer request log to API response format.
+ * Converts camelCase properties to snake_case for API consistency.
+ */
+export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApiResponse {
+  return {
+    id: log.id,
+    api_key_id: log.apiKeyId,
+    upstream_id: log.upstreamId,
+    method: log.method,
+    path: log.path,
+    model: log.model,
+    prompt_tokens: log.promptTokens,
+    completion_tokens: log.completionTokens,
+    total_tokens: log.totalTokens,
+    status_code: log.statusCode,
+    duration_ms: log.durationMs,
+    error_message: log.errorMessage,
+    created_at: log.createdAt.toISOString(),
+  };
+}
+
+/**
+ * Transform paginated request log results to API response format.
+ */
+export function transformPaginatedRequestLogs(
+  result: PaginatedRequestLogs
+): PaginatedApiResponse<RequestLogApiResponse> {
+  return {
+    items: result.items.map(transformRequestLogToApi),
     total: result.total,
     page: result.page,
     page_size: result.pageSize,
