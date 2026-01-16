@@ -70,5 +70,10 @@
     "tailwindcss": "^4.1.17",
     "typescript": "^5",
     "vitest": "^4.0.15"
+  },
+  "pnpm": {
+    "overrides": {
+      "esbuild": "0.27.2"
+    }
   }
 }
