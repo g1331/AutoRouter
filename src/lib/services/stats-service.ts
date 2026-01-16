@@ -127,23 +127,24 @@ export async function getTimeseriesStats(rangeType: TimeRange = "7d"): Promise<S
   const startTime = getTimeRangeStart(rangeType);
   const granularity = getGranularity(rangeType);
 
-  // PostgreSQL date truncation
-  const bucket = granularity === "hour" ? "hour" : "day";
-  const timeBucketExpr = sql`date_trunc(${bucket}, ${requestLogs.createdAt})`;
-  const timeBucket = sql<string>`to_char(${timeBucketExpr}, 'YYYY-MM-DD HH24:MI:SS')`;
+  // PostgreSQL date truncation (use literals to avoid parameter mismatch in GROUP BY)
+  const timeBucketExpr =
+    granularity === "hour"
+      ? sql<Date>`date_trunc('hour', ${requestLogs.createdAt})`
+      : sql<Date>`date_trunc('day', ${requestLogs.createdAt})`;
 
   const result = await db
     .select({
       upstreamId: requestLogs.upstreamId,
-      timeBucket,
+      timeBucket: timeBucketExpr,
       requestCount: count(requestLogs.id),
       totalTokens: sum(requestLogs.totalTokens),
       avgDuration: avg(requestLogs.durationMs),
     })
     .from(requestLogs)
     .where(gte(requestLogs.createdAt, startTime))
-    .groupBy(requestLogs.upstreamId, timeBucket)
-    .orderBy(timeBucket);
+    .groupBy(requestLogs.upstreamId, timeBucketExpr)
+    .orderBy(timeBucketExpr);
 
   // Get upstream names
   const upstreamIds = [
@@ -170,7 +171,20 @@ export async function getTimeseriesStats(rangeType: TimeRange = "7d"): Promise<S
       upstreamData.set(upstreamId, []);
     }
 
-    const timestamp = new Date(row.timeBucket + "Z");
+    const rawTimeBucket: unknown = row.timeBucket;
+    let timestamp: Date;
+
+    if (rawTimeBucket instanceof Date) {
+      timestamp = rawTimeBucket;
+    } else if (typeof rawTimeBucket === "string") {
+      const normalized =
+        rawTimeBucket.endsWith("Z") || rawTimeBucket.includes("+")
+          ? rawTimeBucket
+          : rawTimeBucket + "Z";
+      timestamp = new Date(normalized);
+    } else {
+      timestamp = new Date(rawTimeBucket as number);
+    }
 
     upstreamData.get(upstreamId)!.push({
       timestamp,
