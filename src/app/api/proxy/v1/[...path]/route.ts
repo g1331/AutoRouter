@@ -132,28 +132,30 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     const upstreamForProxy = prepareUpstreamForProxy(selectedUpstream);
     const result = await forwardRequest(request, upstreamForProxy, path, requestId);
 
-    const durationMs = Date.now() - startTime;
-
     // Create response headers
     const responseHeaders = new Headers(result.headers);
 
     if (result.isStream) {
       // Streaming response
       const stream = result.body as ReadableStream<Uint8Array>;
+      const usagePromise = result.usagePromise ?? Promise.resolve(result.usage ?? null);
 
-      // Log request asynchronously (don't await)
-      logRequest({
-        apiKeyId: validApiKey.id,
-        upstreamId: selectedUpstream.id,
-        method: request.method,
-        path,
-        model: requestBody?.model as string | null,
-        promptTokens: result.usage?.promptTokens || 0,
-        completionTokens: result.usage?.completionTokens || 0,
-        totalTokens: result.usage?.totalTokens || 0,
-        statusCode: result.statusCode,
-        durationMs,
-      }).catch((e) => console.error("Failed to log request:", e));
+      void usagePromise
+        .then((usage) =>
+          logRequest({
+            apiKeyId: validApiKey.id,
+            upstreamId: selectedUpstream.id,
+            method: request.method,
+            path,
+            model: requestBody?.model as string | null,
+            promptTokens: usage?.promptTokens || 0,
+            completionTokens: usage?.completionTokens || 0,
+            totalTokens: usage?.totalTokens || 0,
+            statusCode: result.statusCode,
+            durationMs: Date.now() - startTime,
+          })
+        )
+        .catch((e) => console.error("Failed to log request:", e));
 
       // Set streaming headers
       responseHeaders.set("Content-Type", "text/event-stream");
@@ -167,6 +169,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     } else {
       // Regular response
       const bodyBytes = result.body as Uint8Array;
+      const durationMs = Date.now() - startTime;
 
       // Try to extract usage from response
       let usage = result.usage;

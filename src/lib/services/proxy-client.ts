@@ -31,6 +31,11 @@ export interface ProxyResult {
     completionTokens: number;
     totalTokens: number;
   };
+  usagePromise?: Promise<{
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  } | null>;
 }
 
 // Headers that should not be forwarded to upstream (hop-by-hop headers)
@@ -95,19 +100,29 @@ function extractFromUsageObject(usage: Record<string, number>): {
 } | null {
   // OpenAI Chat Completions format: prompt_tokens / completion_tokens
   if ("prompt_tokens" in usage) {
+    const promptTokens = usage.prompt_tokens ?? 0;
+    const completionTokens = usage.completion_tokens ?? 0;
+    const totalTokens =
+      typeof usage.total_tokens === "number" ? usage.total_tokens : promptTokens + completionTokens;
+
     return {
-      promptTokens: usage.prompt_tokens || 0,
-      completionTokens: usage.completion_tokens || 0,
-      totalTokens: usage.total_tokens || 0,
+      promptTokens,
+      completionTokens,
+      totalTokens,
     };
   }
 
   // OpenAI Responses API / Anthropic format: input_tokens / output_tokens
   if ("input_tokens" in usage || "output_tokens" in usage) {
+    const promptTokens = usage.input_tokens ?? 0;
+    const completionTokens = usage.output_tokens ?? 0;
+    const totalTokens =
+      typeof usage.total_tokens === "number" ? usage.total_tokens : promptTokens + completionTokens;
+
     return {
-      promptTokens: usage.input_tokens || 0,
-      completionTokens: usage.output_tokens || 0,
-      totalTokens: usage.total_tokens || (usage.input_tokens || 0) + (usage.output_tokens || 0),
+      promptTokens,
+      completionTokens,
+      totalTokens,
     };
   }
 
@@ -196,6 +211,20 @@ export function createSSETransformer(
       }
     },
   });
+}
+
+async function drainStream(stream: ReadableStream<Uint8Array>): Promise<void> {
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      const { done } = await reader.read();
+      if (done) {
+        break;
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 /**
@@ -292,12 +321,24 @@ export async function forwardRequest(
         })
       );
 
+      const [clientStream, loggingStream] = transformedStream.tee();
+      const usagePromise = (async () => {
+        try {
+          await drainStream(loggingStream);
+        } catch {
+          // Ignore stream consumption errors
+        }
+
+        return usage ?? null;
+      })();
+
       return {
         statusCode: upstreamResponse.status,
         headers: responseHeaders,
-        body: transformedStream,
+        body: clientStream,
         isStream: true,
         usage,
+        usagePromise,
       };
     } else {
       // Regular response

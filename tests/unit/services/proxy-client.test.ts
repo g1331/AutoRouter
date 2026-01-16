@@ -190,7 +190,7 @@ describe("proxy-client", () => {
       expect(usage).toEqual({
         promptTokens: 100,
         completionTokens: 0,
-        totalTokens: 0,
+        totalTokens: 100,
       });
     });
 
@@ -725,6 +725,8 @@ describe("proxy-client", () => {
       expect(result.statusCode).toBe(200);
       expect(result.isStream).toBe(true);
       expect(result.body).toBeInstanceOf(ReadableStream);
+
+      await expect(result.usagePromise).resolves.toBeNull();
     });
 
     it("should handle timeout error", async () => {
