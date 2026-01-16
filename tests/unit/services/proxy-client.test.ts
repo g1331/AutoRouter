@@ -228,6 +228,46 @@ describe("proxy-client", () => {
         totalTokens: 50,
       });
     });
+
+    it("should extract OpenAI Responses API format usage", () => {
+      // OpenAI Responses API uses input_tokens/output_tokens without type="message"
+      const data = {
+        id: "resp_123",
+        object: "response",
+        status: "completed",
+        usage: {
+          input_tokens: 137,
+          output_tokens: 914,
+          total_tokens: 1051,
+        },
+      };
+
+      const usage = extractUsage(data);
+
+      expect(usage).toEqual({
+        promptTokens: 137,
+        completionTokens: 914,
+        totalTokens: 1051,
+      });
+    });
+
+    it("should calculate total_tokens if missing in Responses API format", () => {
+      const data = {
+        id: "resp_456",
+        usage: {
+          input_tokens: 100,
+          output_tokens: 200,
+        },
+      };
+
+      const usage = extractUsage(data);
+
+      expect(usage).toEqual({
+        promptTokens: 100,
+        completionTokens: 200,
+        totalTokens: 300,
+      });
+    });
   });
 
   describe("createSSETransformer", () => {

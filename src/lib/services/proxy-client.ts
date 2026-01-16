@@ -103,14 +103,25 @@ export function extractUsage(data: Record<string, unknown>): {
     };
   }
 
-  // OpenAI format: top-level "usage" key with prompt_tokens
+  // OpenAI format: top-level "usage" key
   if (typeof data.usage === "object" && data.usage !== null) {
     const usage = data.usage as Record<string, number>;
+
+    // OpenAI Chat Completions format: prompt_tokens / completion_tokens
     if ("prompt_tokens" in usage) {
       return {
         promptTokens: usage.prompt_tokens || 0,
         completionTokens: usage.completion_tokens || 0,
         totalTokens: usage.total_tokens || 0,
+      };
+    }
+
+    // OpenAI Responses API format: input_tokens / output_tokens
+    if ("input_tokens" in usage || "output_tokens" in usage) {
+      return {
+        promptTokens: usage.input_tokens || 0,
+        completionTokens: usage.output_tokens || 0,
+        totalTokens: usage.total_tokens || (usage.input_tokens || 0) + (usage.output_tokens || 0),
       };
     }
   }
