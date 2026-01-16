@@ -142,8 +142,8 @@ export async function getTimeseriesStats(rangeType: TimeRange = "7d"): Promise<S
     })
     .from(requestLogs)
     .where(gte(requestLogs.createdAt, startTime))
-    .groupBy(requestLogs.upstreamId, timeBucketExpr)
-    .orderBy(timeBucketExpr);
+    .groupBy(requestLogs.upstreamId, timeBucket)
+    .orderBy(timeBucket);
 
   // Get upstream names
   const upstreamIds = [
