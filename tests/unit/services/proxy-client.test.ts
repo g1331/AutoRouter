@@ -373,6 +373,32 @@ describe("proxy-client", () => {
       });
     });
 
+    it("should extract usage from OpenAI Responses API response.completed event", async () => {
+      const onUsage = vi.fn();
+      const transformer = createSSETransformer(onUsage);
+
+      // OpenAI Responses API streaming: usage is nested in response.completed event
+      const input =
+        'data: {"type":"response.completed","response":{"id":"resp_123","status":"completed","usage":{"input_tokens":200,"output_tokens":500,"total_tokens":700}}}\n\n';
+      const encoder = new TextEncoder();
+      const reader = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(input));
+          controller.close();
+        },
+      })
+        .pipeThrough(transformer)
+        .getReader();
+
+      while (!(await reader.read()).done) {}
+
+      expect(onUsage).toHaveBeenCalledWith({
+        promptTokens: 200,
+        completionTokens: 500,
+        totalTokens: 700,
+      });
+    });
+
     it("should handle [DONE] message", async () => {
       const onUsage = vi.fn();
       const transformer = createSSETransformer(onUsage);
