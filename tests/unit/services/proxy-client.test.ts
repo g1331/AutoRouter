@@ -228,6 +228,46 @@ describe("proxy-client", () => {
         totalTokens: 50,
       });
     });
+
+    it("should extract OpenAI Responses API format usage", () => {
+      // OpenAI Responses API uses input_tokens/output_tokens without type="message"
+      const data = {
+        id: "resp_123",
+        object: "response",
+        status: "completed",
+        usage: {
+          input_tokens: 137,
+          output_tokens: 914,
+          total_tokens: 1051,
+        },
+      };
+
+      const usage = extractUsage(data);
+
+      expect(usage).toEqual({
+        promptTokens: 137,
+        completionTokens: 914,
+        totalTokens: 1051,
+      });
+    });
+
+    it("should calculate total_tokens if missing in Responses API format", () => {
+      const data = {
+        id: "resp_456",
+        usage: {
+          input_tokens: 100,
+          output_tokens: 200,
+        },
+      };
+
+      const usage = extractUsage(data);
+
+      expect(usage).toEqual({
+        promptTokens: 100,
+        completionTokens: 200,
+        totalTokens: 300,
+      });
+    });
   });
 
   describe("createSSETransformer", () => {
@@ -304,6 +344,32 @@ describe("proxy-client", () => {
         promptTokens: 15,
         completionTokens: 25,
         totalTokens: 40,
+      });
+    });
+
+    it("should extract usage from OpenAI Responses API SSE event", async () => {
+      const onUsage = vi.fn();
+      const transformer = createSSETransformer(onUsage);
+
+      // OpenAI Responses API format: input_tokens/output_tokens without type="message"
+      const input =
+        'data: {"id":"resp_123","usage":{"input_tokens":137,"output_tokens":914,"total_tokens":1051}}\n\n';
+      const encoder = new TextEncoder();
+      const reader = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(input));
+          controller.close();
+        },
+      })
+        .pipeThrough(transformer)
+        .getReader();
+
+      while (!(await reader.read()).done) {}
+
+      expect(onUsage).toHaveBeenCalledWith({
+        promptTokens: 137,
+        completionTokens: 914,
+        totalTokens: 1051,
       });
     });
 
