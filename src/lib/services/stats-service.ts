@@ -129,7 +129,8 @@ export async function getTimeseriesStats(rangeType: TimeRange = "7d"): Promise<S
 
   // PostgreSQL date truncation
   const bucket = granularity === "hour" ? "hour" : "day";
-  const timeBucket = sql<string>`to_char(date_trunc(${bucket}, ${requestLogs.createdAt}), 'YYYY-MM-DD HH24:MI:SS')`;
+  const timeBucketExpr = sql`date_trunc(${bucket}, ${requestLogs.createdAt})`;
+  const timeBucket = sql<string>`to_char(${timeBucketExpr}, 'YYYY-MM-DD HH24:MI:SS')`;
 
   const result = await db
     .select({
@@ -141,8 +142,8 @@ export async function getTimeseriesStats(rangeType: TimeRange = "7d"): Promise<S
     })
     .from(requestLogs)
     .where(gte(requestLogs.createdAt, startTime))
-    .groupBy(requestLogs.upstreamId, timeBucket)
-    .orderBy(timeBucket);
+    .groupBy(requestLogs.upstreamId, timeBucketExpr)
+    .orderBy(timeBucketExpr);
 
   // Get upstream names
   const upstreamIds = [
