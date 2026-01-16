@@ -86,6 +86,35 @@ export function injectAuthHeader(
 }
 
 /**
+ * Extract token usage from a usage object.
+ */
+function extractFromUsageObject(usage: Record<string, number>): {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+} | null {
+  // OpenAI Chat Completions format: prompt_tokens / completion_tokens
+  if ("prompt_tokens" in usage) {
+    return {
+      promptTokens: usage.prompt_tokens || 0,
+      completionTokens: usage.completion_tokens || 0,
+      totalTokens: usage.total_tokens || 0,
+    };
+  }
+
+  // OpenAI Responses API / Anthropic format: input_tokens / output_tokens
+  if ("input_tokens" in usage || "output_tokens" in usage) {
+    return {
+      promptTokens: usage.input_tokens || 0,
+      completionTokens: usage.output_tokens || 0,
+      totalTokens: usage.total_tokens || (usage.input_tokens || 0) + (usage.output_tokens || 0),
+    };
+  }
+
+  return null;
+}
+
+/**
  * Extract token usage from response payload.
  */
 export function extractUsage(data: Record<string, unknown>): {
@@ -93,36 +122,23 @@ export function extractUsage(data: Record<string, unknown>): {
   completionTokens: number;
   totalTokens: number;
 } | null {
-  // Anthropic format: type="message" with usage field
-  if (data.type === "message" && typeof data.usage === "object" && data.usage !== null) {
-    const usage = data.usage as Record<string, number>;
-    return {
-      promptTokens: usage.input_tokens || 0,
-      completionTokens: usage.output_tokens || 0,
-      totalTokens: (usage.input_tokens || 0) + (usage.output_tokens || 0),
-    };
+  // Check top-level usage field (OpenAI Chat Completions, Anthropic, Responses API non-streaming)
+  if (typeof data.usage === "object" && data.usage !== null) {
+    const result = extractFromUsageObject(data.usage as Record<string, number>);
+    if (result) return result;
   }
 
-  // OpenAI format: top-level "usage" key
-  if (typeof data.usage === "object" && data.usage !== null) {
-    const usage = data.usage as Record<string, number>;
-
-    // OpenAI Chat Completions format: prompt_tokens / completion_tokens
-    if ("prompt_tokens" in usage) {
-      return {
-        promptTokens: usage.prompt_tokens || 0,
-        completionTokens: usage.completion_tokens || 0,
-        totalTokens: usage.total_tokens || 0,
-      };
-    }
-
-    // OpenAI Responses API format: input_tokens / output_tokens
-    if ("input_tokens" in usage || "output_tokens" in usage) {
-      return {
-        promptTokens: usage.input_tokens || 0,
-        completionTokens: usage.output_tokens || 0,
-        totalTokens: usage.total_tokens || (usage.input_tokens || 0) + (usage.output_tokens || 0),
-      };
+  // OpenAI Responses API streaming: usage is nested in response.completed event
+  // Format: { "type": "response.completed", "response": { "usage": { ... } } }
+  if (
+    data.type === "response.completed" &&
+    typeof data.response === "object" &&
+    data.response !== null
+  ) {
+    const response = data.response as Record<string, unknown>;
+    if (typeof response.usage === "object" && response.usage !== null) {
+      const result = extractFromUsageObject(response.usage as Record<string, number>);
+      if (result) return result;
     }
   }
 
