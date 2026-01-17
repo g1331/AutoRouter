@@ -26,7 +26,7 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 ## Project Overview
 
-AutoRouter is an enterprise AI API Gateway providing API Key distribution, multi-upstream routing, and request management. It's a Next.js fullstack application with API Routes for the backend.
+AutoRouter is an AI API Gateway providing API Key distribution, multi-upstream routing, and request management. It's a Next.js fullstack application with API Routes for the backend.
 
 ## Development Commands
 

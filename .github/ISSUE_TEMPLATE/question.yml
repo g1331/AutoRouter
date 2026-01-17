@@ -1,0 +1,41 @@
+name: Question
+description: Ask a question about usage or configuration
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a question? We're happy to help! Please check the [README](https://github.com/autorouter/autorouter#readme) and existing issues first.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: Describe your question in detail
+      placeholder: I'd like to know...
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Provide relevant configuration, code snippets, or screenshots
+      placeholder: |
+        My configuration:
+        ```
+        ...
+        ```
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What I've Tried
+      description: What solutions have you already attempted?
+      placeholder: I tried...
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Links to documentation, issues, or other resources you've consulted
