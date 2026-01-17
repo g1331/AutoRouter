@@ -169,4 +169,69 @@ describe("Sidebar", () => {
       });
     });
   });
+
+  describe("Visual Enhancements (Fix for Issue #64)", () => {
+    it("applies enhanced border styling to active item", () => {
+      mockPathname = "/dashboard";
+      render(<Sidebar />);
+
+      const dashboardLink = screen.getByRole("link", { name: /DASHBOARD/i });
+      expect(dashboardLink.className).toContain("border-l-4");
+      expect(dashboardLink.className).toContain("border-l-amber-500");
+    });
+
+    it("applies scale effect to active item", () => {
+      mockPathname = "/keys";
+      render(<Sidebar />);
+
+      const keysLink = screen.getByRole("link", { name: /APIKEYS/i });
+      expect(keysLink.className).toContain("scale-[1.02]");
+    });
+
+    it("applies standard border to inactive items", () => {
+      mockPathname = "/dashboard";
+      render(<Sidebar />);
+
+      const keysLink = screen.getByRole("link", { name: /APIKEYS/i });
+      expect(keysLink.className).toContain("border-l-2");
+      expect(keysLink.className).toContain("border-transparent");
+    });
+
+    it("applies pulse glow effect to active item", () => {
+      mockPathname = "/upstreams";
+      render(<Sidebar />);
+
+      const upstreamsLink = screen.getByRole("link", { name: /UPSTREAMS/i });
+      expect(upstreamsLink.className).toContain("cf-pulse-glow");
+    });
+
+    it("does not apply pulse glow to inactive items", () => {
+      mockPathname = "/dashboard";
+      render(<Sidebar />);
+
+      const keysLink = screen.getByRole("link", { name: /APIKEYS/i });
+      expect(keysLink.className).not.toContain("cf-pulse-glow");
+    });
+
+    it("applies enhanced styling consistently across all pages", () => {
+      const pages = [
+        { path: "/dashboard", name: /DASHBOARD/i },
+        { path: "/keys", name: /APIKEYS/i },
+        { path: "/upstreams", name: /UPSTREAMS/i },
+        { path: "/logs", name: /LOGS/i },
+      ];
+
+      pages.forEach(({ path, name }) => {
+        mockPathname = path;
+        const { unmount } = render(<Sidebar />);
+
+        const activeLink = screen.getByRole("link", { name });
+        expect(activeLink.className).toContain("border-l-4");
+        expect(activeLink.className).toContain("scale-[1.02]");
+        expect(activeLink.className).toContain("cf-pulse-glow");
+
+        unmount();
+      });
+    });
+  });
 });

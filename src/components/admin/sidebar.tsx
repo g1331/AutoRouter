@@ -90,12 +90,11 @@ export function Sidebar() {
               className={cn(
                 "group flex items-center gap-3 px-3 py-3 mx-2 rounded-cf-sm relative",
                 "font-mono text-xs font-medium tracking-wider",
-                "border-l-2 border-transparent",
                 "transition-all duration-cf-normal ease-cf-standard",
                 "cf-stagger-reveal",
                 isActive
-                  ? "bg-surface-300 text-amber-500 border-l-amber-500 cf-pulse-glow"
-                  : "text-amber-700 hover:bg-surface-400 hover:text-amber-500 hover:border-l-amber-700"
+                  ? "bg-surface-300 text-amber-500 border-l-4 border-l-amber-500 cf-pulse-glow scale-[1.02]"
+                  : "text-amber-700 border-l-2 border-transparent hover:bg-surface-400 hover:text-amber-500 hover:border-l-amber-700"
               )}
               style={{ animationDelay: `${index * 50}ms` }}
               aria-current={isActive ? "page" : undefined}
@@ -110,7 +109,7 @@ export function Sidebar() {
                 className={cn(
                   "h-5 w-5 flex-shrink-0 transition-transform duration-200",
                   "group-hover:scale-110",
-                  isActive && "drop-shadow-[0_0_4px_rgba(255,191,0,0.5)]"
+                  isActive && "scale-110 drop-shadow-[0_0_6px_rgba(255,191,0,0.8)]"
                 )}
                 aria-hidden="true"
               />
