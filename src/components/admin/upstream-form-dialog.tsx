@@ -59,11 +59,12 @@ export function UpstreamFormDialog({
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
 
+  // 编辑模式下 api_key 可选（留空表示不更新）
   const upstreamFormSchema = z.object({
     name: z.string().min(1, t("upstreamNameRequired")).max(100),
     provider: z.string().min(1, t("providerRequired")),
     base_url: z.string().url(t("baseUrlRequired")),
-    api_key: z.string().min(1, t("apiKeyRequired")),
+    api_key: isEdit ? z.string().optional() : z.string().min(1, t("apiKeyRequired")),
     description: z.string().max(500).optional(),
   });
 
@@ -103,22 +104,33 @@ export function UpstreamFormDialog({
   const onSubmit = async (data: UpstreamForm) => {
     try {
       if (isEdit) {
+        // 只有填写了 api_key 才更新
+        const updateData: {
+          name: string;
+          provider: string;
+          base_url: string;
+          api_key?: string;
+          description: string | null;
+        } = {
+          name: data.name,
+          provider: data.provider,
+          base_url: data.base_url,
+          description: data.description || null,
+        };
+        if (data.api_key) {
+          updateData.api_key = data.api_key;
+        }
         await updateMutation.mutateAsync({
           id: upstream.id,
-          data: {
-            name: data.name,
-            provider: data.provider,
-            base_url: data.base_url,
-            api_key: data.api_key,
-            description: data.description || null,
-          },
+          data: updateData,
         });
       } else {
+        // 创建模式: api_key 必填，schema 已验证非空
         await createMutation.mutateAsync({
           name: data.name,
           provider: data.provider,
           base_url: data.base_url,
-          api_key: data.api_key,
+          api_key: data.api_key!,
           description: data.description || null,
         });
       }

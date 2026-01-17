@@ -217,7 +217,7 @@ describe("UpstreamFormDialog", () => {
       expect(screen.getByText("apiKeyEditHint")).toBeInTheDocument();
     });
 
-    it("calls updateMutation on valid form submission", async () => {
+    it("calls updateMutation on valid form submission with new api_key", async () => {
       mockUpdateMutateAsync.mockResolvedValueOnce({});
 
       render(
@@ -246,6 +246,38 @@ describe("UpstreamFormDialog", () => {
           },
         });
       });
+    });
+
+    it("allows empty api_key in edit mode (keeps existing key)", async () => {
+      mockUpdateMutateAsync.mockResolvedValueOnce({});
+
+      render(
+        <UpstreamFormDialog upstream={mockUpstream} open={true} onOpenChange={mockOnOpenChange} />,
+        { wrapper: Wrapper }
+      );
+
+      const nameInput = screen.getByDisplayValue("OpenAI Production");
+      fireEvent.change(nameInput, { target: { value: "Updated Name" } });
+      // Don't fill api key - should be allowed in edit mode
+
+      const submitButton = screen.getByText("save");
+      fireEvent.click(submitButton);
+
+      await waitFor(() => {
+        expect(mockUpdateMutateAsync).toHaveBeenCalledWith({
+          id: "upstream-1",
+          data: {
+            name: "Updated Name",
+            provider: "openai",
+            base_url: "https://api.openai.com/v1",
+            description: "Production OpenAI API",
+            // api_key should NOT be included when empty
+          },
+        });
+      });
+
+      // Should NOT show validation error
+      expect(screen.queryByText("apiKeyRequired")).not.toBeInTheDocument();
     });
   });
 
