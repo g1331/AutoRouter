@@ -300,16 +300,12 @@ describe("EditKeyDialog", () => {
   });
 
   describe("Loading State", () => {
-    it("shows loading when upstreams are loading", () => {
-      vi.doMock("@/hooks/use-upstreams", () => ({
-        useAllUpstreams: () => ({
-          data: undefined,
-          isLoading: true,
-        }),
-      }));
+    it("does not show loading when upstreams are loaded", () => {
+      render(<EditKeyDialog apiKey={mockApiKey} open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
 
-      // The test above validates the mock structure works correctly
-      // Full loading state test would require re-importing the module
+      expect(screen.queryByText("loading")).not.toBeInTheDocument();
     });
   });
 

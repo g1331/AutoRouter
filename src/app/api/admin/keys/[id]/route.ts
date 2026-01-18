@@ -59,13 +59,18 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   }
 }
 
-const updateApiKeySchema = z.object({
-  name: z.string().min(1).max(255).optional(),
-  description: z.string().nullable().optional(),
-  is_active: z.boolean().optional(),
-  expires_at: z.string().datetime().nullable().optional(),
-  upstream_ids: z.array(z.string().uuid()).min(1).optional(),
-});
+const updateApiKeySchema = z
+  .object({
+    name: z.string().min(1).max(255).optional(),
+    description: z.string().nullable().optional(),
+    is_active: z.boolean().optional(),
+    expires_at: z.string().datetime().nullable().optional(),
+    upstream_ids: z.array(z.string().uuid()).min(1).optional(),
+  })
+  .strict()
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "At least one field must be provided",
+  });
 
 /**
  * PUT /api/admin/keys/[id] - Update an API key
