@@ -199,5 +199,32 @@ describe("TokenDisplay", () => {
       const trigger = screen.getByText("300").closest("div");
       expect(trigger).toHaveAttribute("tabindex", "0");
     });
+
+    it("renders tooltip details on focus", async () => {
+      render(
+        <TooltipProvider delayDuration={0}>
+          <TokenDisplay
+            promptTokens={100}
+            completionTokens={200}
+            totalTokens={300}
+            cachedTokens={50}
+            reasoningTokens={0}
+            cacheCreationTokens={0}
+            cacheReadTokens={0}
+          />
+        </TooltipProvider>
+      );
+
+      const trigger = screen.getByText("300").closest("div");
+      trigger?.focus();
+
+      // Use getAllByText since Radix may render tooltip content multiple times (visible + aria)
+      const detailsElements = await screen.findAllByText("tokenDetails");
+      expect(detailsElements.length).toBeGreaterThan(0);
+      expect(screen.getAllByText("tokenInput").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("tokenCached").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("tokenOutput").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("tokenTotal").length).toBeGreaterThan(0);
+    });
   });
 });

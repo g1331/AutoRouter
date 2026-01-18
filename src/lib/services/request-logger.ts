@@ -186,7 +186,7 @@ export function extractTokenUsage(responseBody: Record<string, unknown> | null):
     const cacheReadTokens = getIntValue(usage, "cache_read_input_tokens");
 
     // Keep invariants even if upstream returns partial usage (e.g., cache_* without input_tokens)
-    const normalizedInputTokens = Math.max(inputTokens, cacheReadTokens);
+    const normalizedInputTokens = Math.max(inputTokens, cacheReadTokens, cacheCreationTokens);
 
     return {
       promptTokens: normalizedInputTokens,
