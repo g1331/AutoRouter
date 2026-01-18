@@ -37,7 +37,8 @@ function TokenTooltipContent({
   const t = useTranslations("logs");
 
   // Calculate new tokens (non-cached input tokens)
-  const newInputTokens = promptTokens - cachedTokens;
+  // Use Math.max to prevent negative values in case of data mismatch
+  const newInputTokens = Math.max(promptTokens - cachedTokens, 0);
 
   // Build rows dynamically, hiding zero values for clarity (except core metrics)
   const rows: Array<{
@@ -82,8 +83,8 @@ function TokenTooltipContent({
     });
   }
 
-  // Only show cache read if present (Anthropic)
-  if (cacheReadTokens > 0) {
+  // Only show cache read if present and not already represented by cachedTokens
+  if (cacheReadTokens > 0 && cacheReadTokens !== cachedTokens) {
     rows.push({
       label: t("tokenCacheRead"),
       value: cacheReadTokens,
@@ -161,7 +162,7 @@ export function TokenDisplay({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <div className="flex flex-col text-xs font-mono cursor-help">
+        <div className="flex flex-col text-xs font-mono cursor-help" tabIndex={0}>
           {/* Row 1: Total tokens - amber-500, primary emphasis */}
           <span className="text-amber-500">{totalTokens.toLocaleString()}</span>
           {/* Row 2: Input / Output breakdown - amber-700, secondary */}

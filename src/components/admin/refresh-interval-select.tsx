@@ -48,17 +48,15 @@ export function RefreshIntervalSelect({
   const t = useTranslations("logs");
   const [interval, setInterval] = useState<RefreshInterval>(getInitialInterval);
 
-  // Notify parent of initial interval on mount
+  // Keep parent interval in sync with local state (and initial localStorage value)
   useEffect(() => {
     const ms = parseInt(interval, 10) * 1000;
     onIntervalChange(ms > 0 ? ms : false);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [interval, onIntervalChange]);
 
   const handleIntervalChange = (value: RefreshInterval) => {
     setInterval(value);
     localStorage.setItem(STORAGE_KEY, value);
-    const ms = parseInt(value, 10) * 1000;
-    onIntervalChange(ms > 0 ? ms : false);
   };
 
   const intervalLabels: Record<RefreshInterval, string> = {
