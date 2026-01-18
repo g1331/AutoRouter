@@ -21,10 +21,16 @@ export type RefreshInterval = "0" | "10" | "30" | "60";
  */
 function getInitialInterval(): RefreshInterval {
   if (typeof window === "undefined") return "0";
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved && ["0", "10", "30", "60"].includes(saved)) {
-    return saved as RefreshInterval;
+
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved === "0" || saved === "10" || saved === "30" || saved === "60") {
+      return saved;
+    }
+  } catch {
+    // localStorage can throw (e.g., disabled/blocked); fall back to "Off"
   }
+
   return "0";
 }
 
@@ -56,7 +62,11 @@ export function RefreshIntervalSelect({
 
   const handleIntervalChange = (value: RefreshInterval) => {
     setInterval(value);
-    localStorage.setItem(STORAGE_KEY, value);
+    try {
+      localStorage.setItem(STORAGE_KEY, value);
+    } catch {
+      // Ignore storage failures; auto-refresh still works for this session
+    }
   };
 
   const intervalLabels: Record<RefreshInterval, string> = {
