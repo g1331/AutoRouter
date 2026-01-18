@@ -83,7 +83,14 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
   try {
     const { id } = await context.params;
-    const body = await request.json();
+    z.string().uuid().parse(id);
+
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return errorResponse("Invalid JSON body", 400);
+    }
     const validated = updateApiKeySchema.parse(body);
 
     const input: ApiKeyUpdateInput = {};

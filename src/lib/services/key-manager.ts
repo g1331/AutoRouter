@@ -402,26 +402,40 @@ export async function updateApiKey(
       throw new ApiKeyNotFoundError(`API key not found: ${keyId}`);
     }
 
-    // If upstreamIds changed, update the associations
+    let currentUpstreamIds: string[];
+
     if (normalizedUpstreamIds !== undefined) {
-      // Delete old associations
-      await tx.delete(apiKeyUpstreams).where(eq(apiKeyUpstreams.apiKeyId, keyId));
+      // Avoid churning join-table rows (and their createdAt) if upstreamIds didn't actually change.
+      const existingLinks = await tx.query.apiKeyUpstreams.findMany({
+        where: eq(apiKeyUpstreams.apiKeyId, keyId),
+      });
+      const existingIds = existingLinks.map((link) => link.upstreamId);
+      const existingSet = new Set(existingIds);
+      const isSame =
+        existingIds.length === normalizedUpstreamIds.length &&
+        normalizedUpstreamIds.every((id) => existingSet.has(id));
 
-      // Insert new associations
-      await tx.insert(apiKeyUpstreams).values(
-        normalizedUpstreamIds.map((upstreamId) => ({
-          apiKeyId: keyId,
-          upstreamId,
-          createdAt: now,
-        }))
-      );
+      if (!isSame) {
+        await tx.delete(apiKeyUpstreams).where(eq(apiKeyUpstreams.apiKeyId, keyId));
+
+        await tx.insert(apiKeyUpstreams).values(
+          normalizedUpstreamIds.map((upstreamId) => ({
+            apiKeyId: keyId,
+            upstreamId,
+            createdAt: now,
+          }))
+        );
+
+        currentUpstreamIds = normalizedUpstreamIds;
+      } else {
+        currentUpstreamIds = existingIds;
+      }
+    } else {
+      const upstreamLinks = await tx.query.apiKeyUpstreams.findMany({
+        where: eq(apiKeyUpstreams.apiKeyId, keyId),
+      });
+      currentUpstreamIds = upstreamLinks.map((link) => link.upstreamId);
     }
-
-    // Fetch current upstreamIds
-    const upstreamLinks = await tx.query.apiKeyUpstreams.findMany({
-      where: eq(apiKeyUpstreams.apiKeyId, keyId),
-    });
-    const currentUpstreamIds = upstreamLinks.map((link) => link.upstreamId);
 
     console.warn(`Updated API key: ${updatedKey.keyPrefix}, name='${updatedKey.name}'`);
 

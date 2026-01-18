@@ -911,6 +911,11 @@ describe("key-manager", () => {
         typeof db.update
       >);
 
+      // Mock existing upstream associations (different from new ones to trigger rebuild)
+      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+        { apiKeyId: "key-1", upstreamId: "upstream-1" },
+      ] as never);
+
       // Mock delete old associations
       const mockDeleteWhere = vi.fn().mockResolvedValue(undefined);
       vi.mocked(db.delete).mockReturnValue({
@@ -923,12 +928,6 @@ describe("key-manager", () => {
           returning: vi.fn().mockResolvedValue([]),
         }),
       } as unknown as ReturnType<typeof db.insert>);
-
-      // Mock final upstreamIds fetch
-      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
-        { apiKeyId: "key-1", upstreamId: "upstream-2" },
-        { apiKeyId: "key-1", upstreamId: "upstream-3" },
-      ] as never);
 
       const result = await updateApiKey("key-1", {
         upstreamIds: ["upstream-2", "upstream-3"],
