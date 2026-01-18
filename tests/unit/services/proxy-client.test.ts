@@ -145,6 +145,40 @@ describe("proxy-client", () => {
         promptTokens: 100,
         completionTokens: 50,
         totalTokens: 150,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+      });
+    });
+
+    it("should extract OpenAI detailed cached_tokens and reasoning_tokens", () => {
+      const data = {
+        id: "chatcmpl-456",
+        object: "chat.completion",
+        usage: {
+          prompt_tokens: 1000,
+          completion_tokens: 200,
+          total_tokens: 1200,
+          prompt_tokens_details: {
+            cached_tokens: 800,
+          },
+          completion_tokens_details: {
+            reasoning_tokens: 150,
+          },
+        },
+      };
+
+      const usage = extractUsage(data);
+
+      expect(usage).toEqual({
+        promptTokens: 1000,
+        completionTokens: 200,
+        totalTokens: 1200,
+        cachedTokens: 800,
+        reasoningTokens: 150,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 800,
       });
     });
 
@@ -164,6 +198,34 @@ describe("proxy-client", () => {
         promptTokens: 80,
         completionTokens: 40,
         totalTokens: 120,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+      });
+    });
+
+    it("should extract Anthropic cache_read/cache_creation tokens", () => {
+      const data = {
+        type: "message",
+        usage: {
+          input_tokens: 2000,
+          output_tokens: 300,
+          cache_creation_input_tokens: 500,
+          cache_read_input_tokens: 1200,
+        },
+      };
+
+      const usage = extractUsage(data);
+
+      expect(usage).toEqual({
+        promptTokens: 2000,
+        completionTokens: 300,
+        totalTokens: 2300,
+        cachedTokens: 1200,
+        reasoningTokens: 0,
+        cacheCreationTokens: 500,
+        cacheReadTokens: 1200,
       });
     });
 
@@ -191,6 +253,10 @@ describe("proxy-client", () => {
         promptTokens: 100,
         completionTokens: 0,
         totalTokens: 100,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
       });
     });
 
@@ -226,6 +292,10 @@ describe("proxy-client", () => {
         promptTokens: 50,
         completionTokens: 0,
         totalTokens: 50,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
       });
     });
 
@@ -248,6 +318,41 @@ describe("proxy-client", () => {
         promptTokens: 137,
         completionTokens: 914,
         totalTokens: 1051,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+      });
+    });
+
+    it("should extract OpenAI Responses API detailed cached_tokens/reasoning_tokens (when present)", () => {
+      const data = {
+        id: "resp_789",
+        object: "response",
+        status: "completed",
+        usage: {
+          input_tokens: 1000,
+          output_tokens: 200,
+          total_tokens: 1200,
+          input_tokens_details: {
+            cached_tokens: 700,
+          },
+          output_tokens_details: {
+            reasoning_tokens: 50,
+          },
+        },
+      };
+
+      const usage = extractUsage(data);
+
+      expect(usage).toEqual({
+        promptTokens: 1000,
+        completionTokens: 200,
+        totalTokens: 1200,
+        cachedTokens: 700,
+        reasoningTokens: 50,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 700,
       });
     });
 
@@ -266,6 +371,10 @@ describe("proxy-client", () => {
         promptTokens: 100,
         completionTokens: 200,
         totalTokens: 300,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
       });
     });
   });
@@ -320,6 +429,10 @@ describe("proxy-client", () => {
         promptTokens: 10,
         completionTokens: 20,
         totalTokens: 30,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
       });
     });
 
@@ -344,6 +457,10 @@ describe("proxy-client", () => {
         promptTokens: 15,
         completionTokens: 25,
         totalTokens: 40,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
       });
     });
 
@@ -370,6 +487,10 @@ describe("proxy-client", () => {
         promptTokens: 137,
         completionTokens: 914,
         totalTokens: 1051,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
       });
     });
 
@@ -396,6 +517,10 @@ describe("proxy-client", () => {
         promptTokens: 200,
         completionTokens: 500,
         totalTokens: 700,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
       });
     });
 
@@ -444,6 +569,10 @@ describe("proxy-client", () => {
         promptTokens: 5,
         completionTokens: 10,
         totalTokens: 15,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
       });
     });
 
@@ -471,6 +600,10 @@ describe("proxy-client", () => {
         promptTokens: 7,
         completionTokens: 14,
         totalTokens: 21,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
       });
     });
 
@@ -702,6 +835,10 @@ describe("proxy-client", () => {
         promptTokens: 100,
         completionTokens: 50,
         totalTokens: 150,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
       });
     });
 

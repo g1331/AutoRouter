@@ -18,6 +18,16 @@ export interface UpstreamForProxy {
   timeout: number;
 }
 
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cachedTokens: number;
+  reasoningTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+}
+
 /**
  * Result of a proxy request.
  */
@@ -26,16 +36,8 @@ export interface ProxyResult {
   headers: Headers;
   body: ReadableStream<Uint8Array> | Uint8Array;
   isStream: boolean;
-  usage?: {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-  };
-  usagePromise?: Promise<{
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-  } | null>;
+  usage?: TokenUsage;
+  usagePromise?: Promise<TokenUsage | null>;
 }
 
 // Headers that should not be forwarded to upstream (hop-by-hop headers)
@@ -91,38 +93,111 @@ export function injectAuthHeader(
 }
 
 /**
+ * Safely extract an integer value from an object.
+ */
+function getIntValue(data: Record<string, unknown>, key: string, defaultValue: number = 0): number {
+  const value = data[key];
+  if (typeof value === "number") {
+    return Math.floor(value);
+  }
+  if (typeof value === "string") {
+    const parsed = parseInt(value, 10);
+    return isNaN(parsed) ? defaultValue : parsed;
+  }
+  return defaultValue;
+}
+
+/**
  * Extract token usage from a usage object.
  */
-function extractFromUsageObject(usage: Record<string, number>): {
-  promptTokens: number;
-  completionTokens: number;
-  totalTokens: number;
-} | null {
+function extractFromUsageObject(usage: Record<string, unknown>): TokenUsage | null {
+  const defaultResult: TokenUsage = {
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+    cachedTokens: 0,
+    reasoningTokens: 0,
+    cacheCreationTokens: 0,
+    cacheReadTokens: 0,
+  };
+
   // OpenAI Chat Completions format: prompt_tokens / completion_tokens
   if ("prompt_tokens" in usage) {
-    const promptTokens = usage.prompt_tokens ?? 0;
-    const completionTokens = usage.completion_tokens ?? 0;
-    const totalTokens =
-      typeof usage.total_tokens === "number" ? usage.total_tokens : promptTokens + completionTokens;
+    const promptTokens = getIntValue(usage, "prompt_tokens");
+    const completionTokens = getIntValue(usage, "completion_tokens");
+    const totalTokens = getIntValue(usage, "total_tokens", promptTokens + completionTokens);
+
+    let cachedTokens = 0;
+    const promptDetails = usage.prompt_tokens_details;
+    if (typeof promptDetails === "object" && promptDetails !== null) {
+      cachedTokens = getIntValue(promptDetails as Record<string, unknown>, "cached_tokens");
+    }
+
+    let reasoningTokens = 0;
+    const completionDetails = usage.completion_tokens_details;
+    if (typeof completionDetails === "object" && completionDetails !== null) {
+      reasoningTokens = getIntValue(
+        completionDetails as Record<string, unknown>,
+        "reasoning_tokens"
+      );
+    }
 
     return {
+      ...defaultResult,
       promptTokens,
       completionTokens,
       totalTokens,
+      cachedTokens,
+      reasoningTokens,
+      cacheReadTokens: cachedTokens,
     };
   }
 
   // OpenAI Responses API / Anthropic format: input_tokens / output_tokens
-  if ("input_tokens" in usage || "output_tokens" in usage) {
-    const promptTokens = usage.input_tokens ?? 0;
-    const completionTokens = usage.output_tokens ?? 0;
-    const totalTokens =
-      typeof usage.total_tokens === "number" ? usage.total_tokens : promptTokens + completionTokens;
+  // Note: Anthropic may also include cache_*_input_tokens.
+  if (
+    "input_tokens" in usage ||
+    "output_tokens" in usage ||
+    "cache_creation_input_tokens" in usage ||
+    "cache_read_input_tokens" in usage
+  ) {
+    const promptTokens = getIntValue(usage, "input_tokens");
+    const completionTokens = getIntValue(usage, "output_tokens");
+    const totalTokens = getIntValue(usage, "total_tokens", promptTokens + completionTokens);
+
+    // Anthropic cache token format
+    const cacheCreationTokens = getIntValue(usage, "cache_creation_input_tokens");
+    const cacheReadTokens = getIntValue(usage, "cache_read_input_tokens");
+
+    // OpenAI Responses API detailed usage format (when present)
+    let cachedTokensFromDetails = 0;
+    const inputDetails = usage.input_tokens_details;
+    if (typeof inputDetails === "object" && inputDetails !== null) {
+      cachedTokensFromDetails = getIntValue(
+        inputDetails as Record<string, unknown>,
+        "cached_tokens"
+      );
+    }
+
+    let reasoningTokens = 0;
+    const outputDetails = usage.output_tokens_details;
+    if (typeof outputDetails === "object" && outputDetails !== null) {
+      reasoningTokens = getIntValue(outputDetails as Record<string, unknown>, "reasoning_tokens");
+    }
+
+    // Prefer Anthropic cache_read/cache_creation when present, otherwise fall back to OpenAI cached_tokens
+    const useAnthropicCache = cacheReadTokens > 0 || cacheCreationTokens > 0;
+    const cachedTokens = useAnthropicCache ? cacheReadTokens : cachedTokensFromDetails;
 
     return {
+      ...defaultResult,
       promptTokens,
       completionTokens,
       totalTokens,
+      cachedTokens,
+      reasoningTokens,
+      cacheCreationTokens: useAnthropicCache ? cacheCreationTokens : 0,
+      cacheReadTokens: useAnthropicCache ? cacheReadTokens : cachedTokens,
     };
   }
 
@@ -132,14 +207,10 @@ function extractFromUsageObject(usage: Record<string, number>): {
 /**
  * Extract token usage from response payload.
  */
-export function extractUsage(data: Record<string, unknown>): {
-  promptTokens: number;
-  completionTokens: number;
-  totalTokens: number;
-} | null {
+export function extractUsage(data: Record<string, unknown>): TokenUsage | null {
   // Check top-level usage field (OpenAI Chat Completions, Anthropic, Responses API non-streaming)
   if (typeof data.usage === "object" && data.usage !== null) {
-    const result = extractFromUsageObject(data.usage as Record<string, number>);
+    const result = extractFromUsageObject(data.usage as Record<string, unknown>);
     if (result) return result;
   }
 
@@ -152,7 +223,7 @@ export function extractUsage(data: Record<string, unknown>): {
   ) {
     const response = data.response as Record<string, unknown>;
     if (typeof response.usage === "object" && response.usage !== null) {
-      const result = extractFromUsageObject(response.usage as Record<string, number>);
+      const result = extractFromUsageObject(response.usage as Record<string, unknown>);
       if (result) return result;
     }
   }
@@ -164,7 +235,7 @@ export function extractUsage(data: Record<string, unknown>): {
  * Create a streaming SSE response transformer that extracts usage data.
  */
 export function createSSETransformer(
-  onUsage: (usage: { promptTokens: number; completionTokens: number; totalTokens: number }) => void
+  onUsage: (usage: TokenUsage) => void
 ): TransformStream<Uint8Array, Uint8Array> {
   let buffer = "";
 
@@ -305,9 +376,7 @@ export async function forwardRequest(
 
     if (contentType.includes("text/event-stream") && upstreamResponse.body) {
       // Streaming response - return stream directly for maximum performance
-      let usage:
-        | { promptTokens: number; completionTokens: number; totalTokens: number }
-        | undefined;
+      let usage: TokenUsage | undefined;
 
       const transformedStream = upstreamResponse.body.pipeThrough(
         createSSETransformer((u) => {
@@ -345,9 +414,7 @@ export async function forwardRequest(
       const bodyBytes = new Uint8Array(await upstreamResponse.arrayBuffer());
 
       // Try to extract usage from JSON response
-      let usage:
-        | { promptTokens: number; completionTokens: number; totalTokens: number }
-        | undefined;
+      let usage: TokenUsage | undefined;
 
       if (contentType.includes("application/json") && bodyBytes.length > 0) {
         try {

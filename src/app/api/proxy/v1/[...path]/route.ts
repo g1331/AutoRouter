@@ -151,6 +151,10 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             promptTokens: usage?.promptTokens || 0,
             completionTokens: usage?.completionTokens || 0,
             totalTokens: usage?.totalTokens || 0,
+            cachedTokens: usage?.cachedTokens || 0,
+            reasoningTokens: usage?.reasoningTokens || 0,
+            cacheCreationTokens: usage?.cacheCreationTokens || 0,
+            cacheReadTokens: usage?.cacheReadTokens || 0,
             statusCode: result.statusCode,
             durationMs: Date.now() - startTime,
           })
@@ -195,6 +199,10 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         promptTokens: usage?.promptTokens || 0,
         completionTokens: usage?.completionTokens || 0,
         totalTokens: usage?.totalTokens || 0,
+        cachedTokens: usage?.cachedTokens || 0,
+        reasoningTokens: usage?.reasoningTokens || 0,
+        cacheCreationTokens: usage?.cacheCreationTokens || 0,
+        cacheReadTokens: usage?.cacheReadTokens || 0,
         statusCode: result.statusCode,
         durationMs,
       });
