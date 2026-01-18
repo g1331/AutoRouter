@@ -50,7 +50,7 @@ The admin console SHALL provide a dedicated page to view request logs with enhan
 - **AND** table follows Cassette Futurism design style
 - **AND** status codes are color-coded (2xx green, 4xx/5xx red)
 - **AND** Token column displays total with labeled breakdown (input/output)
-- **AND** Token column shows cache indicator when cached_tokens > 0
+- **AND** Token column shows cache indicator (Database icon with info color) when cached_tokens > 0
 
 #### Scenario: View token tooltip details
 

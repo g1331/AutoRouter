@@ -64,32 +64,62 @@ cache_read_tokens INTEGER DEFAULT 0  -- Anthropic cache_read
 
 ### 3. Token 显示格式
 
-**决策**：分层标签式 + Tooltip 详情
+**决策**：分层标签式 + Tooltip 详情，遵循 Cassette Futurism 设计语言
 
-表格显示（紧凑）：
+**设计原则**：
 
-```
-总计: 27,323
-输入: 27,296 | 输出: 27
-缓存: 25,000 ✨
-```
+- 复用项目现有色彩系统：amber-500 (主)、amber-700 (次)、status-info (#00d4ff)
+- 使用 lucide-react 图标库（项目已有依赖）
+- 缓存指示使用 `info` 色调（蓝色），与成功/警告/错误状态区分
 
-Tooltip 详情（完整）：
+**表格显示（紧凑）**：
 
 ```
-输入 Token: 27,296
-  - 缓存读取: 25,000
-  - 新增输入: 2,296
-输出 Token: 27
-  - 推理: 0
-总计: 27,323
+┌─────────────────────────────────────┐
+│ 27,323                              │  ← text-amber-500, font-mono
+│ 27,296 / 27                         │  ← text-amber-700, text-[10px]
+│ [Database] 25,000                   │  ← text-status-info, Badge info variant
+└─────────────────────────────────────┘
 ```
+
+- 第一行：总 Token 数（amber-500，主要强调）
+- 第二行：输入/输出分解（amber-700，次要信息）
+- 第三行：缓存命中时显示，使用 `Database` 图标 + info 色调
+
+**Tooltip 详情（Hover 显示）**：
+
+```
+┌─────────────────────────────────────┐
+│ TOKEN DETAILS           [mono字体] │
+├─────────────────────────────────────┤
+│ Input     27,296        [amber-500]│
+│   Cached  25,000        [info蓝色] │
+│   New      2,296        [amber-700]│
+│ Output        27        [amber-500]│
+│   Reasoning    0        [amber-700]│
+├─────────────────────────────────────┤
+│ Total    27,323         [amber-500]│
+└─────────────────────────────────────┘
+```
+
+- 使用 shadcn Tooltip 组件
+- 终端风格排版，等宽字体对齐
+- 零值字段以 amber-700 淡显，非零值突出
+- 背景使用 surface-300，边框 amber-500
+
+**实现组件**：
+
+- `TokenDisplay`: 表格单元格内的紧凑显示
+- `TokenTooltip`: Hover 时的详情弹窗
+- 复用现有 `Badge` 组件（info variant）
+- 复用现有 `Tooltip` 组件
 
 **理由**：
 
 - 表格保持紧凑，不影响整体布局
 - Tooltip 提供完整信息，满足深入分析需求
-- 缓存标识（✨）快速识别缓存命中
+- 使用 info 色调（#00d4ff）标识缓存，与项目状态色系统一致
+- 避免使用 emoji，保持 Cassette Futurism 复古终端风格
 
 ### 4. 自动刷新实现
 
