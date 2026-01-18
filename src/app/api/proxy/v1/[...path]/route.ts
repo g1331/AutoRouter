@@ -11,6 +11,49 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ path: string[] }> };
+type RequiredProvider = "openai" | "anthropic";
+
+function getRequiredProvider(path: string): RequiredProvider | null {
+  const normalized = path.replace(/^\/+/, "").toLowerCase();
+
+  if (normalized === "messages" || normalized.startsWith("messages/")) {
+    return "anthropic";
+  }
+
+  if (normalized === "responses" || normalized.startsWith("responses/")) {
+    return "openai";
+  }
+
+  if (normalized === "chat/completions" || normalized.startsWith("chat/completions/")) {
+    return "openai";
+  }
+
+  if (normalized === "completions" || normalized.startsWith("completions/")) {
+    return "openai";
+  }
+
+  if (normalized === "embeddings" || normalized.startsWith("embeddings/")) {
+    return "openai";
+  }
+
+  if (normalized === "models" || normalized.startsWith("models/")) {
+    return "openai";
+  }
+
+  if (normalized === "moderations" || normalized.startsWith("moderations/")) {
+    return "openai";
+  }
+
+  if (normalized === "images" || normalized.startsWith("images/")) {
+    return "openai";
+  }
+
+  if (normalized === "audio" || normalized.startsWith("audio/")) {
+    return "openai";
+  }
+
+  return null;
+}
 
 /**
  * Handle all HTTP methods for proxy
@@ -22,6 +65,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   // Extract path
   const { path: pathSegments } = await context.params;
   const path = pathSegments.join("/");
+  const requiredProvider = getRequiredProvider(path);
 
   // Extract and validate API key
   const authHeader = request.headers.get("authorization");
@@ -80,6 +124,15 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         { status: 403 }
       );
     }
+
+    if (requiredProvider && selectedUpstream.provider !== requiredProvider) {
+      return NextResponse.json(
+        {
+          error: `Upstream '${upstreamName}' does not support '${requiredProvider}' requests`,
+        },
+        { status: 400 }
+      );
+    }
   } else {
     // Get allowed upstreams for this API key
     const upstreamPermissions = await db.query.apiKeyUpstreams.findMany({
@@ -94,20 +147,32 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       );
     }
 
-    // Get default or first allowed upstream
+    const upstreamConditions = [
+      eq(upstreams.isActive, true),
+      inArray(upstreams.id, allowedUpstreamIds),
+    ];
+
+    if (requiredProvider) {
+      upstreamConditions.push(eq(upstreams.provider, requiredProvider));
+    }
+
+    // Get default or first allowed upstream (filtered by provider when required)
     selectedUpstream = await db.query.upstreams.findFirst({
-      where: and(
-        eq(upstreams.isDefault, true),
-        eq(upstreams.isActive, true),
-        inArray(upstreams.id, allowedUpstreamIds)
-      ),
+      where: and(eq(upstreams.isDefault, true), ...upstreamConditions),
     });
 
     if (!selectedUpstream) {
       // Fall back to first active allowed upstream
       selectedUpstream = await db.query.upstreams.findFirst({
-        where: and(eq(upstreams.isActive, true), inArray(upstreams.id, allowedUpstreamIds)),
+        where: and(...upstreamConditions),
       });
+    }
+
+    if (!selectedUpstream && requiredProvider) {
+      return NextResponse.json(
+        { error: `No upstreams configured for '${requiredProvider}' requests` },
+        { status: 400 }
+      );
     }
   }
 
