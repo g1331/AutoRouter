@@ -91,10 +91,9 @@ export function Sidebar() {
                 "group flex items-center gap-3 px-3 py-3 mx-2 rounded-cf-sm relative",
                 "font-mono text-xs font-medium tracking-wider",
                 "transition-all duration-cf-normal ease-cf-standard",
-                "cf-stagger-reveal",
                 isActive
                   ? "bg-surface-300 text-amber-500 border-l-4 border-l-amber-500 cf-pulse-glow scale-[1.02]"
-                  : "text-amber-700 border-l-2 border-transparent hover:bg-surface-400 hover:text-amber-500 hover:border-l-amber-700"
+                  : "cf-stagger-reveal text-amber-700 border-l-2 border-transparent hover:bg-surface-400 hover:text-amber-500 hover:border-l-amber-700"
               )}
               style={{ animationDelay: `${index * 50}ms` }}
               aria-current={isActive ? "page" : undefined}
