@@ -10,13 +10,18 @@ export interface RequestLogsFilters {
   end_time?: string; // ISO 8601
 }
 
+export interface UseRequestLogsOptions {
+  refetchInterval?: number | false;
+}
+
 /**
  * Fetch paginated request logs with optional filters
  */
 export function useRequestLogs(
   page: number = 1,
   pageSize: number = 20,
-  filters?: RequestLogsFilters
+  filters?: RequestLogsFilters,
+  options?: UseRequestLogsOptions
 ) {
   const { apiClient } = useAuth();
 
@@ -45,5 +50,6 @@ export function useRequestLogs(
 
       return apiClient.get<PaginatedRequestLogsResponse>(`/admin/logs?${params.toString()}`);
     },
+    refetchInterval: options?.refetchInterval,
   });
 }

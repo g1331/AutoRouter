@@ -177,7 +177,22 @@
     "tableModel": "模型",
     "tableTokens": "Token",
     "tableStatus": "状态",
-    "tableDuration": "耗时"
+    "tableDuration": "耗时",
+    "tokenDetails": "TOKEN 明细",
+    "tokenInput": "输入",
+    "tokenOutput": "输出",
+    "tokenCached": "缓存命中",
+    "tokenNew": "新增",
+    "tokenCacheWrite": "缓存写入",
+    "tokenCacheRead": "缓存读取",
+    "tokenReasoning": "推理",
+    "tokenTotal": "总计",
+    "refreshInterval": "刷新",
+    "refreshOff": "关闭",
+    "refresh10s": "10秒",
+    "refresh30s": "30秒",
+    "refresh60s": "60秒",
+    "manualRefresh": "刷新"
   },
   "upstreams": {
     "title": "Upstreams",

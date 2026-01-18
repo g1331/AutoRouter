@@ -7,6 +7,7 @@ import { AuthProvider } from "@/providers/auth-provider";
 import { QueryProvider } from "@/providers/query-provider";
 import { ThemeProvider } from "@/providers/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
@@ -35,7 +36,9 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
     <NextIntlClientProvider messages={messages}>
       <ThemeProvider>
         <QueryProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <TooltipProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </TooltipProvider>
         </QueryProvider>
       </ThemeProvider>
       <Toaster />

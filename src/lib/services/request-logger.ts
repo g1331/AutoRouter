@@ -10,6 +10,10 @@ export interface LogRequestInput {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  cachedTokens?: number;
+  reasoningTokens?: number;
+  cacheCreationTokens?: number;
+  cacheReadTokens?: number;
   statusCode: number | null;
   durationMs: number | null;
   errorMessage?: string | null;
@@ -25,6 +29,10 @@ export interface RequestLogResponse {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  cachedTokens: number;
+  reasoningTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
   statusCode: number | null;
   durationMs: number | null;
   errorMessage: string | null;
@@ -62,6 +70,10 @@ export async function logRequest(input: LogRequestInput): Promise<RequestLog> {
       promptTokens: input.promptTokens,
       completionTokens: input.completionTokens,
       totalTokens: input.totalTokens,
+      cachedTokens: input.cachedTokens ?? 0,
+      reasoningTokens: input.reasoningTokens ?? 0,
+      cacheCreationTokens: input.cacheCreationTokens ?? 0,
+      cacheReadTokens: input.cacheReadTokens ?? 0,
       statusCode: input.statusCode,
       durationMs: input.durationMs,
       errorMessage: input.errorMessage ?? null,
@@ -91,42 +103,94 @@ function getIntValue(data: Record<string, unknown>, key: string, defaultValue: n
 
 /**
  * Extract token usage from OpenAI/Anthropic response.
+ * Supports both basic tokens and detailed cache/reasoning tokens.
  */
 export function extractTokenUsage(responseBody: Record<string, unknown> | null): {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  cachedTokens: number;
+  reasoningTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
 } {
+  const defaultResult = {
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+    cachedTokens: 0,
+    reasoningTokens: 0,
+    cacheCreationTokens: 0,
+    cacheReadTokens: 0,
+  };
+
   if (!responseBody) {
-    return { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+    return defaultResult;
   }
 
   const rawUsage = responseBody.usage;
-  if (typeof rawUsage === "object" && rawUsage !== null) {
-    const usage = rawUsage as Record<string, unknown>;
-
-    // OpenAI format
-    const promptTokens = getIntValue(usage, "prompt_tokens");
-    const completionTokens = getIntValue(usage, "completion_tokens");
-    const totalTokens = getIntValue(usage, "total_tokens", promptTokens + completionTokens);
-
-    if (promptTokens || completionTokens || totalTokens) {
-      return { promptTokens, completionTokens, totalTokens };
-    }
-
-    // Anthropic format
-    const inputTokens = getIntValue(usage, "input_tokens");
-    const outputTokens = getIntValue(usage, "output_tokens");
-    if (inputTokens || outputTokens) {
-      return {
-        promptTokens: inputTokens,
-        completionTokens: outputTokens,
-        totalTokens: inputTokens + outputTokens,
-      };
-    }
+  if (typeof rawUsage !== "object" || rawUsage === null) {
+    return defaultResult;
   }
 
-  return { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+  const usage = rawUsage as Record<string, unknown>;
+
+  // OpenAI format
+  const promptTokens = getIntValue(usage, "prompt_tokens");
+  const completionTokens = getIntValue(usage, "completion_tokens");
+  const totalTokens = getIntValue(usage, "total_tokens", promptTokens + completionTokens);
+
+  if (promptTokens || completionTokens || totalTokens) {
+    // Extract detailed token info for OpenAI
+    let cachedTokens = 0;
+    let reasoningTokens = 0;
+
+    // OpenAI prompt_tokens_details.cached_tokens
+    const promptDetails = usage.prompt_tokens_details;
+    if (typeof promptDetails === "object" && promptDetails !== null) {
+      cachedTokens = getIntValue(promptDetails as Record<string, unknown>, "cached_tokens");
+    }
+
+    // OpenAI completion_tokens_details.reasoning_tokens
+    const completionDetails = usage.completion_tokens_details;
+    if (typeof completionDetails === "object" && completionDetails !== null) {
+      reasoningTokens = getIntValue(
+        completionDetails as Record<string, unknown>,
+        "reasoning_tokens"
+      );
+    }
+
+    return {
+      promptTokens,
+      completionTokens,
+      totalTokens,
+      cachedTokens,
+      reasoningTokens,
+      cacheCreationTokens: 0,
+      cacheReadTokens: cachedTokens, // OpenAI cached_tokens is equivalent to cache_read
+    };
+  }
+
+  // Anthropic format
+  const inputTokens = getIntValue(usage, "input_tokens");
+  const outputTokens = getIntValue(usage, "output_tokens");
+  if (inputTokens || outputTokens) {
+    // Extract Anthropic cache tokens
+    const cacheCreationTokens = getIntValue(usage, "cache_creation_input_tokens");
+    const cacheReadTokens = getIntValue(usage, "cache_read_input_tokens");
+
+    return {
+      promptTokens: inputTokens,
+      completionTokens: outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      cachedTokens: cacheReadTokens, // Anthropic cache_read is the cached tokens
+      reasoningTokens: 0,
+      cacheCreationTokens,
+      cacheReadTokens,
+    };
+  }
+
+  return defaultResult;
 }
 
 /**
@@ -207,6 +271,10 @@ export async function listRequestLogs(
     promptTokens: log.promptTokens,
     completionTokens: log.completionTokens,
     totalTokens: log.totalTokens,
+    cachedTokens: log.cachedTokens,
+    reasoningTokens: log.reasoningTokens,
+    cacheCreationTokens: log.cacheCreationTokens,
+    cacheReadTokens: log.cacheReadTokens,
     statusCode: log.statusCode,
     durationMs: log.durationMs,
     errorMessage: log.errorMessage,
