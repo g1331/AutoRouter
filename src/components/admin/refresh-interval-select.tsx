@@ -69,7 +69,7 @@ export function RefreshIntervalSelect({
   return (
     <div className="flex items-center gap-2">
       <Select value={interval} onValueChange={handleIntervalChange}>
-        <SelectTrigger className="w-[100px] h-9">
+        <SelectTrigger className="w-[100px] h-9" aria-label={t("refreshInterval")}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

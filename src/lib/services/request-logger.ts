@@ -140,7 +140,8 @@ export function extractTokenUsage(responseBody: Record<string, unknown> | null):
   const completionTokens = getIntValue(usage, "completion_tokens");
   const totalTokens = getIntValue(usage, "total_tokens", promptTokens + completionTokens);
 
-  if (promptTokens || completionTokens || totalTokens) {
+  // Detect OpenAI format by key presence (not value) to handle zero-token edge cases
+  if ("prompt_tokens" in usage || "completion_tokens" in usage || "total_tokens" in usage) {
     // Extract detailed token info for OpenAI
     let cachedTokens = 0;
     let reasoningTokens = 0;
@@ -171,10 +172,15 @@ export function extractTokenUsage(responseBody: Record<string, unknown> | null):
     };
   }
 
-  // Anthropic format
+  // Detect Anthropic format by key presence (including cache keys for cache-only payloads)
   const inputTokens = getIntValue(usage, "input_tokens");
   const outputTokens = getIntValue(usage, "output_tokens");
-  if (inputTokens || outputTokens) {
+  if (
+    "input_tokens" in usage ||
+    "output_tokens" in usage ||
+    "cache_creation_input_tokens" in usage ||
+    "cache_read_input_tokens" in usage
+  ) {
     // Extract Anthropic cache tokens
     const cacheCreationTokens = getIntValue(usage, "cache_creation_input_tokens");
     const cacheReadTokens = getIntValue(usage, "cache_read_input_tokens");
