@@ -113,6 +113,7 @@ export function useUpdateAPIKey() {
       apiClient.put<APIKeyResponse>(`/admin/keys/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["api-keys"] });
+      queryClient.invalidateQueries({ queryKey: ["stats", "keys"] });
       toast.success(t("updateSuccess"));
     },
     onError: (error: Error) => {

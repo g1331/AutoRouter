@@ -335,96 +335,106 @@ export async function updateApiKey(
   input: ApiKeyUpdateInput
 ): Promise<ApiKeyListItem> {
   const { name, description, isActive, expiresAt, upstreamIds } = input;
-
-  // Check if key exists
-  const existing = await db.query.apiKeys.findFirst({
-    where: eq(apiKeys.id, keyId),
-  });
-
-  if (!existing) {
-    throw new ApiKeyNotFoundError(`API key not found: ${keyId}`);
-  }
-
-  // If upstreamIds provided, validate them
-  if (upstreamIds !== undefined) {
-    if (upstreamIds.length === 0) {
-      throw new Error("At least one upstream must be specified");
-    }
-
-    const validUpstreams = await db.query.upstreams.findMany({
-      where: inArray(upstreams.id, upstreamIds),
-    });
-
-    if (validUpstreams.length !== upstreamIds.length) {
-      const validIds = new Set(validUpstreams.map((u) => u.id));
-      const invalidIds = upstreamIds.filter((id) => !validIds.has(id));
-      throw new Error(`Invalid upstream IDs: ${invalidIds.join(", ")}`);
-    }
-  }
-
   const now = new Date();
 
-  // Build update object with only provided fields
-  const updateData: Partial<{
-    name: string;
-    description: string | null;
-    isActive: boolean;
-    expiresAt: Date | null;
-    updatedAt: Date;
-  }> = { updatedAt: now };
+  return db.transaction(async (tx) => {
+    // Check if key exists
+    const existing = await tx.query.apiKeys.findFirst({
+      where: eq(apiKeys.id, keyId),
+    });
 
-  if (name !== undefined) {
-    updateData.name = name;
-  }
-  if (description !== undefined) {
-    updateData.description = description;
-  }
-  if (isActive !== undefined) {
-    updateData.isActive = isActive;
-  }
-  if (expiresAt !== undefined) {
-    updateData.expiresAt = expiresAt;
-  }
+    if (!existing) {
+      throw new ApiKeyNotFoundError(`API key not found: ${keyId}`);
+    }
 
-  // Update the API key record
-  const [updatedKey] = await db
-    .update(apiKeys)
-    .set(updateData)
-    .where(eq(apiKeys.id, keyId))
-    .returning();
+    let normalizedUpstreamIds: string[] | undefined;
 
-  // If upstreamIds changed, update the associations
-  if (upstreamIds !== undefined) {
-    // Delete old associations
-    await db.delete(apiKeyUpstreams).where(eq(apiKeyUpstreams.apiKeyId, keyId));
+    // If upstreamIds provided, validate them (and guard against duplicates)
+    if (upstreamIds !== undefined) {
+      normalizedUpstreamIds = Array.from(new Set(upstreamIds));
 
-    // Insert new associations
-    await db.insert(apiKeyUpstreams).values(
-      upstreamIds.map((upstreamId) => ({
-        apiKeyId: keyId,
-        upstreamId,
-        createdAt: now,
-      }))
-    );
-  }
+      if (normalizedUpstreamIds.length === 0) {
+        throw new Error("At least one upstream must be specified");
+      }
 
-  // Fetch current upstreamIds
-  const upstreamLinks = await db.query.apiKeyUpstreams.findMany({
-    where: eq(apiKeyUpstreams.apiKeyId, keyId),
+      const validUpstreams = await tx.query.upstreams.findMany({
+        where: inArray(upstreams.id, normalizedUpstreamIds),
+      });
+
+      if (validUpstreams.length !== normalizedUpstreamIds.length) {
+        const validIds = new Set(validUpstreams.map((u) => u.id));
+        const invalidIds = normalizedUpstreamIds.filter((id) => !validIds.has(id));
+        throw new Error(`Invalid upstream IDs: ${invalidIds.join(", ")}`);
+      }
+    }
+
+    // Build update object with only provided fields
+    const updateData: Partial<{
+      name: string;
+      description: string | null;
+      isActive: boolean;
+      expiresAt: Date | null;
+      updatedAt: Date;
+    }> = { updatedAt: now };
+
+    if (name !== undefined) {
+      updateData.name = name;
+    }
+    if (description !== undefined) {
+      updateData.description = description;
+    }
+    if (isActive !== undefined) {
+      updateData.isActive = isActive;
+    }
+    if (expiresAt !== undefined) {
+      updateData.expiresAt = expiresAt;
+    }
+
+    // Update the API key record
+    const [updatedKey] = await tx
+      .update(apiKeys)
+      .set(updateData)
+      .where(eq(apiKeys.id, keyId))
+      .returning();
+
+    // Key could be deleted concurrently between the existence check and update
+    if (!updatedKey) {
+      throw new ApiKeyNotFoundError(`API key not found: ${keyId}`);
+    }
+
+    // If upstreamIds changed, update the associations
+    if (normalizedUpstreamIds !== undefined) {
+      // Delete old associations
+      await tx.delete(apiKeyUpstreams).where(eq(apiKeyUpstreams.apiKeyId, keyId));
+
+      // Insert new associations
+      await tx.insert(apiKeyUpstreams).values(
+        normalizedUpstreamIds.map((upstreamId) => ({
+          apiKeyId: keyId,
+          upstreamId,
+          createdAt: now,
+        }))
+      );
+    }
+
+    // Fetch current upstreamIds
+    const upstreamLinks = await tx.query.apiKeyUpstreams.findMany({
+      where: eq(apiKeyUpstreams.apiKeyId, keyId),
+    });
+    const currentUpstreamIds = upstreamLinks.map((link) => link.upstreamId);
+
+    console.warn(`Updated API key: ${updatedKey.keyPrefix}, name='${updatedKey.name}'`);
+
+    return {
+      id: updatedKey.id,
+      keyPrefix: updatedKey.keyPrefix,
+      name: updatedKey.name,
+      description: updatedKey.description,
+      upstreamIds: currentUpstreamIds,
+      isActive: updatedKey.isActive,
+      expiresAt: updatedKey.expiresAt,
+      createdAt: updatedKey.createdAt,
+      updatedAt: updatedKey.updatedAt,
+    };
   });
-  const currentUpstreamIds = upstreamLinks.map((link) => link.upstreamId);
-
-  console.warn(`Updated API key: ${updatedKey.keyPrefix}, name='${updatedKey.name}'`);
-
-  return {
-    id: updatedKey.id,
-    keyPrefix: updatedKey.keyPrefix,
-    name: updatedKey.name,
-    description: updatedKey.description,
-    upstreamIds: currentUpstreamIds,
-    isActive: updatedKey.isActive,
-    expiresAt: updatedKey.expiresAt,
-    createdAt: updatedKey.createdAt,
-    updatedAt: updatedKey.updatedAt,
-  };
 }

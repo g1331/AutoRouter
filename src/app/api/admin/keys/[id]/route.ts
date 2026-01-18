@@ -113,6 +113,17 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       return errorResponse("API key not found", 404);
     }
     console.error("Failed to update API key:", error);
-    return errorResponse(error instanceof Error ? error.message : "Internal server error", 500);
+
+    if (error instanceof Error) {
+      // Treat service-level validation failures as 400s.
+      if (
+        error.message.startsWith("Invalid upstream IDs:") ||
+        error.message === "At least one upstream must be specified"
+      ) {
+        return errorResponse(error.message, 400);
+      }
+    }
+
+    return errorResponse("Internal server error", 500);
   }
 }

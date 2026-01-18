@@ -2,8 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { generateApiKey, ApiKeyNotFoundError, LegacyApiKeyError } from "@/lib/services/key-manager";
 
 // Mock the database module
-vi.mock("@/lib/db", () => ({
-  db: {
+vi.mock("@/lib/db", () => {
+  // Create db methods that can be reused for both db and transaction
+  const createDbMethods = () => ({
     query: {
       apiKeys: {
         findFirst: vi.fn(),
@@ -34,11 +35,24 @@ vi.mock("@/lib/db", () => ({
     delete: vi.fn(() => ({
       where: vi.fn(),
     })),
-  },
-  apiKeys: { id: "id", keyPrefix: "keyPrefix", createdAt: "createdAt", updatedAt: "updatedAt" },
-  apiKeyUpstreams: { apiKeyId: "apiKeyId" },
-  upstreams: { id: "id" },
-}));
+  });
+
+  const dbMethods = createDbMethods();
+  return {
+    db: {
+      ...dbMethods,
+      // Transaction executes the callback with a transaction context that has the same interface
+      transaction: vi.fn(
+        async (callback: (tx: ReturnType<typeof createDbMethods>) => Promise<unknown>) => {
+          return callback(dbMethods);
+        }
+      ),
+    },
+    apiKeys: { id: "id", keyPrefix: "keyPrefix", createdAt: "createdAt", updatedAt: "updatedAt" },
+    apiKeyUpstreams: { apiKeyId: "apiKeyId" },
+    upstreams: { id: "id" },
+  };
+});
 
 // Mock auth utilities
 vi.mock("@/lib/utils/auth", () => ({
