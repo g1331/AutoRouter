@@ -65,6 +65,14 @@ export interface ApiKeyRevealResult {
   name: string;
 }
 
+export interface ApiKeyUpdateInput {
+  name?: string;
+  description?: string | null;
+  isActive?: boolean;
+  expiresAt?: Date | null;
+  upstreamIds?: string[];
+}
+
 /**
  * Generate a random API key with format: sk-auto-{base64-random}
  */
@@ -317,4 +325,106 @@ export async function findAndVerifyApiKey(keyValue: string): Promise<ApiKey | nu
   }
 
   return null;
+}
+
+/**
+ * Update an existing API key.
+ */
+export async function updateApiKey(
+  keyId: string,
+  input: ApiKeyUpdateInput
+): Promise<ApiKeyListItem> {
+  const { name, description, isActive, expiresAt, upstreamIds } = input;
+
+  // Check if key exists
+  const existing = await db.query.apiKeys.findFirst({
+    where: eq(apiKeys.id, keyId),
+  });
+
+  if (!existing) {
+    throw new ApiKeyNotFoundError(`API key not found: ${keyId}`);
+  }
+
+  // If upstreamIds provided, validate them
+  if (upstreamIds !== undefined) {
+    if (upstreamIds.length === 0) {
+      throw new Error("At least one upstream must be specified");
+    }
+
+    const validUpstreams = await db.query.upstreams.findMany({
+      where: inArray(upstreams.id, upstreamIds),
+    });
+
+    if (validUpstreams.length !== upstreamIds.length) {
+      const validIds = new Set(validUpstreams.map((u) => u.id));
+      const invalidIds = upstreamIds.filter((id) => !validIds.has(id));
+      throw new Error(`Invalid upstream IDs: ${invalidIds.join(", ")}`);
+    }
+  }
+
+  const now = new Date();
+
+  // Build update object with only provided fields
+  const updateData: Partial<{
+    name: string;
+    description: string | null;
+    isActive: boolean;
+    expiresAt: Date | null;
+    updatedAt: Date;
+  }> = { updatedAt: now };
+
+  if (name !== undefined) {
+    updateData.name = name;
+  }
+  if (description !== undefined) {
+    updateData.description = description;
+  }
+  if (isActive !== undefined) {
+    updateData.isActive = isActive;
+  }
+  if (expiresAt !== undefined) {
+    updateData.expiresAt = expiresAt;
+  }
+
+  // Update the API key record
+  const [updatedKey] = await db
+    .update(apiKeys)
+    .set(updateData)
+    .where(eq(apiKeys.id, keyId))
+    .returning();
+
+  // If upstreamIds changed, update the associations
+  if (upstreamIds !== undefined) {
+    // Delete old associations
+    await db.delete(apiKeyUpstreams).where(eq(apiKeyUpstreams.apiKeyId, keyId));
+
+    // Insert new associations
+    await db.insert(apiKeyUpstreams).values(
+      upstreamIds.map((upstreamId) => ({
+        apiKeyId: keyId,
+        upstreamId,
+        createdAt: now,
+      }))
+    );
+  }
+
+  // Fetch current upstreamIds
+  const upstreamLinks = await db.query.apiKeyUpstreams.findMany({
+    where: eq(apiKeyUpstreams.apiKeyId, keyId),
+  });
+  const currentUpstreamIds = upstreamLinks.map((link) => link.upstreamId);
+
+  console.warn(`Updated API key: ${updatedKey.keyPrefix}, name='${updatedKey.name}'`);
+
+  return {
+    id: updatedKey.id,
+    keyPrefix: updatedKey.keyPrefix,
+    name: updatedKey.name,
+    description: updatedKey.description,
+    upstreamIds: currentUpstreamIds,
+    isActive: updatedKey.isActive,
+    expiresAt: updatedKey.expiresAt,
+    createdAt: updatedKey.createdAt,
+    updatedAt: updatedKey.updatedAt,
+  };
 }

@@ -24,11 +24,18 @@ vi.mock("@/lib/db", () => ({
         returning: vi.fn(),
       })),
     })),
+    update: vi.fn(() => ({
+      set: vi.fn(() => ({
+        where: vi.fn(() => ({
+          returning: vi.fn(),
+        })),
+      })),
+    })),
     delete: vi.fn(() => ({
       where: vi.fn(),
     })),
   },
-  apiKeys: { id: "id", keyPrefix: "keyPrefix", createdAt: "createdAt" },
+  apiKeys: { id: "id", keyPrefix: "keyPrefix", createdAt: "createdAt", updatedAt: "updatedAt" },
   apiKeyUpstreams: { apiKeyId: "apiKeyId" },
   upstreams: { id: "id" },
 }));
@@ -685,6 +692,372 @@ describe("key-manager", () => {
 
       const result = await findAndVerifyApiKey("sk-auto-test-expires-now");
       expect(result).toBeNull();
+    });
+  });
+
+  describe("updateApiKey", () => {
+    it("should throw ApiKeyNotFoundError when key does not exist", async () => {
+      const { db } = await import("@/lib/db");
+      const { updateApiKey } = await import("@/lib/services/key-manager");
+
+      vi.mocked(db.query.apiKeys.findFirst).mockResolvedValueOnce(undefined);
+
+      await expect(updateApiKey("non-existent-id", { name: "New Name" })).rejects.toThrow(
+        ApiKeyNotFoundError
+      );
+    });
+
+    it("should update key name successfully", async () => {
+      const { db } = await import("@/lib/db");
+      const { updateApiKey } = await import("@/lib/services/key-manager");
+
+      const mockExistingKey = {
+        id: "key-1",
+        keyPrefix: "sk-auto-test",
+        name: "Old Name",
+        description: null,
+        isActive: true,
+        expiresAt: null,
+        createdAt: new Date("2024-01-01"),
+        updatedAt: new Date("2024-01-01"),
+      };
+
+      const mockUpdatedKey = {
+        ...mockExistingKey,
+        name: "New Name",
+        updatedAt: new Date(),
+      };
+
+      vi.mocked(db.query.apiKeys.findFirst).mockResolvedValueOnce(mockExistingKey as never);
+
+      const mockReturning = vi.fn().mockResolvedValue([mockUpdatedKey]);
+      const mockWhere = vi.fn(() => ({ returning: mockReturning }));
+      const mockSet = vi.fn(() => ({ where: mockWhere }));
+      vi.mocked(db.update).mockReturnValue({ set: mockSet } as unknown as ReturnType<
+        typeof db.update
+      >);
+
+      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+        { apiKeyId: "key-1", upstreamId: "upstream-1" },
+      ] as never);
+
+      const result = await updateApiKey("key-1", { name: "New Name" });
+
+      expect(result.name).toBe("New Name");
+      expect(db.update).toHaveBeenCalled();
+    });
+
+    it("should update key description", async () => {
+      const { db } = await import("@/lib/db");
+      const { updateApiKey } = await import("@/lib/services/key-manager");
+
+      const mockExistingKey = {
+        id: "key-1",
+        keyPrefix: "sk-auto-test",
+        name: "Test Key",
+        description: "Old description",
+        isActive: true,
+        expiresAt: null,
+        createdAt: new Date("2024-01-01"),
+        updatedAt: new Date("2024-01-01"),
+      };
+
+      const mockUpdatedKey = {
+        ...mockExistingKey,
+        description: "New description",
+        updatedAt: new Date(),
+      };
+
+      vi.mocked(db.query.apiKeys.findFirst).mockResolvedValueOnce(mockExistingKey as never);
+
+      const mockReturning = vi.fn().mockResolvedValue([mockUpdatedKey]);
+      const mockWhere = vi.fn(() => ({ returning: mockReturning }));
+      const mockSet = vi.fn(() => ({ where: mockWhere }));
+      vi.mocked(db.update).mockReturnValue({ set: mockSet } as unknown as ReturnType<
+        typeof db.update
+      >);
+
+      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+        { apiKeyId: "key-1", upstreamId: "upstream-1" },
+      ] as never);
+
+      const result = await updateApiKey("key-1", { description: "New description" });
+
+      expect(result.description).toBe("New description");
+    });
+
+    it("should update isActive status", async () => {
+      const { db } = await import("@/lib/db");
+      const { updateApiKey } = await import("@/lib/services/key-manager");
+
+      const mockExistingKey = {
+        id: "key-1",
+        keyPrefix: "sk-auto-test",
+        name: "Test Key",
+        description: null,
+        isActive: true,
+        expiresAt: null,
+        createdAt: new Date("2024-01-01"),
+        updatedAt: new Date("2024-01-01"),
+      };
+
+      const mockUpdatedKey = {
+        ...mockExistingKey,
+        isActive: false,
+        updatedAt: new Date(),
+      };
+
+      vi.mocked(db.query.apiKeys.findFirst).mockResolvedValueOnce(mockExistingKey as never);
+
+      const mockReturning = vi.fn().mockResolvedValue([mockUpdatedKey]);
+      const mockWhere = vi.fn(() => ({ returning: mockReturning }));
+      const mockSet = vi.fn(() => ({ where: mockWhere }));
+      vi.mocked(db.update).mockReturnValue({ set: mockSet } as unknown as ReturnType<
+        typeof db.update
+      >);
+
+      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+        { apiKeyId: "key-1", upstreamId: "upstream-1" },
+      ] as never);
+
+      const result = await updateApiKey("key-1", { isActive: false });
+
+      expect(result.isActive).toBe(false);
+    });
+
+    it("should update expiresAt", async () => {
+      const { db } = await import("@/lib/db");
+      const { updateApiKey } = await import("@/lib/services/key-manager");
+
+      const newExpiry = new Date("2025-12-31");
+      const mockExistingKey = {
+        id: "key-1",
+        keyPrefix: "sk-auto-test",
+        name: "Test Key",
+        description: null,
+        isActive: true,
+        expiresAt: null,
+        createdAt: new Date("2024-01-01"),
+        updatedAt: new Date("2024-01-01"),
+      };
+
+      const mockUpdatedKey = {
+        ...mockExistingKey,
+        expiresAt: newExpiry,
+        updatedAt: new Date(),
+      };
+
+      vi.mocked(db.query.apiKeys.findFirst).mockResolvedValueOnce(mockExistingKey as never);
+
+      const mockReturning = vi.fn().mockResolvedValue([mockUpdatedKey]);
+      const mockWhere = vi.fn(() => ({ returning: mockReturning }));
+      const mockSet = vi.fn(() => ({ where: mockWhere }));
+      vi.mocked(db.update).mockReturnValue({ set: mockSet } as unknown as ReturnType<
+        typeof db.update
+      >);
+
+      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+        { apiKeyId: "key-1", upstreamId: "upstream-1" },
+      ] as never);
+
+      const result = await updateApiKey("key-1", { expiresAt: newExpiry });
+
+      expect(result.expiresAt).toEqual(newExpiry);
+    });
+
+    it("should update upstreamIds and recreate associations", async () => {
+      const { db } = await import("@/lib/db");
+      const { updateApiKey } = await import("@/lib/services/key-manager");
+
+      const mockExistingKey = {
+        id: "key-1",
+        keyPrefix: "sk-auto-test",
+        name: "Test Key",
+        description: null,
+        isActive: true,
+        expiresAt: null,
+        createdAt: new Date("2024-01-01"),
+        updatedAt: new Date("2024-01-01"),
+      };
+
+      vi.mocked(db.query.apiKeys.findFirst).mockResolvedValueOnce(mockExistingKey as never);
+
+      // Mock upstream validation
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        { id: "upstream-2", name: "New Upstream" },
+        { id: "upstream-3", name: "Another Upstream" },
+      ] as never);
+
+      const mockReturning = vi
+        .fn()
+        .mockResolvedValue([{ ...mockExistingKey, updatedAt: new Date() }]);
+      const mockWhere = vi.fn(() => ({ returning: mockReturning }));
+      const mockSet = vi.fn(() => ({ where: mockWhere }));
+      vi.mocked(db.update).mockReturnValue({ set: mockSet } as unknown as ReturnType<
+        typeof db.update
+      >);
+
+      // Mock delete old associations
+      const mockDeleteWhere = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(db.delete).mockReturnValue({
+        where: mockDeleteWhere,
+      } as unknown as ReturnType<typeof db.delete>);
+
+      // Mock insert new associations
+      vi.mocked(db.insert).mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([]),
+        }),
+      } as unknown as ReturnType<typeof db.insert>);
+
+      // Mock final upstreamIds fetch
+      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+        { apiKeyId: "key-1", upstreamId: "upstream-2" },
+        { apiKeyId: "key-1", upstreamId: "upstream-3" },
+      ] as never);
+
+      const result = await updateApiKey("key-1", {
+        upstreamIds: ["upstream-2", "upstream-3"],
+      });
+
+      expect(result.upstreamIds).toEqual(["upstream-2", "upstream-3"]);
+      expect(db.delete).toHaveBeenCalled();
+      expect(db.insert).toHaveBeenCalled();
+    });
+
+    it("should throw error for invalid upstream IDs", async () => {
+      const { db } = await import("@/lib/db");
+      const { updateApiKey } = await import("@/lib/services/key-manager");
+
+      const mockExistingKey = {
+        id: "key-1",
+        keyPrefix: "sk-auto-test",
+        name: "Test Key",
+        description: null,
+        isActive: true,
+        expiresAt: null,
+        createdAt: new Date("2024-01-01"),
+        updatedAt: new Date("2024-01-01"),
+      };
+
+      vi.mocked(db.query.apiKeys.findFirst).mockResolvedValueOnce(mockExistingKey as never);
+
+      // Mock: only one upstream exists
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        { id: "upstream-1", name: "Valid Upstream" },
+      ] as never);
+
+      await expect(
+        updateApiKey("key-1", { upstreamIds: ["upstream-1", "invalid-upstream-id"] })
+      ).rejects.toThrow("Invalid upstream IDs: invalid-upstream-id");
+    });
+
+    it("should throw error when updating upstreamIds with empty array", async () => {
+      const { db } = await import("@/lib/db");
+      const { updateApiKey } = await import("@/lib/services/key-manager");
+
+      const mockExistingKey = {
+        id: "key-1",
+        keyPrefix: "sk-auto-test",
+        name: "Test Key",
+        description: null,
+        isActive: true,
+        expiresAt: null,
+        createdAt: new Date("2024-01-01"),
+        updatedAt: new Date("2024-01-01"),
+      };
+
+      vi.mocked(db.query.apiKeys.findFirst).mockResolvedValueOnce(mockExistingKey as never);
+
+      await expect(updateApiKey("key-1", { upstreamIds: [] })).rejects.toThrow(
+        "At least one upstream must be specified"
+      );
+    });
+
+    it("should update multiple fields at once", async () => {
+      const { db } = await import("@/lib/db");
+      const { updateApiKey } = await import("@/lib/services/key-manager");
+
+      const mockExistingKey = {
+        id: "key-1",
+        keyPrefix: "sk-auto-test",
+        name: "Old Name",
+        description: "Old description",
+        isActive: true,
+        expiresAt: null,
+        createdAt: new Date("2024-01-01"),
+        updatedAt: new Date("2024-01-01"),
+      };
+
+      const mockUpdatedKey = {
+        ...mockExistingKey,
+        name: "New Name",
+        description: "New description",
+        isActive: false,
+        updatedAt: new Date(),
+      };
+
+      vi.mocked(db.query.apiKeys.findFirst).mockResolvedValueOnce(mockExistingKey as never);
+
+      const mockReturning = vi.fn().mockResolvedValue([mockUpdatedKey]);
+      const mockWhere = vi.fn(() => ({ returning: mockReturning }));
+      const mockSet = vi.fn(() => ({ where: mockWhere }));
+      vi.mocked(db.update).mockReturnValue({ set: mockSet } as unknown as ReturnType<
+        typeof db.update
+      >);
+
+      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+        { apiKeyId: "key-1", upstreamId: "upstream-1" },
+      ] as never);
+
+      const result = await updateApiKey("key-1", {
+        name: "New Name",
+        description: "New description",
+        isActive: false,
+      });
+
+      expect(result.name).toBe("New Name");
+      expect(result.description).toBe("New description");
+      expect(result.isActive).toBe(false);
+    });
+
+    it("should set expiresAt to null when explicitly passing null", async () => {
+      const { db } = await import("@/lib/db");
+      const { updateApiKey } = await import("@/lib/services/key-manager");
+
+      const mockExistingKey = {
+        id: "key-1",
+        keyPrefix: "sk-auto-test",
+        name: "Test Key",
+        description: null,
+        isActive: true,
+        expiresAt: new Date("2025-12-31"),
+        createdAt: new Date("2024-01-01"),
+        updatedAt: new Date("2024-01-01"),
+      };
+
+      const mockUpdatedKey = {
+        ...mockExistingKey,
+        expiresAt: null,
+        updatedAt: new Date(),
+      };
+
+      vi.mocked(db.query.apiKeys.findFirst).mockResolvedValueOnce(mockExistingKey as never);
+
+      const mockReturning = vi.fn().mockResolvedValue([mockUpdatedKey]);
+      const mockWhere = vi.fn(() => ({ returning: mockReturning }));
+      const mockSet = vi.fn(() => ({ where: mockWhere }));
+      vi.mocked(db.update).mockReturnValue({ set: mockSet } as unknown as ReturnType<
+        typeof db.update
+      >);
+
+      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+        { apiKeyId: "key-1", upstreamId: "upstream-1" },
+      ] as never);
+
+      const result = await updateApiKey("key-1", { expiresAt: null });
+
+      expect(result.expiresAt).toBeNull();
     });
   });
 });

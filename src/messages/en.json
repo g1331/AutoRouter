@@ -154,7 +154,15 @@
     "inactive": "Revoked",
     "revealKey": "Reveal key",
     "hideKey": "Hide key",
-    "legacyKey": "Legacy key - regenerate to enable reveal"
+    "legacyKey": "Legacy key - regenerate to enable reveal",
+    "editKey": "Edit API Key",
+    "editKeyTitle": "Edit API Key",
+    "editKeyDesc": "Modify API Key name, description, permissions and expiration",
+    "updating": "Updating...",
+    "updateSuccess": "API Key updated successfully",
+    "updateFailed": "Failed to update API Key",
+    "keyActive": "Active Status",
+    "keyActiveDesc": "Disabled keys cannot access the API"
   },
   "logs": {
     "title": "Request Logs",

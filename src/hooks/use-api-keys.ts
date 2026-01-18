@@ -5,6 +5,8 @@ import type {
   APIKeyCreate,
   APIKeyCreateResponse,
   APIKeyRevealResponse,
+  APIKeyResponse,
+  APIKeyUpdate,
   PaginatedAPIKeysResponse,
 } from "@/types/api";
 import { ApiError } from "@/lib/api";
@@ -94,6 +96,27 @@ export function useRevokeAPIKey() {
     },
     onError: (error: Error) => {
       toast.error(`${t("revokeFailed")}: ${error.message}`);
+    },
+  });
+}
+
+/**
+ * Update API key
+ */
+export function useUpdateAPIKey() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  const t = useTranslations("keys");
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: APIKeyUpdate }) =>
+      apiClient.put<APIKeyResponse>(`/admin/keys/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["api-keys"] });
+      toast.success(t("updateSuccess"));
+    },
+    onError: (error: Error) => {
+      toast.error(`${t("updateFailed")}: ${error.message}`);
     },
   });
 }
