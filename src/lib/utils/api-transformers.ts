@@ -218,6 +218,10 @@ export interface RequestLogApiResponse {
   prompt_tokens: number;
   completion_tokens: number;
   total_tokens: number;
+  cached_tokens: number;
+  reasoning_tokens: number;
+  cache_creation_tokens: number;
+  cache_read_tokens: number;
   status_code: number | null;
   duration_ms: number | null;
   error_message: string | null;
@@ -241,6 +245,10 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
     prompt_tokens: log.promptTokens,
     completion_tokens: log.completionTokens,
     total_tokens: log.totalTokens,
+    cached_tokens: log.cachedTokens,
+    reasoning_tokens: log.reasoningTokens,
+    cache_creation_tokens: log.cacheCreationTokens,
+    cache_read_tokens: log.cacheReadTokens,
     status_code: log.statusCode,
     duration_ms: log.durationMs,
     error_message: log.errorMessage,

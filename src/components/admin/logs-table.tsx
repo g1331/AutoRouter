@@ -15,6 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { getDateLocale } from "@/lib/date-locale";
 import { cn } from "@/lib/utils";
+import { TokenDisplay } from "@/components/admin/token-display";
 
 interface LogsTableProps {
   logs: RequestLog[];
@@ -26,7 +27,7 @@ interface LogsTableProps {
  * Terminal-style data display with:
  * - Mono font for data
  * - Status code color coding
- * - Token usage display
+ * - Token usage display with tooltip details
  */
 export function LogsTable({ logs }: LogsTableProps) {
   const t = useTranslations("logs");
@@ -63,21 +64,6 @@ export function LogsTable({ logs }: LogsTableProps) {
     }
 
     return `${(durationMs / 1000).toFixed(2)}s`;
-  };
-
-  const formatTokens = (prompt: number, completion: number, total: number) => {
-    if (total === 0) {
-      return <span className="text-amber-700">-</span>;
-    }
-
-    return (
-      <div className="flex flex-col text-xs font-mono">
-        <span className="text-amber-500">{total.toLocaleString()}</span>
-        <span className="text-amber-700 text-[10px]">
-          {prompt.toLocaleString()} / {completion.toLocaleString()}
-        </span>
-      </div>
-    );
   };
 
   if (logs.length === 0) {
@@ -132,7 +118,15 @@ export function LogsTable({ logs }: LogsTableProps) {
                 {log.model || <span className="text-amber-700">-</span>}
               </TableCell>
               <TableCell>
-                {formatTokens(log.prompt_tokens, log.completion_tokens, log.total_tokens)}
+                <TokenDisplay
+                  promptTokens={log.prompt_tokens}
+                  completionTokens={log.completion_tokens}
+                  totalTokens={log.total_tokens}
+                  cachedTokens={log.cached_tokens}
+                  reasoningTokens={log.reasoning_tokens}
+                  cacheCreationTokens={log.cache_creation_tokens}
+                  cacheReadTokens={log.cache_read_tokens}
+                />
               </TableCell>
               <TableCell>{formatStatusCode(log.status_code)}</TableCell>
               <TableCell className="font-mono text-xs">{formatDuration(log.duration_ms)}</TableCell>

@@ -121,6 +121,10 @@ export interface RequestLogResponse {
   prompt_tokens: number;
   completion_tokens: number;
   total_tokens: number;
+  cached_tokens: number;
+  reasoning_tokens: number;
+  cache_creation_tokens: number;
+  cache_read_tokens: number;
   status_code: number | null;
   duration_ms: number | null;
   error_message: string | null;

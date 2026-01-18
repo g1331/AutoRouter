@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { Topbar } from "@/components/admin/topbar";
 import { LogsTable } from "@/components/admin/logs-table";
+import { RefreshIntervalSelect } from "@/components/admin/refresh-interval-select";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, ScrollText } from "lucide-react";
 import { useRequestLogs } from "@/hooks/use-request-logs";
@@ -15,21 +16,33 @@ import { useRequestLogs } from "@/hooks/use-request-logs";
  * - Amber text on dark background
  * - Glowing borders and indicators
  * - Mono font for data display
+ * - Auto-refresh functionality
  */
 export default function LogsPage() {
   const [page, setPage] = useState(1);
+  const [refetchInterval, setRefetchInterval] = useState<number | false>(false);
   const pageSize = 20;
   const t = useTranslations("logs");
   const tCommon = useTranslations("common");
 
-  const { data, isLoading } = useRequestLogs(page, pageSize);
+  const { data, isLoading, isFetching, refetch } = useRequestLogs(page, pageSize, undefined, {
+    refetchInterval,
+  });
+
+  const handleIntervalChange = useCallback((interval: number | false) => {
+    setRefetchInterval(interval);
+  }, []);
+
+  const handleManualRefresh = useCallback(() => {
+    refetch();
+  }, [refetch]);
 
   return (
     <>
       <Topbar title={t("pageTitle")} />
       <div className="p-6 lg:p-8 space-y-6 bg-surface-100 min-h-screen">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <ScrollText className="w-5 h-5 text-amber-500" aria-hidden="true" />
@@ -39,6 +52,11 @@ export default function LogsPage() {
             </div>
             <p className="font-sans text-sm text-amber-700">{t("managementDesc")}</p>
           </div>
+          <RefreshIntervalSelect
+            onIntervalChange={handleIntervalChange}
+            onManualRefresh={handleManualRefresh}
+            isRefreshing={isFetching}
+          />
         </div>
 
         {/* Table */}

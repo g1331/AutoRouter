@@ -217,6 +217,30 @@ describe("lib/db/schema", () => {
       expect(requestLogs.totalTokens.name).toBe("total_tokens");
     });
 
+    it("has cachedTokens column with default 0", () => {
+      expect(requestLogs.cachedTokens).toBeDefined();
+      expect(requestLogs.cachedTokens.name).toBe("cached_tokens");
+      expect(requestLogs.cachedTokens.default).toBe(0);
+    });
+
+    it("has reasoningTokens column with default 0", () => {
+      expect(requestLogs.reasoningTokens).toBeDefined();
+      expect(requestLogs.reasoningTokens.name).toBe("reasoning_tokens");
+      expect(requestLogs.reasoningTokens.default).toBe(0);
+    });
+
+    it("has cacheCreationTokens column with default 0", () => {
+      expect(requestLogs.cacheCreationTokens).toBeDefined();
+      expect(requestLogs.cacheCreationTokens.name).toBe("cache_creation_tokens");
+      expect(requestLogs.cacheCreationTokens.default).toBe(0);
+    });
+
+    it("has cacheReadTokens column with default 0", () => {
+      expect(requestLogs.cacheReadTokens).toBeDefined();
+      expect(requestLogs.cacheReadTokens.name).toBe("cache_read_tokens");
+      expect(requestLogs.cacheReadTokens.default).toBe(0);
+    });
+
     it("has statusCode column", () => {
       expect(requestLogs.statusCode).toBeDefined();
       expect(requestLogs.statusCode.name).toBe("status_code");

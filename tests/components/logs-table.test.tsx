@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { LogsTable } from "@/components/admin/logs-table";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import type { RequestLog } from "@/types/api";
 
 // Mock next-intl
@@ -13,6 +14,13 @@ vi.mock("next-intl", () => ({
 vi.mock("@/lib/date-locale", () => ({
   getDateLocale: () => undefined,
 }));
+
+/**
+ * Helper to render with TooltipProvider
+ */
+function renderWithTooltip(ui: React.ReactElement) {
+  return render(<TooltipProvider>{ui}</TooltipProvider>);
+}
 
 /**
  * LogsTable Component Tests
@@ -30,6 +38,10 @@ describe("LogsTable", () => {
     prompt_tokens: 100,
     completion_tokens: 200,
     total_tokens: 300,
+    cached_tokens: 0,
+    reasoning_tokens: 0,
+    cache_creation_tokens: 0,
+    cache_read_tokens: 0,
     status_code: 200,
     duration_ms: 1500,
     error_message: null,
@@ -55,7 +67,7 @@ describe("LogsTable", () => {
 
   describe("Table Rendering", () => {
     it("renders table headers", () => {
-      render(<LogsTable logs={[mockLog]} />);
+      renderWithTooltip(<LogsTable logs={[mockLog]} />);
 
       expect(screen.getByText("tableTime")).toBeInTheDocument();
       expect(screen.getByText("tableMethod")).toBeInTheDocument();
@@ -67,7 +79,7 @@ describe("LogsTable", () => {
     });
 
     it("renders log data correctly", () => {
-      render(<LogsTable logs={[mockLog]} />);
+      renderWithTooltip(<LogsTable logs={[mockLog]} />);
 
       expect(screen.getByText("POST")).toBeInTheDocument();
       expect(screen.getByText("/v1/chat/completions")).toBeInTheDocument();
@@ -77,7 +89,7 @@ describe("LogsTable", () => {
 
   describe("Status Code Formatting", () => {
     it("renders success badge for 2xx status", () => {
-      render(<LogsTable logs={[{ ...mockLog, status_code: 200 }]} />);
+      renderWithTooltip(<LogsTable logs={[{ ...mockLog, status_code: 200 }]} />);
 
       const badge = screen.getByText("200");
       expect(badge).toBeInTheDocument();
@@ -86,7 +98,7 @@ describe("LogsTable", () => {
     });
 
     it("renders warning badge for 4xx status", () => {
-      render(<LogsTable logs={[{ ...mockLog, status_code: 400 }]} />);
+      renderWithTooltip(<LogsTable logs={[{ ...mockLog, status_code: 400 }]} />);
 
       const badge = screen.getByText("400");
       expect(badge).toBeInTheDocument();
@@ -95,7 +107,7 @@ describe("LogsTable", () => {
     });
 
     it("renders error badge for 5xx status", () => {
-      render(<LogsTable logs={[{ ...mockLog, status_code: 500 }]} />);
+      renderWithTooltip(<LogsTable logs={[{ ...mockLog, status_code: 500 }]} />);
 
       const badge = screen.getByText("500");
       expect(badge).toBeInTheDocument();
@@ -104,7 +116,7 @@ describe("LogsTable", () => {
     });
 
     it("renders dash for null status code", () => {
-      render(<LogsTable logs={[{ ...mockLog, status_code: null }]} />);
+      renderWithTooltip(<LogsTable logs={[{ ...mockLog, status_code: null }]} />);
 
       // Find the dash in status column
       const dashes = screen.getAllByText("-");
@@ -114,7 +126,7 @@ describe("LogsTable", () => {
 
   describe("Token Formatting", () => {
     it("renders total tokens with breakdown", () => {
-      render(<LogsTable logs={[mockLog]} />);
+      renderWithTooltip(<LogsTable logs={[mockLog]} />);
 
       // Total tokens
       expect(screen.getByText("300")).toBeInTheDocument();
@@ -129,7 +141,7 @@ describe("LogsTable", () => {
         completion_tokens: 0,
         total_tokens: 0,
       };
-      render(<LogsTable logs={[zeroTokenLog]} />);
+      renderWithTooltip(<LogsTable logs={[zeroTokenLog]} />);
 
       // Should have dash for tokens
       const dashes = screen.getAllByText("-");
@@ -143,7 +155,7 @@ describe("LogsTable", () => {
         completion_tokens: 20000,
         total_tokens: 30000,
       };
-      render(<LogsTable logs={[largeTokenLog]} />);
+      renderWithTooltip(<LogsTable logs={[largeTokenLog]} />);
 
       // Check for formatted number (locale-dependent, may be "30,000" or "30000")
       expect(screen.getByText(/30[,.]?000/)).toBeInTheDocument();
@@ -152,19 +164,19 @@ describe("LogsTable", () => {
 
   describe("Duration Formatting", () => {
     it("renders milliseconds for durations under 1 second", () => {
-      render(<LogsTable logs={[{ ...mockLog, duration_ms: 500 }]} />);
+      renderWithTooltip(<LogsTable logs={[{ ...mockLog, duration_ms: 500 }]} />);
 
       expect(screen.getByText("500ms")).toBeInTheDocument();
     });
 
     it("renders seconds for durations over 1 second", () => {
-      render(<LogsTable logs={[{ ...mockLog, duration_ms: 1500 }]} />);
+      renderWithTooltip(<LogsTable logs={[{ ...mockLog, duration_ms: 1500 }]} />);
 
       expect(screen.getByText("1.50s")).toBeInTheDocument();
     });
 
     it("renders dash for null duration", () => {
-      render(<LogsTable logs={[{ ...mockLog, duration_ms: null }]} />);
+      renderWithTooltip(<LogsTable logs={[{ ...mockLog, duration_ms: null }]} />);
 
       const dashes = screen.getAllByText("-");
       expect(dashes.length).toBeGreaterThan(0);
@@ -173,21 +185,21 @@ describe("LogsTable", () => {
 
   describe("Error Row Styling", () => {
     it("applies error background for 4xx status", () => {
-      render(<LogsTable logs={[{ ...mockLog, status_code: 404 }]} />);
+      renderWithTooltip(<LogsTable logs={[{ ...mockLog, status_code: 404 }]} />);
 
       const row = screen.getByRole("row", { name: /POST/ });
       expect(row).toHaveClass("bg-status-error-muted/20");
     });
 
     it("applies error background for 5xx status", () => {
-      render(<LogsTable logs={[{ ...mockLog, status_code: 503 }]} />);
+      renderWithTooltip(<LogsTable logs={[{ ...mockLog, status_code: 503 }]} />);
 
       const row = screen.getByRole("row", { name: /POST/ });
       expect(row).toHaveClass("bg-status-error-muted/20");
     });
 
     it("does not apply error background for 2xx status", () => {
-      render(<LogsTable logs={[{ ...mockLog, status_code: 200 }]} />);
+      renderWithTooltip(<LogsTable logs={[{ ...mockLog, status_code: 200 }]} />);
 
       const row = screen.getByRole("row", { name: /POST/ });
       expect(row).not.toHaveClass("bg-status-error-muted/20");
@@ -196,7 +208,7 @@ describe("LogsTable", () => {
 
   describe("Null Values Handling", () => {
     it("renders dash for null method", () => {
-      render(<LogsTable logs={[{ ...mockLog, method: null }]} />);
+      renderWithTooltip(<LogsTable logs={[{ ...mockLog, method: null }]} />);
 
       // Method column shows "-" in code element
       const codeElements = screen.getAllByRole("cell");
@@ -205,14 +217,14 @@ describe("LogsTable", () => {
     });
 
     it("renders dash for null path", () => {
-      render(<LogsTable logs={[{ ...mockLog, path: null }]} />);
+      renderWithTooltip(<LogsTable logs={[{ ...mockLog, path: null }]} />);
 
       const dashes = screen.getAllByText("-");
       expect(dashes.length).toBeGreaterThan(0);
     });
 
     it("renders dash for null model", () => {
-      render(<LogsTable logs={[{ ...mockLog, model: null }]} />);
+      renderWithTooltip(<LogsTable logs={[{ ...mockLog, model: null }]} />);
 
       const dashes = screen.getAllByText("-");
       expect(dashes.length).toBeGreaterThan(0);

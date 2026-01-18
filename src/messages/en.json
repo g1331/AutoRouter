@@ -177,7 +177,22 @@
     "tableModel": "Model",
     "tableTokens": "Tokens",
     "tableStatus": "Status",
-    "tableDuration": "Duration"
+    "tableDuration": "Duration",
+    "tokenDetails": "TOKEN DETAILS",
+    "tokenInput": "Input",
+    "tokenOutput": "Output",
+    "tokenCached": "Cached",
+    "tokenNew": "New",
+    "tokenCacheWrite": "Cache Write",
+    "tokenCacheRead": "Cache Read",
+    "tokenReasoning": "Reasoning",
+    "tokenTotal": "Total",
+    "refreshInterval": "Refresh",
+    "refreshOff": "Off",
+    "refresh10s": "10s",
+    "refresh30s": "30s",
+    "refresh60s": "60s",
+    "manualRefresh": "Refresh"
   },
   "upstreams": {
     "title": "Upstreams",

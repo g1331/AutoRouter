@@ -51,6 +51,10 @@ describe("request-logger", () => {
           promptTokens: 100,
           completionTokens: 50,
           totalTokens: 150,
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
         });
       });
 
@@ -68,6 +72,10 @@ describe("request-logger", () => {
           promptTokens: 100,
           completionTokens: 50,
           totalTokens: 150, // Calculated from prompt + completion
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
         });
       });
 
@@ -86,6 +94,10 @@ describe("request-logger", () => {
           promptTokens: 100,
           completionTokens: 50,
           totalTokens: 150,
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
         });
       });
 
@@ -102,6 +114,10 @@ describe("request-logger", () => {
           promptTokens: 100,
           completionTokens: 0,
           totalTokens: 100, // Defaults to prompt + completion when total_tokens missing
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
         });
       });
     });
@@ -123,6 +139,10 @@ describe("request-logger", () => {
           promptTokens: 80,
           completionTokens: 40,
           totalTokens: 120,
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
         });
       });
 
@@ -139,6 +159,10 @@ describe("request-logger", () => {
           promptTokens: 50,
           completionTokens: 0,
           totalTokens: 50,
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
         });
       });
 
@@ -155,6 +179,184 @@ describe("request-logger", () => {
           promptTokens: 0,
           completionTokens: 30,
           totalTokens: 30,
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
+        });
+      });
+    });
+
+    describe("OpenAI detailed token format", () => {
+      it("should extract cached_tokens from prompt_tokens_details", () => {
+        const response = {
+          usage: {
+            prompt_tokens: 1000,
+            completion_tokens: 100,
+            total_tokens: 1100,
+            prompt_tokens_details: {
+              cached_tokens: 800,
+            },
+          },
+        };
+
+        const usage = extractTokenUsage(response);
+
+        expect(usage).toEqual({
+          promptTokens: 1000,
+          completionTokens: 100,
+          totalTokens: 1100,
+          cachedTokens: 800,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 800,
+        });
+      });
+
+      it("should extract reasoning_tokens from completion_tokens_details", () => {
+        const response = {
+          usage: {
+            prompt_tokens: 500,
+            completion_tokens: 200,
+            total_tokens: 700,
+            completion_tokens_details: {
+              reasoning_tokens: 150,
+            },
+          },
+        };
+
+        const usage = extractTokenUsage(response);
+
+        expect(usage).toEqual({
+          promptTokens: 500,
+          completionTokens: 200,
+          totalTokens: 700,
+          cachedTokens: 0,
+          reasoningTokens: 150,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
+        });
+      });
+
+      it("should extract both cached_tokens and reasoning_tokens", () => {
+        const response = {
+          usage: {
+            prompt_tokens: 2000,
+            completion_tokens: 500,
+            total_tokens: 2500,
+            prompt_tokens_details: {
+              cached_tokens: 1500,
+              audio_tokens: 0,
+            },
+            completion_tokens_details: {
+              reasoning_tokens: 300,
+              audio_tokens: 0,
+            },
+          },
+        };
+
+        const usage = extractTokenUsage(response);
+
+        expect(usage).toEqual({
+          promptTokens: 2000,
+          completionTokens: 500,
+          totalTokens: 2500,
+          cachedTokens: 1500,
+          reasoningTokens: 300,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 1500,
+        });
+      });
+
+      it("should handle missing details objects", () => {
+        const response = {
+          usage: {
+            prompt_tokens: 100,
+            completion_tokens: 50,
+            total_tokens: 150,
+            // No prompt_tokens_details or completion_tokens_details
+          },
+        };
+
+        const usage = extractTokenUsage(response);
+
+        expect(usage).toEqual({
+          promptTokens: 100,
+          completionTokens: 50,
+          totalTokens: 150,
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
+        });
+      });
+    });
+
+    describe("Anthropic cache token format", () => {
+      it("should extract cache_creation_input_tokens", () => {
+        const response = {
+          usage: {
+            input_tokens: 500,
+            output_tokens: 100,
+            cache_creation_input_tokens: 400,
+          },
+        };
+
+        const usage = extractTokenUsage(response);
+
+        expect(usage).toEqual({
+          promptTokens: 500,
+          completionTokens: 100,
+          totalTokens: 600,
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 400,
+          cacheReadTokens: 0,
+        });
+      });
+
+      it("should extract cache_read_input_tokens", () => {
+        const response = {
+          usage: {
+            input_tokens: 1000,
+            output_tokens: 200,
+            cache_read_input_tokens: 800,
+          },
+        };
+
+        const usage = extractTokenUsage(response);
+
+        expect(usage).toEqual({
+          promptTokens: 1000,
+          completionTokens: 200,
+          totalTokens: 1200,
+          cachedTokens: 800,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 800,
+        });
+      });
+
+      it("should extract both cache_creation and cache_read tokens", () => {
+        const response = {
+          usage: {
+            input_tokens: 2000,
+            output_tokens: 300,
+            cache_creation_input_tokens: 500,
+            cache_read_input_tokens: 1200,
+          },
+        };
+
+        const usage = extractTokenUsage(response);
+
+        expect(usage).toEqual({
+          promptTokens: 2000,
+          completionTokens: 300,
+          totalTokens: 2300,
+          cachedTokens: 1200,
+          reasoningTokens: 0,
+          cacheCreationTokens: 500,
+          cacheReadTokens: 1200,
         });
       });
     });
@@ -167,6 +369,10 @@ describe("request-logger", () => {
           promptTokens: 0,
           completionTokens: 0,
           totalTokens: 0,
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
         });
       });
 
@@ -182,6 +388,10 @@ describe("request-logger", () => {
           promptTokens: 0,
           completionTokens: 0,
           totalTokens: 0,
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
         });
       });
 
@@ -196,6 +406,10 @@ describe("request-logger", () => {
           promptTokens: 0,
           completionTokens: 0,
           totalTokens: 0,
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
         });
       });
 
@@ -213,6 +427,10 @@ describe("request-logger", () => {
           promptTokens: 0,
           completionTokens: 0,
           totalTokens: 0,
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
         });
       });
 
@@ -231,6 +449,10 @@ describe("request-logger", () => {
           promptTokens: 100,
           completionTokens: 50,
           totalTokens: 151,
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
         });
       });
 
@@ -245,6 +467,10 @@ describe("request-logger", () => {
           promptTokens: 0,
           completionTokens: 0,
           totalTokens: 0,
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
         });
       });
     });
