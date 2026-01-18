@@ -185,13 +185,14 @@ export function extractTokenUsage(responseBody: Record<string, unknown> | null):
     const cacheCreationTokens = getIntValue(usage, "cache_creation_input_tokens");
     const cacheReadTokens = getIntValue(usage, "cache_read_input_tokens");
 
-    // Keep invariants even if upstream returns partial usage (e.g., cache_* without input_tokens)
-    const normalizedInputTokens = Math.max(inputTokens, cacheReadTokens, cacheCreationTokens);
+    // Prefer Anthropic's input_tokens when present; fall back to cache token counts only when missing
+    const promptTokensValue =
+      "input_tokens" in usage ? inputTokens : Math.max(cacheReadTokens, cacheCreationTokens);
 
     return {
-      promptTokens: normalizedInputTokens,
+      promptTokens: promptTokensValue,
       completionTokens: outputTokens,
-      totalTokens: normalizedInputTokens + outputTokens,
+      totalTokens: promptTokensValue + outputTokens,
       cachedTokens: cacheReadTokens, // Anthropic cache_read is the cached tokens
       reasoningTokens: 0,
       cacheCreationTokens,
