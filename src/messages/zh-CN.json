@@ -154,7 +154,15 @@
     "inactive": "已撤销",
     "revealKey": "显示密钥",
     "hideKey": "隐藏密钥",
-    "legacyKey": "旧版密钥 - 需重新生成以启用查看"
+    "legacyKey": "旧版密钥 - 需重新生成以启用查看",
+    "editKey": "编辑 API Key",
+    "editKeyTitle": "编辑 API Key",
+    "editKeyDesc": "修改 API Key 的名称、描述、权限和过期时间",
+    "updating": "更新中...",
+    "updateSuccess": "API Key 更新成功",
+    "updateFailed": "更新 API Key 失败",
+    "keyActive": "启用状态",
+    "keyActiveDesc": "禁用后此 Key 将无法访问 API"
   },
   "logs": {
     "title": "请求日志",

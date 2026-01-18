@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Topbar } from "@/components/admin/topbar";
 import { KeysTable } from "@/components/admin/keys-table";
 import { CreateKeyDialog } from "@/components/admin/create-key-dialog";
+import { EditKeyDialog } from "@/components/admin/edit-key-dialog";
 import { RevokeKeyDialog } from "@/components/admin/revoke-key-dialog";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Key } from "lucide-react";
@@ -22,6 +23,7 @@ import type { APIKey } from "@/types/api";
 export default function KeysPage() {
   const [page, setPage] = useState(1);
   const [revokeKey, setRevokeKey] = useState<APIKey | null>(null);
+  const [editingKey, setEditingKey] = useState<APIKey | null>(null);
   const pageSize = 10;
   const t = useTranslations("keys");
   const tCommon = useTranslations("common");
@@ -56,7 +58,7 @@ export default function KeysPage() {
           </div>
         ) : (
           <>
-            <KeysTable keys={data?.items || []} onRevoke={setRevokeKey} />
+            <KeysTable keys={data?.items || []} onRevoke={setRevokeKey} onEdit={setEditingKey} />
 
             {/* Pagination */}
             {data && data.total_pages > 1 && (
@@ -97,6 +99,15 @@ export default function KeysPage() {
 
       {/* Revoke Confirmation Dialog */}
       <RevokeKeyDialog apiKey={revokeKey} open={!!revokeKey} onClose={() => setRevokeKey(null)} />
+
+      {/* Edit Key Dialog */}
+      {editingKey && (
+        <EditKeyDialog
+          apiKey={editingKey}
+          open={!!editingKey}
+          onOpenChange={(open) => !open && setEditingKey(null)}
+        />
+      )}
     </>
   );
 }

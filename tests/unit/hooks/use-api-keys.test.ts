@@ -7,6 +7,7 @@ import {
   useCreateAPIKey,
   useRevealAPIKey,
   useRevokeAPIKey,
+  useUpdateAPIKey,
 } from "@/hooks/use-api-keys";
 
 // Mock next-intl
@@ -31,6 +32,7 @@ const mockToastError = toast.error as ReturnType<typeof vi.fn>;
 const mockGet = vi.fn();
 const mockPost = vi.fn();
 const mockDelete = vi.fn();
+const mockPut = vi.fn();
 
 vi.mock("@/providers/auth-provider", () => ({
   useAuth: () => ({
@@ -38,6 +40,7 @@ vi.mock("@/providers/auth-provider", () => ({
       get: mockGet,
       post: mockPost,
       delete: mockDelete,
+      put: mockPut,
     },
   }),
 }));
@@ -226,6 +229,104 @@ describe("use-api-keys hooks", () => {
       await waitFor(() => expect(result.current.isError).toBe(true));
 
       expect(mockToastError).toHaveBeenCalledWith("revokeFailed: Revoke failed");
+    });
+  });
+
+  describe("useUpdateAPIKey", () => {
+    it("updates API key successfully", async () => {
+      const mockResponse = {
+        id: "key-1",
+        key_prefix: "sk-auto-test",
+        name: "Updated Key",
+        description: "Updated description",
+        is_active: true,
+        upstream_ids: ["upstream-1"],
+        expires_at: null,
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-02T00:00:00Z",
+      };
+      mockPut.mockResolvedValueOnce(mockResponse);
+
+      const { result } = renderHook(() => useUpdateAPIKey(), { wrapper });
+
+      result.current.mutate({
+        id: "key-1",
+        data: {
+          name: "Updated Key",
+          description: "Updated description",
+        },
+      });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      expect(mockPut).toHaveBeenCalledWith("/admin/keys/key-1", {
+        name: "Updated Key",
+        description: "Updated description",
+      });
+      expect(mockToastSuccess).toHaveBeenCalledWith("updateSuccess");
+      expect(result.current.data).toEqual(mockResponse);
+    });
+
+    it("shows error toast on update failure", async () => {
+      mockPut.mockRejectedValueOnce(new Error("Update failed"));
+
+      const { result } = renderHook(() => useUpdateAPIKey(), { wrapper });
+
+      result.current.mutate({
+        id: "key-1",
+        data: { name: "Updated Key" },
+      });
+
+      await waitFor(() => expect(result.current.isError).toBe(true));
+
+      expect(mockToastError).toHaveBeenCalledWith("updateFailed: Update failed");
+    });
+
+    it("updates API key with is_active field", async () => {
+      const mockResponse = {
+        id: "key-1",
+        key_prefix: "sk-auto-test",
+        name: "Test Key",
+        is_active: false,
+        upstream_ids: ["upstream-1"],
+      };
+      mockPut.mockResolvedValueOnce(mockResponse);
+
+      const { result } = renderHook(() => useUpdateAPIKey(), { wrapper });
+
+      result.current.mutate({
+        id: "key-1",
+        data: { is_active: false },
+      });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      expect(mockPut).toHaveBeenCalledWith("/admin/keys/key-1", {
+        is_active: false,
+      });
+    });
+
+    it("updates API key with upstream_ids", async () => {
+      const mockResponse = {
+        id: "key-1",
+        key_prefix: "sk-auto-test",
+        name: "Test Key",
+        upstream_ids: ["upstream-2", "upstream-3"],
+      };
+      mockPut.mockResolvedValueOnce(mockResponse);
+
+      const { result } = renderHook(() => useUpdateAPIKey(), { wrapper });
+
+      result.current.mutate({
+        id: "key-1",
+        data: { upstream_ids: ["upstream-2", "upstream-3"] },
+      });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      expect(mockPut).toHaveBeenCalledWith("/admin/keys/key-1", {
+        upstream_ids: ["upstream-2", "upstream-3"],
+      });
     });
   });
 });

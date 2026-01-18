@@ -65,6 +65,14 @@ export interface ApiKeyRevealResult {
   name: string;
 }
 
+export interface ApiKeyUpdateInput {
+  name?: string;
+  description?: string | null;
+  isActive?: boolean;
+  expiresAt?: Date | null;
+  upstreamIds?: string[];
+}
+
 /**
  * Generate a random API key with format: sk-auto-{base64-random}
  */
@@ -317,4 +325,130 @@ export async function findAndVerifyApiKey(keyValue: string): Promise<ApiKey | nu
   }
 
   return null;
+}
+
+/**
+ * Update an existing API key.
+ */
+export async function updateApiKey(
+  keyId: string,
+  input: ApiKeyUpdateInput
+): Promise<ApiKeyListItem> {
+  const { name, description, isActive, expiresAt, upstreamIds } = input;
+  const now = new Date();
+
+  return db.transaction(async (tx) => {
+    // Check if key exists
+    const existing = await tx.query.apiKeys.findFirst({
+      where: eq(apiKeys.id, keyId),
+    });
+
+    if (!existing) {
+      throw new ApiKeyNotFoundError(`API key not found: ${keyId}`);
+    }
+
+    let normalizedUpstreamIds: string[] | undefined;
+
+    // If upstreamIds provided, validate them (and guard against duplicates)
+    if (upstreamIds !== undefined) {
+      normalizedUpstreamIds = Array.from(new Set(upstreamIds));
+
+      if (normalizedUpstreamIds.length === 0) {
+        throw new Error("At least one upstream must be specified");
+      }
+
+      const validUpstreams = await tx.query.upstreams.findMany({
+        where: inArray(upstreams.id, normalizedUpstreamIds),
+      });
+
+      if (validUpstreams.length !== normalizedUpstreamIds.length) {
+        const validIds = new Set(validUpstreams.map((u) => u.id));
+        const invalidIds = normalizedUpstreamIds.filter((id) => !validIds.has(id));
+        throw new Error(`Invalid upstream IDs: ${invalidIds.join(", ")}`);
+      }
+    }
+
+    // Build update object with only provided fields
+    const updateData: Partial<{
+      name: string;
+      description: string | null;
+      isActive: boolean;
+      expiresAt: Date | null;
+      updatedAt: Date;
+    }> = { updatedAt: now };
+
+    if (name !== undefined) {
+      updateData.name = name;
+    }
+    if (description !== undefined) {
+      updateData.description = description;
+    }
+    if (isActive !== undefined) {
+      updateData.isActive = isActive;
+    }
+    if (expiresAt !== undefined) {
+      updateData.expiresAt = expiresAt;
+    }
+
+    // Update the API key record
+    const [updatedKey] = await tx
+      .update(apiKeys)
+      .set(updateData)
+      .where(eq(apiKeys.id, keyId))
+      .returning();
+
+    // Key could be deleted concurrently between the existence check and update
+    if (!updatedKey) {
+      throw new ApiKeyNotFoundError(`API key not found: ${keyId}`);
+    }
+
+    let currentUpstreamIds: string[];
+
+    if (normalizedUpstreamIds !== undefined) {
+      // Avoid churning join-table rows (and their createdAt) if upstreamIds didn't actually change.
+      const existingLinks = await tx.query.apiKeyUpstreams.findMany({
+        where: eq(apiKeyUpstreams.apiKeyId, keyId),
+      });
+      const existingIds = existingLinks.map((link) => link.upstreamId);
+      const existingSet = new Set(existingIds);
+      const isSame =
+        existingIds.length === normalizedUpstreamIds.length &&
+        normalizedUpstreamIds.every((id) => existingSet.has(id));
+
+      if (!isSame) {
+        await tx.delete(apiKeyUpstreams).where(eq(apiKeyUpstreams.apiKeyId, keyId));
+
+        await tx.insert(apiKeyUpstreams).values(
+          normalizedUpstreamIds.map((upstreamId) => ({
+            apiKeyId: keyId,
+            upstreamId,
+            createdAt: now,
+          }))
+        );
+
+        currentUpstreamIds = normalizedUpstreamIds;
+      } else {
+        currentUpstreamIds = existingIds;
+      }
+    } else {
+      const upstreamLinks = await tx.query.apiKeyUpstreams.findMany({
+        where: eq(apiKeyUpstreams.apiKeyId, keyId),
+      });
+      currentUpstreamIds = upstreamLinks.map((link) => link.upstreamId);
+    }
+
+    console.warn(`Updated API key: ${updatedKey.keyPrefix}, name='${updatedKey.name}'`);
+
+    return {
+      id: updatedKey.id,
+      keyPrefix: updatedKey.keyPrefix,
+      name: updatedKey.name,
+      description: updatedKey.description,
+      upstreamIds: currentUpstreamIds,
+      isActive: updatedKey.isActive,
+      expiresAt: updatedKey.expiresAt,
+      createdAt: updatedKey.createdAt,
+      updatedAt: updatedKey.updatedAt,
+    };
+  });
 }

@@ -12,6 +12,14 @@ export interface APIKeyCreate {
   expires_at?: string | null; // ISO 8601 date string
 }
 
+export interface APIKeyUpdate {
+  name?: string;
+  description?: string | null;
+  is_active?: boolean;
+  expires_at?: string | null; // ISO 8601 date string
+  upstream_ids?: string[]; // UUID[]
+}
+
 export interface APIKeyResponse {
   id: string; // UUID
   key_prefix: string;
