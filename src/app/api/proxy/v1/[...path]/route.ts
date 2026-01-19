@@ -346,6 +346,32 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       );
     }
 
+    // Validate API key has permission for at least one upstream in this group
+    const upstreamPermissions = await db.query.apiKeyUpstreams.findMany({
+      where: eq(apiKeyUpstreams.apiKeyId, validApiKey.id),
+    });
+    const allowedUpstreamIds = upstreamPermissions.map((p) => p.upstreamId);
+
+    if (allowedUpstreamIds.length === 0) {
+      return NextResponse.json(
+        { error: "No upstreams configured for this API key" },
+        { status: 400 }
+      );
+    }
+
+    const groupUpstreams = await db.query.upstreams.findMany({
+      where: and(eq(upstreams.groupId, group.id), eq(upstreams.isActive, true)),
+      columns: { id: true },
+    });
+
+    const hasPermission = groupUpstreams.some((u) => allowedUpstreamIds.includes(u.id));
+    if (!hasPermission) {
+      return NextResponse.json(
+        { error: `API key not authorized for upstream group '${upstreamGroupName}'` },
+        { status: 403 }
+      );
+    }
+
     useLoadBalancer = true;
     groupId = group.id;
   } else if (upstreamName) {

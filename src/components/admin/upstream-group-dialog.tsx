@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -37,6 +37,18 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useCreateUpstreamGroup, useUpdateUpstreamGroup } from "@/hooks/use-upstream-groups";
 import type { UpstreamGroup } from "@/types/api";
 
+// Zod schema defined at module level to avoid re-creation on each render
+const upstreamGroupFormSchema = z.object({
+  name: z.string().min(1, "Group name is required").max(64),
+  provider: z.enum(["openai", "anthropic"]),
+  strategy: z.enum(["round_robin", "weighted", "least_connections"]),
+  health_check_interval: z.number().int().min(5).max(300),
+  health_check_timeout: z.number().int().min(1).max(60),
+  is_active: z.boolean(),
+});
+
+type UpstreamGroupForm = z.infer<typeof upstreamGroupFormSchema>;
+
 interface UpstreamGroupDialogProps {
   group?: UpstreamGroup | null;
   open: boolean;
@@ -59,17 +71,6 @@ export function UpstreamGroupDialog({
   const updateMutation = useUpdateUpstreamGroup();
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
-
-  const upstreamGroupFormSchema = z.object({
-    name: z.string().min(1, "Group name is required").max(64),
-    provider: z.string().min(1, "Provider is required"),
-    strategy: z.enum(["round_robin", "weighted", "least_connections"]),
-    health_check_interval: z.number().int().min(5).max(300),
-    health_check_timeout: z.number().int().min(1).max(60),
-    is_active: z.boolean(),
-  });
-
-  type UpstreamGroupForm = z.infer<typeof upstreamGroupFormSchema>;
 
   const form = useForm<UpstreamGroupForm>({
     resolver: zodResolver(upstreamGroupFormSchema),
@@ -140,12 +141,8 @@ export function UpstreamGroupDialog({
   const dialogContent = (
     <DialogContent className="max-w-2xl">
       <DialogHeader>
-        <DialogTitle>{isEdit ? "Edit Upstream Group" : "Create Upstream Group"}</DialogTitle>
-        <DialogDescription>
-          {isEdit
-            ? "Update upstream group configuration for load balancing"
-            : "Create a new upstream group for load balancing across multiple upstreams"}
-        </DialogDescription>
+        <DialogTitle>{isEdit ? t("editGroup") : t("createGroup")}</DialogTitle>
+        <DialogDescription>{isEdit ? t("editGroupDesc") : t("createGroupDesc")}</DialogDescription>
       </DialogHeader>
 
       <Form {...form}>
@@ -155,11 +152,11 @@ export function UpstreamGroupDialog({
             name="name"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Group Name *</FormLabel>
+                <FormLabel>{t("groupName")} *</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g., openai-production" {...field} />
+                  <Input placeholder={t("groupNamePlaceholder")} {...field} />
                 </FormControl>
-                <FormDescription>A unique name to identify this upstream group</FormDescription>
+                <FormDescription>{t("groupNameDescription")}</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -182,9 +179,7 @@ export function UpstreamGroupDialog({
                     <SelectItem value="anthropic">Anthropic</SelectItem>
                   </SelectContent>
                 </Select>
-                <FormDescription>
-                  All upstreams in this group must use this provider
-                </FormDescription>
+                <FormDescription>{t("providerGroupDesc")}</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -195,22 +190,22 @@ export function UpstreamGroupDialog({
             name="strategy"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Load Balancing Strategy *</FormLabel>
+                <FormLabel>{t("strategyLabel")} *</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select strategy" />
+                      <SelectValue placeholder={t("strategyPlaceholder")} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="round_robin">Round Robin</SelectItem>
-                    <SelectItem value="weighted">Weighted</SelectItem>
-                    <SelectItem value="least_connections">Least Connections</SelectItem>
+                    <SelectItem value="round_robin">{t("strategyRoundRobin")}</SelectItem>
+                    <SelectItem value="weighted">{t("strategyWeighted")}</SelectItem>
+                    <SelectItem value="least_connections">
+                      {t("strategyLeastConnections")}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
-                <FormDescription>
-                  How requests are distributed across upstreams in this group
-                </FormDescription>
+                <FormDescription>{t("strategyDescription")}</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -222,7 +217,7 @@ export function UpstreamGroupDialog({
               name="health_check_interval"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Health Check Interval (s)</FormLabel>
+                  <FormLabel>{t("healthCheckInterval")}</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
@@ -232,7 +227,7 @@ export function UpstreamGroupDialog({
                       onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 30)}
                     />
                   </FormControl>
-                  <FormDescription>Interval between health checks (5-300s)</FormDescription>
+                  <FormDescription>{t("healthCheckIntervalDesc")}</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -243,7 +238,7 @@ export function UpstreamGroupDialog({
               name="health_check_timeout"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Health Check Timeout (s)</FormLabel>
+                  <FormLabel>{t("healthCheckTimeout")}</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
@@ -253,7 +248,7 @@ export function UpstreamGroupDialog({
                       onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 10)}
                     />
                   </FormControl>
-                  <FormDescription>Timeout for health check requests (1-60s)</FormDescription>
+                  <FormDescription>{t("healthCheckTimeoutDesc")}</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -269,8 +264,8 @@ export function UpstreamGroupDialog({
                   <Checkbox checked={field.value} onCheckedChange={field.onChange} />
                 </FormControl>
                 <div className="space-y-1 leading-none">
-                  <FormLabel>Active</FormLabel>
-                  <FormDescription>Enable or disable this upstream group</FormDescription>
+                  <FormLabel>{t("groupActive")}</FormLabel>
+                  <FormDescription>{t("groupActiveDesc")}</FormDescription>
                 </div>
               </FormItem>
             )}
@@ -315,14 +310,17 @@ export function UpstreamGroupDialog({
  * Create Upstream Group Button with Dialog
  */
 export function CreateUpstreamGroupButton() {
+  const [open, setOpen] = useState(false);
+  const t = useTranslations("upstreams");
+
   return (
     <UpstreamGroupDialog
-      open={false}
-      onOpenChange={() => {}}
+      open={open}
+      onOpenChange={setOpen}
       trigger={
         <Button variant="tonal">
           <FolderKanban className="h-4 w-4 mr-2" />
-          Add Group
+          {t("addGroup")}
         </Button>
       }
     />

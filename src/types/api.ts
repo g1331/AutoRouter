@@ -53,11 +53,16 @@ export interface APIKeyRevealResponse {
  */
 export type LoadBalancerStrategy = "round_robin" | "weighted" | "least_connections";
 
+/**
+ * Supported AI provider types
+ */
+export type Provider = "openai" | "anthropic";
+
 // ========== Upstream Group 相关类型 ==========
 
 export interface UpstreamGroupCreate {
   name: string;
-  provider: string; // "openai" | "anthropic"
+  provider: Provider;
   strategy?: LoadBalancerStrategy;
   health_check_interval?: number; // seconds (default: 30)
   health_check_timeout?: number; // seconds (default: 10)
@@ -67,7 +72,7 @@ export interface UpstreamGroupCreate {
 
 export interface UpstreamGroupUpdate {
   name?: string;
-  provider?: string;
+  provider?: Provider;
   strategy?: LoadBalancerStrategy;
   health_check_interval?: number;
   health_check_timeout?: number;
@@ -78,7 +83,7 @@ export interface UpstreamGroupUpdate {
 export interface UpstreamGroupResponse {
   id: string; // UUID
   name: string;
-  provider: string;
+  provider: Provider;
   strategy: LoadBalancerStrategy;
   health_check_interval: number;
   health_check_timeout: number;
@@ -114,7 +119,7 @@ export type UpstreamHealth = UpstreamHealthResponse;
 
 export interface UpstreamCreate {
   name: string;
-  provider: string; // "openai" | "anthropic"
+  provider: Provider;
   base_url: string;
   api_key: string;
   description?: string | null;
@@ -126,7 +131,7 @@ export interface UpstreamCreate {
 
 export interface UpstreamUpdate {
   name?: string;
-  provider?: string;
+  provider?: Provider;
   base_url?: string;
   api_key?: string; // 留空表示不更新
   description?: string | null;
@@ -139,7 +144,7 @@ export interface UpstreamUpdate {
 export interface UpstreamResponse {
   id: string; // UUID
   name: string;
-  provider: string;
+  provider: Provider;
   base_url: string;
   description: string | null;
   api_key_masked: string; // "sk-***1234"

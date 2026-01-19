@@ -193,6 +193,7 @@ describe("upstream-crud", () => {
       vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
         id: "group-id",
         name: "test-group",
+        provider: "openai",
       } as unknown as PartialUpstreamGroup);
 
       const mockReturning = vi.fn().mockResolvedValue([
@@ -1038,6 +1039,7 @@ describe("upstream-crud", () => {
       vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
         id: "group-id",
         name: "test-group",
+        provider: "openai",
       } as unknown as PartialUpstreamGroup);
 
       const mockReturning = vi.fn().mockResolvedValue([

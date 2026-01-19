@@ -36,7 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreateUpstream, useUpdateUpstream } from "@/hooks/use-upstreams";
 import { useAllUpstreamGroups } from "@/hooks/use-upstream-groups";
-import type { Upstream } from "@/types/api";
+import type { Upstream, Provider } from "@/types/api";
 
 interface UpstreamFormDialogProps {
   upstream?: Upstream | null;
@@ -48,7 +48,7 @@ interface UpstreamFormDialogProps {
 // Schema for create mode - api_key is required
 const createUpstreamFormSchema = z.object({
   name: z.string().min(1).max(100),
-  provider: z.string().min(1),
+  provider: z.enum(["openai", "anthropic"]),
   base_url: z.string().url(),
   api_key: z.string().min(1),
   description: z.string().max(500),
@@ -59,7 +59,7 @@ const createUpstreamFormSchema = z.object({
 // Schema for edit mode - api_key is optional (leave empty to keep unchanged)
 const editUpstreamFormSchema = z.object({
   name: z.string().min(1).max(100),
-  provider: z.string().min(1),
+  provider: z.enum(["openai", "anthropic"]),
   base_url: z.string().url(),
   api_key: z.string(),
   description: z.string().max(500),
@@ -131,7 +131,7 @@ export function UpstreamFormDialog({
         // 只有填写了 api_key 才更新
         const updateData: {
           name: string;
-          provider: string;
+          provider: Provider;
           base_url: string;
           api_key?: string;
           description: string | null;
@@ -210,8 +210,6 @@ export function UpstreamFormDialog({
                   <SelectContent>
                     <SelectItem value="openai">OpenAI</SelectItem>
                     <SelectItem value="anthropic">Anthropic</SelectItem>
-                    <SelectItem value="azure">Azure OpenAI</SelectItem>
-                    <SelectItem value="gemini">Google Gemini</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />

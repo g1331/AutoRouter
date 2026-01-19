@@ -1,5 +1,9 @@
 import { eq, and } from "drizzle-orm";
 import { db, upstreams, upstreamGroups, type Upstream, type UpstreamGroup } from "../db";
+import { UpstreamGroupNotFoundError } from "./upstream-crud";
+
+// Re-export for backward compatibility
+export { UpstreamGroupNotFoundError };
 
 /**
  * Load balancing strategies for upstream selection.
@@ -17,16 +21,6 @@ export class NoHealthyUpstreamsError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "NoHealthyUpstreamsError";
-  }
-}
-
-/**
- * Error thrown when an upstream group is not found.
- */
-export class UpstreamGroupNotFoundError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "UpstreamGroupNotFoundError";
   }
 }
 

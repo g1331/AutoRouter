@@ -18,6 +18,7 @@ vi.mock("@/lib/db", () => ({
       },
       upstreams: {
         findFirst: vi.fn(),
+        findMany: vi.fn(),
       },
     },
   },
@@ -257,6 +258,10 @@ describe("proxy route load balancing with X-Upstream-Group header", () => {
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
     ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-anthropic-1" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([{ id: "up-anthropic-1" }]);
 
     const anthropicGroup = {
       id: "group-1",
@@ -445,6 +450,10 @@ describe("proxy route load balancing with X-Upstream-Group header", () => {
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
     ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-anthropic-1" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([{ id: "up-anthropic-1" }]);
 
     const anthropicGroup = {
       id: "group-1",
@@ -489,6 +498,14 @@ describe("proxy route load balancing with X-Upstream-Group header", () => {
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-anthropic-1" },
+      { upstreamId: "up-anthropic-2" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      { id: "up-anthropic-1" },
+      { id: "up-anthropic-2" },
     ]);
 
     const anthropicGroup = {
@@ -596,6 +613,14 @@ describe("proxy route load balancing with X-Upstream-Group header", () => {
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
     ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-anthropic-1" },
+      { upstreamId: "up-anthropic-2" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      { id: "up-anthropic-1" },
+      { id: "up-anthropic-2" },
+    ]);
 
     const anthropicGroup = {
       id: "group-1",
@@ -687,6 +712,14 @@ describe("proxy route load balancing with X-Upstream-Group header", () => {
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
     ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-anthropic-1" },
+      { upstreamId: "up-anthropic-2" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      { id: "up-anthropic-1" },
+      { id: "up-anthropic-2" },
+    ]);
 
     const anthropicGroup = {
       id: "group-1",
@@ -772,6 +805,14 @@ describe("proxy route load balancing with X-Upstream-Group header", () => {
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
     ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-anthropic-1" },
+      { upstreamId: "up-anthropic-2" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      { id: "up-anthropic-1" },
+      { id: "up-anthropic-2" },
+    ]);
 
     const anthropicGroup = {
       id: "group-1",
@@ -855,6 +896,16 @@ describe("proxy route load balancing with X-Upstream-Group header", () => {
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-anthropic-1" },
+      { upstreamId: "up-anthropic-2" },
+      { upstreamId: "up-anthropic-3" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      { id: "up-anthropic-1" },
+      { id: "up-anthropic-2" },
+      { id: "up-anthropic-3" },
     ]);
 
     const anthropicGroup = {
@@ -1006,6 +1057,10 @@ describe("proxy route load balancing with X-Upstream-Group header", () => {
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
     ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-openai-1" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([{ id: "up-openai-1" }]);
 
     const openaiGroup = {
       id: "group-2",

@@ -161,6 +161,12 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     if (!group) {
       throw new UpstreamGroupNotFoundError(`Upstream group not found: ${groupId}`);
     }
+    // Validate provider consistency
+    if (group.provider !== provider) {
+      throw new Error(
+        `Upstream provider '${provider}' does not match group provider '${group.provider}'`
+      );
+    }
     groupName = group.name;
   }
 
@@ -283,14 +289,19 @@ export async function updateUpstream(
   }
 
   // Decrypt key for masking
-  const decryptedKey = decrypt(updated.apiKeyEncrypted);
+  let apiKeyMasked: string;
+  try {
+    apiKeyMasked = maskApiKey(decrypt(updated.apiKeyEncrypted));
+  } catch {
+    apiKeyMasked = "***error***";
+  }
 
   return {
     id: updated.id,
     name: updated.name,
     provider: updated.provider,
     baseUrl: updated.baseUrl,
-    apiKeyMasked: maskApiKey(decryptedKey),
+    apiKeyMasked,
     isDefault: updated.isDefault,
     timeout: updated.timeout,
     isActive: updated.isActive,
@@ -545,6 +556,21 @@ export async function updateUpstreamGroup(
     }
   }
 
+  // Validate provider change doesn't conflict with existing upstreams
+  if (input.provider && input.provider !== existing.provider) {
+    const existingUpstreams = await db.query.upstreams.findMany({
+      where: eq(upstreams.groupId, groupId),
+      columns: { id: true, provider: true },
+    });
+
+    const incompatible = existingUpstreams.filter((u) => u.provider !== input.provider);
+    if (incompatible.length > 0) {
+      throw new Error(
+        `Cannot change group provider: ${incompatible.length} upstream(s) have incompatible provider`
+      );
+    }
+  }
+
   // Build update values
   const updateValues: Partial<typeof upstreamGroups.$inferInsert> = {
     updatedAt: new Date(),
@@ -709,6 +735,13 @@ export async function addUpstreamToGroup(
     throw new UpstreamGroupNotFoundError(`Upstream group not found: ${groupId}`);
   }
 
+  // Validate provider consistency
+  if (upstream.provider !== group.provider) {
+    throw new Error(
+      `Upstream provider '${upstream.provider}' does not match group provider '${group.provider}'`
+    );
+  }
+
   // Update upstream with group and weight
   const [updated] = await db
     .update(upstreams)
@@ -721,14 +754,19 @@ export async function addUpstreamToGroup(
     .returning();
 
   // Decrypt key for masking
-  const decryptedKey = decrypt(updated.apiKeyEncrypted);
+  let apiKeyMasked: string;
+  try {
+    apiKeyMasked = maskApiKey(decrypt(updated.apiKeyEncrypted));
+  } catch {
+    apiKeyMasked = "***error***";
+  }
 
   return {
     id: updated.id,
     name: updated.name,
     provider: updated.provider,
     baseUrl: updated.baseUrl,
-    apiKeyMasked: maskApiKey(decryptedKey),
+    apiKeyMasked,
     isDefault: updated.isDefault,
     timeout: updated.timeout,
     isActive: updated.isActive,
@@ -766,14 +804,19 @@ export async function removeUpstreamFromGroup(upstreamId: string): Promise<Upstr
     .returning();
 
   // Decrypt key for masking
-  const decryptedKey = decrypt(updated.apiKeyEncrypted);
+  let apiKeyMasked: string;
+  try {
+    apiKeyMasked = maskApiKey(decrypt(updated.apiKeyEncrypted));
+  } catch {
+    apiKeyMasked = "***error***";
+  }
 
   return {
     id: updated.id,
     name: updated.name,
     provider: updated.provider,
     baseUrl: updated.baseUrl,
-    apiKeyMasked: maskApiKey(decryptedKey),
+    apiKeyMasked,
     isDefault: updated.isDefault,
     timeout: updated.timeout,
     isActive: updated.isActive,

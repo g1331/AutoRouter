@@ -2,26 +2,10 @@ import { eq, and } from "drizzle-orm";
 import { db, upstreams, upstreamGroups, upstreamHealth } from "../db";
 import { decrypt } from "../utils/encryption";
 import { testUpstreamConnection, type TestUpstreamResult } from "./upstream-connection-tester";
+import { UpstreamNotFoundError, UpstreamGroupNotFoundError } from "./upstream-crud";
 
-/**
- * Error thrown when an upstream is not found.
- */
-export class UpstreamNotFoundError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "UpstreamNotFoundError";
-  }
-}
-
-/**
- * Error thrown when an upstream group is not found.
- */
-export class UpstreamGroupNotFoundError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "UpstreamGroupNotFoundError";
-  }
-}
+// Re-export for backward compatibility
+export { UpstreamNotFoundError, UpstreamGroupNotFoundError };
 
 /**
  * Health status response for an upstream.
@@ -273,8 +257,9 @@ export async function checkUpstreamHealth(
   let apiKey: string;
   try {
     apiKey = decrypt(upstream.apiKeyEncrypted);
-  } catch {
+  } catch (error) {
     // Cannot decrypt API key - mark as unhealthy
+    console.error(`Failed to decrypt API key for upstream ${upstreamId}:`, error);
     const healthStatus = await markUnhealthy(upstreamId, "Failed to decrypt API key");
     return {
       upstreamId,
@@ -338,6 +323,9 @@ export async function checkGroupHealth(groupId: string): Promise<HealthCheckResu
   });
 
   // Check all upstreams in parallel
+  // NOTE: No concurrency limit is applied here. For production environments with
+  // large groups, consider using p-limit (e.g., limit of 5-10 concurrent checks)
+  // to avoid overwhelming the system or upstream providers.
   const results = await Promise.all(
     groupUpstreams.map((upstream) => checkUpstreamHealth(upstream.id, group.healthCheckTimeout))
   );
