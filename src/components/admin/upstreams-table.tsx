@@ -2,7 +2,7 @@
 
 import { formatDistanceToNow } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
-import { Pencil, Trash2, Server, Play } from "lucide-react";
+import { Pencil, Trash2, Server, Play, CheckCircle, XCircle, HelpCircle } from "lucide-react";
 import type { Upstream } from "@/types/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -53,6 +53,35 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
+  const formatHealthStatus = (upstream: Upstream) => {
+    const healthStatus = upstream.health_status;
+
+    if (!healthStatus) {
+      return (
+        <div className="flex items-center gap-1.5">
+          <HelpCircle className="h-4 w-4 text-amber-600" aria-hidden="true" />
+          <span className="text-amber-600 text-sm">{t("healthUnknown")}</span>
+        </div>
+      );
+    }
+
+    if (healthStatus.is_healthy) {
+      return (
+        <div className="flex items-center gap-1.5">
+          <CheckCircle className="h-4 w-4 text-green-500" aria-hidden="true" />
+          <span className="text-green-500 text-sm">{t("healthHealthy")}</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center gap-1.5">
+        <XCircle className="h-4 w-4 text-status-error" aria-hidden="true" />
+        <span className="text-status-error text-sm">{t("healthUnhealthy")}</span>
+      </div>
+    );
+  };
+
   if (upstreams.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -72,8 +101,10 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
           <TableRow>
             <TableHead>{tCommon("name")}</TableHead>
             <TableHead>{t("tableProvider")}</TableHead>
+            <TableHead>{t("tableGroup")}</TableHead>
+            <TableHead>{t("tableWeight")}</TableHead>
+            <TableHead>{t("tableHealth")}</TableHead>
             <TableHead>{t("tableBaseUrl")}</TableHead>
-            <TableHead>{tCommon("description")}</TableHead>
             <TableHead>{tCommon("createdAt")}</TableHead>
             <TableHead className="text-right">{tCommon("actions")}</TableHead>
           </TableRow>
@@ -84,12 +115,22 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
               <TableCell className="font-medium">{upstream.name}</TableCell>
               <TableCell>{formatProvider(upstream.provider)}</TableCell>
               <TableCell>
+                {upstream.group_name ? (
+                  <Badge variant="secondary">{upstream.group_name}</Badge>
+                ) : (
+                  <span className="text-amber-700 text-sm">{t("noGroup")}</span>
+                )}
+              </TableCell>
+              <TableCell>
+                <code className="px-2 py-0.5 bg-surface-300 text-amber-500 rounded-cf-sm font-mono text-xs border border-divider">
+                  {upstream.weight}
+                </code>
+              </TableCell>
+              <TableCell>{formatHealthStatus(upstream)}</TableCell>
+              <TableCell>
                 <code className="px-2 py-1 bg-surface-300 text-amber-500 rounded-cf-sm font-mono text-xs border border-divider max-w-xs truncate inline-block">
                   {upstream.base_url}
                 </code>
-              </TableCell>
-              <TableCell className="max-w-xs truncate">
-                {upstream.description || <span className="text-amber-700">-</span>}
               </TableCell>
               <TableCell>
                 {formatDistanceToNow(new Date(upstream.created_at), {
