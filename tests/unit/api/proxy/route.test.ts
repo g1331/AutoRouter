@@ -250,7 +250,8 @@ describe("proxy route load balancing with X-Upstream-Group header", () => {
   it("should use load balancer when X-Upstream-Group header is provided", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
-    const { getUpstreamGroupByName, selectUpstream } = await import("@/lib/services/load-balancer");
+    const { getUpstreamGroupByName, selectUpstream, recordConnection, releaseConnection } =
+      await import("@/lib/services/load-balancer");
     const { markHealthy } = await import("@/lib/services/health-checker");
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
@@ -438,7 +439,8 @@ describe("proxy route load balancing with X-Upstream-Group header", () => {
   it("should return 503 when no healthy upstreams are available in group", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
-    const { getUpstreamGroupByName, selectUpstream } = await import("@/lib/services/load-balancer");
+    const { getUpstreamGroupByName, selectUpstream, NoHealthyUpstreamsError } =
+      await import("@/lib/services/load-balancer");
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
@@ -481,7 +483,8 @@ describe("proxy route load balancing with X-Upstream-Group header", () => {
   it("should perform failover to next upstream on 5xx error", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
-    const { getUpstreamGroupByName, selectUpstream } = await import("@/lib/services/load-balancer");
+    const { getUpstreamGroupByName, selectUpstream, recordConnection, releaseConnection } =
+      await import("@/lib/services/load-balancer");
     const { markHealthy, markUnhealthy } = await import("@/lib/services/health-checker");
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
@@ -677,7 +680,8 @@ describe("proxy route load balancing with X-Upstream-Group header", () => {
   it("should perform failover on connection error", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
-    const { getUpstreamGroupByName, selectUpstream } = await import("@/lib/services/load-balancer");
+    const { getUpstreamGroupByName, selectUpstream, releaseConnection } =
+      await import("@/lib/services/load-balancer");
     const { markHealthy, markUnhealthy } = await import("@/lib/services/health-checker");
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
@@ -995,7 +999,8 @@ describe("proxy route load balancing with X-Upstream-Group header", () => {
   it("should work with OpenAI group for chat/completions path", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
-    const { getUpstreamGroupByName, selectUpstream } = await import("@/lib/services/load-balancer");
+    const { getUpstreamGroupByName, selectUpstream, recordConnection, releaseConnection } =
+      await import("@/lib/services/load-balancer");
     const { markHealthy } = await import("@/lib/services/health-checker");
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
