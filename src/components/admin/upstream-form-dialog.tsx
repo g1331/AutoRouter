@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -354,12 +354,13 @@ export function UpstreamFormDialog({
  * M3 Create Upstream Button with Dialog
  */
 export function CreateUpstreamButton() {
+  const [open, setOpen] = useState(false);
   const t = useTranslations("upstreams");
 
   return (
     <UpstreamFormDialog
-      open={false}
-      onOpenChange={() => {}}
+      open={open}
+      onOpenChange={setOpen}
       trigger={
         <Button variant="tonal">
           <Plus className="h-4 w-4 mr-2" />
