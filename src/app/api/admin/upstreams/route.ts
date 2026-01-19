@@ -4,6 +4,7 @@ import { getPaginationParams, errorResponse } from "@/lib/utils/api-auth";
 import {
   listUpstreams,
   createUpstream,
+  UpstreamGroupNotFoundError,
   type UpstreamCreateInput,
 } from "@/lib/services/upstream-service";
 import { transformPaginatedUpstreams, transformUpstreamToApi } from "@/lib/utils/api-transformers";
@@ -17,6 +18,8 @@ const createUpstreamSchema = z.object({
   is_default: z.boolean().default(false),
   timeout: z.number().int().positive().default(60),
   config: z.string().nullable().optional(),
+  group_id: z.string().uuid().nullable().optional(),
+  weight: z.number().int().min(1).max(100).default(1),
 });
 
 /**
@@ -60,6 +63,8 @@ export async function POST(request: NextRequest) {
       isDefault: validated.is_default,
       timeout: validated.timeout,
       config: validated.config ?? null,
+      groupId: validated.group_id ?? null,
+      weight: validated.weight,
     };
 
     const result = await createUpstream(input);
@@ -71,6 +76,9 @@ export async function POST(request: NextRequest) {
         `Validation error: ${error.issues.map((e: { message: string }) => e.message).join(", ")}`,
         400
       );
+    }
+    if (error instanceof UpstreamGroupNotFoundError) {
+      return errorResponse("Upstream group not found", 404);
     }
     console.error("Failed to create upstream:", error);
     return errorResponse(error instanceof Error ? error.message : "Internal server error", 500);

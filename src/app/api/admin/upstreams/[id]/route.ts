@@ -6,6 +6,7 @@ import {
   updateUpstream,
   deleteUpstream,
   UpstreamNotFoundError,
+  UpstreamGroupNotFoundError,
   type UpstreamUpdateInput,
 } from "@/lib/services/upstream-service";
 import { transformUpstreamToApi } from "@/lib/utils/api-transformers";
@@ -22,6 +23,8 @@ const updateUpstreamSchema = z.object({
   timeout: z.number().int().positive().optional(),
   is_active: z.boolean().optional(),
   config: z.string().nullable().optional(),
+  group_id: z.string().uuid().nullable().optional(),
+  weight: z.number().int().min(1).max(100).optional(),
 });
 
 /**
@@ -71,6 +74,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     if (validated.timeout !== undefined) input.timeout = validated.timeout;
     if (validated.is_active !== undefined) input.isActive = validated.is_active;
     if (validated.config !== undefined) input.config = validated.config;
+    if (validated.group_id !== undefined) input.groupId = validated.group_id;
+    if (validated.weight !== undefined) input.weight = validated.weight;
 
     const result = await updateUpstream(id, input);
 
@@ -78,6 +83,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   } catch (error) {
     if (error instanceof UpstreamNotFoundError) {
       return errorResponse("Upstream not found", 404);
+    }
+    if (error instanceof UpstreamGroupNotFoundError) {
+      return errorResponse("Upstream group not found", 404);
     }
     if (error instanceof z.ZodError) {
       return errorResponse(
