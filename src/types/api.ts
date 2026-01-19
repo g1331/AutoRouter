@@ -96,7 +96,7 @@ export type UpstreamGroup = UpstreamGroupResponse;
 // ========== Upstream Health 相关类型 ==========
 
 export interface UpstreamHealthResponse {
-  id: string; // UUID
+  id?: string; // UUID
   upstream_id: string; // UUID
   upstream_name?: string; // Optional upstream name for display
   is_healthy: boolean;

@@ -230,9 +230,11 @@ function wrapStreamWithConnectionTracking(
   stream: ReadableStream<Uint8Array>,
   upstreamId: string
 ): ReadableStream<Uint8Array> {
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+
   return new ReadableStream({
     async start(controller) {
-      const reader = stream.getReader();
+      reader = stream.getReader();
       try {
         while (true) {
           const { done, value } = await reader.read();
@@ -251,11 +253,13 @@ function wrapStreamWithConnectionTracking(
         releaseConnection(upstreamId);
         void markUnhealthy(upstreamId, error instanceof Error ? error.message : "Stream error");
       } finally {
-        reader.releaseLock();
+        reader?.releaseLock();
+        reader = null;
       }
     },
-    cancel() {
-      // Stream was cancelled - release connection
+    async cancel(reason) {
+      // Propagate cancel to the upstream stream to avoid leaking work/connections.
+      await reader?.cancel(reason);
       releaseConnection(upstreamId);
     },
   });

@@ -180,8 +180,6 @@ export function UpstreamGroupDialog({
                   <SelectContent>
                     <SelectItem value="openai">OpenAI</SelectItem>
                     <SelectItem value="anthropic">Anthropic</SelectItem>
-                    <SelectItem value="azure">Azure OpenAI</SelectItem>
-                    <SelectItem value="gemini">Google Gemini</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormDescription>

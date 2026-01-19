@@ -239,6 +239,16 @@ export async function updateUpstream(
     if (!group) {
       throw new UpstreamGroupNotFoundError(`Upstream group not found: ${input.groupId}`);
     }
+
+    // Validate provider consistency if group has provider defined
+    if (group.provider) {
+      const effectiveProvider = input.provider ?? existing.provider;
+      if (group.provider !== effectiveProvider) {
+        throw new Error(
+          `Upstream provider '${effectiveProvider}' does not match group provider '${group.provider}'`
+        );
+      }
+    }
   }
 
   // Build update values
