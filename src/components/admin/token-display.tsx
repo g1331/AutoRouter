@@ -16,14 +16,36 @@ interface TokenDisplayProps {
 }
 
 /**
+ * Calculate effective cache read tokens.
+ * - Anthropic: uses cacheReadTokens directly
+ * - OpenAI: uses cachedTokens (equivalent to cache read)
+ */
+function getEffectiveCacheRead(cacheReadTokens: number, cachedTokens: number): number {
+  return cacheReadTokens > 0 ? cacheReadTokens : cachedTokens;
+}
+
+/**
  * Token Tooltip Content
  *
- * Shows detailed token breakdown in terminal style.
+ * Shows detailed token breakdown in terminal style with grouped sections.
  * Following Cassette Futurism design language:
  * - Mono font for data alignment
  * - amber-500 for primary values
  * - amber-700 for secondary/zero values
  * - status-info for cache-related values
+ *
+ * Display format:
+ * ```
+ * 输入: 4,002
+ * 输出: 501
+ *   推理: 300
+ *   回复: 201
+ * ---
+ * 缓存写入: 100
+ * 缓存读取: 3,000
+ * ---
+ * 总计: 4,503
+ * ```
  */
 function TokenTooltipContent({
   promptTokens,
@@ -36,97 +58,93 @@ function TokenTooltipContent({
 }: TokenDisplayProps) {
   const t = useTranslations("logs");
 
-  // Calculate new tokens (non-cached input tokens)
-  // Use Math.max to prevent negative values in case of data mismatch
-  const newInputTokens = Math.max(promptTokens - cachedTokens, 0);
-
-  // Build rows dynamically, hiding zero values for clarity (except core metrics)
-  const rows: Array<{
+  // Build main token rows (input, output, reasoning breakdown)
+  const mainRows: Array<{
     label: string;
     value: number;
     highlight: boolean;
-    isCache?: boolean;
     indent?: boolean;
-  }> = [{ label: t("tokenInput"), value: promptTokens, highlight: true }];
+  }> = [
+    { label: t("tokenInput"), value: promptTokens, highlight: true },
+    { label: t("tokenOutput"), value: completionTokens, highlight: true },
+  ];
 
-  // Only show cache breakdown if there's cached content
-  if (cachedTokens > 0) {
-    rows.push({
-      label: t("tokenCached"),
-      value: cachedTokens,
-      highlight: true,
-      isCache: true,
-      indent: true,
-    });
-    rows.push({ label: t("tokenNew"), value: newInputTokens, highlight: false, indent: true });
-  }
-
-  rows.push({ label: t("tokenOutput"), value: completionTokens, highlight: true });
-
-  // Only show reasoning if present (o1/o3 models)
+  // Show reasoning breakdown if present (OpenAI o1/o3 models)
+  // Split output into: reasoning + reply
   if (reasoningTokens > 0) {
-    rows.push({
+    const replyTokens = Math.max(completionTokens - reasoningTokens, 0);
+    mainRows.push({
       label: t("tokenReasoning"),
       value: reasoningTokens,
       highlight: false,
       indent: true,
     });
-  }
-
-  // Only show cache creation if present (Anthropic)
-  if (cacheCreationTokens > 0) {
-    rows.push({
-      label: t("tokenCacheWrite"),
-      value: cacheCreationTokens,
+    mainRows.push({
+      label: t("tokenReply"),
+      value: replyTokens,
       highlight: false,
-      isCache: true,
+      indent: true,
     });
   }
 
-  // Only show cache read if present and not already represented by cachedTokens
-  if (cacheReadTokens > 0 && cacheReadTokens !== cachedTokens) {
-    rows.push({
+  // Build cache token rows (separate group)
+  // - Anthropic: has both cache_creation_tokens and cache_read_tokens
+  // - OpenAI: only has cached_tokens (equivalent to cache read)
+  const cacheRows: Array<{
+    label: string;
+    value: number;
+  }> = [];
+
+  if (cacheCreationTokens > 0) {
+    cacheRows.push({
+      label: t("tokenCacheWrite"),
+      value: cacheCreationTokens,
+    });
+  }
+
+  const effectiveCacheRead = getEffectiveCacheRead(cacheReadTokens, cachedTokens);
+  if (effectiveCacheRead > 0) {
+    cacheRows.push({
       label: t("tokenCacheRead"),
-      value: cacheReadTokens,
-      highlight: false,
-      isCache: true,
+      value: effectiveCacheRead,
     });
   }
 
   return (
     <div className="min-w-[180px]">
+      {/* Header */}
       <div className="text-amber-500 uppercase tracking-wider mb-2 text-[10px] border-b border-amber-500/30 pb-1">
         {t("tokenDetails")}
       </div>
+
+      {/* Main token rows */}
       <div className="space-y-1">
-        {rows.map((row, idx) => (
+        {mainRows.map((row, idx) => (
           <div key={idx} className="flex justify-between items-center">
-            <span
-              className={
-                row.isCache
-                  ? "text-status-info"
-                  : row.highlight
-                    ? "text-amber-500"
-                    : "text-amber-700"
-              }
-            >
+            <span className={row.highlight ? "text-amber-500" : "text-amber-700"}>
               {row.indent ? "  " : ""}
               {row.label}
             </span>
-            <span
-              className={
-                row.isCache
-                  ? "text-status-info"
-                  : row.highlight
-                    ? "text-amber-500"
-                    : "text-amber-700"
-              }
-            >
+            <span className={row.highlight ? "text-amber-500" : "text-amber-700"}>
               {row.value.toLocaleString()}
             </span>
           </div>
         ))}
       </div>
+
+      {/* Cache rows (separate group with divider) */}
+      {cacheRows.length > 0 && (
+        <div className="border-t border-amber-500/20 mt-2 pt-2 space-y-1">
+          {cacheRows.map((row, idx) => (
+            <div key={idx} className="flex justify-between items-center">
+              <span className="text-status-info">{row.label}</span>
+              <span className="text-status-info">{row.value.toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Total */}
       <div className="border-t border-amber-500/30 mt-2 pt-2">
         <div className="flex justify-between items-center">
           <span className="text-amber-500 font-medium">{t("tokenTotal")}</span>
@@ -144,7 +162,7 @@ function TokenTooltipContent({
  * Follows Cassette Futurism design:
  * - Total in amber-500 (primary emphasis)
  * - Input/Output breakdown in amber-700 (secondary info)
- * - Cache indicator with Database icon in info color when cached_tokens > 0
+ * - Cache indicator with Database icon in info color when effectiveCacheRead > 0
  */
 export function TokenDisplay({
   promptTokens,
@@ -159,6 +177,8 @@ export function TokenDisplay({
     return <span className="text-amber-700">-</span>;
   }
 
+  const effectiveCacheRead = getEffectiveCacheRead(cacheReadTokens, cachedTokens);
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -170,10 +190,10 @@ export function TokenDisplay({
             {promptTokens.toLocaleString()} / {completionTokens.toLocaleString()}
           </span>
           {/* Row 3: Cache indicator - info color with Database icon */}
-          {cachedTokens > 0 && (
+          {effectiveCacheRead > 0 && (
             <Badge variant="info" className="mt-0.5 px-1.5 py-0 text-[9px] w-fit gap-0.5">
               <Database className="w-2.5 h-2.5" aria-hidden="true" />
-              {cachedTokens.toLocaleString()}
+              {effectiveCacheRead.toLocaleString()}
             </Badge>
           )}
         </div>
