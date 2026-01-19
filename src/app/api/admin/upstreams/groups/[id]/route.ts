@@ -2,33 +2,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateAdminAuth } from "@/lib/utils/auth";
 import { errorResponse } from "@/lib/utils/api-auth";
 import {
-  getUpstreamById,
-  updateUpstream,
-  deleteUpstream,
-  UpstreamNotFoundError,
+  getUpstreamGroupById,
+  updateUpstreamGroup,
+  deleteUpstreamGroup,
   UpstreamGroupNotFoundError,
-  type UpstreamUpdateInput,
+  type UpstreamGroupUpdateInput,
 } from "@/lib/services/upstream-service";
-import { transformUpstreamToApi } from "@/lib/utils/api-transformers";
+import { transformUpstreamGroupToApi } from "@/lib/utils/api-transformers";
 import { z } from "zod";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-const updateUpstreamSchema = z.object({
+const updateUpstreamGroupSchema = z.object({
   name: z.string().min(1).max(64).optional(),
   provider: z.enum(["openai", "anthropic"]).optional(),
-  base_url: z.string().url().optional(),
-  api_key: z.string().min(1).optional(),
-  is_default: z.boolean().optional(),
-  timeout: z.number().int().positive().optional(),
+  strategy: z.enum(["round_robin", "weighted", "least_connections"]).optional(),
+  health_check_interval: z.number().int().positive().optional(),
+  health_check_timeout: z.number().int().positive().optional(),
   is_active: z.boolean().optional(),
   config: z.string().nullable().optional(),
-  group_id: z.string().uuid().nullable().optional(),
-  weight: z.number().int().min(1).max(100).optional(),
 });
 
 /**
- * GET /api/admin/upstreams/[id] - Get upstream details
+ * GET /api/admin/upstreams/groups/[id] - Get upstream group details
  */
 export async function GET(request: NextRequest, context: RouteContext) {
   const authHeader = request.headers.get("authorization");
@@ -38,21 +34,21 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
   try {
     const { id } = await context.params;
-    const upstream = await getUpstreamById(id);
+    const group = await getUpstreamGroupById(id);
 
-    if (!upstream) {
-      return errorResponse("Upstream not found", 404);
+    if (!group) {
+      return errorResponse("Upstream group not found", 404);
     }
 
-    return NextResponse.json(transformUpstreamToApi(upstream));
+    return NextResponse.json(transformUpstreamGroupToApi(group));
   } catch (error) {
-    console.error("Failed to get upstream:", error);
+    console.error("Failed to get upstream group:", error);
     return errorResponse("Internal server error", 500);
   }
 }
 
 /**
- * PUT /api/admin/upstreams/[id] - Update upstream
+ * PUT /api/admin/upstreams/groups/[id] - Update upstream group
  */
 export async function PUT(request: NextRequest, context: RouteContext) {
   const authHeader = request.headers.get("authorization");
@@ -63,27 +59,23 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
     const body = await request.json();
-    const validated = updateUpstreamSchema.parse(body);
+    const validated = updateUpstreamGroupSchema.parse(body);
 
-    const input: UpstreamUpdateInput = {};
+    const input: UpstreamGroupUpdateInput = {};
     if (validated.name !== undefined) input.name = validated.name;
     if (validated.provider !== undefined) input.provider = validated.provider;
-    if (validated.base_url !== undefined) input.baseUrl = validated.base_url;
-    if (validated.api_key !== undefined) input.apiKey = validated.api_key;
-    if (validated.is_default !== undefined) input.isDefault = validated.is_default;
-    if (validated.timeout !== undefined) input.timeout = validated.timeout;
+    if (validated.strategy !== undefined) input.strategy = validated.strategy;
+    if (validated.health_check_interval !== undefined)
+      input.healthCheckInterval = validated.health_check_interval;
+    if (validated.health_check_timeout !== undefined)
+      input.healthCheckTimeout = validated.health_check_timeout;
     if (validated.is_active !== undefined) input.isActive = validated.is_active;
     if (validated.config !== undefined) input.config = validated.config;
-    if (validated.group_id !== undefined) input.groupId = validated.group_id;
-    if (validated.weight !== undefined) input.weight = validated.weight;
 
-    const result = await updateUpstream(id, input);
+    const result = await updateUpstreamGroup(id, input);
 
-    return NextResponse.json(transformUpstreamToApi(result));
+    return NextResponse.json(transformUpstreamGroupToApi(result));
   } catch (error) {
-    if (error instanceof UpstreamNotFoundError) {
-      return errorResponse("Upstream not found", 404);
-    }
     if (error instanceof UpstreamGroupNotFoundError) {
       return errorResponse("Upstream group not found", 404);
     }
@@ -93,13 +85,13 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         400
       );
     }
-    console.error("Failed to update upstream:", error);
+    console.error("Failed to update upstream group:", error);
     return errorResponse(error instanceof Error ? error.message : "Internal server error", 500);
   }
 }
 
 /**
- * DELETE /api/admin/upstreams/[id] - Delete upstream
+ * DELETE /api/admin/upstreams/groups/[id] - Delete upstream group
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
   const authHeader = request.headers.get("authorization");
@@ -109,13 +101,13 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
   try {
     const { id } = await context.params;
-    await deleteUpstream(id);
+    await deleteUpstreamGroup(id);
     return new NextResponse(null, { status: 204 });
   } catch (error) {
-    if (error instanceof UpstreamNotFoundError) {
-      return errorResponse("Upstream not found", 404);
+    if (error instanceof UpstreamGroupNotFoundError) {
+      return errorResponse("Upstream group not found", 404);
     }
-    console.error("Failed to delete upstream:", error);
+    console.error("Failed to delete upstream group:", error);
     return errorResponse("Internal server error", 500);
   }
 }

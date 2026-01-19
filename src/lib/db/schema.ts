@@ -36,6 +36,29 @@ export const apiKeys = pgTable(
 );
 
 /**
+ * Upstream groups for load balancing across multiple upstreams.
+ */
+export const upstreamGroups = pgTable(
+  "upstream_groups",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 64 }).notNull().unique(),
+    provider: varchar("provider", { length: 32 }).notNull(),
+    strategy: varchar("strategy", { length: 32 }).notNull().default("round_robin"),
+    healthCheckInterval: integer("health_check_interval").notNull().default(30),
+    healthCheckTimeout: integer("health_check_timeout").notNull().default(10),
+    isActive: boolean("is_active").notNull().default(true),
+    config: text("config"), // JSON stored as text
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("upstream_groups_name_idx").on(table.name),
+    index("upstream_groups_is_active_idx").on(table.isActive),
+  ]
+);
+
+/**
  * AI service provider upstream configurations.
  */
 export const upstreams = pgTable(
@@ -50,12 +73,39 @@ export const upstreams = pgTable(
     timeout: integer("timeout").notNull().default(60),
     isActive: boolean("is_active").notNull().default(true),
     config: text("config"), // JSON stored as text
+    groupId: uuid("group_id").references(() => upstreamGroups.id, { onDelete: "set null" }),
+    weight: integer("weight").notNull().default(1),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("upstreams_name_idx").on(table.name),
     index("upstreams_is_active_idx").on(table.isActive),
+    index("upstreams_group_id_idx").on(table.groupId),
+  ]
+);
+
+/**
+ * Health status tracking for upstreams.
+ */
+export const upstreamHealth = pgTable(
+  "upstream_health",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    upstreamId: uuid("upstream_id")
+      .notNull()
+      .unique()
+      .references(() => upstreams.id, { onDelete: "cascade" }),
+    isHealthy: boolean("is_healthy").notNull().default(true),
+    lastCheckAt: timestamp("last_check_at", { withTimezone: true }),
+    lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+    failureCount: integer("failure_count").notNull().default(0),
+    latencyMs: integer("latency_ms"),
+    errorMessage: text("error_message"),
+  },
+  (table) => [
+    index("upstream_health_upstream_id_idx").on(table.upstreamId),
+    index("upstream_health_is_healthy_idx").on(table.isHealthy),
   ]
 );
 
@@ -118,9 +168,28 @@ export const apiKeysRelations = relations(apiKeys, ({ many }) => ({
   requestLogs: many(requestLogs),
 }));
 
-export const upstreamsRelations = relations(upstreams, ({ many }) => ({
+export const upstreamGroupsRelations = relations(upstreamGroups, ({ many }) => ({
+  upstreams: many(upstreams),
+}));
+
+export const upstreamsRelations = relations(upstreams, ({ one, many }) => ({
+  group: one(upstreamGroups, {
+    fields: [upstreams.groupId],
+    references: [upstreamGroups.id],
+  }),
+  health: one(upstreamHealth, {
+    fields: [upstreams.id],
+    references: [upstreamHealth.upstreamId],
+  }),
   apiKeys: many(apiKeyUpstreams),
   requestLogs: many(requestLogs),
+}));
+
+export const upstreamHealthRelations = relations(upstreamHealth, ({ one }) => ({
+  upstream: one(upstreams, {
+    fields: [upstreamHealth.upstreamId],
+    references: [upstreams.id],
+  }),
 }));
 
 export const apiKeyUpstreamsRelations = relations(apiKeyUpstreams, ({ one }) => ({
@@ -148,8 +217,12 @@ export const requestLogsRelations = relations(requestLogs, ({ one }) => ({
 // Type exports
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type NewApiKey = typeof apiKeys.$inferInsert;
+export type UpstreamGroup = typeof upstreamGroups.$inferSelect;
+export type NewUpstreamGroup = typeof upstreamGroups.$inferInsert;
 export type Upstream = typeof upstreams.$inferSelect;
 export type NewUpstream = typeof upstreams.$inferInsert;
+export type UpstreamHealth = typeof upstreamHealth.$inferSelect;
+export type NewUpstreamHealth = typeof upstreamHealth.$inferInsert;
 export type ApiKeyUpstream = typeof apiKeyUpstreams.$inferSelect;
 export type NewApiKeyUpstream = typeof apiKeyUpstreams.$inferInsert;
 export type RequestLog = typeof requestLogs.$inferSelect;

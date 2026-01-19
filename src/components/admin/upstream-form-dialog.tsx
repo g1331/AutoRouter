@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -35,7 +35,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreateUpstream, useUpdateUpstream } from "@/hooks/use-upstreams";
-import type { Upstream } from "@/types/api";
+import { useAllUpstreamGroups } from "@/hooks/use-upstream-groups";
+import type { Upstream, Provider } from "@/types/api";
 
 interface UpstreamFormDialogProps {
   upstream?: Upstream | null;
@@ -43,6 +44,30 @@ interface UpstreamFormDialogProps {
   onOpenChange: (open: boolean) => void;
   trigger?: React.ReactNode;
 }
+
+// Schema for create mode - api_key is required
+const createUpstreamFormSchema = z.object({
+  name: z.string().min(1).max(100),
+  provider: z.enum(["openai", "anthropic"]),
+  base_url: z.string().url(),
+  api_key: z.string().min(1),
+  description: z.string().max(500),
+  group_id: z.string().nullable(),
+  weight: z.number().int().min(1).max(100),
+});
+
+// Schema for edit mode - api_key is optional (leave empty to keep unchanged)
+const editUpstreamFormSchema = z.object({
+  name: z.string().min(1).max(100),
+  provider: z.enum(["openai", "anthropic"]),
+  base_url: z.string().url(),
+  api_key: z.string(),
+  description: z.string().max(500),
+  group_id: z.string().nullable(),
+  weight: z.number().int().min(1).max(100),
+});
+
+type UpstreamFormData = z.infer<typeof createUpstreamFormSchema>;
 
 /**
  * M3 Upstream Form Dialog (Create/Edit)
@@ -56,30 +81,25 @@ export function UpstreamFormDialog({
   const isEdit = !!upstream;
   const createMutation = useCreateUpstream();
   const updateMutation = useUpdateUpstream();
+  const { data: upstreamGroups = [], isLoading: groupsLoading } = useAllUpstreamGroups();
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
 
-  // 编辑模式下 api_key 可选（留空表示不更新）
-  const upstreamFormSchema = z.object({
-    name: z.string().min(1, t("upstreamNameRequired")).max(100),
-    provider: z.string().min(1, t("providerRequired")),
-    base_url: z.string().url(t("baseUrlRequired")),
-    api_key: isEdit ? z.string().optional() : z.string().min(1, t("apiKeyRequired")),
-    description: z.string().max(500).optional(),
-  });
-
-  type UpstreamForm = z.infer<typeof upstreamFormSchema>;
-
-  const form = useForm<UpstreamForm>({
-    resolver: zodResolver(upstreamFormSchema),
+  const form = useForm<UpstreamFormData>({
+    resolver: zodResolver(isEdit ? editUpstreamFormSchema : createUpstreamFormSchema),
     defaultValues: {
       name: "",
       provider: "openai",
       base_url: "",
       api_key: "",
       description: "",
+      group_id: null,
+      weight: 1,
     },
   });
+
+  // Watch group_id to conditionally show weight field
+  const selectedGroupId = form.watch("group_id");
 
   useEffect(() => {
     if (upstream && open) {
@@ -89,6 +109,8 @@ export function UpstreamFormDialog({
         base_url: upstream.base_url,
         api_key: "",
         description: upstream.description || "",
+        group_id: upstream.group_id || null,
+        weight: upstream.weight ?? 1,
       });
     } else if (!open) {
       form.reset({
@@ -97,25 +119,31 @@ export function UpstreamFormDialog({
         base_url: "",
         api_key: "",
         description: "",
+        group_id: null,
+        weight: 1,
       });
     }
   }, [upstream, open, form]);
 
-  const onSubmit = async (data: UpstreamForm) => {
+  const onSubmit = async (data: UpstreamFormData) => {
     try {
       if (isEdit) {
         // 只有填写了 api_key 才更新
         const updateData: {
           name: string;
-          provider: string;
+          provider: Provider;
           base_url: string;
           api_key?: string;
           description: string | null;
+          group_id?: string | null;
+          weight?: number;
         } = {
           name: data.name,
           provider: data.provider,
           base_url: data.base_url,
           description: data.description || null,
+          group_id: data.group_id || null,
+          weight: data.weight,
         };
         if (data.api_key) {
           updateData.api_key = data.api_key;
@@ -132,6 +160,8 @@ export function UpstreamFormDialog({
           base_url: data.base_url,
           api_key: data.api_key!,
           description: data.description || null,
+          group_id: data.group_id || null,
+          weight: data.weight,
         });
       }
 
@@ -180,8 +210,6 @@ export function UpstreamFormDialog({
                   <SelectContent>
                     <SelectItem value="openai">OpenAI</SelectItem>
                     <SelectItem value="anthropic">Anthropic</SelectItem>
-                    <SelectItem value="azure">Azure OpenAI</SelectItem>
-                    <SelectItem value="gemini">Google Gemini</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -217,6 +245,61 @@ export function UpstreamFormDialog({
               </FormItem>
             )}
           />
+
+          <FormField
+            control={form.control}
+            name="group_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("group")}</FormLabel>
+                <Select
+                  onValueChange={(value) => field.onChange(value === "__none__" ? null : value)}
+                  value={field.value || "__none__"}
+                  disabled={groupsLoading}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder={t("groupPlaceholder")} />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="__none__">{t("noGroup")}</SelectItem>
+                    {upstreamGroups.map((group) => (
+                      <SelectItem key={group.id} value={group.id}>
+                        {group.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormDescription>{t("groupDescription")}</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {selectedGroupId && (
+            <FormField
+              control={form.control}
+              name="weight"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("weight")}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={100}
+                      placeholder={t("weightPlaceholder")}
+                      {...field}
+                      onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
+                    />
+                  </FormControl>
+                  <FormDescription>{t("weightDescription")}</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
 
           <FormField
             control={form.control}
@@ -271,12 +354,13 @@ export function UpstreamFormDialog({
  * M3 Create Upstream Button with Dialog
  */
 export function CreateUpstreamButton() {
+  const [open, setOpen] = useState(false);
   const t = useTranslations("upstreams");
 
   return (
     <UpstreamFormDialog
-      open={false}
-      onOpenChange={() => {}}
+      open={open}
+      onOpenChange={setOpen}
       trigger={
         <Button variant="tonal">
           <Plus className="h-4 w-4 mr-2" />

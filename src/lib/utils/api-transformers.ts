@@ -1,6 +1,8 @@
 import type {
   UpstreamResponse as ServiceUpstreamResponse,
   PaginatedUpstreams,
+  UpstreamGroupResponse as ServiceUpstreamGroupResponse,
+  PaginatedUpstreamGroups,
 } from "@/lib/services/upstream-crud";
 import type {
   ApiKeyListItem,
@@ -46,6 +48,9 @@ export interface UpstreamApiResponse {
   timeout: number;
   is_active: boolean;
   config: string | null;
+  group_id: string | null;
+  weight: number;
+  group_name: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -59,6 +64,23 @@ export interface PaginatedApiResponse<T> {
   page: number;
   page_size: number;
   total_pages: number;
+}
+
+/**
+ * API response format for upstream group (snake_case).
+ * This matches the actual response format used by the API routes.
+ */
+export interface UpstreamGroupApiResponse {
+  id: string;
+  name: string;
+  provider: string;
+  strategy: string;
+  health_check_interval: number;
+  health_check_timeout: number;
+  is_active: boolean;
+  config: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // ========== Upstream Transformers ==========
@@ -78,6 +100,9 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
     timeout: upstream.timeout,
     is_active: upstream.isActive,
     config: upstream.config,
+    group_id: upstream.groupId,
+    weight: upstream.weight,
+    group_name: upstream.groupName,
     created_at: upstream.createdAt.toISOString(),
     updated_at: upstream.updatedAt.toISOString(),
   };
@@ -91,6 +116,44 @@ export function transformPaginatedUpstreams(
 ): PaginatedApiResponse<UpstreamApiResponse> {
   return {
     items: result.items.map(transformUpstreamToApi),
+    total: result.total,
+    page: result.page,
+    page_size: result.pageSize,
+    total_pages: result.totalPages,
+  };
+}
+
+// ========== Upstream Group Transformers ==========
+
+/**
+ * Transform a service layer upstream group response to API response format.
+ * Converts camelCase properties to snake_case for API consistency.
+ */
+export function transformUpstreamGroupToApi(
+  group: ServiceUpstreamGroupResponse
+): UpstreamGroupApiResponse {
+  return {
+    id: group.id,
+    name: group.name,
+    provider: group.provider,
+    strategy: group.strategy,
+    health_check_interval: group.healthCheckInterval,
+    health_check_timeout: group.healthCheckTimeout,
+    is_active: group.isActive,
+    config: group.config,
+    created_at: group.createdAt.toISOString(),
+    updated_at: group.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * Transform paginated upstream group results to API response format.
+ */
+export function transformPaginatedUpstreamGroups(
+  result: PaginatedUpstreamGroups
+): PaginatedApiResponse<UpstreamGroupApiResponse> {
+  return {
+    items: result.items.map(transformUpstreamGroupToApi),
     total: result.total,
     page: result.page,
     page_size: result.pageSize,

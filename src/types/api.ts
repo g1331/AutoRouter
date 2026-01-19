@@ -46,38 +46,115 @@ export interface APIKeyRevealResponse {
   name: string;
 }
 
+// ========== Load Balancing 相关类型 ==========
+
+/**
+ * Load balancer strategy for upstream groups
+ */
+export type LoadBalancerStrategy = "round_robin" | "weighted" | "least_connections";
+
+/**
+ * Supported AI provider types
+ */
+export type Provider = "openai" | "anthropic";
+
+// ========== Upstream Group 相关类型 ==========
+
+export interface UpstreamGroupCreate {
+  name: string;
+  provider: Provider;
+  strategy?: LoadBalancerStrategy;
+  health_check_interval?: number; // seconds (default: 30)
+  health_check_timeout?: number; // seconds (default: 10)
+  is_active?: boolean;
+  config?: string | null; // JSON config
+}
+
+export interface UpstreamGroupUpdate {
+  name?: string;
+  provider?: Provider;
+  strategy?: LoadBalancerStrategy;
+  health_check_interval?: number;
+  health_check_timeout?: number;
+  is_active?: boolean;
+  config?: string | null;
+}
+
+export interface UpstreamGroupResponse {
+  id: string; // UUID
+  name: string;
+  provider: Provider;
+  strategy: LoadBalancerStrategy;
+  health_check_interval: number;
+  health_check_timeout: number;
+  is_active: boolean;
+  config: string | null;
+  upstream_count?: number; // Optional count of upstreams in group
+  healthy_count?: number; // Optional count of healthy upstreams
+  created_at: string; // ISO 8601 date string
+  updated_at: string; // ISO 8601 date string
+}
+
+// Type alias for convenience
+export type UpstreamGroup = UpstreamGroupResponse;
+
+// ========== Upstream Health 相关类型 ==========
+
+export interface UpstreamHealthResponse {
+  id?: string; // UUID
+  upstream_id: string; // UUID
+  upstream_name?: string; // Optional upstream name for display
+  is_healthy: boolean;
+  last_check_at: string | null; // ISO 8601 date string
+  last_success_at: string | null; // ISO 8601 date string
+  failure_count: number;
+  latency_ms: number | null;
+  error_message: string | null;
+}
+
+// Type alias for convenience
+export type UpstreamHealth = UpstreamHealthResponse;
+
 // ========== Upstream 相关类型 ==========
 
 export interface UpstreamCreate {
   name: string;
-  provider: string; // "openai" | "anthropic"
+  provider: Provider;
   base_url: string;
   api_key: string;
   description?: string | null;
   is_default?: boolean;
   timeout?: number;
+  group_id?: string | null; // UUID - optional group membership
+  weight?: number; // Load balancing weight (default: 1)
 }
 
 export interface UpstreamUpdate {
   name?: string;
-  provider?: string;
+  provider?: Provider;
   base_url?: string;
   api_key?: string; // 留空表示不更新
   description?: string | null;
   is_default?: boolean;
   timeout?: number;
+  group_id?: string | null; // UUID - optional group membership (null to remove from group)
+  weight?: number; // Load balancing weight
 }
 
 export interface UpstreamResponse {
   id: string; // UUID
   name: string;
-  provider: string;
+  provider: Provider;
   base_url: string;
   description: string | null;
   api_key_masked: string; // "sk-***1234"
   is_default: boolean;
   timeout: number;
   is_active: boolean;
+  group_id: string | null; // UUID - group membership
+  weight: number; // Load balancing weight
+  group_name?: string | null; // Group name for display (populated when grouped)
+  health_status?: UpstreamHealthResponse | null; // Health status (populated when requested)
   created_at: string; // ISO 8601 date string
   updated_at: string; // ISO 8601 date string
 }
@@ -146,6 +223,7 @@ export interface PaginatedResponse<T> {
 
 export type PaginatedAPIKeysResponse = PaginatedResponse<APIKeyResponse>;
 export type PaginatedUpstreamsResponse = PaginatedResponse<UpstreamResponse>;
+export type PaginatedUpstreamGroupsResponse = PaginatedResponse<UpstreamGroupResponse>;
 export type PaginatedRequestLogsResponse = PaginatedResponse<RequestLogResponse>;
 
 // ========== 错误响应类型 ==========

@@ -6,8 +6,17 @@ import type {
   UpstreamUpdate,
   PaginatedUpstreamsResponse,
   TestUpstreamResponse,
+  UpstreamHealthResponse,
 } from "@/types/api";
 import { toast } from "sonner";
+
+/**
+ * Response type for upstream health endpoint
+ */
+interface UpstreamHealthListResponse {
+  data: UpstreamHealthResponse[];
+  total: number;
+}
 
 /**
  * Fetch paginated upstreams
@@ -152,5 +161,32 @@ export function useTestUpstream() {
   return useMutation({
     mutationFn: (id: string) =>
       apiClient.post<TestUpstreamResponse>(`/admin/upstreams/${id}/test`, {}),
+  });
+}
+
+/**
+ * Fetch upstream health status
+ * @param groupId - Optional group ID to filter by
+ * @param activeOnly - Whether to only include active upstreams (default: true)
+ */
+export function useUpstreamHealth(groupId?: string, activeOnly: boolean = true) {
+  const { apiClient } = useAuth();
+
+  return useQuery({
+    queryKey: ["upstreams", "health", groupId, activeOnly],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (groupId) {
+        params.set("group_id", groupId);
+      }
+      if (!activeOnly) {
+        params.set("active_only", "false");
+      }
+      const queryString = params.toString();
+      const url = `/admin/upstreams/health${queryString ? `?${queryString}` : ""}`;
+      return apiClient.get<UpstreamHealthListResponse>(url);
+    },
+    // Refetch health status every 30 seconds
+    refetchInterval: 30000,
   });
 }
