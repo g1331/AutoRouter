@@ -1,12 +1,5 @@
 import { eq, and } from "drizzle-orm";
-import {
-  db,
-  upstreams,
-  upstreamGroups,
-  upstreamHealth,
-  type Upstream,
-  type UpstreamGroup,
-} from "../db";
+import { db, upstreams, upstreamGroups, type Upstream, type UpstreamGroup } from "../db";
 
 /**
  * Load balancing strategies for upstream selection.

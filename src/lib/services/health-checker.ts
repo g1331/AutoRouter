@@ -1,12 +1,5 @@
 import { eq, and } from "drizzle-orm";
-import {
-  db,
-  upstreams,
-  upstreamGroups,
-  upstreamHealth,
-  type Upstream,
-  type UpstreamHealth,
-} from "../db";
+import { db, upstreams, upstreamGroups, upstreamHealth } from "../db";
 import { decrypt } from "../utils/encryption";
 import { testUpstreamConnection, type TestUpstreamResult } from "./upstream-connection-tester";
 
@@ -69,12 +62,6 @@ export interface HealthCheckResult {
   /** Updated health status */
   healthStatus: HealthStatus;
 }
-
-/**
- * Default failure threshold before marking upstream as unhealthy.
- * Can be overridden via group configuration.
- */
-const DEFAULT_FAILURE_THRESHOLD = 3;
 
 /**
  * Get the current health status for an upstream.
