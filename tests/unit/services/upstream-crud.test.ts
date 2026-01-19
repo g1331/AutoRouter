@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { maskApiKey, UpstreamNotFoundError } from "@/lib/services/upstream-crud";
+import {
+  maskApiKey,
+  UpstreamNotFoundError,
+  UpstreamGroupNotFoundError,
+} from "@/lib/services/upstream-crud";
 
 // Type helpers for mocking Drizzle ORM query builder
 type MockInsertChain = {
@@ -24,10 +28,20 @@ type PartialUpstream = {
   [key: string]: unknown;
 };
 
+type PartialUpstreamGroup = {
+  id: string;
+  name: string;
+  [key: string]: unknown;
+};
+
 vi.mock("@/lib/db", () => ({
   db: {
     query: {
       upstreams: {
+        findFirst: vi.fn(),
+        findMany: vi.fn(),
+      },
+      upstreamGroups: {
         findFirst: vi.fn(),
         findMany: vi.fn(),
       },
@@ -52,6 +66,7 @@ vi.mock("@/lib/db", () => ({
     })),
   },
   upstreams: {},
+  upstreamGroups: {},
 }));
 
 vi.mock("@/lib/utils/encryption", () => ({
@@ -107,6 +122,23 @@ describe("upstream-crud", () => {
     });
   });
 
+  describe("UpstreamGroupNotFoundError", () => {
+    it("should have correct name", () => {
+      const error = new UpstreamGroupNotFoundError("upstream group not found");
+      expect(error.name).toBe("UpstreamGroupNotFoundError");
+    });
+
+    it("should have correct message", () => {
+      const error = new UpstreamGroupNotFoundError("Upstream group not found: test-id");
+      expect(error.message).toBe("Upstream group not found: test-id");
+    });
+
+    it("should be instanceof Error", () => {
+      const error = new UpstreamGroupNotFoundError("test");
+      expect(error).toBeInstanceOf(Error);
+    });
+  });
+
   describe("createUpstream", () => {
     it("should create upstream with encrypted API key", async () => {
       const { createUpstream } = await import("@/lib/services/upstream-crud");
@@ -126,6 +158,8 @@ describe("upstream-crud", () => {
           timeout: 60,
           isActive: true,
           config: null,
+          groupId: null,
+          weight: 1,
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -147,6 +181,56 @@ describe("upstream-crud", () => {
       expect(encrypt).toHaveBeenCalledWith("sk-test-key");
       expect(result.name).toBe("test-upstream");
       expect(result.apiKeyMasked).toBe("sk-***-key");
+      expect(result.groupId).toBeNull();
+      expect(result.weight).toBe(1);
+    });
+
+    it("should create upstream with groupId and weight", async () => {
+      const { createUpstream } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(null);
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
+        id: "group-id",
+        name: "test-group",
+      } as unknown as PartialUpstreamGroup);
+
+      const mockReturning = vi.fn().mockResolvedValue([
+        {
+          id: "test-id",
+          name: "test-upstream",
+          provider: "openai",
+          baseUrl: "https://api.openai.com",
+          apiKeyEncrypted: "encrypted:sk-test-key",
+          isDefault: false,
+          timeout: 60,
+          isActive: true,
+          config: null,
+          groupId: "group-id",
+          weight: 5,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      vi.mocked(db.insert).mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: mockReturning,
+        }),
+      } as unknown as MockInsertChain);
+
+      const result = await createUpstream({
+        name: "test-upstream",
+        provider: "openai",
+        baseUrl: "https://api.openai.com",
+        apiKey: "sk-test-key",
+        groupId: "group-id",
+        weight: 5,
+      });
+
+      expect(result.groupId).toBe("group-id");
+      expect(result.weight).toBe(5);
+      expect(result.groupName).toBe("test-group");
     });
 
     it("should throw error if name already exists", async () => {
@@ -166,6 +250,24 @@ describe("upstream-crud", () => {
           apiKey: "sk-test-key",
         })
       ).rejects.toThrow("Upstream with name 'test-upstream' already exists");
+    });
+
+    it("should throw UpstreamGroupNotFoundError if groupId is invalid", async () => {
+      const { createUpstream } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(null);
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
+
+      await expect(
+        createUpstream({
+          name: "test-upstream",
+          provider: "openai",
+          baseUrl: "https://api.openai.com",
+          apiKey: "sk-test-key",
+          groupId: "invalid-group-id",
+        })
+      ).rejects.toThrow(UpstreamGroupNotFoundError);
     });
   });
 
@@ -195,6 +297,8 @@ describe("upstream-crud", () => {
           timeout: 60,
           isActive: true,
           config: null,
+          groupId: null,
+          weight: 1,
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -211,6 +315,63 @@ describe("upstream-crud", () => {
       const result = await updateUpstream("test-id", { name: "updated-upstream" });
 
       expect(result.name).toBe("updated-upstream");
+    });
+
+    it("should update upstream with groupId and weight", async () => {
+      const { updateUpstream } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValueOnce({
+        id: "test-id",
+        name: "test-upstream",
+        provider: "openai",
+        baseUrl: "https://api.openai.com",
+        apiKeyEncrypted: "encrypted:sk-test-key",
+        groupId: null,
+        weight: 1,
+      } as unknown as PartialUpstream);
+
+      vi.mocked(db.query.upstreamGroups.findFirst)
+        .mockResolvedValueOnce({
+          id: "group-id",
+          name: "test-group",
+        } as unknown as PartialUpstreamGroup)
+        .mockResolvedValueOnce({
+          id: "group-id",
+          name: "test-group",
+        } as unknown as PartialUpstreamGroup);
+
+      const mockReturning = vi.fn().mockResolvedValue([
+        {
+          id: "test-id",
+          name: "test-upstream",
+          provider: "openai",
+          baseUrl: "https://api.openai.com",
+          apiKeyEncrypted: "encrypted:sk-test-key",
+          isDefault: false,
+          timeout: 60,
+          isActive: true,
+          config: null,
+          groupId: "group-id",
+          weight: 10,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      vi.mocked(db.update).mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: mockReturning,
+          }),
+        }),
+      } as unknown as MockUpdateChain);
+
+      const result = await updateUpstream("test-id", { groupId: "group-id", weight: 10 });
+
+      expect(result.groupId).toBe("group-id");
+      expect(result.weight).toBe(10);
+      expect(result.groupName).toBe("test-group");
     });
 
     it("should throw UpstreamNotFoundError if upstream does not exist", async () => {
@@ -240,6 +401,25 @@ describe("upstream-crud", () => {
 
       await expect(updateUpstream("test-id", { name: "existing-name" })).rejects.toThrow(
         "Upstream with name 'existing-name' already exists"
+      );
+    });
+
+    it("should throw UpstreamGroupNotFoundError if groupId is invalid", async () => {
+      const { updateUpstream } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValueOnce({
+        id: "test-id",
+        name: "test-upstream",
+        provider: "openai",
+        baseUrl: "https://api.openai.com",
+        apiKeyEncrypted: "encrypted:sk-test-key",
+      } as unknown as PartialUpstream);
+
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
+
+      await expect(updateUpstream("test-id", { groupId: "invalid-group-id" })).rejects.toThrow(
+        UpstreamGroupNotFoundError
       );
     });
   });
@@ -294,6 +474,9 @@ describe("upstream-crud", () => {
           timeout: 60,
           isActive: true,
           config: null,
+          groupId: null,
+          weight: 1,
+          group: null,
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -307,6 +490,9 @@ describe("upstream-crud", () => {
           timeout: 60,
           isActive: true,
           config: null,
+          groupId: "group-id",
+          weight: 5,
+          group: { id: "group-id", name: "test-group" },
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -319,6 +505,10 @@ describe("upstream-crud", () => {
       expect(result.page).toBe(1);
       expect(result.pageSize).toBe(20);
       expect(result.totalPages).toBe(1);
+      expect(result.items[0].groupId).toBeNull();
+      expect(result.items[0].groupName).toBeNull();
+      expect(result.items[1].groupId).toBe("group-id");
+      expect(result.items[1].groupName).toBe("test-group");
     });
 
     it("should handle decryption errors gracefully", async () => {
@@ -341,6 +531,9 @@ describe("upstream-crud", () => {
           timeout: 60,
           isActive: true,
           config: null,
+          groupId: null,
+          weight: 1,
+          group: null,
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -374,6 +567,9 @@ describe("upstream-crud", () => {
         timeout: 60,
         isActive: true,
         config: null,
+        groupId: "group-id",
+        weight: 3,
+        group: { id: "group-id", name: "test-group" },
         createdAt: new Date(),
         updatedAt: new Date(),
       } as unknown as PartialUpstream);
@@ -383,6 +579,9 @@ describe("upstream-crud", () => {
       expect(result).not.toBeNull();
       expect(result?.name).toBe("test-upstream");
       expect(result?.apiKeyMasked).toBe("sk-***-key");
+      expect(result?.groupId).toBe("group-id");
+      expect(result?.weight).toBe(3);
+      expect(result?.groupName).toBe("test-group");
     });
 
     it("should return null if upstream not found", async () => {
@@ -484,6 +683,658 @@ describe("upstream-crud", () => {
       const result = getDecryptedApiKey(upstream);
 
       expect(result).toBe("sk-test-key");
+    });
+  });
+
+  // ========================================
+  // Upstream Group CRUD Tests
+  // ========================================
+
+  describe("createUpstreamGroup", () => {
+    it("should create upstream group with default values", async () => {
+      const { createUpstreamGroup } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
+
+      const mockReturning = vi.fn().mockResolvedValue([
+        {
+          id: "group-id",
+          name: "test-group",
+          provider: "openai",
+          strategy: "round_robin",
+          healthCheckInterval: 30,
+          healthCheckTimeout: 10,
+          isActive: true,
+          config: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      vi.mocked(db.insert).mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: mockReturning,
+        }),
+      } as unknown as MockInsertChain);
+
+      const result = await createUpstreamGroup({
+        name: "test-group",
+        provider: "openai",
+      });
+
+      expect(result.name).toBe("test-group");
+      expect(result.provider).toBe("openai");
+      expect(result.strategy).toBe("round_robin");
+      expect(result.healthCheckInterval).toBe(30);
+      expect(result.healthCheckTimeout).toBe(10);
+      expect(result.isActive).toBe(true);
+    });
+
+    it("should create upstream group with custom values", async () => {
+      const { createUpstreamGroup } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
+
+      const mockReturning = vi.fn().mockResolvedValue([
+        {
+          id: "group-id",
+          name: "weighted-group",
+          provider: "anthropic",
+          strategy: "weighted",
+          healthCheckInterval: 60,
+          healthCheckTimeout: 15,
+          isActive: true,
+          config: '{"failoverRetries":3}',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      vi.mocked(db.insert).mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: mockReturning,
+        }),
+      } as unknown as MockInsertChain);
+
+      const result = await createUpstreamGroup({
+        name: "weighted-group",
+        provider: "anthropic",
+        strategy: "weighted",
+        healthCheckInterval: 60,
+        healthCheckTimeout: 15,
+        config: '{"failoverRetries":3}',
+      });
+
+      expect(result.name).toBe("weighted-group");
+      expect(result.strategy).toBe("weighted");
+      expect(result.healthCheckInterval).toBe(60);
+      expect(result.healthCheckTimeout).toBe(15);
+      expect(result.config).toBe('{"failoverRetries":3}');
+    });
+
+    it("should throw error if group name already exists", async () => {
+      const { createUpstreamGroup } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
+        id: "existing-id",
+        name: "test-group",
+      } as unknown as PartialUpstreamGroup);
+
+      await expect(
+        createUpstreamGroup({
+          name: "test-group",
+          provider: "openai",
+        })
+      ).rejects.toThrow("Upstream group with name 'test-group' already exists");
+    });
+  });
+
+  describe("updateUpstreamGroup", () => {
+    it("should update upstream group", async () => {
+      const { updateUpstreamGroup } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreamGroups.findFirst)
+        .mockResolvedValueOnce({
+          id: "group-id",
+          name: "test-group",
+          provider: "openai",
+          strategy: "round_robin",
+        } as unknown as PartialUpstreamGroup)
+        .mockResolvedValueOnce(null);
+
+      const mockReturning = vi.fn().mockResolvedValue([
+        {
+          id: "group-id",
+          name: "updated-group",
+          provider: "openai",
+          strategy: "weighted",
+          healthCheckInterval: 30,
+          healthCheckTimeout: 10,
+          isActive: true,
+          config: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      vi.mocked(db.update).mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: mockReturning,
+          }),
+        }),
+      } as unknown as MockUpdateChain);
+
+      const result = await updateUpstreamGroup("group-id", {
+        name: "updated-group",
+        strategy: "weighted",
+      });
+
+      expect(result.name).toBe("updated-group");
+      expect(result.strategy).toBe("weighted");
+    });
+
+    it("should throw UpstreamGroupNotFoundError if group does not exist", async () => {
+      const { updateUpstreamGroup } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
+
+      await expect(
+        updateUpstreamGroup("nonexistent-id", { name: "new-name" })
+      ).rejects.toThrow(UpstreamGroupNotFoundError);
+    });
+
+    it("should throw error if new name already exists", async () => {
+      const { updateUpstreamGroup } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreamGroups.findFirst)
+        .mockResolvedValueOnce({
+          id: "group-id",
+          name: "test-group",
+        } as unknown as PartialUpstreamGroup)
+        .mockResolvedValueOnce({
+          id: "other-group-id",
+          name: "existing-name",
+        } as unknown as PartialUpstreamGroup);
+
+      await expect(
+        updateUpstreamGroup("group-id", { name: "existing-name" })
+      ).rejects.toThrow("Upstream group with name 'existing-name' already exists");
+    });
+  });
+
+  describe("deleteUpstreamGroup", () => {
+    it("should delete upstream group", async () => {
+      const { deleteUpstreamGroup } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
+        id: "group-id",
+        name: "test-group",
+      } as unknown as PartialUpstreamGroup);
+
+      const mockWhere = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(db.delete).mockReturnValue({
+        where: mockWhere,
+      } as unknown as MockDeleteChain);
+
+      await deleteUpstreamGroup("group-id");
+
+      expect(mockWhere).toHaveBeenCalled();
+    });
+
+    it("should throw UpstreamGroupNotFoundError if group does not exist", async () => {
+      const { deleteUpstreamGroup } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
+
+      await expect(deleteUpstreamGroup("nonexistent-id")).rejects.toThrow(
+        UpstreamGroupNotFoundError
+      );
+    });
+  });
+
+  describe("listUpstreamGroups", () => {
+    it("should list upstream groups with pagination", async () => {
+      const { listUpstreamGroups } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.select).mockReturnValue({
+        from: vi.fn().mockResolvedValue([{ value: 2 }]),
+      } as unknown as MockSelectChain);
+
+      vi.mocked(db.query.upstreamGroups.findMany).mockResolvedValue([
+        {
+          id: "group-1",
+          name: "openai-group",
+          provider: "openai",
+          strategy: "round_robin",
+          healthCheckInterval: 30,
+          healthCheckTimeout: 10,
+          isActive: true,
+          config: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: "group-2",
+          name: "anthropic-group",
+          provider: "anthropic",
+          strategy: "weighted",
+          healthCheckInterval: 60,
+          healthCheckTimeout: 15,
+          isActive: true,
+          config: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ] as unknown as PartialUpstreamGroup[]);
+
+      const result = await listUpstreamGroups(1, 20);
+
+      expect(result.items).toHaveLength(2);
+      expect(result.total).toBe(2);
+      expect(result.page).toBe(1);
+      expect(result.pageSize).toBe(20);
+      expect(result.totalPages).toBe(1);
+      expect(result.items[0].name).toBe("openai-group");
+      expect(result.items[1].name).toBe("anthropic-group");
+    });
+  });
+
+  describe("getUpstreamGroupById", () => {
+    it("should return upstream group by id", async () => {
+      const { getUpstreamGroupById } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
+        id: "group-id",
+        name: "test-group",
+        provider: "openai",
+        strategy: "round_robin",
+        healthCheckInterval: 30,
+        healthCheckTimeout: 10,
+        isActive: true,
+        config: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as unknown as PartialUpstreamGroup);
+
+      const result = await getUpstreamGroupById("group-id");
+
+      expect(result).not.toBeNull();
+      expect(result?.name).toBe("test-group");
+      expect(result?.strategy).toBe("round_robin");
+    });
+
+    it("should return null if group not found", async () => {
+      const { getUpstreamGroupById } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
+
+      const result = await getUpstreamGroupById("nonexistent-id");
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("getUpstreamGroupByName", () => {
+    it("should return upstream group by name", async () => {
+      const { getUpstreamGroupByName } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
+        id: "group-id",
+        name: "test-group",
+        provider: "openai",
+      } as unknown as PartialUpstreamGroup);
+
+      const result = await getUpstreamGroupByName("test-group");
+
+      expect(result).not.toBeNull();
+      expect(result?.name).toBe("test-group");
+    });
+
+    it("should return null if group not found", async () => {
+      const { getUpstreamGroupByName } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
+
+      const result = await getUpstreamGroupByName("nonexistent");
+
+      expect(result).toBeNull();
+    });
+  });
+
+  // ========================================
+  // Group Membership Tests
+  // ========================================
+
+  describe("addUpstreamToGroup", () => {
+    it("should add upstream to group with default weight", async () => {
+      const { addUpstreamToGroup } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+      const { decrypt } = await import("@/lib/utils/encryption");
+
+      vi.mocked(decrypt).mockImplementation((value: string) => value.replace("encrypted:", ""));
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue({
+        id: "upstream-id",
+        name: "test-upstream",
+        provider: "openai",
+        baseUrl: "https://api.openai.com",
+        apiKeyEncrypted: "encrypted:sk-test-key",
+      } as unknown as PartialUpstream);
+
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
+        id: "group-id",
+        name: "test-group",
+      } as unknown as PartialUpstreamGroup);
+
+      const mockReturning = vi.fn().mockResolvedValue([
+        {
+          id: "upstream-id",
+          name: "test-upstream",
+          provider: "openai",
+          baseUrl: "https://api.openai.com",
+          apiKeyEncrypted: "encrypted:sk-test-key",
+          isDefault: false,
+          timeout: 60,
+          isActive: true,
+          config: null,
+          groupId: "group-id",
+          weight: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      vi.mocked(db.update).mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: mockReturning,
+          }),
+        }),
+      } as unknown as MockUpdateChain);
+
+      const result = await addUpstreamToGroup("upstream-id", "group-id");
+
+      expect(result.groupId).toBe("group-id");
+      expect(result.weight).toBe(1);
+      expect(result.groupName).toBe("test-group");
+    });
+
+    it("should add upstream to group with custom weight", async () => {
+      const { addUpstreamToGroup } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+      const { decrypt } = await import("@/lib/utils/encryption");
+
+      vi.mocked(decrypt).mockImplementation((value: string) => value.replace("encrypted:", ""));
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue({
+        id: "upstream-id",
+        name: "test-upstream",
+      } as unknown as PartialUpstream);
+
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
+        id: "group-id",
+        name: "test-group",
+      } as unknown as PartialUpstreamGroup);
+
+      const mockReturning = vi.fn().mockResolvedValue([
+        {
+          id: "upstream-id",
+          name: "test-upstream",
+          provider: "openai",
+          baseUrl: "https://api.openai.com",
+          apiKeyEncrypted: "encrypted:sk-test-key",
+          isDefault: false,
+          timeout: 60,
+          isActive: true,
+          config: null,
+          groupId: "group-id",
+          weight: 10,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      vi.mocked(db.update).mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: mockReturning,
+          }),
+        }),
+      } as unknown as MockUpdateChain);
+
+      const result = await addUpstreamToGroup("upstream-id", "group-id", 10);
+
+      expect(result.weight).toBe(10);
+    });
+
+    it("should throw UpstreamNotFoundError if upstream does not exist", async () => {
+      const { addUpstreamToGroup } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(null);
+
+      await expect(addUpstreamToGroup("nonexistent-id", "group-id")).rejects.toThrow(
+        UpstreamNotFoundError
+      );
+    });
+
+    it("should throw UpstreamGroupNotFoundError if group does not exist", async () => {
+      const { addUpstreamToGroup } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue({
+        id: "upstream-id",
+        name: "test-upstream",
+      } as unknown as PartialUpstream);
+
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
+
+      await expect(addUpstreamToGroup("upstream-id", "nonexistent-group")).rejects.toThrow(
+        UpstreamGroupNotFoundError
+      );
+    });
+  });
+
+  describe("removeUpstreamFromGroup", () => {
+    it("should remove upstream from group", async () => {
+      const { removeUpstreamFromGroup } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+      const { decrypt } = await import("@/lib/utils/encryption");
+
+      vi.mocked(decrypt).mockImplementation((value: string) => value.replace("encrypted:", ""));
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue({
+        id: "upstream-id",
+        name: "test-upstream",
+        groupId: "group-id",
+        weight: 5,
+      } as unknown as PartialUpstream);
+
+      const mockReturning = vi.fn().mockResolvedValue([
+        {
+          id: "upstream-id",
+          name: "test-upstream",
+          provider: "openai",
+          baseUrl: "https://api.openai.com",
+          apiKeyEncrypted: "encrypted:sk-test-key",
+          isDefault: false,
+          timeout: 60,
+          isActive: true,
+          config: null,
+          groupId: null,
+          weight: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      vi.mocked(db.update).mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: mockReturning,
+          }),
+        }),
+      } as unknown as MockUpdateChain);
+
+      const result = await removeUpstreamFromGroup("upstream-id");
+
+      expect(result.groupId).toBeNull();
+      expect(result.weight).toBe(1);
+      expect(result.groupName).toBeNull();
+    });
+
+    it("should throw UpstreamNotFoundError if upstream does not exist", async () => {
+      const { removeUpstreamFromGroup } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(null);
+
+      await expect(removeUpstreamFromGroup("nonexistent-id")).rejects.toThrow(
+        UpstreamNotFoundError
+      );
+    });
+  });
+
+  describe("getUpstreamsInGroup", () => {
+    it("should return all upstreams in a group", async () => {
+      const { getUpstreamsInGroup } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+      const { decrypt } = await import("@/lib/utils/encryption");
+
+      vi.mocked(decrypt).mockImplementation((value: string) => value.replace("encrypted:", ""));
+
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
+        id: "group-id",
+        name: "test-group",
+      } as unknown as PartialUpstreamGroup);
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+        {
+          id: "upstream-1",
+          name: "upstream-1",
+          provider: "openai",
+          baseUrl: "https://api.openai.com",
+          apiKeyEncrypted: "encrypted:sk-key-1",
+          isDefault: false,
+          timeout: 60,
+          isActive: true,
+          config: null,
+          groupId: "group-id",
+          weight: 5,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: "upstream-2",
+          name: "upstream-2",
+          provider: "openai",
+          baseUrl: "https://api.openai.com",
+          apiKeyEncrypted: "encrypted:sk-key-2",
+          isDefault: false,
+          timeout: 60,
+          isActive: true,
+          config: null,
+          groupId: "group-id",
+          weight: 3,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ] as unknown as PartialUpstream[]);
+
+      const result = await getUpstreamsInGroup("group-id");
+
+      expect(result).toHaveLength(2);
+      expect(result[0].groupId).toBe("group-id");
+      expect(result[0].groupName).toBe("test-group");
+      expect(result[1].groupId).toBe("group-id");
+      expect(result[1].groupName).toBe("test-group");
+    });
+
+    it("should throw UpstreamGroupNotFoundError if group does not exist", async () => {
+      const { getUpstreamsInGroup } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
+
+      await expect(getUpstreamsInGroup("nonexistent-id")).rejects.toThrow(
+        UpstreamGroupNotFoundError
+      );
+    });
+  });
+
+  describe("getStandaloneUpstreams", () => {
+    it("should return all upstreams without a group", async () => {
+      const { getStandaloneUpstreams } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+      const { decrypt } = await import("@/lib/utils/encryption");
+
+      vi.mocked(decrypt).mockImplementation((value: string) => value.replace("encrypted:", ""));
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+        {
+          id: "upstream-1",
+          name: "standalone-1",
+          provider: "openai",
+          baseUrl: "https://api.openai.com",
+          apiKeyEncrypted: "encrypted:sk-key-1",
+          isDefault: false,
+          timeout: 60,
+          isActive: true,
+          config: null,
+          groupId: null,
+          weight: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: "upstream-2",
+          name: "standalone-2",
+          provider: "anthropic",
+          baseUrl: "https://api.anthropic.com",
+          apiKeyEncrypted: "encrypted:sk-key-2",
+          isDefault: true,
+          timeout: 90,
+          isActive: true,
+          config: null,
+          groupId: null,
+          weight: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ] as unknown as PartialUpstream[]);
+
+      const result = await getStandaloneUpstreams();
+
+      expect(result).toHaveLength(2);
+      expect(result[0].groupId).toBeNull();
+      expect(result[0].groupName).toBeNull();
+      expect(result[1].groupId).toBeNull();
+      expect(result[1].groupName).toBeNull();
+    });
+
+    it("should return empty array if no standalone upstreams exist", async () => {
+      const { getStandaloneUpstreams } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([]);
+
+      const result = await getStandaloneUpstreams();
+
+      expect(result).toHaveLength(0);
     });
   });
 });
