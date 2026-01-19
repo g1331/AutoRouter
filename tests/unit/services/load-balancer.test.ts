@@ -492,9 +492,8 @@ describe("load-balancer", () => {
 
     describe("round-robin strategy", () => {
       it("should cycle through upstreams in order", async () => {
-        const { selectUpstream, resetRoundRobinIndices } = await import(
-          "@/lib/services/load-balancer"
-        );
+        const { selectUpstream, resetRoundRobinIndices } =
+          await import("@/lib/services/load-balancer");
         const { db } = await import("@/lib/db");
 
         resetRoundRobinIndices();
@@ -576,9 +575,8 @@ describe("load-balancer", () => {
 
     describe("least-connections strategy", () => {
       it("should select upstream with fewest connections", async () => {
-        const { selectUpstream, recordConnection, resetConnectionCounts } = await import(
-          "@/lib/services/load-balancer"
-        );
+        const { selectUpstream, recordConnection, resetConnectionCounts } =
+          await import("@/lib/services/load-balancer");
         const { db } = await import("@/lib/db");
 
         resetConnectionCounts();
@@ -604,9 +602,8 @@ describe("load-balancer", () => {
       });
 
       it("should prefer higher weight when connections are equal", async () => {
-        const { selectUpstream, resetConnectionCounts } = await import(
-          "@/lib/services/load-balancer"
-        );
+        const { selectUpstream, resetConnectionCounts } =
+          await import("@/lib/services/load-balancer");
         const { db } = await import("@/lib/db");
 
         resetConnectionCounts();
@@ -689,9 +686,8 @@ describe("load-balancer", () => {
 
   describe("resetRoundRobinIndices", () => {
     it("should reset round-robin state", async () => {
-      const { selectUpstream, resetRoundRobinIndices } = await import(
-        "@/lib/services/load-balancer"
-      );
+      const { selectUpstream, resetRoundRobinIndices } =
+        await import("@/lib/services/load-balancer");
       const { db } = await import("@/lib/db");
 
       const mockGroup: PartialUpstreamGroup = {

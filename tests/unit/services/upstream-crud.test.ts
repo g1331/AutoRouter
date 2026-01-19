@@ -844,9 +844,9 @@ describe("upstream-crud", () => {
 
       vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
 
-      await expect(
-        updateUpstreamGroup("nonexistent-id", { name: "new-name" })
-      ).rejects.toThrow(UpstreamGroupNotFoundError);
+      await expect(updateUpstreamGroup("nonexistent-id", { name: "new-name" })).rejects.toThrow(
+        UpstreamGroupNotFoundError
+      );
     });
 
     it("should throw error if new name already exists", async () => {
@@ -863,9 +863,9 @@ describe("upstream-crud", () => {
           name: "existing-name",
         } as unknown as PartialUpstreamGroup);
 
-      await expect(
-        updateUpstreamGroup("group-id", { name: "existing-name" })
-      ).rejects.toThrow("Upstream group with name 'existing-name' already exists");
+      await expect(updateUpstreamGroup("group-id", { name: "existing-name" })).rejects.toThrow(
+        "Upstream group with name 'existing-name' already exists"
+      );
     });
   });
 

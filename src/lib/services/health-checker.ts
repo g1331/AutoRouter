@@ -193,10 +193,7 @@ export async function updateHealthStatus(
       updateData.failureCount = existingHealth.failureCount + 1;
     }
 
-    await db
-      .update(upstreamHealth)
-      .set(updateData)
-      .where(eq(upstreamHealth.id, existingHealth.id));
+    await db.update(upstreamHealth).set(updateData).where(eq(upstreamHealth.id, existingHealth.id));
 
     return {
       upstreamId,
@@ -241,10 +238,7 @@ export async function updateHealthStatus(
  * @returns The updated health status
  * @throws {UpstreamNotFoundError} If the upstream does not exist
  */
-export async function markUnhealthy(
-  upstreamId: string,
-  reason: string
-): Promise<HealthStatus> {
+export async function markUnhealthy(upstreamId: string, reason: string): Promise<HealthStatus> {
   return updateHealthStatus(upstreamId, false, null, reason);
 }
 
@@ -256,10 +250,7 @@ export async function markUnhealthy(
  * @returns The updated health status
  * @throws {UpstreamNotFoundError} If the upstream does not exist
  */
-export async function markHealthy(
-  upstreamId: string,
-  latencyMs: number
-): Promise<HealthStatus> {
+export async function markHealthy(upstreamId: string, latencyMs: number): Promise<HealthStatus> {
   return updateHealthStatus(upstreamId, true, latencyMs, null);
 }
 
@@ -309,8 +300,7 @@ export async function checkUpstreamHealth(
   }
 
   // Use group's health check timeout if available, otherwise upstream timeout
-  const effectiveTimeout =
-    timeout ?? upstream.group?.healthCheckTimeout ?? upstream.timeout ?? 10;
+  const effectiveTimeout = timeout ?? upstream.group?.healthCheckTimeout ?? upstream.timeout ?? 10;
 
   // Perform the health check
   const result: TestUpstreamResult = await testUpstreamConnection({
@@ -362,9 +352,7 @@ export async function checkGroupHealth(groupId: string): Promise<HealthCheckResu
 
   // Check all upstreams in parallel
   const results = await Promise.all(
-    groupUpstreams.map((upstream) =>
-      checkUpstreamHealth(upstream.id, group.healthCheckTimeout)
-    )
+    groupUpstreams.map((upstream) => checkUpstreamHealth(upstream.id, group.healthCheckTimeout))
   );
 
   return results;

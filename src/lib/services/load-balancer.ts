@@ -159,9 +159,7 @@ function selectRoundRobin(
   }
 
   // Sort by ID to ensure consistent ordering
-  const sorted = [...healthyUpstreams].sort((a, b) =>
-    a.upstream.id.localeCompare(b.upstream.id)
-  );
+  const sorted = [...healthyUpstreams].sort((a, b) => a.upstream.id.localeCompare(b.upstream.id));
 
   // Get current index and advance
   const currentIndex = roundRobinIndex.get(groupId) ?? 0;
