@@ -11,7 +11,10 @@ export {
 
 // Re-export CRUD functions, types, and error classes
 export {
+  // Error classes
   UpstreamNotFoundError,
+  UpstreamGroupNotFoundError,
+  // Upstream CRUD functions
   createUpstream,
   updateUpstream,
   deleteUpstream,
@@ -22,8 +25,26 @@ export {
   getUpstreamByName,
   getDecryptedApiKey,
   maskApiKey,
+  // Upstream Group CRUD functions
+  createUpstreamGroup,
+  updateUpstreamGroup,
+  deleteUpstreamGroup,
+  listUpstreamGroups,
+  getUpstreamGroupById,
+  getUpstreamGroupByName,
+  // Upstream Group Membership functions
+  addUpstreamToGroup,
+  removeUpstreamFromGroup,
+  getUpstreamsInGroup,
+  getStandaloneUpstreams,
+  // Upstream types
   type UpstreamCreateInput,
   type UpstreamUpdateInput,
   type UpstreamResponse,
   type PaginatedUpstreams,
+  // Upstream Group types
+  type UpstreamGroupCreateInput,
+  type UpstreamGroupUpdateInput,
+  type UpstreamGroupResponse,
+  type PaginatedUpstreamGroups,
 } from "./upstream-crud";
