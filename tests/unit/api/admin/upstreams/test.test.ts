@@ -9,6 +9,16 @@ vi.mock("@/lib/utils/config", () => ({
   validateAdminToken: vi.fn((token: string | null) => token === "test-admin-token"),
 }));
 
+vi.mock("@/lib/utils/auth", () => ({
+  validateAdminAuth: vi.fn((authHeader: string | null) => {
+    if (!authHeader) return false;
+    const token = authHeader.toLowerCase().startsWith("bearer ")
+      ? authHeader.slice(7).trim()
+      : authHeader.trim();
+    return token === "test-admin-token";
+  }),
+}));
+
 vi.mock("@/lib/db", () => ({
   db: {
     query: {
