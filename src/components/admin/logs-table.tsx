@@ -147,7 +147,7 @@ export function LogsTable({ logs }: LogsTableProps) {
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4 text-amber-500" aria-hidden="true" />
           <span className="font-mono text-xs uppercase tracking-wider text-amber-700">
-            Filters
+            {t("filters")}
           </span>
         </div>
 
@@ -155,13 +155,13 @@ export function LogsTable({ logs }: LogsTableProps) {
         <div className="w-[180px]">
           <Select value={statusCodeFilter} onValueChange={setStatusCodeFilter}>
             <SelectTrigger>
-              <SelectValue placeholder="All Status" />
+              <SelectValue placeholder={t("filterStatus")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="2xx">2xx - Success</SelectItem>
-              <SelectItem value="4xx">4xx - Client Error</SelectItem>
-              <SelectItem value="5xx">5xx - Server Error</SelectItem>
+              <SelectItem value="all">{t("filterStatusAll")}</SelectItem>
+              <SelectItem value="2xx">{t("filterStatus2xx")}</SelectItem>
+              <SelectItem value="4xx">{t("filterStatus4xx")}</SelectItem>
+              <SelectItem value="5xx">{t("filterStatus5xx")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -170,7 +170,7 @@ export function LogsTable({ logs }: LogsTableProps) {
         <div className="w-[200px]">
           <Input
             type="text"
-            placeholder="Filter by model..."
+            placeholder={t("filterModel")}
             value={modelFilter}
             onChange={(e) => setModelFilter(e.target.value)}
           />
@@ -188,9 +188,9 @@ export function LogsTable({ logs }: LogsTableProps) {
           <div className="w-16 h-16 rounded-cf-sm bg-surface-300 border border-divider flex items-center justify-center mb-4">
             <Filter className="w-8 h-8 text-amber-700" aria-hidden="true" />
           </div>
-          <h3 className="font-mono text-lg text-amber-500 mb-2">No matching logs</h3>
+          <h3 className="font-mono text-lg text-amber-500 mb-2">{t("noMatchingLogs")}</h3>
           <p className="font-sans text-sm text-amber-700">
-            No logs match your current filter criteria
+            {t("noMatchingLogsDesc")}
           </p>
         </div>
       ) : (

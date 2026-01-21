@@ -194,7 +194,16 @@
     "refresh10s": "10s",
     "refresh30s": "30s",
     "refresh60s": "60s",
-    "manualRefresh": "Refresh"
+    "manualRefresh": "Refresh",
+    "filters": "Filters",
+    "filterStatus": "All Status",
+    "filterStatusAll": "All Status",
+    "filterStatus2xx": "2xx - Success",
+    "filterStatus4xx": "4xx - Client Error",
+    "filterStatus5xx": "5xx - Server Error",
+    "filterModel": "Filter by model...",
+    "noMatchingLogs": "No matching logs",
+    "noMatchingLogsDesc": "No logs match your current filter criteria"
   },
   "upstreams": {
     "title": "Upstreams",
