@@ -184,85 +184,85 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
           </TableHeader>
           <TableBody>
             {filteredKeys.map((key) => (
-            <TableRow key={key.id}>
-              <TableCell className="font-medium">{key.name}</TableCell>
-              <TableCell>
-                <div className="flex items-center gap-2">
-                  <code className="px-2 py-1 bg-surface-300 text-amber-500 rounded-cf-sm font-mono text-xs border border-divider">
-                    {visibleKeyIds.has(key.id)
-                      ? revealedKeys.get(key.id) || key.key_prefix
-                      : maskKey(key.key_prefix)}
-                  </code>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => toggleKeyVisibility(key.id)}
-                    disabled={isRevealing}
-                    aria-label={visibleKeyIds.has(key.id) ? t("hideKey") : t("revealKey")}
-                  >
-                    {visibleKeyIds.has(key.id) ? (
-                      <EyeOff className="h-3.5 w-3.5" aria-hidden="true" />
-                    ) : (
-                      <Eye className="h-3.5 w-3.5" aria-hidden="true" />
-                    )}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => copyKey(key.id)}
-                    aria-label={copiedId === key.id ? tCommon("copied") : tCommon("copy")}
-                  >
-                    {copiedId === key.id ? (
-                      <Check className="h-3.5 w-3.5 text-status-success" aria-hidden="true" />
-                    ) : (
-                      <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                    )}
-                  </Button>
-                </div>
-              </TableCell>
-              <TableCell className="max-w-xs truncate">
-                {key.description || <span className="text-amber-700">-</span>}
-              </TableCell>
-              <TableCell>
-                <Badge variant="info">{key.upstream_ids.length}</Badge>
-              </TableCell>
-              <TableCell>{formatExpiry(key.expires_at)}</TableCell>
-              <TableCell>
-                {formatDistanceToNow(new Date(key.created_at), {
-                  addSuffix: true,
-                  locale: dateLocale,
-                })}
-              </TableCell>
-              <TableCell className="text-right">
-                <div className="flex items-center justify-end gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    type="button"
-                    className="h-8 w-8"
-                    onClick={() => onEdit(key)}
-                    aria-label={`${t("editKey")}: ${key.name}`}
-                  >
-                    <Pencil className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    type="button"
-                    className="h-8 w-8 text-status-error hover:bg-status-error-muted"
-                    onClick={() => onRevoke(key)}
-                    aria-label={`${t("revokeKey")}: ${key.name}`}
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+              <TableRow key={key.id}>
+                <TableCell className="font-medium">{key.name}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <code className="px-2 py-1 bg-surface-300 text-amber-500 rounded-cf-sm font-mono text-xs border border-divider">
+                      {visibleKeyIds.has(key.id)
+                        ? revealedKeys.get(key.id) || key.key_prefix
+                        : maskKey(key.key_prefix)}
+                    </code>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => toggleKeyVisibility(key.id)}
+                      disabled={isRevealing}
+                      aria-label={visibleKeyIds.has(key.id) ? t("hideKey") : t("revealKey")}
+                    >
+                      {visibleKeyIds.has(key.id) ? (
+                        <EyeOff className="h-3.5 w-3.5" aria-hidden="true" />
+                      ) : (
+                        <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => copyKey(key.id)}
+                      aria-label={copiedId === key.id ? tCommon("copied") : tCommon("copy")}
+                    >
+                      {copiedId === key.id ? (
+                        <Check className="h-3.5 w-3.5 text-status-success" aria-hidden="true" />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                      )}
+                    </Button>
+                  </div>
+                </TableCell>
+                <TableCell className="max-w-xs truncate">
+                  {key.description || <span className="text-amber-700">-</span>}
+                </TableCell>
+                <TableCell>
+                  <Badge variant="info">{key.upstream_ids.length}</Badge>
+                </TableCell>
+                <TableCell>{formatExpiry(key.expires_at)}</TableCell>
+                <TableCell>
+                  {formatDistanceToNow(new Date(key.created_at), {
+                    addSuffix: true,
+                    locale: dateLocale,
+                  })}
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      type="button"
+                      className="h-8 w-8"
+                      onClick={() => onEdit(key)}
+                      aria-label={`${t("editKey")}: ${key.name}`}
+                    >
+                      <Pencil className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      type="button"
+                      className="h-8 w-8 text-status-error hover:bg-status-error-muted"
+                      onClick={() => onRevoke(key)}
+                      aria-label={`${t("revokeKey")}: ${key.name}`}
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
     </div>
   );

@@ -55,19 +55,32 @@ export function LogsTable({ logs }: LogsTableProps) {
     return logs.filter((log) => {
       // Status code filter
       if (statusCodeFilter !== "all") {
-        if (statusCodeFilter === "2xx" && (log.status_code === null || log.status_code < 200 || log.status_code >= 300)) {
+        if (
+          statusCodeFilter === "2xx" &&
+          (log.status_code === null || log.status_code < 200 || log.status_code >= 300)
+        ) {
           return false;
         }
-        if (statusCodeFilter === "4xx" && (log.status_code === null || log.status_code < 400 || log.status_code >= 500)) {
+        if (
+          statusCodeFilter === "4xx" &&
+          (log.status_code === null || log.status_code < 400 || log.status_code >= 500)
+        ) {
           return false;
         }
-        if (statusCodeFilter === "5xx" && (log.status_code === null || log.status_code < 500 || log.status_code >= 600)) {
+        if (
+          statusCodeFilter === "5xx" &&
+          (log.status_code === null || log.status_code < 500 || log.status_code >= 600)
+        ) {
           return false;
         }
       }
 
       // Model filter (case-insensitive partial match)
-      if (modelFilter && log.model && !log.model.toLowerCase().includes(modelFilter.toLowerCase())) {
+      if (
+        modelFilter &&
+        log.model &&
+        !log.model.toLowerCase().includes(modelFilter.toLowerCase())
+      ) {
         return false;
       }
 
@@ -189,9 +202,7 @@ export function LogsTable({ logs }: LogsTableProps) {
             <Filter className="w-8 h-8 text-amber-700" aria-hidden="true" />
           </div>
           <h3 className="font-mono text-lg text-amber-500 mb-2">{t("noMatchingLogs")}</h3>
-          <p className="font-sans text-sm text-amber-700">
-            {t("noMatchingLogsDesc")}
-          </p>
+          <p className="font-sans text-sm text-amber-700">{t("noMatchingLogsDesc")}</p>
         </div>
       ) : (
         <div className="rounded-cf-sm border border-divider overflow-hidden">
