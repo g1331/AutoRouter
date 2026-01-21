@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { getDateLocale } from "@/lib/date-locale";
 
@@ -37,11 +38,16 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [visibleKeyIds, setVisibleKeyIds] = useState<Set<string>>(new Set());
   const [revealedKeys, setRevealedKeys] = useState<Map<string, string>>(new Map());
+  const [searchQuery, setSearchQuery] = useState("");
   const { mutateAsync: revealKey, isPending: isRevealing } = useRevealAPIKey();
   const t = useTranslations("keys");
   const tCommon = useTranslations("common");
   const locale = useLocale();
   const dateLocale = getDateLocale(locale);
+
+  const filteredKeys = keys.filter((key) =>
+    key.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const maskKey = (keyPrefix: string) => {
     if (keyPrefix.length < 12) return keyPrefix;
@@ -133,22 +139,51 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
     );
   }
 
+  if (filteredKeys.length === 0) {
+    return (
+      <div className="space-y-4">
+        <Input
+          type="text"
+          placeholder={t("searchKeys")}
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="max-w-md"
+        />
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="w-16 h-16 rounded-cf-sm bg-surface-300 border border-divider flex items-center justify-center mb-4">
+            <Key className="w-8 h-8 text-amber-700" aria-hidden="true" />
+          </div>
+          <h3 className="font-mono text-lg text-amber-500 mb-2">{t("noKeysFound")}</h3>
+          <p className="font-sans text-sm text-amber-700">{t("noKeysFoundDesc")}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-cf-sm border border-divider overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>{tCommon("name")}</TableHead>
-            <TableHead>{t("tableKeyPrefix")}</TableHead>
-            <TableHead>{tCommon("description")}</TableHead>
-            <TableHead>{t("tableUpstreams")}</TableHead>
-            <TableHead>{t("tableExpires")}</TableHead>
-            <TableHead>{tCommon("createdAt")}</TableHead>
-            <TableHead className="text-right">{tCommon("actions")}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {keys.map((key) => (
+    <div className="space-y-4">
+      <Input
+        type="text"
+        placeholder={t("searchKeys")}
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        className="max-w-md"
+      />
+      <div className="rounded-cf-sm border border-divider overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{tCommon("name")}</TableHead>
+              <TableHead>{t("tableKeyPrefix")}</TableHead>
+              <TableHead>{tCommon("description")}</TableHead>
+              <TableHead>{t("tableUpstreams")}</TableHead>
+              <TableHead>{t("tableExpires")}</TableHead>
+              <TableHead>{tCommon("createdAt")}</TableHead>
+              <TableHead className="text-right">{tCommon("actions")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredKeys.map((key) => (
             <TableRow key={key.id}>
               <TableCell className="font-medium">{key.name}</TableCell>
               <TableCell>
@@ -228,6 +263,7 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
           ))}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 }
