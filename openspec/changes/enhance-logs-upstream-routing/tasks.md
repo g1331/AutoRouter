@@ -6,11 +6,11 @@
 
 ## 2. Request Logger Service
 
-- [ ] 2.1 Extend `LogRequestInput` interface in `src/lib/services/request-logger.ts` with routing decision fields
-- [ ] 2.2 Update `logRequest` function to persist the new fields
-- [ ] 2.3 Extend `RequestLogResponse` interface to include routing fields
-- [ ] 2.4 Update `listRequestLogs` to return the new fields
-- [ ] 2.5 Write unit tests for `logRequest` with routing decision data
+- [x] 2.1 Extend `LogRequestInput` interface in `src/lib/services/request-logger.ts` with routing decision fields
+- [x] 2.2 Update `logRequest` function to persist the new fields
+- [x] 2.3 Extend `RequestLogResponse` interface to include routing fields
+- [x] 2.4 Update `listRequestLogs` to return the new fields
+- [x] 2.5 Write unit tests for `logRequest` with routing decision data
 
 ## 3. Proxy Route - Collect Routing Information
 

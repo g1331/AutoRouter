@@ -697,6 +697,138 @@ describe("request-logger", () => {
       expect(result.errorMessage).toBe("Internal server error");
       expect(result.statusCode).toBe(500);
     });
+
+    it("should handle routing decision fields", async () => {
+      const { db } = await import("@/lib/db");
+      const { logRequest } = await import("@/lib/services/request-logger");
+
+      const mockLogEntry = {
+        id: "log-4",
+        apiKeyId: "key-1",
+        upstreamId: "upstream-1",
+        method: "POST",
+        path: "/v1/chat/completions",
+        model: "gpt-4",
+        promptTokens: 100,
+        completionTokens: 50,
+        totalTokens: 150,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+        statusCode: 200,
+        durationMs: 500,
+        errorMessage: null,
+        routingType: "group",
+        groupName: "openai-group",
+        lbStrategy: "round_robin",
+        failoverAttempts: 1,
+        failoverHistory: JSON.stringify([
+          {
+            upstream_id: "upstream-2",
+            upstream_name: "openai-backup",
+            attempted_at: "2024-01-01T00:00:00.000Z",
+            error_type: "http_5xx",
+            error_message: "Service unavailable",
+            status_code: 503,
+          },
+        ]),
+        createdAt: new Date(),
+      };
+
+      vi.mocked(db.insert).mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([mockLogEntry]),
+        }),
+      } as unknown as ReturnType<typeof db.insert>);
+
+      const result = await logRequest({
+        apiKeyId: "key-1",
+        upstreamId: "upstream-1",
+        method: "POST",
+        path: "/v1/chat/completions",
+        model: "gpt-4",
+        promptTokens: 100,
+        completionTokens: 50,
+        totalTokens: 150,
+        statusCode: 200,
+        durationMs: 500,
+        routingType: "group",
+        groupName: "openai-group",
+        lbStrategy: "round_robin",
+        failoverAttempts: 1,
+        failoverHistory: [
+          {
+            upstream_id: "upstream-2",
+            upstream_name: "openai-backup",
+            attempted_at: "2024-01-01T00:00:00.000Z",
+            error_type: "http_5xx",
+            error_message: "Service unavailable",
+            status_code: 503,
+          },
+        ],
+      });
+
+      expect(result.routingType).toBe("group");
+      expect(result.groupName).toBe("openai-group");
+      expect(result.lbStrategy).toBe("round_robin");
+      expect(result.failoverAttempts).toBe(1);
+    });
+
+    it("should handle direct routing type", async () => {
+      const { db } = await import("@/lib/db");
+      const { logRequest } = await import("@/lib/services/request-logger");
+
+      const mockLogEntry = {
+        id: "log-5",
+        apiKeyId: "key-1",
+        upstreamId: "upstream-1",
+        method: "POST",
+        path: "/v1/chat/completions",
+        model: "gpt-4",
+        promptTokens: 100,
+        completionTokens: 50,
+        totalTokens: 150,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+        statusCode: 200,
+        durationMs: 500,
+        errorMessage: null,
+        routingType: "direct",
+        groupName: null,
+        lbStrategy: null,
+        failoverAttempts: 0,
+        failoverHistory: null,
+        createdAt: new Date(),
+      };
+
+      vi.mocked(db.insert).mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([mockLogEntry]),
+        }),
+      } as unknown as ReturnType<typeof db.insert>);
+
+      const result = await logRequest({
+        apiKeyId: "key-1",
+        upstreamId: "upstream-1",
+        method: "POST",
+        path: "/v1/chat/completions",
+        model: "gpt-4",
+        promptTokens: 100,
+        completionTokens: 50,
+        totalTokens: 150,
+        statusCode: 200,
+        durationMs: 500,
+        routingType: "direct",
+      });
+
+      expect(result.routingType).toBe("direct");
+      expect(result.groupName).toBeNull();
+      expect(result.lbStrategy).toBeNull();
+      expect(result.failoverAttempts).toBe(0);
+    });
   });
 
   describe("listRequestLogs", () => {
@@ -715,9 +847,18 @@ describe("request-logger", () => {
           promptTokens: 100,
           completionTokens: 50,
           totalTokens: 150,
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
           statusCode: 200,
           durationMs: 500,
           errorMessage: null,
+          routingType: "direct",
+          groupName: null,
+          lbStrategy: null,
+          failoverAttempts: 0,
+          failoverHistory: null,
           createdAt: new Date(),
         },
       ];
@@ -737,6 +878,65 @@ describe("request-logger", () => {
       expect(result.page).toBe(1);
       expect(result.pageSize).toBe(20);
       expect(result.totalPages).toBe(1);
+    });
+
+    it("should return logs with routing decision fields", async () => {
+      const { db } = await import("@/lib/db");
+      const { listRequestLogs } = await import("@/lib/services/request-logger");
+
+      const mockLogs = [
+        {
+          id: "log-1",
+          apiKeyId: "key-1",
+          upstreamId: "upstream-1",
+          method: "POST",
+          path: "/v1/chat/completions",
+          model: "gpt-4",
+          promptTokens: 100,
+          completionTokens: 50,
+          totalTokens: 150,
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
+          statusCode: 200,
+          durationMs: 500,
+          errorMessage: null,
+          routingType: "group",
+          groupName: "openai-group",
+          lbStrategy: "round_robin",
+          failoverAttempts: 1,
+          failoverHistory: JSON.stringify([
+            {
+              upstream_id: "upstream-2",
+              upstream_name: "openai-backup",
+              attempted_at: "2024-01-01T00:00:00.000Z",
+              error_type: "http_5xx",
+              error_message: "Service unavailable",
+              status_code: 503,
+            },
+          ]),
+          createdAt: new Date(),
+        },
+      ];
+
+      vi.mocked(db.select).mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([{ value: 1 }]),
+        }),
+      } as unknown as ReturnType<typeof db.select>);
+
+      vi.mocked(db.query.requestLogs.findMany).mockResolvedValueOnce(mockLogs);
+
+      const result = await listRequestLogs(1, 20);
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].routingType).toBe("group");
+      expect(result.items[0].groupName).toBe("openai-group");
+      expect(result.items[0].lbStrategy).toBe("round_robin");
+      expect(result.items[0].failoverAttempts).toBe(1);
+      expect(result.items[0].failoverHistory).toHaveLength(1);
+      expect(result.items[0].failoverHistory![0].error_type).toBe("http_5xx");
     });
 
     it("should clamp page to minimum of 1", async () => {
