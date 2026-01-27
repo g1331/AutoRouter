@@ -144,6 +144,9 @@
     "revokeFailed": "撤销 API Key 失败",
     "noKeys": "NO API KEYS FOUND",
     "noKeysDesc": "点击上方按钮创建第一个 API Key",
+    "searchKeys": "按名称搜索...",
+    "noKeysFound": "NO MATCHING KEYS",
+    "noKeysFoundDesc": "没有符合搜索条件的 API Key",
     "tableKeyPrefix": "Key 前缀",
     "tableUpstreams": "Upstreams",
     "tableExpires": "过期时间",
@@ -191,7 +194,16 @@
     "refresh10s": "10秒",
     "refresh30s": "30秒",
     "refresh60s": "60秒",
-    "manualRefresh": "刷新"
+    "manualRefresh": "刷新",
+    "filters": "筛选",
+    "filterStatus": "全部状态",
+    "filterStatusAll": "全部状态",
+    "filterStatus2xx": "2xx - 成功",
+    "filterStatus4xx": "4xx - 客户端错误",
+    "filterStatus5xx": "5xx - 服务器错误",
+    "filterModel": "按模型筛选...",
+    "noMatchingLogs": "未找到匹配日志",
+    "noMatchingLogsDesc": "没有符合当前筛选条件的日志"
   },
   "upstreams": {
     "title": "Upstreams",
