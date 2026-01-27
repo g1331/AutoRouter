@@ -1,8 +1,8 @@
 ## 1. Database Schema Extension
 
-- [ ] 1.1 Add `routing_type`, `group_name`, `lb_strategy`, `failover_attempts`, `failover_history` columns to `request_logs` in `src/lib/db/schema.ts`
-- [ ] 1.2 Generate and apply database migration via `pnpm db:generate` and `pnpm db:migrate`
-- [ ] 1.3 Write schema tests to verify new columns exist with correct types and defaults
+- [x] 1.1 Add `routing_type`, `group_name`, `lb_strategy`, `failover_attempts`, `failover_history` columns to `request_logs` in `src/lib/db/schema.ts`
+- [x] 1.2 Generate and apply database migration via `pnpm db:generate` and `pnpm db:migrate`
+- [x] 1.3 Write schema tests to verify new columns exist with correct types and defaults
 
 ## 2. Request Logger Service
 

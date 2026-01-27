@@ -153,12 +153,19 @@ export const requestLogs = pgTable(
     statusCode: integer("status_code"),
     durationMs: integer("duration_ms"),
     errorMessage: text("error_message"),
+    // Routing decision fields
+    routingType: varchar("routing_type", { length: 16 }), // 'direct' | 'group' | 'default'
+    groupName: varchar("group_name", { length: 64 }), // Group name if group routing
+    lbStrategy: varchar("lb_strategy", { length: 32 }), // Load balancer strategy if group routing
+    failoverAttempts: integer("failover_attempts").notNull().default(0), // Number of failover attempts
+    failoverHistory: text("failover_history"), // JSON array of failover attempt records
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("request_logs_api_key_id_idx").on(table.apiKeyId),
     index("request_logs_upstream_id_idx").on(table.upstreamId),
     index("request_logs_created_at_idx").on(table.createdAt),
+    index("request_logs_routing_type_idx").on(table.routingType),
   ]
 );
 
