@@ -7,7 +7,12 @@ import {
   prepareUpstreamForProxy,
   type ProxyResult,
 } from "@/lib/services/proxy-client";
-import { logRequest, extractTokenUsage, extractModelName } from "@/lib/services/request-logger";
+import {
+  logRequest,
+  extractTokenUsage,
+  extractModelName,
+  type FailoverAttempt,
+} from "@/lib/services/request-logger";
 import {
   selectUpstream,
   recordConnection,
@@ -108,6 +113,33 @@ function shouldFailover(statusCode: number): boolean {
 }
 
 /**
+ * Routing decision information for logging.
+ */
+interface RoutingDecision {
+  routingType: "direct" | "group" | "default";
+  groupName: string | null;
+  lbStrategy: string | null;
+  failoverAttempts: number;
+  failoverHistory: FailoverAttempt[];
+}
+
+/**
+ * Determine error type for failover logging.
+ */
+function getErrorType(
+  error: Error | null,
+  statusCode: number | null
+): FailoverAttempt["error_type"] {
+  if (statusCode === 429) return "http_429";
+  if (statusCode && statusCode >= 500) return "http_5xx";
+  if (error) {
+    const msg = error.message.toLowerCase();
+    if (msg.includes("timed out") || msg.includes("timeout")) return "timeout";
+  }
+  return "connection_error";
+}
+
+/**
  * Forward a request with failover support for group-based routing.
  * Tries multiple upstreams from the group if the initial request fails.
  */
@@ -121,8 +153,10 @@ async function forwardWithFailover(
   result: ProxyResult;
   selectedUpstream: Upstream;
   failedUpstreamIds: string[];
+  failoverHistory: FailoverAttempt[];
 }> {
   const failedUpstreamIds: string[] = [];
+  const failoverHistory: FailoverAttempt[] = [];
   let lastError: Error | null = null;
 
   // Clone the request body once for potential retries
@@ -166,6 +200,15 @@ async function forwardWithFailover(
           // Release connection and mark as unhealthy
           releaseConnection(selectedUpstream.id);
           void markUnhealthy(selectedUpstream.id, `HTTP ${result.statusCode} error`);
+          // Record failover attempt
+          failoverHistory.push({
+            upstream_id: selectedUpstream.id,
+            upstream_name: selectedUpstream.name,
+            attempted_at: new Date().toISOString(),
+            error_type: getErrorType(null, result.statusCode),
+            error_message: `HTTP ${result.statusCode} error`,
+            status_code: result.statusCode,
+          });
           failedUpstreamIds.push(selectedUpstream.id);
           lastError = new Error(`Upstream returned ${result.statusCode}`);
           continue;
@@ -188,20 +231,28 @@ async function forwardWithFailover(
             result: { ...result, body: wrappedStream },
             selectedUpstream,
             failedUpstreamIds,
+            failoverHistory,
           };
         }
 
-        return { result, selectedUpstream, failedUpstreamIds };
+        return { result, selectedUpstream, failedUpstreamIds, failoverHistory };
       } catch (error) {
         // Release connection on error
         releaseConnection(selectedUpstream.id);
 
         if (isFailoverableError(error)) {
           // Mark upstream as unhealthy
-          void markUnhealthy(
-            selectedUpstream.id,
-            error instanceof Error ? error.message : "Request failed"
-          );
+          const errorMessage = error instanceof Error ? error.message : "Request failed";
+          void markUnhealthy(selectedUpstream.id, errorMessage);
+          // Record failover attempt
+          failoverHistory.push({
+            upstream_id: selectedUpstream.id,
+            upstream_name: selectedUpstream.name,
+            attempted_at: new Date().toISOString(),
+            error_type: getErrorType(error instanceof Error ? error : null, null),
+            error_message: errorMessage,
+            status_code: null,
+          });
           failedUpstreamIds.push(selectedUpstream.id);
           lastError = error instanceof Error ? error : new Error(String(error));
           continue;
@@ -317,9 +368,15 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   let selectedUpstream: Upstream | undefined;
   let useLoadBalancer = false;
   let groupId: string | null = null;
+  let groupStrategy: string | null = null;
+  let groupName: string | null = null;
+
+  // Determine routing type based on headers
+  let routingType: "direct" | "group" | "default" = "default";
 
   if (upstreamGroupName && !upstreamName) {
     // Group-based load balanced routing
+    routingType = "group";
     const group = await getUpstreamGroupByName(upstreamGroupName);
 
     if (!group) {
@@ -374,8 +431,11 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
     useLoadBalancer = true;
     groupId = group.id;
+    groupName = group.name;
+    groupStrategy = group.strategy;
   } else if (upstreamName) {
     // Explicit upstream name specified
+    routingType = "direct";
     // Check if API key has permission for this upstream
     const upstreamPermissions = await db.query.apiKeyUpstreams.findMany({
       where: eq(apiKeyUpstreams.apiKeyId, validApiKey.id),
@@ -461,22 +521,24 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     // Not JSON or empty body
   }
 
+  // Track failover history outside try block for error logging
+  let failoverHistory: FailoverAttempt[] = [];
+
   // Forward request to upstream
   try {
     let result: ProxyResult;
     let upstreamForLogging: Upstream;
 
-    if (useLoadBalancer && groupId) {
+    if (useLoadBalancer && groupId && groupStrategy) {
       // Use load balancer with failover for group-based routing
-      const { result: proxyResult, selectedUpstream: selected } = await forwardWithFailover(
-        request,
-        groupId,
-        path,
-        requestId,
-        requiredProvider
-      );
+      const {
+        result: proxyResult,
+        selectedUpstream: selected,
+        failoverHistory: history,
+      } = await forwardWithFailover(request, groupId, path, requestId, requiredProvider);
       result = proxyResult;
       upstreamForLogging = selected;
+      failoverHistory = history;
     } else if (selectedUpstream) {
       // Direct upstream routing (no load balancing)
       const upstreamForProxy = prepareUpstreamForProxy(selectedUpstream);
@@ -485,6 +547,15 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     } else {
       return NextResponse.json({ error: "No active upstream available" }, { status: 503 });
     }
+
+    // Build routing decision for logging
+    const routingDecision: RoutingDecision = {
+      routingType,
+      groupName,
+      lbStrategy: groupStrategy,
+      failoverAttempts: failoverHistory.length,
+      failoverHistory,
+    };
 
     // Create response headers
     const responseHeaders = new Headers(result.headers);
@@ -511,6 +582,12 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             cacheReadTokens: usage?.cacheReadTokens || 0,
             statusCode: result.statusCode,
             durationMs: Date.now() - startTime,
+            routingType: routingDecision.routingType,
+            groupName: routingDecision.groupName,
+            lbStrategy: routingDecision.lbStrategy,
+            failoverAttempts: routingDecision.failoverAttempts,
+            failoverHistory:
+              routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
           })
         )
         .catch((e) => console.error("Failed to log request:", e));
@@ -559,6 +636,12 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         cacheReadTokens: usage?.cacheReadTokens || 0,
         statusCode: result.statusCode,
         durationMs,
+        routingType: routingDecision.routingType,
+        groupName: routingDecision.groupName,
+        lbStrategy: routingDecision.lbStrategy,
+        failoverAttempts: routingDecision.failoverAttempts,
+        failoverHistory:
+          routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
       });
 
       return new Response(Buffer.from(bodyBytes), {
@@ -585,6 +668,11 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       statusCode: error instanceof Error && error.message.includes("timed out") ? 504 : 502,
       durationMs,
       errorMessage: error instanceof Error ? error.message : "Unknown error",
+      routingType,
+      groupName,
+      lbStrategy: groupStrategy,
+      failoverAttempts: failoverHistory.length,
+      failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
     });
 
     if (error instanceof UpstreamGroupNotFoundError) {

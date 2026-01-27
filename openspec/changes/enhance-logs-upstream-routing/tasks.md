@@ -14,12 +14,12 @@
 
 ## 3. Proxy Route - Collect Routing Information
 
-- [ ] 3.1 Define a `RoutingDecision` type to carry routing info through the proxy flow
-- [ ] 3.2 Capture routing type (`direct`/`group`/`default`) in `handleProxy` based on which header is used
-- [ ] 3.3 Capture group name and load balancer strategy for group routing
-- [ ] 3.4 Update `forwardWithFailover` to collect failover attempt records (upstream_id, name, error_type, error_message, status_code, timestamp)
-- [ ] 3.5 Pass routing decision and failover history to all `logRequest` calls
-- [ ] 3.6 Write unit tests for routing decision collection in proxy route
+- [x] 3.1 Define a `RoutingDecision` type to carry routing info through the proxy flow
+- [x] 3.2 Capture routing type (`direct`/`group`/`default`) in `handleProxy` based on which header is used
+- [x] 3.3 Capture group name and load balancer strategy for group routing
+- [x] 3.4 Update `forwardWithFailover` to collect failover attempt records (upstream_id, name, error_type, error_message, status_code, timestamp)
+- [x] 3.5 Pass routing decision and failover history to all `logRequest` calls
+- [x] 3.6 Write unit tests for routing decision collection in proxy route
 
 ## 4. Admin API - Return Upstream Name
 
