@@ -29,8 +29,8 @@
 
 ## 5. Types and API Contracts
 
-- [ ] 5.1 Update `RequestLog` type in `src/types/api.ts` with routing fields and `upstream_name`
-- [ ] 5.2 Update API hooks in `src/hooks/` if needed for the new response shape
+- [x] 5.1 Update `RequestLog` type in `src/types/api.ts` with routing fields and `upstream_name`
+- [x] 5.2 Update API hooks in `src/hooks/` if needed for the new response shape
 
 ## 6. UI - Logs Table Enhancement
 

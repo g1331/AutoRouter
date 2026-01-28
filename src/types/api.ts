@@ -188,10 +188,28 @@ export interface TestUpstreamResponse {
 
 // ========== Request Log 相关类型 ==========
 
+/**
+ * Failover attempt record in request log
+ */
+export interface FailoverAttempt {
+  upstream_id: string;
+  upstream_name: string;
+  attempted_at: string; // ISO 8601 date string
+  error_type: "timeout" | "http_5xx" | "http_429" | "connection_error";
+  error_message: string;
+  status_code?: number | null;
+}
+
+/**
+ * Routing type for request logs
+ */
+export type RoutingType = "direct" | "group" | "default";
+
 export interface RequestLogResponse {
   id: string; // UUID
   api_key_id: string | null; // UUID
   upstream_id: string | null; // UUID
+  upstream_name: string | null; // Upstream display name
   method: string | null;
   path: string | null;
   model: string | null;
@@ -205,6 +223,12 @@ export interface RequestLogResponse {
   status_code: number | null;
   duration_ms: number | null;
   error_message: string | null;
+  // Routing decision fields
+  routing_type: RoutingType | null;
+  group_name: string | null;
+  lb_strategy: string | null;
+  failover_attempts: number;
+  failover_history: FailoverAttempt[] | null;
   created_at: string; // ISO 8601 date string
 }
 
