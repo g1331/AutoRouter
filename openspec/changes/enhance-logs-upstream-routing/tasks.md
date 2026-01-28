@@ -34,17 +34,17 @@
 
 ## 6. UI - Logs Table Enhancement
 
-- [ ] 6.1 Add "Upstream" column to logs table displaying upstream name
-- [ ] 6.2 Add routing type badge (direct/group/default) next to upstream name
-- [ ] 6.3 Implement expandable row for failover details (show only when `failover_attempts > 0`)
-- [ ] 6.4 Display failover attempt list with upstream name, error type, message, and timestamp
-- [ ] 6.5 Handle edge cases: null upstream (show "-"), deleted upstream (show "Unknown"), null routing_type (no badge)
+- [x] 6.1 Add "Upstream" column to logs table displaying upstream name
+- [x] 6.2 Add routing type badge (direct/group/default) next to upstream name
+- [x] 6.3 Implement expandable row for failover details (show only when `failover_attempts > 0`)
+- [x] 6.4 Display failover attempt list with upstream name, error type, message, and timestamp
+- [x] 6.5 Handle edge cases: null upstream (show "-"), deleted upstream (show "Unknown"), null routing_type (no badge)
 
 ## 7. Internationalization
 
-- [ ] 7.1 Add English translations to `src/messages/en.json` for routing labels, failover detail labels, and column header
-- [ ] 7.2 Add Chinese translations to `src/messages/zh-CN.json` for the same keys
-- [ ] 7.3 Integrate translations in logs table component using `useTranslations`
+- [x] 7.1 Add English translations to `src/messages/en.json` for routing labels, failover detail labels, and column header
+- [x] 7.2 Add Chinese translations to `src/messages/zh-CN.json` for the same keys
+- [x] 7.3 Integrate translations in logs table component using `useTranslations`
 
 ## 8. Verification
 
