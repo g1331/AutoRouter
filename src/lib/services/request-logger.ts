@@ -18,7 +18,7 @@ export interface LogRequestInput {
   durationMs: number | null;
   errorMessage?: string | null;
   // Routing decision fields
-  routingType?: "direct" | "group" | "default" | null;
+  routingType?: "auto" | null;
   groupName?: string | null;
   lbStrategy?: string | null;
   failoverAttempts?: number;

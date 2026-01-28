@@ -1,36 +1,36 @@
 ## 1. Database Schema
 
-- [ ] 1.1 Add `provider_type` column to `upstreams` table (enum: anthropic, openai, google, custom)
-- [ ] 1.2 Add `allowed_models` column to `upstreams` table (JSON array, nullable)
-- [ ] 1.3 Add `model_redirects` column to `upstreams` table (JSON object, nullable)
-- [ ] 1.4 Generate and apply database migration
-- [ ] 1.5 Write tests for new schema columns
+- [x] 1.1 Add `provider_type` column to `upstreams` table (enum: anthropic, openai, google, custom)
+- [x] 1.2 Add `allowed_models` column to `upstreams` table (JSON array, nullable)
+- [x] 1.3 Add `model_redirects` column to `upstreams` table (JSON object, nullable)
+- [x] 1.4 Generate and apply database migration
+- [x] 1.5 Write tests for new schema columns
 
 ## 2. Upstream Service Updates
 
-- [ ] 2.1 Update `Upstream` type to include `providerType`, `allowedModels`, `modelRedirects`
-- [ ] 2.2 Update upstream CRUD operations to handle new fields
-- [ ] 2.3 Add validation for `providerType` enum values
-- [ ] 2.4 Add validation for `modelRedirects` to prevent circular redirects
-- [ ] 2.5 Write unit tests for upstream service with new fields
+- [x] 2.1 Update `Upstream` type to include `providerType`, `allowedModels`, `modelRedirects`
+- [x] 2.2 Update upstream CRUD operations to handle new fields
+- [x] 2.3 Add validation for `providerType` enum values
+- [x] 2.4 Add validation for `modelRedirects` to prevent circular redirects
+- [x] 2.5 Write unit tests for upstream service with new fields
 
 ## 3. Model-Based Router Service
 
-- [ ] 3.1 Create `ModelRouter` service with `routeByModel(model: string)` method
-- [ ] 3.2 Implement model prefix to group mapping (claude-_ → anthropic, gpt-_ → openai, gemini-\* → google)
-- [ ] 3.3 Implement `allowedModels` filtering logic
-- [ ] 3.4 Implement `modelRedirects` transformation logic
-- [ ] 3.5 Add circular redirect detection
-- [ ] 3.6 Write unit tests for ModelRouter service
+- [x] 3.1 Create `ModelRouter` service with `routeByModel(model: string)` method
+- [x] 3.2 Implement model prefix to group mapping (claude-_ → anthropic, gpt-_ → openai, gemini-\* → google)
+- [x] 3.3 Implement `allowedModels` filtering logic
+- [x] 3.4 Implement `modelRedirects` transformation logic
+- [x] 3.5 Add circular redirect detection
+- [x] 3.6 Write unit tests for ModelRouter service
 
 ## 4. Proxy Route Refactoring
 
-- [ ] 4.1 Remove `X-Upstream-Name` header handling from proxy route
-- [ ] 4.2 Remove `X-Upstream-Group` header handling from proxy route
-- [ ] 4.3 Integrate ModelRouter into proxy request flow
-- [ ] 4.4 Update request body parsing to extract model field
-- [ ] 4.5 Update error handling for missing model field
-- [ ] 4.6 Update error handling for non-existent group
+- [x] 4.1 Remove `X-Upstream-Name` header handling from proxy route
+- [x] 4.2 Remove `X-Upstream-Group` header handling from proxy route
+- [x] 4.3 Integrate ModelRouter into proxy request flow
+- [x] 4.4 Update request body parsing to extract model field
+- [x] 4.5 Update error handling for missing model field
+- [x] 4.6 Update error handling for non-existent group
 - [ ] 4.7 Write integration tests for new routing flow
 
 ## 5. Admin API Updates

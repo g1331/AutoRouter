@@ -138,6 +138,27 @@ describe("lib/db/schema", () => {
       expect(indexNames).toContain("upstreams_name_idx");
       expect(indexNames).toContain("upstreams_is_active_idx");
     });
+
+    it("has providerType column for model-based routing", () => {
+      expect(upstreams.providerType).toBeDefined();
+      expect(upstreams.providerType.name).toBe("provider_type");
+    });
+
+    it("has allowedModels column for model filtering", () => {
+      expect(upstreams.allowedModels).toBeDefined();
+      expect(upstreams.allowedModels.name).toBe("allowed_models");
+    });
+
+    it("has modelRedirects column for model name mapping", () => {
+      expect(upstreams.modelRedirects).toBeDefined();
+      expect(upstreams.modelRedirects.name).toBe("model_redirects");
+    });
+
+    it("has provider_type index", () => {
+      const tableConfig = getTableConfig(upstreams);
+      const indexNames = tableConfig.indexes.map((i) => i.config.name);
+      expect(indexNames).toContain("upstreams_provider_type_idx");
+    });
   });
 
   describe("apiKeyUpstreams table", () => {

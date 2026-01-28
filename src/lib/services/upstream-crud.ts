@@ -34,6 +34,9 @@ export interface UpstreamCreateInput {
   config?: string | null;
   groupId?: string | null;
   weight?: number;
+  providerType?: string | null;
+  allowedModels?: string[] | null;
+  modelRedirects?: Record<string, string> | null;
 }
 
 export interface UpstreamUpdateInput {
@@ -47,6 +50,9 @@ export interface UpstreamUpdateInput {
   config?: string | null;
   groupId?: string | null;
   weight?: number;
+  providerType?: string | null;
+  allowedModels?: string[] | null;
+  modelRedirects?: Record<string, string> | null;
 }
 
 export interface UpstreamResponse {
@@ -62,6 +68,9 @@ export interface UpstreamResponse {
   groupId: string | null;
   weight: number;
   groupName: string | null;
+  providerType: string | null;
+  allowedModels: string[] | null;
+  modelRedirects: Record<string, string> | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -141,6 +150,9 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     config,
     groupId,
     weight = 1,
+    providerType,
+    allowedModels,
+    modelRedirects,
   } = input;
 
   // Check if name already exists
@@ -189,6 +201,9 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
       config: config ?? null,
       groupId: groupId ?? null,
       weight,
+      providerType: providerType ?? null,
+      allowedModels: allowedModels ?? null,
+      modelRedirects: modelRedirects ?? null,
       createdAt: now,
       updatedAt: now,
     })
@@ -207,6 +222,9 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     groupId: newUpstream.groupId,
     weight: newUpstream.weight,
     groupName,
+    providerType: newUpstream.providerType,
+    allowedModels: newUpstream.allowedModels,
+    modelRedirects: newUpstream.modelRedirects,
     createdAt: newUpstream.createdAt,
     updatedAt: newUpstream.updatedAt,
   };
@@ -272,6 +290,9 @@ export async function updateUpstream(
   if (input.config !== undefined) updateValues.config = input.config;
   if (input.groupId !== undefined) updateValues.groupId = input.groupId;
   if (input.weight !== undefined) updateValues.weight = input.weight;
+  if (input.providerType !== undefined) updateValues.providerType = input.providerType;
+  if (input.allowedModels !== undefined) updateValues.allowedModels = input.allowedModels;
+  if (input.modelRedirects !== undefined) updateValues.modelRedirects = input.modelRedirects;
 
   const [updated] = await db
     .update(upstreams)
@@ -309,6 +330,9 @@ export async function updateUpstream(
     groupId: updated.groupId,
     weight: updated.weight,
     groupName,
+    providerType: updated.providerType,
+    allowedModels: updated.allowedModels,
+    modelRedirects: updated.modelRedirects,
     createdAt: updated.createdAt,
     updatedAt: updated.updatedAt,
   };
@@ -378,6 +402,9 @@ export async function listUpstreams(
       groupId: upstream.groupId,
       weight: upstream.weight,
       groupName: upstream.group?.name ?? null,
+      providerType: upstream.providerType,
+      allowedModels: upstream.allowedModels,
+      modelRedirects: upstream.modelRedirects,
       createdAt: upstream.createdAt,
       updatedAt: upstream.updatedAt,
     };
@@ -430,6 +457,9 @@ export async function getUpstreamById(upstreamId: string): Promise<UpstreamRespo
     groupId: upstream.groupId,
     weight: upstream.weight,
     groupName: upstream.group?.name ?? null,
+    providerType: upstream.providerType,
+    allowedModels: upstream.allowedModels,
+    modelRedirects: upstream.modelRedirects,
     createdAt: upstream.createdAt,
     updatedAt: upstream.updatedAt,
   };
@@ -774,6 +804,9 @@ export async function addUpstreamToGroup(
     groupId: updated.groupId,
     weight: updated.weight,
     groupName: group.name,
+    providerType: updated.providerType,
+    allowedModels: updated.allowedModels,
+    modelRedirects: updated.modelRedirects,
     createdAt: updated.createdAt,
     updatedAt: updated.updatedAt,
   };
@@ -824,6 +857,9 @@ export async function removeUpstreamFromGroup(upstreamId: string): Promise<Upstr
     groupId: updated.groupId,
     weight: updated.weight,
     groupName: null,
+    providerType: updated.providerType,
+    allowedModels: updated.allowedModels,
+    modelRedirects: updated.modelRedirects,
     createdAt: updated.createdAt,
     updatedAt: updated.updatedAt,
   };
@@ -871,6 +907,9 @@ export async function getUpstreamsInGroup(groupId: string): Promise<UpstreamResp
       groupId: upstream.groupId,
       weight: upstream.weight,
       groupName: group.name,
+      providerType: upstream.providerType,
+      allowedModels: upstream.allowedModels,
+      modelRedirects: upstream.modelRedirects,
       createdAt: upstream.createdAt,
       updatedAt: upstream.updatedAt,
     };
@@ -910,6 +949,9 @@ export async function getStandaloneUpstreams(): Promise<UpstreamResponse[]> {
       groupId: upstream.groupId,
       weight: upstream.weight,
       groupName: null,
+      providerType: upstream.providerType,
+      allowedModels: upstream.allowedModels,
+      modelRedirects: upstream.modelRedirects,
       createdAt: upstream.createdAt,
       updatedAt: upstream.updatedAt,
     };
