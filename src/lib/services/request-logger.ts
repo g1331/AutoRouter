@@ -41,6 +41,7 @@ export interface RequestLogResponse {
   id: string;
   apiKeyId: string | null;
   upstreamId: string | null;
+  upstreamName: string | null;
   method: string | null;
   path: string | null;
   model: string | null;
@@ -307,19 +308,23 @@ export async function listRequestLogs(
     .from(requestLogs)
     .where(whereClause);
 
-  // Query paginated results
+  // Query paginated results with upstream name
   const offset = (page - 1) * pageSize;
   const logs = await db.query.requestLogs.findMany({
     where: whereClause,
     orderBy: [desc(requestLogs.createdAt)],
     limit: pageSize,
     offset,
+    with: {
+      upstream: true,
+    },
   });
 
   const items: RequestLogResponse[] = logs.map((log) => ({
     id: log.id,
     apiKeyId: log.apiKeyId,
     upstreamId: log.upstreamId,
+    upstreamName: log.upstream?.name ?? null,
     method: log.method,
     path: log.path,
     model: log.model,

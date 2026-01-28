@@ -23,9 +23,9 @@
 
 ## 4. Admin API - Return Upstream Name
 
-- [ ] 4.1 Update `listRequestLogs` query to JOIN `upstreams` table and return upstream name
-- [ ] 4.2 Update the logs API response to include `upstream_name` and routing fields
-- [ ] 4.3 Write unit tests for logs API response with upstream name and routing data
+- [x] 4.1 Update `listRequestLogs` query to JOIN `upstreams` table and return upstream name
+- [x] 4.2 Update the logs API response to include `upstream_name` and routing fields
+- [x] 4.3 Write unit tests for logs API response with upstream name and routing data
 
 ## 5. Types and API Contracts
 

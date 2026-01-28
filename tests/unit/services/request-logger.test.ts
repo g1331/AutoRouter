@@ -889,6 +889,7 @@ describe("request-logger", () => {
           id: "log-1",
           apiKeyId: "key-1",
           upstreamId: "upstream-1",
+          upstream: { name: "openai-primary" },
           method: "POST",
           path: "/v1/chat/completions",
           model: "gpt-4",
@@ -931,6 +932,7 @@ describe("request-logger", () => {
       const result = await listRequestLogs(1, 20);
 
       expect(result.items).toHaveLength(1);
+      expect(result.items[0].upstreamName).toBe("openai-primary");
       expect(result.items[0].routingType).toBe("group");
       expect(result.items[0].groupName).toBe("openai-group");
       expect(result.items[0].lbStrategy).toBe("round_robin");
@@ -1023,6 +1025,52 @@ describe("request-logger", () => {
 
       expect(result.total).toBe(45);
       expect(result.totalPages).toBe(3); // ceil(45/20) = 3
+    });
+
+    it("should return null upstreamName when upstream is null", async () => {
+      const { db } = await import("@/lib/db");
+      const { listRequestLogs } = await import("@/lib/services/request-logger");
+
+      const mockLogs = [
+        {
+          id: "log-1",
+          apiKeyId: "key-1",
+          upstreamId: null,
+          upstream: null,
+          method: "POST",
+          path: "/v1/chat/completions",
+          model: "gpt-4",
+          promptTokens: 100,
+          completionTokens: 50,
+          totalTokens: 150,
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
+          statusCode: 200,
+          durationMs: 500,
+          errorMessage: null,
+          routingType: null,
+          groupName: null,
+          lbStrategy: null,
+          failoverAttempts: 0,
+          failoverHistory: null,
+          createdAt: new Date("2024-01-01"),
+        },
+      ];
+
+      vi.mocked(db.select).mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([{ value: 1 }]),
+        }),
+      } as unknown as ReturnType<typeof db.select>);
+
+      vi.mocked(db.query.requestLogs.findMany).mockResolvedValueOnce(mockLogs);
+
+      const result = await listRequestLogs(1, 20);
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].upstreamName).toBeNull();
     });
   });
 });
