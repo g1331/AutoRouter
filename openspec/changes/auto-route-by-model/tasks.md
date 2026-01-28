@@ -38,7 +38,7 @@
 - [x] 5.1 Update upstream list API to include new fields
 - [x] 5.2 Update upstream create API to accept new fields
 - [x] 5.3 Update upstream update API to accept new fields
-- [ ] 5.4 Write tests for Admin API with new fields
+- [x] 5.4 Write tests for Admin API with new fields
 
 ## 6. Admin UI Updates
 
