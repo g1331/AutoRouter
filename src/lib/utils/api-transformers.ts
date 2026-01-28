@@ -55,6 +55,9 @@ export interface UpstreamApiResponse {
   group_id: string | null;
   weight: number;
   group_name: string | null;
+  provider_type: string | null;
+  allowed_models: string[] | null;
+  model_redirects: Record<string, string> | null;
   created_at: string;
   updated_at: string;
 }
@@ -107,6 +110,9 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
     group_id: upstream.groupId,
     weight: upstream.weight,
     group_name: upstream.groupName,
+    provider_type: upstream.providerType,
+    allowed_models: upstream.allowedModels,
+    model_redirects: upstream.modelRedirects,
     created_at: upstream.createdAt.toISOString(),
     updated_at: upstream.updatedAt.toISOString(),
   };

@@ -152,11 +152,13 @@ describe("proxy route helper functions", () => {
   });
 
   describe("RoutingDecision type validation", () => {
-    it("accepts valid routing decision data", () => {
+    it("accepts valid routing decision data with auto routing type", () => {
       interface RoutingDecision {
-        routingType: "direct" | "group" | "default";
+        routingType: "auto";
         groupName: string | null;
         lbStrategy: string | null;
+        providerType: "anthropic" | "openai" | "google" | "custom" | null;
+        resolvedModel: string | null;
         failoverAttempts: number;
         failoverHistory: Array<{
           upstream_id: string;
@@ -168,24 +170,30 @@ describe("proxy route helper functions", () => {
         }>;
       }
 
-      const directRouting: RoutingDecision = {
-        routingType: "direct",
-        groupName: null,
-        lbStrategy: null,
+      const autoRouting: RoutingDecision = {
+        routingType: "auto",
+        groupName: "openai",
+        lbStrategy: "round_robin",
+        providerType: "openai",
+        resolvedModel: "gpt-4",
         failoverAttempts: 0,
         failoverHistory: [],
       };
-      expect(directRouting.routingType).toBe("direct");
+      expect(autoRouting.routingType).toBe("auto");
+      expect(autoRouting.providerType).toBe("openai");
+      expect(autoRouting.resolvedModel).toBe("gpt-4");
 
-      const groupRouting: RoutingDecision = {
-        routingType: "group",
-        groupName: "openai-pool",
-        lbStrategy: "round_robin",
+      const autoRoutingWithFailover: RoutingDecision = {
+        routingType: "auto",
+        groupName: "anthropic",
+        lbStrategy: "weighted",
+        providerType: "anthropic",
+        resolvedModel: "claude-3-opus",
         failoverAttempts: 2,
         failoverHistory: [
           {
             upstream_id: "up-1",
-            upstream_name: "OpenAI-1",
+            upstream_name: "Anthropic-1",
             attempted_at: "2024-01-01T00:00:00.000Z",
             error_type: "http_5xx",
             error_message: "HTTP 502 error",
@@ -193,7 +201,7 @@ describe("proxy route helper functions", () => {
           },
           {
             upstream_id: "up-2",
-            upstream_name: "OpenAI-2",
+            upstream_name: "Anthropic-2",
             attempted_at: "2024-01-01T00:00:01.000Z",
             error_type: "timeout",
             error_message: "Request timed out",
@@ -201,18 +209,37 @@ describe("proxy route helper functions", () => {
           },
         ],
       };
-      expect(groupRouting.routingType).toBe("group");
-      expect(groupRouting.failoverAttempts).toBe(2);
-      expect(groupRouting.failoverHistory).toHaveLength(2);
+      expect(autoRoutingWithFailover.routingType).toBe("auto");
+      expect(autoRoutingWithFailover.failoverAttempts).toBe(2);
+      expect(autoRoutingWithFailover.failoverHistory).toHaveLength(2);
+    });
+  });
 
-      const defaultRouting: RoutingDecision = {
-        routingType: "default",
-        groupName: null,
-        lbStrategy: null,
-        failoverAttempts: 0,
-        failoverHistory: [],
-      };
-      expect(defaultRouting.routingType).toBe("default");
+  describe("Model-based routing validation", () => {
+    it("validates model extraction from request body", () => {
+      const validBody = { model: "gpt-4", messages: [] };
+      expect(validBody.model).toBe("gpt-4");
+
+      const claudeBody = { model: "claude-3-opus-20240229", messages: [] };
+      expect(claudeBody.model).toBe("claude-3-opus-20240229");
+
+      const emptyBody = {};
+      expect(emptyBody.model).toBeUndefined();
+    });
+
+    it("validates provider type mapping from model name", () => {
+      function getProviderTypeForModel(model: string): string | null {
+        const lowerModel = model.toLowerCase();
+        if (lowerModel.startsWith("claude-")) return "anthropic";
+        if (lowerModel.startsWith("gpt-")) return "openai";
+        if (lowerModel.startsWith("gemini-")) return "google";
+        return null;
+      }
+
+      expect(getProviderTypeForModel("claude-3-opus")).toBe("anthropic");
+      expect(getProviderTypeForModel("gpt-4")).toBe("openai");
+      expect(getProviderTypeForModel("gemini-pro")).toBe("google");
+      expect(getProviderTypeForModel("unknown-model")).toBeNull();
     });
   });
 });

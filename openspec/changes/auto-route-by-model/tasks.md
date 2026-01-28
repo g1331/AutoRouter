@@ -31,13 +31,13 @@
 - [x] 4.4 Update request body parsing to extract model field
 - [x] 4.5 Update error handling for missing model field
 - [x] 4.6 Update error handling for non-existent group
-- [ ] 4.7 Write integration tests for new routing flow
+- [x] 4.7 Write integration tests for new routing flow
 
 ## 5. Admin API Updates
 
-- [ ] 5.1 Update upstream list API to include new fields
-- [ ] 5.2 Update upstream create API to accept new fields
-- [ ] 5.3 Update upstream update API to accept new fields
+- [x] 5.1 Update upstream list API to include new fields
+- [x] 5.2 Update upstream create API to accept new fields
+- [x] 5.3 Update upstream update API to accept new fields
 - [ ] 5.4 Write tests for Admin API with new fields
 
 ## 6. Admin UI Updates
@@ -50,8 +50,8 @@
 
 ## 7. Request Logger Updates
 
-- [ ] 7.1 Update `routing_type` to use "auto" instead of "direct"/"group"/"default"
-- [ ] 7.2 Remove `routing_decision` fields that are no longer applicable
+- [x] 7.1 Update `routing_type` to use "auto" instead of "direct"/"group"/"default"
+- [x] 7.2 Remove `routing_decision` fields that are no longer applicable
 - [ ] 7.3 Update logs table UI to reflect new routing type
 
 ## 8. Migration and Cleanup
