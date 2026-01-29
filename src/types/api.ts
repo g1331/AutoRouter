@@ -117,6 +117,41 @@ export interface UpstreamHealthResponse {
   error_message: string | null;
 }
 
+// ========== Circuit Breaker 相关类型 ==========
+
+export type CircuitBreakerState = "closed" | "open" | "half_open";
+
+export interface CircuitBreakerConfig {
+  failure_threshold?: number;
+  success_threshold?: number;
+  open_duration?: number; // milliseconds
+  probe_interval?: number; // milliseconds
+}
+
+export interface CircuitBreakerStatus {
+  state: CircuitBreakerState;
+  failure_count: number;
+  success_count: number;
+  last_failure_at: string | null; // ISO 8601 date string
+  opened_at: string | null; // ISO 8601 date string
+  config: CircuitBreakerConfig | null;
+}
+
+export interface CircuitBreakerDetailResponse {
+  id: string;
+  upstream_id: string;
+  upstream_name: string;
+  state: CircuitBreakerState;
+  failure_count: number;
+  success_count: number;
+  last_failure_at: string | null;
+  opened_at: string | null;
+  last_probe_at: string | null;
+  config: CircuitBreakerConfig | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Type alias for convenience
 export type UpstreamHealth = UpstreamHealthResponse;
 
@@ -166,6 +201,7 @@ export interface UpstreamResponse {
   weight: number; // Load balancing weight
   group_name?: string | null; // Group name for display (populated when grouped)
   health_status?: UpstreamHealthResponse | null; // Health status (populated when requested)
+  circuit_breaker?: CircuitBreakerStatus | null; // Circuit breaker status
   provider_type: ProviderType | null; // Provider type for model-based routing
   allowed_models: string[] | null; // List of supported model names
   model_redirects: Record<string, string> | null; // Model name mapping

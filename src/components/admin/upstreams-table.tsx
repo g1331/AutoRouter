@@ -2,7 +2,18 @@
 
 import { formatDistanceToNow } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
-import { Pencil, Trash2, Server, Play, CheckCircle, XCircle, HelpCircle } from "lucide-react";
+import {
+  Pencil,
+  Trash2,
+  Server,
+  Play,
+  CheckCircle,
+  XCircle,
+  HelpCircle,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+} from "lucide-react";
 import type { Upstream } from "@/types/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -100,6 +111,45 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
     );
   };
 
+  const formatCircuitBreakerStatus = (upstream: Upstream) => {
+    const cb = upstream.circuit_breaker;
+
+    if (!cb) {
+      return (
+        <div className="flex items-center gap-1.5">
+          <Shield className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <span className="text-muted-foreground text-sm">{t("circuitBreakerUnknown")}</span>
+        </div>
+      );
+    }
+
+    if (cb.state === "closed") {
+      return (
+        <div className="flex items-center gap-1.5">
+          <ShieldCheck className="h-4 w-4 text-green-500" aria-hidden="true" />
+          <span className="text-green-500 text-sm">{t("circuitBreakerClosed")}</span>
+        </div>
+      );
+    }
+
+    if (cb.state === "open") {
+      return (
+        <div className="flex items-center gap-1.5">
+          <ShieldAlert className="h-4 w-4 text-status-error" aria-hidden="true" />
+          <span className="text-status-error text-sm">{t("circuitBreakerOpen")}</span>
+        </div>
+      );
+    }
+
+    // half_open
+    return (
+      <div className="flex items-center gap-1.5">
+        <Shield className="h-4 w-4 text-amber-500" aria-hidden="true" />
+        <span className="text-amber-500 text-sm">{t("circuitBreakerHalfOpen")}</span>
+      </div>
+    );
+  };
+
   if (upstreams.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -123,6 +173,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
             <TableHead>{t("tableGroup")}</TableHead>
             <TableHead>{t("tableWeight")}</TableHead>
             <TableHead>{t("tableHealth")}</TableHead>
+            <TableHead>{t("tableCircuitBreaker")}</TableHead>
             <TableHead>{t("tableBaseUrl")}</TableHead>
             <TableHead>{tCommon("createdAt")}</TableHead>
             <TableHead className="text-right">{tCommon("actions")}</TableHead>
@@ -153,6 +204,9 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                 </code>
               </TableCell>
               <TableCell>{formatHealthStatus(upstream)}</TableCell>
+              <TableCell className="cursor-pointer hover:bg-muted/50">
+                {formatCircuitBreakerStatus(upstream)}
+              </TableCell>
               <TableCell>
                 <code className="px-2 py-1 bg-surface-300 text-amber-500 rounded-cf-sm font-mono text-xs border border-divider max-w-xs truncate inline-block">
                   {upstream.base_url}
