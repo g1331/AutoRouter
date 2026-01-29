@@ -164,12 +164,12 @@
 
 **质量门禁**: 文档无错误，与代码一致
 
-- [ ] 10.1 Update API documentation with new circuit breaker endpoints
-- [ ] 10.2 Add configuration guide for circuit breaker thresholds
-- [ ] 10.3 Document failover behavior and troubleshooting
-- [ ] 10.4 Update CLAUDE.md with new architecture details
-- [ ] 10.5 **Verify** all new environment variables documented
-- [ ] 10.6 **Verify** decision path JSON format documented
+- [x] 10.1 Update API documentation with new circuit breaker endpoints
+- [x] 10.2 Add configuration guide for circuit breaker thresholds
+- [x] 10.3 Document failover behavior and troubleshooting
+- [x] 10.4 Update CLAUDE.md with new architecture details
+- [x] 10.5 **Verify** all new environment variables documented - No new env vars required
+- [x] 10.6 **Verify** decision path JSON format documented - Documented in circuit-breaker.md
 
 **提交节点**: `docs(failover): documentation - add circuit breaker guides`
 

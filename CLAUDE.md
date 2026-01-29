@@ -47,6 +47,7 @@ src/
 │   │   ├── admin/           # Admin API endpoints
 │   │   │   ├── keys/        # API key management
 │   │   │   ├── upstreams/   # Upstream management
+│   │   │   ├── circuit-breakers/  # Circuit breaker management
 │   │   │   ├── stats/       # Statistics endpoints
 │   │   │   └── logs/        # Request logs
 │   │   ├── proxy/v1/        # AI proxy endpoint
@@ -69,7 +70,11 @@ src/
 │   │   ├── upstream-ssrf-validator.ts     # SSRF protection (IP/URL/DNS validation)
 │   │   ├── proxy-client.ts  # HTTP proxy with SSE support
 │   │   ├── request-logger.ts    # Request logging
-│   │   └── stats-service.ts     # Statistics aggregation
+│   │   ├── stats-service.ts     # Statistics aggregation
+│   │   ├── circuit-breaker.ts   # Circuit breaker state machine
+│   │   ├── load-balancer.ts     # Load balancing strategies
+│   │   ├── model-router.ts      # Model-based auto routing
+│   │   └── health-checker.ts    # Health monitoring
 │   └── utils/               # Utility functions
 │       ├── auth.ts          # Authentication (bcrypt)
 │       ├── encryption.ts    # Fernet encryption
@@ -91,7 +96,14 @@ src/
 
 3. **Proxy Flow**: `/api/proxy/v1/*` receives requests → validates API key → extracts model from request body → routes to upstream group based on model prefix → selects upstream → forwards via proxy-client → logs request → returns SSE stream or response
 
-4. **Database**: PostgreSQL with Drizzle ORM. Schema defined in `src/lib/db/schema.ts`.
+4. **Failover & Circuit Breaker**: Automatic failover with circuit breaker pattern:
+   - **Circuit Breaker States**: CLOSED (normal), OPEN (failing), HALF_OPEN (probing)
+   - **Auto-failover**: On timeout/5xx errors, retry with next available upstream
+   - **Health Monitoring**: Background health checks mark upstreams healthy/unhealthy
+   - **Decision Logging**: Failover attempts logged with error type and timestamp
+   - **Admin Control**: API endpoints to force circuit breaker open/closed
+
+5. **Database**: PostgreSQL with Drizzle ORM. Schema defined in `src/lib/db/schema.ts`.
 
 ## Configuration
 
