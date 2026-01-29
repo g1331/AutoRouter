@@ -131,8 +131,13 @@ Upstream 级别配置 (数据库 circuit_breaker_states.config)
 3. **配置调整**: 逐步调低阈值到合理值
 4. **监控**: 添加熔断器状态指标，观察触发频率
 
-## Open Questions
+## Open Questions (Resolved)
 
-1. 是否需要 Admin API 手动重置熔断器状态？
-2. 是否需要熔断事件通知（Webhook）？
-3. 半开状态探测使用真实请求还是独立健康检查？
+1. **是否需要 Admin API 手动重置熔断器状态？**
+   - **决策**: 需要。提供 `POST /api/admin/circuit-breakers/{upstreamId}/force-open` 和 `force-close` 接口，允许管理员在紧急情况下手动干预。
+
+2. **是否需要熔断事件通知（Webhook）？**
+   - **决策**: 预留扩展点，首期不实现。在 `circuit_breaker_states` 表中保留 `last_transition_reason` 字段，未来可扩展事件通知机制。
+
+3. **半开状态探测使用真实请求还是独立健康检查？**
+   - **决策**: 使用真实请求被动检测。HALF_OPEN 状态下按 `probeInterval` 间隔放行真实用户请求作为探测，根据请求结果决定是否状态转移。避免额外的健康检查请求开销。
