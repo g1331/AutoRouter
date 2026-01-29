@@ -82,14 +82,14 @@ src/
 
 ### Key Architectural Patterns
 
-1. **Upstream Management**: Upstreams (AI providers like OpenAI, Anthropic) stored in PostgreSQL database. Runtime selection via `X-Upstream-Name` header.
+1. **Upstream Management**: Upstreams (AI providers like OpenAI, Anthropic) stored in PostgreSQL database. Runtime selection via model-based auto-routing (e.g., gpt-_ → openai group, claude-_ → anthropic group).
 
 2. **Security Model**:
    - Admin authentication: Bearer token (`ADMIN_TOKEN` env var)
    - API key authentication: Client keys hashed with bcrypt, verified on proxy requests
    - Upstream keys: Encrypted at rest with Fernet (`ENCRYPTION_KEY` env var)
 
-3. **Proxy Flow**: `/api/proxy/v1/*` receives requests → validates API key → selects upstream → forwards via proxy-client → logs request → returns SSE stream or response
+3. **Proxy Flow**: `/api/proxy/v1/*` receives requests → validates API key → extracts model from request body → routes to upstream group based on model prefix → selects upstream → forwards via proxy-client → logs request → returns SSE stream or response
 
 4. **Database**: PostgreSQL with Drizzle ORM. Schema defined in `src/lib/db/schema.ts`.
 

@@ -56,10 +56,10 @@
 
 ## 8. Migration and Cleanup
 
-- [ ] 8.1 Create database migration script for existing upstreams (set default provider_type)
-- [ ] 8.2 Update API Key configuration to remove upstream association (if applicable)
-- [ ] 8.3 Remove deprecated header-based routing code
-- [ ] 8.4 Update documentation to remove Header routing references
+- [x] 8.1 Create database migration script for existing upstreams (set default provider_type)
+- [x] 8.2 Update API Key configuration to remove upstream association (if applicable) - Not applicable, upstream permissions still required for security
+- [x] 8.3 Remove deprecated header-based routing code - Already removed from proxy route
+- [x] 8.4 Update documentation to remove Header routing references - Updated CLAUDE.md
 
 ## 9. Verification
 
