@@ -1,9 +1,20 @@
 import { eq, and } from "drizzle-orm";
-import { db, upstreams, upstreamGroups, type Upstream, type UpstreamGroup } from "../db";
+import {
+  db,
+  upstreams,
+  upstreamGroups,
+  type Upstream,
+  type UpstreamGroup,
+  type CircuitBreakerState,
+} from "../db";
 import { UpstreamGroupNotFoundError } from "./upstream-crud";
+import { getCircuitBreakerState, CircuitBreakerStateEnum } from "./circuit-breaker";
+import { VALID_PROVIDER_TYPES, type ProviderType } from "./model-router";
 
-// Re-export for backward compatibility
+// Re-export for backward compatibility and convenience
 export { UpstreamGroupNotFoundError };
+export { VALID_PROVIDER_TYPES };
+export type { ProviderType };
 
 /**
  * Load balancing strategies for upstream selection.
@@ -39,6 +50,31 @@ export interface UpstreamWithHealth {
 export interface SelectedUpstream {
   upstream: Upstream;
   strategy: LoadBalancerStrategy;
+}
+
+/**
+ * Upstream with health and circuit breaker information.
+ */
+export interface UpstreamWithCircuitBreaker {
+  upstream: Upstream;
+  isHealthy: boolean;
+  latencyMs: number | null;
+  circuitState: CircuitBreakerState["state"] | null;
+  isCircuitClosed: boolean;
+}
+
+/**
+ * Selection result with metadata for observability.
+ */
+export interface ProviderTypeSelectionResult {
+  upstream: Upstream;
+  strategy: LoadBalancerStrategy;
+  providerType: ProviderType;
+  routingType: "provider_type" | "group";
+  groupName: string | null;
+  circuitBreakerFiltered: number;
+  healthFiltered: number;
+  totalCandidates: number;
 }
 
 // In-memory state for load balancing (per-instance, not distributed)
@@ -307,4 +343,312 @@ export async function getUpstreamGroupByName(name: string): Promise<UpstreamGrou
  */
 export function isValidStrategy(strategy: string): strategy is LoadBalancerStrategy {
   return Object.values(LoadBalancerStrategy).includes(strategy as LoadBalancerStrategy);
+}
+
+// ============================================================================
+// Provider Type Based Selection (Model-Based Routing)
+// ============================================================================
+
+/**
+ * Get all upstreams by provider type with circuit breaker status.
+ * Tries provider_type field first, falls back to group-based routing.
+ */
+export async function getUpstreamsByProviderType(providerType: ProviderType): Promise<{
+  upstreamsWithCircuitBreaker: UpstreamWithCircuitBreaker[];
+  groupName: string | null;
+  routingType: "provider_type" | "group";
+}> {
+  // First, try to find upstreams with matching provider_type field
+  const providerTypeUpstreams = await db.query.upstreams.findMany({
+    where: and(eq(upstreams.providerType, providerType), eq(upstreams.isActive, true)),
+    with: {
+      health: true,
+    },
+  });
+
+  if (providerTypeUpstreams.length > 0) {
+    const upstreamsWithCircuitBreaker = await Promise.all(
+      providerTypeUpstreams.map(async (upstream) => {
+        const cbState = await getCircuitBreakerState(upstream.id);
+        const isHealthy = upstream.health?.isHealthy ?? true;
+        const circuitState = cbState?.state ?? null;
+        const isCircuitClosed = !circuitState || circuitState === CircuitBreakerStateEnum.CLOSED;
+
+        return {
+          upstream,
+          isHealthy,
+          latencyMs: upstream.health?.latencyMs ?? null,
+          circuitState,
+          isCircuitClosed,
+        };
+      })
+    );
+
+    return {
+      upstreamsWithCircuitBreaker,
+      groupName: null,
+      routingType: "provider_type",
+    };
+  }
+
+  // Fallback: find upstreams by group name
+  const group = await db.query.upstreamGroups.findFirst({
+    where: eq(upstreamGroups.name, providerType),
+  });
+
+  if (group) {
+    const groupUpstreams = await db.query.upstreams.findMany({
+      where: and(eq(upstreams.groupId, group.id), eq(upstreams.isActive, true)),
+      with: {
+        health: true,
+      },
+    });
+
+    const upstreamsWithCircuitBreaker = await Promise.all(
+      groupUpstreams.map(async (upstream) => {
+        const cbState = await getCircuitBreakerState(upstream.id);
+        const isHealthy = upstream.health?.isHealthy ?? true;
+        const circuitState = cbState?.state ?? null;
+        const isCircuitClosed = !circuitState || circuitState === CircuitBreakerStateEnum.CLOSED;
+
+        return {
+          upstream,
+          isHealthy,
+          latencyMs: upstream.health?.latencyMs ?? null,
+          circuitState,
+          isCircuitClosed,
+        };
+      })
+    );
+
+    return {
+      upstreamsWithCircuitBreaker,
+      groupName: group.name,
+      routingType: "group",
+    };
+  }
+
+  return {
+    upstreamsWithCircuitBreaker: [],
+    groupName: null,
+    routingType: "provider_type",
+  };
+}
+
+/**
+ * Filter upstreams by circuit breaker state (only CLOSED allowed for selection).
+ * Returns the filtered list and count of excluded upstreams.
+ */
+export function filterByCircuitBreaker(upstreamList: UpstreamWithCircuitBreaker[]): {
+  allowed: UpstreamWithCircuitBreaker[];
+  excludedCount: number;
+} {
+  const allowed: UpstreamWithCircuitBreaker[] = [];
+  let excludedCount = 0;
+
+  for (const u of upstreamList) {
+    if (u.isCircuitClosed) {
+      allowed.push(u);
+    } else {
+      excludedCount++;
+    }
+  }
+
+  return { allowed, excludedCount };
+}
+
+/**
+ * Filter upstreams by health status and optional exclusion list.
+ */
+export function filterByHealth(
+  upstreamList: UpstreamWithCircuitBreaker[],
+  excludeIds?: string[]
+): {
+  allowed: UpstreamWithCircuitBreaker[];
+  excludedCount: number;
+} {
+  const allowed = upstreamList.filter(
+    (u) => u.isHealthy && (!excludeIds || !excludeIds.includes(u.upstream.id))
+  );
+  const excludedCount = upstreamList.length - allowed.length;
+
+  return { allowed, excludedCount };
+}
+
+/**
+ * Select upstream using weighted strategy with health score consideration.
+ * Higher health scores (lower latency, better availability) get increased weight.
+ */
+function selectWeightedWithHealthScore(
+  upstreamList: UpstreamWithCircuitBreaker[]
+): UpstreamWithCircuitBreaker {
+  if (upstreamList.length === 0) {
+    throw new NoHealthyUpstreamsError("No healthy upstreams available for weighted selection");
+  }
+
+  // Calculate effective weights with health score multiplier
+  // Health score: 1.0 = perfect health, 0.0 = unhealthy
+  // We boost weight by up to 50% for healthy upstreams with low latency
+  const scoredUpstreams = upstreamList.map((u) => {
+    let healthScore = 1.0;
+
+    // Reduce score for high latency (assuming 500ms is "high")
+    if (u.latencyMs !== null && u.latencyMs > 0) {
+      const latencyPenalty = Math.min(u.latencyMs / 500, 0.5);
+      healthScore -= latencyPenalty;
+    }
+
+    // Reduce score for unhealthy status
+    if (!u.isHealthy) {
+      healthScore -= 0.5;
+    }
+
+    // Ensure minimum score
+    healthScore = Math.max(healthScore, 0.1);
+
+    // Calculate effective weight
+    const effectiveWeight = u.upstream.weight * healthScore;
+
+    return { ...u, effectiveWeight };
+  });
+
+  const totalWeight = scoredUpstreams.reduce((sum, u) => sum + u.effectiveWeight, 0);
+
+  if (totalWeight === 0) {
+    // Fallback to random selection
+    const randomIndex = Math.floor(Math.random() * upstreamList.length);
+    return upstreamList[randomIndex];
+  }
+
+  let random = Math.random() * totalWeight;
+
+  for (const u of scoredUpstreams) {
+    random -= u.effectiveWeight;
+    if (random <= 0) {
+      return u;
+    }
+  }
+
+  return upstreamList[upstreamList.length - 1];
+}
+
+/**
+ * Select upstream from a provider type using specified strategy.
+ * Integrates circuit breaker filtering and health-based selection.
+ *
+ * @param providerType - The provider type (anthropic, openai, google, custom)
+ * @param strategy - The load balancing strategy to use
+ * @param excludeIds - Optional array of upstream IDs to exclude (for failover)
+ * @returns Selection result with metadata
+ * @throws {NoHealthyUpstreamsError} If no healthy upstreams available
+ */
+export async function selectFromProviderType(
+  providerType: ProviderType,
+  strategy: LoadBalancerStrategy = LoadBalancerStrategy.WEIGHTED,
+  excludeIds?: string[]
+): Promise<ProviderTypeSelectionResult> {
+  // Validate provider type
+  if (!VALID_PROVIDER_TYPES.includes(providerType)) {
+    throw new Error(`Invalid provider type: ${providerType}`);
+  }
+
+  // Get upstreams by provider type (with fallback to group-based)
+  const { upstreamsWithCircuitBreaker, groupName, routingType } =
+    await getUpstreamsByProviderType(providerType);
+
+  const totalCandidates = upstreamsWithCircuitBreaker.length;
+
+  if (totalCandidates === 0) {
+    throw new NoHealthyUpstreamsError(`No upstreams found for provider type: ${providerType}`);
+  }
+
+  // Filter by circuit breaker (exclude OPEN state)
+  const afterCircuitBreaker = filterByCircuitBreaker(upstreamsWithCircuitBreaker);
+
+  // Filter by health and exclusions
+  const afterHealth = filterByHealth(afterCircuitBreaker.allowed, excludeIds);
+
+  if (afterHealth.allowed.length === 0) {
+    throw new NoHealthyUpstreamsError(
+      `No healthy upstreams available for provider type: ${providerType}` +
+        (excludeIds?.length ? ` (excluded: ${excludeIds.length})` : "")
+    );
+  }
+
+  // Select based on strategy
+  let selected: UpstreamWithCircuitBreaker;
+
+  switch (strategy) {
+    case LoadBalancerStrategy.ROUND_ROBIN:
+      selected = selectRoundRobinFromList(providerType, afterHealth.allowed);
+      break;
+    case LoadBalancerStrategy.WEIGHTED:
+      selected = selectWeightedWithHealthScore(afterHealth.allowed);
+      break;
+    case LoadBalancerStrategy.LEAST_CONNECTIONS:
+      selected = selectLeastConnectionsFromList(afterHealth.allowed);
+      break;
+    default:
+      selected = selectWeightedWithHealthScore(afterHealth.allowed);
+  }
+
+  return {
+    upstream: selected.upstream,
+    strategy,
+    providerType,
+    routingType,
+    groupName,
+    circuitBreakerFiltered: afterCircuitBreaker.excludedCount,
+    healthFiltered: afterHealth.excludedCount,
+    totalCandidates,
+  };
+}
+
+/**
+ * Round-robin selection from a list (no group required).
+ */
+function selectRoundRobinFromList(
+  key: string,
+  upstreamList: UpstreamWithCircuitBreaker[]
+): UpstreamWithCircuitBreaker {
+  if (upstreamList.length === 0) {
+    throw new NoHealthyUpstreamsError("No healthy upstreams available for round-robin selection");
+  }
+
+  // Sort by ID for consistent ordering
+  const sorted = [...upstreamList].sort((a, b) => a.upstream.id.localeCompare(b.upstream.id));
+
+  // Get current index and advance
+  const currentIndex = roundRobinIndex.get(key) ?? 0;
+  const selectedIndex = currentIndex % sorted.length;
+  roundRobinIndex.set(key, currentIndex + 1);
+
+  return sorted[selectedIndex];
+}
+
+/**
+ * Least connections selection from a list (no group required).
+ */
+function selectLeastConnectionsFromList(
+  upstreamList: UpstreamWithCircuitBreaker[]
+): UpstreamWithCircuitBreaker {
+  if (upstreamList.length === 0) {
+    throw new NoHealthyUpstreamsError(
+      "No healthy upstreams available for least-connections selection"
+    );
+  }
+
+  // Sort by connection count (ascending), then by weight (descending)
+  const sorted = [...upstreamList].sort((a, b) => {
+    const connA = getConnectionCount(a.upstream.id);
+    const connB = getConnectionCount(b.upstream.id);
+
+    if (connA !== connB) {
+      return connA - connB;
+    }
+
+    return b.upstream.weight - a.upstream.weight;
+  });
+
+  return sorted[0];
 }

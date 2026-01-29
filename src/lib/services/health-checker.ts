@@ -55,7 +55,7 @@ export interface HealthStatus {
   /** Error message from last failed check */
   errorMessage: string | null;
   /** Circuit breaker status (optional, populated when requested) */
-  circuitBreaker?: CircuitBreakerStatus;
+  circuitBreaker?: CircuitBreakerStatus | null;
 }
 
 /**
@@ -548,9 +548,7 @@ export async function getHealthStatusWithCircuitBreaker(
 
   if (includeCircuitBreaker) {
     const cbStatus = await getCircuitBreakerStatus(upstreamId);
-    if (cbStatus) {
-      healthStatus.circuitBreaker = cbStatus;
-    }
+    healthStatus.circuitBreaker = cbStatus ?? null;
   }
 
   return healthStatus;

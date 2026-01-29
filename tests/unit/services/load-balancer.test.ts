@@ -10,7 +10,12 @@ import {
   resetRoundRobinIndices,
   filterHealthyUpstreams,
   isValidStrategy,
+  filterByCircuitBreaker,
+  filterByHealth,
   type UpstreamWithHealth,
+  type UpstreamWithCircuitBreaker,
+  VALID_PROVIDER_TYPES,
+  type ProviderType,
 } from "@/lib/services/load-balancer";
 
 // Type helpers for mocking
@@ -52,6 +57,15 @@ vi.mock("@/lib/db", () => ({
   upstreams: {},
   upstreamGroups: {},
   upstreamHealth: {},
+}));
+
+vi.mock("@/lib/services/circuit-breaker", () => ({
+  getCircuitBreakerState: vi.fn(),
+  CircuitBreakerStateEnum: {
+    CLOSED: "closed",
+    OPEN: "open",
+    HALF_OPEN: "half_open",
+  },
 }));
 
 describe("load-balancer", () => {
@@ -729,6 +743,552 @@ describe("load-balancer", () => {
 
       // Both should be the same (first in sorted order)
       expect(firstResult.upstream.id).toBe(afterResetResult.upstream.id);
+    });
+  });
+
+  // ============================================================================
+  // Provider Type Based Selection Tests
+  // ============================================================================
+
+  describe("getUpstreamsByProviderType", () => {
+    it("should return upstreams with provider_type match", async () => {
+      const { getUpstreamsByProviderType } = await import("@/lib/services/load-balancer");
+      const { db } = await import("@/lib/db");
+      const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+        {
+          id: "upstream-1",
+          name: "test-upstream-1",
+          weight: 1,
+          groupId: null,
+          isActive: true,
+          providerType: "openai",
+          health: { isHealthy: true, latencyMs: 50 },
+        },
+        {
+          id: "upstream-2",
+          name: "test-upstream-2",
+          weight: 2,
+          groupId: null,
+          isActive: true,
+          providerType: "openai",
+          health: { isHealthy: true, latencyMs: 100 },
+        },
+      ] as unknown as PartialUpstream[]);
+
+      vi.mocked(getCircuitBreakerState).mockResolvedValue(null);
+
+      const result = await getUpstreamsByProviderType("openai");
+
+      expect(result.upstreamsWithCircuitBreaker).toHaveLength(2);
+      expect(result.routingType).toBe("provider_type");
+      expect(result.groupName).toBeNull();
+      expect(result.upstreamsWithCircuitBreaker[0].isCircuitClosed).toBe(true);
+    });
+
+    it("should fallback to group-based routing when no provider_type match", async () => {
+      const { getUpstreamsByProviderType } = await import("@/lib/services/load-balancer");
+      const { db } = await import("@/lib/db");
+      const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
+
+      // No upstreams with provider_type match
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([]);
+
+      // But group exists with matching name
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
+        id: "group-openai",
+        name: "openai",
+        strategy: "weighted",
+      } as unknown as PartialUpstreamGroup);
+
+      // Upstreams in the group
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        {
+          id: "upstream-1",
+          name: "test-upstream-1",
+          weight: 1,
+          groupId: "group-openai",
+          isActive: true,
+          health: { isHealthy: true, latencyMs: 50 },
+        },
+      ] as unknown as PartialUpstream[]);
+
+      vi.mocked(getCircuitBreakerState).mockResolvedValue(null);
+
+      const result = await getUpstreamsByProviderType("openai");
+
+      expect(result.upstreamsWithCircuitBreaker).toHaveLength(1);
+      expect(result.routingType).toBe("group");
+      expect(result.groupName).toBe("openai");
+    });
+
+    it("should return empty array when no upstreams found", async () => {
+      const { getUpstreamsByProviderType } = await import("@/lib/services/load-balancer");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([]);
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
+
+      const result = await getUpstreamsByProviderType("custom");
+
+      expect(result.upstreamsWithCircuitBreaker).toHaveLength(0);
+      expect(result.routingType).toBe("provider_type");
+    });
+
+    it("should include circuit breaker state for each upstream", async () => {
+      const { getUpstreamsByProviderType } = await import("@/lib/services/load-balancer");
+      const { db } = await import("@/lib/db");
+      const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+        {
+          id: "upstream-1",
+          name: "test-1",
+          weight: 1,
+          groupId: null,
+          isActive: true,
+          providerType: "openai",
+          health: { isHealthy: true, latencyMs: 50 },
+        },
+        {
+          id: "upstream-2",
+          name: "test-2",
+          weight: 1,
+          groupId: null,
+          isActive: true,
+          providerType: "openai",
+          health: { isHealthy: false, latencyMs: 500 },
+        },
+      ] as unknown as PartialUpstream[]);
+
+      vi.mocked(getCircuitBreakerState)
+        .mockResolvedValueOnce({ state: "closed", failureCount: 0 } as CircuitBreakerState)
+        .mockResolvedValueOnce({ state: "open", failureCount: 5 } as CircuitBreakerState);
+
+      const result = await getUpstreamsByProviderType("openai");
+
+      expect(result.upstreamsWithCircuitBreaker[0].circuitState).toBe("closed");
+      expect(result.upstreamsWithCircuitBreaker[0].isCircuitClosed).toBe(true);
+      expect(result.upstreamsWithCircuitBreaker[1].circuitState).toBe("open");
+      expect(result.upstreamsWithCircuitBreaker[1].isCircuitClosed).toBe(false);
+    });
+  });
+
+  describe("filterByCircuitBreaker", () => {
+    const createMockUpstreamWithCircuitBreaker = (
+      id: string,
+      isCircuitClosed: boolean,
+      circuitState: string | null
+    ): UpstreamWithCircuitBreaker => ({
+      upstream: {
+        id,
+        name: `upstream-${id}`,
+        weight: 1,
+        groupId: "group-1",
+        isActive: true,
+      } as UpstreamWithCircuitBreaker["upstream"],
+      isHealthy: true,
+      latencyMs: 100,
+      circuitState,
+      isCircuitClosed,
+    });
+
+    it("should filter out upstreams with OPEN circuit", () => {
+      const upstreams = [
+        createMockUpstreamWithCircuitBreaker("1", true, "closed"),
+        createMockUpstreamWithCircuitBreaker("2", false, "open"),
+        createMockUpstreamWithCircuitBreaker("3", true, "closed"),
+      ];
+
+      const result = filterByCircuitBreaker(upstreams);
+
+      expect(result.allowed).toHaveLength(2);
+      expect(result.allowed.map((u) => u.upstream.id)).toEqual(["1", "3"]);
+      expect(result.excludedCount).toBe(1);
+    });
+
+    it("should include upstreams with null circuit state", () => {
+      const upstreams = [
+        createMockUpstreamWithCircuitBreaker("1", true, null),
+        createMockUpstreamWithCircuitBreaker("2", false, "open"),
+      ];
+
+      const result = filterByCircuitBreaker(upstreams);
+
+      expect(result.allowed).toHaveLength(1);
+      expect(result.allowed[0].upstream.id).toBe("1");
+    });
+
+    it("should exclude upstreams with HALF_OPEN circuit", () => {
+      // HALF_OPEN is not CLOSED, so should be excluded
+      const upstreams = [
+        createMockUpstreamWithCircuitBreaker("1", true, "closed"),
+        createMockUpstreamWithCircuitBreaker("2", false, "half_open"),
+      ];
+
+      const result = filterByCircuitBreaker(upstreams);
+
+      expect(result.allowed).toHaveLength(1);
+      expect(result.allowed[0].upstream.id).toBe("1");
+    });
+
+    it("should handle empty array", () => {
+      const result = filterByCircuitBreaker([]);
+
+      expect(result.allowed).toHaveLength(0);
+      expect(result.excludedCount).toBe(0);
+    });
+
+    it("should exclude all if all circuits are open", () => {
+      const upstreams = [
+        createMockUpstreamWithCircuitBreaker("1", false, "open"),
+        createMockUpstreamWithCircuitBreaker("2", false, "open"),
+      ];
+
+      const result = filterByCircuitBreaker(upstreams);
+
+      expect(result.allowed).toHaveLength(0);
+      expect(result.excludedCount).toBe(2);
+    });
+  });
+
+  describe("filterByHealth", () => {
+    const createMockUpstreamWithCircuitBreaker = (
+      id: string,
+      isHealthy: boolean
+    ): UpstreamWithCircuitBreaker => ({
+      upstream: {
+        id,
+        name: `upstream-${id}`,
+        weight: 1,
+        groupId: "group-1",
+        isActive: true,
+      } as UpstreamWithCircuitBreaker["upstream"],
+      isHealthy,
+      latencyMs: 100,
+      circuitState: "closed",
+      isCircuitClosed: true,
+    });
+
+    it("should filter out unhealthy upstreams", () => {
+      const upstreams = [
+        createMockUpstreamWithCircuitBreaker("1", true),
+        createMockUpstreamWithCircuitBreaker("2", false),
+        createMockUpstreamWithCircuitBreaker("3", true),
+      ];
+
+      const result = filterByHealth(upstreams);
+
+      expect(result.allowed).toHaveLength(2);
+      expect(result.allowed.map((u) => u.upstream.id)).toEqual(["1", "3"]);
+    });
+
+    it("should exclude specified IDs", () => {
+      const upstreams = [
+        createMockUpstreamWithCircuitBreaker("1", true),
+        createMockUpstreamWithCircuitBreaker("2", true),
+        createMockUpstreamWithCircuitBreaker("3", true),
+      ];
+
+      const result = filterByHealth(upstreams, ["2"]);
+
+      expect(result.allowed).toHaveLength(2);
+      expect(result.allowed.map((u) => u.upstream.id)).toEqual(["1", "3"]);
+    });
+
+    it("should combine health and exclusion filters", () => {
+      const upstreams = [
+        createMockUpstreamWithCircuitBreaker("1", true),
+        createMockUpstreamWithCircuitBreaker("2", false),
+        createMockUpstreamWithCircuitBreaker("3", true),
+        createMockUpstreamWithCircuitBreaker("4", true),
+      ];
+
+      const result = filterByHealth(upstreams, ["1"]);
+
+      expect(result.allowed).toHaveLength(2);
+      expect(result.allowed.map((u) => u.upstream.id)).toEqual(["3", "4"]);
+      expect(result.excludedCount).toBe(2);
+    });
+  });
+
+  describe("selectFromProviderType", () => {
+    beforeEach(() => {
+      vi.resetModules();
+    });
+
+    it("should throw error for invalid provider type", async () => {
+      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+
+      await expect(selectFromProviderType("invalid" as ProviderType)).rejects.toThrow(
+        "Invalid provider type"
+      );
+    });
+
+    it("should throw NoHealthyUpstreamsError when no upstreams found", async () => {
+      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([]);
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
+
+      await expect(selectFromProviderType("openai")).rejects.toThrow(
+        "No upstreams found for provider type: openai"
+      );
+    });
+
+    it("should select upstream with weighted strategy by default", async () => {
+      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+      const { db } = await import("@/lib/db");
+      const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+        {
+          id: "upstream-1",
+          name: "test-1",
+          weight: 1,
+          groupId: null,
+          isActive: true,
+          providerType: "openai",
+          health: { isHealthy: true, latencyMs: 50 },
+        },
+      ] as unknown as PartialUpstream[]);
+
+      vi.mocked(getCircuitBreakerState).mockResolvedValue(null);
+
+      const result = await selectFromProviderType("openai");
+
+      expect(result.upstream.id).toBe("upstream-1");
+      expect(result.strategy).toBe(LoadBalancerStrategy.WEIGHTED);
+      expect(result.providerType).toBe("openai");
+      expect(result.routingType).toBe("provider_type");
+    });
+
+    it("should exclude upstreams with OPEN circuit", async () => {
+      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+      const { db } = await import("@/lib/db");
+      const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+        {
+          id: "upstream-1",
+          name: "test-1",
+          weight: 1,
+          groupId: null,
+          isActive: true,
+          providerType: "openai",
+          health: { isHealthy: true, latencyMs: 50 },
+        },
+        {
+          id: "upstream-2",
+          name: "test-2",
+          weight: 1,
+          groupId: null,
+          isActive: true,
+          providerType: "openai",
+          health: { isHealthy: true, latencyMs: 100 },
+        },
+      ] as unknown as PartialUpstream[]);
+
+      // First upstream has OPEN circuit
+      vi.mocked(getCircuitBreakerState)
+        .mockResolvedValueOnce({ state: "open", failureCount: 5 } as CircuitBreakerState)
+        .mockResolvedValueOnce({ state: "closed", failureCount: 0 } as CircuitBreakerState);
+
+      const result = await selectFromProviderType("openai");
+
+      expect(result.upstream.id).toBe("upstream-2");
+      expect(result.circuitBreakerFiltered).toBe(1);
+    });
+
+    it("should exclude specified upstream IDs", async () => {
+      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+      const { db } = await import("@/lib/db");
+      const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+        {
+          id: "upstream-1",
+          name: "test-1",
+          weight: 1,
+          groupId: null,
+          isActive: true,
+          providerType: "openai",
+          health: { isHealthy: true, latencyMs: 50 },
+        },
+        {
+          id: "upstream-2",
+          name: "test-2",
+          weight: 1,
+          groupId: null,
+          isActive: true,
+          providerType: "openai",
+          health: { isHealthy: true, latencyMs: 100 },
+        },
+      ] as unknown as PartialUpstream[]);
+
+      vi.mocked(getCircuitBreakerState).mockResolvedValue(null);
+
+      const result = await selectFromProviderType("openai", LoadBalancerStrategy.WEIGHTED, [
+        "upstream-1",
+      ]);
+
+      expect(result.upstream.id).toBe("upstream-2");
+    });
+
+    it("should throw error when all upstreams excluded", async () => {
+      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+      const { db } = await import("@/lib/db");
+      const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+        {
+          id: "upstream-1",
+          name: "test-1",
+          weight: 1,
+          groupId: null,
+          isActive: true,
+          providerType: "openai",
+          health: { isHealthy: true, latencyMs: 50 },
+        },
+      ] as unknown as PartialUpstream[]);
+
+      vi.mocked(getCircuitBreakerState).mockResolvedValue({
+        state: "open",
+        failureCount: 5,
+      } as CircuitBreakerState);
+
+      await expect(selectFromProviderType("openai")).rejects.toThrow(
+        "No healthy upstreams available for provider type: openai"
+      );
+    });
+
+    it("should support round-robin strategy", async () => {
+      const { selectFromProviderType, resetRoundRobinIndices } =
+        await import("@/lib/services/load-balancer");
+      const { db } = await import("@/lib/db");
+      const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
+
+      resetRoundRobinIndices();
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+        {
+          id: "upstream-a",
+          name: "test-a",
+          weight: 1,
+          groupId: null,
+          isActive: true,
+          providerType: "openai",
+          health: { isHealthy: true, latencyMs: 50 },
+        },
+        {
+          id: "upstream-b",
+          name: "test-b",
+          weight: 1,
+          groupId: null,
+          isActive: true,
+          providerType: "openai",
+          health: { isHealthy: true, latencyMs: 100 },
+        },
+      ] as unknown as PartialUpstream[]);
+
+      vi.mocked(getCircuitBreakerState).mockResolvedValue(null);
+
+      const result = await selectFromProviderType("openai", LoadBalancerStrategy.ROUND_ROBIN);
+
+      expect(result.strategy).toBe(LoadBalancerStrategy.ROUND_ROBIN);
+      expect(result.upstream.id).toBeDefined();
+    });
+
+    it("should support least-connections strategy", async () => {
+      const { selectFromProviderType, recordConnection, resetConnectionCounts } =
+        await import("@/lib/services/load-balancer");
+      const { db } = await import("@/lib/db");
+      const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
+
+      resetConnectionCounts();
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+        {
+          id: "upstream-1",
+          name: "test-1",
+          weight: 1,
+          groupId: null,
+          isActive: true,
+          providerType: "openai",
+          health: { isHealthy: true, latencyMs: 50 },
+        },
+        {
+          id: "upstream-2",
+          name: "test-2",
+          weight: 1,
+          groupId: null,
+          isActive: true,
+          providerType: "openai",
+          health: { isHealthy: true, latencyMs: 100 },
+        },
+      ] as unknown as PartialUpstream[]);
+
+      vi.mocked(getCircuitBreakerState).mockResolvedValue(null);
+
+      // Add connections to upstream-1
+      recordConnection("upstream-1");
+      recordConnection("upstream-1");
+
+      const result = await selectFromProviderType("openai", LoadBalancerStrategy.LEAST_CONNECTIONS);
+
+      expect(result.strategy).toBe(LoadBalancerStrategy.LEAST_CONNECTIONS);
+      // Should select upstream-2 (fewer connections)
+      expect(result.upstream.id).toBe("upstream-2");
+    });
+
+    it("should return metadata about filtering", async () => {
+      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+      const { db } = await import("@/lib/db");
+      const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+        {
+          id: "upstream-1",
+          name: "test-1",
+          weight: 1,
+          groupId: null,
+          isActive: true,
+          providerType: "openai",
+          health: { isHealthy: true, latencyMs: 50 },
+        },
+        {
+          id: "upstream-2",
+          name: "test-2",
+          weight: 1,
+          groupId: null,
+          isActive: true,
+          providerType: "openai",
+          health: { isHealthy: true, latencyMs: 100 },
+        },
+      ] as unknown as PartialUpstream[]);
+
+      // One upstream has open circuit
+      vi.mocked(getCircuitBreakerState)
+        .mockResolvedValueOnce({ state: "open", failureCount: 5 } as CircuitBreakerState)
+        .mockResolvedValueOnce({ state: "closed", failureCount: 0 } as CircuitBreakerState);
+
+      const result = await selectFromProviderType("openai");
+
+      expect(result.totalCandidates).toBe(2);
+      expect(result.circuitBreakerFiltered).toBe(1);
+      expect(result.healthFiltered).toBe(0);
+    });
+  });
+
+  describe("VALID_PROVIDER_TYPES", () => {
+    it("should contain all valid provider types", () => {
+      expect(VALID_PROVIDER_TYPES).toContain("anthropic");
+      expect(VALID_PROVIDER_TYPES).toContain("openai");
+      expect(VALID_PROVIDER_TYPES).toContain("google");
+      expect(VALID_PROVIDER_TYPES).toContain("custom");
+      expect(VALID_PROVIDER_TYPES.length).toBe(4);
     });
   });
 });

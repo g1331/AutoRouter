@@ -81,13 +81,13 @@
 
 **质量门禁**: `pnpm lint`, `pnpm exec tsc --noEmit`, 单元测试通过
 
-- [ ] 5.1 Add `selectFromProviderType(providerType, excludeIds?)` method to load-balancer.ts
-- [ ] 5.2 Modify selection strategies to work without group requirement
-- [ ] 5.3 Integrate circuit breaker state check in upstream selection
-- [ ] 5.4 Add support for weighted selection based on health scores
+- [x] 5.1 Add `selectFromProviderType(providerType, excludeIds?)` method to load-balancer.ts
+- [x] 5.2 Modify selection strategies to work without group requirement
+- [x] 5.3 Integrate circuit breaker state check in upstream selection
+- [x] 5.4 Add support for weighted selection based on health scores
 - [ ] 5.5 Implement sticky session preference (optional, if time permits)
-- [ ] 5.6 **Write unit tests** for `selectFromProviderType()`
-- [ ] 5.7 **Write unit tests** for circuit breaker exclusion logic
+- [x] 5.6 **Write unit tests** for `selectFromProviderType()`
+- [x] 5.7 **Write unit tests** for circuit breaker exclusion logic
 
 **提交节点**: `feat(failover): load-balancer - add provider_type based selection`
 
