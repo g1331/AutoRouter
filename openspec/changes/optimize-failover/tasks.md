@@ -1,4 +1,20 @@
+## 0. 任务完成规范
+
+> **每个任务完成后必须：**
+>
+> 1. 勾选完成 `[x]`
+> 2. 通过 `pnpm lint` 检查
+> 3. 通过 `pnpm exec tsc --noEmit` 类型检查
+> 4. 相关测试通过 `pnpm test:run`
+>
+> **提交节点（强制）**：每个阶段完成后必须提交，commit message 格式：
+> `feat(failover): <phase> - <description>`
+
+---
+
 ## 1. Database Schema
+
+**质量门禁**: 数据库迁移可执行
 
 - [ ] 1.1 Create `circuit_breaker_states` table with fields: upstream_id, state, failure_count, success_count, last_failure_at, opened_at, last_probe_at, config, created_at, updated_at
 - [ ] 1.2 Add foreign key constraint from `circuit_breaker_states.upstream_id` to `upstreams.id` (onDelete: cascade)
@@ -6,7 +22,13 @@
 - [ ] 1.4 Create Drizzle ORM schema definition for the new table
 - [ ] 1.5 Generate and run database migration
 
+**提交节点**: `feat(failover): database - add circuit_breaker_states table`
+
+---
+
 ## 2. Circuit Breaker Core Service
+
+**质量门禁**: `pnpm lint`, `pnpm exec tsc --noEmit`, 单元测试通过
 
 - [ ] 2.1 Create `src/lib/services/circuit-breaker.ts` with CircuitBreakerState enum (CLOSED, OPEN, HALF_OPEN)
 - [ ] 2.2 Implement `getCircuitBreakerState(upstreamId)` to load state from database
@@ -15,66 +37,167 @@
 - [ ] 2.5 Implement `canRequestPass(upstreamId)` to check if request should be allowed
 - [ ] 2.6 Implement `forceOpen(upstreamId)` and `forceClose(upstreamId)` for admin control
 - [ ] 2.7 Add default configuration constants (failureThreshold=5, successThreshold=2, openDuration=30s, probeInterval=10s)
+- [ ] 2.8 **Write unit tests** for circuit breaker state transitions (closed→open→half-open→closed)
+- [ ] 2.9 **Write unit tests** for configuration override logic
+- [ ] 2.10 **Write unit tests** for `canRequestPass()` in different states
+
+**提交节点**: `feat(failover): circuit-breaker - implement core service with tests`
+
+---
 
 ## 3. Health Monitoring Enhancement
+
+**质量门禁**: `pnpm lint`, `pnpm exec tsc --noEmit`, 单元测试通过
 
 - [ ] 3.1 Extend `src/lib/services/health-checker.ts` to integrate with circuit breaker
 - [ ] 3.2 Implement `probeUpstream(upstreamId)` for half-open state verification
 - [ ] 3.3 Add background task scheduler for periodic health probes
 - [ ] 3.4 Implement health metrics aggregation (availability, latency percentiles)
 - [ ] 3.5 Create `src/app/api/admin/health/route.ts` for health status API
+- [ ] 3.6 **Write tests** for health metrics calculation
+- [ ] 3.7 **Verify** admin health API returns correct circuit breaker status
+
+**提交节点**: `feat(failover): health-monitoring - integrate with circuit breaker`
+
+---
 
 ## 4. Model Router Integration
+
+**质量门禁**: `pnpm lint`, `pnpm exec tsc --noEmit`, 现有测试不失败
 
 - [ ] 4.1 Modify `src/lib/services/model-router.ts` to query upstreams by provider_type directly
 - [ ] 4.2 Integrate circuit breaker check in upstream selection (filter out OPEN state)
 - [ ] 4.3 Update `routeByModel()` to return list of candidate upstreams instead of single upstream
 - [ ] 4.4 Add fallback to group-based routing when no provider_type match found
 - [ ] 4.5 Update `ModelRouterResult` interface to include candidate upstreams list
+- [ ] 4.6 **Update existing tests** to reflect new return type
+- [ ] 4.7 **Verify** `pnpm test:run` passes
+
+**提交节点**: `feat(failover): model-router - integrate circuit breaker filtering`
+
+---
 
 ## 5. Load Balancer Enhancement
+
+**质量门禁**: `pnpm lint`, `pnpm exec tsc --noEmit`, 单元测试通过
 
 - [ ] 5.1 Add `selectFromProviderType(providerType, excludeIds?)` method to load-balancer.ts
 - [ ] 5.2 Modify selection strategies to work without group requirement
 - [ ] 5.3 Integrate circuit breaker state check in upstream selection
 - [ ] 5.4 Add support for weighted selection based on health scores
 - [ ] 5.5 Implement sticky session preference (optional, if time permits)
+- [ ] 5.6 **Write unit tests** for `selectFromProviderType()`
+- [ ] 5.7 **Write unit tests** for circuit breaker exclusion logic
+
+**提交节点**: `feat(failover): load-balancer - add provider_type based selection`
+
+---
 
 ## 6. Proxy Route Failover
+
+**质量门禁**: `pnpm lint`, `pnpm exec tsc --noEmit`, 集成测试通过
 
 - [ ] 6.1 Refactor `forwardWithFailover()` in proxy route to use circuit breaker
 - [ ] 6.2 Implement retry logic with circuit breaker awareness
 - [ ] 6.3 Track failover history for request logging
 - [ ] 6.4 Update error handling to distinguish circuit breaker errors from upstream errors
 - [ ] 6.5 Ensure streaming responses properly release connections on failure
+- [ ] 6.6 **Write integration tests** for failover scenarios (2 retries then success)
+- [ ] 6.7 **Write integration tests** for all upstreams failing
+- [ ] 6.8 **Write integration tests** for circuit breaker blocking requests
+- [ ] 6.9 **Verify** streaming failover works correctly
+
+**提交节点**: `feat(failover): proxy-route - implement circuit breaker failover`
+
+---
 
 ## 7. Admin API
+
+**质量门禁**: `pnpm lint`, `pnpm exec tsc --noEmit`, API 测试通过
 
 - [ ] 7.1 Create `GET /api/admin/circuit-breakers` to list all circuit breaker states
 - [ ] 7.2 Create `GET /api/admin/circuit-breakers/{upstreamId}` to get specific state
 - [ ] 7.3 Create `POST /api/admin/circuit-breakers/{upstreamId}/force-open` endpoint
 - [ ] 7.4 Create `POST /api/admin/circuit-breakers/{upstreamId}/force-close` endpoint
 - [ ] 7.5 Add circuit breaker status to upstream list API response
+- [ ] 7.6 **Write tests** for all admin endpoints
+- [ ] 7.7 **Verify** force-open/force-close correctly changes state
+
+**提交节点**: `feat(failover): admin-api - add circuit breaker management endpoints`
+
+---
 
 ## 8. Frontend Updates
+
+**质量门禁**: `pnpm lint`, `pnpm exec tsc --noEmit`, 构建通过
 
 - [ ] 8.1 Add circuit breaker status column to upstreams table
 - [ ] 8.2 Create circuit breaker detail view with state visualization
 - [ ] 8.3 Add manual reset buttons (force open/close) for admins
 - [ ] 8.4 Update upstream form to include circuit breaker configuration
 - [ ] 8.5 Add health status indicator to upstream cards
+- [ ] 8.6 **Verify** `pnpm build` succeeds
+- [ ] 8.7 **Verify** no TypeScript errors in frontend code
 
-## 9. Testing
+**提交节点**: `feat(failover): frontend - add circuit breaker UI components`
 
-- [ ] 9.1 Write unit tests for circuit breaker state transitions
-- [ ] 9.2 Write unit tests for failover logic with multiple upstreams
-- [ ] 9.3 Write integration tests for proxy route failover scenarios
-- [ ] 9.4 Write tests for circuit breaker configuration overrides
+---
+
+## 9. Integration & Regression Testing
+
+**质量门禁**: 所有测试通过，覆盖率不下降
+
+- [ ] 9.1 Run full test suite: `pnpm test:run`
+- [ ] 9.2 Run type check: `pnpm exec tsc --noEmit`
+- [ ] 9.3 Run lint: `pnpm lint`
+- [ ] 9.4 Run build: `pnpm build`
 - [ ] 9.5 Test database migration on existing data
+- [ ] 9.6 Test end-to-end failover scenario (manually or via integration test)
+- [ ] 9.7 **Verify** decision path is logged correctly
+- [ ] 9.8 **Verify** no regression in existing proxy functionality
+
+**提交节点**: `test(failover): integration - add comprehensive failover tests`
+
+---
 
 ## 10. Documentation
+
+**质量门禁**: 文档无错误，与代码一致
 
 - [ ] 10.1 Update API documentation with new circuit breaker endpoints
 - [ ] 10.2 Add configuration guide for circuit breaker thresholds
 - [ ] 10.3 Document failover behavior and troubleshooting
 - [ ] 10.4 Update CLAUDE.md with new architecture details
+- [ ] 10.5 **Verify** all new environment variables documented
+- [ ] 10.6 **Verify** decision path JSON format documented
+
+**提交节点**: `docs(failover): documentation - add circuit breaker guides`
+
+---
+
+## 11. Final Verification & Archive
+
+**质量门禁**: 完整功能验证通过
+
+- [ ] 11.1 Complete all previous tasks and verify checklist
+- [ ] 11.2 Run pre-commit hooks on all files
+- [ ] 11.3 Verify no TODO/FIXME comments left
+- [ ] 11.4 Archive OpenSpec change
+- [ ] 11.5 Create summary PR description
+
+**提交节点**: `feat(failover): complete - finalize circuit breaker and failover implementation`
+
+---
+
+## 快速检查清单
+
+每次提交前运行：
+
+```bash
+pnpm lint
+pnpm exec tsc --noEmit
+pnpm test:run
+pnpm build  # 阶段性提交可不运行，关键节点必须运行
+```
+
+**信率**: 95% - 任务结构清晰，质量门禁明确
