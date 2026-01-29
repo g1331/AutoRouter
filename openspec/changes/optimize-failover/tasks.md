@@ -16,11 +16,11 @@
 
 **质量门禁**: 数据库迁移可执行
 
-- [ ] 1.1 Create `circuit_breaker_states` table with fields: upstream_id, state, failure_count, success_count, last_failure_at, opened_at, last_probe_at, config, created_at, updated_at
-- [ ] 1.2 Add foreign key constraint from `circuit_breaker_states.upstream_id` to `upstreams.id` (onDelete: cascade)
-- [ ] 1.3 Create index on `circuit_breaker_states.state` for fast filtering
-- [ ] 1.4 Create Drizzle ORM schema definition for the new table
-- [ ] 1.5 Generate and run database migration
+- [x] 1.1 Create `circuit_breaker_states` table with fields: upstream_id, state, failure_count, success_count, last_failure_at, opened_at, last_probe_at, config, created_at, updated_at
+- [x] 1.2 Add foreign key constraint from `circuit_breaker_states.upstream_id` to `upstreams.id` (onDelete: cascade)
+- [x] 1.3 Create index on `circuit_breaker_states.state` for fast filtering
+- [x] 1.4 Create Drizzle ORM schema definition for the new table
+- [x] 1.5 Generate and run database migration
 
 **提交节点**: `feat(failover): database - add circuit_breaker_states table`
 

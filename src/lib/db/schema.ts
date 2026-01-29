@@ -138,6 +138,38 @@ export const apiKeyUpstreams = pgTable(
 );
 
 /**
+ * Circuit breaker states for upstream health management.
+ */
+export const circuitBreakerStates = pgTable(
+  "circuit_breaker_states",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    upstreamId: uuid("upstream_id")
+      .notNull()
+      .unique()
+      .references(() => upstreams.id, { onDelete: "cascade" }),
+    state: varchar("state", { length: 16 }).notNull().default("closed"), // 'closed' | 'open' | 'half_open'
+    failureCount: integer("failure_count").notNull().default(0),
+    successCount: integer("success_count").notNull().default(0),
+    lastFailureAt: timestamp("last_failure_at", { withTimezone: true }),
+    openedAt: timestamp("opened_at", { withTimezone: true }),
+    lastProbeAt: timestamp("last_probe_at", { withTimezone: true }),
+    config: json("config").$type<{
+      failureThreshold?: number;
+      successThreshold?: number;
+      openDuration?: number;
+      probeInterval?: number;
+    } | null>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("circuit_breaker_states_upstream_id_idx").on(table.upstreamId),
+    index("circuit_breaker_states_state_idx").on(table.state),
+  ]
+);
+
+/**
  * Request audit logs for analytics and billing.
  */
 export const requestLogs = pgTable(
@@ -194,6 +226,10 @@ export const upstreamsRelations = relations(upstreams, ({ one, many }) => ({
     fields: [upstreams.id],
     references: [upstreamHealth.upstreamId],
   }),
+  circuitBreaker: one(circuitBreakerStates, {
+    fields: [upstreams.id],
+    references: [circuitBreakerStates.upstreamId],
+  }),
   apiKeys: many(apiKeyUpstreams),
   requestLogs: many(requestLogs),
 }));
@@ -201,6 +237,13 @@ export const upstreamsRelations = relations(upstreams, ({ one, many }) => ({
 export const upstreamHealthRelations = relations(upstreamHealth, ({ one }) => ({
   upstream: one(upstreams, {
     fields: [upstreamHealth.upstreamId],
+    references: [upstreams.id],
+  }),
+}));
+
+export const circuitBreakerStatesRelations = relations(circuitBreakerStates, ({ one }) => ({
+  upstream: one(upstreams, {
+    fields: [circuitBreakerStates.upstreamId],
     references: [upstreams.id],
   }),
 }));
@@ -240,3 +283,5 @@ export type ApiKeyUpstream = typeof apiKeyUpstreams.$inferSelect;
 export type NewApiKeyUpstream = typeof apiKeyUpstreams.$inferInsert;
 export type RequestLog = typeof requestLogs.$inferSelect;
 export type NewRequestLog = typeof requestLogs.$inferInsert;
+export type CircuitBreakerState = typeof circuitBreakerStates.$inferSelect;
+export type NewCircuitBreakerState = typeof circuitBreakerStates.$inferInsert;

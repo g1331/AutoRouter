@@ -36,6 +36,13 @@
       "when": 1769615834473,
       "tag": "0004_neat_lady_mastermind",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1769677500943,
+      "tag": "0005_daily_zaran",
+      "breakpoints": true
     }
   ]
 }
