@@ -171,6 +171,9 @@ describe("UpstreamFormDialog", () => {
           description: null,
           group_id: null,
           weight: 1,
+          provider_type: null,
+          allowed_models: null,
+          model_redirects: null,
         });
       });
     });
@@ -266,6 +269,9 @@ describe("UpstreamFormDialog", () => {
             description: "Production OpenAI API",
             group_id: null,
             weight: 1,
+            provider_type: null,
+            allowed_models: null,
+            model_redirects: null,
           },
         });
       });
@@ -296,6 +302,9 @@ describe("UpstreamFormDialog", () => {
             description: "Production OpenAI API",
             group_id: null,
             weight: 1,
+            provider_type: null,
+            allowed_models: null,
+            model_redirects: null,
             // api_key should NOT be included when empty
           },
         });
