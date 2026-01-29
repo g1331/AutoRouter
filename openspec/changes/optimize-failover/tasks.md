@@ -49,13 +49,13 @@
 
 **质量门禁**: `pnpm lint`, `pnpm exec tsc --noEmit`, 单元测试通过
 
-- [ ] 3.1 Extend `src/lib/services/health-checker.ts` to integrate with circuit breaker
-- [ ] 3.2 Implement `probeUpstream(upstreamId)` for half-open state verification
-- [ ] 3.3 Add background task scheduler for periodic health probes
-- [ ] 3.4 Implement health metrics aggregation (availability, latency percentiles)
-- [ ] 3.5 Create `src/app/api/admin/health/route.ts` for health status API
-- [ ] 3.6 **Write tests** for health metrics calculation
-- [ ] 3.7 **Verify** admin health API returns correct circuit breaker status
+- [x] 3.1 Extend `src/lib/services/health-checker.ts` to integrate with circuit breaker
+- [x] 3.2 Implement `probeUpstream(upstreamId)` for half-open state verification
+- [x] 3.3 Add background task scheduler for periodic health probes
+- [x] 3.4 Implement health metrics aggregation (availability, latency percentiles)
+- [x] 3.5 Create `src/app/api/admin/health/route.ts` for health status API
+- [x] 3.6 **Write tests** for health metrics calculation
+- [x] 3.7 **Verify** admin health API returns correct circuit breaker status
 
 **提交节点**: `feat(failover): health-monitoring - integrate with circuit breaker`
 

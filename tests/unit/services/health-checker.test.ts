@@ -5,6 +5,8 @@ import {
   type HealthStatus,
   type HealthCheckResult,
 } from "@/lib/services/health-checker";
+import { getCircuitBreakerState, CircuitBreakerStateEnum } from "@/lib/services/circuit-breaker";
+import { testUpstreamConnection } from "@/lib/services/upstream-connection-tester";
 
 // Type helpers for mocking Drizzle ORM query builder
 type MockInsertChain = {
@@ -65,6 +67,25 @@ vi.mock("@/lib/utils/encryption", () => ({
 // Mock upstream-connection-tester
 vi.mock("@/lib/services/upstream-connection-tester", () => ({
   testUpstreamConnection: vi.fn(),
+}));
+
+// Mock circuit-breaker module
+vi.mock("@/lib/services/circuit-breaker", () => ({
+  CircuitBreakerStateEnum: {
+    CLOSED: "closed",
+    OPEN: "open",
+    HALF_OPEN: "half_open",
+  },
+  DEFAULT_CONFIG: {
+    failureThreshold: 5,
+    successThreshold: 2,
+    openDuration: 30,
+    probeInterval: 10,
+  },
+  getCircuitBreakerState: vi.fn(),
+  recordSuccess: vi.fn(),
+  recordFailure: vi.fn(),
+  canRequestPass: vi.fn(),
 }));
 
 describe("health-checker", () => {
@@ -1043,6 +1064,276 @@ describe("health-checker", () => {
       expect(formatted.error_message).toBe("Connection timeout");
       expect(formatted.health_status.is_healthy).toBe(false);
       expect(formatted.health_status.failure_count).toBe(3);
+    });
+  });
+
+  // Circuit Breaker Integration Tests
+  describe("Circuit Breaker Integration", () => {
+    it("should get circuit breaker status for closed state", async () => {
+      const { getCircuitBreakerStatus } = await import("@/lib/services/health-checker");
+
+      vi.mocked(getCircuitBreakerState).mockResolvedValue({
+        id: "cb-1",
+        upstreamId: "upstream-1",
+        state: CircuitBreakerStateEnum.CLOSED,
+        failureCount: 0,
+        successCount: 0,
+        openedAt: null,
+        lastFailureAt: null,
+        config: null,
+      });
+
+      const result = await getCircuitBreakerStatus("upstream-1");
+
+      expect(result).not.toBeNull();
+      expect(result?.state).toBe("closed");
+      expect(result?.failureCount).toBe(0);
+      expect(result?.remainingOpenSeconds).toBe(0);
+      expect(result?.config.failureThreshold).toBe(5);
+    });
+
+    it("should calculate remaining open seconds for open state", async () => {
+      const { getCircuitBreakerStatus } = await import("@/lib/services/health-checker");
+
+      const openedAt = new Date(Date.now() - 10000); // 10 seconds ago
+      vi.mocked(getCircuitBreakerState).mockResolvedValue({
+        id: "cb-1",
+        upstreamId: "upstream-1",
+        state: CircuitBreakerStateEnum.OPEN,
+        failureCount: 5,
+        successCount: 0,
+        openedAt,
+        lastFailureAt: openedAt,
+        config: null,
+      });
+
+      const result = await getCircuitBreakerStatus("upstream-1");
+
+      expect(result).not.toBeNull();
+      expect(result?.state).toBe("open");
+      expect(result?.remainingOpenSeconds).toBe(20); // 30 - 10 = 20
+    });
+
+    it("should return zero remaining seconds if open duration elapsed", async () => {
+      const { getCircuitBreakerStatus } = await import("@/lib/services/health-checker");
+
+      const openedAt = new Date(Date.now() - 40000); // 40 seconds ago
+      vi.mocked(getCircuitBreakerState).mockResolvedValue({
+        id: "cb-1",
+        upstreamId: "upstream-1",
+        state: CircuitBreakerStateEnum.OPEN,
+        failureCount: 5,
+        successCount: 0,
+        openedAt,
+        lastFailureAt: openedAt,
+        config: null,
+      });
+
+      const result = await getCircuitBreakerStatus("upstream-1");
+
+      expect(result).not.toBeNull();
+      expect(result?.remainingOpenSeconds).toBe(0);
+    });
+
+    it("should include circuit breaker status in health status when requested", async () => {
+      const { getHealthStatusWithCircuitBreaker } = await import("@/lib/services/health-checker");
+      const { db } = await import("@/lib/db");
+
+      const mockUpstream = createMockUpstream({
+        id: "upstream-1",
+        health: createMockHealth(),
+      });
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(mockUpstream);
+      vi.mocked(getCircuitBreakerState).mockResolvedValue({
+        id: "cb-1",
+        upstreamId: "upstream-1",
+        state: CircuitBreakerStateEnum.CLOSED,
+        failureCount: 2,
+        successCount: 1,
+        openedAt: null,
+        lastFailureAt: new Date("2024-01-15T10:00:00.000Z"),
+        config: { failureThreshold: 3 },
+      });
+
+      const result = await getHealthStatusWithCircuitBreaker("upstream-1", true);
+
+      expect(result).not.toBeNull();
+      expect(result?.circuitBreaker).toBeDefined();
+      expect(result?.circuitBreaker?.state).toBe("closed");
+      expect(result?.circuitBreaker?.failureCount).toBe(2);
+      expect(result?.circuitBreaker?.config.failureThreshold).toBe(3);
+    });
+
+    it("should not include circuit breaker status when not requested", async () => {
+      const { getHealthStatusWithCircuitBreaker } = await import("@/lib/services/health-checker");
+      const { db } = await import("@/lib/db");
+
+      const mockUpstream = createMockUpstream({
+        id: "upstream-1",
+        health: createMockHealth(),
+      });
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(mockUpstream);
+
+      const result = await getHealthStatusWithCircuitBreaker("upstream-1", false);
+
+      expect(result).not.toBeNull();
+      expect(result?.circuitBreaker).toBeUndefined();
+    });
+
+    it("should return null circuit breaker status if no state exists", async () => {
+      const { getHealthStatusWithCircuitBreaker } = await import("@/lib/services/health-checker");
+      const { db } = await import("@/lib/db");
+
+      const mockUpstream = createMockUpstream({
+        id: "upstream-1",
+        health: createMockHealth(),
+      });
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(mockUpstream);
+      vi.mocked(getCircuitBreakerState).mockResolvedValue(null);
+
+      const result = await getHealthStatusWithCircuitBreaker("upstream-1", true);
+
+      expect(result).not.toBeNull();
+      expect(result?.circuitBreaker).toBeNull();
+    });
+  });
+
+  describe("probeUpstream", () => {
+    it("should return true when probe succeeds", async () => {
+      const { probeUpstream } = await import("@/lib/services/health-checker");
+      const { db } = await import("@/lib/db");
+
+      const mockUpstream = createMockUpstream({
+        id: "upstream-1",
+        isActive: true,
+        provider: "openai",
+        baseUrl: "https://api.openai.com",
+        apiKeyEncrypted: "encrypted-key",
+      });
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(mockUpstream);
+      vi.mocked(testUpstreamConnection).mockResolvedValue({
+        success: true,
+        latencyMs: 150,
+        message: "OK",
+        testedAt: new Date(),
+      });
+
+      const result = await probeUpstream("upstream-1");
+
+      expect(result).toBe(true);
+    });
+
+    it("should return false when probe fails", async () => {
+      const { probeUpstream } = await import("@/lib/services/health-checker");
+      const { db } = await import("@/lib/db");
+
+      const mockUpstream = createMockUpstream({
+        id: "upstream-1",
+        isActive: true,
+        provider: "openai",
+        baseUrl: "https://api.openai.com",
+        apiKeyEncrypted: "encrypted-key",
+      });
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(mockUpstream);
+      vi.mocked(testUpstreamConnection).mockResolvedValue({
+        success: false,
+        latencyMs: null,
+        message: "Connection refused",
+        testedAt: new Date(),
+      });
+
+      const result = await probeUpstream("upstream-1");
+
+      expect(result).toBe(false);
+    });
+
+    it("should return false if upstream not found", async () => {
+      const { probeUpstream } = await import("@/lib/services/health-checker");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(null);
+
+      const result = await probeUpstream("upstream-1");
+
+      expect(result).toBe(false);
+    });
+
+    it("should return false if upstream is inactive", async () => {
+      const { probeUpstream } = await import("@/lib/services/health-checker");
+      const { db } = await import("@/lib/db");
+
+      const mockUpstream = createMockUpstream({
+        id: "upstream-1",
+        isActive: false,
+      });
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(mockUpstream);
+
+      const result = await probeUpstream("upstream-1");
+
+      expect(result).toBe(false);
+      expect(testUpstreamConnection).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("formatCircuitBreakerStatusResponse", () => {
+    it("should format circuit breaker status correctly", async () => {
+      const { formatCircuitBreakerStatusResponse } = await import("@/lib/services/health-checker");
+
+      const status = {
+        state: "closed" as const,
+        failureCount: 2,
+        successCount: 1,
+        openedAt: null,
+        lastFailureAt: new Date("2024-01-15T10:00:00.000Z"),
+        remainingOpenSeconds: 0,
+        config: {
+          failureThreshold: 5,
+          successThreshold: 2,
+          openDuration: 30,
+          probeInterval: 10,
+        },
+      };
+
+      const result = formatCircuitBreakerStatusResponse(status);
+
+      expect(result.state).toBe("closed");
+      expect(result.failure_count).toBe(2);
+      expect(result.success_count).toBe(1);
+      expect(result.opened_at).toBeNull();
+      expect(result.last_failure_at).toBe("2024-01-15T10:00:00.000Z");
+      expect(result.remaining_open_seconds).toBe(0);
+      expect(result.config.failure_threshold).toBe(5);
+    });
+
+    it("should format open circuit breaker status", async () => {
+      const { formatCircuitBreakerStatusResponse } = await import("@/lib/services/health-checker");
+
+      const status = {
+        state: "open" as const,
+        failureCount: 5,
+        successCount: 0,
+        openedAt: new Date("2024-01-15T12:00:00.000Z"),
+        lastFailureAt: new Date("2024-01-15T12:00:00.000Z"),
+        remainingOpenSeconds: 15,
+        config: {
+          failureThreshold: 5,
+          successThreshold: 2,
+          openDuration: 30,
+          probeInterval: 10,
+        },
+      };
+
+      const result = formatCircuitBreakerStatusResponse(status);
+
+      expect(result.state).toBe("open");
+      expect(result.opened_at).toBe("2024-01-15T12:00:00.000Z");
+      expect(result.remaining_open_seconds).toBe(15);
     });
   });
 });
