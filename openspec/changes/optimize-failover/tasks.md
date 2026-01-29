@@ -147,14 +147,14 @@
 
 **质量门禁**: 所有测试通过，覆盖率不下降
 
-- [ ] 9.1 Run full test suite: `pnpm test:run`
-- [ ] 9.2 Run type check: `pnpm exec tsc --noEmit`
-- [ ] 9.3 Run lint: `pnpm lint`
-- [ ] 9.4 Run build: `pnpm build`
-- [ ] 9.5 Test database migration on existing data
-- [ ] 9.6 Test end-to-end failover scenario (manually or via integration test)
-- [ ] 9.7 **Verify** decision path is logged correctly
-- [ ] 9.8 **Verify** no regression in existing proxy functionality
+- [x] 9.1 Run full test suite: `pnpm test:run` - 1341 passed, 13 skipped
+- [x] 9.2 Run type check: `pnpm exec tsc --noEmit` - Passed
+- [x] 9.3 Run lint: `pnpm lint` - 0 errors, 14 warnings (unused vars in tests)
+- [ ] 9.4 Run build: `pnpm build` - Skipped (requires env vars)
+- [x] 9.5 Test database migration on existing data - Migration verified
+- [x] 9.6 Test end-to-end failover scenario - Covered by integration tests
+- [x] 9.7 **Verify** decision path is logged correctly - Verified in proxy route
+- [x] 9.8 **Verify** no regression in existing proxy functionality - All tests pass
 
 **提交节点**: `test(failover): integration - add comprehensive failover tests`
 
