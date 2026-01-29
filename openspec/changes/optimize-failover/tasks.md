@@ -30,16 +30,16 @@
 
 **质量门禁**: `pnpm lint`, `pnpm exec tsc --noEmit`, 单元测试通过
 
-- [ ] 2.1 Create `src/lib/services/circuit-breaker.ts` with CircuitBreakerState enum (CLOSED, OPEN, HALF_OPEN)
-- [ ] 2.2 Implement `getCircuitBreakerState(upstreamId)` to load state from database
-- [ ] 2.3 Implement `recordSuccess(upstreamId)` to handle success transitions
-- [ ] 2.4 Implement `recordFailure(upstreamId, errorType)` to handle failure transitions
-- [ ] 2.5 Implement `canRequestPass(upstreamId)` to check if request should be allowed
-- [ ] 2.6 Implement `forceOpen(upstreamId)` and `forceClose(upstreamId)` for admin control
-- [ ] 2.7 Add default configuration constants (failureThreshold=5, successThreshold=2, openDuration=30s, probeInterval=10s)
-- [ ] 2.8 **Write unit tests** for circuit breaker state transitions (closed→open→half-open→closed)
-- [ ] 2.9 **Write unit tests** for configuration override logic
-- [ ] 2.10 **Write unit tests** for `canRequestPass()` in different states
+- [x] 2.1 Create `src/lib/services/circuit-breaker.ts` with CircuitBreakerState enum (CLOSED, OPEN, HALF_OPEN)
+- [x] 2.2 Implement `getCircuitBreakerState(upstreamId)` to load state from database
+- [x] 2.3 Implement `recordSuccess(upstreamId)` to handle success transitions
+- [x] 2.4 Implement `recordFailure(upstreamId, errorType)` to handle failure transitions
+- [x] 2.5 Implement `canRequestPass(upstreamId)` to check if request should be allowed
+- [x] 2.6 Implement `forceOpen(upstreamId)` and `forceClose(upstreamId)` for admin control
+- [x] 2.7 Add default configuration constants (failureThreshold=5, successThreshold=2, openDuration=30s, probeInterval=10s)
+- [x] 2.8 **Write unit tests** for circuit breaker state transitions (closed→open→half-open→closed)
+- [x] 2.9 **Write unit tests** for configuration override logic
+- [x] 2.10 **Write unit tests** for `canRequestPass()` in different states
 
 **提交节点**: `feat(failover): circuit-breaker - implement core service with tests`
 
