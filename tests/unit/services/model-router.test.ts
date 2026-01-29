@@ -5,13 +5,17 @@ import {
   validateModelRedirects,
   resolveModelWithRedirects,
   filterUpstreamsByModel,
+  filterUpstreamsByCircuitBreaker,
+  getUpstreamsByProviderType,
   routeByModel,
   NoUpstreamGroupError,
+  NoHealthyUpstreamError,
   CircularRedirectError,
   VALID_PROVIDER_TYPES,
   MODEL_PREFIX_TO_PROVIDER_TYPE,
 } from "@/lib/services/model-router";
 import type { Upstream } from "@/lib/db";
+import { db } from "@/lib/db";
 
 type PartialUpstream = Partial<Upstream> & { id: string; name: string };
 
@@ -24,10 +28,14 @@ vi.mock("@/lib/db", () => ({
       upstreams: {
         findMany: vi.fn(),
       },
+      circuitBreakerStates: {
+        findFirst: vi.fn(),
+      },
     },
   },
   upstreams: {},
   upstreamGroups: {},
+  circuitBreakerStates: {},
 }));
 
 describe("model-router", () => {
@@ -227,8 +235,14 @@ describe("model-router", () => {
   });
 
   describe("routeByModel", () => {
-    it("should throw NoUpstreamGroupError when group does not exist", async () => {
-      const { db } = await import("@/lib/db");
+    beforeEach(() => {
+      // Default mock for circuit breaker state (all upstreams closed/healthy)
+      vi.mocked(db.query.circuitBreakerStates.findFirst).mockResolvedValue(null);
+    });
+
+    it("should throw NoUpstreamGroupError when no upstreams exist for provider type", async () => {
+      // Mock no upstreams for provider_type and no matching group
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([]);
       vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
 
       await expect(routeByModel("gpt-4")).rejects.toThrow(NoUpstreamGroupError);
@@ -242,26 +256,26 @@ describe("model-router", () => {
     });
 
     it("should route to upstream with matching allowedModels", async () => {
-      const { db } = await import("@/lib/db");
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
-        id: "group-id",
-        name: "openai",
-        provider: "openai",
-      } as unknown as Awaited<ReturnType<typeof db.query.upstreamGroups.findFirst>>);
-
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+      // Mock upstreams with provider_type field (new routing method)
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        // First call - provider_type query
         {
           id: "upstream-1",
           name: "openai-1",
+          providerType: "openai",
           allowedModels: ["gpt-4"],
           modelRedirects: null,
+          weight: 1,
+          isActive: true,
         },
         {
           id: "upstream-2",
           name: "openai-2",
+          providerType: "openai",
           allowedModels: ["gpt-3.5"],
           modelRedirects: null,
+          weight: 1,
+          isActive: true,
         },
       ] as unknown as Awaited<ReturnType<typeof db.query.upstreams.findMany>>);
 
@@ -270,24 +284,23 @@ describe("model-router", () => {
       expect(result.upstream).not.toBeNull();
       expect(result.upstream?.id).toBe("upstream-1");
       expect(result.providerType).toBe("openai");
-      expect(result.groupName).toBe("openai");
+      expect(result.routingDecision.routingType).toBe("provider_type");
+      expect(result.candidateUpstreams.length).toBeGreaterThan(0);
+      expect(result.routingDecision.circuitBreakerFilter).toBe(false);
     });
 
     it("should apply model redirects", async () => {
-      const { db } = await import("@/lib/db");
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
-        id: "group-id",
-        name: "openai",
-        provider: "openai",
-      } as unknown as Awaited<ReturnType<typeof db.query.upstreamGroups.findFirst>>);
-
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+      // Mock upstreams with provider_type field and model redirects
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        // First call - provider_type query
         {
           id: "upstream-1",
           name: "openai-1",
+          providerType: "openai",
           allowedModels: null,
           modelRedirects: { "gpt-4-turbo": "gpt-4" },
+          weight: 1,
+          isActive: true,
         },
       ] as unknown as Awaited<ReturnType<typeof db.query.upstreams.findMany>>);
 
@@ -298,20 +311,17 @@ describe("model-router", () => {
     });
 
     it("should include routing decision details", async () => {
-      const { db } = await import("@/lib/db");
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
-        id: "group-id",
-        name: "anthropic",
-        provider: "anthropic",
-      } as unknown as Awaited<ReturnType<typeof db.query.upstreamGroups.findFirst>>);
-
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+      // Mock upstreams with provider_type field
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        // First call - provider_type query
         {
           id: "upstream-1",
           name: "anthropic-1",
+          providerType: "anthropic",
           allowedModels: ["claude-3-opus"],
           modelRedirects: null,
+          weight: 1,
+          isActive: true,
         },
       ] as unknown as Awaited<ReturnType<typeof db.query.upstreams.findMany>>);
 
@@ -320,10 +330,12 @@ describe("model-router", () => {
       expect(result.routingDecision.originalModel).toBe("claude-3-opus");
       expect(result.routingDecision.resolvedModel).toBe("claude-3-opus");
       expect(result.routingDecision.providerType).toBe("anthropic");
-      expect(result.routingDecision.groupName).toBe("anthropic");
+      expect(result.routingDecision.routingType).toBe("provider_type");
       expect(result.routingDecision.upstreamName).toBe("anthropic-1");
       expect(result.routingDecision.allowedModelsFilter).toBe(true);
       expect(result.routingDecision.modelRedirectApplied).toBe(false);
+      expect(result.routingDecision.circuitBreakerFilter).toBe(false);
+      expect(result.routingDecision.candidateCount).toBe(1);
     });
   });
 
@@ -358,6 +370,261 @@ describe("model-router", () => {
     it("should be instanceof Error", () => {
       const error = new CircularRedirectError("test");
       expect(error).toBeInstanceOf(Error);
+    });
+  });
+
+  describe("NoHealthyUpstreamError", () => {
+    it("should have correct name", () => {
+      const error = new NoHealthyUpstreamError("gpt-4", "openai");
+      expect(error.name).toBe("NoHealthyUpstreamError");
+    });
+
+    it("should have correct message", () => {
+      const error = new NoHealthyUpstreamError("gpt-4", "openai");
+      expect(error.message).toBe("No healthy upstreams available for model: gpt-4");
+    });
+
+    it("should store model and providerType", () => {
+      const error = new NoHealthyUpstreamError("gpt-4", "openai");
+      expect(error.model).toBe("gpt-4");
+      expect(error.providerType).toBe("openai");
+    });
+
+    it("should be instanceof Error", () => {
+      const error = new NoHealthyUpstreamError("test", null);
+      expect(error).toBeInstanceOf(Error);
+    });
+  });
+
+  describe("filterUpstreamsByCircuitBreaker", () => {
+    it("should filter out OPEN circuit upstreams", async () => {
+      const upstreams: PartialUpstream[] = [
+        { id: "1", name: "upstream-1" },
+        { id: "2", name: "upstream-2" },
+        { id: "3", name: "upstream-3" },
+      ];
+
+      // Mock circuit breaker states: first two closed, third open
+      vi.mocked(db.query.circuitBreakerStates.findFirst)
+        .mockResolvedValueOnce(null) // closed (no record = closed)
+        .mockResolvedValueOnce(null) // closed (no record = closed)
+        .mockResolvedValueOnce({
+          id: "cb-3",
+          upstreamId: "3",
+          state: "open",
+          failureCount: 5,
+        } as unknown as Awaited<ReturnType<typeof db.query.circuitBreakerStates.findFirst>>);
+
+      const result = await filterUpstreamsByCircuitBreaker(upstreams as Upstream[]);
+
+      expect(result.allowed).toHaveLength(2);
+      expect(result.allowed[0].id).toBe("1");
+      expect(result.allowed[1].id).toBe("2");
+      expect(result.excluded).toHaveLength(1);
+      expect(result.excluded[0].id).toBe("3");
+      expect(result.excluded[0].reason).toBe("circuit_open");
+    });
+
+    it("should allow all upstreams when no circuit breaker states", async () => {
+      const upstreams: PartialUpstream[] = [
+        { id: "1", name: "upstream-1" },
+        { id: "2", name: "upstream-2" },
+      ];
+
+      vi.mocked(db.query.circuitBreakerStates.findFirst).mockResolvedValue(null);
+
+      const result = await filterUpstreamsByCircuitBreaker(upstreams as Upstream[]);
+
+      expect(result.allowed).toHaveLength(2);
+      expect(result.excluded).toHaveLength(0);
+    });
+  });
+
+  describe("getUpstreamsByProviderType", () => {
+    it("should return upstreams by provider_type field", async () => {
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        // provider_type query returns results
+        {
+          id: "upstream-1",
+          name: "openai-1",
+          providerType: "openai",
+        },
+      ] as unknown as Awaited<ReturnType<typeof db.query.upstreams.findMany>>);
+
+      const result = await getUpstreamsByProviderType("openai");
+
+      expect(result.upstreams).toHaveLength(1);
+      expect(result.upstreams[0].id).toBe("upstream-1");
+      expect(result.groupName).toBeNull();
+      expect(result.routingType).toBe("provider_type");
+    });
+
+    it("should fallback to group-based routing when no provider_type match", async () => {
+      // First query returns empty (no provider_type match)
+      vi.mocked(db.query.upstreams.findMany)
+        .mockResolvedValueOnce([])
+        // Group query returns group
+        .mockResolvedValueOnce([
+          {
+            id: "upstream-1",
+            name: "openai-1",
+            groupId: "group-id",
+          },
+        ] as unknown as Awaited<ReturnType<typeof db.query.upstreams.findMany>>);
+
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
+        id: "group-id",
+        name: "openai",
+      } as unknown as Awaited<ReturnType<typeof db.query.upstreamGroups.findFirst>>);
+
+      const result = await getUpstreamsByProviderType("openai");
+
+      expect(result.upstreams).toHaveLength(1);
+      expect(result.groupName).toBe("openai");
+      expect(result.routingType).toBe("group");
+    });
+
+    it("should return empty array when no upstreams found", async () => {
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([]);
+      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
+
+      const result = await getUpstreamsByProviderType("openai");
+
+      expect(result.upstreams).toHaveLength(0);
+      expect(result.routingType).toBe("provider_type");
+    });
+  });
+
+  describe("routeByModel with circuit breaker", () => {
+    it("should skip OPEN circuit upstreams", async () => {
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        // First call - provider_type query
+        {
+          id: "upstream-1",
+          name: "openai-1",
+          providerType: "openai",
+          allowedModels: null,
+          modelRedirects: null,
+          weight: 1,
+          isActive: true,
+        },
+        {
+          id: "upstream-2",
+          name: "openai-2",
+          providerType: "openai",
+          allowedModels: null,
+          modelRedirects: null,
+          weight: 1,
+          isActive: true,
+        },
+      ] as unknown as Awaited<ReturnType<typeof db.query.upstreams.findMany>>);
+
+      // Mock circuit breaker: first upstream OPEN, second closed
+      // Called twice: once for filterUpstreamsByCircuitBreaker, once for buildCandidateList
+      vi.mocked(db.query.circuitBreakerStates.findFirst)
+        .mockResolvedValueOnce({
+          id: "cb-1",
+          upstreamId: "upstream-1",
+          state: "open",
+          failureCount: 5,
+        } as unknown as Awaited<ReturnType<typeof db.query.circuitBreakerStates.findFirst>>)
+        .mockResolvedValueOnce(null) // second upstream closed (filter)
+        .mockResolvedValueOnce({
+          id: "cb-1",
+          upstreamId: "upstream-1",
+          state: "open",
+          failureCount: 5,
+        } as unknown as Awaited<ReturnType<typeof db.query.circuitBreakerStates.findFirst>>)
+        .mockResolvedValueOnce(null); // second upstream closed (candidate list)
+
+      const result = await routeByModel("gpt-4");
+
+      expect(result.upstream).not.toBeNull();
+      expect(result.upstream?.id).toBe("upstream-2");
+      expect(result.excludedUpstreams).toHaveLength(1);
+      expect(result.excludedUpstreams[0].reason).toBe("circuit_open");
+      expect(result.routingDecision.circuitBreakerFilter).toBe(true);
+    });
+
+    it("should throw NoHealthyUpstreamError when all upstreams are OPEN", async () => {
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        // First call - provider_type query
+        {
+          id: "upstream-1",
+          name: "openai-1",
+          providerType: "openai",
+          allowedModels: null,
+          modelRedirects: null,
+          weight: 1,
+          isActive: true,
+        },
+      ] as unknown as Awaited<ReturnType<typeof db.query.upstreams.findMany>>);
+
+      // Mock circuit breaker: upstream OPEN
+      vi.mocked(db.query.circuitBreakerStates.findFirst).mockResolvedValue({
+        id: "cb-1",
+        upstreamId: "upstream-1",
+        state: "open",
+        failureCount: 5,
+      } as unknown as Awaited<ReturnType<typeof db.query.circuitBreakerStates.findFirst>>);
+
+      await expect(routeByModel("gpt-4")).rejects.toThrow(NoHealthyUpstreamError);
+    });
+
+    it("should return candidate upstreams with circuit state", async () => {
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        // First call - provider_type query
+        {
+          id: "upstream-1",
+          name: "openai-1",
+          providerType: "openai",
+          allowedModels: null,
+          modelRedirects: null,
+          weight: 1,
+          isActive: true,
+        },
+      ] as unknown as Awaited<ReturnType<typeof db.query.upstreams.findMany>>);
+
+      vi.mocked(db.query.circuitBreakerStates.findFirst).mockResolvedValue(null);
+
+      const result = await routeByModel("gpt-4");
+
+      expect(result.candidateUpstreams).toHaveLength(1);
+      expect(result.candidateUpstreams[0].id).toBe("upstream-1");
+      expect(result.candidateUpstreams[0].circuitState).toBe("closed");
+    });
+
+    it("should log excluded upstreams with model_not_allowed reason", async () => {
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        // First call - provider_type query
+        {
+          id: "upstream-1",
+          name: "openai-1",
+          providerType: "openai",
+          allowedModels: ["gpt-4"],
+          modelRedirects: null,
+          weight: 1,
+          isActive: true,
+        },
+        {
+          id: "upstream-2",
+          name: "openai-2",
+          providerType: "openai",
+          allowedModels: ["gpt-3.5"], // does not support gpt-4
+          modelRedirects: null,
+          weight: 1,
+          isActive: true,
+        },
+      ] as unknown as Awaited<ReturnType<typeof db.query.upstreams.findMany>>);
+
+      vi.mocked(db.query.circuitBreakerStates.findFirst).mockResolvedValue(null);
+
+      const result = await routeByModel("gpt-4");
+
+      expect(result.upstream?.id).toBe("upstream-1");
+      expect(result.excludedUpstreams).toHaveLength(1);
+      expect(result.excludedUpstreams[0].id).toBe("upstream-2");
+      expect(result.excludedUpstreams[0].reason).toBe("model_not_allowed");
     });
   });
 });

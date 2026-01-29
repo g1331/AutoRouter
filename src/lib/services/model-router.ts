@@ -1,5 +1,6 @@
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, upstreams, upstreamGroups, type Upstream } from "../db";
+import { getCircuitBreakerState, CircuitBreakerStateEnum } from "./circuit-breaker";
 
 /**
  * Valid provider types for model-based routing
@@ -18,6 +19,26 @@ export const MODEL_PREFIX_TO_PROVIDER_TYPE: Record<string, ProviderType> = {
 };
 
 /**
+ * Excluded upstream with reason
+ */
+export interface ExcludedUpstream {
+  id: string;
+  name: string;
+  reason: "circuit_open" | "model_not_allowed" | "unhealthy";
+}
+
+/**
+ * Candidate upstream with circuit breaker state
+ */
+export interface CandidateUpstream {
+  id: string;
+  name: string;
+  weight: number;
+  circuitState: string;
+  allowedModels: string[] | null;
+}
+
+/**
  * Result of model routing operation
  */
 export interface ModelRouterResult {
@@ -25,6 +46,8 @@ export interface ModelRouterResult {
   groupName: string | null;
   providerType: ProviderType | null;
   resolvedModel: string;
+  candidateUpstreams: CandidateUpstream[];
+  excludedUpstreams: ExcludedUpstream[];
   routingDecision: {
     originalModel: string;
     resolvedModel: string;
@@ -33,6 +56,10 @@ export interface ModelRouterResult {
     upstreamName: string | null;
     allowedModelsFilter: boolean;
     modelRedirectApplied: boolean;
+    circuitBreakerFilter: boolean;
+    routingType: "provider_type" | "group" | "none";
+    candidateCount: number;
+    finalCandidateCount: number;
   };
 }
 
@@ -43,6 +70,19 @@ export class NoUpstreamGroupError extends Error {
   constructor(model: string) {
     super(`No upstream group configured for model: ${model}`);
     this.name = "NoUpstreamGroupError";
+  }
+}
+
+/**
+ * Error thrown when no healthy upstreams available for a model
+ */
+export class NoHealthyUpstreamError extends Error {
+  constructor(
+    public readonly model: string,
+    public readonly providerType: ProviderType | null
+  ) {
+    super(`No healthy upstreams available for model: ${model}`);
+    this.name = "NoHealthyUpstreamError";
   }
 }
 
@@ -157,7 +197,105 @@ export function filterUpstreamsByModel(upstreamList: Upstream[], model: string):
 }
 
 /**
+ * Filter upstreams by circuit breaker state (exclude OPEN state)
+ * Returns the filtered list and list of excluded upstreams
+ */
+export async function filterUpstreamsByCircuitBreaker(upstreamList: Upstream[]): Promise<{
+  allowed: Upstream[];
+  excluded: ExcludedUpstream[];
+}> {
+  const allowed: Upstream[] = [];
+  const excluded: ExcludedUpstream[] = [];
+
+  for (const upstream of upstreamList) {
+    const cbState = await getCircuitBreakerState(upstream.id);
+
+    if (cbState && cbState.state === CircuitBreakerStateEnum.OPEN) {
+      excluded.push({
+        id: upstream.id,
+        name: upstream.name,
+        reason: "circuit_open",
+      });
+    } else {
+      allowed.push(upstream);
+    }
+  }
+
+  return { allowed, excluded };
+}
+
+/**
+ * Get upstreams by provider type directly (fallback to group-based if needed)
+ */
+export async function getUpstreamsByProviderType(providerType: ProviderType): Promise<{
+  upstreams: Upstream[];
+  groupName: string | null;
+  routingType: "provider_type" | "group";
+}> {
+  // First, try to find upstreams with matching provider_type field
+  const providerTypeUpstreams = await db.query.upstreams.findMany({
+    where: and(eq(upstreams.providerType, providerType), eq(upstreams.isActive, true)),
+  });
+
+  if (providerTypeUpstreams.length > 0) {
+    return {
+      upstreams: providerTypeUpstreams,
+      groupName: null,
+      routingType: "provider_type",
+    };
+  }
+
+  // Fallback: find upstreams by group name
+  const group = await db.query.upstreamGroups.findFirst({
+    where: eq(upstreamGroups.name, providerType),
+  });
+
+  if (group) {
+    const groupUpstreams = await db.query.upstreams.findMany({
+      where: and(eq(upstreams.groupId, group.id), eq(upstreams.isActive, true)),
+    });
+
+    if (groupUpstreams.length > 0) {
+      // Log deprecation warning
+      console.warn(
+        `[model-router] Using deprecated group-based routing for provider type: ${providerType}. Consider setting provider_type field on upstreams.`
+      );
+      return {
+        upstreams: groupUpstreams,
+        groupName: group.name,
+        routingType: "group",
+      };
+    }
+  }
+
+  return {
+    upstreams: [],
+    groupName: null,
+    routingType: "provider_type",
+  };
+}
+
+/**
+ * Build candidate upstream list with circuit breaker state
+ */
+async function buildCandidateList(upstreamList: Upstream[]): Promise<CandidateUpstream[]> {
+  return Promise.all(
+    upstreamList.map(async (upstream) => {
+      const cbState = await getCircuitBreakerState(upstream.id);
+      return {
+        id: upstream.id,
+        name: upstream.name,
+        weight: upstream.weight,
+        circuitState: cbState?.state ?? "closed",
+        allowedModels: upstream.allowedModels,
+      };
+    })
+  );
+}
+
+/**
  * Route request to appropriate upstream based on model
+ * Integrates circuit breaker filtering and returns candidate list
  */
 export async function routeByModel(model: string): Promise<ModelRouterResult> {
   const originalModel = model;
@@ -171,6 +309,8 @@ export async function routeByModel(model: string): Promise<ModelRouterResult> {
       groupName: null,
       providerType: null,
       resolvedModel: model,
+      candidateUpstreams: [],
+      excludedUpstreams: [],
       routingDecision: {
         originalModel,
         resolvedModel: model,
@@ -179,34 +319,40 @@ export async function routeByModel(model: string): Promise<ModelRouterResult> {
         upstreamName: null,
         allowedModelsFilter: false,
         modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "none",
+        candidateCount: 0,
+        finalCandidateCount: 0,
       },
     };
   }
 
-  // Step 2: Find upstream group by provider type
-  const group = await db.query.upstreamGroups.findFirst({
-    where: eq(upstreamGroups.name, providerType),
-  });
-
-  if (!group) {
-    throw new NoUpstreamGroupError(model);
-  }
-
-  // Step 3: Get all active upstreams in the group
-  const upstreamList = await db.query.upstreams.findMany({
-    where: eq(upstreams.groupId, group.id),
-  });
+  // Step 2: Get upstreams by provider type (with fallback to group-based)
+  const {
+    upstreams: upstreamList,
+    groupName,
+    routingType,
+  } = await getUpstreamsByProviderType(providerType);
 
   if (upstreamList.length === 0) {
     throw new NoUpstreamGroupError(model);
   }
 
-  // Step 4: Apply model redirects on each upstream and find matching upstream
+  // Build candidate list for observability
+  const allCandidates = await buildCandidateList(upstreamList);
+
+  // Step 3: Filter upstreams by circuit breaker state
+  const { allowed: healthyUpstreams, excluded: cbExcluded } =
+    await filterUpstreamsByCircuitBreaker(upstreamList);
+
+  // Step 4: Apply model redirects and filter by allowedModels
   let selectedUpstream: Upstream | null = null;
   let finalResolvedModel = model;
   let redirectApplied = false;
+  const modelExcluded: ExcludedUpstream[] = [];
+  let candidateCount = 0;
 
-  for (const upstream of upstreamList) {
+  for (const upstream of healthyUpstreams) {
     const { resolvedModel, redirectApplied: wasRedirected } = resolveModelWithRedirects(
       model,
       upstream.modelRedirects
@@ -219,33 +365,58 @@ export async function routeByModel(model: string): Promise<ModelRouterResult> {
       upstream.allowedModels.includes(resolvedModel);
 
     if (supportsModel) {
-      selectedUpstream = upstream;
-      finalResolvedModel = resolvedModel;
-      redirectApplied = wasRedirected;
-      break;
+      if (!selectedUpstream) {
+        selectedUpstream = upstream;
+        finalResolvedModel = resolvedModel;
+        redirectApplied = wasRedirected;
+      }
+      candidateCount++;
+    } else {
+      modelExcluded.push({
+        id: upstream.id,
+        name: upstream.name,
+        reason: "model_not_allowed",
+      });
     }
   }
 
-  // If no upstream supports the model, use first upstream (fallback)
-  if (!selectedUpstream) {
-    selectedUpstream = upstreamList[0];
+  // Combine all excluded upstreams
+  const allExcluded = [...cbExcluded, ...modelExcluded];
+
+  // Step 5: If no upstream supports the model, use first healthy upstream (fallback)
+  const usingModelFilter = upstreamList.some((u) => u.allowedModels && u.allowedModels.length > 0);
+
+  if (!selectedUpstream && healthyUpstreams.length > 0) {
+    selectedUpstream = healthyUpstreams[0];
     const { resolvedModel } = resolveModelWithRedirects(model, selectedUpstream.modelRedirects);
     finalResolvedModel = resolvedModel;
+    candidateCount = 1;
+  }
+
+  // If no healthy upstreams available, throw error
+  if (!selectedUpstream) {
+    throw new NoHealthyUpstreamError(model, providerType);
   }
 
   return {
     upstream: selectedUpstream,
-    groupName: group.name,
+    groupName,
     providerType,
     resolvedModel: finalResolvedModel,
+    candidateUpstreams: allCandidates,
+    excludedUpstreams: allExcluded,
     routingDecision: {
       originalModel,
       resolvedModel: finalResolvedModel,
       providerType,
-      groupName: group.name,
+      groupName,
       upstreamName: selectedUpstream?.name ?? null,
-      allowedModelsFilter: upstreamList.some((u) => u.allowedModels && u.allowedModels.length > 0),
+      allowedModelsFilter: usingModelFilter,
       modelRedirectApplied: redirectApplied,
+      circuitBreakerFilter: cbExcluded.length > 0,
+      routingType,
+      candidateCount: upstreamList.length,
+      finalCandidateCount: candidateCount,
     },
   };
 }

@@ -65,13 +65,13 @@
 
 **质量门禁**: `pnpm lint`, `pnpm exec tsc --noEmit`, 现有测试不失败
 
-- [ ] 4.1 Modify `src/lib/services/model-router.ts` to query upstreams by provider_type directly
-- [ ] 4.2 Integrate circuit breaker check in upstream selection (filter out OPEN state)
-- [ ] 4.3 Update `routeByModel()` to return list of candidate upstreams instead of single upstream
-- [ ] 4.4 Add fallback to group-based routing when no provider_type match found
-- [ ] 4.5 Update `ModelRouterResult` interface to include candidate upstreams list
-- [ ] 4.6 **Update existing tests** to reflect new return type
-- [ ] 4.7 **Verify** `pnpm test:run` passes
+- [x] 4.1 Modify `src/lib/services/model-router.ts` to query upstreams by provider_type directly
+- [x] 4.2 Integrate circuit breaker check in upstream selection (filter out OPEN state)
+- [x] 4.3 Update `routeByModel()` to return list of candidate upstreams instead of single upstream
+- [x] 4.4 Add fallback to group-based routing when no provider_type match found
+- [x] 4.5 Update `ModelRouterResult` interface to include candidate upstreams list
+- [x] 4.6 **Update existing tests** to reflect new return type
+- [x] 4.7 **Verify** `pnpm test:run` passes
 
 **提交节点**: `feat(failover): model-router - integrate circuit breaker filtering`
 
