@@ -45,6 +45,9 @@ vi.mock("@/lib/db", () => ({
         findFirst: vi.fn(),
         findMany: vi.fn(),
       },
+      circuitBreakerStates: {
+        findMany: vi.fn(() => Promise.resolve([])),
+      },
     },
     select: vi.fn(() => ({
       from: vi.fn(() => Promise.resolve([{ value: 0 }])),

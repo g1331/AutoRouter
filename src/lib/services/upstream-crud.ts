@@ -1,8 +1,26 @@
 import { eq, desc, count, isNull } from "drizzle-orm";
-import { db, upstreams, upstreamGroups, type Upstream, type UpstreamGroup } from "../db";
+import {
+  db,
+  upstreams,
+  upstreamGroups,
+  circuitBreakerStates,
+  type Upstream,
+  type UpstreamGroup,
+} from "../db";
 import { encrypt, decrypt } from "../utils/encryption";
 
 const MIN_KEY_LENGTH_FOR_MASKING = 7;
+
+/**
+ * Circuit breaker status for upstream response
+ */
+export interface UpstreamCircuitBreakerStatus {
+  state: "closed" | "open" | "half_open";
+  failureCount: number;
+  successCount: number;
+  lastFailureAt: Date | null;
+  openedAt: Date | null;
+}
 
 /**
  * Error thrown when an upstream is not found in the database.
@@ -73,6 +91,7 @@ export interface UpstreamResponse {
   modelRedirects: Record<string, string> | null;
   createdAt: Date;
   updatedAt: Date;
+  circuitBreaker?: UpstreamCircuitBreakerStatus | null;
 }
 
 export interface PaginatedUpstreams {
@@ -378,6 +397,17 @@ export async function listUpstreams(
     },
   });
 
+  // Fetch circuit breaker states for all upstreams
+  const upstreamIds = upstreamList.map((u) => u.id);
+  const cbStates =
+    upstreamIds.length > 0
+      ? await db.query.circuitBreakerStates.findMany({
+          where: (table, { inArray }) => inArray(table.upstreamId, upstreamIds),
+        })
+      : [];
+
+  const cbStateMap = new Map(cbStates.map((cb) => [cb.upstreamId, cb]));
+
   // Build response items with masked API keys
   const items: UpstreamResponse[] = upstreamList.map((upstream) => {
     let maskedKey: string;
@@ -388,6 +418,8 @@ export async function listUpstreams(
       console.error(`Failed to decrypt upstream key for masking: ${upstream.name}, error: ${e}`);
       maskedKey = "***error***";
     }
+
+    const cbState = cbStateMap.get(upstream.id);
 
     return {
       id: upstream.id,
@@ -407,6 +439,15 @@ export async function listUpstreams(
       modelRedirects: upstream.modelRedirects,
       createdAt: upstream.createdAt,
       updatedAt: upstream.updatedAt,
+      circuitBreaker: cbState
+        ? {
+            state: cbState.state as "closed" | "open" | "half_open",
+            failureCount: cbState.failureCount,
+            successCount: cbState.successCount,
+            lastFailureAt: cbState.lastFailureAt,
+            openedAt: cbState.openedAt,
+          }
+        : null,
     };
   });
 

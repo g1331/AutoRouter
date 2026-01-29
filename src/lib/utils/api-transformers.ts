@@ -39,6 +39,17 @@ export function toISOStringOrNull(date: Date | null | undefined): string | null 
 // ========== Upstream API Response Types ==========
 
 /**
+ * API response format for circuit breaker status
+ */
+export interface UpstreamCircuitBreakerApiResponse {
+  state: "closed" | "open" | "half_open";
+  failure_count: number;
+  success_count: number;
+  last_failure_at: string | null;
+  opened_at: string | null;
+}
+
+/**
  * API response format for upstream (snake_case).
  * This matches the actual response format used by the API routes.
  */
@@ -60,6 +71,7 @@ export interface UpstreamApiResponse {
   model_redirects: Record<string, string> | null;
   created_at: string;
   updated_at: string;
+  circuit_breaker: UpstreamCircuitBreakerApiResponse | null;
 }
 
 /**
@@ -115,6 +127,15 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
     model_redirects: upstream.modelRedirects,
     created_at: upstream.createdAt.toISOString(),
     updated_at: upstream.updatedAt.toISOString(),
+    circuit_breaker: upstream.circuitBreaker
+      ? {
+          state: upstream.circuitBreaker.state,
+          failure_count: upstream.circuitBreaker.failureCount,
+          success_count: upstream.circuitBreaker.successCount,
+          last_failure_at: upstream.circuitBreaker.lastFailureAt?.toISOString() ?? null,
+          opened_at: upstream.circuitBreaker.openedAt?.toISOString() ?? null,
+        }
+      : null,
   };
 }
 

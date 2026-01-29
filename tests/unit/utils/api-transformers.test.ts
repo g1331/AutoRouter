@@ -68,6 +68,13 @@ describe("api-transformers", () => {
         config: '{"model": "gpt-4"}',
         created_at: "2024-01-15T10:00:00.000Z",
         updated_at: "2024-01-15T12:00:00.000Z",
+        group_id: undefined,
+        group_name: undefined,
+        weight: undefined,
+        provider_type: undefined,
+        allowed_models: undefined,
+        model_redirects: undefined,
+        circuit_breaker: null,
       });
     });
 
