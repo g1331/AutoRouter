@@ -53,6 +53,24 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
+  const formatProviderType = (providerType: string | null) => {
+    if (!providerType) return null;
+
+    const typeMap: Record<string, { label: string; variant: BadgeProps["variant"] }> = {
+      anthropic: { label: "Anthropic", variant: "default" },
+      openai: { label: "OpenAI", variant: "success" },
+      google: { label: "Google", variant: "warning" },
+      custom: { label: "Custom", variant: "outline" },
+    };
+
+    const config = typeMap[providerType.toLowerCase()] || {
+      label: providerType,
+      variant: "neutral" as const,
+    };
+
+    return <Badge variant={config.variant}>{config.label}</Badge>;
+  };
+
   const formatHealthStatus = (upstream: Upstream) => {
     const healthStatus = upstream.health_status;
 
@@ -101,6 +119,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
           <TableRow>
             <TableHead>{tCommon("name")}</TableHead>
             <TableHead>{t("tableProvider")}</TableHead>
+            <TableHead>{t("providerType")}</TableHead>
             <TableHead>{t("tableGroup")}</TableHead>
             <TableHead>{t("tableWeight")}</TableHead>
             <TableHead>{t("tableHealth")}</TableHead>
@@ -114,6 +133,13 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
             <TableRow key={upstream.id}>
               <TableCell className="font-medium">{upstream.name}</TableCell>
               <TableCell>{formatProvider(upstream.provider)}</TableCell>
+              <TableCell>
+                {upstream.provider_type ? (
+                  formatProviderType(upstream.provider_type)
+                ) : (
+                  <span className="text-muted-foreground text-sm">—</span>
+                )}
+              </TableCell>
               <TableCell>
                 {upstream.group_name ? (
                   <Badge variant="secondary">{upstream.group_name}</Badge>

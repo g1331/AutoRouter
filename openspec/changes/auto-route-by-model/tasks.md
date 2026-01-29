@@ -42,11 +42,11 @@
 
 ## 6. Admin UI Updates
 
-- [ ] 6.1 Add `Provider Type` selector to upstream create/edit forms
-- [ ] 6.2 Add `Allowed Models` input field (tag input or comma-separated)
-- [ ] 6.3 Add `Model Redirects` key-value input field
-- [ ] 6.4 Update upstream list display to show provider type
-- [ ] 6.5 Update translations for new fields (en, zh-CN)
+- [x] 6.1 Add `Provider Type` selector to upstream create/edit forms
+- [x] 6.2 Add `Allowed Models` input field (tag input or comma-separated)
+- [x] 6.3 Add `Model Redirects` key-value input field
+- [x] 6.4 Update upstream list display to show provider type
+- [x] 6.5 Update translations for new fields (en, zh-CN)
 
 ## 7. Request Logger Updates
 
