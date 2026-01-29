@@ -170,6 +170,7 @@ export interface UpstreamCreate {
   provider_type?: ProviderType | null; // Provider type for model-based routing
   allowed_models?: string[] | null; // List of supported model names
   model_redirects?: Record<string, string> | null; // Model name mapping
+  circuit_breaker_config?: CircuitBreakerConfig | null; // Circuit breaker configuration
 }
 
 export interface UpstreamUpdate {
@@ -185,6 +186,7 @@ export interface UpstreamUpdate {
   provider_type?: ProviderType | null; // Provider type for model-based routing
   allowed_models?: string[] | null; // List of supported model names
   model_redirects?: Record<string, string> | null; // Model name mapping
+  circuit_breaker_config?: CircuitBreakerConfig | null; // Circuit breaker configuration
 }
 
 export interface UpstreamResponse {

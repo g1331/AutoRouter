@@ -14,6 +14,13 @@ import { z } from "zod";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+const circuitBreakerConfigSchema = z.object({
+  failure_threshold: z.number().int().min(1).max(100).optional(),
+  success_threshold: z.number().int().min(1).max(100).optional(),
+  open_duration: z.number().int().min(1000).max(300000).optional(),
+  probe_interval: z.number().int().min(1000).max(60000).optional(),
+});
+
 const updateUpstreamSchema = z.object({
   name: z.string().min(1).max(64).optional(),
   provider: z.enum(["openai", "anthropic"]).optional(),
@@ -28,6 +35,7 @@ const updateUpstreamSchema = z.object({
   provider_type: z.enum(["anthropic", "openai", "google", "custom"]).nullable().optional(),
   allowed_models: z.array(z.string()).nullable().optional(),
   model_redirects: z.record(z.string(), z.string()).nullable().optional(),
+  circuit_breaker_config: circuitBreakerConfigSchema.nullable().optional(),
 });
 
 /**
@@ -82,6 +90,16 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     if (validated.provider_type !== undefined) input.providerType = validated.provider_type;
     if (validated.allowed_models !== undefined) input.allowedModels = validated.allowed_models;
     if (validated.model_redirects !== undefined) input.modelRedirects = validated.model_redirects;
+    if (validated.circuit_breaker_config !== undefined) {
+      input.circuitBreakerConfig = validated.circuit_breaker_config
+        ? {
+            failureThreshold: validated.circuit_breaker_config.failure_threshold,
+            successThreshold: validated.circuit_breaker_config.success_threshold,
+            openDuration: validated.circuit_breaker_config.open_duration,
+            probeInterval: validated.circuit_breaker_config.probe_interval,
+          }
+        : null;
+    }
 
     const result = await updateUpstream(id, input);
 

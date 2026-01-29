@@ -8,6 +8,7 @@ import {
   type UpstreamGroup,
 } from "../db";
 import { encrypt, decrypt } from "../utils/encryption";
+import { CircuitBreakerStateEnum } from "./circuit-breaker";
 
 const MIN_KEY_LENGTH_FOR_MASKING = 7;
 
@@ -55,6 +56,12 @@ export interface UpstreamCreateInput {
   providerType?: string | null;
   allowedModels?: string[] | null;
   modelRedirects?: Record<string, string> | null;
+  circuitBreakerConfig?: {
+    failureThreshold?: number;
+    successThreshold?: number;
+    openDuration?: number;
+    probeInterval?: number;
+  } | null;
 }
 
 export interface UpstreamUpdateInput {
@@ -71,6 +78,12 @@ export interface UpstreamUpdateInput {
   providerType?: string | null;
   allowedModels?: string[] | null;
   modelRedirects?: Record<string, string> | null;
+  circuitBreakerConfig?: {
+    failureThreshold?: number;
+    successThreshold?: number;
+    openDuration?: number;
+    probeInterval?: number;
+  } | null;
 }
 
 export interface UpstreamResponse {
@@ -228,6 +241,19 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     })
     .returning();
 
+  // Create circuit breaker state with custom config if provided
+  if (input.circuitBreakerConfig) {
+    await db.insert(circuitBreakerStates).values({
+      upstreamId: newUpstream.id,
+      state: CircuitBreakerStateEnum.CLOSED,
+      failureCount: 0,
+      successCount: 0,
+      config: input.circuitBreakerConfig,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
   return {
     id: newUpstream.id,
     name: newUpstream.name,
@@ -318,6 +344,35 @@ export async function updateUpstream(
     .set(updateValues)
     .where(eq(upstreams.id, upstreamId))
     .returning();
+
+  // Update circuit breaker config if provided
+  if (input.circuitBreakerConfig !== undefined) {
+    const existingCb = await db.query.circuitBreakerStates.findFirst({
+      where: eq(circuitBreakerStates.upstreamId, upstreamId),
+    });
+
+    if (existingCb) {
+      // Update existing circuit breaker config
+      await db
+        .update(circuitBreakerStates)
+        .set({
+          config: input.circuitBreakerConfig,
+          updatedAt: new Date(),
+        })
+        .where(eq(circuitBreakerStates.upstreamId, upstreamId));
+    } else if (input.circuitBreakerConfig) {
+      // Create new circuit breaker state with config
+      await db.insert(circuitBreakerStates).values({
+        upstreamId,
+        state: CircuitBreakerStateEnum.CLOSED,
+        failureCount: 0,
+        successCount: 0,
+        config: input.circuitBreakerConfig,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+  }
 
   // Get group name if upstream is in a group
   let groupName: string | null = null;

@@ -134,7 +134,7 @@
 - [ ] 8.1 Add circuit breaker status column to upstreams table
 - [ ] 8.2 Create circuit breaker detail view with state visualization
 - [ ] 8.3 Add manual reset buttons (force open/close) for admins
-- [ ] 8.4 Update upstream form to include circuit breaker configuration
+- [x] 8.4 Update upstream form to include circuit breaker configuration
 - [ ] 8.5 Add health status indicator to upstream cards
 - [ ] 8.6 **Verify** `pnpm build` succeeds
 - [ ] 8.7 **Verify** no TypeScript errors in frontend code

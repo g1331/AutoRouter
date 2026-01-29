@@ -10,6 +10,13 @@ import {
 import { transformPaginatedUpstreams, transformUpstreamToApi } from "@/lib/utils/api-transformers";
 import { z } from "zod";
 
+const circuitBreakerConfigSchema = z.object({
+  failure_threshold: z.number().int().min(1).max(100).optional(),
+  success_threshold: z.number().int().min(1).max(100).optional(),
+  open_duration: z.number().int().min(1000).max(300000).optional(),
+  probe_interval: z.number().int().min(1000).max(60000).optional(),
+});
+
 const createUpstreamSchema = z.object({
   name: z.string().min(1).max(64),
   provider: z.enum(["openai", "anthropic"]),
@@ -23,6 +30,7 @@ const createUpstreamSchema = z.object({
   provider_type: z.enum(["anthropic", "openai", "google", "custom"]).nullable().optional(),
   allowed_models: z.array(z.string()).nullable().optional(),
   model_redirects: z.record(z.string(), z.string()).nullable().optional(),
+  circuit_breaker_config: circuitBreakerConfigSchema.nullable().optional(),
 });
 
 /**
@@ -71,6 +79,14 @@ export async function POST(request: NextRequest) {
       providerType: validated.provider_type ?? null,
       allowedModels: validated.allowed_models ?? null,
       modelRedirects: validated.model_redirects ?? null,
+      circuitBreakerConfig: validated.circuit_breaker_config
+        ? {
+            failureThreshold: validated.circuit_breaker_config.failure_threshold,
+            successThreshold: validated.circuit_breaker_config.success_threshold,
+            openDuration: validated.circuit_breaker_config.open_duration,
+            probeInterval: validated.circuit_breaker_config.probe_interval,
+          }
+        : null,
     };
 
     const result = await createUpstream(input);

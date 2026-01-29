@@ -174,6 +174,7 @@ describe("UpstreamFormDialog", () => {
           provider_type: null,
           allowed_models: null,
           model_redirects: null,
+          circuit_breaker_config: null,
         });
       });
     });
@@ -272,6 +273,7 @@ describe("UpstreamFormDialog", () => {
             provider_type: null,
             allowed_models: null,
             model_redirects: null,
+            circuit_breaker_config: null,
           },
         });
       });
@@ -305,6 +307,7 @@ describe("UpstreamFormDialog", () => {
             provider_type: null,
             allowed_models: null,
             model_redirects: null,
+            circuit_breaker_config: null,
             // api_key should NOT be included when empty
           },
         });

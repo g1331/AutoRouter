@@ -47,6 +47,16 @@ interface UpstreamFormDialogProps {
   trigger?: React.ReactNode;
 }
 
+// Circuit breaker config schema
+const circuitBreakerConfigSchema = z
+  .object({
+    failure_threshold: z.number().int().min(1).max(100).optional(),
+    success_threshold: z.number().int().min(1).max(100).optional(),
+    open_duration: z.number().int().min(1000).max(300000).optional(),
+    probe_interval: z.number().int().min(1000).max(60000).optional(),
+  })
+  .nullable();
+
 // Schema for create mode - api_key is required
 const createUpstreamFormSchema = z.object({
   name: z.string().min(1).max(100),
@@ -59,6 +69,7 @@ const createUpstreamFormSchema = z.object({
   provider_type: z.enum(["anthropic", "openai", "google", "custom"]).nullable(),
   allowed_models: z.array(z.string()).nullable(),
   model_redirects: z.record(z.string(), z.string()).nullable(),
+  circuit_breaker_config: circuitBreakerConfigSchema,
 });
 
 // Schema for edit mode - api_key is optional (leave empty to keep unchanged)
@@ -73,6 +84,7 @@ const editUpstreamFormSchema = z.object({
   provider_type: z.enum(["anthropic", "openai", "google", "custom"]).nullable(),
   allowed_models: z.array(z.string()).nullable(),
   model_redirects: z.record(z.string(), z.string()).nullable(),
+  circuit_breaker_config: circuitBreakerConfigSchema,
 });
 
 type UpstreamFormData = z.infer<typeof createUpstreamFormSchema>;
@@ -106,6 +118,7 @@ export function UpstreamFormDialog({
       provider_type: null,
       allowed_models: null,
       model_redirects: null,
+      circuit_breaker_config: null,
     },
   });
 
@@ -125,6 +138,14 @@ export function UpstreamFormDialog({
         provider_type: upstream.provider_type || null,
         allowed_models: upstream.allowed_models || null,
         model_redirects: upstream.model_redirects || null,
+        circuit_breaker_config: upstream.circuit_breaker?.config
+          ? {
+              failure_threshold: upstream.circuit_breaker.config.failure_threshold,
+              success_threshold: upstream.circuit_breaker.config.success_threshold,
+              open_duration: upstream.circuit_breaker.config.open_duration,
+              probe_interval: upstream.circuit_breaker.config.probe_interval,
+            }
+          : null,
       });
     } else if (!open) {
       form.reset({
@@ -138,6 +159,7 @@ export function UpstreamFormDialog({
         provider_type: null,
         allowed_models: null,
         model_redirects: null,
+        circuit_breaker_config: null,
       });
     }
   }, [upstream, open, form]);
@@ -157,6 +179,12 @@ export function UpstreamFormDialog({
           provider_type?: ProviderType | null;
           allowed_models?: string[] | null;
           model_redirects?: Record<string, string> | null;
+          circuit_breaker_config?: {
+            failure_threshold?: number;
+            success_threshold?: number;
+            open_duration?: number;
+            probe_interval?: number;
+          } | null;
         } = {
           name: data.name,
           provider: data.provider,
@@ -167,6 +195,7 @@ export function UpstreamFormDialog({
           provider_type: data.provider_type,
           allowed_models: data.allowed_models,
           model_redirects: data.model_redirects,
+          circuit_breaker_config: data.circuit_breaker_config,
         };
         if (data.api_key) {
           updateData.api_key = data.api_key;
@@ -188,6 +217,7 @@ export function UpstreamFormDialog({
           provider_type: data.provider_type,
           allowed_models: data.allowed_models,
           model_redirects: data.model_redirects,
+          circuit_breaker_config: data.circuit_breaker_config,
         });
       }
 
@@ -417,6 +447,101 @@ export function UpstreamFormDialog({
                 </FormItem>
               )}
             />
+          </div>
+
+          {/* Circuit Breaker Configuration Section */}
+          <div className="border-t pt-6 mt-6">
+            <h3 className="text-sm font-medium text-muted-foreground mb-4">
+              {t("circuitBreakerConfig")}
+            </h3>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">{t("failureThreshold")}</label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={100}
+                  placeholder="5"
+                  value={form.watch("circuit_breaker_config")?.failure_threshold ?? ""}
+                  onChange={(e) => {
+                    const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                    const currentConfig = form.getValues("circuit_breaker_config") || {};
+                    form.setValue(
+                      "circuit_breaker_config",
+                      val !== undefined ? { ...currentConfig, failure_threshold: val } : null,
+                      { shouldValidate: true }
+                    );
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">{t("failureThresholdDesc")}</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">{t("successThreshold")}</label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={100}
+                  placeholder="2"
+                  value={form.watch("circuit_breaker_config")?.success_threshold ?? ""}
+                  onChange={(e) => {
+                    const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                    const currentConfig = form.getValues("circuit_breaker_config") || {};
+                    form.setValue(
+                      "circuit_breaker_config",
+                      val !== undefined ? { ...currentConfig, success_threshold: val } : null,
+                      { shouldValidate: true }
+                    );
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">{t("successThresholdDesc")}</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">{t("openDuration")}</label>
+                <Input
+                  type="number"
+                  min={1000}
+                  max={300000}
+                  step={1000}
+                  placeholder="30000"
+                  value={form.watch("circuit_breaker_config")?.open_duration ?? ""}
+                  onChange={(e) => {
+                    const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                    const currentConfig = form.getValues("circuit_breaker_config") || {};
+                    form.setValue(
+                      "circuit_breaker_config",
+                      val !== undefined ? { ...currentConfig, open_duration: val } : null,
+                      { shouldValidate: true }
+                    );
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">{t("openDurationDesc")}</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">{t("probeInterval")}</label>
+                <Input
+                  type="number"
+                  min={1000}
+                  max={60000}
+                  step={1000}
+                  placeholder="10000"
+                  value={form.watch("circuit_breaker_config")?.probe_interval ?? ""}
+                  onChange={(e) => {
+                    const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                    const currentConfig = form.getValues("circuit_breaker_config") || {};
+                    form.setValue(
+                      "circuit_breaker_config",
+                      val !== undefined ? { ...currentConfig, probe_interval: val } : null,
+                      { shouldValidate: true }
+                    );
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">{t("probeIntervalDesc")}</p>
+              </div>
+            </div>
           </div>
 
           <DialogFooter>
