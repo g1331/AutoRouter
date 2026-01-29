@@ -1,11 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import {
-  hashApiKey,
-  verifyApiKey,
-  extractApiKey,
-  getKeyPrefix,
-  generateApiKey,
-} from "@/lib/utils/auth";
+import { hashApiKey, verifyApiKey, extractApiKey, getKeyPrefix } from "@/lib/utils/auth";
 
 describe("auth utilities", () => {
   describe("hashApiKey", () => {
@@ -92,31 +86,6 @@ describe("auth utilities", () => {
       const key = "short";
       const prefix = getKeyPrefix(key);
       expect(prefix).toBe("short");
-    });
-  });
-
-  describe("generateApiKey", () => {
-    it("should generate a key with correct format", () => {
-      const key = generateApiKey();
-      expect(key.startsWith("sk-auto-")).toBe(true);
-    });
-
-    it("should generate a key with correct length", () => {
-      const key = generateApiKey();
-      // sk-auto- (8) + 32 random chars = 40
-      expect(key.length).toBe(40);
-    });
-
-    it("should generate unique keys", () => {
-      const key1 = generateApiKey();
-      const key2 = generateApiKey();
-      expect(key1).not.toBe(key2);
-    });
-
-    it("should only contain valid characters", () => {
-      const key = generateApiKey();
-      const randomPart = key.slice(8);
-      expect(randomPart).toMatch(/^[a-zA-Z0-9]+$/);
     });
   });
 

@@ -73,22 +73,6 @@ export function validateAdminAuth(authHeader: string | null): boolean {
 }
 
 /**
- * Generate a new API key with the standard format.
- *
- * Format: sk-auto-<random>
- *
- * @returns A new API key string
- */
-export function generateApiKey(): string {
-  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  const randomPart = Array.from(
-    { length: 32 },
-    () => chars[Math.floor(Math.random() * chars.length)]
-  ).join("");
-  return `sk-auto-${randomPart}`;
-}
-
-/**
  * Reveal a stored encrypted API key.
  *
  * @param encryptedKey - The encrypted key value
