@@ -9,14 +9,20 @@ import {
 } from "@/lib/services/proxy-client";
 import { logRequest, extractTokenUsage, type FailoverAttempt } from "@/lib/services/request-logger";
 import {
-  selectUpstream,
+  selectFromProviderType,
   recordConnection,
   releaseConnection,
   getUpstreamGroupByName,
   NoHealthyUpstreamsError,
   UpstreamGroupNotFoundError,
+  LoadBalancerStrategy,
 } from "@/lib/services/load-balancer";
 import { markHealthy, markUnhealthy } from "@/lib/services/health-checker";
+import {
+  recordSuccess,
+  recordFailure,
+  CircuitBreakerOpenError,
+} from "@/lib/services/circuit-breaker";
 import { randomUUID } from "crypto";
 import { routeByModel, NoUpstreamGroupError, type ProviderType } from "@/lib/services/model-router";
 
@@ -30,10 +36,13 @@ type RouteContext = { params: Promise<{ path: string[] }> };
 const MAX_FAILOVER_ATTEMPTS = 3;
 
 /**
- * Check if an error indicates the upstream is unhealthy (connection/timeout errors).
+ * Check if an error indicates the upstream is unhealthy (connection/timeout/circuit breaker errors).
  * We should attempt failover for these errors.
  */
 function isFailoverableError(error: unknown): boolean {
+  if (error instanceof CircuitBreakerOpenError) {
+    return true;
+  }
   if (error instanceof Error) {
     const msg = error.message.toLowerCase();
     return (
@@ -43,7 +52,8 @@ function isFailoverableError(error: unknown): boolean {
       msg.includes("econnreset") ||
       msg.includes("socket hang up") ||
       msg.includes("network") ||
-      msg.includes("fetch failed")
+      msg.includes("fetch failed") ||
+      msg.includes("circuit breaker")
     );
   }
   return false;
@@ -85,22 +95,24 @@ function getErrorType(
   error: Error | null,
   statusCode: number | null
 ): FailoverAttempt["error_type"] {
+  if (error instanceof CircuitBreakerOpenError) return "circuit_open";
   if (statusCode === 429) return "http_429";
   if (statusCode && statusCode >= 500) return "http_5xx";
   if (error) {
     const msg = error.message.toLowerCase();
     if (msg.includes("timed out") || msg.includes("timeout")) return "timeout";
+    if (msg.includes("circuit breaker") || msg.includes("circuit_open")) return "circuit_open";
   }
   return "connection_error";
 }
 
 /**
- * Forward a request with failover support for group-based routing.
- * Tries multiple upstreams from the group if the initial request fails.
+ * Forward a request with failover support using circuit breaker.
+ * Tries multiple upstreams if the initial request fails.
  */
 async function forwardWithFailover(
   request: NextRequest,
-  groupId: string,
+  providerType: ProviderType,
   path: string,
   requestId: string
 ): Promise<{
@@ -118,15 +130,17 @@ async function forwardWithFailover(
   const requestBodyBuffer = await requestClone.arrayBuffer();
 
   for (let attempt = 0; attempt < MAX_FAILOVER_ATTEMPTS; attempt++) {
+    let selectedUpstream: Upstream | null = null;
+
     try {
-      // Select an upstream from the group, excluding previously failed ones
-      const selection = await selectUpstream(
-        groupId,
-        undefined, // Use group's default strategy
+      // Select an upstream using provider type, excluding previously failed ones
+      const selection = await selectFromProviderType(
+        providerType,
+        LoadBalancerStrategy.WEIGHTED,
         failedUpstreamIds.length > 0 ? failedUpstreamIds : undefined
       );
 
-      const selectedUpstream = selection.upstream;
+      selectedUpstream = selection.upstream;
 
       // Track connection for least-connections strategy
       recordConnection(selectedUpstream.id);
@@ -147,6 +161,8 @@ async function forwardWithFailover(
           // Release connection and mark as unhealthy
           releaseConnection(selectedUpstream.id);
           void markUnhealthy(selectedUpstream.id, `HTTP ${result.statusCode} error`);
+          // Record failure in circuit breaker
+          void recordFailure(selectedUpstream.id, `http_${result.statusCode}`);
           // Record failover attempt
           failoverHistory.push({
             upstream_id: selectedUpstream.id,
@@ -161,7 +177,9 @@ async function forwardWithFailover(
           continue;
         }
 
-        // Success! Update health status asynchronously
+        // Success! Record success in circuit breaker and update health status
+        void recordSuccess(selectedUpstream.id);
+
         // For streaming responses, we track the connection until the stream ends
         if (!result.isStream) {
           releaseConnection(selectedUpstream.id);
@@ -187,7 +205,13 @@ async function forwardWithFailover(
         // Release connection on error
         releaseConnection(selectedUpstream.id);
 
+        // Record failure in circuit breaker for failoverable errors
         if (isFailoverableError(error)) {
+          void recordFailure(
+            selectedUpstream.id,
+            getErrorType(error instanceof Error ? error : null, null)
+          );
+
           // Mark upstream as unhealthy
           const errorMessage = error instanceof Error ? error.message : "Request failed";
           void markUnhealthy(selectedUpstream.id, errorMessage);
@@ -197,6 +221,23 @@ async function forwardWithFailover(
             upstream_name: selectedUpstream.name,
             attempted_at: new Date().toISOString(),
             error_type: getErrorType(error instanceof Error ? error : null, null),
+            error_message: errorMessage,
+            status_code: null,
+          });
+          failedUpstreamIds.push(selectedUpstream.id);
+          lastError = error instanceof Error ? error : new Error(String(error));
+          continue;
+        }
+
+        // Circuit breaker open error - record and continue to next upstream
+        if (error instanceof CircuitBreakerOpenError) {
+          const errorMessage = error.message;
+          // Record failover attempt
+          failoverHistory.push({
+            upstream_id: selectedUpstream.id,
+            upstream_name: selectedUpstream.name,
+            attempted_at: new Date().toISOString(),
+            error_type: "circuit_open",
             error_message: errorMessage,
             status_code: null,
           });
@@ -223,6 +264,7 @@ async function forwardWithFailover(
 
 /**
  * Wrap a ReadableStream to track and release connection when the stream ends.
+ * Also records circuit breaker success/failure based on stream completion.
  */
 function wrapStreamWithConnectionTracking(
   stream: ReadableStream<Uint8Array>,
@@ -242,14 +284,16 @@ function wrapStreamWithConnectionTracking(
           controller.enqueue(value);
         }
         controller.close();
-        // Stream completed successfully - release connection and mark healthy
+        // Stream completed successfully - release connection, mark healthy, record circuit breaker success
         releaseConnection(upstreamId);
         void markHealthy(upstreamId, 100);
+        void recordSuccess(upstreamId);
       } catch (error) {
         controller.error(error);
-        // Stream errored - release connection and mark unhealthy
+        // Stream errored - release connection, mark unhealthy, record circuit breaker failure
         releaseConnection(upstreamId);
         void markUnhealthy(upstreamId, error instanceof Error ? error.message : "Stream error");
+        void recordFailure(upstreamId, "stream_error");
       } finally {
         reader?.releaseLock();
         reader = null;
@@ -332,7 +376,6 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   // Model-based routing
   let selectedUpstream: Upstream | undefined;
   let useLoadBalancer = false;
-  let groupId: string | null = null;
   let groupStrategy: string | null = null;
   let groupName: string | null = null;
   let providerType: ProviderType | null = null;
@@ -361,7 +404,6 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     if (groupName) {
       const group = await getUpstreamGroupByName(groupName);
       if (group) {
-        groupId = group.id;
         groupStrategy = group.strategy;
         useLoadBalancer = true;
       }
@@ -389,18 +431,6 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     throw error;
   }
 
-  // Parse request body for logging (need to re-clone since we already read it)
-  let requestBody: Record<string, unknown> | null = null;
-  try {
-    const clonedRequest = request.clone();
-    const bodyText = await clonedRequest.text();
-    if (bodyText) {
-      requestBody = JSON.parse(bodyText);
-    }
-  } catch {
-    // Not JSON or empty body
-  }
-
   // Track failover history outside try block for error logging
   let failoverHistory: FailoverAttempt[] = [];
 
@@ -409,13 +439,13 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     let result: ProxyResult;
     let upstreamForLogging: Upstream;
 
-    if (useLoadBalancer && groupId && groupStrategy) {
-      // Use load balancer with failover for group-based routing
+    if (useLoadBalancer && providerType) {
+      // Use load balancer with circuit breaker failover for provider-type routing
       const {
         result: proxyResult,
         selectedUpstream: selected,
         failoverHistory: history,
-      } = await forwardWithFailover(request, groupId, path, requestId);
+      } = await forwardWithFailover(request, providerType, path, requestId);
       result = proxyResult;
       upstreamForLogging = selected;
       failoverHistory = history;
@@ -570,6 +600,13 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
     if (error instanceof Error && error.message.includes("timed out")) {
       return NextResponse.json({ error: "Upstream request timed out" }, { status: 504 });
+    }
+
+    if (error instanceof CircuitBreakerOpenError) {
+      return NextResponse.json(
+        { error: "Circuit breaker is open - upstream temporarily unavailable" },
+        { status: 503 }
+      );
     }
 
     console.error(`Proxy error for request ${requestId}:`, error);

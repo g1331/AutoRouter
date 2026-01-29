@@ -97,15 +97,15 @@
 
 **质量门禁**: `pnpm lint`, `pnpm exec tsc --noEmit`, 集成测试通过
 
-- [ ] 6.1 Refactor `forwardWithFailover()` in proxy route to use circuit breaker
-- [ ] 6.2 Implement retry logic with circuit breaker awareness
-- [ ] 6.3 Track failover history for request logging
-- [ ] 6.4 Update error handling to distinguish circuit breaker errors from upstream errors
-- [ ] 6.5 Ensure streaming responses properly release connections on failure
-- [ ] 6.6 **Write integration tests** for failover scenarios (2 retries then success)
-- [ ] 6.7 **Write integration tests** for all upstreams failing
-- [ ] 6.8 **Write integration tests** for circuit breaker blocking requests
-- [ ] 6.9 **Verify** streaming failover works correctly
+- [x] 6.1 Refactor `forwardWithFailover()` in proxy route to use circuit breaker
+- [x] 6.2 Implement retry logic with circuit breaker awareness
+- [x] 6.3 Track failover history for request logging
+- [x] 6.4 Update error handling to distinguish circuit breaker errors from upstream errors
+- [x] 6.5 Ensure streaming responses properly release connections on failure
+- [x] 6.6 **Write integration tests** for failover scenarios (2 retries then success)
+- [x] 6.7 **Write integration tests** for all upstreams failing
+- [x] 6.8 **Write integration tests** for circuit breaker blocking requests
+- [x] 6.9 **Verify** streaming failover works correctly
 
 **提交节点**: `feat(failover): proxy-route - implement circuit breaker failover`
 

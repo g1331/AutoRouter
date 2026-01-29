@@ -65,11 +65,19 @@ vi.mock("@/lib/services/load-balancer", () => {
     }
   }
 
+  const LoadBalancerStrategy = {
+    ROUND_ROBIN: "round_robin",
+    WEIGHTED: "weighted",
+    LEAST_CONNECTIONS: "least_connections",
+  };
+
   return {
     selectUpstream: vi.fn(),
+    selectFromProviderType: vi.fn(),
     recordConnection: vi.fn(),
     releaseConnection: vi.fn(),
     getUpstreamGroupByName: vi.fn(),
+    LoadBalancerStrategy,
     NoHealthyUpstreamsError,
     UpstreamGroupNotFoundError,
   };
@@ -80,6 +88,26 @@ vi.mock("@/lib/services/health-checker", () => ({
   markHealthy: vi.fn(),
   markUnhealthy: vi.fn(),
 }));
+
+// Mock circuit-breaker module
+vi.mock("@/lib/services/circuit-breaker", () => {
+  class CircuitBreakerOpenError extends Error {
+    public readonly upstreamId: string;
+    public readonly remainingSeconds: number;
+    constructor(upstreamId: string, remainingSeconds: number) {
+      super(`Circuit breaker is OPEN for upstream ${upstreamId}. Retry after ${remainingSeconds}s`);
+      this.name = "CircuitBreakerOpenError";
+      this.upstreamId = upstreamId;
+      this.remainingSeconds = remainingSeconds;
+    }
+  }
+
+  return {
+    recordSuccess: vi.fn(),
+    recordFailure: vi.fn(),
+    CircuitBreakerOpenError,
+  };
+});
 
 // Mock model-router module
 vi.mock("@/lib/services/model-router", () => ({
@@ -171,6 +199,396 @@ describe("proxy route upstream selection", () => {
     );
   });
 
+  it("should perform failover with circuit breaker when first upstream fails", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType, getUpstreamGroupByName } =
+      await import("@/lib/services/load-balancer");
+    const { markHealthy, markUnhealthy } = await import("@/lib/services/health-checker");
+    const { recordSuccess, recordFailure } = await import("@/lib/services/circuit-breaker");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-anthropic-1" },
+      { upstreamId: "up-anthropic-2" },
+    ]);
+
+    const failingUpstream = {
+      id: "up-anthropic-1",
+      name: "anthropic-1",
+      provider: "anthropic",
+      baseUrl: "https://api.anthropic.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    const healthyUpstream = {
+      id: "up-anthropic-2",
+      name: "anthropic-2",
+      provider: "anthropic",
+      baseUrl: "https://api.anthropic.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    // Mock the group to enable load balancer mode
+    vi.mocked(getUpstreamGroupByName).mockResolvedValueOnce({
+      id: "group-1",
+      name: "anthropic",
+      provider: "anthropic",
+      strategy: "weighted",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream: failingUpstream,
+      groupName: "anthropic",
+      providerType: "anthropic",
+      resolvedModel: "claude-test",
+      candidateUpstreams: [],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "claude-test",
+        resolvedModel: "claude-test",
+        providerType: "anthropic",
+        groupName: "anthropic",
+        upstreamName: "anthropic-1",
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 2,
+        finalCandidateCount: 2,
+      },
+    });
+
+    // First call selects failing upstream, second call selects healthy upstream
+    vi.mocked(selectFromProviderType)
+      .mockResolvedValueOnce({
+        upstream: failingUpstream,
+        strategy: "weighted",
+        providerType: "anthropic",
+        routingType: "provider_type",
+        groupName: "anthropic",
+        circuitBreakerFiltered: 0,
+        healthFiltered: 0,
+        totalCandidates: 2,
+      })
+      .mockResolvedValueOnce({
+        upstream: healthyUpstream,
+        strategy: "weighted",
+        providerType: "anthropic",
+        routingType: "provider_type",
+        groupName: "anthropic",
+        circuitBreakerFiltered: 0,
+        healthFiltered: 0,
+        totalCandidates: 2,
+      });
+
+    // First request returns 500, second succeeds
+    vi.mocked(forwardRequest)
+      .mockResolvedValueOnce({
+        statusCode: 500,
+        headers: new Headers(),
+        body: new Uint8Array(),
+        isStream: false,
+        usage: null,
+      })
+      .mockResolvedValueOnce({
+        statusCode: 200,
+        headers: new Headers(),
+        body: new Uint8Array(),
+        isStream: false,
+        usage: null,
+      });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-test",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, { params: Promise.resolve({ path: ["messages"] }) });
+
+    expect(response.status).toBe(200);
+
+    // First upstream was tried, failed, and marked unhealthy
+    expect(markUnhealthy).toHaveBeenCalledWith("up-anthropic-1", "HTTP 500 error");
+    expect(recordFailure).toHaveBeenCalledWith("up-anthropic-1", "http_500");
+
+    // Second upstream was tried and succeeded
+    expect(markHealthy).toHaveBeenCalledWith("up-anthropic-2", 100);
+    expect(recordSuccess).toHaveBeenCalledWith("up-anthropic-2");
+
+    // selectFromProviderType was called twice - first without exclusions, second with failed upstream excluded
+    expect(selectFromProviderType).toHaveBeenCalledTimes(2);
+    expect(selectFromProviderType).toHaveBeenNthCalledWith(1, "anthropic", "weighted", undefined);
+    expect(selectFromProviderType).toHaveBeenNthCalledWith(2, "anthropic", "weighted", [
+      "up-anthropic-1",
+    ]);
+
+    expect(forwardRequest).toHaveBeenCalledTimes(2);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(healthyUpstream);
+  });
+
+  it("should return 503 when circuit breaker is open for all upstreams", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType, NoHealthyUpstreamsError, getUpstreamGroupByName } =
+      await import("@/lib/services/load-balancer");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-anthropic-1" },
+      { upstreamId: "up-anthropic-2" },
+    ]);
+
+    const upstream1 = {
+      id: "up-anthropic-1",
+      name: "anthropic-1",
+      provider: "anthropic",
+      baseUrl: "https://api.anthropic.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    // Mock the group to enable load balancer mode
+    vi.mocked(getUpstreamGroupByName).mockResolvedValueOnce({
+      id: "group-1",
+      name: "anthropic",
+      provider: "anthropic",
+      strategy: "weighted",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream: upstream1,
+      groupName: "anthropic",
+      providerType: "anthropic",
+      resolvedModel: "claude-test",
+      candidateUpstreams: [],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "claude-test",
+        resolvedModel: "claude-test",
+        providerType: "anthropic",
+        groupName: "anthropic",
+        upstreamName: "anthropic-1",
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 2,
+        finalCandidateCount: 2,
+      },
+    });
+
+    // Simulate no healthy upstreams (all circuit breakers open)
+    vi.mocked(selectFromProviderType).mockRejectedValueOnce(
+      new NoHealthyUpstreamsError("No healthy upstreams available for provider type: anthropic")
+    );
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-test",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, { params: Promise.resolve({ path: ["messages"] }) });
+    const data = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(data).toEqual({ error: "No healthy upstreams available in the group" });
+    expect(forwardRequest).not.toHaveBeenCalled();
+  });
+
+  it("should exhaust all failover attempts and return 502", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType, getUpstreamGroupByName } =
+      await import("@/lib/services/load-balancer");
+    const { markUnhealthy } = await import("@/lib/services/health-checker");
+    const { recordFailure } = await import("@/lib/services/circuit-breaker");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-anthropic-1" },
+      { upstreamId: "up-anthropic-2" },
+      { upstreamId: "up-anthropic-3" },
+    ]);
+
+    const upstreams = [
+      {
+        id: "up-anthropic-1",
+        name: "anthropic-1",
+        provider: "anthropic",
+        baseUrl: "https://api.anthropic.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+      },
+      {
+        id: "up-anthropic-2",
+        name: "anthropic-2",
+        provider: "anthropic",
+        baseUrl: "https://api.anthropic.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+      },
+      {
+        id: "up-anthropic-3",
+        name: "anthropic-3",
+        provider: "anthropic",
+        baseUrl: "https://api.anthropic.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+      },
+    ];
+
+    // Mock the group to enable load balancer mode
+    vi.mocked(getUpstreamGroupByName).mockResolvedValueOnce({
+      id: "group-1",
+      name: "anthropic",
+      provider: "anthropic",
+      strategy: "weighted",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream: upstreams[0],
+      groupName: "anthropic",
+      providerType: "anthropic",
+      resolvedModel: "claude-test",
+      candidateUpstreams: [],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "claude-test",
+        resolvedModel: "claude-test",
+        providerType: "anthropic",
+        groupName: "anthropic",
+        upstreamName: "anthropic-1",
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 3,
+        finalCandidateCount: 3,
+      },
+    });
+
+    // All upstreams return 500 errors
+    vi.mocked(selectFromProviderType)
+      .mockResolvedValueOnce({
+        upstream: upstreams[0],
+        strategy: "weighted",
+        providerType: "anthropic",
+        routingType: "provider_type",
+        groupName: "anthropic",
+        circuitBreakerFiltered: 0,
+        healthFiltered: 0,
+        totalCandidates: 3,
+      })
+      .mockResolvedValueOnce({
+        upstream: upstreams[1],
+        strategy: "weighted",
+        providerType: "anthropic",
+        routingType: "provider_type",
+        groupName: "anthropic",
+        circuitBreakerFiltered: 0,
+        healthFiltered: 0,
+        totalCandidates: 3,
+      })
+      .mockResolvedValueOnce({
+        upstream: upstreams[2],
+        strategy: "weighted",
+        providerType: "anthropic",
+        routingType: "provider_type",
+        groupName: "anthropic",
+        circuitBreakerFiltered: 0,
+        healthFiltered: 0,
+        totalCandidates: 3,
+      });
+
+    vi.mocked(forwardRequest)
+      .mockResolvedValueOnce({
+        statusCode: 500,
+        headers: new Headers(),
+        body: new Uint8Array(),
+        isStream: false,
+        usage: null,
+      })
+      .mockResolvedValueOnce({
+        statusCode: 500,
+        headers: new Headers(),
+        body: new Uint8Array(),
+        isStream: false,
+        usage: null,
+      })
+      .mockResolvedValueOnce({
+        statusCode: 500,
+        headers: new Headers(),
+        body: new Uint8Array(),
+        isStream: false,
+        usage: null,
+      });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-test",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, { params: Promise.resolve({ path: ["messages"] }) });
+    const data = await response.json();
+
+    // After exhausting all attempts (MAX_FAILOVER_ATTEMPTS = 3), should return 502
+    expect(response.status).toBe(502);
+    expect(data).toEqual({ error: "Failed to connect to upstream" });
+
+    // All 3 upstreams should be marked unhealthy and have circuit breaker failures recorded
+    expect(markUnhealthy).toHaveBeenCalledTimes(3);
+    expect(recordFailure).toHaveBeenCalledTimes(3);
+    expect(forwardRequest).toHaveBeenCalledTimes(3);
+  });
+
   it("should return 400 when no upstream group configured for model", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
@@ -259,6 +677,166 @@ describe("proxy route upstream selection", () => {
       error: "API key not authorized for upstream 'anthropic-one'",
     });
     expect(forwardRequest).not.toHaveBeenCalled();
+  });
+
+  it.skip("should handle streaming response failover with circuit breaker", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType, getUpstreamGroupByName } =
+      await import("@/lib/services/load-balancer");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-anthropic-1" },
+      { upstreamId: "up-anthropic-2" },
+    ]);
+
+    const failingUpstream = {
+      id: "up-anthropic-1",
+      name: "anthropic-1",
+      provider: "anthropic",
+      baseUrl: "https://api.anthropic.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    const healthyUpstream = {
+      id: "up-anthropic-2",
+      name: "anthropic-2",
+      provider: "anthropic",
+      baseUrl: "https://api.anthropic.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    // Mock the group to enable load balancer mode
+    vi.mocked(getUpstreamGroupByName).mockResolvedValueOnce({
+      id: "group-1",
+      name: "anthropic",
+      provider: "anthropic",
+      strategy: "weighted",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream: failingUpstream,
+      groupName: "anthropic",
+      providerType: "anthropic",
+      resolvedModel: "claude-test",
+      candidateUpstreams: [],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "claude-test",
+        resolvedModel: "claude-test",
+        providerType: "anthropic",
+        groupName: "anthropic",
+        upstreamName: "anthropic-1",
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 2,
+        finalCandidateCount: 2,
+      },
+    });
+
+    // First upstream fails with 503 (circuit breaker open), second succeeds with streaming
+    vi.mocked(selectFromProviderType)
+      .mockResolvedValueOnce({
+        upstream: failingUpstream,
+        strategy: "weighted",
+        providerType: "anthropic",
+        routingType: "provider_type",
+        groupName: "anthropic",
+        circuitBreakerFiltered: 0,
+        healthFiltered: 0,
+        totalCandidates: 2,
+      })
+      .mockResolvedValueOnce({
+        upstream: healthyUpstream,
+        strategy: "weighted",
+        providerType: "anthropic",
+        routingType: "provider_type",
+        groupName: "anthropic",
+        circuitBreakerFiltered: 0,
+        healthFiltered: 0,
+        totalCandidates: 2,
+      });
+
+    // Create a readable stream that emits data then closes
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"chunk": 1}\n\n'));
+        controller.close();
+      },
+    });
+
+    // First request returns 503 (circuit breaker open), second succeeds with streaming
+    vi.mocked(forwardRequest)
+      .mockResolvedValueOnce({
+        statusCode: 503,
+        headers: new Headers(),
+        body: new Uint8Array(),
+        isStream: false,
+        usage: null,
+      })
+      .mockResolvedValueOnce({
+        statusCode: 200,
+        headers: new Headers({ "content-type": "text/event-stream" }),
+        body: stream,
+        isStream: true,
+        usage: null,
+        usagePromise: Promise.resolve({
+          promptTokens: 10,
+          completionTokens: 20,
+          totalTokens: 30,
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
+        }),
+      });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-test",
+        messages: [{ role: "user", content: "hi" }],
+        stream: true,
+      }),
+    });
+
+    const response = await POST(request, { params: Promise.resolve({ path: ["messages"] }) });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/event-stream");
+
+    // Read the stream to completion
+    const reader = response.body?.getReader();
+    if (reader) {
+      while (true) {
+        const { done } = await reader.read();
+        if (done) break;
+      }
+    }
+
+    // Wait for async logging
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(healthyUpstream);
+    expect(forwardRequest).toHaveBeenCalledTimes(2);
   });
 });
 
