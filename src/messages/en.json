@@ -182,6 +182,7 @@
     "tableStatus": "Status",
     "tableDuration": "Duration",
     "tableUpstream": "Upstream",
+    "routingAuto": "Auto",
     "routingDirect": "Direct",
     "routingGroup": "Group",
     "routingDefault": "Default",

@@ -10,7 +10,6 @@ import {
   CircularRedirectError,
   VALID_PROVIDER_TYPES,
   MODEL_PREFIX_TO_PROVIDER_TYPE,
-  type ProviderType,
 } from "@/lib/services/model-router";
 import type { Upstream } from "@/lib/db";
 

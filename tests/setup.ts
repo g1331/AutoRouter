@@ -27,3 +27,12 @@ global.ResizeObserver = class ResizeObserver {
   unobserve() {}
   disconnect() {}
 };
+
+// Polyfill requestAnimationFrame for jsdom environment
+// @see https://github.com/testing-library/react-testing-library/issues/1198
+global.requestAnimationFrame = (callback: FrameRequestCallback) => {
+  return setTimeout(callback, 0) as unknown as number;
+};
+global.cancelAnimationFrame = (id: number) => {
+  clearTimeout(id);
+};

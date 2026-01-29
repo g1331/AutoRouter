@@ -179,8 +179,10 @@ export function LogsTable({ logs }: LogsTableProps) {
 
     const variants: Record<
       string,
-      { label: string; variant: "default" | "secondary" | "outline" }
+      { label: string; variant: "default" | "secondary" | "outline" | "success" }
     > = {
+      auto: { label: t("routingAuto"), variant: "success" },
+      // Keep old variants for backward compatibility with existing logs
       direct: { label: t("routingDirect"), variant: "default" },
       group: { label: t("routingGroup"), variant: "secondary" },
       default: { label: t("routingDefault"), variant: "outline" },

@@ -20,11 +20,15 @@ vi.mock("@/lib/db", () => ({
         findFirst: vi.fn(),
         findMany: vi.fn(),
       },
+      upstreamGroups: {
+        findFirst: vi.fn(),
+      },
     },
   },
   apiKeys: {},
   apiKeyUpstreams: {},
   upstreams: {},
+  upstreamGroups: {},
 }));
 
 vi.mock("@/lib/services/proxy-client", () => ({
@@ -77,6 +81,17 @@ vi.mock("@/lib/services/health-checker", () => ({
   markUnhealthy: vi.fn(),
 }));
 
+// Mock model-router module
+vi.mock("@/lib/services/model-router", () => ({
+  routeByModel: vi.fn(),
+  NoUpstreamGroupError: class NoUpstreamGroupError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = "NoUpstreamGroupError";
+    }
+  },
+}));
+
 describe("proxy route upstream selection", () => {
   let POST: (
     request: NextRequest,
@@ -97,6 +112,7 @@ describe("proxy route upstream selection", () => {
   it("should route messages requests to anthropic upstream when available", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
@@ -116,9 +132,12 @@ describe("proxy route upstream selection", () => {
       timeout: 60,
     };
 
-    vi.mocked(db.query.upstreams.findFirst)
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(anthropicUpstream);
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream: anthropicUpstream,
+      groupName: "anthropic",
+      providerType: "anthropic",
+      resolvedModel: "claude-test",
+    });
 
     vi.mocked(forwardRequest).mockResolvedValue({
       statusCode: 200,
@@ -152,9 +171,10 @@ describe("proxy route upstream selection", () => {
     );
   });
 
-  it("should return 400 when no upstream matches required provider", async () => {
+  it("should return 400 when no upstream group configured for model", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
@@ -162,7 +182,12 @@ describe("proxy route upstream selection", () => {
     vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
       { upstreamId: "up-openai" },
     ]);
-    vi.mocked(db.query.upstreams.findFirst).mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream: null,
+      groupName: null,
+      providerType: null,
+      resolvedModel: "unknown-model",
+    });
 
     const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
       method: "POST",
@@ -171,7 +196,7 @@ describe("proxy route upstream selection", () => {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-test",
+        model: "unknown-model",
         messages: [{ role: "user", content: "hi" }],
       }),
     });
@@ -180,38 +205,44 @@ describe("proxy route upstream selection", () => {
     const data = await response.json();
 
     expect(response.status).toBe(400);
-    expect(data).toEqual({ error: "No upstreams configured for 'anthropic' requests" });
+    expect(data).toEqual({ error: "No upstream group configured for model: unknown-model" });
     expect(forwardRequest).not.toHaveBeenCalled();
   });
 
-  it("should reject upstreamName when provider does not match path", async () => {
+  it("should reject when API key not authorized for selected upstream", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
     ]);
+    // API key only has access to up-openai, but model routes to anthropic
     vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
       { upstreamId: "up-openai" },
     ]);
 
-    const openaiUpstream = {
-      id: "up-openai",
-      name: "openai-one",
-      provider: "openai",
-      baseUrl: "https://api.openai.com",
-      isDefault: true,
+    const anthropicUpstream = {
+      id: "up-anthropic",
+      name: "anthropic-one",
+      provider: "anthropic",
+      baseUrl: "https://api.anthropic.com",
+      isDefault: false,
       isActive: true,
       timeout: 60,
     };
 
-    vi.mocked(db.query.upstreams.findFirst).mockResolvedValueOnce(openaiUpstream);
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream: anthropicUpstream,
+      groupName: "anthropic",
+      providerType: "anthropic",
+      resolvedModel: "claude-test",
+    });
 
     const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
       method: "POST",
       headers: {
         authorization: "Bearer sk-test",
-        "x-upstream-name": "openai-one",
         "content-type": "application/json",
       },
       body: JSON.stringify({
@@ -223,9 +254,9 @@ describe("proxy route upstream selection", () => {
     const response = await POST(request, { params: Promise.resolve({ path: ["messages"] }) });
     const data = await response.json();
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(403);
     expect(data).toEqual({
-      error: "Upstream 'openai-one' does not support 'anthropic' requests",
+      error: "API key not authorized for upstream 'anthropic-one'",
     });
     expect(forwardRequest).not.toHaveBeenCalled();
   });

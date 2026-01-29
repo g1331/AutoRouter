@@ -37,7 +37,8 @@ export function KeyValueInput({
   };
 
   const removeEntry = (key: string) => {
-    const { [key]: _, ...rest } = entries;
+    const { [key]: _removed, ...rest } = entries;
+    void _removed;
     onEntriesChange(rest);
   };
 
