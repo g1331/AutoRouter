@@ -48,3 +48,20 @@ export {
   type UpstreamGroupResponse,
   type PaginatedUpstreamGroups,
 } from "./upstream-crud";
+
+// Re-export model router functions and types
+export {
+  // Model router functions
+  routeByModel,
+  getProviderTypeForModel,
+  resolveModelWithRedirects,
+  filterUpstreamsByModel,
+  validateModelRedirects,
+  detectCircularRedirect,
+  // Constants
+  VALID_PROVIDER_TYPES,
+  MODEL_PREFIX_TO_PROVIDER_TYPE,
+  // Types
+  type ProviderType,
+  type ModelRouterResult,
+} from "./model-router";

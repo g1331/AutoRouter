@@ -209,6 +209,9 @@ describe("upstream-crud", () => {
           config: null,
           groupId: "group-id",
           weight: 5,
+          providerType: null,
+          allowedModels: null,
+          modelRedirects: null,
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -232,6 +235,54 @@ describe("upstream-crud", () => {
       expect(result.groupId).toBe("group-id");
       expect(result.weight).toBe(5);
       expect(result.groupName).toBe("test-group");
+    });
+
+    it("should create upstream with model-based routing fields", async () => {
+      const { createUpstream } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(null);
+
+      const mockReturning = vi.fn().mockResolvedValue([
+        {
+          id: "test-id",
+          name: "test-upstream",
+          provider: "openai",
+          baseUrl: "https://api.openai.com",
+          apiKeyEncrypted: "encrypted:sk-test-key",
+          isDefault: false,
+          timeout: 60,
+          isActive: true,
+          config: null,
+          groupId: null,
+          weight: 1,
+          providerType: "openai",
+          allowedModels: ["gpt-4", "gpt-4-turbo"],
+          modelRedirects: { "gpt-4-turbo": "gpt-4" },
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      vi.mocked(db.insert).mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: mockReturning,
+        }),
+      } as unknown as MockInsertChain);
+
+      const result = await createUpstream({
+        name: "test-upstream",
+        provider: "openai",
+        baseUrl: "https://api.openai.com",
+        apiKey: "sk-test-key",
+        providerType: "openai",
+        allowedModels: ["gpt-4", "gpt-4-turbo"],
+        modelRedirects: { "gpt-4-turbo": "gpt-4" },
+      });
+
+      expect(result.providerType).toBe("openai");
+      expect(result.allowedModels).toEqual(["gpt-4", "gpt-4-turbo"]);
+      expect(result.modelRedirects).toEqual({ "gpt-4-turbo": "gpt-4" });
     });
 
     it("should throw error if name already exists", async () => {

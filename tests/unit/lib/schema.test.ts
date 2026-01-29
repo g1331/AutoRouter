@@ -138,6 +138,27 @@ describe("lib/db/schema", () => {
       expect(indexNames).toContain("upstreams_name_idx");
       expect(indexNames).toContain("upstreams_is_active_idx");
     });
+
+    it("has providerType column for model-based routing", () => {
+      expect(upstreams.providerType).toBeDefined();
+      expect(upstreams.providerType.name).toBe("provider_type");
+    });
+
+    it("has allowedModels column for model filtering", () => {
+      expect(upstreams.allowedModels).toBeDefined();
+      expect(upstreams.allowedModels.name).toBe("allowed_models");
+    });
+
+    it("has modelRedirects column for model name mapping", () => {
+      expect(upstreams.modelRedirects).toBeDefined();
+      expect(upstreams.modelRedirects.name).toBe("model_redirects");
+    });
+
+    it("has provider_type index", () => {
+      const tableConfig = getTableConfig(upstreams);
+      const indexNames = tableConfig.indexes.map((i) => i.config.name);
+      expect(indexNames).toContain("upstreams_provider_type_idx");
+    });
   });
 
   describe("apiKeyUpstreams table", () => {
@@ -256,6 +277,32 @@ describe("lib/db/schema", () => {
       expect(requestLogs.errorMessage.name).toBe("error_message");
     });
 
+    it("has routingType column", () => {
+      expect(requestLogs.routingType).toBeDefined();
+      expect(requestLogs.routingType.name).toBe("routing_type");
+    });
+
+    it("has groupName column", () => {
+      expect(requestLogs.groupName).toBeDefined();
+      expect(requestLogs.groupName.name).toBe("group_name");
+    });
+
+    it("has lbStrategy column", () => {
+      expect(requestLogs.lbStrategy).toBeDefined();
+      expect(requestLogs.lbStrategy.name).toBe("lb_strategy");
+    });
+
+    it("has failoverAttempts column with default 0", () => {
+      expect(requestLogs.failoverAttempts).toBeDefined();
+      expect(requestLogs.failoverAttempts.name).toBe("failover_attempts");
+      expect(requestLogs.failoverAttempts.default).toBe(0);
+    });
+
+    it("has failoverHistory column", () => {
+      expect(requestLogs.failoverHistory).toBeDefined();
+      expect(requestLogs.failoverHistory.name).toBe("failover_history");
+    });
+
     it("has createdAt timestamp", () => {
       expect(requestLogs.createdAt).toBeDefined();
       expect(requestLogs.createdAt.name).toBe("created_at");
@@ -267,6 +314,7 @@ describe("lib/db/schema", () => {
       expect(indexNames).toContain("request_logs_api_key_id_idx");
       expect(indexNames).toContain("request_logs_upstream_id_idx");
       expect(indexNames).toContain("request_logs_created_at_idx");
+      expect(indexNames).toContain("request_logs_routing_type_idx");
     });
   });
 

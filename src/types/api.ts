@@ -54,9 +54,14 @@ export interface APIKeyRevealResponse {
 export type LoadBalancerStrategy = "round_robin" | "weighted" | "least_connections";
 
 /**
- * Supported AI provider types
+ * Supported AI provider types (for API compatibility)
  */
 export type Provider = "openai" | "anthropic";
+
+/**
+ * Provider type for model-based routing
+ */
+export type ProviderType = "anthropic" | "openai" | "google" | "custom";
 
 // ========== Upstream Group 相关类型 ==========
 
@@ -127,6 +132,9 @@ export interface UpstreamCreate {
   timeout?: number;
   group_id?: string | null; // UUID - optional group membership
   weight?: number; // Load balancing weight (default: 1)
+  provider_type?: ProviderType | null; // Provider type for model-based routing
+  allowed_models?: string[] | null; // List of supported model names
+  model_redirects?: Record<string, string> | null; // Model name mapping
 }
 
 export interface UpstreamUpdate {
@@ -139,6 +147,9 @@ export interface UpstreamUpdate {
   timeout?: number;
   group_id?: string | null; // UUID - optional group membership (null to remove from group)
   weight?: number; // Load balancing weight
+  provider_type?: ProviderType | null; // Provider type for model-based routing
+  allowed_models?: string[] | null; // List of supported model names
+  model_redirects?: Record<string, string> | null; // Model name mapping
 }
 
 export interface UpstreamResponse {
@@ -155,6 +166,9 @@ export interface UpstreamResponse {
   weight: number; // Load balancing weight
   group_name?: string | null; // Group name for display (populated when grouped)
   health_status?: UpstreamHealthResponse | null; // Health status (populated when requested)
+  provider_type: ProviderType | null; // Provider type for model-based routing
+  allowed_models: string[] | null; // List of supported model names
+  model_redirects: Record<string, string> | null; // Model name mapping
   created_at: string; // ISO 8601 date string
   updated_at: string; // ISO 8601 date string
 }
@@ -188,10 +202,28 @@ export interface TestUpstreamResponse {
 
 // ========== Request Log 相关类型 ==========
 
+/**
+ * Failover attempt record in request log
+ */
+export interface FailoverAttempt {
+  upstream_id: string;
+  upstream_name: string;
+  attempted_at: string; // ISO 8601 date string
+  error_type: "timeout" | "http_5xx" | "http_429" | "connection_error";
+  error_message: string;
+  status_code?: number | null;
+}
+
+/**
+ * Routing type for request logs
+ */
+export type RoutingType = "direct" | "group" | "default";
+
 export interface RequestLogResponse {
   id: string; // UUID
   api_key_id: string | null; // UUID
   upstream_id: string | null; // UUID
+  upstream_name: string | null; // Upstream display name
   method: string | null;
   path: string | null;
   model: string | null;
@@ -205,6 +237,12 @@ export interface RequestLogResponse {
   status_code: number | null;
   duration_ms: number | null;
   error_message: string | null;
+  // Routing decision fields
+  routing_type: RoutingType | null;
+  group_name: string | null;
+  lb_strategy: string | null;
+  failover_attempts: number;
+  failover_history: FailoverAttempt[] | null;
   created_at: string; // ISO 8601 date string
 }
 

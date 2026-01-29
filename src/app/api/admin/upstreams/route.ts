@@ -20,6 +20,9 @@ const createUpstreamSchema = z.object({
   config: z.string().nullable().optional(),
   group_id: z.string().uuid().nullable().optional(),
   weight: z.number().int().min(1).max(100).default(1),
+  provider_type: z.enum(["anthropic", "openai", "google", "custom"]).nullable().optional(),
+  allowed_models: z.array(z.string()).nullable().optional(),
+  model_redirects: z.record(z.string(), z.string()).nullable().optional(),
 });
 
 /**
@@ -65,6 +68,9 @@ export async function POST(request: NextRequest) {
       config: validated.config ?? null,
       groupId: validated.group_id ?? null,
       weight: validated.weight,
+      providerType: validated.provider_type ?? null,
+      allowedModels: validated.allowed_models ?? null,
+      modelRedirects: validated.model_redirects ?? null,
     };
 
     const result = await createUpstream(input);

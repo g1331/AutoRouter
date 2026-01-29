@@ -10,7 +10,11 @@ import type {
   ApiKeyRevealResult,
   PaginatedApiKeys,
 } from "@/lib/services/key-manager";
-import type { RequestLogResponse, PaginatedRequestLogs } from "@/lib/services/request-logger";
+import type {
+  RequestLogResponse,
+  PaginatedRequestLogs,
+  FailoverAttempt,
+} from "@/lib/services/request-logger";
 import type {
   StatsOverview,
   StatsTimeseries,
@@ -51,6 +55,9 @@ export interface UpstreamApiResponse {
   group_id: string | null;
   weight: number;
   group_name: string | null;
+  provider_type: string | null;
+  allowed_models: string[] | null;
+  model_redirects: Record<string, string> | null;
   created_at: string;
   updated_at: string;
 }
@@ -103,6 +110,9 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
     group_id: upstream.groupId,
     weight: upstream.weight,
     group_name: upstream.groupName,
+    provider_type: upstream.providerType,
+    allowed_models: upstream.allowedModels,
+    model_redirects: upstream.modelRedirects,
     created_at: upstream.createdAt.toISOString(),
     updated_at: upstream.updatedAt.toISOString(),
   };
@@ -275,6 +285,7 @@ export interface RequestLogApiResponse {
   id: string;
   api_key_id: string | null;
   upstream_id: string | null;
+  upstream_name: string | null;
   method: string | null;
   path: string | null;
   model: string | null;
@@ -288,6 +299,12 @@ export interface RequestLogApiResponse {
   status_code: number | null;
   duration_ms: number | null;
   error_message: string | null;
+  // Routing decision fields
+  routing_type: string | null;
+  group_name: string | null;
+  lb_strategy: string | null;
+  failover_attempts: number;
+  failover_history: FailoverAttempt[] | null;
   created_at: string;
 }
 
@@ -302,6 +319,7 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
     id: log.id,
     api_key_id: log.apiKeyId,
     upstream_id: log.upstreamId,
+    upstream_name: log.upstreamName,
     method: log.method,
     path: log.path,
     model: log.model,
@@ -315,6 +333,12 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
     status_code: log.statusCode,
     duration_ms: log.durationMs,
     error_message: log.errorMessage,
+    // Routing decision fields
+    routing_type: log.routingType,
+    group_name: log.groupName,
+    lb_strategy: log.lbStrategy,
+    failover_attempts: log.failoverAttempts,
+    failover_history: log.failoverHistory,
     created_at: log.createdAt.toISOString(),
   };
 }

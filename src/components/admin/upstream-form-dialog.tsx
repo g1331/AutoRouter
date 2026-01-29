@@ -36,7 +36,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreateUpstream, useUpdateUpstream } from "@/hooks/use-upstreams";
 import { useAllUpstreamGroups } from "@/hooks/use-upstream-groups";
-import type { Upstream, Provider } from "@/types/api";
+import type { Upstream, Provider, ProviderType } from "@/types/api";
+import { TagInput } from "@/components/ui/tag-input";
+import { KeyValueInput } from "@/components/ui/key-value-input";
 
 interface UpstreamFormDialogProps {
   upstream?: Upstream | null;
@@ -54,6 +56,9 @@ const createUpstreamFormSchema = z.object({
   description: z.string().max(500),
   group_id: z.string().nullable(),
   weight: z.number().int().min(1).max(100),
+  provider_type: z.enum(["anthropic", "openai", "google", "custom"]).nullable(),
+  allowed_models: z.array(z.string()).nullable(),
+  model_redirects: z.record(z.string(), z.string()).nullable(),
 });
 
 // Schema for edit mode - api_key is optional (leave empty to keep unchanged)
@@ -65,6 +70,9 @@ const editUpstreamFormSchema = z.object({
   description: z.string().max(500),
   group_id: z.string().nullable(),
   weight: z.number().int().min(1).max(100),
+  provider_type: z.enum(["anthropic", "openai", "google", "custom"]).nullable(),
+  allowed_models: z.array(z.string()).nullable(),
+  model_redirects: z.record(z.string(), z.string()).nullable(),
 });
 
 type UpstreamFormData = z.infer<typeof createUpstreamFormSchema>;
@@ -95,6 +103,9 @@ export function UpstreamFormDialog({
       description: "",
       group_id: null,
       weight: 1,
+      provider_type: null,
+      allowed_models: null,
+      model_redirects: null,
     },
   });
 
@@ -111,6 +122,9 @@ export function UpstreamFormDialog({
         description: upstream.description || "",
         group_id: upstream.group_id || null,
         weight: upstream.weight ?? 1,
+        provider_type: upstream.provider_type || null,
+        allowed_models: upstream.allowed_models || null,
+        model_redirects: upstream.model_redirects || null,
       });
     } else if (!open) {
       form.reset({
@@ -121,6 +135,9 @@ export function UpstreamFormDialog({
         description: "",
         group_id: null,
         weight: 1,
+        provider_type: null,
+        allowed_models: null,
+        model_redirects: null,
       });
     }
   }, [upstream, open, form]);
@@ -137,6 +154,9 @@ export function UpstreamFormDialog({
           description: string | null;
           group_id?: string | null;
           weight?: number;
+          provider_type?: ProviderType | null;
+          allowed_models?: string[] | null;
+          model_redirects?: Record<string, string> | null;
         } = {
           name: data.name,
           provider: data.provider,
@@ -144,6 +164,9 @@ export function UpstreamFormDialog({
           description: data.description || null,
           group_id: data.group_id || null,
           weight: data.weight,
+          provider_type: data.provider_type,
+          allowed_models: data.allowed_models,
+          model_redirects: data.model_redirects,
         };
         if (data.api_key) {
           updateData.api_key = data.api_key;
@@ -162,6 +185,9 @@ export function UpstreamFormDialog({
           description: data.description || null,
           group_id: data.group_id || null,
           weight: data.weight,
+          provider_type: data.provider_type,
+          allowed_models: data.allowed_models,
+          model_redirects: data.model_redirects,
         });
       }
 
@@ -314,6 +340,84 @@ export function UpstreamFormDialog({
               </FormItem>
             )}
           />
+
+          {/* Model-based Routing Section */}
+          <div className="border-t pt-6 mt-6">
+            <h3 className="text-sm font-medium text-muted-foreground mb-4">
+              {t("modelBasedRouting")}
+            </h3>
+
+            <FormField
+              control={form.control}
+              name="provider_type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("providerType")}</FormLabel>
+                  <Select
+                    onValueChange={(value) => field.onChange(value === "__none__" ? null : value)}
+                    value={field.value || "__none__"}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder={t("providerTypePlaceholder")} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="__none__">{t("noProviderType")}</SelectItem>
+                      <SelectItem value="anthropic">Anthropic</SelectItem>
+                      <SelectItem value="openai">OpenAI</SelectItem>
+                      <SelectItem value="google">Google</SelectItem>
+                      <SelectItem value="custom">{t("custom")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>{t("providerTypeDescription")}</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="allowed_models"
+              render={({ field }) => (
+                <FormItem className="mt-4">
+                  <FormLabel>{t("allowedModels")}</FormLabel>
+                  <FormControl>
+                    <TagInput
+                      placeholder={t("allowedModelsPlaceholder")}
+                      tags={field.value || []}
+                      onTagsChange={(tags) => field.onChange(tags.length > 0 ? tags : null)}
+                    />
+                  </FormControl>
+                  <FormDescription>{t("allowedModelsDescription")}</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="model_redirects"
+              render={({ field }) => (
+                <FormItem className="mt-4">
+                  <FormLabel>{t("modelRedirects")}</FormLabel>
+                  <FormControl>
+                    <KeyValueInput
+                      placeholder={t("modelRedirectsPlaceholder")}
+                      entries={field.value || {}}
+                      onEntriesChange={(entries) =>
+                        field.onChange(Object.keys(entries).length > 0 ? entries : null)
+                      }
+                      keyLabel={t("sourceModel")}
+                      valueLabel={t("targetModel")}
+                    />
+                  </FormControl>
+                  <FormDescription>{t("modelRedirectsDescription")}</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

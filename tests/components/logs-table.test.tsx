@@ -211,8 +211,9 @@ describe("LogsTable", () => {
       renderWithTooltip(<LogsTable logs={[{ ...mockLog, method: null }]} />);
 
       // Method column shows "-" in code element
+      // Cell order: expand | time | upstream | method | path | model | tokens | status | duration
       const codeElements = screen.getAllByRole("cell");
-      const methodCell = codeElements[1]; // Second cell is method
+      const methodCell = codeElements[3]; // Fourth cell is method (after expand, time, upstream)
       expect(methodCell).toHaveTextContent("-");
     });
 

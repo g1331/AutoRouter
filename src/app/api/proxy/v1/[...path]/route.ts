@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractApiKey, getKeyPrefix, verifyApiKey } from "@/lib/utils/auth";
-import { db, apiKeys, apiKeyUpstreams, upstreams, type Upstream } from "@/lib/db";
-import { eq, and, inArray } from "drizzle-orm";
+import { db, apiKeys, apiKeyUpstreams, type Upstream } from "@/lib/db";
+import { eq, and } from "drizzle-orm";
 import {
   forwardRequest,
   prepareUpstreamForProxy,
   type ProxyResult,
 } from "@/lib/services/proxy-client";
-import { logRequest, extractTokenUsage, extractModelName } from "@/lib/services/request-logger";
+import { logRequest, extractTokenUsage, type FailoverAttempt } from "@/lib/services/request-logger";
 import {
   selectUpstream,
   recordConnection,
@@ -18,58 +18,16 @@ import {
 } from "@/lib/services/load-balancer";
 import { markHealthy, markUnhealthy } from "@/lib/services/health-checker";
 import { randomUUID } from "crypto";
+import { routeByModel, NoUpstreamGroupError, type ProviderType } from "@/lib/services/model-router";
 
 // Edge runtime for streaming support
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ path: string[] }> };
-type RequiredProvider = "openai" | "anthropic";
 
 /** Maximum number of failover attempts when using group-based routing. */
 const MAX_FAILOVER_ATTEMPTS = 3;
-
-function getRequiredProvider(path: string): RequiredProvider | null {
-  const normalized = path.replace(/^\/+/, "").toLowerCase();
-
-  if (normalized === "messages" || normalized.startsWith("messages/")) {
-    return "anthropic";
-  }
-
-  if (normalized === "responses" || normalized.startsWith("responses/")) {
-    return "openai";
-  }
-
-  if (normalized === "chat/completions" || normalized.startsWith("chat/completions/")) {
-    return "openai";
-  }
-
-  if (normalized === "completions" || normalized.startsWith("completions/")) {
-    return "openai";
-  }
-
-  if (normalized === "embeddings" || normalized.startsWith("embeddings/")) {
-    return "openai";
-  }
-
-  if (normalized === "models" || normalized.startsWith("models/")) {
-    return "openai";
-  }
-
-  if (normalized === "moderations" || normalized.startsWith("moderations/")) {
-    return "openai";
-  }
-
-  if (normalized === "images" || normalized.startsWith("images/")) {
-    return "openai";
-  }
-
-  if (normalized === "audio" || normalized.startsWith("audio/")) {
-    return "openai";
-  }
-
-  return null;
-}
 
 /**
  * Check if an error indicates the upstream is unhealthy (connection/timeout errors).
@@ -108,6 +66,35 @@ function shouldFailover(statusCode: number): boolean {
 }
 
 /**
+ * Routing decision information for logging.
+ */
+interface RoutingDecision {
+  routingType: "auto";
+  groupName: string | null;
+  lbStrategy: string | null;
+  providerType: ProviderType | null;
+  resolvedModel: string | null;
+  failoverAttempts: number;
+  failoverHistory: FailoverAttempt[];
+}
+
+/**
+ * Determine error type for failover logging.
+ */
+function getErrorType(
+  error: Error | null,
+  statusCode: number | null
+): FailoverAttempt["error_type"] {
+  if (statusCode === 429) return "http_429";
+  if (statusCode && statusCode >= 500) return "http_5xx";
+  if (error) {
+    const msg = error.message.toLowerCase();
+    if (msg.includes("timed out") || msg.includes("timeout")) return "timeout";
+  }
+  return "connection_error";
+}
+
+/**
  * Forward a request with failover support for group-based routing.
  * Tries multiple upstreams from the group if the initial request fails.
  */
@@ -115,14 +102,15 @@ async function forwardWithFailover(
   request: NextRequest,
   groupId: string,
   path: string,
-  requestId: string,
-  requiredProvider: RequiredProvider | null
+  requestId: string
 ): Promise<{
   result: ProxyResult;
   selectedUpstream: Upstream;
   failedUpstreamIds: string[];
+  failoverHistory: FailoverAttempt[];
 }> {
   const failedUpstreamIds: string[] = [];
+  const failoverHistory: FailoverAttempt[] = [];
   let lastError: Error | null = null;
 
   // Clone the request body once for potential retries
@@ -139,13 +127,6 @@ async function forwardWithFailover(
       );
 
       const selectedUpstream = selection.upstream;
-
-      // Validate provider compatibility
-      if (requiredProvider && selectedUpstream.provider !== requiredProvider) {
-        // This shouldn't happen if group is configured correctly, but handle it
-        failedUpstreamIds.push(selectedUpstream.id);
-        continue;
-      }
 
       // Track connection for least-connections strategy
       recordConnection(selectedUpstream.id);
@@ -166,6 +147,15 @@ async function forwardWithFailover(
           // Release connection and mark as unhealthy
           releaseConnection(selectedUpstream.id);
           void markUnhealthy(selectedUpstream.id, `HTTP ${result.statusCode} error`);
+          // Record failover attempt
+          failoverHistory.push({
+            upstream_id: selectedUpstream.id,
+            upstream_name: selectedUpstream.name,
+            attempted_at: new Date().toISOString(),
+            error_type: getErrorType(null, result.statusCode),
+            error_message: `HTTP ${result.statusCode} error`,
+            status_code: result.statusCode,
+          });
           failedUpstreamIds.push(selectedUpstream.id);
           lastError = new Error(`Upstream returned ${result.statusCode}`);
           continue;
@@ -188,20 +178,28 @@ async function forwardWithFailover(
             result: { ...result, body: wrappedStream },
             selectedUpstream,
             failedUpstreamIds,
+            failoverHistory,
           };
         }
 
-        return { result, selectedUpstream, failedUpstreamIds };
+        return { result, selectedUpstream, failedUpstreamIds, failoverHistory };
       } catch (error) {
         // Release connection on error
         releaseConnection(selectedUpstream.id);
 
         if (isFailoverableError(error)) {
           // Mark upstream as unhealthy
-          void markUnhealthy(
-            selectedUpstream.id,
-            error instanceof Error ? error.message : "Request failed"
-          );
+          const errorMessage = error instanceof Error ? error.message : "Request failed";
+          void markUnhealthy(selectedUpstream.id, errorMessage);
+          // Record failover attempt
+          failoverHistory.push({
+            upstream_id: selectedUpstream.id,
+            upstream_name: selectedUpstream.name,
+            attempted_at: new Date().toISOString(),
+            error_type: getErrorType(error instanceof Error ? error : null, null),
+            error_message: errorMessage,
+            status_code: null,
+          });
           failedUpstreamIds.push(selectedUpstream.id);
           lastError = error instanceof Error ? error : new Error(String(error));
           continue;
@@ -266,6 +264,23 @@ function wrapStreamWithConnectionTracking(
 }
 
 /**
+ * Extract model from request body
+ */
+async function extractModelFromRequest(request: NextRequest): Promise<string | null> {
+  try {
+    const clonedRequest = request.clone();
+    const bodyText = await clonedRequest.text();
+    if (bodyText) {
+      const body = JSON.parse(bodyText);
+      return body.model || null;
+    }
+  } catch {
+    // Not JSON or empty body
+  }
+  return null;
+}
+
+/**
  * Handle all HTTP methods for proxy
  */
 async function handleProxy(request: NextRequest, context: RouteContext): Promise<Response> {
@@ -275,7 +290,6 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   // Extract path
   const { path: pathSegments } = await context.params;
   const path = pathSegments.join("/");
-  const requiredProvider = getRequiredProvider(path);
 
   // Extract and validate API key
   const authHeader = request.headers.get("authorization");
@@ -308,148 +322,74 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
   }
 
-  // Check for X-Upstream-Group header first (load balanced routing)
-  const upstreamGroupName = request.headers.get("x-upstream-group");
+  // Extract model from request body for model-based routing
+  const model = await extractModelFromRequest(request);
 
-  // Get upstream - check X-Upstream-Name header, then X-Upstream-Group, then use default
-  const upstreamName = request.headers.get("x-upstream-name");
+  if (!model) {
+    return NextResponse.json({ error: "Missing required field: model" }, { status: 400 });
+  }
 
+  // Model-based routing
   let selectedUpstream: Upstream | undefined;
   let useLoadBalancer = false;
   let groupId: string | null = null;
+  let groupStrategy: string | null = null;
+  let groupName: string | null = null;
+  let providerType: ProviderType | null = null;
+  let resolvedModel = model;
 
-  if (upstreamGroupName && !upstreamName) {
-    // Group-based load balanced routing
-    const group = await getUpstreamGroupByName(upstreamGroupName);
+  // Routing type is always "auto" for model-based routing
+  const routingType = "auto" as const;
 
-    if (!group) {
+  try {
+    // Route by model
+    const routingResult = await routeByModel(model);
+
+    if (!routingResult.upstream) {
       return NextResponse.json(
-        { error: `Upstream group '${upstreamGroupName}' not found` },
-        { status: 404 }
-      );
-    }
-
-    if (!group.isActive) {
-      return NextResponse.json(
-        { error: `Upstream group '${upstreamGroupName}' is not active` },
+        { error: `No upstream group configured for model: ${model}` },
         { status: 400 }
       );
     }
 
-    // Validate provider matches group
-    if (requiredProvider && group.provider !== requiredProvider) {
-      return NextResponse.json(
-        {
-          error: `Upstream group '${upstreamGroupName}' does not support '${requiredProvider}' requests`,
-        },
-        { status: 400 }
-      );
+    selectedUpstream = routingResult.upstream;
+    groupName = routingResult.groupName;
+    providerType = routingResult.providerType;
+    resolvedModel = routingResult.resolvedModel;
+
+    // Get group details for load balancing
+    if (groupName) {
+      const group = await getUpstreamGroupByName(groupName);
+      if (group) {
+        groupId = group.id;
+        groupStrategy = group.strategy;
+        useLoadBalancer = true;
+      }
     }
 
-    // Validate API key has permission for at least one upstream in this group
+    // Validate API key has permission for this upstream
     const upstreamPermissions = await db.query.apiKeyUpstreams.findMany({
       where: eq(apiKeyUpstreams.apiKeyId, validApiKey.id),
     });
     const allowedUpstreamIds = upstreamPermissions.map((p) => p.upstreamId);
-
-    if (allowedUpstreamIds.length === 0) {
-      return NextResponse.json(
-        { error: "No upstreams configured for this API key" },
-        { status: 400 }
-      );
-    }
-
-    const groupUpstreams = await db.query.upstreams.findMany({
-      where: and(eq(upstreams.groupId, group.id), eq(upstreams.isActive, true)),
-      columns: { id: true },
-    });
-
-    const hasPermission = groupUpstreams.some((u) => allowedUpstreamIds.includes(u.id));
-    if (!hasPermission) {
-      return NextResponse.json(
-        { error: `API key not authorized for upstream group '${upstreamGroupName}'` },
-        { status: 403 }
-      );
-    }
-
-    useLoadBalancer = true;
-    groupId = group.id;
-  } else if (upstreamName) {
-    // Explicit upstream name specified
-    // Check if API key has permission for this upstream
-    const upstreamPermissions = await db.query.apiKeyUpstreams.findMany({
-      where: eq(apiKeyUpstreams.apiKeyId, validApiKey.id),
-    });
-    const allowedUpstreamIds = upstreamPermissions.map((p) => p.upstreamId);
-
-    selectedUpstream = await db.query.upstreams.findFirst({
-      where: and(eq(upstreams.name, upstreamName), eq(upstreams.isActive, true)),
-    });
-
-    if (!selectedUpstream) {
-      return NextResponse.json({ error: `Upstream '${upstreamName}' not found` }, { status: 404 });
-    }
 
     if (!allowedUpstreamIds.includes(selectedUpstream.id)) {
       return NextResponse.json(
-        { error: `API key not authorized for upstream '${upstreamName}'` },
+        { error: `API key not authorized for upstream '${selectedUpstream.name}'` },
         { status: 403 }
       );
     }
-
-    if (requiredProvider && selectedUpstream.provider !== requiredProvider) {
+  } catch (error) {
+    if (error instanceof NoUpstreamGroupError) {
       return NextResponse.json(
-        {
-          error: `Upstream '${upstreamName}' does not support '${requiredProvider}' requests`,
-        },
+        { error: `No upstream group configured for model: ${model}` },
         { status: 400 }
       );
     }
-  } else {
-    // Default upstream selection (no explicit name or group)
-    // Get allowed upstreams for this API key
-    const upstreamPermissions = await db.query.apiKeyUpstreams.findMany({
-      where: eq(apiKeyUpstreams.apiKeyId, validApiKey.id),
-    });
-    const allowedUpstreamIds = upstreamPermissions.map((p) => p.upstreamId);
-
-    if (allowedUpstreamIds.length === 0) {
-      return NextResponse.json(
-        { error: "No upstreams configured for this API key" },
-        { status: 400 }
-      );
-    }
-
-    const upstreamConditions = [
-      eq(upstreams.isActive, true),
-      inArray(upstreams.id, allowedUpstreamIds),
-    ];
-
-    if (requiredProvider) {
-      upstreamConditions.push(eq(upstreams.provider, requiredProvider));
-    }
-
-    // Get default or first allowed upstream (filtered by provider when required)
-    selectedUpstream = await db.query.upstreams.findFirst({
-      where: and(eq(upstreams.isDefault, true), ...upstreamConditions),
-    });
-
-    if (!selectedUpstream) {
-      // Fall back to first active allowed upstream
-      selectedUpstream = await db.query.upstreams.findFirst({
-        where: and(...upstreamConditions),
-      });
-    }
-
-    if (!selectedUpstream && requiredProvider) {
-      return NextResponse.json(
-        { error: `No upstreams configured for '${requiredProvider}' requests` },
-        { status: 400 }
-      );
-    }
+    throw error;
   }
 
-  // Parse request body for model name (before forwarding)
+  // Parse request body for logging (need to re-clone since we already read it)
   let requestBody: Record<string, unknown> | null = null;
   try {
     const clonedRequest = request.clone();
@@ -461,22 +401,24 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     // Not JSON or empty body
   }
 
+  // Track failover history outside try block for error logging
+  let failoverHistory: FailoverAttempt[] = [];
+
   // Forward request to upstream
   try {
     let result: ProxyResult;
     let upstreamForLogging: Upstream;
 
-    if (useLoadBalancer && groupId) {
+    if (useLoadBalancer && groupId && groupStrategy) {
       // Use load balancer with failover for group-based routing
-      const { result: proxyResult, selectedUpstream: selected } = await forwardWithFailover(
-        request,
-        groupId,
-        path,
-        requestId,
-        requiredProvider
-      );
+      const {
+        result: proxyResult,
+        selectedUpstream: selected,
+        failoverHistory: history,
+      } = await forwardWithFailover(request, groupId, path, requestId);
       result = proxyResult;
       upstreamForLogging = selected;
+      failoverHistory = history;
     } else if (selectedUpstream) {
       // Direct upstream routing (no load balancing)
       const upstreamForProxy = prepareUpstreamForProxy(selectedUpstream);
@@ -485,6 +427,17 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     } else {
       return NextResponse.json({ error: "No active upstream available" }, { status: 503 });
     }
+
+    // Build routing decision for logging
+    const routingDecision: RoutingDecision = {
+      routingType,
+      groupName,
+      lbStrategy: groupStrategy,
+      providerType,
+      resolvedModel,
+      failoverAttempts: failoverHistory.length,
+      failoverHistory,
+    };
 
     // Create response headers
     const responseHeaders = new Headers(result.headers);
@@ -501,7 +454,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             upstreamId: upstreamForLogging.id,
             method: request.method,
             path,
-            model: requestBody?.model as string | null,
+            model: resolvedModel,
             promptTokens: usage?.promptTokens || 0,
             completionTokens: usage?.completionTokens || 0,
             totalTokens: usage?.totalTokens || 0,
@@ -511,6 +464,12 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             cacheReadTokens: usage?.cacheReadTokens || 0,
             statusCode: result.statusCode,
             durationMs: Date.now() - startTime,
+            routingType: routingDecision.routingType,
+            groupName: routingDecision.groupName,
+            lbStrategy: routingDecision.lbStrategy,
+            failoverAttempts: routingDecision.failoverAttempts,
+            failoverHistory:
+              routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
           })
         )
         .catch((e) => console.error("Failed to log request:", e));
@@ -549,7 +508,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         upstreamId: upstreamForLogging.id,
         method: request.method,
         path,
-        model: extractModelName(requestBody, null),
+        model: resolvedModel,
         promptTokens: usage?.promptTokens || 0,
         completionTokens: usage?.completionTokens || 0,
         totalTokens: usage?.totalTokens || 0,
@@ -559,6 +518,12 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         cacheReadTokens: usage?.cacheReadTokens || 0,
         statusCode: result.statusCode,
         durationMs,
+        routingType: routingDecision.routingType,
+        groupName: routingDecision.groupName,
+        lbStrategy: routingDecision.lbStrategy,
+        failoverAttempts: routingDecision.failoverAttempts,
+        failoverHistory:
+          routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
       });
 
       return new Response(Buffer.from(bodyBytes), {
@@ -578,13 +543,18 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       upstreamId: logUpstreamId,
       method: request.method,
       path,
-      model: requestBody?.model as string | null,
+      model: resolvedModel,
       promptTokens: 0,
       completionTokens: 0,
       totalTokens: 0,
       statusCode: error instanceof Error && error.message.includes("timed out") ? 504 : 502,
       durationMs,
       errorMessage: error instanceof Error ? error.message : "Unknown error",
+      routingType,
+      groupName,
+      lbStrategy: groupStrategy,
+      failoverAttempts: failoverHistory.length,
+      failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
     });
 
     if (error instanceof UpstreamGroupNotFoundError) {

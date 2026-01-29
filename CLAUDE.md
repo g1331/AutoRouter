@@ -2,28 +2,6 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-<!-- OPENSPEC:START -->
-
-# OpenSpec Instructions
-
-These instructions are for AI assistants working in this project.
-
-Always open `@/openspec/AGENTS.md` when the request:
-
-- Mentions planning or proposals (words like proposal, spec, change, plan)
-- Introduces new capabilities, breaking changes, architecture shifts, or big performance/security work
-- Sounds ambiguous and you need the authoritative spec before coding
-
-Use `@/openspec/AGENTS.md` to learn:
-
-- How to create and apply change proposals
-- Spec format and conventions
-- Project structure and guidelines
-
-Keep this managed block so 'openspec update' can refresh the instructions.
-
-<!-- OPENSPEC:END -->
-
 ## Project Overview
 
 AutoRouter is an AI API Gateway providing API Key distribution, multi-upstream routing, and request management. It's a Next.js fullstack application with API Routes for the backend.
@@ -104,14 +82,14 @@ src/
 
 ### Key Architectural Patterns
 
-1. **Upstream Management**: Upstreams (AI providers like OpenAI, Anthropic) stored in PostgreSQL database. Runtime selection via `X-Upstream-Name` header.
+1. **Upstream Management**: Upstreams (AI providers like OpenAI, Anthropic) stored in PostgreSQL database. Runtime selection via model-based auto-routing (e.g., gpt-_ → openai group, claude-_ → anthropic group).
 
 2. **Security Model**:
    - Admin authentication: Bearer token (`ADMIN_TOKEN` env var)
    - API key authentication: Client keys hashed with bcrypt, verified on proxy requests
    - Upstream keys: Encrypted at rest with Fernet (`ENCRYPTION_KEY` env var)
 
-3. **Proxy Flow**: `/api/proxy/v1/*` receives requests → validates API key → selects upstream → forwards via proxy-client → logs request → returns SSE stream or response
+3. **Proxy Flow**: `/api/proxy/v1/*` receives requests → validates API key → extracts model from request body → routes to upstream group based on model prefix → selects upstream → forwards via proxy-client → logs request → returns SSE stream or response
 
 4. **Database**: PostgreSQL with Drizzle ORM. Schema defined in `src/lib/db/schema.ts`.
 

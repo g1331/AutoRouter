@@ -321,15 +321,34 @@ describe("api-transformers", () => {
         id: "log-123",
         apiKeyId: "key-456",
         upstreamId: "upstream-789",
+        upstreamName: "openai-primary",
         method: "POST",
         path: "/v1/chat/completions",
         model: "gpt-4",
         promptTokens: 100,
         completionTokens: 200,
         totalTokens: 300,
+        cachedTokens: 10,
+        reasoningTokens: 20,
+        cacheCreationTokens: 5,
+        cacheReadTokens: 8,
         statusCode: 200,
         durationMs: 1500,
         errorMessage: null,
+        routingType: "group",
+        groupName: "openai-pool",
+        lbStrategy: "round_robin",
+        failoverAttempts: 1,
+        failoverHistory: [
+          {
+            upstream_id: "upstream-failed",
+            upstream_name: "openai-backup",
+            attempted_at: "2024-01-15T10:29:50.000Z",
+            error_type: "http_5xx" as const,
+            error_message: "HTTP 502 error",
+            status_code: 502,
+          },
+        ],
         createdAt: new Date("2024-01-15T10:30:00.000Z"),
       };
 
@@ -339,15 +358,34 @@ describe("api-transformers", () => {
         id: "log-123",
         api_key_id: "key-456",
         upstream_id: "upstream-789",
+        upstream_name: "openai-primary",
         method: "POST",
         path: "/v1/chat/completions",
         model: "gpt-4",
         prompt_tokens: 100,
         completion_tokens: 200,
         total_tokens: 300,
+        cached_tokens: 10,
+        reasoning_tokens: 20,
+        cache_creation_tokens: 5,
+        cache_read_tokens: 8,
         status_code: 200,
         duration_ms: 1500,
         error_message: null,
+        routing_type: "group",
+        group_name: "openai-pool",
+        lb_strategy: "round_robin",
+        failover_attempts: 1,
+        failover_history: [
+          {
+            upstream_id: "upstream-failed",
+            upstream_name: "openai-backup",
+            attempted_at: "2024-01-15T10:29:50.000Z",
+            error_type: "http_5xx",
+            error_message: "HTTP 502 error",
+            status_code: 502,
+          },
+        ],
         created_at: "2024-01-15T10:30:00.000Z",
       });
     });
@@ -357,15 +395,25 @@ describe("api-transformers", () => {
         id: "log-456",
         apiKeyId: null,
         upstreamId: null,
+        upstreamName: null,
         method: null,
         path: null,
         model: null,
         promptTokens: 0,
         completionTokens: 0,
         totalTokens: 0,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
         statusCode: null,
         durationMs: null,
         errorMessage: "Connection timeout",
+        routingType: null,
+        groupName: null,
+        lbStrategy: null,
+        failoverAttempts: 0,
+        failoverHistory: null,
         createdAt: new Date("2024-01-15T10:30:00.000Z"),
       };
 
@@ -373,12 +421,18 @@ describe("api-transformers", () => {
 
       expect(result.api_key_id).toBeNull();
       expect(result.upstream_id).toBeNull();
+      expect(result.upstream_name).toBeNull();
       expect(result.method).toBeNull();
       expect(result.path).toBeNull();
       expect(result.model).toBeNull();
       expect(result.status_code).toBeNull();
       expect(result.duration_ms).toBeNull();
       expect(result.error_message).toBe("Connection timeout");
+      expect(result.routing_type).toBeNull();
+      expect(result.group_name).toBeNull();
+      expect(result.lb_strategy).toBeNull();
+      expect(result.failover_attempts).toBe(0);
+      expect(result.failover_history).toBeNull();
     });
   });
 
@@ -390,15 +444,25 @@ describe("api-transformers", () => {
             id: "log-1",
             apiKeyId: "key-1",
             upstreamId: "upstream-1",
+            upstreamName: "openai-primary",
             method: "POST",
             path: "/v1/chat/completions",
             model: "gpt-4",
             promptTokens: 50,
             completionTokens: 100,
             totalTokens: 150,
+            cachedTokens: 0,
+            reasoningTokens: 0,
+            cacheCreationTokens: 0,
+            cacheReadTokens: 0,
             statusCode: 200,
             durationMs: 800,
             errorMessage: null,
+            routingType: "direct",
+            groupName: null,
+            lbStrategy: null,
+            failoverAttempts: 0,
+            failoverHistory: null,
             createdAt: new Date("2024-01-15T10:00:00.000Z"),
           },
         ],

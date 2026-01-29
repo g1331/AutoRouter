@@ -17,12 +17,31 @@ export interface LogRequestInput {
   statusCode: number | null;
   durationMs: number | null;
   errorMessage?: string | null;
+  // Routing decision fields
+  routingType?: "auto" | null;
+  groupName?: string | null;
+  lbStrategy?: string | null;
+  failoverAttempts?: number;
+  failoverHistory?: FailoverAttempt[] | null;
+}
+
+/**
+ * Failover attempt record for tracking routing failures.
+ */
+export interface FailoverAttempt {
+  upstream_id: string;
+  upstream_name: string;
+  attempted_at: string; // ISO timestamp
+  error_type: "timeout" | "http_5xx" | "http_429" | "connection_error";
+  error_message: string;
+  status_code?: number | null;
 }
 
 export interface RequestLogResponse {
   id: string;
   apiKeyId: string | null;
   upstreamId: string | null;
+  upstreamName: string | null;
   method: string | null;
   path: string | null;
   model: string | null;
@@ -36,6 +55,12 @@ export interface RequestLogResponse {
   statusCode: number | null;
   durationMs: number | null;
   errorMessage: string | null;
+  // Routing decision fields
+  routingType: string | null;
+  groupName: string | null;
+  lbStrategy: string | null;
+  failoverAttempts: number;
+  failoverHistory: FailoverAttempt[] | null;
   createdAt: Date;
 }
 
@@ -77,6 +102,12 @@ export async function logRequest(input: LogRequestInput): Promise<RequestLog> {
       statusCode: input.statusCode,
       durationMs: input.durationMs,
       errorMessage: input.errorMessage ?? null,
+      // Routing decision fields
+      routingType: input.routingType ?? null,
+      groupName: input.groupName ?? null,
+      lbStrategy: input.lbStrategy ?? null,
+      failoverAttempts: input.failoverAttempts ?? 0,
+      failoverHistory: input.failoverHistory ? JSON.stringify(input.failoverHistory) : null,
       createdAt: new Date(),
     })
     .returning();
@@ -99,6 +130,21 @@ function getIntValue(data: Record<string, unknown>, key: string, defaultValue: n
     return isNaN(parsed) ? defaultValue : parsed;
   }
   return defaultValue;
+}
+
+/**
+ * Parse failover history JSON string into typed array.
+ */
+function parseFailoverHistory(json: string): FailoverAttempt[] | null {
+  try {
+    const parsed = JSON.parse(json);
+    if (Array.isArray(parsed)) {
+      return parsed as FailoverAttempt[];
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -262,19 +308,23 @@ export async function listRequestLogs(
     .from(requestLogs)
     .where(whereClause);
 
-  // Query paginated results
+  // Query paginated results with upstream name
   const offset = (page - 1) * pageSize;
   const logs = await db.query.requestLogs.findMany({
     where: whereClause,
     orderBy: [desc(requestLogs.createdAt)],
     limit: pageSize,
     offset,
+    with: {
+      upstream: true,
+    },
   });
 
   const items: RequestLogResponse[] = logs.map((log) => ({
     id: log.id,
     apiKeyId: log.apiKeyId,
     upstreamId: log.upstreamId,
+    upstreamName: log.upstream?.name ?? null,
     method: log.method,
     path: log.path,
     model: log.model,
@@ -288,6 +338,12 @@ export async function listRequestLogs(
     statusCode: log.statusCode,
     durationMs: log.durationMs,
     errorMessage: log.errorMessage,
+    // Routing decision fields
+    routingType: log.routingType,
+    groupName: log.groupName,
+    lbStrategy: log.lbStrategy,
+    failoverAttempts: log.failoverAttempts,
+    failoverHistory: log.failoverHistory ? parseFailoverHistory(log.failoverHistory) : null,
     createdAt: log.createdAt,
   }));
 
