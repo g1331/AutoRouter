@@ -98,10 +98,9 @@ describe("proxy-client", () => {
 
       expect(result["x-api-key"]).toBe("ant-test-key");
       expect(result["Authorization"]).toBeUndefined();
-      expect(result["anthropic-version"]).toBe("2023-06-01");
     });
 
-    it("should preserve existing anthropic-version if present", () => {
+    it("should preserve client anthropic-version header", () => {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         "anthropic-version": "2024-01-01",
@@ -801,7 +800,6 @@ describe("proxy-client", () => {
 
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
       expect(fetchCall[1].headers["x-api-key"]).toBe("ant-key");
-      expect(fetchCall[1].headers["anthropic-version"]).toBe("2023-06-01");
     });
 
     it("should return non-streaming response with usage extraction", async () => {

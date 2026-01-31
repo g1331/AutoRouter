@@ -83,10 +83,6 @@ export function injectAuthHeader(
     result["Authorization"] = `Bearer ${upstream.apiKey}`;
   } else if (upstream.provider === "anthropic") {
     result["x-api-key"] = upstream.apiKey;
-    // Anthropic requires anthropic-version header
-    if (!result["anthropic-version"]) {
-      result["anthropic-version"] = "2023-06-01";
-    }
   }
 
   return result;
