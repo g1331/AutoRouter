@@ -108,12 +108,14 @@ function isFailoverableError(error: unknown): boolean {
  * - All non-2xx responses trigger failover (configurable via excludeStatusCodes)
  * - Detects downstream client disconnect to stop unnecessary retries
  * - First-chunk validation for streaming responses
+ * - Only selects from authorized upstreams (API key permission filtering)
  */
 async function forwardWithFailover(
   request: NextRequest,
   providerType: ProviderType,
   path: string,
   requestId: string,
+  allowedUpstreamIds: string[],
   config: FailoverConfig = DEFAULT_FAILOVER_CONFIG
 ): Promise<{
   result: ProxyResult;
@@ -143,10 +145,12 @@ async function forwardWithFailover(
 
     try {
       // Select an upstream using provider type, excluding previously failed ones
+      // and filtering by allowed upstream IDs (API key authorization)
       const selection = await selectFromProviderType(
         providerType,
         LoadBalancerStrategy.WEIGHTED,
-        failedUpstreamIds.length > 0 ? failedUpstreamIds : undefined
+        failedUpstreamIds.length > 0 ? failedUpstreamIds : undefined,
+        allowedUpstreamIds
       );
 
       selectedUpstream = selection.upstream;
@@ -449,6 +453,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   let groupName: string | null = null;
   let providerType: ProviderType | null = null;
   let resolvedModel = model;
+  let allowedUpstreamIds: string[] = [];
 
   // Routing type is always "auto" for model-based routing
   const routingType = "auto" as const;
@@ -475,13 +480,14 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       }
     }
 
-    // Validate API key has permission for this upstream
+    // Get API key's allowed upstream IDs for authorization filtering
     const upstreamPermissions = await db.query.apiKeyUpstreams.findMany({
       where: eq(apiKeyUpstreams.apiKeyId, validApiKey.id),
     });
-    const allowedUpstreamIds = upstreamPermissions.map((p) => p.upstreamId);
+    allowedUpstreamIds = upstreamPermissions.map((p) => p.upstreamId);
 
-    if (!allowedUpstreamIds.includes(selectedUpstream.id)) {
+    // For non-load-balanced routing, validate API key has permission for this upstream
+    if (!useLoadBalancer && !allowedUpstreamIds.includes(selectedUpstream.id)) {
       // Log the actual reason internally but return generic error to downstream
       console.warn(
         `[Auth] API key ${validApiKey.id} not authorized for upstream '${selectedUpstream.name}'`
@@ -505,11 +511,12 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
     if (useLoadBalancer && providerType) {
       // Use load balancer with circuit breaker failover for provider-type routing
+      // Pass allowedUpstreamIds to filter by API key authorization
       const {
         result: proxyResult,
         selectedUpstream: selected,
         failoverHistory: history,
-      } = await forwardWithFailover(request, providerType, path, requestId);
+      } = await forwardWithFailover(request, providerType, path, requestId, allowedUpstreamIds);
       result = proxyResult;
       upstreamForLogging = selected;
       failoverHistory = history;

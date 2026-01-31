@@ -1034,7 +1034,7 @@ describe("load-balancer", () => {
       vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
 
       await expect(selectFromProviderType("openai")).rejects.toThrow(
-        "No upstreams found for provider type: openai"
+        "No authorized upstreams found for provider type: openai"
       );
     });
 

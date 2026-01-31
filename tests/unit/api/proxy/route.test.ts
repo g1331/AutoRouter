@@ -127,7 +127,7 @@ describe("proxy route upstream selection", () => {
   ) => Promise<Response>;
 
   beforeEach(async () => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     vi.resetModules();
     const routeModule = await import("@/app/api/proxy/v1/[...path]/route");
     POST = routeModule.POST;
@@ -334,11 +334,19 @@ describe("proxy route upstream selection", () => {
     expect(recordSuccess).toHaveBeenCalledWith("up-anthropic-2");
 
     // selectFromProviderType was called twice - first without exclusions, second with failed upstream excluded
+    // Both calls include allowedUpstreamIds from API key authorization
     expect(selectFromProviderType).toHaveBeenCalledTimes(2);
-    expect(selectFromProviderType).toHaveBeenNthCalledWith(1, "anthropic", "weighted", undefined);
-    expect(selectFromProviderType).toHaveBeenNthCalledWith(2, "anthropic", "weighted", [
+    expect(selectFromProviderType).toHaveBeenNthCalledWith(1, "anthropic", "weighted", undefined, [
       "up-anthropic-1",
+      "up-anthropic-2",
     ]);
+    expect(selectFromProviderType).toHaveBeenNthCalledWith(
+      2,
+      "anthropic",
+      "weighted",
+      ["up-anthropic-1"],
+      ["up-anthropic-1", "up-anthropic-2"]
+    );
 
     expect(forwardRequest).toHaveBeenCalledTimes(2);
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(healthyUpstream);
@@ -863,6 +871,379 @@ describe("proxy route upstream selection", () => {
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(healthyUpstream);
     expect(forwardRequest).toHaveBeenCalledTimes(2);
   });
+
+  describe("API key upstream authorization filtering", () => {
+    it("should only select from authorized upstreams when multiple upstreams match provider type", async () => {
+      const { db } = await import("@/lib/db");
+      const { forwardRequest, prepareUpstreamForProxy } =
+        await import("@/lib/services/proxy-client");
+      const { routeByModel } = await import("@/lib/services/model-router");
+      const { selectFromProviderType, getUpstreamGroupByName } =
+        await import("@/lib/services/load-balancer");
+      const { markHealthy } = await import("@/lib/services/health-checker");
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      ]);
+
+      // API key only authorized for privnode-cx, NOT for duck
+      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+        { upstreamId: "up-privnode" },
+      ]);
+
+      const duckUpstream = {
+        id: "up-duck",
+        name: "duck",
+        provider: "openai",
+        providerType: "openai",
+        baseUrl: "https://jp.duckcoding.com/v1",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+      };
+
+      const privnodeUpstream = {
+        id: "up-privnode",
+        name: "privnode-cx",
+        provider: "openai",
+        providerType: "openai",
+        baseUrl: "https://privnode.com/v1",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+      };
+
+      // routeByModel returns duck (first match), but API key only authorizes privnode
+      vi.mocked(routeByModel).mockResolvedValueOnce({
+        upstream: duckUpstream,
+        groupName: "cx",
+        providerType: "openai",
+        resolvedModel: "gpt-5.2",
+        candidateUpstreams: [duckUpstream, privnodeUpstream],
+        excludedUpstreams: [],
+        routingDecision: {
+          originalModel: "gpt-5.2",
+          resolvedModel: "gpt-5.2",
+          providerType: "openai",
+          groupName: "cx",
+          upstreamName: "duck",
+          allowedModelsFilter: false,
+          modelRedirectApplied: false,
+          circuitBreakerFilter: false,
+          routingType: "provider_type",
+          candidateCount: 2,
+          finalCandidateCount: 2,
+        },
+      });
+
+      vi.mocked(getUpstreamGroupByName).mockResolvedValueOnce({
+        id: "group-cx",
+        name: "cx",
+        provider: "openai",
+        strategy: "weighted",
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        healthCheckInterval: 30,
+        healthCheckTimeout: 10,
+        config: null,
+      });
+
+      // selectFromProviderType should be called with allowedUpstreamIds filter
+      // and should return privnode (the only authorized upstream)
+      vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+        upstream: privnodeUpstream,
+        strategy: "weighted",
+        providerType: "openai",
+        routingType: "provider_type",
+        groupName: "cx",
+        circuitBreakerFiltered: 0,
+        healthFiltered: 0,
+        totalCandidates: 1,
+      });
+
+      vi.mocked(forwardRequest).mockResolvedValueOnce({
+        statusCode: 200,
+        headers: new Headers(),
+        body: new Uint8Array(),
+        isStream: false,
+        usage: null,
+      });
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-test",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5.2",
+          messages: [{ role: "user", content: "hi" }],
+        }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["chat", "completions"] }),
+      });
+
+      expect(response.status).toBe(200);
+      // Verify selectFromProviderType was called with allowedUpstreamIds
+      expect(selectFromProviderType).toHaveBeenCalledWith(
+        "openai",
+        "weighted",
+        undefined, // excludeIds
+        ["up-privnode"] // allowedUpstreamIds - only authorized upstreams
+      );
+      // Verify the request was forwarded to privnode, not duck
+      expect(prepareUpstreamForProxy).toHaveBeenCalledWith(privnodeUpstream);
+      expect(markHealthy).toHaveBeenCalledWith("up-privnode", 100);
+    });
+
+    it("should return error when no authorized upstreams match provider type", async () => {
+      const { db } = await import("@/lib/db");
+      const { forwardRequest } = await import("@/lib/services/proxy-client");
+      const { routeByModel } = await import("@/lib/services/model-router");
+      const { selectFromProviderType, getUpstreamGroupByName, NoHealthyUpstreamsError } =
+        await import("@/lib/services/load-balancer");
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      ]);
+
+      // API key only authorized for anthropic upstream, but model routes to openai
+      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+        { upstreamId: "up-anthropic" },
+      ]);
+
+      const duckUpstream = {
+        id: "up-duck",
+        name: "duck",
+        provider: "openai",
+        providerType: "openai",
+        baseUrl: "https://jp.duckcoding.com/v1",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+      };
+
+      vi.mocked(routeByModel).mockResolvedValueOnce({
+        upstream: duckUpstream,
+        groupName: "cx",
+        providerType: "openai",
+        resolvedModel: "gpt-5.2",
+        candidateUpstreams: [duckUpstream],
+        excludedUpstreams: [],
+        routingDecision: {
+          originalModel: "gpt-5.2",
+          resolvedModel: "gpt-5.2",
+          providerType: "openai",
+          groupName: "cx",
+          upstreamName: "duck",
+          allowedModelsFilter: false,
+          modelRedirectApplied: false,
+          circuitBreakerFilter: false,
+          routingType: "provider_type",
+          candidateCount: 1,
+          finalCandidateCount: 1,
+        },
+      });
+
+      vi.mocked(getUpstreamGroupByName).mockResolvedValueOnce({
+        id: "group-cx",
+        name: "cx",
+        provider: "openai",
+        strategy: "weighted",
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        healthCheckInterval: 30,
+        healthCheckTimeout: 10,
+        config: null,
+      });
+
+      // selectFromProviderType throws because no authorized upstreams available
+      vi.mocked(selectFromProviderType).mockRejectedValueOnce(
+        new NoHealthyUpstreamsError("No authorized upstreams available for provider type: openai")
+      );
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-test",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5.2",
+          messages: [{ role: "user", content: "hi" }],
+        }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["chat", "completions"] }),
+      });
+      const data = await response.json();
+
+      expect(response.status).toBe(503);
+      expect(data).toEqual({
+        error: {
+          message: "服务暂时不可用，请稍后重试",
+          type: "service_unavailable",
+          code: "ALL_UPSTREAMS_UNAVAILABLE",
+        },
+      });
+      expect(forwardRequest).not.toHaveBeenCalled();
+    });
+
+    it("should filter unauthorized upstreams during failover", async () => {
+      const { db } = await import("@/lib/db");
+      const { forwardRequest, prepareUpstreamForProxy } =
+        await import("@/lib/services/proxy-client");
+      const { routeByModel } = await import("@/lib/services/model-router");
+      const { selectFromProviderType, getUpstreamGroupByName } =
+        await import("@/lib/services/load-balancer");
+      const { markHealthy, markUnhealthy } = await import("@/lib/services/health-checker");
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      ]);
+
+      // API key authorized for both privnode and rightcode, but NOT duck
+      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+        { upstreamId: "up-privnode" },
+        { upstreamId: "up-rightcode" },
+      ]);
+
+      const privnodeUpstream = {
+        id: "up-privnode",
+        name: "privnode-cx",
+        provider: "openai",
+        providerType: "openai",
+        baseUrl: "https://privnode.com/v1",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+      };
+
+      const rightcodeUpstream = {
+        id: "up-rightcode",
+        name: "rightcode",
+        provider: "openai",
+        providerType: "openai",
+        baseUrl: "https://rightcode.com/v1",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+      };
+
+      vi.mocked(routeByModel).mockResolvedValueOnce({
+        upstream: privnodeUpstream,
+        groupName: "cx",
+        providerType: "openai",
+        resolvedModel: "gpt-5.2",
+        candidateUpstreams: [privnodeUpstream, rightcodeUpstream],
+        excludedUpstreams: [],
+        routingDecision: {
+          originalModel: "gpt-5.2",
+          resolvedModel: "gpt-5.2",
+          providerType: "openai",
+          groupName: "cx",
+          upstreamName: "privnode-cx",
+          allowedModelsFilter: false,
+          modelRedirectApplied: false,
+          circuitBreakerFilter: false,
+          routingType: "provider_type",
+          candidateCount: 2,
+          finalCandidateCount: 2,
+        },
+      });
+
+      vi.mocked(getUpstreamGroupByName).mockResolvedValueOnce({
+        id: "group-cx",
+        name: "cx",
+        provider: "openai",
+        strategy: "weighted",
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        healthCheckInterval: 30,
+        healthCheckTimeout: 10,
+        config: null,
+      });
+
+      // First attempt: privnode fails with 500
+      vi.mocked(selectFromProviderType)
+        .mockResolvedValueOnce({
+          upstream: privnodeUpstream,
+          strategy: "weighted",
+          providerType: "openai",
+          routingType: "provider_type",
+          groupName: "cx",
+          circuitBreakerFiltered: 0,
+          healthFiltered: 0,
+          totalCandidates: 2,
+        })
+        // Second attempt: rightcode succeeds
+        .mockResolvedValueOnce({
+          upstream: rightcodeUpstream,
+          strategy: "weighted",
+          providerType: "openai",
+          routingType: "provider_type",
+          groupName: "cx",
+          circuitBreakerFiltered: 0,
+          healthFiltered: 1,
+          totalCandidates: 2,
+        });
+
+      vi.mocked(forwardRequest)
+        .mockResolvedValueOnce({
+          statusCode: 500,
+          headers: new Headers(),
+          body: new Uint8Array(),
+          isStream: false,
+          usage: null,
+        })
+        .mockResolvedValueOnce({
+          statusCode: 200,
+          headers: new Headers(),
+          body: new Uint8Array(),
+          isStream: false,
+          usage: null,
+        });
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-test",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5.2",
+          messages: [{ role: "user", content: "hi" }],
+        }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["chat", "completions"] }),
+      });
+
+      expect(response.status).toBe(200);
+      // Verify both calls to selectFromProviderType included allowedUpstreamIds
+      expect(selectFromProviderType).toHaveBeenCalledTimes(2);
+      expect(selectFromProviderType).toHaveBeenNthCalledWith(1, "openai", "weighted", undefined, [
+        "up-privnode",
+        "up-rightcode",
+      ]);
+      expect(selectFromProviderType).toHaveBeenNthCalledWith(
+        2,
+        "openai",
+        "weighted",
+        ["up-privnode"], // excludeIds - failed upstream
+        ["up-privnode", "up-rightcode"] // allowedUpstreamIds
+      );
+      expect(markUnhealthy).toHaveBeenCalledWith("up-privnode", "HTTP 500 error");
+      expect(markHealthy).toHaveBeenCalledWith("up-rightcode", 100);
+    });
+  });
 });
 
 describe.skip("proxy route load balancing with X-Upstream-Group header (deprecated - now uses model-based routing)", () => {
@@ -872,7 +1253,7 @@ describe.skip("proxy route load balancing with X-Upstream-Group header (deprecat
   ) => Promise<Response>;
 
   beforeEach(async () => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     vi.resetModules();
     const routeModule = await import("@/app/api/proxy/v1/[...path]/route");
     POST = routeModule.POST;

@@ -539,13 +539,15 @@ function selectWeightedWithHealthScore(
  * @param providerType - The provider type (anthropic, openai, google, custom)
  * @param strategy - The load balancing strategy to use
  * @param excludeIds - Optional array of upstream IDs to exclude (for failover)
+ * @param allowedUpstreamIds - Optional array of upstream IDs that are allowed (for API key authorization)
  * @returns Selection result with metadata
  * @throws {NoHealthyUpstreamsError} If no healthy upstreams available
  */
 export async function selectFromProviderType(
   providerType: ProviderType,
   strategy: LoadBalancerStrategy = LoadBalancerStrategy.WEIGHTED,
-  excludeIds?: string[]
+  excludeIds?: string[],
+  allowedUpstreamIds?: string[]
 ): Promise<ProviderTypeSelectionResult> {
   // Validate provider type
   if (!VALID_PROVIDER_TYPES.includes(providerType)) {
@@ -556,14 +558,23 @@ export async function selectFromProviderType(
   const { upstreamsWithCircuitBreaker, groupName, routingType } =
     await getUpstreamsByProviderType(providerType);
 
-  const totalCandidates = upstreamsWithCircuitBreaker.length;
+  // Filter by allowed upstream IDs (API key authorization)
+  let filteredUpstreams = upstreamsWithCircuitBreaker;
+  if (allowedUpstreamIds && allowedUpstreamIds.length > 0) {
+    const allowedSet = new Set(allowedUpstreamIds);
+    filteredUpstreams = upstreamsWithCircuitBreaker.filter((u) => allowedSet.has(u.upstream.id));
+  }
+
+  const totalCandidates = filteredUpstreams.length;
 
   if (totalCandidates === 0) {
-    throw new NoHealthyUpstreamsError(`No upstreams found for provider type: ${providerType}`);
+    throw new NoHealthyUpstreamsError(
+      `No authorized upstreams found for provider type: ${providerType}`
+    );
   }
 
   // Filter by circuit breaker (exclude OPEN state)
-  const afterCircuitBreaker = filterByCircuitBreaker(upstreamsWithCircuitBreaker);
+  const afterCircuitBreaker = filterByCircuitBreaker(filteredUpstreams);
 
   // Filter by health and exclusions
   const afterHealth = filterByHealth(afterCircuitBreaker.allowed, excludeIds);
