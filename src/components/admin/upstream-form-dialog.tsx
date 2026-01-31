@@ -229,7 +229,7 @@ export function UpstreamFormDialog({
   };
 
   const dialogContent = (
-    <DialogContent className="max-w-2xl">
+    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>{isEdit ? t("editUpstreamTitle") : t("createUpstreamTitle")}</DialogTitle>
         <DialogDescription>{t("createUpstreamDesc")}</DialogDescription>
