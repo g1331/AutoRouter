@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "3331:3000"
     environment:
       - DATABASE_URL=postgresql://autorouter:autorouter@db:5432/autorouter
       - ADMIN_TOKEN=${ADMIN_TOKEN}
