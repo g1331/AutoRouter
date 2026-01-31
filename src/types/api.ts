@@ -247,7 +247,13 @@ export interface FailoverAttempt {
   upstream_id: string;
   upstream_name: string;
   attempted_at: string; // ISO 8601 date string
-  error_type: "timeout" | "http_5xx" | "http_429" | "connection_error";
+  error_type:
+    | "timeout"
+    | "http_5xx"
+    | "http_4xx"
+    | "http_429"
+    | "connection_error"
+    | "circuit_open";
   error_message: string;
   status_code?: number | null;
 }

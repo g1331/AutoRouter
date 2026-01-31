@@ -25,55 +25,23 @@ import {
 } from "@/lib/services/circuit-breaker";
 import { randomUUID } from "crypto";
 import { routeByModel, NoUpstreamGroupError, type ProviderType } from "@/lib/services/model-router";
+import {
+  type FailoverConfig,
+  DEFAULT_FAILOVER_CONFIG,
+  shouldTriggerFailover,
+  shouldContinueFailover,
+} from "@/lib/services/failover-config";
+import {
+  createUnifiedErrorResponse,
+  createSSEErrorEvent,
+  getHttpStatusForError,
+} from "@/lib/services/unified-error";
 
 // Edge runtime for streaming support
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ path: string[] }> };
-
-/** Maximum number of failover attempts when using group-based routing. */
-const MAX_FAILOVER_ATTEMPTS = 3;
-
-/**
- * Check if an error indicates the upstream is unhealthy (connection/timeout/circuit breaker errors).
- * We should attempt failover for these errors.
- */
-function isFailoverableError(error: unknown): boolean {
-  if (error instanceof CircuitBreakerOpenError) {
-    return true;
-  }
-  if (error instanceof Error) {
-    const msg = error.message.toLowerCase();
-    return (
-      msg.includes("timed out") ||
-      msg.includes("timeout") ||
-      msg.includes("econnrefused") ||
-      msg.includes("econnreset") ||
-      msg.includes("socket hang up") ||
-      msg.includes("network") ||
-      msg.includes("fetch failed") ||
-      msg.includes("circuit breaker")
-    );
-  }
-  return false;
-}
-
-/**
- * Check if an HTTP status code indicates the upstream is unhealthy.
- * 5xx errors and some 4xx errors (like 429 rate limit) may indicate issues.
- */
-function shouldFailover(statusCode: number): boolean {
-  // 5xx server errors
-  if (statusCode >= 500 && statusCode <= 599) {
-    return true;
-  }
-  // 429 rate limit - may want to try another upstream
-  if (statusCode === 429) {
-    return true;
-  }
-  return false;
-}
 
 /**
  * Routing decision information for logging.
@@ -97,6 +65,7 @@ function getErrorType(
 ): FailoverAttempt["error_type"] {
   if (error instanceof CircuitBreakerOpenError) return "circuit_open";
   if (statusCode === 429) return "http_429";
+  if (statusCode && statusCode >= 400 && statusCode < 500) return "http_4xx";
   if (statusCode && statusCode >= 500) return "http_5xx";
   if (error) {
     const msg = error.message.toLowerCase();
@@ -107,14 +76,45 @@ function getErrorType(
 }
 
 /**
+ * Check if an error indicates we should attempt failover.
+ * All connection/timeout/circuit breaker errors are failoverable.
+ */
+function isFailoverableError(error: unknown): boolean {
+  if (error instanceof CircuitBreakerOpenError) {
+    return true;
+  }
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    return (
+      msg.includes("timed out") ||
+      msg.includes("timeout") ||
+      msg.includes("econnrefused") ||
+      msg.includes("econnreset") ||
+      msg.includes("socket hang up") ||
+      msg.includes("network") ||
+      msg.includes("fetch failed") ||
+      msg.includes("circuit breaker")
+    );
+  }
+  return false;
+}
+
+/**
  * Forward a request with failover support using circuit breaker.
- * Tries multiple upstreams if the initial request fails.
+ * Tries multiple upstreams based on the configured failover strategy.
+ *
+ * Key features:
+ * - exhaust_all strategy: tries all available upstreams until success
+ * - All non-2xx responses trigger failover (configurable via excludeStatusCodes)
+ * - Detects downstream client disconnect to stop unnecessary retries
+ * - First-chunk validation for streaming responses
  */
 async function forwardWithFailover(
   request: NextRequest,
   providerType: ProviderType,
   path: string,
-  requestId: string
+  requestId: string,
+  config: FailoverConfig = DEFAULT_FAILOVER_CONFIG
 ): Promise<{
   result: ProxyResult;
   selectedUpstream: Upstream;
@@ -129,8 +129,17 @@ async function forwardWithFailover(
   const requestClone = request.clone();
   const requestBodyBuffer = await requestClone.arrayBuffer();
 
-  for (let attempt = 0; attempt < MAX_FAILOVER_ATTEMPTS; attempt++) {
+  // Loop until we succeed, exhaust all upstreams, or hit max attempts
+  let attemptCount = 0;
+  while (true) {
+    // Check if downstream client has disconnected
+    if (request.signal.aborted) {
+      console.warn(`[${requestId}] Client disconnected during failover, stopping retries`);
+      throw new ClientDisconnectedError("Client disconnected during failover");
+    }
+
     let selectedUpstream: Upstream | null = null;
+    let hasMoreUpstreams = true;
 
     try {
       // Select an upstream using provider type, excluding previously failed ones
@@ -141,142 +150,183 @@ async function forwardWithFailover(
       );
 
       selectedUpstream = selection.upstream;
-
-      // Track connection for least-connections strategy
-      recordConnection(selectedUpstream.id);
-
-      try {
-        // Create a new request with the buffered body
-        const proxyRequest = new Request(request.url, {
-          method: request.method,
-          headers: request.headers,
-          body: requestBodyBuffer.byteLength > 0 ? requestBodyBuffer : undefined,
-        });
-
-        const upstreamForProxy = prepareUpstreamForProxy(selectedUpstream);
-        const result = await forwardRequest(proxyRequest, upstreamForProxy, path, requestId);
-
-        // Check if response indicates we should failover
-        if (shouldFailover(result.statusCode)) {
-          // Release connection and mark as unhealthy
-          releaseConnection(selectedUpstream.id);
-          void markUnhealthy(selectedUpstream.id, `HTTP ${result.statusCode} error`);
-          // Record failure in circuit breaker
-          void recordFailure(selectedUpstream.id, `http_${result.statusCode}`);
-          // Record failover attempt
-          failoverHistory.push({
-            upstream_id: selectedUpstream.id,
-            upstream_name: selectedUpstream.name,
-            attempted_at: new Date().toISOString(),
-            error_type: getErrorType(null, result.statusCode),
-            error_message: `HTTP ${result.statusCode} error`,
-            status_code: result.statusCode,
-          });
-          failedUpstreamIds.push(selectedUpstream.id);
-          lastError = new Error(`Upstream returned ${result.statusCode}`);
-          continue;
-        }
-
-        // Success! Record success in circuit breaker and update health status
-        void recordSuccess(selectedUpstream.id);
-
-        // For streaming responses, we track the connection until the stream ends
-        if (!result.isStream) {
-          releaseConnection(selectedUpstream.id);
-          // Mark healthy with a reasonable latency estimate
-          void markHealthy(selectedUpstream.id, 100);
-        } else {
-          // For streaming, wrap the stream to release connection when done
-          const originalStream = result.body as ReadableStream<Uint8Array>;
-          const wrappedStream = wrapStreamWithConnectionTracking(
-            originalStream,
-            selectedUpstream.id
-          );
-          return {
-            result: { ...result, body: wrappedStream },
-            selectedUpstream,
-            failedUpstreamIds,
-            failoverHistory,
-          };
-        }
-
-        return { result, selectedUpstream, failedUpstreamIds, failoverHistory };
-      } catch (error) {
-        // Release connection on error
-        releaseConnection(selectedUpstream.id);
-
-        // Record failure in circuit breaker for failoverable errors
-        if (isFailoverableError(error)) {
-          void recordFailure(
-            selectedUpstream.id,
-            getErrorType(error instanceof Error ? error : null, null)
-          );
-
-          // Mark upstream as unhealthy
-          const errorMessage = error instanceof Error ? error.message : "Request failed";
-          void markUnhealthy(selectedUpstream.id, errorMessage);
-          // Record failover attempt
-          failoverHistory.push({
-            upstream_id: selectedUpstream.id,
-            upstream_name: selectedUpstream.name,
-            attempted_at: new Date().toISOString(),
-            error_type: getErrorType(error instanceof Error ? error : null, null),
-            error_message: errorMessage,
-            status_code: null,
-          });
-          failedUpstreamIds.push(selectedUpstream.id);
-          lastError = error instanceof Error ? error : new Error(String(error));
-          continue;
-        }
-
-        // Circuit breaker open error - record and continue to next upstream
-        if (error instanceof CircuitBreakerOpenError) {
-          const errorMessage = error.message;
-          // Record failover attempt
-          failoverHistory.push({
-            upstream_id: selectedUpstream.id,
-            upstream_name: selectedUpstream.name,
-            attempted_at: new Date().toISOString(),
-            error_type: "circuit_open",
-            error_message: errorMessage,
-            status_code: null,
-          });
-          failedUpstreamIds.push(selectedUpstream.id);
-          lastError = error instanceof Error ? error : new Error(String(error));
-          continue;
-        }
-
-        // Non-failoverable error - rethrow
-        throw error;
-      }
     } catch (error) {
       if (error instanceof NoHealthyUpstreamsError) {
-        // No more healthy upstreams to try
-        throw lastError ?? error;
+        hasMoreUpstreams = false;
+      } else {
+        throw error;
       }
+    }
+
+    // Check if we should continue trying
+    if (!shouldContinueFailover(attemptCount, hasMoreUpstreams, config, request.signal.aborted)) {
+      // No more upstreams or hit max attempts - throw NoHealthyUpstreamsError
+      // to indicate all failover attempts have been exhausted
+      throw new NoHealthyUpstreamsError(lastError?.message ?? "All upstreams exhausted");
+    }
+
+    if (!selectedUpstream) {
+      throw new NoHealthyUpstreamsError("No upstream available");
+    }
+
+    attemptCount++;
+
+    // Track connection for least-connections strategy
+    recordConnection(selectedUpstream.id);
+
+    try {
+      // Create a new request with the buffered body
+      const proxyRequest = new Request(request.url, {
+        method: request.method,
+        headers: request.headers,
+        body: requestBodyBuffer.byteLength > 0 ? requestBodyBuffer : undefined,
+      });
+
+      const upstreamForProxy = prepareUpstreamForProxy(selectedUpstream);
+      const result = await forwardRequest(proxyRequest, upstreamForProxy, path, requestId);
+
+      // Check if response indicates we should failover
+      if (shouldTriggerFailover(result.statusCode, config)) {
+        // Release connection and mark as unhealthy
+        releaseConnection(selectedUpstream.id);
+        void markUnhealthy(selectedUpstream.id, `HTTP ${result.statusCode} error`);
+        // Record failure in circuit breaker
+        void recordFailure(selectedUpstream.id, `http_${result.statusCode}`);
+        // Record failover attempt
+        failoverHistory.push({
+          upstream_id: selectedUpstream.id,
+          upstream_name: selectedUpstream.name,
+          attempted_at: new Date().toISOString(),
+          error_type: getErrorType(null, result.statusCode),
+          error_message: `HTTP ${result.statusCode} error`,
+          status_code: result.statusCode,
+        });
+        failedUpstreamIds.push(selectedUpstream.id);
+        lastError = new Error(`Upstream returned ${result.statusCode}`);
+        continue;
+      }
+
+      // Success! Record success in circuit breaker and update health status
+      void recordSuccess(selectedUpstream.id);
+
+      // For streaming responses, we track the connection until the stream ends
+      if (!result.isStream) {
+        releaseConnection(selectedUpstream.id);
+        // Mark healthy with a reasonable latency estimate
+        void markHealthy(selectedUpstream.id, 100);
+      } else {
+        // For streaming, wrap the stream to release connection when done
+        // and handle mid-stream errors
+        const originalStream = result.body as ReadableStream<Uint8Array>;
+        const wrappedStream = wrapStreamWithConnectionTracking(
+          originalStream,
+          selectedUpstream.id,
+          request.signal
+        );
+        return {
+          result: { ...result, body: wrappedStream },
+          selectedUpstream,
+          failedUpstreamIds,
+          failoverHistory,
+        };
+      }
+
+      return { result, selectedUpstream, failedUpstreamIds, failoverHistory };
+    } catch (error) {
+      // Release connection on error
+      releaseConnection(selectedUpstream.id);
+
+      // Check if client disconnected
+      if (request.signal.aborted) {
+        console.warn(`[${requestId}] Client disconnected during request, stopping`);
+        throw new ClientDisconnectedError("Client disconnected during request");
+      }
+
+      // Record failure in circuit breaker for failoverable errors
+      if (isFailoverableError(error) || error instanceof CircuitBreakerOpenError) {
+        void recordFailure(
+          selectedUpstream.id,
+          getErrorType(error instanceof Error ? error : null, null)
+        );
+
+        // Mark upstream as unhealthy
+        const errorMessage = error instanceof Error ? error.message : "Request failed";
+        void markUnhealthy(selectedUpstream.id, errorMessage);
+        // Record failover attempt
+        failoverHistory.push({
+          upstream_id: selectedUpstream.id,
+          upstream_name: selectedUpstream.name,
+          attempted_at: new Date().toISOString(),
+          error_type: getErrorType(error instanceof Error ? error : null, null),
+          error_message: errorMessage,
+          status_code: null,
+        });
+        failedUpstreamIds.push(selectedUpstream.id);
+        lastError = error instanceof Error ? error : new Error(String(error));
+        continue;
+      }
+
+      // Non-failoverable error - rethrow
       throw error;
     }
   }
+}
 
-  // Exhausted all attempts
-  throw lastError ?? new Error("All failover attempts exhausted");
+/**
+ * Error thrown when downstream client disconnects.
+ */
+class ClientDisconnectedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ClientDisconnectedError";
+  }
 }
 
 /**
  * Wrap a ReadableStream to track and release connection when the stream ends.
  * Also records circuit breaker success/failure based on stream completion.
+ * Supports downstream disconnect detection and SSE error events.
+ *
+ * @param stream - The upstream response stream
+ * @param upstreamId - The upstream ID for connection tracking
+ * @param abortSignal - Optional abort signal to detect downstream disconnect
  */
 function wrapStreamWithConnectionTracking(
   stream: ReadableStream<Uint8Array>,
-  upstreamId: string
+  upstreamId: string,
+  abortSignal?: AbortSignal
 ): ReadableStream<Uint8Array> {
   let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  const encoder = new TextEncoder();
 
   return new ReadableStream({
     async start(controller) {
       reader = stream.getReader();
+
+      // Set up abort listener if signal provided
+      const abortHandler = () => {
+        console.warn(`[Stream] Client disconnected, cancelling upstream stream`);
+        reader?.cancel("Client disconnected");
+        releaseConnection(upstreamId);
+        try {
+          controller.close();
+        } catch {
+          // Controller may already be closed
+        }
+      };
+
+      if (abortSignal) {
+        abortSignal.addEventListener("abort", abortHandler, { once: true });
+      }
+
       try {
         while (true) {
+          // Check if client disconnected
+          if (abortSignal?.aborted) {
+            console.warn(`[Stream] Client already disconnected, stopping stream`);
+            break;
+          }
+
           const { done, value } = await reader.read();
           if (done) {
             break;
@@ -289,14 +339,33 @@ function wrapStreamWithConnectionTracking(
         void markHealthy(upstreamId, 100);
         void recordSuccess(upstreamId);
       } catch (error) {
-        controller.error(error);
-        // Stream errored - release connection, mark unhealthy, record circuit breaker failure
+        // Check if this is due to client disconnect
+        if (abortSignal?.aborted) {
+          console.warn(`[Stream] Stream error due to client disconnect`);
+          releaseConnection(upstreamId);
+          return;
+        }
+
+        // Stream errored mid-way - send SSE error event to downstream
+        try {
+          const sseErrorEvent = createSSEErrorEvent("STREAM_ERROR");
+          controller.enqueue(encoder.encode(sseErrorEvent));
+          controller.close();
+        } catch {
+          // Controller may already be in error state
+          controller.error(error);
+        }
+
+        // Release connection, mark unhealthy, record circuit breaker failure
         releaseConnection(upstreamId);
         void markUnhealthy(upstreamId, error instanceof Error ? error.message : "Stream error");
         void recordFailure(upstreamId, "stream_error");
       } finally {
         reader?.releaseLock();
         reader = null;
+        if (abortSignal) {
+          abortSignal.removeEventListener("abort", abortHandler);
+        }
       }
     },
     async cancel(reason) {
@@ -567,7 +636,21 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     // Determine which upstream to log (for load balanced requests, we may not have one if all failed)
     const logUpstreamId = selectedUpstream?.id ?? null;
 
-    // Log failed request
+    // Determine error code for unified response
+    let errorCode:
+      | "ALL_UPSTREAMS_UNAVAILABLE"
+      | "REQUEST_TIMEOUT"
+      | "CLIENT_DISCONNECTED"
+      | "SERVICE_UNAVAILABLE" = "SERVICE_UNAVAILABLE";
+    if (error instanceof NoHealthyUpstreamsError) {
+      errorCode = "ALL_UPSTREAMS_UNAVAILABLE";
+    } else if (error instanceof ClientDisconnectedError) {
+      errorCode = "CLIENT_DISCONNECTED";
+    } else if (error instanceof Error && error.message.includes("timed out")) {
+      errorCode = "REQUEST_TIMEOUT";
+    }
+
+    // Log failed request (internal logging with full details)
     await logRequest({
       apiKeyId: validApiKey.id,
       upstreamId: logUpstreamId,
@@ -577,7 +660,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       promptTokens: 0,
       completionTokens: 0,
       totalTokens: 0,
-      statusCode: error instanceof Error && error.message.includes("timed out") ? 504 : 502,
+      statusCode: getHttpStatusForError(errorCode),
       durationMs,
       errorMessage: error instanceof Error ? error.message : "Unknown error",
       routingType,
@@ -587,30 +670,31 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
     });
 
-    if (error instanceof UpstreamGroupNotFoundError) {
-      return NextResponse.json({ error: error.message }, { status: 404 });
+    // Handle client disconnect silently (no response needed)
+    if (error instanceof ClientDisconnectedError) {
+      console.warn(`[${requestId}] Client disconnected, no response sent`);
+      return createUnifiedErrorResponse("CLIENT_DISCONNECTED");
     }
 
+    // Return unified error response (no upstream details exposed)
     if (error instanceof NoHealthyUpstreamsError) {
-      return NextResponse.json(
-        { error: "No healthy upstreams available in the group" },
-        { status: 503 }
-      );
+      return createUnifiedErrorResponse("ALL_UPSTREAMS_UNAVAILABLE");
     }
 
     if (error instanceof Error && error.message.includes("timed out")) {
-      return NextResponse.json({ error: "Upstream request timed out" }, { status: 504 });
+      return createUnifiedErrorResponse("REQUEST_TIMEOUT");
     }
 
     if (error instanceof CircuitBreakerOpenError) {
-      return NextResponse.json(
-        { error: "Circuit breaker is open - upstream temporarily unavailable" },
-        { status: 503 }
-      );
+      return createUnifiedErrorResponse("ALL_UPSTREAMS_UNAVAILABLE");
+    }
+
+    if (error instanceof UpstreamGroupNotFoundError) {
+      return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED");
     }
 
     console.error(`Proxy error for request ${requestId}:`, error);
-    return NextResponse.json({ error: "Failed to connect to upstream" }, { status: 502 });
+    return createUnifiedErrorResponse("SERVICE_UNAVAILABLE");
   }
 }
 

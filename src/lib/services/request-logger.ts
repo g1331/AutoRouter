@@ -32,7 +32,13 @@ export interface FailoverAttempt {
   upstream_id: string;
   upstream_name: string;
   attempted_at: string; // ISO timestamp
-  error_type: "timeout" | "http_5xx" | "http_429" | "connection_error" | "circuit_open";
+  error_type:
+    | "timeout"
+    | "http_5xx"
+    | "http_4xx"
+    | "http_429"
+    | "connection_error"
+    | "circuit_open";
   error_message: string;
   status_code?: number | null;
 }

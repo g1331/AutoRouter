@@ -423,7 +423,13 @@ describe("proxy route upstream selection", () => {
     const data = await response.json();
 
     expect(response.status).toBe(503);
-    expect(data).toEqual({ error: "No healthy upstreams available in the group" });
+    expect(data).toEqual({
+      error: {
+        message: "服务暂时不可用，请稍后重试",
+        type: "service_unavailable",
+        code: "ALL_UPSTREAMS_UNAVAILABLE",
+      },
+    });
     expect(forwardRequest).not.toHaveBeenCalled();
   });
 
@@ -431,7 +437,7 @@ describe("proxy route upstream selection", () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
     const { routeByModel } = await import("@/lib/services/model-router");
-    const { selectFromProviderType, getUpstreamGroupByName } =
+    const { selectFromProviderType, getUpstreamGroupByName, NoHealthyUpstreamsError } =
       await import("@/lib/services/load-balancer");
     const { markUnhealthy } = await import("@/lib/services/health-checker");
     const { recordFailure } = await import("@/lib/services/circuit-breaker");
@@ -539,7 +545,8 @@ describe("proxy route upstream selection", () => {
         circuitBreakerFiltered: 0,
         healthFiltered: 0,
         totalCandidates: 3,
-      });
+      })
+      .mockRejectedValueOnce(new NoHealthyUpstreamsError("No healthy upstreams available"));
 
     vi.mocked(forwardRequest)
       .mockResolvedValueOnce({
@@ -579,9 +586,15 @@ describe("proxy route upstream selection", () => {
     const response = await POST(request, { params: Promise.resolve({ path: ["messages"] }) });
     const data = await response.json();
 
-    // After exhausting all attempts (MAX_FAILOVER_ATTEMPTS = 3), should return 502
-    expect(response.status).toBe(502);
-    expect(data).toEqual({ error: "Failed to connect to upstream" });
+    // After exhausting all attempts, should return 503 with unified error format
+    expect(response.status).toBe(503);
+    expect(data).toEqual({
+      error: {
+        message: "服务暂时不可用，请稍后重试",
+        type: "service_unavailable",
+        code: "ALL_UPSTREAMS_UNAVAILABLE",
+      },
+    });
 
     // All 3 upstreams should be marked unhealthy and have circuit breaker failures recorded
     expect(markUnhealthy).toHaveBeenCalledTimes(3);
