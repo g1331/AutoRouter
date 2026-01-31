@@ -635,8 +635,15 @@ describe("proxy route upstream selection", () => {
     const response = await POST(request, { params: Promise.resolve({ path: ["messages"] }) });
     const data = await response.json();
 
-    expect(response.status).toBe(400);
-    expect(data).toEqual({ error: "No upstream group configured for model: unknown-model" });
+    // Should return unified error format without exposing model name
+    expect(response.status).toBe(503);
+    expect(data).toEqual({
+      error: {
+        message: "服务暂时不可用，请稍后重试",
+        type: "service_unavailable",
+        code: "NO_UPSTREAMS_CONFIGURED",
+      },
+    });
     expect(forwardRequest).not.toHaveBeenCalled();
   });
 
@@ -685,9 +692,14 @@ describe("proxy route upstream selection", () => {
     const response = await POST(request, { params: Promise.resolve({ path: ["messages"] }) });
     const data = await response.json();
 
-    expect(response.status).toBe(403);
+    // Should return unified error format without exposing upstream name
+    expect(response.status).toBe(503);
     expect(data).toEqual({
-      error: "API key not authorized for upstream 'anthropic-one'",
+      error: {
+        message: "服务暂时不可用，请稍后重试",
+        type: "service_unavailable",
+        code: "SERVICE_UNAVAILABLE",
+      },
     });
     expect(forwardRequest).not.toHaveBeenCalled();
   });

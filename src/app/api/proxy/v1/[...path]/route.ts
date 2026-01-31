@@ -458,10 +458,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     const routingResult = await routeByModel(model);
 
     if (!routingResult.upstream) {
-      return NextResponse.json(
-        { error: `No upstream group configured for model: ${model}` },
-        { status: 400 }
-      );
+      return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED");
     }
 
     selectedUpstream = routingResult.upstream;
@@ -485,17 +482,15 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     const allowedUpstreamIds = upstreamPermissions.map((p) => p.upstreamId);
 
     if (!allowedUpstreamIds.includes(selectedUpstream.id)) {
-      return NextResponse.json(
-        { error: `API key not authorized for upstream '${selectedUpstream.name}'` },
-        { status: 403 }
+      // Log the actual reason internally but return generic error to downstream
+      console.warn(
+        `[Auth] API key ${validApiKey.id} not authorized for upstream '${selectedUpstream.name}'`
       );
+      return createUnifiedErrorResponse("SERVICE_UNAVAILABLE");
     }
   } catch (error) {
     if (error instanceof NoUpstreamGroupError) {
-      return NextResponse.json(
-        { error: `No upstream group configured for model: ${model}` },
-        { status: 400 }
-      );
+      return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED");
     }
     throw error;
   }
@@ -524,7 +519,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       result = await forwardRequest(request, upstreamForProxy, path, requestId);
       upstreamForLogging = selectedUpstream;
     } else {
-      return NextResponse.json({ error: "No active upstream available" }, { status: 503 });
+      return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED");
     }
 
     // Build routing decision for logging
