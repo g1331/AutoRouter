@@ -16,7 +16,7 @@ async function runMigrations() {
     process.exit(1);
   }
 
-  const sql = postgres(connectionString, { max: 1 });
+  const sql = postgres(connectionString, { max: 1, onnotice: () => {} });
   let failed = false;
 
   try {
