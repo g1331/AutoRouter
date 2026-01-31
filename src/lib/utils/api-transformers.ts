@@ -98,6 +98,8 @@ export interface UpstreamGroupApiResponse {
   health_check_timeout: number;
   is_active: boolean;
   config: string | null;
+  upstream_count?: number;
+  healthy_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -172,6 +174,8 @@ export function transformUpstreamGroupToApi(
     health_check_timeout: group.healthCheckTimeout,
     is_active: group.isActive,
     config: group.config,
+    upstream_count: group.upstreamCount,
+    healthy_count: group.healthyCount,
     created_at: group.createdAt.toISOString(),
     updated_at: group.updatedAt.toISOString(),
   };

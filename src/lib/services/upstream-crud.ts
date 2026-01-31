@@ -1,4 +1,4 @@
-import { eq, desc, count, isNull } from "drizzle-orm";
+import { eq, desc, count, isNull, and, inArray } from "drizzle-orm";
 import {
   db,
   upstreams,
@@ -143,6 +143,8 @@ export interface UpstreamGroupResponse {
   healthCheckTimeout: number;
   isActive: boolean;
   config: string | null;
+  upstreamCount?: number;
+  healthyCount?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -794,19 +796,56 @@ export async function listUpstreamGroups(
     offset,
   });
 
+  // Get all group IDs from the current page
+  const groupIds = groupList.map((g) => g.id);
+
+  // Query all active upstreams for these groups with health status
+  const upstreamsWithHealth =
+    groupIds.length > 0
+      ? await db.query.upstreams.findMany({
+          where: and(inArray(upstreams.groupId, groupIds), eq(upstreams.isActive, true)),
+          with: {
+            health: true,
+          },
+        })
+      : [];
+
+  // Build a map of group ID -> { upstreamCount, healthyCount }
+  const groupStats = new Map<string, { upstreamCount: number; healthyCount: number }>();
+  for (const groupId of groupIds) {
+    groupStats.set(groupId, { upstreamCount: 0, healthyCount: 0 });
+  }
+  for (const upstream of upstreamsWithHealth) {
+    if (upstream.groupId) {
+      const stats = groupStats.get(upstream.groupId);
+      if (stats) {
+        stats.upstreamCount++;
+        // Upstream is healthy if health record is null (not checked yet) or isHealthy is true
+        if (!upstream.health || upstream.health.isHealthy) {
+          stats.healthyCount++;
+        }
+      }
+    }
+  }
+
   // Build response items
-  const items: UpstreamGroupResponse[] = groupList.map((group) => ({
-    id: group.id,
-    name: group.name,
-    provider: group.provider,
-    strategy: group.strategy,
-    healthCheckInterval: group.healthCheckInterval,
-    healthCheckTimeout: group.healthCheckTimeout,
-    isActive: group.isActive,
-    config: group.config,
-    createdAt: group.createdAt,
-    updatedAt: group.updatedAt,
-  }));
+  const items: UpstreamGroupResponse[] = groupList.map((group) => {
+    const stats = groupStats.get(group.id) || { upstreamCount: 0, healthyCount: 0 };
+    return {
+      id: group.id,
+      name: group.name,
+      provider: group.provider,
+      strategy: group.strategy,
+      healthCheckInterval: group.healthCheckInterval,
+      healthCheckTimeout: group.healthCheckTimeout,
+      isActive: group.isActive,
+      config: group.config,
+      upstreamCount: stats.upstreamCount,
+      healthyCount: stats.healthyCount,
+      createdAt: group.createdAt,
+      updatedAt: group.updatedAt,
+    };
+  });
 
   const totalPages = total > 0 ? Math.ceil(total / pageSize) : 1;
 

@@ -1005,6 +1005,9 @@ describe("upstream-crud", () => {
         },
       ] as unknown as PartialUpstreamGroup[]);
 
+      // Mock upstreams query for counting
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([]);
+
       const result = await listUpstreamGroups(1, 20);
 
       expect(result.items).toHaveLength(2);
@@ -1014,6 +1017,113 @@ describe("upstream-crud", () => {
       expect(result.totalPages).toBe(1);
       expect(result.items[0].name).toBe("openai-group");
       expect(result.items[1].name).toBe("anthropic-group");
+    });
+
+    it("should include upstreamCount and healthyCount for each group", async () => {
+      const { listUpstreamGroups } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.select).mockReturnValue({
+        from: vi.fn().mockResolvedValue([{ value: 2 }]),
+      } as unknown as MockSelectChain);
+
+      vi.mocked(db.query.upstreamGroups.findMany).mockResolvedValue([
+        {
+          id: "group-1",
+          name: "openai-group",
+          provider: "openai",
+          strategy: "round_robin",
+          healthCheckInterval: 30,
+          healthCheckTimeout: 10,
+          isActive: true,
+          config: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: "group-2",
+          name: "anthropic-group",
+          provider: "anthropic",
+          strategy: "weighted",
+          healthCheckInterval: 60,
+          healthCheckTimeout: 15,
+          isActive: true,
+          config: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ] as unknown as PartialUpstreamGroup[]);
+
+      // Mock upstreams with health status for counting
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+        {
+          id: "upstream-1",
+          groupId: "group-1",
+          isActive: true,
+          health: { isHealthy: true },
+        },
+        {
+          id: "upstream-2",
+          groupId: "group-1",
+          isActive: true,
+          health: { isHealthy: false },
+        },
+        {
+          id: "upstream-3",
+          groupId: "group-1",
+          isActive: true,
+          health: null, // No health record yet, treated as healthy
+        },
+        {
+          id: "upstream-4",
+          groupId: "group-2",
+          isActive: true,
+          health: { isHealthy: true },
+        },
+      ] as unknown as PartialUpstream[]);
+
+      const result = await listUpstreamGroups(1, 20);
+
+      expect(result.items).toHaveLength(2);
+      // group-1 has 3 upstreams, 2 healthy (1 true + 1 null treated as healthy)
+      expect(result.items[0].upstreamCount).toBe(3);
+      expect(result.items[0].healthyCount).toBe(2);
+      // group-2 has 1 upstream, 1 healthy
+      expect(result.items[1].upstreamCount).toBe(1);
+      expect(result.items[1].healthyCount).toBe(1);
+    });
+
+    it("should return 0 for upstreamCount and healthyCount when group has no upstreams", async () => {
+      const { listUpstreamGroups } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.select).mockReturnValue({
+        from: vi.fn().mockResolvedValue([{ value: 1 }]),
+      } as unknown as MockSelectChain);
+
+      vi.mocked(db.query.upstreamGroups.findMany).mockResolvedValue([
+        {
+          id: "group-1",
+          name: "empty-group",
+          provider: "openai",
+          strategy: "round_robin",
+          healthCheckInterval: 30,
+          healthCheckTimeout: 10,
+          isActive: true,
+          config: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ] as unknown as PartialUpstreamGroup[]);
+
+      // No upstreams in any group
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([]);
+
+      const result = await listUpstreamGroups(1, 20);
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].upstreamCount).toBe(0);
+      expect(result.items[0].healthyCount).toBe(0);
     });
   });
 
