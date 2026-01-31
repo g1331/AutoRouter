@@ -54,7 +54,19 @@ vi.mock("@/lib/db", () => ({
     })),
     insert: vi.fn(() => ({
       values: vi.fn(() => ({
-        returning: vi.fn(),
+        returning: vi.fn(() =>
+          Promise.resolve([
+            {
+              id: "cb-1",
+              upstreamId: "test-upstream-id",
+              state: "closed",
+              failureCount: 0,
+              successCount: 0,
+              lastFailureAt: null,
+              openedAt: null,
+            },
+          ])
+        ),
       })),
     })),
     update: vi.fn(() => ({
@@ -70,6 +82,7 @@ vi.mock("@/lib/db", () => ({
   },
   upstreams: {},
   upstreamGroups: {},
+  circuitBreakerStates: {},
 }));
 
 vi.mock("@/lib/utils/encryption", () => ({

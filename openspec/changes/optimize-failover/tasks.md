@@ -115,13 +115,13 @@
 
 **质量门禁**: `pnpm lint`, `pnpm exec tsc --noEmit`, API 测试通过
 
-- [ ] 7.1 Create `GET /api/admin/circuit-breakers` to list all circuit breaker states
-- [ ] 7.2 Create `GET /api/admin/circuit-breakers/{upstreamId}` to get specific state
-- [ ] 7.3 Create `POST /api/admin/circuit-breakers/{upstreamId}/force-open` endpoint
-- [ ] 7.4 Create `POST /api/admin/circuit-breakers/{upstreamId}/force-close` endpoint
-- [ ] 7.5 Add circuit breaker status to upstream list API response
-- [ ] 7.6 **Write tests** for all admin endpoints
-- [ ] 7.7 **Verify** force-open/force-close correctly changes state
+- [x] 7.1 Create `GET /api/admin/circuit-breakers` to list all circuit breaker states
+- [x] 7.2 Create `GET /api/admin/circuit-breakers/{upstreamId}` to get specific state
+- [x] 7.3 Create `POST /api/admin/circuit-breakers/{upstreamId}/force-open` endpoint
+- [x] 7.4 Create `POST /api/admin/circuit-breakers/{upstreamId}/force-close` endpoint
+- [x] 7.5 Add circuit breaker status to upstream list API response
+- [x] 7.6 **Write tests** for all admin endpoints
+- [x] 7.7 **Verify** force-open/force-close correctly changes state
 
 **提交节点**: `feat(failover): admin-api - add circuit breaker management endpoints`
 
@@ -131,13 +131,13 @@
 
 **质量门禁**: `pnpm lint`, `pnpm exec tsc --noEmit`, 构建通过
 
-- [ ] 8.1 Add circuit breaker status column to upstreams table
-- [ ] 8.2 Create circuit breaker detail view with state visualization
-- [ ] 8.3 Add manual reset buttons (force open/close) for admins
+- [x] 8.1 Add circuit breaker status column to upstreams table
+- [x] 8.2 Create circuit breaker detail view with state visualization
+- [x] 8.3 Add manual reset buttons (force open/close) for admins
 - [x] 8.4 Update upstream form to include circuit breaker configuration
-- [ ] 8.5 Add health status indicator to upstream cards
-- [ ] 8.6 **Verify** `pnpm build` succeeds
-- [ ] 8.7 **Verify** no TypeScript errors in frontend code
+- [x] 8.5 Add health status indicator to upstream cards
+- [x] 8.6 **Verify** `pnpm build` succeeds
+- [x] 8.7 **Verify** no TypeScript errors in frontend code
 
 **提交节点**: `feat(failover): frontend - add circuit breaker UI components`
 

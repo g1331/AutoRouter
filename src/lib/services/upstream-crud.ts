@@ -463,6 +463,30 @@ export async function listUpstreams(
 
   const cbStateMap = new Map(cbStates.map((cb) => [cb.upstreamId, cb]));
 
+  // Auto-create circuit breaker states for upstreams that don't have one
+  const missingCbUpstreamIds = upstreamIds.filter((id) => !cbStateMap.has(id));
+  if (missingCbUpstreamIds.length > 0) {
+    const now = new Date();
+    const newCbStates = await db
+      .insert(circuitBreakerStates)
+      .values(
+        missingCbUpstreamIds.map((upstreamId) => ({
+          upstreamId,
+          state: CircuitBreakerStateEnum.CLOSED,
+          failureCount: 0,
+          successCount: 0,
+          createdAt: now,
+          updatedAt: now,
+        }))
+      )
+      .returning();
+
+    // Add newly created states to the map
+    for (const cb of newCbStates) {
+      cbStateMap.set(cb.upstreamId, cb);
+    }
+  }
+
   // Build response items with masked API keys
   const items: UpstreamResponse[] = upstreamList.map((upstream) => {
     let maskedKey: string;
