@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { POST } from "@/app/api/admin/circuit-breakers/[id]/force-open/route";
-import { db, upstreams } from "@/lib/db";
+import { db } from "@/lib/db";
 import { forceOpen } from "@/lib/services/circuit-breaker";
 
 // Mock auth validation

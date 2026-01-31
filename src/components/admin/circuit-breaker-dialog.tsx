@@ -24,7 +24,6 @@ interface CircuitBreakerDialogProps {
 export function CircuitBreakerDialog({ upstream, trigger }: CircuitBreakerDialogProps) {
   const [open, setOpen] = useState(false);
   const t = useTranslations("circuitBreaker");
-  const tCommon = useTranslations("common");
 
   const { data: status, isLoading, refetch } = useCircuitBreakerStatus(upstream.id, open);
   const forceOpenMutation = useForceCircuitBreaker();

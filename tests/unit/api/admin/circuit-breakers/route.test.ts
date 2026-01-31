@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { GET } from "@/app/api/admin/circuit-breakers/route";
-import { db, circuitBreakerStates, upstreams } from "@/lib/db";
-import { eq, desc, sql } from "drizzle-orm";
+import { db } from "@/lib/db";
 
 // Mock auth validation
 vi.mock("@/lib/utils/auth", () => ({
