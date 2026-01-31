@@ -148,7 +148,7 @@ jobs:
             ADMIN_TOKEN=${{ secrets.ADMIN_TOKEN }}
 
             # Optional
-            PORT=3000
+            PORT=3331
             EOF
               echo ".env file generated successfully"
             fi
@@ -192,7 +192,7 @@ jobs:
               echo "Container is running"
 
               # Health check
-              if curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
+              if curl -sf http://localhost:3331/api/health > /dev/null 2>&1; then
                 echo "Health check passed"
               else
                 echo "Warning: Health check failed, but container is running"
