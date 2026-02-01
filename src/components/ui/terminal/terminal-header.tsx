@@ -40,24 +40,27 @@ export function TerminalHeader({
       {/* Right: Status indicators */}
       <div className="flex items-center gap-2">
         {requestRate !== undefined && (
-          <span className="text-surface-600 border border-surface-500 px-2 py-0.5">
+          <span className="text-amber-600 border border-amber-600/30 px-2 py-0.5">
             [↓ {requestRate.toFixed(1)}/s]
           </span>
         )}
         {timeRange && (
-          <span className="text-surface-600 border border-surface-500 px-2 py-0.5">
+          <span className="text-amber-600 border border-amber-600/30 px-2 py-0.5">
             [{timeRange}]
           </span>
         )}
         {nodeCount !== undefined && (
-          <span className="text-surface-600 border border-surface-500 px-2 py-0.5">
+          <span className="text-amber-600 border border-amber-600/30 px-2 py-0.5">
             [{nodeCount} NODES]
           </span>
         )}
         {isLive && (
-          <span className="flex items-center gap-1 text-status-error border border-status-error/50 px-2 py-0.5">
+          <span
+            className="flex items-center gap-1 text-status-error border border-status-error/50 px-2 py-0.5"
+            style={{ textShadow: "0 0 4px var(--status-error)" }}
+          >
             <span
-              className="motion-safe:animate-[cf-led-pulse_1s_ease-in-out_infinite] drop-shadow-[0_0_4px_var(--status-error)]"
+              className="motion-safe:animate-[cf-led-pulse_1s_ease-in-out_infinite]"
               aria-hidden="true"
             >
               ●

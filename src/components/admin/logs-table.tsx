@@ -61,16 +61,29 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
 
   // Track new log IDs for scan animation
   const [newLogIds, setNewLogIds] = useState<Set<string>>(new Set());
-  const prevLogIdsRef = useRef<Set<string>>(new Set());
+  const prevLogIdsRef = useRef<Set<string> | null>(null); // null = initial load
+  const isInitialLoadRef = useRef(true);
 
   // Request rate calculation
   const [requestRate, setRequestRate] = useState<number>(0);
   const logTimestampsRef = useRef<number[]>([]);
 
-  // Detect new logs and trigger animation
+  // Detect new logs and trigger animation (skip initial load)
   useEffect(() => {
     const currentIds = new Set(logs.map((log) => log.id));
+
+    // Skip animation on initial load
+    if (isInitialLoadRef.current) {
+      isInitialLoadRef.current = false;
+      prevLogIdsRef.current = currentIds;
+      return;
+    }
+
     const prevIds = prevLogIdsRef.current;
+    if (!prevIds) {
+      prevLogIdsRef.current = currentIds;
+      return;
+    }
 
     const newIds = new Set<string>();
     currentIds.forEach((id) => {
@@ -534,7 +547,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
           )}
 
           {/* Stream Statistics Footer */}
-          <div className="border border-t-0 border-surface-400 px-4 py-2 bg-surface-300 font-mono text-xs text-surface-600">
+          <div className="border border-t-0 border-surface-400 px-4 py-2 bg-surface-300 font-mono text-xs text-amber-600">
             STREAM STATS: {streamStats.total} requests │ {streamStats.successRate}% success │ avg{" "}
             {streamStats.avgDuration.toFixed(2)}s │ {formatTokensCompact(streamStats.totalTokens)}{" "}
             tokens

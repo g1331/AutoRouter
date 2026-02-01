@@ -108,11 +108,10 @@ describe("Reduced Motion Support", () => {
       render(<StatusLed status="healthy" />);
 
       const led = screen.getByRole("status");
-      const ledChar = led.querySelector("[aria-hidden='true']");
+      const ledChar = led.querySelector("[aria-hidden='true']") as HTMLElement;
 
-      // Glow (drop-shadow) should not be conditional on motion
-      expect(ledChar?.className).toContain("drop-shadow-");
-      expect(ledChar?.className).not.toContain("motion-safe:drop-shadow-");
+      // Glow (text-shadow via style) should not be conditional on motion
+      expect(ledChar?.style.textShadow).toBeTruthy();
     });
   });
 

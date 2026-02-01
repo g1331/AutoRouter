@@ -13,24 +13,24 @@ export interface StatusLedProps {
 
 const LED_CONFIG: Record<
   LedStatus,
-  { char: string; colorClass: string; glowClass: string; pulseClass: string }
+  { char: string; colorClass: string; glowStyle: React.CSSProperties; pulseClass: string }
 > = {
   healthy: {
     char: "◉",
     colorClass: "text-status-success",
-    glowClass: "drop-shadow-[0_0_4px_var(--status-success)]",
+    glowStyle: { textShadow: "0 0 6px var(--status-success), 0 0 12px var(--status-success)" },
     pulseClass: "motion-safe:animate-[cf-led-pulse_2s_ease-in-out_infinite]",
   },
   degraded: {
     char: "◎",
     colorClass: "text-amber-500",
-    glowClass: "drop-shadow-[0_0_4px_var(--cf-amber-500)]",
+    glowStyle: { textShadow: "0 0 6px var(--cf-amber-500), 0 0 12px var(--cf-amber-500)" },
     pulseClass: "motion-safe:animate-[cf-led-pulse_1s_ease-in-out_infinite]",
   },
   offline: {
     char: "●",
     colorClass: "text-status-error",
-    glowClass: "drop-shadow-[0_0_6px_var(--status-error)]",
+    glowStyle: { textShadow: "0 0 8px var(--status-error), 0 0 16px var(--status-error)" },
     pulseClass: "", // Static glow, no pulse
   },
 };
@@ -46,12 +46,8 @@ export function StatusLed({ status, label, showLabel = false, className }: Statu
       aria-label={`Status: ${displayLabel}`}
     >
       <span
-        className={cn(
-          config.colorClass,
-          config.glowClass,
-          config.pulseClass,
-          "text-sm leading-none"
-        )}
+        className={cn(config.colorClass, config.pulseClass, "text-sm leading-none")}
+        style={config.glowStyle}
         aria-hidden="true"
       >
         {config.char}

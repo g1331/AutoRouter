@@ -256,14 +256,14 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                           {/* Health Summary */}
                           <div className="flex items-center gap-2">
                             <StatusLed status={getGroupHealthLedStatus(group.healthySummary)} />
-                            <span className="text-surface-600">
+                            <span className="text-amber-600">
                               {group.healthySummary.healthy}/{group.healthySummary.total} HEALTHY
                             </span>
                           </div>
 
                           {/* Circuit Summary */}
                           <div className="flex items-center gap-2">
-                            <span className="text-surface-600">CIRCUIT:</span>
+                            <span className="text-amber-600">CIRCUIT:</span>
                             <AsciiProgress
                               value={group.circuitSummary.closed}
                               max={group.circuitSummary.total}
