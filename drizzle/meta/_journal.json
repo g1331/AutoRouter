@@ -43,6 +43,13 @@
       "when": 1769677500943,
       "tag": "0005_daily_zaran",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1769951677338,
+      "tag": "0006_fuzzy_cyclops",
+      "breakpoints": true
     }
   ]
 }

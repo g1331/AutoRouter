@@ -1072,5 +1072,330 @@ describe("request-logger", () => {
       expect(result.items).toHaveLength(1);
       expect(result.items[0].upstreamName).toBeNull();
     });
+
+    it("should parse and return routing decision from JSON", async () => {
+      const { db } = await import("@/lib/db");
+      const { listRequestLogs } = await import("@/lib/services/request-logger");
+
+      const routingDecision = {
+        original_model: "gpt-4",
+        resolved_model: "gpt-4-turbo",
+        model_redirect_applied: true,
+        provider_type: "openai",
+        routing_type: "auto",
+        candidates: [
+          {
+            upstream_id: "upstream-1",
+            upstream_name: "openai-primary",
+            weight: 100,
+            circuit_state: "closed",
+          },
+        ],
+        excluded: [
+          {
+            upstream_id: "upstream-2",
+            upstream_name: "openai-backup",
+            reason: "circuit_open",
+          },
+        ],
+        candidate_count: 2,
+        final_candidate_count: 1,
+        selected_upstream_id: "upstream-1",
+        selection_strategy: "round_robin",
+      };
+
+      const mockLogs = [
+        {
+          id: "log-1",
+          apiKeyId: "key-1",
+          upstreamId: "upstream-1",
+          upstream: { name: "openai-primary" },
+          method: "POST",
+          path: "/v1/chat/completions",
+          model: "gpt-4-turbo",
+          promptTokens: 100,
+          completionTokens: 50,
+          totalTokens: 150,
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
+          statusCode: 200,
+          durationMs: 500,
+          errorMessage: null,
+          routingType: "auto",
+          groupName: null,
+          lbStrategy: "round_robin",
+          failoverAttempts: 0,
+          failoverHistory: null,
+          routingDecision: JSON.stringify(routingDecision),
+          createdAt: new Date(),
+        },
+      ];
+
+      vi.mocked(db.select).mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([{ value: 1 }]),
+        }),
+      } as unknown as ReturnType<typeof db.select>);
+
+      vi.mocked(db.query.requestLogs.findMany).mockResolvedValueOnce(mockLogs);
+
+      const result = await listRequestLogs(1, 20);
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].routingDecision).not.toBeNull();
+      expect(result.items[0].routingDecision?.original_model).toBe("gpt-4");
+      expect(result.items[0].routingDecision?.resolved_model).toBe("gpt-4-turbo");
+      expect(result.items[0].routingDecision?.model_redirect_applied).toBe(true);
+      expect(result.items[0].routingDecision?.provider_type).toBe("openai");
+      expect(result.items[0].routingDecision?.routing_type).toBe("auto");
+      expect(result.items[0].routingDecision?.candidates).toHaveLength(1);
+      expect(result.items[0].routingDecision?.candidates[0].upstream_name).toBe("openai-primary");
+      expect(result.items[0].routingDecision?.excluded).toHaveLength(1);
+      expect(result.items[0].routingDecision?.excluded[0].reason).toBe("circuit_open");
+      expect(result.items[0].routingDecision?.selection_strategy).toBe("round_robin");
+    });
+
+    it("should return null routing decision for invalid JSON", async () => {
+      const { db } = await import("@/lib/db");
+      const { listRequestLogs } = await import("@/lib/services/request-logger");
+
+      const mockLogs = [
+        {
+          id: "log-1",
+          apiKeyId: "key-1",
+          upstreamId: "upstream-1",
+          upstream: { name: "openai-primary" },
+          method: "POST",
+          path: "/v1/chat/completions",
+          model: "gpt-4",
+          promptTokens: 100,
+          completionTokens: 50,
+          totalTokens: 150,
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
+          statusCode: 200,
+          durationMs: 500,
+          errorMessage: null,
+          routingType: "auto",
+          groupName: null,
+          lbStrategy: "round_robin",
+          failoverAttempts: 0,
+          failoverHistory: null,
+          routingDecision: "invalid json {{{",
+          createdAt: new Date(),
+        },
+      ];
+
+      vi.mocked(db.select).mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([{ value: 1 }]),
+        }),
+      } as unknown as ReturnType<typeof db.select>);
+
+      vi.mocked(db.query.requestLogs.findMany).mockResolvedValueOnce(mockLogs);
+
+      const result = await listRequestLogs(1, 20);
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].routingDecision).toBeNull();
+    });
+
+    it("should return null routing decision when field is null", async () => {
+      const { db } = await import("@/lib/db");
+      const { listRequestLogs } = await import("@/lib/services/request-logger");
+
+      const mockLogs = [
+        {
+          id: "log-1",
+          apiKeyId: "key-1",
+          upstreamId: "upstream-1",
+          upstream: { name: "openai-primary" },
+          method: "POST",
+          path: "/v1/chat/completions",
+          model: "gpt-4",
+          promptTokens: 100,
+          completionTokens: 50,
+          totalTokens: 150,
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
+          statusCode: 200,
+          durationMs: 500,
+          errorMessage: null,
+          routingType: "direct",
+          groupName: null,
+          lbStrategy: null,
+          failoverAttempts: 0,
+          failoverHistory: null,
+          routingDecision: null,
+          createdAt: new Date(),
+        },
+      ];
+
+      vi.mocked(db.select).mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([{ value: 1 }]),
+        }),
+      } as unknown as ReturnType<typeof db.select>);
+
+      vi.mocked(db.query.requestLogs.findMany).mockResolvedValueOnce(mockLogs);
+
+      const result = await listRequestLogs(1, 20);
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].routingDecision).toBeNull();
+    });
+  });
+
+  describe("logRequest with routing decision", () => {
+    it("should serialize routing decision to JSON", async () => {
+      const { db } = await import("@/lib/db");
+      const { logRequest } = await import("@/lib/services/request-logger");
+
+      const routingDecision = {
+        original_model: "claude-3-opus",
+        resolved_model: "claude-3-opus-20240229",
+        model_redirect_applied: true,
+        provider_type: "anthropic",
+        routing_type: "auto" as const,
+        candidates: [
+          {
+            upstream_id: "upstream-1",
+            upstream_name: "anthropic-primary",
+            weight: 100,
+            circuit_state: "closed" as const,
+          },
+        ],
+        excluded: [],
+        candidate_count: 1,
+        final_candidate_count: 1,
+        selected_upstream_id: "upstream-1",
+        selection_strategy: "round_robin",
+      };
+
+      const mockLogEntry = {
+        id: "log-1",
+        apiKeyId: "key-1",
+        upstreamId: "upstream-1",
+        method: "POST",
+        path: "/v1/messages",
+        model: "claude-3-opus-20240229",
+        promptTokens: 100,
+        completionTokens: 50,
+        totalTokens: 150,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+        statusCode: 200,
+        durationMs: 500,
+        errorMessage: null,
+        routingType: "auto",
+        groupName: null,
+        lbStrategy: "round_robin",
+        failoverAttempts: 0,
+        failoverHistory: null,
+        routingDecision: JSON.stringify(routingDecision),
+        createdAt: new Date(),
+      };
+
+      let capturedValues: Record<string, unknown> | null = null;
+      vi.mocked(db.insert).mockReturnValue({
+        values: vi.fn().mockImplementation((values) => {
+          capturedValues = values;
+          return {
+            returning: vi.fn().mockResolvedValue([mockLogEntry]),
+          };
+        }),
+      } as unknown as ReturnType<typeof db.insert>);
+
+      await logRequest({
+        apiKeyId: "key-1",
+        upstreamId: "upstream-1",
+        method: "POST",
+        path: "/v1/messages",
+        model: "claude-3-opus-20240229",
+        promptTokens: 100,
+        completionTokens: 50,
+        totalTokens: 150,
+        statusCode: 200,
+        durationMs: 500,
+        routingType: "auto",
+        lbStrategy: "round_robin",
+        routingDecision,
+      });
+
+      expect(db.insert).toHaveBeenCalled();
+      expect(capturedValues).not.toBeNull();
+      expect(typeof capturedValues?.routingDecision).toBe("string");
+      const parsedDecision = JSON.parse(capturedValues?.routingDecision as string);
+      expect(parsedDecision.original_model).toBe("claude-3-opus");
+      expect(parsedDecision.provider_type).toBe("anthropic");
+    });
+
+    it("should handle null routing decision", async () => {
+      const { db } = await import("@/lib/db");
+      const { logRequest } = await import("@/lib/services/request-logger");
+
+      const mockLogEntry = {
+        id: "log-1",
+        apiKeyId: "key-1",
+        upstreamId: "upstream-1",
+        method: "POST",
+        path: "/v1/chat/completions",
+        model: "gpt-4",
+        promptTokens: 100,
+        completionTokens: 50,
+        totalTokens: 150,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+        statusCode: 200,
+        durationMs: 500,
+        errorMessage: null,
+        routingType: "direct",
+        groupName: null,
+        lbStrategy: null,
+        failoverAttempts: 0,
+        failoverHistory: null,
+        routingDecision: null,
+        createdAt: new Date(),
+      };
+
+      let capturedValues: Record<string, unknown> | null = null;
+      vi.mocked(db.insert).mockReturnValue({
+        values: vi.fn().mockImplementation((values) => {
+          capturedValues = values;
+          return {
+            returning: vi.fn().mockResolvedValue([mockLogEntry]),
+          };
+        }),
+      } as unknown as ReturnType<typeof db.insert>);
+
+      await logRequest({
+        apiKeyId: "key-1",
+        upstreamId: "upstream-1",
+        method: "POST",
+        path: "/v1/chat/completions",
+        model: "gpt-4",
+        promptTokens: 100,
+        completionTokens: 50,
+        totalTokens: 150,
+        statusCode: 200,
+        durationMs: 500,
+        routingType: "direct",
+        routingDecision: null,
+      });
+
+      expect(db.insert).toHaveBeenCalled();
+      expect(capturedValues).not.toBeNull();
+      expect(capturedValues?.routingDecision).toBeNull();
+    });
   });
 });

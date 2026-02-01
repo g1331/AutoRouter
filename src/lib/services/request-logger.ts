@@ -1,5 +1,6 @@
 import { eq, desc, count, and, gte, lte } from "drizzle-orm";
 import { db, requestLogs, type RequestLog } from "../db";
+import type { RoutingDecisionLog } from "@/types/api";
 
 export interface LogRequestInput {
   apiKeyId: string | null;
@@ -23,6 +24,53 @@ export interface LogRequestInput {
   lbStrategy?: string | null;
   failoverAttempts?: number;
   failoverHistory?: FailoverAttempt[] | null;
+  routingDecision?: RoutingDecisionLog | null;
+}
+
+/**
+ * Minimal request log fields available at request start.
+ * Used to create an "in-progress" row that will be updated on completion.
+ */
+export interface StartRequestLogInput {
+  apiKeyId: string | null;
+  upstreamId: string | null;
+  method: string | null;
+  path: string | null;
+  model: string | null;
+  // Routing decision fields
+  routingType?: "auto" | null;
+  groupName?: string | null;
+  lbStrategy?: string | null;
+  routingDecision?: RoutingDecisionLog | null;
+}
+
+/**
+ * Fields that can be updated on an existing request log entry.
+ * All fields are optional; only provided ones will be updated.
+ */
+export interface UpdateRequestLogInput {
+  apiKeyId?: string | null;
+  upstreamId?: string | null;
+  method?: string | null;
+  path?: string | null;
+  model?: string | null;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  cachedTokens?: number;
+  reasoningTokens?: number;
+  cacheCreationTokens?: number;
+  cacheReadTokens?: number;
+  statusCode?: number | null;
+  durationMs?: number | null;
+  errorMessage?: string | null;
+  // Routing decision fields
+  routingType?: "auto" | null;
+  groupName?: string | null;
+  lbStrategy?: string | null;
+  failoverAttempts?: number;
+  failoverHistory?: FailoverAttempt[] | null;
+  routingDecision?: RoutingDecisionLog | null;
 }
 
 /**
@@ -67,6 +115,7 @@ export interface RequestLogResponse {
   lbStrategy: string | null;
   failoverAttempts: number;
   failoverHistory: FailoverAttempt[] | null;
+  routingDecision: RoutingDecisionLog | null;
   createdAt: Date;
 }
 
@@ -84,6 +133,103 @@ export interface ListRequestLogsFilter {
   statusCode?: number;
   startTime?: Date;
   endTime?: Date;
+}
+
+/**
+ * Create a request log entry at request start (in-progress).
+ * The entry should be completed via updateRequestLog(...).
+ */
+export async function logRequestStart(input: StartRequestLogInput): Promise<RequestLog> {
+  const [logEntry] = await db
+    .insert(requestLogs)
+    .values({
+      apiKeyId: input.apiKeyId,
+      upstreamId: input.upstreamId,
+      method: input.method,
+      path: input.path,
+      model: input.model,
+      // Keep token fields at 0 until completion.
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      cachedTokens: 0,
+      reasoningTokens: 0,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+      statusCode: null,
+      durationMs: null,
+      errorMessage: null,
+      // Routing decision fields
+      routingType: input.routingType ?? null,
+      groupName: input.groupName ?? null,
+      lbStrategy: input.lbStrategy ?? null,
+      // Failover fields are only known when request finishes.
+      failoverAttempts: 0,
+      failoverHistory: null,
+      routingDecision: input.routingDecision ? JSON.stringify(input.routingDecision) : null,
+      createdAt: new Date(),
+    })
+    .returning();
+
+  return logEntry;
+}
+
+/**
+ * Update an existing request log entry (e.g. to mark completion).
+ * Returns the updated row, or null if no row matched.
+ */
+export async function updateRequestLog(
+  id: string,
+  input: UpdateRequestLogInput
+): Promise<RequestLog | null> {
+  const updateValues: Partial<typeof requestLogs.$inferInsert> = {};
+
+  if (input.apiKeyId !== undefined) updateValues.apiKeyId = input.apiKeyId;
+  if (input.upstreamId !== undefined) updateValues.upstreamId = input.upstreamId;
+  if (input.method !== undefined) updateValues.method = input.method;
+  if (input.path !== undefined) updateValues.path = input.path;
+  if (input.model !== undefined) updateValues.model = input.model;
+
+  if (input.promptTokens !== undefined) updateValues.promptTokens = input.promptTokens;
+  if (input.completionTokens !== undefined) updateValues.completionTokens = input.completionTokens;
+  if (input.totalTokens !== undefined) updateValues.totalTokens = input.totalTokens;
+  if (input.cachedTokens !== undefined) updateValues.cachedTokens = input.cachedTokens;
+  if (input.reasoningTokens !== undefined) updateValues.reasoningTokens = input.reasoningTokens;
+  if (input.cacheCreationTokens !== undefined)
+    updateValues.cacheCreationTokens = input.cacheCreationTokens;
+  if (input.cacheReadTokens !== undefined) updateValues.cacheReadTokens = input.cacheReadTokens;
+
+  if (input.statusCode !== undefined) updateValues.statusCode = input.statusCode;
+  if (input.durationMs !== undefined) updateValues.durationMs = input.durationMs;
+  if (input.errorMessage !== undefined) updateValues.errorMessage = input.errorMessage;
+
+  if (input.routingType !== undefined) updateValues.routingType = input.routingType;
+  if (input.groupName !== undefined) updateValues.groupName = input.groupName;
+  if (input.lbStrategy !== undefined) updateValues.lbStrategy = input.lbStrategy;
+
+  if (input.failoverAttempts !== undefined) updateValues.failoverAttempts = input.failoverAttempts;
+  if (input.failoverHistory !== undefined) {
+    updateValues.failoverHistory = input.failoverHistory
+      ? JSON.stringify(input.failoverHistory)
+      : null;
+  }
+  if (input.routingDecision !== undefined) {
+    updateValues.routingDecision = input.routingDecision
+      ? JSON.stringify(input.routingDecision)
+      : null;
+  }
+
+  if (Object.keys(updateValues).length === 0) {
+    return null;
+  }
+
+  const [updated] = await db
+    .update(requestLogs)
+    .set(updateValues)
+    .where(eq(requestLogs.id, id))
+    .returning();
+
+  return updated ?? null;
 }
 
 /**
@@ -114,6 +260,7 @@ export async function logRequest(input: LogRequestInput): Promise<RequestLog> {
       lbStrategy: input.lbStrategy ?? null,
       failoverAttempts: input.failoverAttempts ?? 0,
       failoverHistory: input.failoverHistory ? JSON.stringify(input.failoverHistory) : null,
+      routingDecision: input.routingDecision ? JSON.stringify(input.routingDecision) : null,
       createdAt: new Date(),
     })
     .returning();
@@ -146,6 +293,21 @@ function parseFailoverHistory(json: string): FailoverAttempt[] | null {
     const parsed = JSON.parse(json);
     if (Array.isArray(parsed)) {
       return parsed as FailoverAttempt[];
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parse routing decision JSON string into typed object.
+ */
+function parseRoutingDecision(json: string): RoutingDecisionLog | null {
+  try {
+    const parsed = JSON.parse(json);
+    if (typeof parsed === "object" && parsed !== null) {
+      return parsed as RoutingDecisionLog;
     }
     return null;
   } catch {
@@ -350,6 +512,7 @@ export async function listRequestLogs(
     lbStrategy: log.lbStrategy,
     failoverAttempts: log.failoverAttempts,
     failoverHistory: log.failoverHistory ? parseFailoverHistory(log.failoverHistory) : null,
+    routingDecision: log.routingDecision ? parseRoutingDecision(log.routingDecision) : null,
     createdAt: log.createdAt,
   }));
 

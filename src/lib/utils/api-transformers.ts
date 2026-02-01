@@ -15,6 +15,7 @@ import type {
   PaginatedRequestLogs,
   FailoverAttempt,
 } from "@/lib/services/request-logger";
+import type { RoutingDecisionLog } from "@/types/api";
 import type {
   StatsOverview,
   StatsTimeseries,
@@ -330,6 +331,7 @@ export interface RequestLogApiResponse {
   lb_strategy: string | null;
   failover_attempts: number;
   failover_history: FailoverAttempt[] | null;
+  routing_decision: RoutingDecisionLog | null;
   created_at: string;
 }
 
@@ -364,6 +366,7 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
     lb_strategy: log.lbStrategy,
     failover_attempts: log.failoverAttempts,
     failover_history: log.failoverHistory,
+    routing_decision: log.routingDecision,
     created_at: log.createdAt.toISOString(),
   };
 }

@@ -263,6 +263,68 @@ export interface FailoverAttempt {
  */
 export type RoutingType = "direct" | "group" | "default";
 
+/**
+ * Circuit breaker state for routing decision log
+ */
+export type RoutingCircuitState = "closed" | "open" | "half_open";
+
+/**
+ * Routing decision type
+ */
+export type RoutingDecisionType = "provider_type" | "group" | "none";
+
+/**
+ * Candidate upstream in routing decision
+ */
+export interface RoutingCandidate {
+  id: string;
+  name: string;
+  weight: number;
+  circuit_state: RoutingCircuitState;
+}
+
+/**
+ * Exclusion reason for routing decision
+ */
+export type ExclusionReason = "circuit_open" | "model_not_allowed" | "unhealthy";
+
+/**
+ * Excluded upstream in routing decision
+ */
+export interface RoutingExcluded {
+  id: string;
+  name: string;
+  reason: ExclusionReason;
+}
+
+/**
+ * Complete routing decision log stored in database
+ */
+export interface RoutingDecisionLog {
+  // Model resolution
+  original_model: string;
+  resolved_model: string;
+  model_redirect_applied: boolean;
+
+  // Routing decision
+  provider_type: string | null;
+  routing_type: RoutingDecisionType;
+
+  // Candidate upstreams (simplified, only key info)
+  candidates: RoutingCandidate[];
+
+  // Excluded upstreams
+  excluded: RoutingExcluded[];
+
+  // Statistics
+  candidate_count: number;
+  final_candidate_count: number;
+
+  // Selection info
+  selected_upstream_id: string | null;
+  selection_strategy: string; // lb_strategy
+}
+
 export interface RequestLogResponse {
   id: string; // UUID
   api_key_id: string | null; // UUID
@@ -287,6 +349,7 @@ export interface RequestLogResponse {
   lb_strategy: string | null;
   failover_attempts: number;
   failover_history: FailoverAttempt[] | null;
+  routing_decision: RoutingDecisionLog | null; // Complete routing decision info
   created_at: string; // ISO 8601 date string
 }
 

@@ -7,7 +7,13 @@ import {
   prepareUpstreamForProxy,
   type ProxyResult,
 } from "@/lib/services/proxy-client";
-import { logRequest, extractTokenUsage, type FailoverAttempt } from "@/lib/services/request-logger";
+import {
+  logRequest,
+  logRequestStart,
+  updateRequestLog,
+  extractTokenUsage,
+  type FailoverAttempt,
+} from "@/lib/services/request-logger";
 import {
   selectFromProviderType,
   recordConnection,
@@ -24,7 +30,12 @@ import {
   CircuitBreakerOpenError,
 } from "@/lib/services/circuit-breaker";
 import { randomUUID } from "crypto";
-import { routeByModel, NoUpstreamGroupError, type ProviderType } from "@/lib/services/model-router";
+import {
+  routeByModel,
+  NoUpstreamGroupError,
+  type ProviderType,
+  type ModelRouterResult,
+} from "@/lib/services/model-router";
 import {
   type FailoverConfig,
   DEFAULT_FAILOVER_CONFIG,
@@ -36,12 +47,56 @@ import {
   createSSEErrorEvent,
   getHttpStatusForError,
 } from "@/lib/services/unified-error";
+import type {
+  RoutingDecisionLog,
+  RoutingCandidate,
+  RoutingExcluded,
+  RoutingCircuitState,
+} from "@/types/api";
 
 // Edge runtime for streaming support
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ path: string[] }> };
+
+/**
+ * Transform ModelRouterResult to RoutingDecisionLog for storage.
+ */
+function transformToRoutingDecisionLog(
+  routerResult: ModelRouterResult,
+  selectedUpstreamId: string | null,
+  lbStrategy: string | null
+): RoutingDecisionLog {
+  // Transform candidates to simplified format (handle undefined)
+  const candidates: RoutingCandidate[] = (routerResult.candidateUpstreams || []).map((c) => ({
+    id: c.id,
+    name: c.name,
+    weight: c.weight,
+    circuit_state: (c.circuitState as RoutingCircuitState) || "closed",
+  }));
+
+  // Transform excluded upstreams (handle undefined)
+  const excluded: RoutingExcluded[] = (routerResult.excludedUpstreams || []).map((e) => ({
+    id: e.id,
+    name: e.name,
+    reason: e.reason,
+  }));
+
+  return {
+    original_model: routerResult.routingDecision.originalModel,
+    resolved_model: routerResult.routingDecision.resolvedModel,
+    model_redirect_applied: routerResult.routingDecision.modelRedirectApplied,
+    provider_type: routerResult.providerType,
+    routing_type: routerResult.routingDecision.routingType,
+    candidates,
+    excluded,
+    candidate_count: routerResult.routingDecision.candidateCount,
+    final_candidate_count: routerResult.routingDecision.finalCandidateCount,
+    selected_upstream_id: selectedUpstreamId,
+    selection_strategy: lbStrategy || "weighted",
+  };
+}
 
 /**
  * Routing decision information for logging.
@@ -454,22 +509,23 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   let providerType: ProviderType | null = null;
   let resolvedModel = model;
   let allowedUpstreamIds: string[] = [];
+  let routerResult: ModelRouterResult | null = null;
 
   // Routing type is always "auto" for model-based routing
   const routingType = "auto" as const;
 
   try {
     // Route by model
-    const routingResult = await routeByModel(model);
+    routerResult = await routeByModel(model);
 
-    if (!routingResult.upstream) {
+    if (!routerResult.upstream) {
       return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED");
     }
 
-    selectedUpstream = routingResult.upstream;
-    groupName = routingResult.groupName;
-    providerType = routingResult.providerType;
-    resolvedModel = routingResult.resolvedModel;
+    selectedUpstream = routerResult.upstream;
+    groupName = routerResult.groupName;
+    providerType = routerResult.providerType;
+    resolvedModel = routerResult.resolvedModel;
 
     // Get group details for load balancing
     if (groupName) {
@@ -503,6 +559,36 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
   // Track failover history outside try block for error logging
   let failoverHistory: FailoverAttempt[] = [];
+  let requestLogId: string | null = null;
+
+  // Build initial routing decision log (will be updated with final upstream after selection)
+  const initialRoutingDecisionLog =
+    routerResult && routerResult.routingDecision
+      ? transformToRoutingDecisionLog(
+          routerResult,
+          useLoadBalancer ? null : (selectedUpstream?.id ?? null),
+          groupStrategy
+        )
+      : null;
+
+  // Create an in-progress log entry so the admin UI can show active requests.
+  // Never fail the proxy request if logging fails.
+  try {
+    const startLog = await logRequestStart({
+      apiKeyId: validApiKey.id,
+      upstreamId: useLoadBalancer ? null : (selectedUpstream?.id ?? null),
+      method: request.method,
+      path,
+      model: resolvedModel,
+      routingType,
+      groupName,
+      lbStrategy: groupStrategy,
+      routingDecision: initialRoutingDecisionLog,
+    });
+    requestLogId = startLog.id;
+  } catch (e) {
+    console.error("Failed to create in-progress request log:", e);
+  }
 
   // Forward request to upstream
   try {
@@ -540,6 +626,21 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       failoverHistory,
     };
 
+    // Build final routing decision log with actual selected upstream
+    const finalRoutingDecisionLog =
+      routerResult && routerResult.routingDecision
+        ? transformToRoutingDecisionLog(routerResult, upstreamForLogging.id, groupStrategy)
+        : null;
+
+    // For load-balanced routing, the upstream is only known after selection. Update it early
+    // so the in-progress row shows the upstream as soon as possible.
+    if (requestLogId && useLoadBalancer) {
+      void updateRequestLog(requestLogId, {
+        upstreamId: upstreamForLogging.id,
+        routingDecision: finalRoutingDecisionLog,
+      }).catch((e) => console.error("Failed to update request log upstream:", e));
+    }
+
     // Create response headers
     const responseHeaders = new Headers(result.headers);
 
@@ -549,8 +650,32 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       const usagePromise = result.usagePromise ?? Promise.resolve(result.usage ?? null);
 
       void usagePromise
-        .then((usage) =>
-          logRequest({
+        .then((usage) => {
+          if (requestLogId) {
+            return updateRequestLog(requestLogId, {
+              upstreamId: upstreamForLogging.id,
+              model: resolvedModel,
+              promptTokens: usage?.promptTokens || 0,
+              completionTokens: usage?.completionTokens || 0,
+              totalTokens: usage?.totalTokens || 0,
+              cachedTokens: usage?.cachedTokens || 0,
+              reasoningTokens: usage?.reasoningTokens || 0,
+              cacheCreationTokens: usage?.cacheCreationTokens || 0,
+              cacheReadTokens: usage?.cacheReadTokens || 0,
+              statusCode: result.statusCode,
+              durationMs: Date.now() - startTime,
+              errorMessage: null,
+              routingType: routingDecision.routingType,
+              groupName: routingDecision.groupName,
+              lbStrategy: routingDecision.lbStrategy,
+              failoverAttempts: routingDecision.failoverAttempts,
+              failoverHistory:
+                routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
+              routingDecision: finalRoutingDecisionLog,
+            });
+          }
+
+          return logRequest({
             apiKeyId: validApiKey.id,
             upstreamId: upstreamForLogging.id,
             method: request.method,
@@ -571,8 +696,9 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             failoverAttempts: routingDecision.failoverAttempts,
             failoverHistory:
               routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
-          })
-        )
+            routingDecision: finalRoutingDecisionLog,
+          });
+        })
         .catch((e) => console.error("Failed to log request:", e));
 
       // Set streaming headers
@@ -604,28 +730,53 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       }
 
       // Log request
-      await logRequest({
-        apiKeyId: validApiKey.id,
-        upstreamId: upstreamForLogging.id,
-        method: request.method,
-        path,
-        model: resolvedModel,
-        promptTokens: usage?.promptTokens || 0,
-        completionTokens: usage?.completionTokens || 0,
-        totalTokens: usage?.totalTokens || 0,
-        cachedTokens: usage?.cachedTokens || 0,
-        reasoningTokens: usage?.reasoningTokens || 0,
-        cacheCreationTokens: usage?.cacheCreationTokens || 0,
-        cacheReadTokens: usage?.cacheReadTokens || 0,
-        statusCode: result.statusCode,
-        durationMs,
-        routingType: routingDecision.routingType,
-        groupName: routingDecision.groupName,
-        lbStrategy: routingDecision.lbStrategy,
-        failoverAttempts: routingDecision.failoverAttempts,
-        failoverHistory:
-          routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
-      });
+      if (requestLogId) {
+        await updateRequestLog(requestLogId, {
+          upstreamId: upstreamForLogging.id,
+          model: resolvedModel,
+          promptTokens: usage?.promptTokens || 0,
+          completionTokens: usage?.completionTokens || 0,
+          totalTokens: usage?.totalTokens || 0,
+          cachedTokens: usage?.cachedTokens || 0,
+          reasoningTokens: usage?.reasoningTokens || 0,
+          cacheCreationTokens: usage?.cacheCreationTokens || 0,
+          cacheReadTokens: usage?.cacheReadTokens || 0,
+          statusCode: result.statusCode,
+          durationMs,
+          errorMessage: null,
+          routingType: routingDecision.routingType,
+          groupName: routingDecision.groupName,
+          lbStrategy: routingDecision.lbStrategy,
+          failoverAttempts: routingDecision.failoverAttempts,
+          failoverHistory:
+            routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
+          routingDecision: finalRoutingDecisionLog,
+        });
+      } else {
+        await logRequest({
+          apiKeyId: validApiKey.id,
+          upstreamId: upstreamForLogging.id,
+          method: request.method,
+          path,
+          model: resolvedModel,
+          promptTokens: usage?.promptTokens || 0,
+          completionTokens: usage?.completionTokens || 0,
+          totalTokens: usage?.totalTokens || 0,
+          cachedTokens: usage?.cachedTokens || 0,
+          reasoningTokens: usage?.reasoningTokens || 0,
+          cacheCreationTokens: usage?.cacheCreationTokens || 0,
+          cacheReadTokens: usage?.cacheReadTokens || 0,
+          statusCode: result.statusCode,
+          durationMs,
+          routingType: routingDecision.routingType,
+          groupName: routingDecision.groupName,
+          lbStrategy: routingDecision.lbStrategy,
+          failoverAttempts: routingDecision.failoverAttempts,
+          failoverHistory:
+            routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
+          routingDecision: finalRoutingDecisionLog,
+        });
+      }
 
       return new Response(Buffer.from(bodyBytes), {
         status: result.statusCode,
@@ -653,24 +804,44 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     }
 
     // Log failed request (internal logging with full details)
-    await logRequest({
-      apiKeyId: validApiKey.id,
-      upstreamId: logUpstreamId,
-      method: request.method,
-      path,
-      model: resolvedModel,
-      promptTokens: 0,
-      completionTokens: 0,
-      totalTokens: 0,
-      statusCode: getHttpStatusForError(errorCode),
-      durationMs,
-      errorMessage: error instanceof Error ? error.message : "Unknown error",
-      routingType,
-      groupName,
-      lbStrategy: groupStrategy,
-      failoverAttempts: failoverHistory.length,
-      failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
-    });
+    if (requestLogId) {
+      await updateRequestLog(requestLogId, {
+        upstreamId: logUpstreamId,
+        model: resolvedModel,
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        statusCode: getHttpStatusForError(errorCode),
+        durationMs,
+        errorMessage: error instanceof Error ? error.message : "Unknown error",
+        routingType,
+        groupName,
+        lbStrategy: groupStrategy,
+        failoverAttempts: failoverHistory.length,
+        failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
+        routingDecision: initialRoutingDecisionLog,
+      });
+    } else {
+      await logRequest({
+        apiKeyId: validApiKey.id,
+        upstreamId: logUpstreamId,
+        method: request.method,
+        path,
+        model: resolvedModel,
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        statusCode: getHttpStatusForError(errorCode),
+        durationMs,
+        errorMessage: error instanceof Error ? error.message : "Unknown error",
+        routingType,
+        groupName,
+        lbStrategy: groupStrategy,
+        failoverAttempts: failoverHistory.length,
+        failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
+        routingDecision: initialRoutingDecisionLog,
+      });
+    }
 
     // Handle client disconnect silently (no response needed)
     if (error instanceof ClientDisconnectedError) {

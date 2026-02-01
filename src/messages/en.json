@@ -215,7 +215,30 @@
     "filterStatus5xx": "5xx - Server Error",
     "filterModel": "Filter by model...",
     "noMatchingLogs": "No matching logs",
-    "noMatchingLogsDesc": "No logs match your current filter criteria"
+    "noMatchingLogsDesc": "No logs match your current filter criteria",
+    "routingProviderType": "Provider",
+    "routingNone": "None",
+    "routingDecisionDetails": "Routing Decision Details",
+    "indicatorRedirect": "Model redirect applied",
+    "indicatorFailover": "Failover occurred",
+    "indicatorExcluded": "Some upstreams excluded",
+    "indicatorLowCandidates": "Low candidate count",
+    "tooltipModelResolution": "Model Resolution",
+    "tooltipCandidates": "Candidates",
+    "tooltipExcluded": "Excluded",
+    "tooltipStrategy": "Strategy",
+    "noRoutingDecision": "No routing decision data",
+    "more": "more",
+    "exclusionReason": {
+      "circuit_open": "Circuit breaker open",
+      "model_not_allowed": "Model not allowed",
+      "unhealthy": "Unhealthy"
+    },
+    "circuitState": {
+      "closed": "Normal",
+      "open": "Open",
+      "half_open": "Recovering"
+    }
   },
   "upstreams": {
     "title": "Upstreams",

@@ -197,6 +197,7 @@ export const requestLogs = pgTable(
     lbStrategy: varchar("lb_strategy", { length: 32 }), // Load balancer strategy if group routing
     failoverAttempts: integer("failover_attempts").notNull().default(0), // Number of failover attempts
     failoverHistory: text("failover_history"), // JSON array of failover attempt records
+    routingDecision: text("routing_decision"), // JSON object with complete routing decision info
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

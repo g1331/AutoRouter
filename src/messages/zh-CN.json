@@ -186,9 +186,12 @@
     "routingDirect": "直连",
     "routingGroup": "分组",
     "routingDefault": "默认",
-    "expandDetails": "展开故障转移详情",
-    "collapseDetails": "收起故障转移详情",
+    "routingProviderType": "自动路由",
+    "routingNone": "无路由",
+    "expandDetails": "展开详情",
+    "collapseDetails": "收起详情",
     "failoverDetails": "故障转移尝试 ({count})",
+    "routingDecisionDetails": "路由决策详情",
     "upstream": "上游",
     "errorType": "错误类型",
     "statusCode": "状态码",
@@ -215,7 +218,27 @@
     "filterStatus5xx": "5xx - 服务器错误",
     "filterModel": "按模型筛选...",
     "noMatchingLogs": "未找到匹配日志",
-    "noMatchingLogsDesc": "没有符合当前筛选条件的日志"
+    "noMatchingLogsDesc": "没有符合当前筛选条件的日志",
+    "indicatorRedirect": "模型重定向",
+    "indicatorFailover": "故障转移",
+    "indicatorExcluded": "有上游被排除",
+    "indicatorLowCandidates": "候选上游不足",
+    "tooltipModelResolution": "模型解析",
+    "tooltipCandidates": "候选上游",
+    "tooltipExcluded": "被排除上游",
+    "tooltipStrategy": "选择策略",
+    "noRoutingDecision": "无路由决策信息",
+    "more": "更多",
+    "exclusionReason": {
+      "circuit_open": "熔断",
+      "model_not_allowed": "模型不支持",
+      "unhealthy": "不健康"
+    },
+    "circuitState": {
+      "closed": "正常",
+      "open": "熔断",
+      "half_open": "恢复中"
+    }
   },
   "upstreams": {
     "title": "Upstreams",

@@ -3,15 +3,7 @@
 import { useState, useMemo } from "react";
 import { formatDistanceToNow, subDays, startOfDay } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
-import {
-  ScrollText,
-  Filter,
-  ChevronDown,
-  ChevronUp,
-  Server,
-  Route,
-  AlertCircle,
-} from "lucide-react";
+import { ScrollText, Filter, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
 import type { RequestLog, TimeRange } from "@/types/api";
 import {
   Table,
@@ -34,6 +26,7 @@ import { TimeRangeSelector } from "@/components/dashboard/time-range-selector";
 import { getDateLocale } from "@/lib/date-locale";
 import { cn } from "@/lib/utils";
 import { TokenDisplay } from "@/components/admin/token-display";
+import { RoutingDecisionDisplay } from "@/components/admin/routing-decision-display";
 
 interface LogsTableProps {
   logs: RequestLog[];
@@ -162,43 +155,6 @@ export function LogsTable({ logs }: LogsTableProps) {
     return `${(durationMs / 1000).toFixed(2)}s`;
   };
 
-  const formatUpstreamName = (upstreamName: string | null) => {
-    if (!upstreamName) {
-      return <span className="text-amber-700">-</span>;
-    }
-    return (
-      <div className="flex items-center gap-1.5">
-        <Server className="w-3.5 h-3.5 text-amber-600" />
-        <span className="font-mono text-xs">{upstreamName}</span>
-      </div>
-    );
-  };
-
-  const formatRoutingType = (routingType: string | null) => {
-    if (!routingType) return null;
-
-    const variants: Record<
-      string,
-      { label: string; variant: "default" | "secondary" | "outline" | "success" }
-    > = {
-      auto: { label: t("routingAuto"), variant: "success" },
-      // Keep old variants for backward compatibility with existing logs
-      direct: { label: t("routingDirect"), variant: "default" },
-      group: { label: t("routingGroup"), variant: "secondary" },
-      default: { label: t("routingDefault"), variant: "outline" },
-    };
-
-    const config = variants[routingType];
-    if (!config) return null;
-
-    return (
-      <Badge variant={config.variant} className="text-[10px] px-1.5 py-0">
-        <Route className="w-3 h-3 mr-1" />
-        {config.label}
-      </Badge>
-    );
-  };
-
   const formatErrorType = (errorType: string) => {
     const errorColors: Record<string, string> = {
       timeout: "text-amber-600",
@@ -292,6 +248,8 @@ export function LogsTable({ logs }: LogsTableProps) {
               {filteredLogs.map((log) => {
                 const isExpanded = expandedRows.has(log.id);
                 const hasFailover = log.failover_attempts > 0;
+                const hasRoutingDecision = !!log.routing_decision;
+                const canExpand = hasFailover || hasRoutingDecision;
 
                 return (
                   <>
@@ -299,12 +257,12 @@ export function LogsTable({ logs }: LogsTableProps) {
                       key={log.id}
                       className={cn(
                         log.status_code && log.status_code >= 400 && "bg-status-error-muted/20",
-                        hasFailover && "cursor-pointer hover:bg-surface-300/50"
+                        canExpand && "cursor-pointer hover:bg-surface-300/50"
                       )}
-                      onClick={() => hasFailover && toggleRow(log.id)}
+                      onClick={() => canExpand && toggleRow(log.id)}
                     >
                       <TableCell className="p-2">
-                        {hasFailover && (
+                        {canExpand && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -328,17 +286,14 @@ export function LogsTable({ logs }: LogsTableProps) {
                         })}
                       </TableCell>
                       <TableCell>
-                        <div className="space-y-1">
-                          {formatUpstreamName(log.upstream_name)}
-                          <div className="flex items-center gap-1">
-                            {formatRoutingType(log.routing_type)}
-                            {log.group_name && (
-                              <span className="text-[10px] text-amber-700 font-mono">
-                                {log.group_name}
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                        <RoutingDecisionDisplay
+                          routingDecision={log.routing_decision}
+                          upstreamName={log.upstream_name}
+                          routingType={log.routing_type}
+                          groupName={log.group_name}
+                          failoverAttempts={log.failover_attempts}
+                          compact={true}
+                        />
                       </TableCell>
                       <TableCell>
                         <code className="px-1.5 py-0.5 bg-surface-300 text-amber-500 rounded-cf-sm font-mono text-xs border border-divider">
@@ -368,56 +323,84 @@ export function LogsTable({ logs }: LogsTableProps) {
                       </TableCell>
                     </TableRow>
 
-                    {/* Failover Details Row */}
-                    {isExpanded && hasFailover && log.failover_history && (
+                    {/* Expanded Details Row - Routing Decision and Failover History */}
+                    {isExpanded && canExpand && (
                       <TableRow className="bg-surface-300/30">
                         <TableCell colSpan={9} className="p-0">
-                          <div className="px-4 py-3 border-t border-dashed border-divider">
-                            <div className="flex items-center gap-2 mb-2">
-                              <AlertCircle className="w-4 h-4 text-amber-600" />
-                              <span className="font-mono text-xs font-medium text-amber-700">
-                                {t("failoverDetails", { count: log.failover_attempts })}
-                              </span>
-                            </div>
-                            <div className="space-y-2 pl-6">
-                              {log.failover_history.map((attempt, index) => (
-                                <div
-                                  key={index}
-                                  className="flex items-start gap-3 text-xs font-mono"
-                                >
-                                  <span className="text-amber-600">#{index + 1}</span>
-                                  <div className="flex-1 grid grid-cols-4 gap-4">
-                                    <div>
-                                      <span className="text-amber-700">{t("upstream")}: </span>
-                                      <span className="text-amber-500">
-                                        {attempt.upstream_name}
-                                      </span>
-                                    </div>
-                                    <div>
-                                      <span className="text-amber-700">{t("errorType")}: </span>
-                                      <span className={formatErrorType(attempt.error_type)}>
-                                        {attempt.error_type}
-                                      </span>
-                                    </div>
-                                    <div>
-                                      <span className="text-amber-700">{t("statusCode")}: </span>
-                                      <span className="text-amber-500">
-                                        {attempt.status_code || "-"}
-                                      </span>
-                                    </div>
-                                    <div>
-                                      <span className="text-amber-700">{t("time")}: </span>
-                                      <span className="text-amber-500">
-                                        {new Date(attempt.attempted_at).toLocaleTimeString()}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <div className="col-span-4 text-amber-600 max-w-md truncate">
-                                    {attempt.error_message}
-                                  </div>
+                          <div className="px-4 py-3 border-t border-dashed border-divider space-y-4">
+                            {/* Routing Decision Details */}
+                            {hasRoutingDecision && (
+                              <div>
+                                <div className="flex items-center gap-2 mb-3">
+                                  <span className="font-mono text-xs font-medium text-amber-500">
+                                    {t("routingDecisionDetails")}
+                                  </span>
                                 </div>
-                              ))}
-                            </div>
+                                <div className="pl-6">
+                                  <RoutingDecisionDisplay
+                                    routingDecision={log.routing_decision}
+                                    upstreamName={log.upstream_name}
+                                    routingType={log.routing_type}
+                                    groupName={log.group_name}
+                                    failoverAttempts={log.failover_attempts}
+                                    compact={false}
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Failover History */}
+                            {hasFailover && log.failover_history && (
+                              <div>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                                  <span className="font-mono text-xs font-medium text-amber-700">
+                                    {t("failoverDetails", { count: log.failover_attempts })}
+                                  </span>
+                                </div>
+                                <div className="space-y-2 pl-6">
+                                  {log.failover_history.map((attempt, index) => (
+                                    <div
+                                      key={index}
+                                      className="flex items-start gap-3 text-xs font-mono"
+                                    >
+                                      <span className="text-amber-600">#{index + 1}</span>
+                                      <div className="flex-1 grid grid-cols-4 gap-4">
+                                        <div>
+                                          <span className="text-amber-700">{t("upstream")}: </span>
+                                          <span className="text-amber-500">
+                                            {attempt.upstream_name}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="text-amber-700">{t("errorType")}: </span>
+                                          <span className={formatErrorType(attempt.error_type)}>
+                                            {attempt.error_type}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="text-amber-700">
+                                            {t("statusCode")}:{" "}
+                                          </span>
+                                          <span className="text-amber-500">
+                                            {attempt.status_code || "-"}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="text-amber-700">{t("time")}: </span>
+                                          <span className="text-amber-500">
+                                            {new Date(attempt.attempted_at).toLocaleTimeString()}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      <div className="col-span-4 text-amber-600 max-w-md truncate">
+                                        {attempt.error_message}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
