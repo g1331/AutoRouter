@@ -71,6 +71,34 @@ describe("UpstreamsTable", () => {
     });
   });
 
+  describe("Terminal Header", () => {
+    it("renders terminal header with system ID", () => {
+      render(
+        <UpstreamsTable
+          upstreams={[mockUpstream]}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onTest={mockOnTest}
+        />
+      );
+
+      expect(screen.getByText("SYS.UPSTREAM_ARRAY")).toBeInTheDocument();
+    });
+
+    it("displays node count in header", () => {
+      render(
+        <UpstreamsTable
+          upstreams={[mockUpstream]}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onTest={mockOnTest}
+        />
+      );
+
+      expect(screen.getByText("[1 NODES]")).toBeInTheDocument();
+    });
+  });
+
   describe("Table Rendering", () => {
     it("renders table headers", () => {
       render(
@@ -84,9 +112,9 @@ describe("UpstreamsTable", () => {
 
       expect(screen.getByText("name")).toBeInTheDocument();
       expect(screen.getByText("tableProvider")).toBeInTheDocument();
-      expect(screen.getByText("tableGroup")).toBeInTheDocument();
       expect(screen.getByText("tableWeight")).toBeInTheDocument();
       expect(screen.getByText("tableHealth")).toBeInTheDocument();
+      expect(screen.getByText("tableCircuitBreaker")).toBeInTheDocument();
       expect(screen.getByText("tableBaseUrl")).toBeInTheDocument();
       expect(screen.getByText("createdAt")).toBeInTheDocument();
       expect(screen.getByText("actions")).toBeInTheDocument();
@@ -104,8 +132,197 @@ describe("UpstreamsTable", () => {
 
       expect(screen.getByText("Test Upstream")).toBeInTheDocument();
       expect(screen.getByText("https://api.openai.com/v1")).toBeInTheDocument();
-      // Weight displayed
-      expect(screen.getByText("1")).toBeInTheDocument();
+    });
+  });
+
+  describe("Group-based Organization", () => {
+    it("displays UNGROUPED section for upstreams without group", () => {
+      render(
+        <UpstreamsTable
+          upstreams={[mockUpstream]}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onTest={mockOnTest}
+        />
+      );
+
+      expect(screen.getByText("GROUP: UNGROUPED")).toBeInTheDocument();
+    });
+
+    it("displays named group section for upstreams with group", () => {
+      const groupedUpstream = { ...mockUpstream, group_name: "openai" };
+      render(
+        <UpstreamsTable
+          upstreams={[groupedUpstream]}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onTest={mockOnTest}
+        />
+      );
+
+      expect(screen.getByText("GROUP: OPENAI")).toBeInTheDocument();
+    });
+
+    it("groups upstreams by group_name", () => {
+      const upstreams = [
+        { ...mockUpstream, id: "1", name: "Upstream 1", group_name: "openai" },
+        { ...mockUpstream, id: "2", name: "Upstream 2", group_name: "openai" },
+        {
+          ...mockUpstream,
+          id: "3",
+          name: "Upstream 3",
+          group_name: "anthropic",
+        },
+      ];
+      render(
+        <UpstreamsTable
+          upstreams={upstreams}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onTest={mockOnTest}
+        />
+      );
+
+      expect(screen.getByText("GROUP: OPENAI")).toBeInTheDocument();
+      expect(screen.getByText("GROUP: ANTHROPIC")).toBeInTheDocument();
+    });
+
+    it("displays health summary in group header", () => {
+      const healthyUpstream = {
+        ...mockUpstream,
+        group_name: "test",
+        health_status: { is_healthy: true, last_check: new Date().toISOString() },
+      };
+      render(
+        <UpstreamsTable
+          upstreams={[healthyUpstream]}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onTest={mockOnTest}
+        />
+      );
+
+      expect(screen.getByText(/1\/1 HEALTHY/)).toBeInTheDocument();
+    });
+  });
+
+  describe("Collapsible Groups", () => {
+    it("shows expand/collapse button in group header", () => {
+      render(
+        <UpstreamsTable
+          upstreams={[mockUpstream]}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onTest={mockOnTest}
+        />
+      );
+
+      const collapseButton = screen.getByRole("button", { name: "collapse" });
+      expect(collapseButton).toBeInTheDocument();
+    });
+
+    it("collapses group when header is clicked", () => {
+      render(
+        <UpstreamsTable
+          upstreams={[mockUpstream]}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onTest={mockOnTest}
+        />
+      );
+
+      // Initially upstream is visible
+      expect(screen.getByText("Test Upstream")).toBeInTheDocument();
+
+      // Click group header to collapse
+      const groupHeader = screen.getByText("GROUP: UNGROUPED").closest("tr");
+      fireEvent.click(groupHeader!);
+
+      // Upstream should be hidden
+      expect(screen.queryByText("Test Upstream")).not.toBeInTheDocument();
+    });
+
+    it("expands group when collapsed header is clicked", () => {
+      render(
+        <UpstreamsTable
+          upstreams={[mockUpstream]}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onTest={mockOnTest}
+        />
+      );
+
+      const groupHeader = screen.getByText("GROUP: UNGROUPED").closest("tr");
+
+      // Collapse
+      fireEvent.click(groupHeader!);
+      expect(screen.queryByText("Test Upstream")).not.toBeInTheDocument();
+
+      // Expand
+      fireEvent.click(groupHeader!);
+      expect(screen.getByText("Test Upstream")).toBeInTheDocument();
+    });
+  });
+
+  describe("LED Status Indicators", () => {
+    it("displays healthy LED for healthy upstream", () => {
+      const healthyUpstream = {
+        ...mockUpstream,
+        health_status: { is_healthy: true, last_check: new Date().toISOString() },
+      };
+      render(
+        <UpstreamsTable
+          upstreams={[healthyUpstream]}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onTest={mockOnTest}
+        />
+      );
+
+      // Should have healthy LED character
+      expect(screen.getAllByText("◉").length).toBeGreaterThan(0);
+    });
+
+    it("displays offline LED for unhealthy upstream", () => {
+      const unhealthyUpstream = {
+        ...mockUpstream,
+        health_status: {
+          is_healthy: false,
+          last_check: new Date().toISOString(),
+        },
+      };
+      render(
+        <UpstreamsTable
+          upstreams={[unhealthyUpstream]}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onTest={mockOnTest}
+        />
+      );
+
+      // Should have offline LED character
+      expect(screen.getAllByText("●").length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("ASCII Progress Bar for Weight", () => {
+    it("displays weight as ASCII progress bar", () => {
+      const upstream = { ...mockUpstream, weight: 5 };
+      render(
+        <UpstreamsTable
+          upstreams={[upstream]}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onTest={mockOnTest}
+        />
+      );
+
+      // Should have progress bar characters (multiple: one for weight, one for circuit summary)
+      const progressbars = screen.getAllByRole("progressbar");
+      expect(progressbars.length).toBeGreaterThan(0);
+      // Find the one with weight value "5"
+      const weightProgressbar = progressbars.find((pb) => pb.textContent?.includes("5"));
+      expect(weightProgressbar).toBeInTheDocument();
     });
   });
 
@@ -324,36 +541,6 @@ describe("UpstreamsTable", () => {
     });
   });
 
-  describe("No Group Display", () => {
-    it("renders 'noGroup' text for null group_name", () => {
-      const upstreamWithNoGroup = { ...mockUpstream, group_name: null };
-      render(
-        <UpstreamsTable
-          upstreams={[upstreamWithNoGroup]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      expect(screen.getByText("noGroup")).toBeInTheDocument();
-    });
-
-    it("renders group name badge when group is set", () => {
-      const upstreamWithGroup = { ...mockUpstream, group_name: "Test Group" };
-      render(
-        <UpstreamsTable
-          upstreams={[upstreamWithGroup]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      expect(screen.getByText("Test Group")).toBeInTheDocument();
-    });
-  });
-
   describe("Base URL Display", () => {
     it("displays base URL in code element", () => {
       render(
@@ -367,6 +554,30 @@ describe("UpstreamsTable", () => {
 
       const urlElement = screen.getByText("https://api.openai.com/v1");
       expect(urlElement.tagName).toBe("CODE");
+    });
+  });
+
+  describe("Error State Glow", () => {
+    it("applies error glow to unhealthy upstream rows", () => {
+      const unhealthyUpstream = {
+        ...mockUpstream,
+        health_status: {
+          is_healthy: false,
+          last_check: new Date().toISOString(),
+        },
+      };
+      render(
+        <UpstreamsTable
+          upstreams={[unhealthyUpstream]}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onTest={mockOnTest}
+        />
+      );
+
+      // The row should have the error shadow class
+      const row = screen.getByText("Test Upstream").closest("tr");
+      expect(row?.className).toContain("shadow-[inset_0_0_20px");
     });
   });
 
@@ -395,6 +606,20 @@ describe("UpstreamsTable", () => {
       );
 
       expect(screen.getByLabelText("delete: Test Upstream")).toBeInTheDocument();
+    });
+
+    it("has aria-expanded on collapse button", () => {
+      render(
+        <UpstreamsTable
+          upstreams={[mockUpstream]}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onTest={mockOnTest}
+        />
+      );
+
+      const collapseButton = screen.getByRole("button", { name: "collapse" });
+      expect(collapseButton).toHaveAttribute("aria-expanded", "true");
     });
   });
 });

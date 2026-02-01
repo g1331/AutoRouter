@@ -57,6 +57,26 @@ describe("LogsTable", () => {
     });
   });
 
+  describe("Terminal Header", () => {
+    it("renders terminal header with system ID", () => {
+      render(<LogsTable logs={[mockLog]} />);
+
+      expect(screen.getByText("SYS.REQUEST_STREAM")).toBeInTheDocument();
+    });
+
+    it("displays time range in header", () => {
+      render(<LogsTable logs={[mockLog]} />);
+
+      expect(screen.getByText("[30D]")).toBeInTheDocument();
+    });
+
+    it("shows live indicator when isLive is true", () => {
+      render(<LogsTable logs={[mockLog]} isLive />);
+
+      expect(screen.getByText("REC")).toBeInTheDocument();
+    });
+  });
+
   describe("Table Rendering", () => {
     it("renders table headers", () => {
       render(<LogsTable logs={[mockLog]} />);
@@ -79,32 +99,29 @@ describe("LogsTable", () => {
     });
   });
 
-  describe("Status Code Formatting", () => {
-    it("renders success badge for 2xx status", () => {
+  describe("LED Status Indicators", () => {
+    it("renders healthy LED for 2xx status", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 200 }]} />);
 
-      const badge = screen.getByText("200");
-      expect(badge).toBeInTheDocument();
-      expect(badge).toHaveClass("bg-status-success-muted");
-      expect(badge).toHaveClass("text-status-success");
+      // Should have healthy LED character (◉)
+      expect(screen.getAllByText("◉").length).toBeGreaterThan(0);
+      expect(screen.getByText("200")).toBeInTheDocument();
     });
 
-    it("renders warning badge for 4xx status", () => {
+    it("renders degraded LED for 4xx status", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 400 }]} />);
 
-      const badge = screen.getByText("400");
-      expect(badge).toBeInTheDocument();
-      expect(badge).toHaveClass("bg-status-warning-muted");
-      expect(badge).toHaveClass("text-status-warning");
+      // Should have degraded LED character (◎)
+      expect(screen.getAllByText("◎").length).toBeGreaterThan(0);
+      expect(screen.getByText("400")).toBeInTheDocument();
     });
 
-    it("renders error badge for 5xx status", () => {
+    it("renders offline LED for 5xx status", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 500 }]} />);
 
-      const badge = screen.getByText("500");
-      expect(badge).toBeInTheDocument();
-      expect(badge).toHaveClass("bg-status-error-muted");
-      expect(badge).toHaveClass("text-status-error");
+      // Should have offline LED character (●)
+      expect(screen.getAllByText("●").length).toBeGreaterThan(0);
+      expect(screen.getByText("500")).toBeInTheDocument();
     });
 
     it("renders dash for null status code", () => {
@@ -175,26 +192,65 @@ describe("LogsTable", () => {
     });
   });
 
-  describe("Error Row Styling", () => {
-    it("applies error background for 4xx status", () => {
+  describe("Error Row Glow Effect", () => {
+    it("applies error glow for 4xx status", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 404 }]} />);
 
-      const row = screen.getByRole("row", { name: /POST/ });
-      expect(row).toHaveClass("bg-status-error-muted/20");
+      const row = screen.getByText("POST").closest("tr");
+      expect(row?.className).toContain("shadow-[inset_0_0_20px");
     });
 
-    it("applies error background for 5xx status", () => {
+    it("applies error glow for 5xx status", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 503 }]} />);
 
-      const row = screen.getByRole("row", { name: /POST/ });
-      expect(row).toHaveClass("bg-status-error-muted/20");
+      const row = screen.getByText("POST").closest("tr");
+      expect(row?.className).toContain("shadow-[inset_0_0_20px");
     });
 
-    it("does not apply error background for 2xx status", () => {
+    it("does not apply error glow for 2xx status", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 200 }]} />);
 
-      const row = screen.getByRole("row", { name: /POST/ });
-      expect(row).not.toHaveClass("bg-status-error-muted/20");
+      const row = screen.getByText("POST").closest("tr");
+      expect(row?.className).not.toContain("shadow-[inset_0_0_20px");
+    });
+  });
+
+  describe("Stream Statistics Footer", () => {
+    it("displays stream statistics", () => {
+      render(<LogsTable logs={[mockLog]} />);
+
+      expect(screen.getByText(/STREAM STATS:/)).toBeInTheDocument();
+      expect(screen.getByText(/1 requests/)).toBeInTheDocument();
+      expect(screen.getByText(/100% success/)).toBeInTheDocument();
+    });
+
+    it("calculates correct success rate", () => {
+      const logs = [
+        { ...mockLog, id: "1", status_code: 200 },
+        { ...mockLog, id: "2", status_code: 200 },
+        { ...mockLog, id: "3", status_code: 500 },
+      ];
+      render(<LogsTable logs={logs} />);
+
+      // 2 out of 3 = 67%
+      expect(screen.getByText(/67% success/)).toBeInTheDocument();
+    });
+  });
+
+  describe("Blinking Cursor", () => {
+    it("shows blinking cursor in live mode", () => {
+      const { container } = render(<LogsTable logs={[mockLog]} isLive />);
+
+      const cursor = container.querySelector(".cf-cursor-blink");
+      expect(cursor).toBeInTheDocument();
+      expect(cursor).toHaveTextContent("_");
+    });
+
+    it("does not show cursor when not in live mode", () => {
+      const { container } = render(<LogsTable logs={[mockLog]} isLive={false} />);
+
+      const cursor = container.querySelector(".cf-cursor-blink");
+      expect(cursor).not.toBeInTheDocument();
     });
   });
 
@@ -637,14 +693,14 @@ describe("LogsTable", () => {
       expect(screen.queryByText("tokenDetails")).not.toBeInTheDocument();
     });
 
-    it("shows failover history at bottom when available", () => {
+    it("shows failover history with terminal-style formatting", () => {
       const logWithFailover: RequestLog = {
         ...mockLog,
         failover_attempts: 1,
         failover_history: [
           {
             upstream_id: "upstream-1",
-            upstream_name: "openai-1",
+            upstream_name: "failed-upstream",
             error_type: "timeout",
             error_message: "Request timed out",
             attempted_at: new Date().toISOString(),
@@ -658,9 +714,10 @@ describe("LogsTable", () => {
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
       fireEvent.click(expandButton);
 
-      // Failover history should be visible
+      // Failover history should be visible with terminal-style formatting
       expect(screen.getByText(/failoverDetails/)).toBeInTheDocument();
-      expect(screen.getByText("openai-1")).toBeInTheDocument();
+      // Check for the FAILOVER line with upstream name
+      expect(screen.getByText(/FAILOVER: failed-upstream/)).toBeInTheDocument();
     });
 
     it("displays two-column layout with token details on left and routing on right", () => {
@@ -678,6 +735,18 @@ describe("LogsTable", () => {
       // Check for grid layout
       const gridContainer = container.querySelector(".grid.grid-cols-2");
       expect(gridContainer).toBeInTheDocument();
+    });
+
+    it("shows error details in terminal style for error rows", () => {
+      render(<LogsTable logs={[{ ...mockLog, status_code: 500 }]} />);
+
+      // Click expand button
+      const expandButton = screen.getByRole("button", { name: "expandDetails" });
+      fireEvent.click(expandButton);
+
+      // Should show terminal-style error details
+      expect(screen.getByText(/ERROR_TYPE:/)).toBeInTheDocument();
+      expect(screen.getByText(/STATUS:/)).toBeInTheDocument();
     });
   });
 });
