@@ -34,18 +34,6 @@ vi.mock("next-intl", () => ({
   },
 }));
 
-// Mock Tooltip components
-vi.mock("@/components/ui/tooltip", () => ({
-  Tooltip: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  TooltipTrigger: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="tooltip-trigger">{children}</div>
-  ),
-  TooltipContent: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="tooltip-content">{children}</div>
-  ),
-  TooltipProvider: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-}));
-
 // Mock Badge component
 vi.mock("@/components/ui/badge", () => ({
   Badge: ({ children, className }: { children: React.ReactNode; className?: string }) => (

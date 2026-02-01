@@ -15,7 +15,6 @@ import {
   CircleDot,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { RoutingDecisionLog, RoutingCircuitState } from "@/types/api";
 
@@ -91,158 +90,61 @@ export function RoutingDecisionDisplay({
     }
   };
 
-  // Compact view for table cell
+  // Compact view for table cell (no tooltip)
   if (compact) {
     return (
-      <TooltipProvider>
-        <Tooltip delayDuration={300}>
-          <TooltipTrigger asChild>
-            <div className="space-y-1 cursor-help">
-              {/* Upstream name */}
-              <div className="flex items-center gap-1.5">
-                <Server className="w-3.5 h-3.5 text-amber-600" />
-                <span className="font-mono text-xs">{upstreamName || "-"}</span>
-              </div>
+      <div className="space-y-1">
+        {/* Upstream name */}
+        <div className="flex items-center gap-1.5">
+          <Server className="w-3.5 h-3.5 text-amber-600" />
+          <span className="font-mono text-xs">{upstreamName || "-"}</span>
+        </div>
 
-              {/* Routing info with indicators */}
-              <div className="flex items-center gap-1 flex-wrap">
-                {/* Routing type badge */}
-                {routingTypeLabel && (
-                  <Badge variant="success" className="text-[10px] px-1.5 py-0">
-                    <Route className="w-3 h-3 mr-1" />
-                    {routingTypeLabel}
-                  </Badge>
-                )}
+        {/* Routing info with indicators */}
+        <div className="flex items-center gap-1 flex-wrap">
+          {/* Routing type badge */}
+          {routingTypeLabel && (
+            <Badge variant="success" className="text-[10px] px-1.5 py-0">
+              <Route className="w-3 h-3 mr-1" />
+              {routingTypeLabel}
+            </Badge>
+          )}
 
-                {/* Group name */}
-                {groupName && (
-                  <span className="text-[10px] text-amber-700 font-mono">{groupName}</span>
-                )}
+          {/* Group name */}
+          {groupName && <span className="text-[10px] text-amber-700 font-mono">{groupName}</span>}
 
-                {/* Candidate count */}
-                {routingDecision && (
-                  <span className="text-[10px] text-amber-600 font-mono">
-                    {routingDecision.final_candidate_count}/{routingDecision.candidate_count}
-                  </span>
-                )}
+          {/* Candidate count */}
+          {routingDecision && (
+            <span className="text-[10px] text-amber-600 font-mono">
+              {routingDecision.final_candidate_count}/{routingDecision.candidate_count}
+            </span>
+          )}
 
-                {/* Visual indicators */}
-                <div className="flex items-center gap-0.5 ml-1">
-                  {indicators.redirect && (
-                    <span title={t("indicatorRedirect")}>
-                      <RefreshCw className="w-3 h-3 text-blue-500" />
-                    </span>
-                  )}
-                  {indicators.failover && (
-                    <span title={t("indicatorFailover")}>
-                      <Zap className="w-3 h-3 text-orange-500" />
-                    </span>
-                  )}
-                  {indicators.excluded && (
-                    <span title={t("indicatorExcluded")}>
-                      <Lock className="w-3 h-3 text-red-500" />
-                    </span>
-                  )}
-                  {indicators.lowCandidates && (
-                    <span title={t("indicatorLowCandidates")}>
-                      <AlertTriangle className="w-3 h-3 text-amber-500" />
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </TooltipTrigger>
-
-          {/* Tooltip content */}
-          <TooltipContent side="right" className="max-w-sm p-0">
-            {routingDecision ? (
-              <div className="p-3 space-y-3 text-xs">
-                {/* Model resolution */}
-                <div>
-                  <div className="font-medium text-amber-500 mb-1">
-                    {t("tooltipModelResolution")}
-                  </div>
-                  <div className="font-mono text-amber-700">
-                    {routingDecision.original_model}
-                    {routingDecision.model_redirect_applied && (
-                      <>
-                        <ChevronRight className="w-3 h-3 inline mx-1" />
-                        <span className="text-blue-500">{routingDecision.resolved_model}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Candidates */}
-                {routingDecision.candidates.length > 0 && (
-                  <div>
-                    <div className="font-medium text-amber-500 mb-1">
-                      {t("tooltipCandidates")} ({routingDecision.candidates.length})
-                    </div>
-                    <div className="space-y-1">
-                      {routingDecision.candidates.slice(0, 5).map((c) => (
-                        <div
-                          key={c.id}
-                          className="flex items-center gap-2 font-mono text-amber-700"
-                        >
-                          <CircuitStateIcon state={c.circuit_state} />
-                          <span
-                            className={cn(
-                              c.id === routingDecision.selected_upstream_id &&
-                                "text-amber-500 font-medium"
-                            )}
-                          >
-                            {c.name}
-                          </span>
-                          <span className="text-amber-600">w:{c.weight}</span>
-                        </div>
-                      ))}
-                      {routingDecision.candidates.length > 5 && (
-                        <div className="text-amber-600">
-                          +{routingDecision.candidates.length - 5} {t("more")}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Excluded */}
-                {routingDecision.excluded.length > 0 && (
-                  <div>
-                    <div className="font-medium text-red-500 mb-1">
-                      {t("tooltipExcluded")} ({routingDecision.excluded.length})
-                    </div>
-                    <div className="space-y-1">
-                      {routingDecision.excluded.slice(0, 3).map((e) => (
-                        <div
-                          key={e.id}
-                          className="flex items-center gap-2 font-mono text-amber-700"
-                        >
-                          <Lock className="w-3 h-3 text-red-500" />
-                          <span>{e.name}</span>
-                          <span className="text-red-500">{t(`exclusionReason.${e.reason}`)}</span>
-                        </div>
-                      ))}
-                      {routingDecision.excluded.length > 3 && (
-                        <div className="text-amber-600">
-                          +{routingDecision.excluded.length - 3} {t("more")}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Selection strategy */}
-                <div className="text-amber-600 font-mono">
-                  {t("tooltipStrategy")}: {routingDecision.selection_strategy}
-                </div>
-              </div>
-            ) : (
-              <div className="p-3 text-xs text-amber-700">{t("noRoutingDecision")}</div>
+          {/* Visual indicators */}
+          <div className="flex items-center gap-0.5 ml-1">
+            {indicators.redirect && (
+              <span title={t("indicatorRedirect")}>
+                <RefreshCw className="w-3 h-3 text-blue-500" />
+              </span>
             )}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+            {indicators.failover && (
+              <span title={t("indicatorFailover")}>
+                <Zap className="w-3 h-3 text-orange-500" />
+              </span>
+            )}
+            {indicators.excluded && (
+              <span title={t("indicatorExcluded")}>
+                <Lock className="w-3 h-3 text-red-500" />
+              </span>
+            )}
+            {indicators.lowCandidates && (
+              <span title={t("indicatorLowCandidates")}>
+                <AlertTriangle className="w-3 h-3 text-amber-500" />
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
     );
   }
 

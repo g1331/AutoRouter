@@ -25,7 +25,7 @@ import {
 import { TimeRangeSelector } from "@/components/dashboard/time-range-selector";
 import { getDateLocale } from "@/lib/date-locale";
 import { cn } from "@/lib/utils";
-import { TokenDisplay } from "@/components/admin/token-display";
+import { TokenDisplay, TokenDetailContent } from "@/components/admin/token-display";
 import { RoutingDecisionDisplay } from "@/components/admin/routing-decision-display";
 
 interface LogsTableProps {
@@ -249,7 +249,7 @@ export function LogsTable({ logs }: LogsTableProps) {
                 const isExpanded = expandedRows.has(log.id);
                 const hasFailover = log.failover_attempts > 0;
                 const hasRoutingDecision = !!log.routing_decision;
-                const canExpand = hasFailover || hasRoutingDecision;
+                const canExpand = true;
 
                 return (
                   <>
@@ -323,20 +323,29 @@ export function LogsTable({ logs }: LogsTableProps) {
                       </TableCell>
                     </TableRow>
 
-                    {/* Expanded Details Row - Routing Decision and Failover History */}
+                    {/* Expanded Details Row - Token Details, Routing Decision, and Failover History */}
                     {isExpanded && canExpand && (
                       <TableRow className="bg-surface-300/30">
                         <TableCell colSpan={9} className="p-0">
                           <div className="px-4 py-3 border-t border-dashed border-divider space-y-4">
-                            {/* Routing Decision Details */}
-                            {hasRoutingDecision && (
+                            {/* Two-column layout: Token Details (left) and Routing Decision (right) */}
+                            <div className="grid grid-cols-2 gap-6">
+                              {/* Token Details */}
                               <div>
-                                <div className="flex items-center gap-2 mb-3">
-                                  <span className="font-mono text-xs font-medium text-amber-500">
-                                    {t("routingDecisionDetails")}
-                                  </span>
-                                </div>
-                                <div className="pl-6">
+                                <TokenDetailContent
+                                  promptTokens={log.prompt_tokens}
+                                  completionTokens={log.completion_tokens}
+                                  totalTokens={log.total_tokens}
+                                  cachedTokens={log.cached_tokens}
+                                  reasoningTokens={log.reasoning_tokens}
+                                  cacheCreationTokens={log.cache_creation_tokens}
+                                  cacheReadTokens={log.cache_read_tokens}
+                                />
+                              </div>
+
+                              {/* Routing Decision Details */}
+                              <div>
+                                {hasRoutingDecision ? (
                                   <RoutingDecisionDisplay
                                     routingDecision={log.routing_decision}
                                     upstreamName={log.upstream_name}
@@ -345,9 +354,13 @@ export function LogsTable({ logs }: LogsTableProps) {
                                     failoverAttempts={log.failover_attempts}
                                     compact={false}
                                   />
-                                </div>
+                                ) : (
+                                  <div className="text-xs text-amber-700">
+                                    {t("noRoutingDecision")}
+                                  </div>
+                                )}
                               </div>
-                            )}
+                            </div>
 
                             {/* Failover History */}
                             {hasFailover && log.failover_history && (

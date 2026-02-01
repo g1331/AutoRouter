@@ -1,8 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { LogsTable } from "@/components/admin/logs-table";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import type { RequestLog } from "@/types/api";
+import type { RequestLog, RoutingDecisionLog } from "@/types/api";
 
 // Mock next-intl
 vi.mock("next-intl", () => ({
@@ -14,13 +13,6 @@ vi.mock("next-intl", () => ({
 vi.mock("@/lib/date-locale", () => ({
   getDateLocale: () => undefined,
 }));
-
-/**
- * Helper to render with TooltipProvider
- */
-function renderWithTooltip(ui: React.ReactElement) {
-  return render(<TooltipProvider>{ui}</TooltipProvider>);
-}
 
 /**
  * LogsTable Component Tests
@@ -67,7 +59,7 @@ describe("LogsTable", () => {
 
   describe("Table Rendering", () => {
     it("renders table headers", () => {
-      renderWithTooltip(<LogsTable logs={[mockLog]} />);
+      render(<LogsTable logs={[mockLog]} />);
 
       expect(screen.getByText("tableTime")).toBeInTheDocument();
       expect(screen.getByText("tableMethod")).toBeInTheDocument();
@@ -79,7 +71,7 @@ describe("LogsTable", () => {
     });
 
     it("renders log data correctly", () => {
-      renderWithTooltip(<LogsTable logs={[mockLog]} />);
+      render(<LogsTable logs={[mockLog]} />);
 
       expect(screen.getByText("POST")).toBeInTheDocument();
       expect(screen.getByText("/v1/chat/completions")).toBeInTheDocument();
@@ -89,7 +81,7 @@ describe("LogsTable", () => {
 
   describe("Status Code Formatting", () => {
     it("renders success badge for 2xx status", () => {
-      renderWithTooltip(<LogsTable logs={[{ ...mockLog, status_code: 200 }]} />);
+      render(<LogsTable logs={[{ ...mockLog, status_code: 200 }]} />);
 
       const badge = screen.getByText("200");
       expect(badge).toBeInTheDocument();
@@ -98,7 +90,7 @@ describe("LogsTable", () => {
     });
 
     it("renders warning badge for 4xx status", () => {
-      renderWithTooltip(<LogsTable logs={[{ ...mockLog, status_code: 400 }]} />);
+      render(<LogsTable logs={[{ ...mockLog, status_code: 400 }]} />);
 
       const badge = screen.getByText("400");
       expect(badge).toBeInTheDocument();
@@ -107,7 +99,7 @@ describe("LogsTable", () => {
     });
 
     it("renders error badge for 5xx status", () => {
-      renderWithTooltip(<LogsTable logs={[{ ...mockLog, status_code: 500 }]} />);
+      render(<LogsTable logs={[{ ...mockLog, status_code: 500 }]} />);
 
       const badge = screen.getByText("500");
       expect(badge).toBeInTheDocument();
@@ -116,7 +108,7 @@ describe("LogsTable", () => {
     });
 
     it("renders dash for null status code", () => {
-      renderWithTooltip(<LogsTable logs={[{ ...mockLog, status_code: null }]} />);
+      render(<LogsTable logs={[{ ...mockLog, status_code: null }]} />);
 
       // Find the dash in status column
       const dashes = screen.getAllByText("-");
@@ -126,7 +118,7 @@ describe("LogsTable", () => {
 
   describe("Token Formatting", () => {
     it("renders total tokens with breakdown", () => {
-      renderWithTooltip(<LogsTable logs={[mockLog]} />);
+      render(<LogsTable logs={[mockLog]} />);
 
       // Total tokens
       expect(screen.getByText("300")).toBeInTheDocument();
@@ -141,7 +133,7 @@ describe("LogsTable", () => {
         completion_tokens: 0,
         total_tokens: 0,
       };
-      renderWithTooltip(<LogsTable logs={[zeroTokenLog]} />);
+      render(<LogsTable logs={[zeroTokenLog]} />);
 
       // Should have dash for tokens
       const dashes = screen.getAllByText("-");
@@ -155,7 +147,7 @@ describe("LogsTable", () => {
         completion_tokens: 20000,
         total_tokens: 30000,
       };
-      renderWithTooltip(<LogsTable logs={[largeTokenLog]} />);
+      render(<LogsTable logs={[largeTokenLog]} />);
 
       // Check for formatted number (locale-dependent, may be "30,000" or "30000")
       expect(screen.getByText(/30[,.]?000/)).toBeInTheDocument();
@@ -164,19 +156,19 @@ describe("LogsTable", () => {
 
   describe("Duration Formatting", () => {
     it("renders milliseconds for durations under 1 second", () => {
-      renderWithTooltip(<LogsTable logs={[{ ...mockLog, duration_ms: 500 }]} />);
+      render(<LogsTable logs={[{ ...mockLog, duration_ms: 500 }]} />);
 
       expect(screen.getByText("500ms")).toBeInTheDocument();
     });
 
     it("renders seconds for durations over 1 second", () => {
-      renderWithTooltip(<LogsTable logs={[{ ...mockLog, duration_ms: 1500 }]} />);
+      render(<LogsTable logs={[{ ...mockLog, duration_ms: 1500 }]} />);
 
       expect(screen.getByText("1.50s")).toBeInTheDocument();
     });
 
     it("renders dash for null duration", () => {
-      renderWithTooltip(<LogsTable logs={[{ ...mockLog, duration_ms: null }]} />);
+      render(<LogsTable logs={[{ ...mockLog, duration_ms: null }]} />);
 
       const dashes = screen.getAllByText("-");
       expect(dashes.length).toBeGreaterThan(0);
@@ -185,21 +177,21 @@ describe("LogsTable", () => {
 
   describe("Error Row Styling", () => {
     it("applies error background for 4xx status", () => {
-      renderWithTooltip(<LogsTable logs={[{ ...mockLog, status_code: 404 }]} />);
+      render(<LogsTable logs={[{ ...mockLog, status_code: 404 }]} />);
 
       const row = screen.getByRole("row", { name: /POST/ });
       expect(row).toHaveClass("bg-status-error-muted/20");
     });
 
     it("applies error background for 5xx status", () => {
-      renderWithTooltip(<LogsTable logs={[{ ...mockLog, status_code: 503 }]} />);
+      render(<LogsTable logs={[{ ...mockLog, status_code: 503 }]} />);
 
       const row = screen.getByRole("row", { name: /POST/ });
       expect(row).toHaveClass("bg-status-error-muted/20");
     });
 
     it("does not apply error background for 2xx status", () => {
-      renderWithTooltip(<LogsTable logs={[{ ...mockLog, status_code: 200 }]} />);
+      render(<LogsTable logs={[{ ...mockLog, status_code: 200 }]} />);
 
       const row = screen.getByRole("row", { name: /POST/ });
       expect(row).not.toHaveClass("bg-status-error-muted/20");
@@ -208,7 +200,7 @@ describe("LogsTable", () => {
 
   describe("Null Values Handling", () => {
     it("renders dash for null method", () => {
-      renderWithTooltip(<LogsTable logs={[{ ...mockLog, method: null }]} />);
+      render(<LogsTable logs={[{ ...mockLog, method: null }]} />);
 
       // Method column shows "-" in code element
       // Cell order: expand | time | upstream | method | path | model | tokens | status | duration
@@ -218,14 +210,14 @@ describe("LogsTable", () => {
     });
 
     it("renders dash for null path", () => {
-      renderWithTooltip(<LogsTable logs={[{ ...mockLog, path: null }]} />);
+      render(<LogsTable logs={[{ ...mockLog, path: null }]} />);
 
       const dashes = screen.getAllByText("-");
       expect(dashes.length).toBeGreaterThan(0);
     });
 
     it("renders dash for null model", () => {
-      renderWithTooltip(<LogsTable logs={[{ ...mockLog, model: null }]} />);
+      render(<LogsTable logs={[{ ...mockLog, model: null }]} />);
 
       const dashes = screen.getAllByText("-");
       expect(dashes.length).toBeGreaterThan(0);
@@ -295,7 +287,7 @@ describe("LogsTable", () => {
 
     describe("Status Code Filter", () => {
       it("shows all logs when filter is 'all'", () => {
-        renderWithTooltip(<LogsTable logs={logsForFiltering} />);
+        render(<LogsTable logs={logsForFiltering} />);
 
         // Default filter is "all", should show all logs (within time range)
         // Only logs within 30d range: log-1, log-2, log-3, log-4, log-7
@@ -305,7 +297,7 @@ describe("LogsTable", () => {
       });
 
       it("shows only 2xx logs when filter is '2xx'", () => {
-        const { container } = renderWithTooltip(<LogsTable logs={logsForFiltering} />);
+        const { container } = render(<LogsTable logs={logsForFiltering} />);
 
         // Find and click status filter
         const selectTrigger = container.querySelector('[role="combobox"]');
@@ -313,7 +305,7 @@ describe("LogsTable", () => {
       });
 
       it("filters out null status codes for 2xx filter", () => {
-        renderWithTooltip(
+        render(
           <LogsTable
             logs={[
               { ...mockLog, id: "log-1", status_code: 200 },
@@ -328,7 +320,7 @@ describe("LogsTable", () => {
       });
 
       it("filters out null status codes for 4xx filter", () => {
-        renderWithTooltip(
+        render(
           <LogsTable
             logs={[
               { ...mockLog, id: "log-1", status_code: 400 },
@@ -342,7 +334,7 @@ describe("LogsTable", () => {
       });
 
       it("filters out null status codes for 5xx filter", () => {
-        renderWithTooltip(
+        render(
           <LogsTable
             logs={[
               { ...mockLog, id: "log-1", status_code: 500 },
@@ -356,7 +348,7 @@ describe("LogsTable", () => {
       });
 
       it("correctly filters boundary status codes for 2xx", () => {
-        renderWithTooltip(
+        render(
           <LogsTable
             logs={[
               { ...mockLog, id: "log-1", status_code: 199 },
@@ -373,7 +365,7 @@ describe("LogsTable", () => {
       });
 
       it("correctly filters boundary status codes for 4xx", () => {
-        renderWithTooltip(
+        render(
           <LogsTable
             logs={[
               { ...mockLog, id: "log-1", status_code: 399 },
@@ -389,7 +381,7 @@ describe("LogsTable", () => {
       });
 
       it("correctly filters boundary status codes for 5xx", () => {
-        renderWithTooltip(
+        render(
           <LogsTable
             logs={[
               { ...mockLog, id: "log-1", status_code: 499 },
@@ -407,7 +399,7 @@ describe("LogsTable", () => {
 
     describe("Model Filter", () => {
       it("performs case-insensitive partial match", () => {
-        renderWithTooltip(<LogsTable logs={logsForFiltering} />);
+        render(<LogsTable logs={logsForFiltering} />);
 
         // All logs visible by default (within time range)
         const rows = screen.getAllByRole("row");
@@ -415,7 +407,7 @@ describe("LogsTable", () => {
       });
 
       it("filters logs by exact model name", () => {
-        renderWithTooltip(
+        render(
           <LogsTable
             logs={[
               { ...mockLog, id: "log-1", model: "gpt-4" },
@@ -431,7 +423,7 @@ describe("LogsTable", () => {
       });
 
       it("filters logs by partial model name", () => {
-        renderWithTooltip(
+        render(
           <LogsTable
             logs={[
               { ...mockLog, id: "log-1", model: "gpt-4" },
@@ -446,7 +438,7 @@ describe("LogsTable", () => {
       });
 
       it("filters out logs with null model", () => {
-        renderWithTooltip(
+        render(
           <LogsTable
             logs={[
               { ...mockLog, id: "log-1", model: "gpt-4" },
@@ -460,7 +452,7 @@ describe("LogsTable", () => {
       });
 
       it("returns no results when no models match", () => {
-        renderWithTooltip(
+        render(
           <LogsTable
             logs={[
               { ...mockLog, id: "log-1", model: "gpt-4" },
@@ -477,7 +469,7 @@ describe("LogsTable", () => {
 
     describe("Time Range Filter", () => {
       it("filters logs for 'today' range", () => {
-        renderWithTooltip(<LogsTable logs={logsForFiltering} />);
+        render(<LogsTable logs={logsForFiltering} />);
 
         // Default is "30d", which should include recent logs
         const rows = screen.getAllByRole("row");
@@ -485,7 +477,7 @@ describe("LogsTable", () => {
       });
 
       it("filters logs for '7d' range", () => {
-        renderWithTooltip(<LogsTable logs={logsForFiltering} />);
+        render(<LogsTable logs={logsForFiltering} />);
 
         // Default filter shows logs within 30 days
         const rows = screen.getAllByRole("row");
@@ -493,7 +485,7 @@ describe("LogsTable", () => {
       });
 
       it("filters logs for '30d' range", () => {
-        renderWithTooltip(<LogsTable logs={logsForFiltering} />);
+        render(<LogsTable logs={logsForFiltering} />);
 
         // Default is "30d"
         // Should show: log-1 (now), log-2 (yesterday), log-3 (8d ago), log-4 (8d ago), log-7 (now)
@@ -503,7 +495,7 @@ describe("LogsTable", () => {
       });
 
       it("excludes logs older than time range", () => {
-        renderWithTooltip(<LogsTable logs={logsForFiltering} />);
+        render(<LogsTable logs={logsForFiltering} />);
 
         // With 30d filter, logs from 35 days ago should not appear
         const rows = screen.getAllByRole("row");
@@ -518,7 +510,7 @@ describe("LogsTable", () => {
 
     describe("Combined Filters", () => {
       it("applies all filters together", () => {
-        renderWithTooltip(<LogsTable logs={logsForFiltering} />);
+        render(<LogsTable logs={logsForFiltering} />);
 
         // Default filters: statusCode="all", model="", timeRange="30d"
         // Should show logs within 30 days
@@ -527,7 +519,7 @@ describe("LogsTable", () => {
       });
 
       it("shows empty state when no logs match combined filters", () => {
-        renderWithTooltip(
+        render(
           <LogsTable logs={[{ ...mockLog, id: "log-1", status_code: 200, model: "gpt-4" }]} />
         );
 
@@ -545,7 +537,7 @@ describe("LogsTable", () => {
           { ...mockLog, id: "old-2", created_at: thirtyFiveDaysAgo.toISOString() },
         ];
 
-        renderWithTooltip(<LogsTable logs={oldLogs} />);
+        render(<LogsTable logs={oldLogs} />);
 
         // With 30d filter (default), old logs should be filtered out
         // Should show the "no matching logs" message
@@ -556,11 +548,136 @@ describe("LogsTable", () => {
       it("shows filter icon in empty filter state", () => {
         const oldLogs = [{ ...mockLog, id: "old-1", created_at: thirtyFiveDaysAgo.toISOString() }];
 
-        renderWithTooltip(<LogsTable logs={oldLogs} />);
+        render(<LogsTable logs={oldLogs} />);
 
         // Should show the filtered empty state
         expect(screen.getByText("noMatchingLogs")).toBeInTheDocument();
       });
+    });
+  });
+
+  describe("Row Expansion", () => {
+    const mockRoutingDecision: RoutingDecisionLog = {
+      original_model: "gpt-4",
+      resolved_model: "gpt-4",
+      model_redirect_applied: false,
+      routing_type: "group",
+      selection_strategy: "weighted_random",
+      candidate_count: 3,
+      final_candidate_count: 2,
+      selected_upstream_id: "upstream-1",
+      candidates: [
+        { id: "upstream-1", name: "openai-1", weight: 100, circuit_state: "closed" },
+        { id: "upstream-2", name: "openai-2", weight: 50, circuit_state: "closed" },
+      ],
+      excluded: [],
+    };
+
+    it("all rows are expandable", () => {
+      render(<LogsTable logs={[mockLog]} />);
+
+      // Find expand button by aria-label
+      const expandButton = screen.getByRole("button", { name: "expandDetails" });
+      expect(expandButton).toBeInTheDocument();
+    });
+
+    it("expands row on click to show token details", () => {
+      render(<LogsTable logs={[mockLog]} />);
+
+      // Click expand button
+      const expandButton = screen.getByRole("button", { name: "expandDetails" });
+      fireEvent.click(expandButton);
+
+      // Token details should be visible
+      expect(screen.getByText("tokenDetails")).toBeInTheDocument();
+      expect(screen.getByText("tokenInput")).toBeInTheDocument();
+      expect(screen.getByText("tokenOutput")).toBeInTheDocument();
+      expect(screen.getByText("tokenTotal")).toBeInTheDocument();
+    });
+
+    it("shows routing decision in expanded view when available", () => {
+      const logWithRouting: RequestLog = {
+        ...mockLog,
+        routing_decision: mockRoutingDecision,
+      };
+
+      render(<LogsTable logs={[logWithRouting]} />);
+
+      // Click expand button
+      const expandButton = screen.getByRole("button", { name: "expandDetails" });
+      fireEvent.click(expandButton);
+
+      // Both token details and routing decision should be visible
+      expect(screen.getByText("tokenDetails")).toBeInTheDocument();
+      expect(screen.getByText("tooltipModelResolution")).toBeInTheDocument();
+    });
+
+    it("shows noRoutingDecision message when routing decision is null", () => {
+      render(<LogsTable logs={[mockLog]} />);
+
+      // Click expand button
+      const expandButton = screen.getByRole("button", { name: "expandDetails" });
+      fireEvent.click(expandButton);
+
+      // Should show "no routing decision" message
+      expect(screen.getByText("noRoutingDecision")).toBeInTheDocument();
+    });
+
+    it("collapses row on second click", () => {
+      render(<LogsTable logs={[mockLog]} />);
+
+      // Click to expand
+      const expandButton = screen.getByRole("button", { name: "expandDetails" });
+      fireEvent.click(expandButton);
+      expect(screen.getByText("tokenDetails")).toBeInTheDocument();
+
+      // Click to collapse (button now has collapseDetails label)
+      const collapseButton = screen.getByRole("button", { name: "collapseDetails" });
+      fireEvent.click(collapseButton);
+      expect(screen.queryByText("tokenDetails")).not.toBeInTheDocument();
+    });
+
+    it("shows failover history at bottom when available", () => {
+      const logWithFailover: RequestLog = {
+        ...mockLog,
+        failover_attempts: 1,
+        failover_history: [
+          {
+            upstream_id: "upstream-1",
+            upstream_name: "openai-1",
+            error_type: "timeout",
+            error_message: "Request timed out",
+            attempted_at: new Date().toISOString(),
+          },
+        ],
+      };
+
+      render(<LogsTable logs={[logWithFailover]} />);
+
+      // Click expand button
+      const expandButton = screen.getByRole("button", { name: "expandDetails" });
+      fireEvent.click(expandButton);
+
+      // Failover history should be visible
+      expect(screen.getByText(/failoverDetails/)).toBeInTheDocument();
+      expect(screen.getByText("openai-1")).toBeInTheDocument();
+    });
+
+    it("displays two-column layout with token details on left and routing on right", () => {
+      const logWithRouting: RequestLog = {
+        ...mockLog,
+        routing_decision: mockRoutingDecision,
+      };
+
+      const { container } = render(<LogsTable logs={[logWithRouting]} />);
+
+      // Click expand button
+      const expandButton = screen.getByRole("button", { name: "expandDetails" });
+      fireEvent.click(expandButton);
+
+      // Check for grid layout
+      const gridContainer = container.querySelector(".grid.grid-cols-2");
+      expect(gridContainer).toBeInTheDocument();
     });
   });
 });

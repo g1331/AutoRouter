@@ -3,7 +3,6 @@
 import { Database } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface TokenDisplayProps {
   promptTokens: number;
@@ -25,9 +24,10 @@ function getEffectiveCacheRead(cacheReadTokens: number, cachedTokens: number): n
 }
 
 /**
- * Token Tooltip Content
+ * Token Detail Content
  *
  * Shows detailed token breakdown in terminal style with grouped sections.
+ * Used in expanded row details.
  * Following Cassette Futurism design language:
  * - Mono font for data alignment
  * - amber-500 for primary values
@@ -47,7 +47,7 @@ function getEffectiveCacheRead(cacheReadTokens: number, cachedTokens: number): n
  * 总计: 4,503
  * ```
  */
-function TokenTooltipContent({
+export function TokenDetailContent({
   promptTokens,
   completionTokens,
   totalTokens,
@@ -111,7 +111,7 @@ function TokenTooltipContent({
   }
 
   return (
-    <div className="min-w-[180px]">
+    <div className="min-w-[180px] font-mono text-xs">
       {/* Header */}
       <div className="text-amber-500 uppercase tracking-wider mb-2 text-[10px] border-b border-amber-500/30 pb-1">
         {t("tokenDetails")}
@@ -158,7 +158,7 @@ function TokenTooltipContent({
 /**
  * Token Display Component
  *
- * Compact display for table cell with tooltip for details.
+ * Compact display for table cell. Details shown in expanded row.
  * Follows Cassette Futurism design:
  * - Total in amber-500 (primary emphasis)
  * - Input/Output breakdown in amber-700 (secondary info)
@@ -180,35 +180,20 @@ export function TokenDisplay({
   const effectiveCacheRead = getEffectiveCacheRead(cacheReadTokens, cachedTokens);
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <div className="flex flex-col text-xs font-mono cursor-help" tabIndex={0}>
-          {/* Row 1: Total tokens - amber-500, primary emphasis */}
-          <span className="text-amber-500">{totalTokens.toLocaleString()}</span>
-          {/* Row 2: Input / Output breakdown - amber-700, secondary */}
-          <span className="text-amber-700 text-[10px]">
-            {promptTokens.toLocaleString()} / {completionTokens.toLocaleString()}
-          </span>
-          {/* Row 3: Cache indicator - info color with Database icon */}
-          {effectiveCacheRead > 0 && (
-            <Badge variant="info" className="mt-0.5 px-1.5 py-0 text-[9px] w-fit gap-0.5">
-              <Database className="w-2.5 h-2.5" aria-hidden="true" />
-              {effectiveCacheRead.toLocaleString()}
-            </Badge>
-          )}
-        </div>
-      </TooltipTrigger>
-      <TooltipContent side="top" align="start">
-        <TokenTooltipContent
-          promptTokens={promptTokens}
-          completionTokens={completionTokens}
-          totalTokens={totalTokens}
-          cachedTokens={cachedTokens}
-          reasoningTokens={reasoningTokens}
-          cacheCreationTokens={cacheCreationTokens}
-          cacheReadTokens={cacheReadTokens}
-        />
-      </TooltipContent>
-    </Tooltip>
+    <div className="flex flex-col text-xs font-mono">
+      {/* Row 1: Total tokens - amber-500, primary emphasis */}
+      <span className="text-amber-500">{totalTokens.toLocaleString()}</span>
+      {/* Row 2: Input / Output breakdown - amber-700, secondary */}
+      <span className="text-amber-700 text-[10px]">
+        {promptTokens.toLocaleString()} / {completionTokens.toLocaleString()}
+      </span>
+      {/* Row 3: Cache indicator - info color with Database icon */}
+      {effectiveCacheRead > 0 && (
+        <Badge variant="info" className="mt-0.5 px-1.5 py-0 text-[9px] w-fit gap-0.5">
+          <Database className="w-2.5 h-2.5" aria-hidden="true" />
+          {effectiveCacheRead.toLocaleString()}
+        </Badge>
+      )}
+    </div>
   );
 }

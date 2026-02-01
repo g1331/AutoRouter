@@ -1,8 +1,6 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
-import { TokenDisplay } from "@/components/admin/token-display";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TokenDisplay, TokenDetailContent } from "@/components/admin/token-display";
 
 // Mock next-intl
 vi.mock("next-intl", () => ({
@@ -22,21 +20,14 @@ function formatNumberRegex(num: number): RegExp {
 }
 
 /**
- * Helper to render with TooltipProvider
- */
-function renderWithTooltip(ui: React.ReactElement) {
-  return render(<TooltipProvider>{ui}</TooltipProvider>);
-}
-
-/**
  * TokenDisplay Component Tests
  *
- * Tests token display, tooltip content, and edge cases.
+ * Tests compact token display for table cells.
  */
 describe("TokenDisplay", () => {
   describe("Basic Rendering", () => {
     it("renders dash for zero total tokens", () => {
-      renderWithTooltip(
+      render(
         <TokenDisplay
           promptTokens={0}
           completionTokens={0}
@@ -52,7 +43,7 @@ describe("TokenDisplay", () => {
     });
 
     it("renders total tokens", () => {
-      renderWithTooltip(
+      render(
         <TokenDisplay
           promptTokens={100}
           completionTokens={200}
@@ -68,7 +59,7 @@ describe("TokenDisplay", () => {
     });
 
     it("renders input/output breakdown", () => {
-      renderWithTooltip(
+      render(
         <TokenDisplay
           promptTokens={100}
           completionTokens={200}
@@ -86,7 +77,7 @@ describe("TokenDisplay", () => {
 
   describe("Cache Indicator", () => {
     it("shows cache badge when cachedTokens > 0", () => {
-      renderWithTooltip(
+      render(
         <TokenDisplay
           promptTokens={100}
           completionTokens={200}
@@ -102,7 +93,7 @@ describe("TokenDisplay", () => {
     });
 
     it("does not show cache badge when cachedTokens is 0", () => {
-      renderWithTooltip(
+      render(
         <TokenDisplay
           promptTokens={100}
           completionTokens={200}
@@ -122,7 +113,7 @@ describe("TokenDisplay", () => {
 
   describe("Number Formatting", () => {
     it("formats large numbers with locale separator", () => {
-      renderWithTooltip(
+      render(
         <TokenDisplay
           promptTokens={10000}
           completionTokens={20000}
@@ -142,7 +133,7 @@ describe("TokenDisplay", () => {
   describe("Edge Cases", () => {
     it("shows cache read using cachedTokens when cacheReadTokens is 0 (OpenAI)", () => {
       // This tests OpenAI scenario where only cachedTokens is populated
-      renderWithTooltip(
+      render(
         <TokenDisplay
           promptTokens={100}
           completionTokens={200}
@@ -159,7 +150,7 @@ describe("TokenDisplay", () => {
     });
 
     it("shows cache read using cacheReadTokens when both are present (Anthropic)", () => {
-      renderWithTooltip(
+      render(
         <TokenDisplay
           promptTokens={100}
           completionTokens={200}
@@ -174,27 +165,58 @@ describe("TokenDisplay", () => {
       // Cache badge should use cacheReadTokens (30) not cachedTokens (50)
       expect(screen.getByText("30")).toBeInTheDocument();
     });
+  });
+});
 
-    it("shows cache write when cacheCreationTokens is present (Anthropic)", () => {
-      renderWithTooltip(
-        <TokenDisplay
+/**
+ * TokenDetailContent Component Tests
+ *
+ * Tests detailed token breakdown for expanded row area.
+ */
+describe("TokenDetailContent", () => {
+  describe("Basic Rendering", () => {
+    it("renders header and main token rows", () => {
+      render(
+        <TokenDetailContent
           promptTokens={100}
           completionTokens={200}
           totalTokens={300}
           cachedTokens={0}
           reasoningTokens={0}
-          cacheCreationTokens={25}
+          cacheCreationTokens={0}
           cacheReadTokens={0}
         />
       );
 
-      // Should render without errors
-      expect(screen.getByText("300")).toBeInTheDocument();
+      expect(screen.getByText("tokenDetails")).toBeInTheDocument();
+      expect(screen.getByText("tokenInput")).toBeInTheDocument();
+      expect(screen.getByText("tokenOutput")).toBeInTheDocument();
+      expect(screen.getByText("tokenTotal")).toBeInTheDocument();
     });
 
-    it("splits output into reasoning and reply when reasoningTokens > 0 (OpenAI o1/o3)", () => {
-      renderWithTooltip(
-        <TokenDisplay
+    it("renders formatted token values", () => {
+      render(
+        <TokenDetailContent
+          promptTokens={1000}
+          completionTokens={2000}
+          totalTokens={3000}
+          cachedTokens={0}
+          reasoningTokens={0}
+          cacheCreationTokens={0}
+          cacheReadTokens={0}
+        />
+      );
+
+      expect(screen.getByText(formatNumberRegex(1000))).toBeInTheDocument();
+      expect(screen.getByText(formatNumberRegex(2000))).toBeInTheDocument();
+      expect(screen.getByText(formatNumberRegex(3000))).toBeInTheDocument();
+    });
+  });
+
+  describe("Reasoning Breakdown", () => {
+    it("shows reasoning and reply breakdown when reasoningTokens > 0", () => {
+      render(
+        <TokenDetailContent
           promptTokens={100}
           completionTokens={500}
           totalTokens={600}
@@ -205,33 +227,16 @@ describe("TokenDisplay", () => {
         />
       );
 
-      // Should render total and breakdown
-      expect(screen.getByText("600")).toBeInTheDocument();
-      expect(screen.getByText("100 / 500")).toBeInTheDocument();
+      expect(screen.getByText("tokenReasoning")).toBeInTheDocument();
+      expect(screen.getByText("tokenReply")).toBeInTheDocument();
+      // reasoning = 300, reply = 500 - 300 = 200
+      expect(screen.getByText("300")).toBeInTheDocument();
+      expect(screen.getByText("200")).toBeInTheDocument();
     });
 
-    it("calculates reply tokens correctly (output - reasoning)", () => {
-      renderWithTooltip(
-        <TokenDisplay
-          promptTokens={100}
-          completionTokens={500}
-          totalTokens={600}
-          cachedTokens={0}
-          reasoningTokens={300} // reply = 500 - 300 = 200
-          cacheCreationTokens={0}
-          cacheReadTokens={0}
-        />
-      );
-
-      // Should render without errors
-      expect(screen.getByText("600")).toBeInTheDocument();
-    });
-  });
-
-  describe("Accessibility", () => {
-    it("has keyboard-accessible trigger with tabIndex", () => {
-      renderWithTooltip(
-        <TokenDisplay
+    it("does not show reasoning breakdown when reasoningTokens is 0", () => {
+      render(
+        <TokenDetailContent
           promptTokens={100}
           completionTokens={200}
           totalTokens={300}
@@ -242,225 +247,145 @@ describe("TokenDisplay", () => {
         />
       );
 
-      // Find the trigger div
-      const trigger = screen.getByText("300").closest("div");
-      expect(trigger).toHaveAttribute("tabindex", "0");
-    });
-
-    it("renders tooltip details on focus", async () => {
-      const user = userEvent.setup();
-      render(
-        <TooltipProvider delayDuration={0}>
-          <TokenDisplay
-            promptTokens={100}
-            completionTokens={200}
-            totalTokens={300}
-            cachedTokens={50}
-            reasoningTokens={0}
-            cacheCreationTokens={0}
-            cacheReadTokens={0}
-          />
-        </TooltipProvider>
-      );
-
-      const trigger = screen.getByText("300").closest("div");
-      await user.hover(trigger!);
-
-      // Use getAllByText since Radix may render tooltip content multiple times (visible + aria)
-      const detailsElements = await screen.findAllByText("tokenDetails");
-      expect(detailsElements.length).toBeGreaterThan(0);
-      expect(screen.getAllByText("tokenInput").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("tokenCacheRead").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("tokenOutput").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("tokenTotal").length).toBeGreaterThan(0);
+      expect(screen.queryByText("tokenReasoning")).not.toBeInTheDocument();
+      expect(screen.queryByText("tokenReply")).not.toBeInTheDocument();
     });
   });
 
-  describe("Tooltip Content Details", () => {
-    it("shows tokenCacheWrite with correct value in tooltip (Anthropic)", async () => {
-      const user = userEvent.setup();
+  describe("Cache Section", () => {
+    it("shows cache write when cacheCreationTokens > 0 (Anthropic)", () => {
       render(
-        <TooltipProvider delayDuration={0}>
-          <TokenDisplay
-            promptTokens={100}
-            completionTokens={200}
-            totalTokens={300}
-            cachedTokens={0}
-            reasoningTokens={0}
-            cacheCreationTokens={25}
-            cacheReadTokens={0}
-          />
-        </TooltipProvider>
+        <TokenDetailContent
+          promptTokens={100}
+          completionTokens={200}
+          totalTokens={300}
+          cachedTokens={0}
+          reasoningTokens={0}
+          cacheCreationTokens={25}
+          cacheReadTokens={0}
+        />
       );
 
-      const trigger = screen.getByText("300").closest("div");
-      await user.hover(trigger!);
-
-      // Verify tokenCacheWrite label appears in tooltip
-      const cacheWriteLabels = await screen.findAllByText("tokenCacheWrite");
-      expect(cacheWriteLabels.length).toBeGreaterThan(0);
-
-      // Verify the value 25 appears in tooltip
-      const valueElements = screen.getAllByText("25");
-      expect(valueElements.length).toBeGreaterThan(0);
+      expect(screen.getByText("tokenCacheWrite")).toBeInTheDocument();
+      expect(screen.getByText("25")).toBeInTheDocument();
     });
 
-    it("shows tokenReasoning and tokenReply with correct values in tooltip (OpenAI o1/o3)", async () => {
-      const user = userEvent.setup();
+    it("shows cache read when cacheReadTokens > 0 (Anthropic)", () => {
       render(
-        <TooltipProvider delayDuration={0}>
-          <TokenDisplay
-            promptTokens={100}
-            completionTokens={500}
-            totalTokens={600}
-            cachedTokens={0}
-            reasoningTokens={300}
-            cacheCreationTokens={0}
-            cacheReadTokens={0}
-          />
-        </TooltipProvider>
+        <TokenDetailContent
+          promptTokens={100}
+          completionTokens={200}
+          totalTokens={300}
+          cachedTokens={0}
+          reasoningTokens={0}
+          cacheCreationTokens={0}
+          cacheReadTokens={50}
+        />
       );
 
-      const trigger = screen.getByText("600").closest("div");
-      await user.hover(trigger!);
-
-      // Verify tokenReasoning label appears
-      const reasoningLabels = await screen.findAllByText("tokenReasoning");
-      expect(reasoningLabels.length).toBeGreaterThan(0);
-
-      // Verify tokenReply label appears
-      const replyLabels = screen.getAllByText("tokenReply");
-      expect(replyLabels.length).toBeGreaterThan(0);
-
-      // Verify reasoning value (300)
-      const reasoningValues = screen.getAllByText("300");
-      expect(reasoningValues.length).toBeGreaterThan(0);
-
-      // Verify reply value (500 - 300 = 200)
-      const replyValues = screen.getAllByText("200");
-      expect(replyValues.length).toBeGreaterThan(0);
+      expect(screen.getByText("tokenCacheRead")).toBeInTheDocument();
+      expect(screen.getByText("50")).toBeInTheDocument();
     });
 
-    it("does not show tokenReasoning/tokenReply when reasoningTokens is 0", async () => {
-      const user = userEvent.setup();
+    it("shows cache read using cachedTokens when cacheReadTokens is 0 (OpenAI)", () => {
       render(
-        <TooltipProvider delayDuration={0}>
-          <TokenDisplay
-            promptTokens={100}
-            completionTokens={200}
-            totalTokens={300}
-            cachedTokens={0}
-            reasoningTokens={0}
-            cacheCreationTokens={0}
-            cacheReadTokens={0}
-          />
-        </TooltipProvider>
+        <TokenDetailContent
+          promptTokens={100}
+          completionTokens={200}
+          totalTokens={300}
+          cachedTokens={80}
+          reasoningTokens={0}
+          cacheCreationTokens={0}
+          cacheReadTokens={0}
+        />
       );
 
-      const trigger = screen.getByText("300").closest("div");
-      await user.hover(trigger!);
-
-      // Wait for tooltip to appear
-      await screen.findAllByText("tokenDetails");
-
-      // Verify tokenReasoning does NOT appear
-      expect(screen.queryAllByText("tokenReasoning").length).toBe(0);
-      expect(screen.queryAllByText("tokenReply").length).toBe(0);
+      expect(screen.getByText("tokenCacheRead")).toBeInTheDocument();
+      expect(screen.getByText("80")).toBeInTheDocument();
     });
 
-    it("does not show cache section when no cache tokens present", async () => {
-      const user = userEvent.setup();
+    it("prefers cacheReadTokens over cachedTokens when both present", () => {
       render(
-        <TooltipProvider delayDuration={0}>
-          <TokenDisplay
-            promptTokens={100}
-            completionTokens={200}
-            totalTokens={300}
-            cachedTokens={0}
-            reasoningTokens={0}
-            cacheCreationTokens={0}
-            cacheReadTokens={0}
-          />
-        </TooltipProvider>
+        <TokenDetailContent
+          promptTokens={100}
+          completionTokens={200}
+          totalTokens={300}
+          cachedTokens={80}
+          reasoningTokens={0}
+          cacheCreationTokens={0}
+          cacheReadTokens={50}
+        />
       );
 
-      const trigger = screen.getByText("300").closest("div");
-      await user.hover(trigger!);
-
-      // Wait for tooltip to appear
-      await screen.findAllByText("tokenDetails");
-
-      // Verify cache labels do NOT appear
-      expect(screen.queryAllByText("tokenCacheWrite").length).toBe(0);
-      expect(screen.queryAllByText("tokenCacheRead").length).toBe(0);
+      // Should show 50 (cacheReadTokens), not 80 (cachedTokens)
+      expect(screen.getByText("50")).toBeInTheDocument();
+      expect(screen.queryByText("80")).not.toBeInTheDocument();
     });
 
-    it("shows both cache write and cache read in tooltip (Anthropic full scenario)", async () => {
-      const user = userEvent.setup();
+    it("shows both cache write and cache read (Anthropic full scenario)", () => {
       render(
-        <TooltipProvider delayDuration={0}>
-          <TokenDisplay
-            promptTokens={1000}
-            completionTokens={200}
-            totalTokens={1200}
-            cachedTokens={0}
-            reasoningTokens={0}
-            cacheCreationTokens={100}
-            cacheReadTokens={800}
-          />
-        </TooltipProvider>
+        <TokenDetailContent
+          promptTokens={1000}
+          completionTokens={200}
+          totalTokens={1200}
+          cachedTokens={0}
+          reasoningTokens={0}
+          cacheCreationTokens={100}
+          cacheReadTokens={800}
+        />
       );
 
-      const trigger = screen.getByText(formatNumberRegex(1200)).closest("div");
-      await user.hover(trigger!);
-
-      // Wait for tooltip
-      await screen.findAllByText("tokenDetails");
-
-      // Verify both cache labels appear
-      expect(screen.getAllByText("tokenCacheWrite").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("tokenCacheRead").length).toBeGreaterThan(0);
-
-      // Verify values
-      expect(screen.getAllByText("100").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("800").length).toBeGreaterThan(0);
+      expect(screen.getByText("tokenCacheWrite")).toBeInTheDocument();
+      expect(screen.getByText("tokenCacheRead")).toBeInTheDocument();
+      expect(screen.getByText("100")).toBeInTheDocument();
+      expect(screen.getByText("800")).toBeInTheDocument();
     });
 
-    it("shows complete breakdown for complex scenario (reasoning + cache)", async () => {
-      const user = userEvent.setup();
+    it("does not show cache section when no cache tokens present", () => {
       render(
-        <TooltipProvider delayDuration={0}>
-          <TokenDisplay
-            promptTokens={1000}
-            completionTokens={500}
-            totalTokens={1500}
-            cachedTokens={800}
-            reasoningTokens={300}
-            cacheCreationTokens={0}
-            cacheReadTokens={0}
-          />
-        </TooltipProvider>
+        <TokenDetailContent
+          promptTokens={100}
+          completionTokens={200}
+          totalTokens={300}
+          cachedTokens={0}
+          reasoningTokens={0}
+          cacheCreationTokens={0}
+          cacheReadTokens={0}
+        />
       );
 
-      const trigger = screen.getByText(formatNumberRegex(1500)).closest("div");
-      await user.hover(trigger!);
+      expect(screen.queryByText("tokenCacheWrite")).not.toBeInTheDocument();
+      expect(screen.queryByText("tokenCacheRead")).not.toBeInTheDocument();
+    });
+  });
 
-      // Wait for tooltip
-      await screen.findAllByText("tokenDetails");
+  describe("Complex Scenarios", () => {
+    it("shows complete breakdown for reasoning + cache scenario", () => {
+      render(
+        <TokenDetailContent
+          promptTokens={1000}
+          completionTokens={500}
+          totalTokens={1500}
+          cachedTokens={800}
+          reasoningTokens={300}
+          cacheCreationTokens={0}
+          cacheReadTokens={0}
+        />
+      );
 
-      // Verify main tokens
-      expect(screen.getAllByText("tokenInput").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("tokenOutput").length).toBeGreaterThan(0);
+      // Main tokens
+      expect(screen.getByText("tokenInput")).toBeInTheDocument();
+      expect(screen.getByText("tokenOutput")).toBeInTheDocument();
 
-      // Verify reasoning breakdown
-      expect(screen.getAllByText("tokenReasoning").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("tokenReply").length).toBeGreaterThan(0);
+      // Reasoning breakdown
+      expect(screen.getByText("tokenReasoning")).toBeInTheDocument();
+      expect(screen.getByText("tokenReply")).toBeInTheDocument();
 
-      // Verify cache (OpenAI style - cachedTokens maps to cacheRead)
-      expect(screen.getAllByText("tokenCacheRead").length).toBeGreaterThan(0);
+      // Cache (OpenAI style - cachedTokens maps to cacheRead)
+      expect(screen.getByText("tokenCacheRead")).toBeInTheDocument();
 
-      // Verify total
-      expect(screen.getAllByText("tokenTotal").length).toBeGreaterThan(0);
+      // Total
+      expect(screen.getByText("tokenTotal")).toBeInTheDocument();
     });
   });
 });
