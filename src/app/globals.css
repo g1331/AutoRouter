@@ -600,6 +600,28 @@ html.light.theme-switching::after {
     }
   }
 
+  /* Table row scan highlight - used for newly arrived log rows.
+     Uses background-position so it won't shift table layout (unlike animating `left`). */
+  .cf-row-scan {
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 191, 0, 0.12) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: cf-row-scan 0.5s ease-out 1;
+  }
+
+  @keyframes cf-row-scan {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
   /* Terminal typing effect */
   .cf-typing {
     overflow: hidden;
@@ -1042,6 +1064,11 @@ html.light.theme-switching::after {
 [data-minimal-effects="true"] .cf-glow-text,
 [data-minimal-effects="true"] .cf-glow-text-strong {
   text-shadow: none;
+}
+
+[data-minimal-effects="true"] .cf-row-scan {
+  animation: none;
+  background-image: none;
 }
 
 [data-minimal-effects="true"] .cf-cursor-blink::after {
