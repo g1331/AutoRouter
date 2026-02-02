@@ -686,8 +686,28 @@ describe("LogsTable", () => {
       ],
     };
 
-    it("does not show expand indicator when no failover attempts", () => {
+    it("shows expand indicator when token details exist even without failover", () => {
       render(<LogsTable logs={[mockLog]} />);
+
+      expect(screen.getByRole("button", { name: "expandDetails" })).toBeInTheDocument();
+    });
+
+    it("does not show expand indicator when no details are available", () => {
+      const logWithoutDetails: RequestLog = {
+        ...mockLog,
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        total_tokens: 0,
+        cached_tokens: 0,
+        cache_creation_tokens: 0,
+        cache_read_tokens: 0,
+        reasoning_tokens: 0,
+        routing_decision: null,
+        failover_attempts: 0,
+        failover_history: null,
+      };
+
+      render(<LogsTable logs={[logWithoutDetails]} />);
 
       expect(screen.queryByRole("button", { name: "expandDetails" })).not.toBeInTheDocument();
     });

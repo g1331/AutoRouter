@@ -340,7 +340,11 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                   const isExpanded = expandedRows.has(log.id);
                   const hasFailover = log.failover_attempts > 0;
                   const hasRoutingDecision = !!log.routing_decision;
-                  const canExpand = hasFailover;
+                  // Token details moved from tooltip into the expanded row, so allow expansion
+                  // whenever there is something meaningful to show.
+                  // - In-progress requests: tokens may be 0 but routing_decision can exist
+                  // - Normal requests: routing_decision may be null but token stats usually exist
+                  const canExpand = hasFailover || hasRoutingDecision || log.total_tokens > 0;
                   const isNew = newLogIds.has(log.id);
                   const isError = hasErrorState(log);
                   const upstreamDisplayName =
