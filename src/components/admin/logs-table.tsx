@@ -100,9 +100,11 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
       queueMicrotask(() => {
         setNewLogIds(newIds);
 
-        // Update request rate
+        // Update request rate (count each newly arrived log)
         const now = Date.now();
-        logTimestampsRef.current.push(now);
+        for (let i = 0; i < newIds.size; i += 1) {
+          logTimestampsRef.current.push(now);
+        }
         // Keep only timestamps from last 10 seconds
         logTimestampsRef.current = logTimestampsRef.current.filter((ts) => now - ts < 10000);
         setRequestRate(logTimestampsRef.current.length / 10);
@@ -348,9 +350,8 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                         className={cn(
                           // Error row glow effect
                           isError && "shadow-[inset_0_0_20px_-10px_var(--status-error)]",
-                          // New row scan animation
-                          isNew &&
-                            "motion-safe:animate-[cf-data-scan_0.5s_ease-out] relative overflow-hidden",
+                          // New row scan highlight (background-position animation; no layout shifting)
+                          isNew && "cf-row-scan",
                           canExpand && "cursor-pointer hover:bg-surface-300/50"
                         )}
                         onClick={() => canExpand && toggleRow(log.id)}
@@ -542,7 +543,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
           {/* Blinking Cursor Indicator (Live Mode) */}
           {isLive && (
             <div className="border border-t-0 border-surface-400 px-4 py-2 bg-surface-200">
-              <span className="cf-cursor-blink font-mono text-amber-500">_</span>
+              <span className="cf-cursor-blink font-mono text-amber-500" aria-hidden="true" />
             </div>
           )}
 

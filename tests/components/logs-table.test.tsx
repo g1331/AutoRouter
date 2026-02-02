@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { LogsTable } from "@/components/admin/logs-table";
 import type { RequestLog, RoutingDecisionLog } from "@/types/api";
@@ -215,6 +215,23 @@ describe("LogsTable", () => {
     });
   });
 
+  describe("New Row Scan Highlight", () => {
+    it("applies scan highlight class for newly arrived logs", async () => {
+      const { rerender } = render(<LogsTable logs={[mockLog]} />);
+
+      const newLog: RequestLog = {
+        ...mockLog,
+        id: "test-id-2",
+        path: "/v1/messages",
+      };
+
+      rerender(<LogsTable logs={[newLog, mockLog]} />);
+
+      const row = screen.getByText("/v1/messages").closest("tr");
+      await waitFor(() => expect(row?.className).toContain("cf-row-scan"));
+    });
+  });
+
   describe("Stream Statistics Footer", () => {
     it("displays stream statistics", () => {
       render(<LogsTable logs={[mockLog]} />);
@@ -241,9 +258,11 @@ describe("LogsTable", () => {
     it("shows blinking cursor in live mode", () => {
       const { container } = render(<LogsTable logs={[mockLog]} isLive />);
 
-      const cursor = container.querySelector(".cf-cursor-blink");
+      const cursor = container.querySelector(".cf-cursor-blink") as HTMLElement | null;
       expect(cursor).toBeInTheDocument();
-      expect(cursor).toHaveTextContent("_");
+
+      // The underscore is rendered via CSS ::after to avoid duplicating visible characters.
+      expect(cursor?.textContent).toBe("");
     });
 
     it("does not show cursor when not in live mode", () => {
