@@ -755,22 +755,24 @@ html.light.theme-switching::after {
 
   .cf-status-led-online {
     background: var(--cf-status-success);
+    color: var(--cf-status-success);
     animation: cf-led-pulse 2s ease-in-out infinite;
   }
 
   .cf-status-led-offline {
     background: var(--cf-status-error);
+    color: var(--cf-status-error);
   }
 
   @keyframes cf-led-pulse {
     0%,
     100% {
       opacity: 1;
-      box-shadow: 0 0 4px var(--cf-status-success);
+      filter: drop-shadow(0 0 4px currentColor);
     }
     50% {
       opacity: 0.7;
-      box-shadow: 0 0 8px var(--cf-status-success);
+      filter: drop-shadow(0 0 8px currentColor);
     }
   }
 }

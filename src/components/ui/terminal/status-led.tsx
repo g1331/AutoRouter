@@ -57,7 +57,12 @@ export function StatusLed({ status, label, showLabel = false, className }: Statu
     >
       {/* Circular glow container */}
       <span
-        className={cn(config.pulseClass, "relative inline-flex items-center justify-center")}
+        className={cn(
+          // Ensure `currentColor` matches the LED state so any glow animations inherit correctly.
+          config.colorClass,
+          config.pulseClass,
+          "relative inline-flex items-center justify-center"
+        )}
         style={{ width: "14px", height: "14px" }}
         aria-hidden="true"
       >
