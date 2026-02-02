@@ -69,7 +69,7 @@ export default function LogsPage() {
           </div>
         ) : (
           <>
-            <LogsTable logs={data?.items || []} />
+            <LogsTable logs={data?.items || []} isLive={refetchInterval !== false} />
 
             {/* Pagination */}
             {data && data.total_pages > 1 && (

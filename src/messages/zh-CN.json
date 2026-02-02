@@ -182,6 +182,7 @@
     "tableStatus": "状态",
     "tableDuration": "耗时",
     "tableUpstream": "上游",
+    "upstreamUnknown": "未知",
     "routingAuto": "自动",
     "routingDirect": "直连",
     "routingGroup": "分组",

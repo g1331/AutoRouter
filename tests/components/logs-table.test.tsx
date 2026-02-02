@@ -24,6 +24,7 @@ describe("LogsTable", () => {
     id: "test-id-1",
     api_key_id: "key-1",
     upstream_id: "upstream-1",
+    upstream_name: "upstream-1",
     method: "POST",
     path: "/v1/chat/completions",
     model: "gpt-4",
@@ -37,6 +38,12 @@ describe("LogsTable", () => {
     status_code: 200,
     duration_ms: 1500,
     error_message: null,
+    routing_type: null,
+    group_name: null,
+    lb_strategy: null,
+    failover_attempts: 0,
+    failover_history: null,
+    routing_decision: null,
     created_at: new Date().toISOString(),
   };
 
@@ -96,6 +103,22 @@ describe("LogsTable", () => {
       expect(screen.getByText("POST")).toBeInTheDocument();
       expect(screen.getByText("/v1/chat/completions")).toBeInTheDocument();
       expect(screen.getByText("gpt-4")).toBeInTheDocument();
+    });
+  });
+
+  describe("Upstream Display", () => {
+    it("shows upstreamUnknown when upstream_id exists but upstream_name is null", () => {
+      render(<LogsTable logs={[{ ...mockLog, upstream_name: null }]} />);
+
+      expect(screen.getByText("upstreamUnknown")).toBeInTheDocument();
+    });
+
+    it("shows dash when upstream_id is null", () => {
+      render(<LogsTable logs={[{ ...mockLog, upstream_id: null, upstream_name: null }]} />);
+
+      const cells = screen.getAllByRole("cell");
+      const upstreamCell = cells[2]; // expand | time | upstream
+      expect(upstreamCell).toHaveTextContent("-");
     });
   });
 
@@ -648,16 +671,36 @@ describe("LogsTable", () => {
       excluded: [],
     };
 
-    it("all rows are expandable", () => {
+    const attemptedAt = "2026-02-02T00:00:00.000Z";
+    const logWithFailoverBase: RequestLog = {
+      ...mockLog,
+      failover_attempts: 1,
+      failover_history: [
+        {
+          upstream_id: "upstream-1",
+          upstream_name: "failed-upstream",
+          error_type: "timeout",
+          error_message: "Request timed out",
+          attempted_at: attemptedAt,
+        },
+      ],
+    };
+
+    it("does not show expand indicator when no failover attempts", () => {
       render(<LogsTable logs={[mockLog]} />);
 
-      // Find expand button by aria-label
+      expect(screen.queryByRole("button", { name: "expandDetails" })).not.toBeInTheDocument();
+    });
+
+    it("shows expand indicator when failover attempts > 0", () => {
+      render(<LogsTable logs={[logWithFailoverBase]} />);
+
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
       expect(expandButton).toBeInTheDocument();
     });
 
     it("expands row on click to show token details", () => {
-      render(<LogsTable logs={[mockLog]} />);
+      render(<LogsTable logs={[logWithFailoverBase]} />);
 
       // Click expand button
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
@@ -672,7 +715,7 @@ describe("LogsTable", () => {
 
     it("shows routing decision in expanded view when available", () => {
       const logWithRouting: RequestLog = {
-        ...mockLog,
+        ...logWithFailoverBase,
         routing_decision: mockRoutingDecision,
       };
 
@@ -688,7 +731,7 @@ describe("LogsTable", () => {
     });
 
     it("shows noRoutingDecision message when routing decision is null", () => {
-      render(<LogsTable logs={[mockLog]} />);
+      render(<LogsTable logs={[logWithFailoverBase]} />);
 
       // Click expand button
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
@@ -699,7 +742,7 @@ describe("LogsTable", () => {
     });
 
     it("collapses row on second click", () => {
-      render(<LogsTable logs={[mockLog]} />);
+      render(<LogsTable logs={[logWithFailoverBase]} />);
 
       // Click to expand
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
@@ -713,21 +756,7 @@ describe("LogsTable", () => {
     });
 
     it("shows failover history with terminal-style formatting", () => {
-      const logWithFailover: RequestLog = {
-        ...mockLog,
-        failover_attempts: 1,
-        failover_history: [
-          {
-            upstream_id: "upstream-1",
-            upstream_name: "failed-upstream",
-            error_type: "timeout",
-            error_message: "Request timed out",
-            attempted_at: new Date().toISOString(),
-          },
-        ],
-      };
-
-      render(<LogsTable logs={[logWithFailover]} />);
+      render(<LogsTable logs={[logWithFailoverBase]} />);
 
       // Click expand button
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
@@ -737,11 +766,13 @@ describe("LogsTable", () => {
       expect(screen.getByText(/failoverDetails/)).toBeInTheDocument();
       // Check for the FAILOVER line with upstream name
       expect(screen.getByText(/FAILOVER: failed-upstream/)).toBeInTheDocument();
+      expect(screen.getByText(/Request timed out/)).toBeInTheDocument();
+      expect(screen.getByText(new RegExp(`@${attemptedAt}`))).toBeInTheDocument();
     });
 
     it("displays two-column layout with token details on left and routing on right", () => {
       const logWithRouting: RequestLog = {
-        ...mockLog,
+        ...logWithFailoverBase,
         routing_decision: mockRoutingDecision,
       };
 
@@ -757,7 +788,7 @@ describe("LogsTable", () => {
     });
 
     it("shows error details in terminal style for error rows", () => {
-      render(<LogsTable logs={[{ ...mockLog, status_code: 500 }]} />);
+      render(<LogsTable logs={[{ ...logWithFailoverBase, status_code: 500 }]} />);
 
       // Click expand button
       const expandButton = screen.getByRole("button", { name: "expandDetails" });

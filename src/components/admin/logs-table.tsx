@@ -340,9 +340,11 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                   const isExpanded = expandedRows.has(log.id);
                   const hasFailover = log.failover_attempts > 0;
                   const hasRoutingDecision = !!log.routing_decision;
-                  const canExpand = true;
+                  const canExpand = hasFailover;
                   const isNew = newLogIds.has(log.id);
                   const isError = hasErrorState(log);
+                  const upstreamDisplayName =
+                    log.upstream_id === null ? null : (log.upstream_name ?? t("upstreamUnknown"));
 
                   return (
                     <Fragment key={log.id}>
@@ -383,7 +385,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                         <TableCell>
                           <RoutingDecisionDisplay
                             routingDecision={log.routing_decision}
-                            upstreamName={log.upstream_name}
+                            upstreamName={upstreamDisplayName}
                             routingType={log.routing_type}
                             groupName={log.group_name}
                             failoverAttempts={log.failover_attempts}
@@ -465,7 +467,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                   {hasRoutingDecision ? (
                                     <RoutingDecisionDisplay
                                       routingDecision={log.routing_decision}
-                                      upstreamName={log.upstream_name}
+                                      upstreamName={upstreamDisplayName}
                                       routingType={log.routing_type}
                                       groupName={log.group_name}
                                       failoverAttempts={log.failover_attempts}
@@ -490,13 +492,17 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                     {log.failover_history.map((attempt, index) => {
                                       const isLast = index === log.failover_history!.length - 1;
                                       const prefix = isLast ? "└─" : "├─";
-                                      const statusText = attempt.status_code || attempt.error_type;
+                                      const attemptUpstreamName =
+                                        attempt.upstream_name || t("upstreamUnknown");
+                                      const statusText = `${attempt.error_type}${
+                                        attempt.status_code ? `/${attempt.status_code}` : ""
+                                      }`;
 
                                       return (
                                         <div key={index} className="flex items-start">
                                           <span className="text-surface-500 mr-2">{prefix}</span>
                                           <span className="text-amber-500">
-                                            FAILOVER: {attempt.upstream_name} →{" "}
+                                            FAILOVER: {attemptUpstreamName} →{" "}
                                             <span
                                               className={cn(
                                                 attempt.error_type === "timeout" &&
@@ -508,6 +514,15 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                               )}
                                             >
                                               [{statusText}]
+                                            </span>
+                                            <span
+                                              className="text-amber-700 ml-2"
+                                              title={attempt.error_message}
+                                            >
+                                              {attempt.error_message}
+                                            </span>
+                                            <span className="text-surface-500 ml-2">
+                                              @{attempt.attempted_at}
                                             </span>
                                           </span>
                                         </div>
