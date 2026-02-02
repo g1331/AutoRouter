@@ -97,21 +97,22 @@ describe("Reduced Motion Support", () => {
       render(<StatusLed status="healthy" />);
 
       const led = screen.getByRole("status");
-      const ledChar = led.querySelector("[aria-hidden='true']");
+      // Color class is on the inner character span
+      const charSpan = led.querySelector("[aria-hidden='true'] .text-status-success");
 
       // Color classes should not be conditional on motion
-      expect(ledChar?.className).toContain("text-status-success");
-      expect(ledChar?.className).not.toContain("motion-safe:text-");
+      expect(charSpan).toBeInTheDocument();
     });
 
     it("glow effects remain visible regardless of motion preference", () => {
       render(<StatusLed status="healthy" />);
 
       const led = screen.getByRole("status");
-      const ledChar = led.querySelector("[aria-hidden='true']") as HTMLElement;
+      // Glow is now via box-shadow on a rounded-full span
+      const glowSpan = led.querySelector(".rounded-full") as HTMLElement;
 
-      // Glow (text-shadow via style) should not be conditional on motion
-      expect(ledChar?.style.textShadow).toBeTruthy();
+      // Glow (box-shadow via style) should not be conditional on motion
+      expect(glowSpan?.style.boxShadow).toBeTruthy();
     });
   });
 
