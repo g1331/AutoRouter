@@ -45,6 +45,8 @@ vi.mock("@/lib/services/proxy-client", () => ({
 
 vi.mock("@/lib/services/request-logger", () => ({
   logRequest: vi.fn(),
+  logRequestStart: vi.fn(async () => ({ id: "log-id" })),
+  updateRequestLog: vi.fn(async () => ({})),
   extractTokenUsage: vi.fn(),
   extractModelName: vi.fn(),
 }));

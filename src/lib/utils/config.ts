@@ -8,13 +8,12 @@ const configSchema = z.object({
   environment: z.enum(["development", "production", "test"]).default("development"),
   nodeEnv: z.string().default("development"),
 
+  // Database
+  dbType: z.enum(["postgres", "sqlite"]).default("postgres"),
+  sqliteDbPath: z.string().default("./data/dev.sqlite"),
+
   // Database (required at runtime, optional at build time)
-  databaseUrl: z
-    .string()
-    .optional()
-    .refine((url) => !url || url.startsWith("postgres://") || url.startsWith("postgresql://"), {
-      message: "DATABASE_URL must be a valid PostgreSQL connection string",
-    }),
+  databaseUrl: z.string().optional(),
 
   // Server
   port: z.coerce.number().int().positive().default(3000),
@@ -36,6 +35,19 @@ const configSchema = z.object({
     .string()
     .optional()
     .transform((s) => (s ? s.split(",").map((o) => o.trim()) : ["http://localhost:3000"])),
+}).superRefine((value, ctx) => {
+  if (value.dbType === "postgres" && value.databaseUrl) {
+    if (
+      !value.databaseUrl.startsWith("postgres://") &&
+      !value.databaseUrl.startsWith("postgresql://")
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "DATABASE_URL must be a valid PostgreSQL connection string",
+        path: ["databaseUrl"],
+      });
+    }
+  }
 });
 
 export type Config = z.infer<typeof configSchema>;
@@ -47,6 +59,8 @@ function loadConfig(): Config {
   const rawConfig = {
     environment: process.env.ENVIRONMENT || process.env.NODE_ENV,
     nodeEnv: process.env.NODE_ENV,
+    dbType: process.env.DB_TYPE ?? (process.env.DATABASE_URL ? "postgres" : "sqlite"),
+    sqliteDbPath: process.env.SQLITE_DB_PATH,
     databaseUrl: process.env.DATABASE_URL,
     port: process.env.PORT,
     encryptionKey: process.env.ENCRYPTION_KEY,
