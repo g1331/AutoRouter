@@ -1098,7 +1098,7 @@ describe("proxy route upstream selection", () => {
 
     it("should filter unauthorized upstreams during failover", async () => {
       const { db } = await import("@/lib/db");
-      const { forwardRequest, prepareUpstreamForProxy } =
+      const { forwardRequest } =
         await import("@/lib/services/proxy-client");
       const { routeByModel } = await import("@/lib/services/model-router");
       const { selectFromProviderType, getUpstreamGroupByName } =
