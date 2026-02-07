@@ -53,12 +53,11 @@
   },
   "devDependencies": {
     "@babel/types": "^7.28.6",
+    "@libsql/client": "^0.17.0",
     "@tailwindcss/postcss": "^4.1.17",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
-    "@types/better-sqlite3": "^7.6.12",
-    "better-sqlite3": "^11.10.0",
     "@types/node": "^25",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -74,8 +73,8 @@
     "postcss": "^8.5.6",
     "prettier": "^3.3.3",
     "tailwindcss": "^4.1.17",
-    "typescript": "^5",
     "tsx": "^4.19.0",
+    "typescript": "^5",
     "vitest": "^4.0.15"
   },
   "pnpm": {

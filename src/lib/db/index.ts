@@ -41,11 +41,11 @@ function getClient(): Sql {
 
 function getSqliteClient() {
   if (!sqliteClient) {
-    // Dynamic require to avoid bundling native module in production builds.
-    // better-sqlite3 is a devDependency and not available in production.
+    // Dynamic require to avoid bundling in production builds.
+    // @libsql/client is a devDependency (pure JS, no native compilation needed).
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Database = require("better-sqlite3");
-    sqliteClient = new Database(config.sqliteDbPath);
+    const { createClient } = require("@libsql/client");
+    sqliteClient = createClient({ url: `file:${config.sqliteDbPath}` });
   }
   return sqliteClient;
 }
@@ -53,13 +53,13 @@ function getSqliteClient() {
 function getDb(): DatabaseInstance {
   if (!dbInstance) {
     if (ensureDbType() === "sqlite") {
-      // Dynamic require: SQLite drizzle instance is structurally compatible
+      // Dynamic require: libsql drizzle instance is structurally compatible
       // with PG at runtime for standard CRUD operations (select/insert/update/
       // delete/query/transaction). Raw SQL via db.execute() may use PG-specific
       // syntax that won't work on SQLite (e.g. PERCENTILE_CONT).
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { drizzle: drizzleSqlite } = require("drizzle-orm/better-sqlite3");
-      dbInstance = drizzleSqlite(getSqliteClient(), { schema }) as DatabaseInstance;
+      const { drizzle: drizzleLibsql } = require("drizzle-orm/libsql");
+      dbInstance = drizzleLibsql(getSqliteClient(), { schema }) as DatabaseInstance;
     } else {
       dbInstance = drizzlePg(getClient(), { schema });
     }
