@@ -169,8 +169,6 @@ export function TokenDisplay({
   completionTokens,
   totalTokens,
   cachedTokens,
-  reasoningTokens,
-  cacheCreationTokens,
   cacheReadTokens,
 }: TokenDisplayProps) {
   if (totalTokens === 0) {

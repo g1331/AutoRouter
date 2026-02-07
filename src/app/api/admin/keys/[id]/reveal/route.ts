@@ -11,6 +11,17 @@ type RouteContext = { params: Promise<{ id: string }> };
  * GET /api/admin/keys/[id]/reveal - Reveal full API key value
  */
 export async function GET(request: NextRequest, context: RouteContext) {
+  return handleReveal(request, context);
+}
+
+/**
+ * POST /api/admin/keys/[id]/reveal - Reveal full API key value
+ */
+export async function POST(request: NextRequest, context: RouteContext) {
+  return handleReveal(request, context);
+}
+
+async function handleReveal(request: NextRequest, context: RouteContext) {
   const authHeader = request.headers.get("authorization");
   if (!validateAdminAuth(authHeader)) {
     return errorResponse("Unauthorized", 401);

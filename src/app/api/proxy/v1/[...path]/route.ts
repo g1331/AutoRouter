@@ -5,6 +5,8 @@ import { eq, and } from "drizzle-orm";
 import {
   forwardRequest,
   prepareUpstreamForProxy,
+  filterHeaders,
+  injectAuthHeader,
   type ProxyResult,
 } from "@/lib/services/proxy-client";
 import {
@@ -53,6 +55,14 @@ import type {
   RoutingExcluded,
   RoutingCircuitState,
 } from "@/types/api";
+import {
+  isRecorderEnabled,
+  readRequestBody,
+  readStreamChunks,
+  teeStreamForRecording,
+  buildFixture,
+  recordTrafficFixture,
+} from "@/lib/services/traffic-recorder";
 
 // Edge runtime for streaming support
 export const runtime = "nodejs";
@@ -510,6 +520,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   let resolvedModel = model;
   let allowedUpstreamIds: string[] = [];
   let routerResult: ModelRouterResult | null = null;
+  const recorderEnabled = isRecorderEnabled();
+  const inboundBody = recorderEnabled ? await readRequestBody(request) : null;
 
   // Routing type is always "auto" for model-based routing
   const routingType = "auto" as const;
@@ -646,7 +658,15 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
     if (result.isStream) {
       // Streaming response
-      const stream = result.body as ReadableStream<Uint8Array>;
+      const originalStream = result.body as ReadableStream<Uint8Array>;
+      let recordingStream: ReadableStream<Uint8Array> | null = null;
+      let responseStream = originalStream;
+
+      if (recorderEnabled && inboundBody) {
+        const [clientStream, recordStream] = teeStreamForRecording(originalStream);
+        recordingStream = recordStream;
+        responseStream = clientStream;
+      }
       const usagePromise = result.usagePromise ?? Promise.resolve(result.usage ?? null);
 
       void usagePromise
@@ -706,7 +726,46 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       responseHeaders.set("Cache-Control", "no-cache");
       responseHeaders.set("Connection", "keep-alive");
 
-      return new Response(stream, {
+      if (recorderEnabled && inboundBody && recordingStream) {
+        const upstreamForProxy = prepareUpstreamForProxy(upstreamForLogging);
+        const outboundHeaders = injectAuthHeader(
+          filterHeaders(new Headers(request.headers)),
+          upstreamForProxy
+        );
+        void readStreamChunks(recordingStream)
+          .then((chunks) => {
+            const fixture = buildFixture({
+              requestId,
+              startTime,
+              provider: upstreamForLogging.provider,
+              route: path,
+              model: resolvedModel,
+              inboundRequest: {
+                method: request.method,
+                path,
+                headers: request.headers,
+                bodyText: inboundBody.text,
+                bodyJson: inboundBody.json,
+              },
+              upstream: {
+                id: upstreamForLogging.id,
+                name: upstreamForLogging.name,
+                provider: upstreamForLogging.provider,
+                baseUrl: upstreamForProxy.baseUrl,
+              },
+              outboundHeaders,
+              response: {
+                statusCode: result.statusCode,
+                headers: result.headers,
+                streamChunks: chunks,
+              },
+            });
+            return recordTrafficFixture(fixture);
+          })
+          .catch((error) => console.error("Failed to record stream fixture:", error));
+      }
+
+      return new Response(responseStream, {
         status: result.statusCode,
         headers: responseHeaders,
       });
@@ -776,6 +835,55 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
           routingDecision: finalRoutingDecisionLog,
         });
+      }
+
+      if (recorderEnabled && inboundBody) {
+        const upstreamForProxy = prepareUpstreamForProxy(upstreamForLogging);
+        const outboundHeaders = injectAuthHeader(
+          filterHeaders(new Headers(request.headers)),
+          upstreamForProxy
+        );
+        const responseText = bodyBytes.length > 0 ? new TextDecoder().decode(bodyBytes) : null;
+        let responseJson: unknown | null = null;
+        if (responseText) {
+          try {
+            responseJson = JSON.parse(responseText);
+          } catch {
+            responseJson = null;
+          }
+        }
+
+        const fixture = buildFixture({
+          requestId,
+          startTime,
+          provider: upstreamForLogging.provider,
+          route: path,
+          model: resolvedModel,
+          inboundRequest: {
+            method: request.method,
+            path,
+            headers: request.headers,
+            bodyText: inboundBody.text,
+            bodyJson: inboundBody.json,
+          },
+          upstream: {
+            id: upstreamForLogging.id,
+            name: upstreamForLogging.name,
+            provider: upstreamForLogging.provider,
+            baseUrl: upstreamForProxy.baseUrl,
+          },
+          outboundHeaders,
+          response: {
+            statusCode: result.statusCode,
+            headers: result.headers,
+            bodyText: responseText,
+            bodyJson: responseJson,
+          },
+        });
+
+        void recordTrafficFixture(fixture).catch((error) =>
+          console.error("Failed to record fixture:", error)
+        );
       }
 
       return new Response(Buffer.from(bodyBytes), {

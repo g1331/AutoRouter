@@ -15,6 +15,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
+    "db:seed": "tsx scripts/seed-lite.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
@@ -52,6 +53,7 @@
   },
   "devDependencies": {
     "@babel/types": "^7.28.6",
+    "@libsql/client": "^0.17.0",
     "@tailwindcss/postcss": "^4.1.17",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
@@ -71,6 +73,7 @@
     "postcss": "^8.5.6",
     "prettier": "^3.3.3",
     "tailwindcss": "^4.1.17",
+    "tsx": "^4.19.0",
     "typescript": "^5",
     "vitest": "^4.0.15"
   },

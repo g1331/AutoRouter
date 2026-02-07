@@ -45,6 +45,8 @@ vi.mock("@/lib/services/proxy-client", () => ({
 
 vi.mock("@/lib/services/request-logger", () => ({
   logRequest: vi.fn(),
+  logRequestStart: vi.fn(async () => ({ id: "log-id" })),
+  updateRequestLog: vi.fn(async () => ({})),
   extractTokenUsage: vi.fn(),
   extractModelName: vi.fn(),
 }));
@@ -1096,8 +1098,7 @@ describe("proxy route upstream selection", () => {
 
     it("should filter unauthorized upstreams during failover", async () => {
       const { db } = await import("@/lib/db");
-      const { forwardRequest, prepareUpstreamForProxy } =
-        await import("@/lib/services/proxy-client");
+      const { forwardRequest } = await import("@/lib/services/proxy-client");
       const { routeByModel } = await import("@/lib/services/model-router");
       const { selectFromProviderType, getUpstreamGroupByName } =
         await import("@/lib/services/load-balancer");

@@ -5,6 +5,7 @@ import "@testing-library/jest-dom";
  *
  * Global test configuration and matchers.
  */
+process.env.DB_TYPE = "postgres";
 
 // Mock window.matchMedia for components that use media queries
 Object.defineProperty(window, "matchMedia", {

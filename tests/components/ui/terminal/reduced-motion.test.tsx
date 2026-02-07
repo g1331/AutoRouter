@@ -53,7 +53,7 @@ describe("Reduced Motion Support", () => {
 
   describe("TerminalHeader", () => {
     it("live indicator uses motion-safe prefix for pulse", () => {
-      const { container } = render(<TerminalHeader systemId="test" isLive />);
+      render(<TerminalHeader systemId="test" isLive />);
 
       // Find the pulsing LED element
       const recContainer = screen.getByText("REC").parentElement;

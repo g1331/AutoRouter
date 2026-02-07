@@ -35,7 +35,9 @@
     "expiresAt": "Expires",
     "never": "Never",
     "sysReady": "SYS::READY",
-    "sysOk": "SYS::OK"
+    "sysOk": "SYS::OK",
+    "expand": "Expand",
+    "collapse": "Collapse"
   },
   "nav": {
     "dashboard": "Dashboard",

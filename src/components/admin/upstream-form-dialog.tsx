@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Plus } from "lucide-react";
@@ -123,7 +123,16 @@ export function UpstreamFormDialog({
   });
 
   // Watch group_id to conditionally show weight field
-  const selectedGroupId = form.watch("group_id");
+  const selectedGroupId = useWatch({
+    control: form.control,
+    name: "group_id",
+  });
+
+  // Watch circuit_breaker_config for controlled inputs
+  const circuitBreakerConfig = useWatch({
+    control: form.control,
+    name: "circuit_breaker_config",
+  });
 
   useEffect(() => {
     if (upstream && open) {
@@ -463,7 +472,7 @@ export function UpstreamFormDialog({
                   min={1}
                   max={100}
                   placeholder="5"
-                  value={form.watch("circuit_breaker_config")?.failure_threshold ?? ""}
+                  value={circuitBreakerConfig?.failure_threshold ?? ""}
                   onChange={(e) => {
                     const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
                     const currentConfig = form.getValues("circuit_breaker_config") || {};
@@ -484,7 +493,7 @@ export function UpstreamFormDialog({
                   min={1}
                   max={100}
                   placeholder="2"
-                  value={form.watch("circuit_breaker_config")?.success_threshold ?? ""}
+                  value={circuitBreakerConfig?.success_threshold ?? ""}
                   onChange={(e) => {
                     const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
                     const currentConfig = form.getValues("circuit_breaker_config") || {};
@@ -506,7 +515,7 @@ export function UpstreamFormDialog({
                   max={300000}
                   step={1000}
                   placeholder="30000"
-                  value={form.watch("circuit_breaker_config")?.open_duration ?? ""}
+                  value={circuitBreakerConfig?.open_duration ?? ""}
                   onChange={(e) => {
                     const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
                     const currentConfig = form.getValues("circuit_breaker_config") || {};
@@ -528,7 +537,7 @@ export function UpstreamFormDialog({
                   max={60000}
                   step={1000}
                   placeholder="10000"
-                  value={form.watch("circuit_breaker_config")?.probe_interval ?? ""}
+                  value={circuitBreakerConfig?.probe_interval ?? ""}
                   onChange={(e) => {
                     const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
                     const currentConfig = form.getValues("circuit_breaker_config") || {};
