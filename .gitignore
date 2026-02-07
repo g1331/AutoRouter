@@ -32,6 +32,9 @@ dist/
 .env.*
 !.env.example
 
+# Local SQLite data
+data/
+
 # Mac/Win
 .DS_Store
 Thumbs.db
