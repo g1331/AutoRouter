@@ -701,6 +701,9 @@ export async function calculateHealthMetrics(
 
   if (config.dbType === "sqlite") {
     // SQLite: approximate percentiles via sorted LIMIT/OFFSET
+    // drizzle-orm/libsql does not expose db.execute(); use db.all() instead.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dbSqlite = db as any;
     const countQuery = sql`
       SELECT COUNT(*) as cnt FROM ${requestLogs}
       WHERE ${requestLogs.upstreamId} = ${upstreamId}
@@ -708,8 +711,8 @@ export async function calculateHealthMetrics(
         AND ${requestLogs.createdAt} <= ${endTime}
         AND ${requestLogs.durationMs} IS NOT NULL
     `;
-    const countRes = (await db.execute(countQuery)) as unknown as Array<{ cnt: number }>;
-    const n = Number(countRes[0]?.cnt ?? 0);
+    const countRes = dbSqlite.all(countQuery) as Array<{ cnt: number }>;
+    const n = Number((await countRes)[0]?.cnt ?? 0);
     if (n > 0) {
       const pctQuery = (offset: number) => sql`
         SELECT duration_ms as val FROM ${requestLogs}
@@ -721,9 +724,9 @@ export async function calculateHealthMetrics(
         LIMIT 1 OFFSET ${Math.max(0, Math.floor(n * offset) - 1)}
       `;
       const [r50, r95, r99] = await Promise.all([
-        db.execute(pctQuery(0.5)) as unknown as Array<{ val: number }>,
-        db.execute(pctQuery(0.95)) as unknown as Array<{ val: number }>,
-        db.execute(pctQuery(0.99)) as unknown as Array<{ val: number }>,
+        dbSqlite.all(pctQuery(0.5)) as Promise<Array<{ val: number }>>,
+        dbSqlite.all(pctQuery(0.95)) as Promise<Array<{ val: number }>>,
+        dbSqlite.all(pctQuery(0.99)) as Promise<Array<{ val: number }>>,
       ]);
       latencyRow = {
         p50: r50[0]?.val ?? null,

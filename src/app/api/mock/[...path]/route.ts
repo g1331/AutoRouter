@@ -81,7 +81,12 @@ async function handleMock(request: NextRequest, context: RouteContext): Promise<
     return new Response(response.bodyText, { status, headers });
   }
 
-  return NextResponse.json(response.bodyJson ?? {}, { status, headers });
+  if (response.bodyJson != null) {
+    return NextResponse.json(response.bodyJson, { status, headers });
+  }
+
+  // Empty body response (both bodyText and bodyJson absent or null)
+  return new Response(null, { status, headers });
 }
 
 export async function GET(request: NextRequest, context: RouteContext) {
