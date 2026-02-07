@@ -15,6 +15,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
+    "db:seed": "tsx scripts/seed-lite.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
@@ -74,6 +75,7 @@
     "prettier": "^3.3.3",
     "tailwindcss": "^4.1.17",
     "typescript": "^5",
+    "tsx": "^4.19.0",
     "vitest": "^4.0.15"
   },
   "pnpm": {

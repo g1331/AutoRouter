@@ -1,16 +1,19 @@
 import { drizzle as drizzlePg, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3";
 import postgres, { type Sql } from "postgres";
-import Database from "better-sqlite3";
 import * as schema from "./schema";
 import { config } from "../utils/config";
 
 type DbType = "postgres" | "sqlite";
+
+// All business code is written against PG types. SQLite is only for local
+// development sandboxing and its drizzle instance is structurally compatible
+// at runtime, so we keep the exported type as PostgresJsDatabase.
 type DatabaseInstance = PostgresJsDatabase<typeof schema>;
 
 // Lazy-loaded database client (avoids errors at build time)
 let client: Sql | null = null;
-let sqliteClient: Database.Database | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let sqliteClient: any = null;
 let dbInstance: DatabaseInstance | null = null;
 let dbType: DbType | null = null;
 
@@ -36,8 +39,12 @@ function getClient(): Sql {
   return client;
 }
 
-function getSqliteClient(): Database.Database {
+function getSqliteClient() {
   if (!sqliteClient) {
+    // Dynamic require to avoid bundling native module in production builds.
+    // better-sqlite3 is a devDependency and not available in production.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Database = require("better-sqlite3");
     sqliteClient = new Database(config.sqliteDbPath);
   }
   return sqliteClient;
@@ -46,7 +53,13 @@ function getSqliteClient(): Database.Database {
 function getDb(): DatabaseInstance {
   if (!dbInstance) {
     if (ensureDbType() === "sqlite") {
-      dbInstance = drizzleSqlite(getSqliteClient(), { schema }) as unknown as DatabaseInstance;
+      // Dynamic require: SQLite drizzle instance is structurally compatible
+      // with PG at runtime for standard CRUD operations (select/insert/update/
+      // delete/query/transaction). Raw SQL via db.execute() may use PG-specific
+      // syntax that won't work on SQLite (e.g. PERCENTILE_CONT).
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { drizzle: drizzleSqlite } = require("drizzle-orm/better-sqlite3");
+      dbInstance = drizzleSqlite(getSqliteClient(), { schema }) as DatabaseInstance;
     } else {
       dbInstance = drizzlePg(getClient(), { schema });
     }
