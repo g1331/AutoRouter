@@ -432,5 +432,30 @@ describe("traffic recorder", () => {
       expect(chunks).toHaveLength(1);
       expect(chunks[0]).toMatch(/\n\n$/);
     });
+
+    it("cancels stream when exceeding MAX_RECORDING_BYTES", async () => {
+      // Create a stream that produces chunks exceeding 16 MiB
+      const bigChunk = "x".repeat(1024 * 1024); // 1 MiB per chunk
+      let cancelled = false;
+      let index = 0;
+      const stream = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (index < 20) {
+            // 20 MiB total > 16 MiB limit
+            controller.enqueue(new TextEncoder().encode(bigChunk));
+            index++;
+          } else {
+            controller.close();
+          }
+        },
+        cancel() {
+          cancelled = true;
+        },
+      });
+
+      const chunks = await readStreamChunks(stream);
+      expect(chunks[chunks.length - 1]).toBe("[RECORDING_TRUNCATED]");
+      expect(cancelled).toBe(true);
+    });
   });
 });

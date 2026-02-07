@@ -185,7 +185,9 @@ export async function readStreamChunks(stream: ReadableStream<Uint8Array>): Prom
         totalBytes += value.byteLength;
         if (totalBytes > MAX_RECORDING_BYTES) {
           events.push("[RECORDING_TRUNCATED]");
-          break;
+          // Cancel the stream to release tee backpressure and prevent memory accumulation
+          await reader.cancel();
+          return events;
         }
         buffer += decoder.decode(value, { stream: true });
         // Split on SSE event boundary

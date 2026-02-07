@@ -77,7 +77,7 @@ async function handleMock(request: NextRequest, context: RouteContext): Promise<
     return new Response(buildStream(response.streamChunks, interruptCount), { status, headers });
   }
 
-  if (response.bodyText) {
+  if (response.bodyText != null) {
     return new Response(response.bodyText, { status, headers });
   }
 
