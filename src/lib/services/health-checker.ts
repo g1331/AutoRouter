@@ -1,5 +1,6 @@
 import { eq, and, gte, lte, sql, count, avg } from "drizzle-orm";
 import { db, upstreams, upstreamGroups, upstreamHealth, requestLogs } from "../db";
+import { config } from "../utils/config";
 import { decrypt } from "../utils/encryption";
 import { testUpstreamConnection, type TestUpstreamResult } from "./upstream-connection-tester";
 import { UpstreamNotFoundError, UpstreamGroupNotFoundError } from "./upstream-crud";
@@ -692,24 +693,64 @@ export async function calculateHealthMetrics(
   const availability = totalRequests > 0 ? (successfulRequests / totalRequests) * 100 : 100;
 
   // Calculate latency percentiles using raw SQL
-  const latencyQuery = sql`
-    SELECT
-      PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms) as p50,
-      PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY duration_ms) as p95,
-      PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY duration_ms) as p99
-    FROM ${requestLogs}
-    WHERE ${requestLogs.upstreamId} = ${upstreamId}
-      AND ${requestLogs.createdAt} >= ${startTime}
-      AND ${requestLogs.createdAt} <= ${endTime}
-      AND ${requestLogs.durationMs} IS NOT NULL
-  `;
+  let latencyRow: { p50: number | null; p95: number | null; p99: number | null } = {
+    p50: null,
+    p95: null,
+    p99: null,
+  };
 
-  const latencyResult = (await db.execute(latencyQuery)) as unknown as Array<{
-    p50: number | null;
-    p95: number | null;
-    p99: number | null;
-  }>;
-  const latencyRow = latencyResult[0];
+  if (config.dbType === "sqlite") {
+    // SQLite: approximate percentiles via sorted LIMIT/OFFSET
+    const countQuery = sql`
+      SELECT COUNT(*) as cnt FROM ${requestLogs}
+      WHERE ${requestLogs.upstreamId} = ${upstreamId}
+        AND ${requestLogs.createdAt} >= ${startTime}
+        AND ${requestLogs.createdAt} <= ${endTime}
+        AND ${requestLogs.durationMs} IS NOT NULL
+    `;
+    const countRes = (await db.execute(countQuery)) as unknown as Array<{ cnt: number }>;
+    const n = Number(countRes[0]?.cnt ?? 0);
+    if (n > 0) {
+      const pctQuery = (offset: number) => sql`
+        SELECT duration_ms as val FROM ${requestLogs}
+        WHERE ${requestLogs.upstreamId} = ${upstreamId}
+          AND ${requestLogs.createdAt} >= ${startTime}
+          AND ${requestLogs.createdAt} <= ${endTime}
+          AND ${requestLogs.durationMs} IS NOT NULL
+        ORDER BY duration_ms
+        LIMIT 1 OFFSET ${Math.max(0, Math.floor(n * offset) - 1)}
+      `;
+      const [r50, r95, r99] = await Promise.all([
+        db.execute(pctQuery(0.5)) as unknown as Array<{ val: number }>,
+        db.execute(pctQuery(0.95)) as unknown as Array<{ val: number }>,
+        db.execute(pctQuery(0.99)) as unknown as Array<{ val: number }>,
+      ]);
+      latencyRow = {
+        p50: r50[0]?.val ?? null,
+        p95: r95[0]?.val ?? null,
+        p99: r99[0]?.val ?? null,
+      };
+    }
+  } else {
+    // PostgreSQL: native PERCENTILE_CONT
+    const latencyQuery = sql`
+      SELECT
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms) as p50,
+        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY duration_ms) as p95,
+        PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY duration_ms) as p99
+      FROM ${requestLogs}
+      WHERE ${requestLogs.upstreamId} = ${upstreamId}
+        AND ${requestLogs.createdAt} >= ${startTime}
+        AND ${requestLogs.createdAt} <= ${endTime}
+        AND ${requestLogs.durationMs} IS NOT NULL
+    `;
+    const latencyResult = (await db.execute(latencyQuery)) as unknown as Array<{
+      p50: number | null;
+      p95: number | null;
+      p99: number | null;
+    }>;
+    latencyRow = latencyResult[0] ?? latencyRow;
+  }
 
   return {
     upstreamId,

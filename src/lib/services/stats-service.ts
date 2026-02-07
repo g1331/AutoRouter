@@ -1,5 +1,6 @@
 import { and, gte, sql, count, sum, avg, inArray, isNotNull, ne } from "drizzle-orm";
 import { db, requestLogs, apiKeys, upstreams } from "../db";
+import { config } from "../utils/config";
 
 export type TimeRange = "today" | "7d" | "30d";
 
@@ -127,11 +128,15 @@ export async function getTimeseriesStats(rangeType: TimeRange = "7d"): Promise<S
   const startTime = getTimeRangeStart(rangeType);
   const granularity = getGranularity(rangeType);
 
-  // PostgreSQL date truncation (use literals to avoid parameter mismatch in GROUP BY)
+  // Time bucket expression: PG uses date_trunc, SQLite uses strftime
   const timeBucketExpr =
-    granularity === "hour"
-      ? sql<Date>`date_trunc('hour', ${requestLogs.createdAt})`
-      : sql<Date>`date_trunc('day', ${requestLogs.createdAt})`;
+    config.dbType === "sqlite"
+      ? granularity === "hour"
+        ? sql<Date>`strftime('%Y-%m-%d %H:00:00', datetime(${requestLogs.createdAt} / 1000, 'unixepoch'))`
+        : sql<Date>`strftime('%Y-%m-%d', datetime(${requestLogs.createdAt} / 1000, 'unixepoch'))`
+      : granularity === "hour"
+        ? sql<Date>`date_trunc('hour', ${requestLogs.createdAt})`
+        : sql<Date>`date_trunc('day', ${requestLogs.createdAt})`;
 
   const result = await db
     .select({
