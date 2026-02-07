@@ -1,11 +1,5 @@
 import { randomUUID } from "crypto";
-import {
-  index,
-  integer,
-  sqliteTable,
-  text,
-  unique,
-} from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 
 /**
@@ -14,7 +8,9 @@ import { relations } from "drizzle-orm";
 export const apiKeys = sqliteTable(
   "api_keys",
   {
-    id: text("id").primaryKey().$defaultFn(() => randomUUID()),
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
     keyHash: text("key_hash").notNull().unique(),
     keyValueEncrypted: text("key_value_encrypted"),
     keyPrefix: text("key_prefix").notNull(),
@@ -23,12 +19,8 @@ export const apiKeys = sqliteTable(
     userId: text("user_id"), // Reserved for future user system
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
-    createdAt: integer("created_at", { mode: "timestamp_ms" })
-      .notNull()
-      .defaultNow(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-      .notNull()
-      .defaultNow(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },
   (table) => [
     index("api_keys_key_hash_idx").on(table.keyHash),
@@ -42,7 +34,9 @@ export const apiKeys = sqliteTable(
 export const upstreamGroups = sqliteTable(
   "upstream_groups",
   {
-    id: text("id").primaryKey().$defaultFn(() => randomUUID()),
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
     name: text("name").notNull().unique(),
     provider: text("provider").notNull(),
     strategy: text("strategy").notNull().default("round_robin"),
@@ -50,12 +44,8 @@ export const upstreamGroups = sqliteTable(
     healthCheckTimeout: integer("health_check_timeout").notNull().default(10),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
     config: text("config"), // JSON stored as text
-    createdAt: integer("created_at", { mode: "timestamp_ms" })
-      .notNull()
-      .defaultNow(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-      .notNull()
-      .defaultNow(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },
   (table) => [
     index("upstream_groups_name_idx").on(table.name),
@@ -69,7 +59,9 @@ export const upstreamGroups = sqliteTable(
 export const upstreams = sqliteTable(
   "upstreams",
   {
-    id: text("id").primaryKey().$defaultFn(() => randomUUID()),
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
     name: text("name").notNull().unique(),
     provider: text("provider").notNull(),
     baseUrl: text("base_url").notNull(),
@@ -83,15 +75,12 @@ export const upstreams = sqliteTable(
     // Model-based routing fields
     providerType: text("provider_type"), // "anthropic" | "openai" | "google" | "custom"
     allowedModels: text("allowed_models", { mode: "json" }).$type<string[] | null>(),
-    modelRedirects: text("model_redirects", { mode: "json" }).$type<
-      Record<string, string> | null
-    >(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" })
-      .notNull()
-      .defaultNow(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-      .notNull()
-      .defaultNow(),
+    modelRedirects: text("model_redirects", { mode: "json" }).$type<Record<
+      string,
+      string
+    > | null>(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },
   (table) => [
     index("upstreams_name_idx").on(table.name),
@@ -107,7 +96,9 @@ export const upstreams = sqliteTable(
 export const upstreamHealth = sqliteTable(
   "upstream_health",
   {
-    id: text("id").primaryKey().$defaultFn(() => randomUUID()),
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
     upstreamId: text("upstream_id")
       .notNull()
       .unique()
@@ -131,16 +122,16 @@ export const upstreamHealth = sqliteTable(
 export const apiKeyUpstreams = sqliteTable(
   "api_key_upstreams",
   {
-    id: text("id").primaryKey().$defaultFn(() => randomUUID()),
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
     apiKeyId: text("api_key_id")
       .notNull()
       .references(() => apiKeys.id, { onDelete: "cascade" }),
     upstreamId: text("upstream_id")
       .notNull()
       .references(() => upstreams.id, { onDelete: "cascade" }),
-    createdAt: integer("created_at", { mode: "timestamp_ms" })
-      .notNull()
-      .defaultNow(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },
   (table) => [
     index("api_key_upstreams_api_key_id_idx").on(table.apiKeyId),
@@ -155,7 +146,9 @@ export const apiKeyUpstreams = sqliteTable(
 export const circuitBreakerStates = sqliteTable(
   "circuit_breaker_states",
   {
-    id: text("id").primaryKey().$defaultFn(() => randomUUID()),
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
     upstreamId: text("upstream_id")
       .notNull()
       .unique()
@@ -172,12 +165,8 @@ export const circuitBreakerStates = sqliteTable(
       openDuration?: number;
       probeInterval?: number;
     } | null>(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" })
-      .notNull()
-      .defaultNow(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-      .notNull()
-      .defaultNow(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },
   (table) => [
     index("circuit_breaker_states_upstream_id_idx").on(table.upstreamId),
@@ -191,7 +180,9 @@ export const circuitBreakerStates = sqliteTable(
 export const requestLogs = sqliteTable(
   "request_logs",
   {
-    id: text("id").primaryKey().$defaultFn(() => randomUUID()),
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
     apiKeyId: text("api_key_id").references(() => apiKeys.id, { onDelete: "set null" }),
     upstreamId: text("upstream_id").references(() => upstreams.id, { onDelete: "set null" }),
     method: text("method"),
@@ -214,9 +205,7 @@ export const requestLogs = sqliteTable(
     failoverAttempts: integer("failover_attempts").notNull().default(0), // Number of failover attempts
     failoverHistory: text("failover_history"), // JSON array of failover attempt records
     routingDecision: text("routing_decision"), // JSON object with complete routing decision info
-    createdAt: integer("created_at", { mode: "timestamp_ms" })
-      .notNull()
-      .defaultNow(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },
   (table) => [
     index("request_logs_api_key_id_idx").on(table.apiKeyId),
