@@ -35,7 +35,9 @@
     "expiresAt": "过期时间",
     "never": "永不",
     "sysReady": "SYS::READY",
-    "sysOk": "SYS::OK"
+    "sysOk": "SYS::OK",
+    "expand": "展开",
+    "collapse": "收起"
   },
   "nav": {
     "dashboard": "仪表盘",
