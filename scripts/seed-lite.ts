@@ -6,8 +6,12 @@ import { hashApiKey } from "../src/lib/utils/auth";
 
 async function main() {
   if (!process.env.ENCRYPTION_KEY) {
-    process.env.ENCRYPTION_KEY = randomBytes(32).toString("base64");
-    console.warn("[seed-lite] ENCRYPTION_KEY not set, generated a temporary key.");
+    const encryptionKey = randomBytes(32).toString("base64");
+    process.env.ENCRYPTION_KEY = encryptionKey;
+    console.warn("[seed-lite] ENCRYPTION_KEY not set; generated one for this seed run.");
+    console.warn(
+      `[seed-lite] Export this to reuse the seeded data: ENCRYPTION_KEY=${encryptionKey}`
+    );
   }
 
   const now = new Date();

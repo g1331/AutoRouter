@@ -488,6 +488,11 @@ async function readStreamChunks(stream: ReadableStream<Uint8Array>): Promise<str
         chunks.push(decoder.decode(value, { stream: true }));
       }
     }
+    // Flush any remaining bytes from the decoder (e.g. incomplete multi-byte UTF-8)
+    const tail = decoder.decode();
+    if (tail) {
+      chunks.push(tail);
+    }
   } finally {
     reader.releaseLock();
   }

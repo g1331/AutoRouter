@@ -6,6 +6,13 @@ export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ path: string[] }> };
 
+function guardProduction(): Response | null {
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "Mock endpoint is disabled in production" }, { status: 404 });
+  }
+  return null;
+}
+
 function buildStream(chunks: string[], interruptAfter?: number): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   let index = 0;
@@ -34,6 +41,9 @@ function buildStream(chunks: string[], interruptAfter?: number): ReadableStream<
 }
 
 async function handleMock(request: NextRequest, context: RouteContext): Promise<Response> {
+  const blocked = guardProduction();
+  if (blocked) return blocked;
+
   const { path: pathSegments } = await context.params;
   const route = pathSegments.join("/");
   const provider = request.nextUrl.searchParams.get("provider") || "default";

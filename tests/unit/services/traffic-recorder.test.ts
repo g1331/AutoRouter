@@ -19,6 +19,7 @@ describe("traffic recorder", () => {
         Authorization: "Bearer secret",
         "x-api-key": "secret-key",
         Cookie: "session=token",
+        "Proxy-Authorization": "Basic secret",
         "content-type": "application/json",
       });
 
@@ -26,6 +27,7 @@ describe("traffic recorder", () => {
         authorization: "[REDACTED]",
         "x-api-key": "[REDACTED]",
         cookie: "[REDACTED]",
+        "proxy-authorization": "[REDACTED]",
         "content-type": "application/json",
       });
     });
@@ -35,11 +37,13 @@ describe("traffic recorder", () => {
         redactHeaders({
           authorization: "Bearer secret",
           "set-cookie": "token",
+          "x-forwarded-authorization": "Bearer forwarded",
           accept: "application/json",
         })
       ).toEqual({
         authorization: "[REDACTED]",
         "set-cookie": "[REDACTED]",
+        "x-forwarded-authorization": "[REDACTED]",
         accept: "application/json",
       });
     });
@@ -114,12 +118,16 @@ describe("traffic recorder", () => {
   describe("buildFixturePath", () => {
     it("builds correct path with valid inputs", () => {
       const result = buildFixturePath("openai", "chat/completions", "2024-01-01T12-00-00");
-      expect(result).toBe(path.join("tests/fixtures", "openai", "chat_completions", "2024-01-01T12-00-00.json"));
+      expect(result).toBe(
+        path.join("tests/fixtures", "openai", "chat_completions", "2024-01-01T12-00-00.json")
+      );
     });
 
     it("sanitizes special characters in provider and route", () => {
       const result = buildFixturePath("open@ai!", "chat/completions?v=1", "2024-01-01");
-      expect(result).toBe(path.join("tests/fixtures", "open_ai_", "chat_completions_v_1", "2024-01-01.json"));
+      expect(result).toBe(
+        path.join("tests/fixtures", "open_ai_", "chat_completions_v_1", "2024-01-01.json")
+      );
     });
 
     it("handles empty provider and route", () => {
@@ -129,7 +137,9 @@ describe("traffic recorder", () => {
 
     it("sanitizes slashes in route", () => {
       const result = buildFixturePath("anthropic", "v1/messages", "2024-01-01");
-      expect(result).toBe(path.join("tests/fixtures", "anthropic", "v1_messages", "2024-01-01.json"));
+      expect(result).toBe(
+        path.join("tests/fixtures", "anthropic", "v1_messages", "2024-01-01.json")
+      );
     });
 
     it("handles null provider and route", () => {
@@ -140,13 +150,17 @@ describe("traffic recorder", () => {
 
     it("preserves alphanumeric characters and common separators", () => {
       const result = buildFixturePath("provider-1.0", "route_v2.1", "2024-01-01");
-      expect(result).toBe(path.join("tests/fixtures", "provider-1.0", "route_v2.1", "2024-01-01.json"));
+      expect(result).toBe(
+        path.join("tests/fixtures", "provider-1.0", "route_v2.1", "2024-01-01.json")
+      );
     });
 
     it("handles multiple consecutive special characters", () => {
       const result = buildFixturePath("open@@@ai", "chat///completions", "2024-01-01");
       // The regex replaces consecutive special chars with a single underscore
-      expect(result).toBe(path.join("tests/fixtures", "open_ai", "chat_completions", "2024-01-01.json"));
+      expect(result).toBe(
+        path.join("tests/fixtures", "open_ai", "chat_completions", "2024-01-01.json")
+      );
     });
   });
 });

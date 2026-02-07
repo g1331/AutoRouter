@@ -40,7 +40,14 @@ export interface TrafficRecordFixture {
 }
 
 const DEFAULT_FIXTURE_DIR = "tests/fixtures";
-const SENSITIVE_HEADER_NAMES = new Set(["authorization", "x-api-key", "cookie", "set-cookie"]);
+const SENSITIVE_HEADER_NAMES = new Set([
+  "authorization",
+  "proxy-authorization",
+  "x-forwarded-authorization",
+  "x-api-key",
+  "cookie",
+  "set-cookie",
+]);
 
 export function isRecorderEnabled(): boolean {
   return process.env.RECORDER_ENABLED === "true" || process.env.RECORDER_ENABLED === "1";
@@ -50,10 +57,9 @@ export function getFixtureRoot(): string {
   return process.env.RECORDER_FIXTURES_DIR || DEFAULT_FIXTURE_DIR;
 }
 
-export function redactHeaders(
-  headers: Headers | Record<string, string>
-): Record<string, string> {
-  const entries = headers instanceof Headers ? Array.from(headers.entries()) : Object.entries(headers);
+export function redactHeaders(headers: Headers | Record<string, string>): Record<string, string> {
+  const entries =
+    headers instanceof Headers ? Array.from(headers.entries()) : Object.entries(headers);
   return Object.fromEntries(
     entries.map(([key, value]) => [
       key,
@@ -85,7 +91,11 @@ export async function readLatestFixture(
   provider: string,
   route: string
 ): Promise<TrafficRecordFixture | null> {
-  const dir = path.join(getFixtureRoot(), sanitizePathSegment(provider), sanitizePathSegment(route));
+  const dir = path.join(
+    getFixtureRoot(),
+    sanitizePathSegment(provider),
+    sanitizePathSegment(route)
+  );
   try {
     const entries = await readdir(dir);
     const candidates = entries.filter((entry) => entry.endsWith(".json")).sort();
