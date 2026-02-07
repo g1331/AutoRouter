@@ -106,9 +106,6 @@ const SENSITIVE_HEADER_NAMES = new Set([
   "x-codex-beta-features",
 ]);
 
-/** Response headers stripped entirely (not redacted, just removed). */
-const NOISY_RESPONSE_HEADERS = new Set(["cf-ray", "nel", "report-to", "alt-svc", "server", "via"]);
-
 export function isRecorderEnabled(): boolean {
   return process.env.RECORDER_ENABLED === "true" || process.env.RECORDER_ENABLED === "1";
 }
@@ -125,13 +122,6 @@ export function redactHeaders(headers: Headers | Record<string, string>): Record
       key,
       SENSITIVE_HEADER_NAMES.has(key.toLowerCase()) ? "[REDACTED]" : value,
     ])
-  );
-}
-
-/** Remove noisy infrastructure headers that add no value to fixtures. */
-export function stripNoisyHeaders(headers: Record<string, string>): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(headers).filter(([key]) => !NOISY_RESPONSE_HEADERS.has(key.toLowerCase()))
   );
 }
 
@@ -338,7 +328,7 @@ export function buildFixture(params: BuildFixtureParams): TrafficRecordFixture {
       },
       response: {
         status: params.response.statusCode,
-        headers: stripNoisyHeaders(redactHeaders(params.response.headers)),
+        headers: redactHeaders(params.response.headers),
         ...responseBody,
         streamChunks,
       },

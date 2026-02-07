@@ -1,7 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import {
   redactHeaders,
-  stripNoisyHeaders,
   redactUrl,
   compactSSEChunks,
   buildFixture,
@@ -84,41 +83,6 @@ describe("traffic recorder", () => {
         "x-codex-turn-metadata": "[REDACTED]",
         "x-codex-beta-features": "[REDACTED]",
         "content-type": "application/json",
-      });
-    });
-  });
-
-  describe("stripNoisyHeaders", () => {
-    it("removes infrastructure headers", () => {
-      expect(
-        stripNoisyHeaders({
-          "content-type": "text/event-stream",
-          "cache-control": "no-cache",
-          "cf-ray": "9ca26cc05f5ca742-SIN",
-          nel: '{"report_to":"cf-nel"}',
-          "report-to": '{"group":"cf-nel"}',
-          "alt-svc": 'h3=":443"; ma=86400',
-          server: "cloudflare",
-          via: "1.1 Caddy",
-        })
-      ).toEqual({
-        "content-type": "text/event-stream",
-        "cache-control": "no-cache",
-      });
-    });
-
-    it("handles empty headers", () => {
-      expect(stripNoisyHeaders({})).toEqual({});
-    });
-
-    it("is case-insensitive", () => {
-      expect(
-        stripNoisyHeaders({
-          "CF-Ray": "abc",
-          "Content-Type": "text/plain",
-        })
-      ).toEqual({
-        "Content-Type": "text/plain",
       });
     });
   });
@@ -374,11 +338,11 @@ describe("traffic recorder", () => {
       expect(fixture.outbound.upstream.baseUrl).toBe("[REDACTED]/v1");
     });
 
-    it("strips noisy response headers", () => {
+    it("preserves all response headers (only redacts sensitive ones)", () => {
       const fixture = buildFixture(baseParams);
       expect(fixture.outbound.response.headers["content-type"]).toBe("text/event-stream");
-      expect(fixture.outbound.response.headers["cf-ray"]).toBeUndefined();
-      expect(fixture.outbound.response.headers["server"]).toBeUndefined();
+      expect(fixture.outbound.response.headers["cf-ray"]).toBe("abc123");
+      expect(fixture.outbound.response.headers["server"]).toBe("cloudflare");
     });
 
     it("compacts stream chunks", () => {
