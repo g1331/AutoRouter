@@ -59,6 +59,9 @@ next-env.d.ts
 # Auto Claude data directory
 .auto-claude/
 
+# Recorded traffic fixtures (development only)
+tests/fixtures/
+
 # Auto Claude generated files
 .auto-claude-security.json
 .auto-claude-status
