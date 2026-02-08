@@ -29,7 +29,10 @@ COPY . .
 # RUN pnpm db:generate
 
 # Build the application
+# DB_TYPE avoids the production fail-fast check that requires DATABASE_URL.
+# The actual connection string is provided at runtime; db access is lazy.
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV DB_TYPE=postgres
 RUN pnpm build
 
 # Production stage
