@@ -152,11 +152,9 @@ describe("proxy route helper functions", () => {
   });
 
   describe("RoutingDecision type validation", () => {
-    it("accepts valid routing decision data with auto routing type", () => {
+    it("accepts valid routing decision data with provider_type routing type", () => {
       interface RoutingDecision {
-        routingType: "auto";
-        groupName: string | null;
-        lbStrategy: string | null;
+        routingType: "provider_type";
         providerType: "anthropic" | "openai" | "google" | "custom" | null;
         resolvedModel: string | null;
         failoverAttempts: number;
@@ -170,23 +168,19 @@ describe("proxy route helper functions", () => {
         }>;
       }
 
-      const autoRouting: RoutingDecision = {
-        routingType: "auto",
-        groupName: "openai",
-        lbStrategy: "round_robin",
+      const tieredRouting: RoutingDecision = {
+        routingType: "provider_type",
         providerType: "openai",
         resolvedModel: "gpt-4",
         failoverAttempts: 0,
         failoverHistory: [],
       };
-      expect(autoRouting.routingType).toBe("auto");
-      expect(autoRouting.providerType).toBe("openai");
-      expect(autoRouting.resolvedModel).toBe("gpt-4");
+      expect(tieredRouting.routingType).toBe("provider_type");
+      expect(tieredRouting.providerType).toBe("openai");
+      expect(tieredRouting.resolvedModel).toBe("gpt-4");
 
-      const autoRoutingWithFailover: RoutingDecision = {
-        routingType: "auto",
-        groupName: "anthropic",
-        lbStrategy: "weighted",
+      const routingWithFailover: RoutingDecision = {
+        routingType: "provider_type",
         providerType: "anthropic",
         resolvedModel: "claude-3-opus",
         failoverAttempts: 2,
@@ -209,9 +203,9 @@ describe("proxy route helper functions", () => {
           },
         ],
       };
-      expect(autoRoutingWithFailover.routingType).toBe("auto");
-      expect(autoRoutingWithFailover.failoverAttempts).toBe(2);
-      expect(autoRoutingWithFailover.failoverHistory).toHaveLength(2);
+      expect(routingWithFailover.routingType).toBe("provider_type");
+      expect(routingWithFailover.failoverAttempts).toBe(2);
+      expect(routingWithFailover.failoverHistory).toHaveLength(2);
     });
   });
 

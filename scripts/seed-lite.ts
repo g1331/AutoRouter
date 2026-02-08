@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "crypto";
-import { db, apiKeys, apiKeyUpstreams, upstreamGroups, upstreams } from "../src/lib/db";
+import { db, apiKeys, apiKeyUpstreams, upstreams } from "../src/lib/db";
 import { encrypt } from "../src/lib/utils/encryption";
 import { generateApiKey } from "../src/lib/services/key-manager";
 import { hashApiKey } from "../src/lib/utils/auth";
@@ -15,21 +15,7 @@ async function main() {
   }
 
   const now = new Date();
-  const groupId = randomUUID();
   const upstreamId = randomUUID();
-
-  await db.insert(upstreamGroups).values({
-    id: groupId,
-    name: "local-openai",
-    provider: "openai",
-    strategy: "round_robin",
-    healthCheckInterval: 30,
-    healthCheckTimeout: 10,
-    isActive: true,
-    config: null,
-    createdAt: now,
-    updatedAt: now,
-  });
 
   await db.insert(upstreams).values({
     id: upstreamId,
@@ -41,8 +27,8 @@ async function main() {
     timeout: 60,
     isActive: true,
     config: null,
-    groupId,
     weight: 1,
+    priority: 0,
     providerType: "openai",
     allowedModels: null,
     modelRedirects: null,

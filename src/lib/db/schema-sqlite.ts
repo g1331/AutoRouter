@@ -29,31 +29,6 @@ export const apiKeys = sqliteTable(
 );
 
 /**
- * Upstream groups for load balancing across multiple upstreams.
- */
-export const upstreamGroups = sqliteTable(
-  "upstream_groups",
-  {
-    id: text("id")
-      .primaryKey()
-      .$defaultFn(() => randomUUID()),
-    name: text("name").notNull().unique(),
-    provider: text("provider").notNull(),
-    strategy: text("strategy").notNull().default("round_robin"),
-    healthCheckInterval: integer("health_check_interval").notNull().default(30),
-    healthCheckTimeout: integer("health_check_timeout").notNull().default(10),
-    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-    config: text("config"), // JSON stored as text
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
-  },
-  (table) => [
-    index("upstream_groups_name_idx").on(table.name),
-    index("upstream_groups_is_active_idx").on(table.isActive),
-  ]
-);
-
-/**
  * AI service provider upstream configurations.
  */
 export const upstreams = sqliteTable(
@@ -70,8 +45,8 @@ export const upstreams = sqliteTable(
     timeout: integer("timeout").notNull().default(60),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
     config: text("config"), // JSON stored as text
-    groupId: text("group_id").references(() => upstreamGroups.id, { onDelete: "set null" }),
     weight: integer("weight").notNull().default(1),
+    priority: integer("priority").notNull().default(0),
     // Model-based routing fields
     providerType: text("provider_type"), // "anthropic" | "openai" | "google" | "custom"
     allowedModels: text("allowed_models", { mode: "json" }).$type<string[] | null>(),
@@ -85,8 +60,7 @@ export const upstreams = sqliteTable(
   (table) => [
     index("upstreams_name_idx").on(table.name),
     index("upstreams_is_active_idx").on(table.isActive),
-    index("upstreams_group_id_idx").on(table.groupId),
-    index("upstreams_provider_type_idx").on(table.providerType),
+    index("upstreams_provider_type_priority_idx").on(table.providerType, table.priority),
   ]
 );
 
@@ -199,9 +173,10 @@ export const requestLogs = sqliteTable(
     durationMs: integer("duration_ms"),
     errorMessage: text("error_message"),
     // Routing decision fields
-    routingType: text("routing_type"), // 'direct' | 'group' | 'default'
-    groupName: text("group_name"), // Group name if group routing
-    lbStrategy: text("lb_strategy"), // Load balancer strategy if group routing
+    routingType: text("routing_type"), // 'direct' | 'provider_type' | 'tiered'
+    groupName: text("group_name"), // Deprecated: kept for historical data
+    lbStrategy: text("lb_strategy"), // Deprecated: kept for historical data
+    priorityTier: integer("priority_tier"), // Priority tier of the selected upstream
     failoverAttempts: integer("failover_attempts").notNull().default(0), // Number of failover attempts
     failoverHistory: text("failover_history"), // JSON array of failover attempt records
     routingDecision: text("routing_decision"), // JSON object with complete routing decision info
@@ -221,15 +196,7 @@ export const apiKeysRelations = relations(apiKeys, ({ many }) => ({
   requestLogs: many(requestLogs),
 }));
 
-export const upstreamGroupsRelations = relations(upstreamGroups, ({ many }) => ({
-  upstreams: many(upstreams),
-}));
-
 export const upstreamsRelations = relations(upstreams, ({ one, many }) => ({
-  group: one(upstreamGroups, {
-    fields: [upstreams.groupId],
-    references: [upstreamGroups.id],
-  }),
   health: one(upstreamHealth, {
     fields: [upstreams.id],
     references: [upstreamHealth.upstreamId],
@@ -281,8 +248,6 @@ export const requestLogsRelations = relations(requestLogs, ({ one }) => ({
 // Type exports
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type NewApiKey = typeof apiKeys.$inferInsert;
-export type UpstreamGroup = typeof upstreamGroups.$inferSelect;
-export type NewUpstreamGroup = typeof upstreamGroups.$inferInsert;
 export type Upstream = typeof upstreams.$inferSelect;
 export type NewUpstream = typeof upstreams.$inferInsert;
 export type UpstreamHealth = typeof upstreamHealth.$inferSelect;

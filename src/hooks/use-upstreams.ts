@@ -169,16 +169,13 @@ export function useTestUpstream() {
  * @param groupId - Optional group ID to filter by
  * @param activeOnly - Whether to only include active upstreams (default: true)
  */
-export function useUpstreamHealth(groupId?: string, activeOnly: boolean = true) {
+export function useUpstreamHealth(activeOnly: boolean = true) {
   const { apiClient } = useAuth();
 
   return useQuery({
-    queryKey: ["upstreams", "health", groupId, activeOnly],
+    queryKey: ["upstreams", "health", activeOnly],
     queryFn: () => {
       const params = new URLSearchParams();
-      if (groupId) {
-        params.set("group_id", groupId);
-      }
       if (!activeOnly) {
         params.set("active_only", "false");
       }

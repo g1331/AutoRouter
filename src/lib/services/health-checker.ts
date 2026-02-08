@@ -1,9 +1,9 @@
 import { eq, and, gte, lte, sql, count, avg } from "drizzle-orm";
-import { db, upstreams, upstreamGroups, upstreamHealth, requestLogs } from "../db";
+import { db, upstreams, upstreamHealth, requestLogs } from "../db";
 import { config } from "../utils/config";
 import { decrypt } from "../utils/encryption";
 import { testUpstreamConnection, type TestUpstreamResult } from "./upstream-connection-tester";
-import { UpstreamNotFoundError, UpstreamGroupNotFoundError } from "./upstream-crud";
+import { UpstreamNotFoundError } from "./upstream-crud";
 import {
   getCircuitBreakerState,
   CircuitBreakerStateEnum,
@@ -12,7 +12,7 @@ import {
 } from "./circuit-breaker";
 
 // Re-export for backward compatibility
-export { UpstreamNotFoundError, UpstreamGroupNotFoundError };
+export { UpstreamNotFoundError };
 export { CircuitBreakerStateEnum } from "./circuit-breaker";
 
 /**
@@ -135,43 +135,6 @@ export async function getHealthStatus(upstreamId: string): Promise<HealthStatus 
     latencyMs: health?.latencyMs ?? null,
     errorMessage: health?.errorMessage ?? null,
   };
-}
-
-/**
- * Get health status for all upstreams in a group.
- *
- * @param groupId - The upstream group ID
- * @returns Array of health statuses for all upstreams in the group
- * @throws {UpstreamGroupNotFoundError} If the group does not exist
- */
-export async function getGroupHealthStatus(groupId: string): Promise<HealthStatus[]> {
-  // Verify group exists
-  const group = await db.query.upstreamGroups.findFirst({
-    where: eq(upstreamGroups.id, groupId),
-  });
-
-  if (!group) {
-    throw new UpstreamGroupNotFoundError(`Upstream group not found: ${groupId}`);
-  }
-
-  // Get all upstreams in the group with health status
-  const groupUpstreams = await db.query.upstreams.findMany({
-    where: eq(upstreams.groupId, groupId),
-    with: {
-      health: true,
-    },
-  });
-
-  return groupUpstreams.map((upstream) => ({
-    upstreamId: upstream.id,
-    upstreamName: upstream.name,
-    isHealthy: upstream.health?.isHealthy ?? true,
-    lastCheckAt: upstream.health?.lastCheckAt ?? null,
-    lastSuccessAt: upstream.health?.lastSuccessAt ?? null,
-    failureCount: upstream.health?.failureCount ?? 0,
-    latencyMs: upstream.health?.latencyMs ?? null,
-    errorMessage: upstream.health?.errorMessage ?? null,
-  }));
 }
 
 /**
@@ -303,7 +266,6 @@ export async function checkUpstreamHealth(
     where: eq(upstreams.id, upstreamId),
     with: {
       health: true,
-      group: true,
     },
   });
 
@@ -329,8 +291,8 @@ export async function checkUpstreamHealth(
     };
   }
 
-  // Use group's health check timeout if available, otherwise upstream timeout
-  const effectiveTimeout = timeout ?? upstream.group?.healthCheckTimeout ?? upstream.timeout ?? 10;
+  // Use provided timeout, upstream timeout, or global config
+  const effectiveTimeout = timeout ?? upstream.timeout ?? config.healthCheckTimeout;
 
   // Perform the health check
   const result: TestUpstreamResult = await testUpstreamConnection({
@@ -356,39 +318,6 @@ export async function checkUpstreamHealth(
     checkedAt: result.testedAt,
     healthStatus,
   };
-}
-
-/**
- * Check health for all upstreams in a group.
- *
- * @param groupId - The upstream group ID
- * @returns Array of health check results
- * @throws {UpstreamGroupNotFoundError} If the group does not exist
- */
-export async function checkGroupHealth(groupId: string): Promise<HealthCheckResult[]> {
-  // Verify group exists and get configuration
-  const group = await db.query.upstreamGroups.findFirst({
-    where: eq(upstreamGroups.id, groupId),
-  });
-
-  if (!group) {
-    throw new UpstreamGroupNotFoundError(`Upstream group not found: ${groupId}`);
-  }
-
-  // Get all active upstreams in the group
-  const groupUpstreams = await db.query.upstreams.findMany({
-    where: and(eq(upstreams.groupId, groupId), eq(upstreams.isActive, true)),
-  });
-
-  // Check all upstreams in parallel
-  // NOTE: No concurrency limit is applied here. For production environments with
-  // large groups, consider using p-limit (e.g., limit of 5-10 concurrent checks)
-  // to avoid overwhelming the system or upstream providers.
-  const results = await Promise.all(
-    groupUpstreams.map((upstream) => checkUpstreamHealth(upstream.id, group.healthCheckTimeout))
-  );
-
-  return results;
 }
 
 /**

@@ -36,7 +36,7 @@ describe("POST /api/admin/circuit-breakers/{upstreamId}/force-close", () => {
     timeout: 30000,
     isActive: true,
     config: null,
-    groupId: null,
+    priority: 0,
     weight: 100,
     healthCheckInterval: 60,
     healthCheckTimeout: 10,

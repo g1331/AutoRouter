@@ -154,10 +154,10 @@ describe("lib/db/schema", () => {
       expect(upstreams.modelRedirects.name).toBe("model_redirects");
     });
 
-    it("has provider_type index", () => {
+    it("has provider_type + priority composite index", () => {
       const tableConfig = getTableConfig(upstreams);
       const indexNames = tableConfig.indexes.map((i) => i.config.name);
-      expect(indexNames).toContain("upstreams_provider_type_idx");
+      expect(indexNames).toContain("upstreams_provider_type_priority_idx");
     });
   });
 

@@ -1,66 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  LoadBalancerStrategy,
-  NoHealthyUpstreamsError,
-  UpstreamGroupNotFoundError,
-  getConnectionCount,
-  recordConnection,
-  releaseConnection,
-  resetConnectionCounts,
-  resetRoundRobinIndices,
-  filterHealthyUpstreams,
-  isValidStrategy,
-  filterByCircuitBreaker,
-  filterByHealth,
-  type UpstreamWithHealth,
-  type UpstreamWithCircuitBreaker,
-  VALID_PROVIDER_TYPES,
-  type ProviderType,
-} from "@/lib/services/load-balancer";
 
-// Type helpers for mocking
-type PartialUpstream = {
-  id: string;
-  name: string;
-  weight: number;
-  groupId: string | null;
-  isActive: boolean;
-  health?: {
-    isHealthy: boolean;
-    latencyMs: number | null;
-  };
-  [key: string]: unknown;
-};
+// ---------------------------------------------------------------------------
+// Mocks
+// ---------------------------------------------------------------------------
 
-type PartialUpstreamGroup = {
-  id: string;
-  name: string;
-  strategy: string;
-  [key: string]: unknown;
-};
-
+// Mock db – the load-balancer uses `db.query.upstreams.findMany`
+const mockFindMany = vi.fn();
 vi.mock("@/lib/db", () => ({
   db: {
     query: {
-      upstreams: {
-        findFirst: vi.fn(),
-        findMany: vi.fn(),
-      },
-      upstreamGroups: {
-        findFirst: vi.fn(),
-      },
-      upstreamHealth: {
-        findFirst: vi.fn(),
-      },
+      upstreams: { findMany: (...args: unknown[]) => mockFindMany(...args) },
     },
   },
-  upstreams: {},
-  upstreamGroups: {},
-  upstreamHealth: {},
+  upstreams: {
+    id: "id",
+    providerType: "providerType",
+    isActive: "isActive",
+    priority: "priority",
+  },
 }));
 
+// Mock circuit-breaker – load-balancer calls `getCircuitBreakerState`
+const mockGetCircuitBreakerState = vi.fn();
 vi.mock("@/lib/services/circuit-breaker", () => ({
-  getCircuitBreakerState: vi.fn(),
+  getCircuitBreakerState: (...args: unknown[]) => mockGetCircuitBreakerState(...args),
   CircuitBreakerStateEnum: {
     CLOSED: "closed",
     OPEN: "open",
@@ -68,1227 +31,493 @@ vi.mock("@/lib/services/circuit-breaker", () => ({
   },
 }));
 
+// Import after mocks are registered
+import {
+  selectFromProviderType,
+  NoHealthyUpstreamsError,
+  resetConnectionCounts,
+  recordConnection,
+  releaseConnection,
+  getConnectionCount,
+} from "@/lib/services/load-balancer";
+
+// ---------------------------------------------------------------------------
+// Helpers – mock upstream factory
+// ---------------------------------------------------------------------------
+
+let idCounter = 0;
+
+interface MockUpstreamOpts {
+  id?: string;
+  name?: string;
+  providerType?: string;
+  priority?: number;
+  weight?: number;
+  isActive?: boolean;
+  isHealthy?: boolean;
+  cbState?: "closed" | "open" | "half_open";
+}
+
+function makeUpstream(opts: MockUpstreamOpts = {}) {
+  idCounter += 1;
+  const id = opts.id ?? `upstream-${idCounter}`;
+  return {
+    id,
+    name: opts.name ?? `upstream-${idCounter}`,
+    provider: "openai",
+    baseUrl: "https://api.openai.com/v1",
+    apiKeyEncrypted: "encrypted-key",
+    isDefault: false,
+    timeout: 60,
+    isActive: opts.isActive ?? true,
+    config: null,
+    weight: opts.weight ?? 1,
+    priority: opts.priority ?? 0,
+    providerType: opts.providerType ?? "openai",
+    allowedModels: null,
+    modelRedirects: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    health:
+      opts.isHealthy === false
+        ? { isHealthy: false, latencyMs: null }
+        : { isHealthy: true, latencyMs: 100 },
+  };
+}
+
+/**
+ * Helper: configure `mockGetCircuitBreakerState` so that specific upstream IDs
+ * return an OPEN circuit breaker, while all others return CLOSED.
+ */
+function setCBOpen(...openIds: string[]) {
+  mockGetCircuitBreakerState.mockImplementation(async (upstreamId: string) => {
+    if (openIds.includes(upstreamId)) {
+      return {
+        id: "cb-1",
+        upstreamId,
+        state: "open",
+        failureCount: 5,
+        successCount: 0,
+        lastFailureAt: new Date(),
+        openedAt: new Date(),
+        lastProbeAt: null,
+        config: null,
+      };
+    }
+    return {
+      id: "cb-2",
+      upstreamId,
+      state: "closed",
+      failureCount: 0,
+      successCount: 0,
+      lastFailureAt: null,
+      openedAt: null,
+      lastProbeAt: null,
+      config: null,
+    };
+  });
+}
+
+function setCBAllClosed() {
+  mockGetCircuitBreakerState.mockResolvedValue({
+    id: "cb-1",
+    upstreamId: "any",
+    state: "closed",
+    failureCount: 0,
+    successCount: 0,
+    lastFailureAt: null,
+    openedAt: null,
+    lastProbeAt: null,
+    config: null,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 describe("load-balancer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    idCounter = 0;
+    // Reset connectionCounts map between tests
     resetConnectionCounts();
-    resetRoundRobinIndices();
+    setCBAllClosed();
   });
 
-  describe("LoadBalancerStrategy enum", () => {
-    it("should have ROUND_ROBIN strategy", () => {
-      expect(LoadBalancerStrategy.ROUND_ROBIN).toBe("round_robin");
-    });
-
-    it("should have WEIGHTED strategy", () => {
-      expect(LoadBalancerStrategy.WEIGHTED).toBe("weighted");
-    });
-
-    it("should have LEAST_CONNECTIONS strategy", () => {
-      expect(LoadBalancerStrategy.LEAST_CONNECTIONS).toBe("least_connections");
-    });
-  });
-
-  describe("NoHealthyUpstreamsError", () => {
-    it("should have correct name", () => {
-      const error = new NoHealthyUpstreamsError("no healthy upstreams");
-      expect(error.name).toBe("NoHealthyUpstreamsError");
-    });
-
-    it("should have correct message", () => {
-      const error = new NoHealthyUpstreamsError("No healthy upstreams in group: test-group");
-      expect(error.message).toBe("No healthy upstreams in group: test-group");
-    });
-
-    it("should be instanceof Error", () => {
-      const error = new NoHealthyUpstreamsError("test");
-      expect(error).toBeInstanceOf(Error);
-    });
-  });
-
-  describe("UpstreamGroupNotFoundError", () => {
-    it("should have correct name", () => {
-      const error = new UpstreamGroupNotFoundError("group not found");
-      expect(error.name).toBe("UpstreamGroupNotFoundError");
-    });
-
-    it("should have correct message", () => {
-      const error = new UpstreamGroupNotFoundError("Upstream group not found: test-id");
-      expect(error.message).toBe("Upstream group not found: test-id");
-    });
-
-    it("should be instanceof Error", () => {
-      const error = new UpstreamGroupNotFoundError("test");
-      expect(error).toBeInstanceOf(Error);
-    });
-  });
-
-  describe("Connection tracking", () => {
-    describe("getConnectionCount", () => {
-      it("should return 0 for unknown upstream", () => {
-        expect(getConnectionCount("unknown-id")).toBe(0);
-      });
-
-      it("should return current count for tracked upstream", () => {
-        recordConnection("test-id");
-        recordConnection("test-id");
-        expect(getConnectionCount("test-id")).toBe(2);
-      });
-    });
-
-    describe("recordConnection", () => {
-      it("should increment connection count", () => {
-        expect(getConnectionCount("test-id")).toBe(0);
-        recordConnection("test-id");
-        expect(getConnectionCount("test-id")).toBe(1);
-        recordConnection("test-id");
-        expect(getConnectionCount("test-id")).toBe(2);
-      });
-
-      it("should track multiple upstreams independently", () => {
-        recordConnection("upstream-1");
-        recordConnection("upstream-1");
-        recordConnection("upstream-2");
-
-        expect(getConnectionCount("upstream-1")).toBe(2);
-        expect(getConnectionCount("upstream-2")).toBe(1);
-      });
-    });
-
-    describe("releaseConnection", () => {
-      it("should decrement connection count", () => {
-        recordConnection("test-id");
-        recordConnection("test-id");
-        expect(getConnectionCount("test-id")).toBe(2);
-
-        releaseConnection("test-id");
-        expect(getConnectionCount("test-id")).toBe(1);
-      });
-
-      it("should not go below 0", () => {
-        releaseConnection("unknown-id");
-        expect(getConnectionCount("unknown-id")).toBe(0);
-
-        recordConnection("test-id");
-        releaseConnection("test-id");
-        releaseConnection("test-id");
-        releaseConnection("test-id");
-        expect(getConnectionCount("test-id")).toBe(0);
-      });
-    });
-
-    describe("resetConnectionCounts", () => {
-      it("should clear all connection counts", () => {
-        recordConnection("upstream-1");
-        recordConnection("upstream-2");
-        expect(getConnectionCount("upstream-1")).toBe(1);
-        expect(getConnectionCount("upstream-2")).toBe(1);
-
-        resetConnectionCounts();
-
-        expect(getConnectionCount("upstream-1")).toBe(0);
-        expect(getConnectionCount("upstream-2")).toBe(0);
-      });
-    });
-  });
-
-  describe("filterHealthyUpstreams", () => {
-    const createMockUpstreamWithHealth = (
-      id: string,
-      isHealthy: boolean,
-      weight = 1
-    ): UpstreamWithHealth => ({
-      upstream: {
-        id,
-        name: `upstream-${id}`,
-        weight,
-        groupId: "group-1",
-        isActive: true,
-      } as UpstreamWithHealth["upstream"],
-      isHealthy,
-      latencyMs: 100,
-    });
-
-    it("should filter out unhealthy upstreams", () => {
-      const upstreams = [
-        createMockUpstreamWithHealth("1", true),
-        createMockUpstreamWithHealth("2", false),
-        createMockUpstreamWithHealth("3", true),
-      ];
-
-      const result = filterHealthyUpstreams(upstreams);
-
-      expect(result).toHaveLength(2);
-      expect(result.map((u) => u.upstream.id)).toEqual(["1", "3"]);
-    });
-
-    it("should return empty array if no healthy upstreams", () => {
-      const upstreams = [
-        createMockUpstreamWithHealth("1", false),
-        createMockUpstreamWithHealth("2", false),
-      ];
-
-      const result = filterHealthyUpstreams(upstreams);
-
-      expect(result).toHaveLength(0);
-    });
-
-    it("should return all upstreams if all are healthy", () => {
-      const upstreams = [
-        createMockUpstreamWithHealth("1", true),
-        createMockUpstreamWithHealth("2", true),
-      ];
-
-      const result = filterHealthyUpstreams(upstreams);
-
-      expect(result).toHaveLength(2);
-    });
-
-    it("should exclude specified IDs", () => {
-      const upstreams = [
-        createMockUpstreamWithHealth("1", true),
-        createMockUpstreamWithHealth("2", true),
-        createMockUpstreamWithHealth("3", true),
-      ];
-
-      const result = filterHealthyUpstreams(upstreams, ["2"]);
-
-      expect(result).toHaveLength(2);
-      expect(result.map((u) => u.upstream.id)).toEqual(["1", "3"]);
-    });
-
-    it("should combine health and exclusion filters", () => {
-      const upstreams = [
-        createMockUpstreamWithHealth("1", true),
-        createMockUpstreamWithHealth("2", false),
-        createMockUpstreamWithHealth("3", true),
-        createMockUpstreamWithHealth("4", true),
-      ];
-
-      const result = filterHealthyUpstreams(upstreams, ["1"]);
-
-      expect(result).toHaveLength(2);
-      expect(result.map((u) => u.upstream.id)).toEqual(["3", "4"]);
-    });
-
-    it("should handle empty exclude list", () => {
-      const upstreams = [createMockUpstreamWithHealth("1", true)];
-
-      const result = filterHealthyUpstreams(upstreams, []);
-
-      expect(result).toHaveLength(1);
-    });
-
-    it("should handle undefined exclude list", () => {
-      const upstreams = [createMockUpstreamWithHealth("1", true)];
-
-      const result = filterHealthyUpstreams(upstreams, undefined);
-
-      expect(result).toHaveLength(1);
-    });
-  });
-
-  describe("isValidStrategy", () => {
-    it("should return true for round_robin", () => {
-      expect(isValidStrategy("round_robin")).toBe(true);
-    });
-
-    it("should return true for weighted", () => {
-      expect(isValidStrategy("weighted")).toBe(true);
-    });
-
-    it("should return true for least_connections", () => {
-      expect(isValidStrategy("least_connections")).toBe(true);
-    });
-
-    it("should return false for invalid strategy", () => {
-      expect(isValidStrategy("invalid")).toBe(false);
-    });
-
-    it("should return false for empty string", () => {
-      expect(isValidStrategy("")).toBe(false);
-    });
-
-    it("should return false for mixed case", () => {
-      expect(isValidStrategy("Round_Robin")).toBe(false);
-      expect(isValidStrategy("WEIGHTED")).toBe(false);
-    });
-  });
-
-  describe("getGroupUpstreams", () => {
-    it("should return upstreams with health status", async () => {
-      const { getGroupUpstreams } = await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
-        id: "group-1",
-        name: "test-group",
-        strategy: "round_robin",
-      } as unknown as PartialUpstreamGroup);
-
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
-        {
-          id: "upstream-1",
-          name: "test-upstream-1",
-          weight: 1,
-          groupId: "group-1",
-          isActive: true,
-          health: {
-            isHealthy: true,
-            latencyMs: 50,
-          },
-        },
-        {
-          id: "upstream-2",
-          name: "test-upstream-2",
-          weight: 2,
-          groupId: "group-1",
-          isActive: true,
-          health: {
-            isHealthy: false,
-            latencyMs: 200,
-          },
-        },
-      ] as unknown as PartialUpstream[]);
-
-      const result = await getGroupUpstreams("group-1");
-
-      expect(result).toHaveLength(2);
-      expect(result[0].isHealthy).toBe(true);
-      expect(result[0].latencyMs).toBe(50);
-      expect(result[1].isHealthy).toBe(false);
-      expect(result[1].latencyMs).toBe(200);
-    });
-
-    it("should default to healthy if no health record exists", async () => {
-      const { getGroupUpstreams } = await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
-        id: "group-1",
-        name: "test-group",
-        strategy: "round_robin",
-      } as unknown as PartialUpstreamGroup);
-
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
-        {
-          id: "upstream-1",
-          name: "test-upstream-1",
-          weight: 1,
-          groupId: "group-1",
-          isActive: true,
-          health: null,
-        },
-      ] as unknown as PartialUpstream[]);
-
-      const result = await getGroupUpstreams("group-1");
-
-      expect(result).toHaveLength(1);
-      expect(result[0].isHealthy).toBe(true);
-      expect(result[0].latencyMs).toBeNull();
-    });
-
-    it("should throw UpstreamGroupNotFoundError if group does not exist", async () => {
-      const { getGroupUpstreams } = await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
-
-      await expect(getGroupUpstreams("nonexistent-group")).rejects.toThrow(
-        UpstreamGroupNotFoundError
-      );
-    });
-  });
-
-  describe("selectUpstream", () => {
-    const mockGroup: PartialUpstreamGroup = {
-      id: "group-1",
-      name: "test-group",
-      strategy: "round_robin",
-    };
-
-    const createMockUpstreamsWithHealth = () => [
-      {
-        id: "upstream-1",
-        name: "test-upstream-1",
-        weight: 1,
-        groupId: "group-1",
-        isActive: true,
-        health: { isHealthy: true, latencyMs: 50 },
-      },
-      {
-        id: "upstream-2",
-        name: "test-upstream-2",
-        weight: 2,
-        groupId: "group-1",
-        isActive: true,
-        health: { isHealthy: true, latencyMs: 100 },
-      },
-    ];
-
-    it("should throw UpstreamGroupNotFoundError if group does not exist", async () => {
-      const { selectUpstream } = await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
-
-      await expect(selectUpstream("nonexistent-group")).rejects.toThrow(UpstreamGroupNotFoundError);
-    });
-
-    it("should throw NoHealthyUpstreamsError if no healthy upstreams available", async () => {
-      const { selectUpstream } = await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(
-        mockGroup as unknown as PartialUpstreamGroup
-      );
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
-        {
-          id: "upstream-1",
-          name: "test-upstream-1",
-          weight: 1,
-          groupId: "group-1",
-          isActive: true,
-          health: { isHealthy: false, latencyMs: 500 },
-        },
-      ] as unknown as PartialUpstream[]);
-
-      await expect(selectUpstream("group-1")).rejects.toThrow(NoHealthyUpstreamsError);
-    });
-
-    it("should use group default strategy when none provided", async () => {
-      const { selectUpstream } = await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(
-        mockGroup as unknown as PartialUpstreamGroup
-      );
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue(
-        createMockUpstreamsWithHealth() as unknown as PartialUpstream[]
-      );
-
-      const result = await selectUpstream("group-1");
-
-      expect(result.strategy).toBe(LoadBalancerStrategy.ROUND_ROBIN);
-    });
-
-    it("should override strategy when provided", async () => {
-      const { selectUpstream } = await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(
-        mockGroup as unknown as PartialUpstreamGroup
-      );
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue(
-        createMockUpstreamsWithHealth() as unknown as PartialUpstream[]
-      );
-
-      const result = await selectUpstream("group-1", LoadBalancerStrategy.WEIGHTED);
-
-      expect(result.strategy).toBe(LoadBalancerStrategy.WEIGHTED);
-    });
-
-    it("should exclude specified upstream IDs", async () => {
-      const { selectUpstream } = await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(
-        mockGroup as unknown as PartialUpstreamGroup
-      );
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue(
-        createMockUpstreamsWithHealth() as unknown as PartialUpstream[]
-      );
-
-      const result = await selectUpstream("group-1", undefined, ["upstream-1"]);
-
-      expect(result.upstream.id).toBe("upstream-2");
-    });
-
-    describe("round-robin strategy", () => {
-      it("should cycle through upstreams in order", async () => {
-        const { selectUpstream, resetRoundRobinIndices } =
-          await import("@/lib/services/load-balancer");
-        const { db } = await import("@/lib/db");
-
-        resetRoundRobinIndices();
-
-        vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(
-          mockGroup as unknown as PartialUpstreamGroup
-        );
-        vi.mocked(db.query.upstreams.findMany).mockResolvedValue(
-          createMockUpstreamsWithHealth() as unknown as PartialUpstream[]
-        );
-
-        // First selection
-        const result1 = await selectUpstream("group-1", LoadBalancerStrategy.ROUND_ROBIN);
-        // Second selection
-        const result2 = await selectUpstream("group-1", LoadBalancerStrategy.ROUND_ROBIN);
-        // Third selection (cycles back)
-        const result3 = await selectUpstream("group-1", LoadBalancerStrategy.ROUND_ROBIN);
-
-        // Should cycle through sorted order (by ID)
-        const ids = [result1.upstream.id, result2.upstream.id, result3.upstream.id];
-        expect(ids[0]).toBe(ids[2]); // First and third should be same (cycled)
-        expect(ids[0]).not.toBe(ids[1]); // First and second should differ
-      });
-    });
-
-    describe("weighted strategy", () => {
-      it("should select upstream (weighted random)", async () => {
-        const { selectUpstream } = await import("@/lib/services/load-balancer");
-        const { db } = await import("@/lib/db");
-
-        vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
-          ...mockGroup,
-          strategy: "weighted",
-        } as unknown as PartialUpstreamGroup);
-        vi.mocked(db.query.upstreams.findMany).mockResolvedValue(
-          createMockUpstreamsWithHealth() as unknown as PartialUpstream[]
-        );
-
-        const result = await selectUpstream("group-1", LoadBalancerStrategy.WEIGHTED);
-
-        // Should select one of the upstreams
-        expect(["upstream-1", "upstream-2"]).toContain(result.upstream.id);
-        expect(result.strategy).toBe(LoadBalancerStrategy.WEIGHTED);
-      });
-
-      it("should handle all zero weights", async () => {
-        const { selectUpstream } = await import("@/lib/services/load-balancer");
-        const { db } = await import("@/lib/db");
-
-        vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
-          ...mockGroup,
-          strategy: "weighted",
-        } as unknown as PartialUpstreamGroup);
-        vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
-          {
-            id: "upstream-1",
-            name: "test-1",
-            weight: 0,
-            groupId: "group-1",
-            isActive: true,
-            health: { isHealthy: true, latencyMs: 50 },
-          },
-          {
-            id: "upstream-2",
-            name: "test-2",
-            weight: 0,
-            groupId: "group-1",
-            isActive: true,
-            health: { isHealthy: true, latencyMs: 100 },
-          },
-        ] as unknown as PartialUpstream[]);
-
-        const result = await selectUpstream("group-1", LoadBalancerStrategy.WEIGHTED);
-
-        // Should fall back to random selection
-        expect(["upstream-1", "upstream-2"]).toContain(result.upstream.id);
-      });
-    });
-
-    describe("least-connections strategy", () => {
-      it("should select upstream with fewest connections", async () => {
-        const { selectUpstream, recordConnection, resetConnectionCounts } =
-          await import("@/lib/services/load-balancer");
-        const { db } = await import("@/lib/db");
-
-        resetConnectionCounts();
-
-        vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
-          ...mockGroup,
-          strategy: "least_connections",
-        } as unknown as PartialUpstreamGroup);
-        vi.mocked(db.query.upstreams.findMany).mockResolvedValue(
-          createMockUpstreamsWithHealth() as unknown as PartialUpstream[]
-        );
-
-        // Add connections to upstream-1
-        recordConnection("upstream-1");
-        recordConnection("upstream-1");
-        // Add one connection to upstream-2
-        recordConnection("upstream-2");
-
-        const result = await selectUpstream("group-1", LoadBalancerStrategy.LEAST_CONNECTIONS);
-
-        // Should select upstream-2 (fewer connections)
-        expect(result.upstream.id).toBe("upstream-2");
-      });
-
-      it("should prefer higher weight when connections are equal", async () => {
-        const { selectUpstream, resetConnectionCounts } =
-          await import("@/lib/services/load-balancer");
-        const { db } = await import("@/lib/db");
-
-        resetConnectionCounts();
-
-        vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
-          ...mockGroup,
-          strategy: "least_connections",
-        } as unknown as PartialUpstreamGroup);
-        vi.mocked(db.query.upstreams.findMany).mockResolvedValue(
-          createMockUpstreamsWithHealth() as unknown as PartialUpstream[]
-        );
-
-        const result = await selectUpstream("group-1", LoadBalancerStrategy.LEAST_CONNECTIONS);
-
-        // upstream-2 has weight 2, upstream-1 has weight 1
-        // With 0 connections each, should prefer higher weight
-        expect(result.upstream.id).toBe("upstream-2");
-      });
-    });
-  });
-
-  describe("getUpstreamGroupById", () => {
-    it("should return group by id", async () => {
-      const { getUpstreamGroupById } = await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
-        id: "group-1",
-        name: "test-group",
-        strategy: "round_robin",
-      } as unknown as PartialUpstreamGroup);
-
-      const result = await getUpstreamGroupById("group-1");
-
-      expect(result).not.toBeNull();
-      expect(result?.id).toBe("group-1");
-      expect(result?.name).toBe("test-group");
-    });
-
-    it("should return null if group not found", async () => {
-      const { getUpstreamGroupById } = await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
-
-      const result = await getUpstreamGroupById("nonexistent");
-
-      expect(result).toBeNull();
-    });
-  });
-
-  describe("getUpstreamGroupByName", () => {
-    it("should return group by name", async () => {
-      const { getUpstreamGroupByName } = await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
-        id: "group-1",
-        name: "test-group",
-        strategy: "round_robin",
-      } as unknown as PartialUpstreamGroup);
-
-      const result = await getUpstreamGroupByName("test-group");
-
-      expect(result).not.toBeNull();
-      expect(result?.name).toBe("test-group");
-    });
-
-    it("should return null if group not found", async () => {
-      const { getUpstreamGroupByName } = await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
-
-      const result = await getUpstreamGroupByName("nonexistent");
-
-      expect(result).toBeNull();
-    });
-  });
-
-  describe("resetRoundRobinIndices", () => {
-    it("should reset round-robin state", async () => {
-      const { selectUpstream, resetRoundRobinIndices } =
-        await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-
-      const mockGroup: PartialUpstreamGroup = {
-        id: "group-1",
-        name: "test-group",
-        strategy: "round_robin",
-      };
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(
-        mockGroup as unknown as PartialUpstreamGroup
-      );
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
-        {
-          id: "upstream-1",
-          name: "test-1",
-          weight: 1,
-          groupId: "group-1",
-          isActive: true,
-          health: { isHealthy: true, latencyMs: 50 },
-        },
-        {
-          id: "upstream-2",
-          name: "test-2",
-          weight: 1,
-          groupId: "group-1",
-          isActive: true,
-          health: { isHealthy: true, latencyMs: 100 },
-        },
-      ] as unknown as PartialUpstream[]);
-
-      // Make a selection
-      const firstResult = await selectUpstream("group-1", LoadBalancerStrategy.ROUND_ROBIN);
-
-      // Reset
-      resetRoundRobinIndices();
-
-      // Next selection should start from beginning again
-      const afterResetResult = await selectUpstream("group-1", LoadBalancerStrategy.ROUND_ROBIN);
-
-      // Both should be the same (first in sorted order)
-      expect(firstResult.upstream.id).toBe(afterResetResult.upstream.id);
-    });
-  });
-
-  // ============================================================================
-  // Provider Type Based Selection Tests
-  // ============================================================================
-
-  describe("getUpstreamsByProviderType", () => {
-    it("should return upstreams with provider_type match", async () => {
-      const { getUpstreamsByProviderType } = await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-      const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
-
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
-        {
-          id: "upstream-1",
-          name: "test-upstream-1",
-          weight: 1,
-          groupId: null,
-          isActive: true,
-          providerType: "openai",
-          health: { isHealthy: true, latencyMs: 50 },
-        },
-        {
-          id: "upstream-2",
-          name: "test-upstream-2",
-          weight: 2,
-          groupId: null,
-          isActive: true,
-          providerType: "openai",
-          health: { isHealthy: true, latencyMs: 100 },
-        },
-      ] as unknown as PartialUpstream[]);
-
-      vi.mocked(getCircuitBreakerState).mockResolvedValue(null);
-
-      const result = await getUpstreamsByProviderType("openai");
-
-      expect(result.upstreamsWithCircuitBreaker).toHaveLength(2);
-      expect(result.routingType).toBe("provider_type");
-      expect(result.groupName).toBeNull();
-      expect(result.upstreamsWithCircuitBreaker[0].isCircuitClosed).toBe(true);
-    });
-
-    it("should fallback to group-based routing when no provider_type match", async () => {
-      const { getUpstreamsByProviderType } = await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-      const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
-
-      // No upstreams with provider_type match
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([]);
-
-      // But group exists with matching name
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
-        id: "group-openai",
-        name: "openai",
-        strategy: "weighted",
-      } as unknown as PartialUpstreamGroup);
-
-      // Upstreams in the group
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
-        {
-          id: "upstream-1",
-          name: "test-upstream-1",
-          weight: 1,
-          groupId: "group-openai",
-          isActive: true,
-          health: { isHealthy: true, latencyMs: 50 },
-        },
-      ] as unknown as PartialUpstream[]);
-
-      vi.mocked(getCircuitBreakerState).mockResolvedValue(null);
-
-      const result = await getUpstreamsByProviderType("openai");
-
-      expect(result.upstreamsWithCircuitBreaker).toHaveLength(1);
-      expect(result.routingType).toBe("group");
-      expect(result.groupName).toBe("openai");
-    });
-
-    it("should return empty array when no upstreams found", async () => {
-      const { getUpstreamsByProviderType } = await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([]);
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
-
-      const result = await getUpstreamsByProviderType("custom");
-
-      expect(result.upstreamsWithCircuitBreaker).toHaveLength(0);
-      expect(result.routingType).toBe("provider_type");
-    });
-
-    it("should include circuit breaker state for each upstream", async () => {
-      const { getUpstreamsByProviderType } = await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-      const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
-
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
-        {
-          id: "upstream-1",
-          name: "test-1",
-          weight: 1,
-          groupId: null,
-          isActive: true,
-          providerType: "openai",
-          health: { isHealthy: true, latencyMs: 50 },
-        },
-        {
-          id: "upstream-2",
-          name: "test-2",
-          weight: 1,
-          groupId: null,
-          isActive: true,
-          providerType: "openai",
-          health: { isHealthy: false, latencyMs: 500 },
-        },
-      ] as unknown as PartialUpstream[]);
-
-      vi.mocked(getCircuitBreakerState)
-        .mockResolvedValueOnce({ state: "closed", failureCount: 0 } as CircuitBreakerState)
-        .mockResolvedValueOnce({ state: "open", failureCount: 5 } as CircuitBreakerState);
-
-      const result = await getUpstreamsByProviderType("openai");
-
-      expect(result.upstreamsWithCircuitBreaker[0].circuitState).toBe("closed");
-      expect(result.upstreamsWithCircuitBreaker[0].isCircuitClosed).toBe(true);
-      expect(result.upstreamsWithCircuitBreaker[1].circuitState).toBe("open");
-      expect(result.upstreamsWithCircuitBreaker[1].isCircuitClosed).toBe(false);
-    });
-  });
-
-  describe("filterByCircuitBreaker", () => {
-    const createMockUpstreamWithCircuitBreaker = (
-      id: string,
-      isCircuitClosed: boolean,
-      circuitState: string | null
-    ): UpstreamWithCircuitBreaker => ({
-      upstream: {
-        id,
-        name: `upstream-${id}`,
-        weight: 1,
-        groupId: "group-1",
-        isActive: true,
-      } as UpstreamWithCircuitBreaker["upstream"],
-      isHealthy: true,
-      latencyMs: 100,
-      circuitState,
-      isCircuitClosed,
-    });
-
-    it("should filter out upstreams with OPEN circuit", () => {
-      const upstreams = [
-        createMockUpstreamWithCircuitBreaker("1", true, "closed"),
-        createMockUpstreamWithCircuitBreaker("2", false, "open"),
-        createMockUpstreamWithCircuitBreaker("3", true, "closed"),
-      ];
-
-      const result = filterByCircuitBreaker(upstreams);
-
-      expect(result.allowed).toHaveLength(2);
-      expect(result.allowed.map((u) => u.upstream.id)).toEqual(["1", "3"]);
-      expect(result.excludedCount).toBe(1);
-    });
-
-    it("should include upstreams with null circuit state", () => {
-      const upstreams = [
-        createMockUpstreamWithCircuitBreaker("1", true, null),
-        createMockUpstreamWithCircuitBreaker("2", false, "open"),
-      ];
-
-      const result = filterByCircuitBreaker(upstreams);
-
-      expect(result.allowed).toHaveLength(1);
-      expect(result.allowed[0].upstream.id).toBe("1");
-    });
-
-    it("should exclude upstreams with HALF_OPEN circuit", () => {
-      // HALF_OPEN is not CLOSED, so should be excluded
-      const upstreams = [
-        createMockUpstreamWithCircuitBreaker("1", true, "closed"),
-        createMockUpstreamWithCircuitBreaker("2", false, "half_open"),
-      ];
-
-      const result = filterByCircuitBreaker(upstreams);
-
-      expect(result.allowed).toHaveLength(1);
-      expect(result.allowed[0].upstream.id).toBe("1");
-    });
-
-    it("should handle empty array", () => {
-      const result = filterByCircuitBreaker([]);
-
-      expect(result.allowed).toHaveLength(0);
-      expect(result.excludedCount).toBe(0);
-    });
-
-    it("should exclude all if all circuits are open", () => {
-      const upstreams = [
-        createMockUpstreamWithCircuitBreaker("1", false, "open"),
-        createMockUpstreamWithCircuitBreaker("2", false, "open"),
-      ];
-
-      const result = filterByCircuitBreaker(upstreams);
-
-      expect(result.allowed).toHaveLength(0);
-      expect(result.excludedCount).toBe(2);
-    });
-  });
-
-  describe("filterByHealth", () => {
-    const createMockUpstreamWithCircuitBreaker = (
-      id: string,
-      isHealthy: boolean
-    ): UpstreamWithCircuitBreaker => ({
-      upstream: {
-        id,
-        name: `upstream-${id}`,
-        weight: 1,
-        groupId: "group-1",
-        isActive: true,
-      } as UpstreamWithCircuitBreaker["upstream"],
-      isHealthy,
-      latencyMs: 100,
-      circuitState: "closed",
-      isCircuitClosed: true,
-    });
-
-    it("should filter out unhealthy upstreams", () => {
-      const upstreams = [
-        createMockUpstreamWithCircuitBreaker("1", true),
-        createMockUpstreamWithCircuitBreaker("2", false),
-        createMockUpstreamWithCircuitBreaker("3", true),
-      ];
-
-      const result = filterByHealth(upstreams);
-
-      expect(result.allowed).toHaveLength(2);
-      expect(result.allowed.map((u) => u.upstream.id)).toEqual(["1", "3"]);
-    });
-
-    it("should exclude specified IDs", () => {
-      const upstreams = [
-        createMockUpstreamWithCircuitBreaker("1", true),
-        createMockUpstreamWithCircuitBreaker("2", true),
-        createMockUpstreamWithCircuitBreaker("3", true),
-      ];
-
-      const result = filterByHealth(upstreams, ["2"]);
-
-      expect(result.allowed).toHaveLength(2);
-      expect(result.allowed.map((u) => u.upstream.id)).toEqual(["1", "3"]);
-    });
-
-    it("should combine health and exclusion filters", () => {
-      const upstreams = [
-        createMockUpstreamWithCircuitBreaker("1", true),
-        createMockUpstreamWithCircuitBreaker("2", false),
-        createMockUpstreamWithCircuitBreaker("3", true),
-        createMockUpstreamWithCircuitBreaker("4", true),
-      ];
-
-      const result = filterByHealth(upstreams, ["1"]);
-
-      expect(result.allowed).toHaveLength(2);
-      expect(result.allowed.map((u) => u.upstream.id)).toEqual(["3", "4"]);
-      expect(result.excludedCount).toBe(2);
-    });
-  });
-
+  // =========================================================================
+  // selectFromProviderType – basic selection
+  // =========================================================================
   describe("selectFromProviderType", () => {
-    beforeEach(() => {
-      vi.resetModules();
-    });
-
-    it("should throw error for invalid provider type", async () => {
-      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
-
-      await expect(selectFromProviderType("invalid" as ProviderType)).rejects.toThrow(
-        "Invalid provider type"
-      );
-    });
-
-    it("should throw NoHealthyUpstreamsError when no upstreams found", async () => {
-      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([]);
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
-
-      await expect(selectFromProviderType("openai")).rejects.toThrow(
-        "No authorized upstreams found for provider type: openai"
-      );
-    });
-
-    it("should select upstream with weighted strategy by default", async () => {
-      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-      const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
-
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
-        {
-          id: "upstream-1",
-          name: "test-1",
-          weight: 1,
-          groupId: null,
-          isActive: true,
-          providerType: "openai",
-          health: { isHealthy: true, latencyMs: 50 },
-        },
-      ] as unknown as PartialUpstream[]);
-
-      vi.mocked(getCircuitBreakerState).mockResolvedValue(null);
+    it("should select an upstream of the given provider type", async () => {
+      const u1 = makeUpstream({ id: "u1", providerType: "openai", priority: 0 });
+      mockFindMany.mockResolvedValue([u1]);
 
       const result = await selectFromProviderType("openai");
 
-      expect(result.upstream.id).toBe("upstream-1");
-      expect(result.strategy).toBe(LoadBalancerStrategy.WEIGHTED);
-      expect(result.providerType).toBe("openai");
-      expect(result.routingType).toBe("provider_type");
+      expect(result.upstream.id).toBe("u1");
+      expect(result.selectedTier).toBe(0);
     });
 
-    it("should exclude upstreams with OPEN circuit", async () => {
-      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-      const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
+    it("should throw NoHealthyUpstreamsError when no upstreams exist", async () => {
+      mockFindMany.mockResolvedValue([]);
 
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
-        {
-          id: "upstream-1",
-          name: "test-1",
-          weight: 1,
-          groupId: null,
-          isActive: true,
-          providerType: "openai",
-          health: { isHealthy: true, latencyMs: 50 },
-        },
-        {
-          id: "upstream-2",
-          name: "test-2",
-          weight: 1,
-          groupId: null,
-          isActive: true,
-          providerType: "openai",
-          health: { isHealthy: true, latencyMs: 100 },
-        },
-      ] as unknown as PartialUpstream[]);
-
-      // First upstream has OPEN circuit
-      vi.mocked(getCircuitBreakerState)
-        .mockResolvedValueOnce({ state: "open", failureCount: 5 } as CircuitBreakerState)
-        .mockResolvedValueOnce({ state: "closed", failureCount: 0 } as CircuitBreakerState);
-
-      const result = await selectFromProviderType("openai");
-
-      expect(result.upstream.id).toBe("upstream-2");
-      expect(result.circuitBreakerFiltered).toBe(1);
+      await expect(selectFromProviderType("openai")).rejects.toThrow(NoHealthyUpstreamsError);
     });
 
-    it("should exclude specified upstream IDs", async () => {
-      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-      const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
+    it("should throw NoHealthyUpstreamsError when all upstreams are unhealthy", async () => {
+      const u1 = makeUpstream({ id: "u1", isHealthy: false });
+      const u2 = makeUpstream({ id: "u2", isHealthy: false });
+      mockFindMany.mockResolvedValue([u1, u2]);
 
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
-        {
-          id: "upstream-1",
-          name: "test-1",
-          weight: 1,
-          groupId: null,
-          isActive: true,
-          providerType: "openai",
-          health: { isHealthy: true, latencyMs: 50 },
-        },
-        {
-          id: "upstream-2",
-          name: "test-2",
-          weight: 1,
-          groupId: null,
-          isActive: true,
-          providerType: "openai",
-          health: { isHealthy: true, latencyMs: 100 },
-        },
-      ] as unknown as PartialUpstream[]);
-
-      vi.mocked(getCircuitBreakerState).mockResolvedValue(null);
-
-      const result = await selectFromProviderType("openai", LoadBalancerStrategy.WEIGHTED, [
-        "upstream-1",
-      ]);
-
-      expect(result.upstream.id).toBe("upstream-2");
+      await expect(selectFromProviderType("openai")).rejects.toThrow(NoHealthyUpstreamsError);
     });
 
-    it("should throw error when all upstreams excluded", async () => {
-      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-      const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
+    it("should throw NoHealthyUpstreamsError when all upstreams are circuit-broken", async () => {
+      const u1 = makeUpstream({ id: "u1" });
+      const u2 = makeUpstream({ id: "u2" });
+      mockFindMany.mockResolvedValue([u1, u2]);
+      setCBOpen("u1", "u2");
 
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
-        {
-          id: "upstream-1",
-          name: "test-1",
-          weight: 1,
-          groupId: null,
-          isActive: true,
-          providerType: "openai",
-          health: { isHealthy: true, latencyMs: 50 },
-        },
-      ] as unknown as PartialUpstream[]);
-
-      vi.mocked(getCircuitBreakerState).mockResolvedValue({
-        state: "open",
-        failureCount: 5,
-      } as CircuitBreakerState);
-
-      await expect(selectFromProviderType("openai")).rejects.toThrow(
-        "No healthy upstreams available for provider type: openai"
-      );
+      await expect(selectFromProviderType("openai")).rejects.toThrow(NoHealthyUpstreamsError);
     });
 
-    it("should support round-robin strategy", async () => {
-      const { selectFromProviderType, resetRoundRobinIndices } =
-        await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-      const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
+    // =========================================================================
+    // Tiered routing (priority-based)
+    // =========================================================================
+    describe("tiered routing", () => {
+      it("should prefer tier 0 (lowest priority number) upstreams", async () => {
+        const p0 = makeUpstream({ id: "p0", priority: 0, weight: 1 });
+        const p1 = makeUpstream({ id: "p1", priority: 1, weight: 1 });
+        mockFindMany.mockResolvedValue([p0, p1]);
 
-      resetRoundRobinIndices();
+        // Run multiple times – should always pick p0
+        for (let i = 0; i < 10; i++) {
+          const result = await selectFromProviderType("openai");
+          expect(result.upstream.id).toBe("p0");
+          expect(result.selectedTier).toBe(0);
+        }
+      });
 
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
-        {
-          id: "upstream-a",
-          name: "test-a",
-          weight: 1,
-          groupId: null,
-          isActive: true,
-          providerType: "openai",
-          health: { isHealthy: true, latencyMs: 50 },
-        },
-        {
-          id: "upstream-b",
-          name: "test-b",
-          weight: 1,
-          groupId: null,
-          isActive: true,
-          providerType: "openai",
-          health: { isHealthy: true, latencyMs: 100 },
-        },
-      ] as unknown as PartialUpstream[]);
+      it("should degrade to tier 1 when all tier 0 upstreams are circuit-broken", async () => {
+        const p0a = makeUpstream({ id: "p0a", priority: 0 });
+        const p0b = makeUpstream({ id: "p0b", priority: 0 });
+        const p1 = makeUpstream({ id: "p1", priority: 1 });
+        mockFindMany.mockResolvedValue([p0a, p0b, p1]);
+        setCBOpen("p0a", "p0b");
 
-      vi.mocked(getCircuitBreakerState).mockResolvedValue(null);
+        const result = await selectFromProviderType("openai");
+        expect(result.upstream.id).toBe("p1");
+        expect(result.selectedTier).toBe(1);
+      });
 
-      const result = await selectFromProviderType("openai", LoadBalancerStrategy.ROUND_ROBIN);
+      it("should degrade to tier 1 when all tier 0 upstreams are unhealthy", async () => {
+        const p0 = makeUpstream({ id: "p0", priority: 0, isHealthy: false });
+        const p1 = makeUpstream({ id: "p1", priority: 1 });
+        mockFindMany.mockResolvedValue([p0, p1]);
 
-      expect(result.strategy).toBe(LoadBalancerStrategy.ROUND_ROBIN);
-      expect(result.upstream.id).toBeDefined();
+        const result = await selectFromProviderType("openai");
+        expect(result.upstream.id).toBe("p1");
+        expect(result.selectedTier).toBe(1);
+      });
+
+      it("should degrade to tier 2 when tier 0 and tier 1 are all unavailable", async () => {
+        const p0 = makeUpstream({ id: "p0", priority: 0 });
+        const p1 = makeUpstream({ id: "p1", priority: 1 });
+        const p2 = makeUpstream({ id: "p2", priority: 2 });
+        mockFindMany.mockResolvedValue([p0, p1, p2]);
+        setCBOpen("p0", "p1");
+
+        const result = await selectFromProviderType("openai");
+        expect(result.upstream.id).toBe("p2");
+        expect(result.selectedTier).toBe(2);
+      });
+
+      it("should degrade through mixed unhealthy and circuit-broken tiers", async () => {
+        const p0 = makeUpstream({ id: "p0", priority: 0, isHealthy: false });
+        const p1 = makeUpstream({ id: "p1", priority: 1 });
+        const p2 = makeUpstream({ id: "p2", priority: 2 });
+        mockFindMany.mockResolvedValue([p0, p1, p2]);
+        setCBOpen("p1");
+
+        const result = await selectFromProviderType("openai");
+        expect(result.upstream.id).toBe("p2");
+        expect(result.selectedTier).toBe(2);
+      });
+
+      it("should return selectedTier matching the priority of the chosen upstream", async () => {
+        const p5 = makeUpstream({ id: "p5", priority: 5 });
+        mockFindMany.mockResolvedValue([p5]);
+
+        const result = await selectFromProviderType("openai");
+        expect(result.selectedTier).toBe(5);
+      });
     });
 
-    it("should support least-connections strategy", async () => {
-      const { selectFromProviderType, recordConnection, resetConnectionCounts } =
-        await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-      const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
+    // =========================================================================
+    // Weighted selection within a tier
+    // =========================================================================
+    describe("weighted selection within tier", () => {
+      it("should distribute selections roughly by weight", async () => {
+        // weight 10 vs weight 1 – the heavier one should be picked much more often
+        const heavy = makeUpstream({ id: "heavy", priority: 0, weight: 10 });
+        const light = makeUpstream({ id: "light", priority: 0, weight: 1 });
+        mockFindMany.mockResolvedValue([heavy, light]);
 
-      resetConnectionCounts();
+        const counts: Record<string, number> = { heavy: 0, light: 0 };
+        const iterations = 200;
 
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
-        {
-          id: "upstream-1",
-          name: "test-1",
-          weight: 1,
-          groupId: null,
-          isActive: true,
-          providerType: "openai",
-          health: { isHealthy: true, latencyMs: 50 },
-        },
-        {
-          id: "upstream-2",
-          name: "test-2",
-          weight: 1,
-          groupId: null,
-          isActive: true,
-          providerType: "openai",
-          health: { isHealthy: true, latencyMs: 100 },
-        },
-      ] as unknown as PartialUpstream[]);
+        for (let i = 0; i < iterations; i++) {
+          const result = await selectFromProviderType("openai");
+          counts[result.upstream.id] += 1;
+        }
 
-      vi.mocked(getCircuitBreakerState).mockResolvedValue(null);
+        // With weight 10:1, heavy should get the vast majority
+        expect(counts["heavy"]).toBeGreaterThan(counts["light"]);
+        // heavy should get at least 60% of selections (very conservative threshold)
+        expect(counts["heavy"]).toBeGreaterThan(iterations * 0.6);
+      });
 
-      // Add connections to upstream-1
-      recordConnection("upstream-1");
-      recordConnection("upstream-1");
+      it("should only select from the highest-priority available tier", async () => {
+        const p0 = makeUpstream({ id: "p0", priority: 0, weight: 1 });
+        const p1heavy = makeUpstream({ id: "p1heavy", priority: 1, weight: 100 });
+        mockFindMany.mockResolvedValue([p0, p1heavy]);
 
-      const result = await selectFromProviderType("openai", LoadBalancerStrategy.LEAST_CONNECTIONS);
+        // Even though p1heavy has much higher weight, p0 should always be selected
+        // because it is in a higher-priority tier
+        for (let i = 0; i < 20; i++) {
+          const result = await selectFromProviderType("openai");
+          expect(result.upstream.id).toBe("p0");
+        }
+      });
 
-      expect(result.strategy).toBe(LoadBalancerStrategy.LEAST_CONNECTIONS);
-      // Should select upstream-2 (fewer connections)
-      expect(result.upstream.id).toBe("upstream-2");
+      it("should handle upstreams with equal weights", async () => {
+        const u1 = makeUpstream({ id: "u1", priority: 0, weight: 1 });
+        const u2 = makeUpstream({ id: "u2", priority: 0, weight: 1 });
+        const u3 = makeUpstream({ id: "u3", priority: 0, weight: 1 });
+        mockFindMany.mockResolvedValue([u1, u2, u3]);
+
+        const selected = new Set<string>();
+        for (let i = 0; i < 100; i++) {
+          const result = await selectFromProviderType("openai");
+          selected.add(result.upstream.id);
+        }
+
+        // With equal weights, all three should be selected at least once over 100 runs
+        expect(selected.size).toBe(3);
+      });
     });
 
-    it("should return metadata about filtering", async () => {
-      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
-      const { db } = await import("@/lib/db");
-      const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
+    // =========================================================================
+    // excludeIds filtering
+    // =========================================================================
+    describe("excludeIds filtering", () => {
+      it("should exclude specified upstream IDs", async () => {
+        const u1 = makeUpstream({ id: "u1", priority: 0 });
+        const u2 = makeUpstream({ id: "u2", priority: 0 });
+        mockFindMany.mockResolvedValue([u1, u2]);
 
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
-        {
-          id: "upstream-1",
-          name: "test-1",
-          weight: 1,
-          groupId: null,
-          isActive: true,
-          providerType: "openai",
-          health: { isHealthy: true, latencyMs: 50 },
-        },
-        {
-          id: "upstream-2",
-          name: "test-2",
-          weight: 1,
-          groupId: null,
-          isActive: true,
-          providerType: "openai",
-          health: { isHealthy: true, latencyMs: 100 },
-        },
-      ] as unknown as PartialUpstream[]);
+        const result = await selectFromProviderType("openai", ["u1"]);
+        expect(result.upstream.id).toBe("u2");
+      });
 
-      // One upstream has open circuit
-      vi.mocked(getCircuitBreakerState)
-        .mockResolvedValueOnce({ state: "open", failureCount: 5 } as CircuitBreakerState)
-        .mockResolvedValueOnce({ state: "closed", failureCount: 0 } as CircuitBreakerState);
+      it("should throw NoHealthyUpstreamsError when all upstreams are excluded", async () => {
+        const u1 = makeUpstream({ id: "u1" });
+        const u2 = makeUpstream({ id: "u2" });
+        mockFindMany.mockResolvedValue([u1, u2]);
 
-      const result = await selectFromProviderType("openai");
+        await expect(selectFromProviderType("openai", ["u1", "u2"])).rejects.toThrow(
+          NoHealthyUpstreamsError
+        );
+      });
 
-      expect(result.totalCandidates).toBe(2);
-      expect(result.circuitBreakerFiltered).toBe(1);
-      expect(result.healthFiltered).toBe(0);
+      it("should degrade to next tier when all upstreams in current tier are excluded", async () => {
+        const p0 = makeUpstream({ id: "p0", priority: 0 });
+        const p1 = makeUpstream({ id: "p1", priority: 1 });
+        mockFindMany.mockResolvedValue([p0, p1]);
+
+        const result = await selectFromProviderType("openai", ["p0"]);
+        expect(result.upstream.id).toBe("p1");
+        expect(result.selectedTier).toBe(1);
+      });
+    });
+
+    // =========================================================================
+    // allowedUpstreamIds filtering
+    // =========================================================================
+    describe("allowedUpstreamIds filtering", () => {
+      it("should restrict selection to only allowed upstream IDs", async () => {
+        const u1 = makeUpstream({ id: "u1", priority: 0 });
+        const u2 = makeUpstream({ id: "u2", priority: 0 });
+        const u3 = makeUpstream({ id: "u3", priority: 0 });
+        mockFindMany.mockResolvedValue([u1, u2, u3]);
+
+        const result = await selectFromProviderType("openai", undefined, ["u2"]);
+        expect(result.upstream.id).toBe("u2");
+      });
+
+      it("should throw NoHealthyUpstreamsError when no allowed upstreams match", async () => {
+        const u1 = makeUpstream({ id: "u1" });
+        mockFindMany.mockResolvedValue([u1]);
+
+        await expect(selectFromProviderType("openai", undefined, ["nonexistent"])).rejects.toThrow(
+          NoHealthyUpstreamsError
+        );
+      });
+
+      it("should combine allowedUpstreamIds with excludeIds", async () => {
+        const u1 = makeUpstream({ id: "u1", priority: 0 });
+        const u2 = makeUpstream({ id: "u2", priority: 0 });
+        const u3 = makeUpstream({ id: "u3", priority: 0 });
+        mockFindMany.mockResolvedValue([u1, u2, u3]);
+
+        // Allow u1 and u2, but exclude u1 -> only u2 remains
+        const result = await selectFromProviderType("openai", ["u1"], ["u1", "u2"]);
+        expect(result.upstream.id).toBe("u2");
+      });
+
+      it("should throw when allowed and excluded sets cancel each other out", async () => {
+        const u1 = makeUpstream({ id: "u1" });
+        const u2 = makeUpstream({ id: "u2" });
+        mockFindMany.mockResolvedValue([u1, u2]);
+
+        await expect(selectFromProviderType("openai", ["u1", "u2"], ["u1", "u2"])).rejects.toThrow(
+          NoHealthyUpstreamsError
+        );
+      });
+    });
+
+    // =========================================================================
+    // Health-based filtering
+    // =========================================================================
+    describe("health-based filtering", () => {
+      it("should skip unhealthy upstreams and select healthy ones", async () => {
+        const unhealthy = makeUpstream({ id: "sick", priority: 0, isHealthy: false });
+        const healthy = makeUpstream({ id: "ok", priority: 0 });
+        mockFindMany.mockResolvedValue([unhealthy, healthy]);
+
+        const result = await selectFromProviderType("openai");
+        expect(result.upstream.id).toBe("ok");
+      });
+
+      it("should skip circuit-broken upstreams and select closed ones", async () => {
+        const u1 = makeUpstream({ id: "broken", priority: 0 });
+        const u2 = makeUpstream({ id: "working", priority: 0 });
+        mockFindMany.mockResolvedValue([u1, u2]);
+        setCBOpen("broken");
+
+        const result = await selectFromProviderType("openai");
+        expect(result.upstream.id).toBe("working");
+      });
+
+      it("should reject half_open circuit breaker upstreams", async () => {
+        const u1 = makeUpstream({ id: "half", priority: 0 });
+        mockFindMany.mockResolvedValue([u1]);
+        mockGetCircuitBreakerState.mockResolvedValue({
+          id: "cb-1",
+          upstreamId: "half",
+          state: "half_open",
+          failureCount: 3,
+          successCount: 0,
+          lastFailureAt: new Date(),
+          openedAt: new Date(),
+          lastProbeAt: null,
+          config: null,
+        });
+
+        await expect(selectFromProviderType("openai")).rejects.toThrow(NoHealthyUpstreamsError);
+      });
+
+      it("should treat upstream with no health record as healthy", async () => {
+        const u1 = makeUpstream({ id: "no-health", priority: 0 });
+        // Simulate no health record by setting health to null
+        (u1 as Record<string, unknown>).health = null;
+        mockFindMany.mockResolvedValue([u1]);
+
+        const result = await selectFromProviderType("openai");
+        expect(result.upstream.id).toBe("no-health");
+      });
+    });
+
+    // =========================================================================
+    // Combined scenarios
+    // =========================================================================
+    describe("combined scenarios", () => {
+      it("should handle mix of excluded, unhealthy, and circuit-broken across tiers", async () => {
+        const p0a = makeUpstream({ id: "p0a", priority: 0 }); // will be excluded
+        const p0b = makeUpstream({ id: "p0b", priority: 0, isHealthy: false }); // unhealthy
+        const p1a = makeUpstream({ id: "p1a", priority: 1 }); // circuit-broken
+        const p1b = makeUpstream({ id: "p1b", priority: 1 }); // the only viable one
+        mockFindMany.mockResolvedValue([p0a, p0b, p1a, p1b]);
+        setCBOpen("p1a");
+
+        const result = await selectFromProviderType("openai", ["p0a"]);
+        expect(result.upstream.id).toBe("p1b");
+        expect(result.selectedTier).toBe(1);
+      });
+
+      it("should throw when every upstream is unavailable for different reasons", async () => {
+        const excluded = makeUpstream({ id: "ex" });
+        const unhealthy = makeUpstream({ id: "sick", isHealthy: false });
+        const broken = makeUpstream({ id: "broken" });
+        mockFindMany.mockResolvedValue([excluded, unhealthy, broken]);
+        setCBOpen("broken");
+
+        await expect(selectFromProviderType("openai", ["ex"])).rejects.toThrow(
+          NoHealthyUpstreamsError
+        );
+      });
     });
   });
 
-  describe("VALID_PROVIDER_TYPES", () => {
-    it("should contain all valid provider types", () => {
-      expect(VALID_PROVIDER_TYPES).toContain("anthropic");
-      expect(VALID_PROVIDER_TYPES).toContain("openai");
-      expect(VALID_PROVIDER_TYPES).toContain("google");
-      expect(VALID_PROVIDER_TYPES).toContain("custom");
-      expect(VALID_PROVIDER_TYPES.length).toBe(4);
+  // =========================================================================
+  // NoHealthyUpstreamsError
+  // =========================================================================
+  describe("NoHealthyUpstreamsError", () => {
+    it("should be an instance of Error", () => {
+      const err = new NoHealthyUpstreamsError("openai");
+      expect(err).toBeInstanceOf(Error);
+      expect(err.name).toBe("NoHealthyUpstreamsError");
+    });
+
+    it("should contain the provider type in the message", () => {
+      const err = new NoHealthyUpstreamsError("anthropic");
+      expect(err.message).toContain("anthropic");
+    });
+  });
+
+  // =========================================================================
+  // connectionCounts / recordConnection / releaseConnection
+  // =========================================================================
+  describe("connection tracking", () => {
+    it("recordConnection should increment the count for an upstream", () => {
+      recordConnection("u1");
+      expect(getConnectionCount("u1")).toBe(1);
+
+      recordConnection("u1");
+      expect(getConnectionCount("u1")).toBe(2);
+    });
+
+    it("releaseConnection should decrement the count for an upstream", () => {
+      recordConnection("u1");
+      recordConnection("u1");
+      releaseConnection("u1");
+      expect(getConnectionCount("u1")).toBe(1);
+    });
+
+    it("releaseConnection should not go below zero", () => {
+      releaseConnection("u1");
+      const count = getConnectionCount("u1");
+      expect(count === undefined || count === 0).toBe(true);
+    });
+
+    it("should track connections independently per upstream", () => {
+      recordConnection("u1");
+      recordConnection("u1");
+      recordConnection("u2");
+
+      expect(getConnectionCount("u1")).toBe(2);
+      expect(getConnectionCount("u2")).toBe(1);
     });
   });
 });

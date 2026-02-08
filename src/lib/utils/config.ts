@@ -31,6 +31,10 @@ const configSchema = z
     // Request log retention
     logRetentionDays: z.coerce.number().int().positive().default(90),
 
+    // Health check
+    healthCheckInterval: z.coerce.number().int().positive().default(30),
+    healthCheckTimeout: z.coerce.number().int().positive().default(10),
+
     // CORS
     corsOrigins: z
       .string()
@@ -71,6 +75,8 @@ function loadConfig(): Config {
     allowKeyReveal: process.env.ALLOW_KEY_REVEAL,
     debugLogHeaders: process.env.DEBUG_LOG_HEADERS,
     logRetentionDays: process.env.LOG_RETENTION_DAYS,
+    healthCheckInterval: process.env.HEALTH_CHECK_INTERVAL,
+    healthCheckTimeout: process.env.HEALTH_CHECK_TIMEOUT,
     corsOrigins: process.env.CORS_ORIGINS,
   };
 

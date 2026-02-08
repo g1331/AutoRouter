@@ -62,6 +62,7 @@ export function RoutingDecisionDisplay({
       const labels: Record<string, string> = {
         auto: t("routingAuto"),
         direct: t("routingDirect"),
+        tiered: t("routingTiered"),
         group: t("routingGroup"),
         default: t("routingDefault"),
       };
@@ -70,7 +71,7 @@ export function RoutingDecisionDisplay({
 
     const labels: Record<string, string> = {
       provider_type: t("routingProviderType"),
-      group: t("routingGroup"),
+      tiered: t("routingTiered"),
       none: t("routingNone"),
     };
     return labels[routingDecision.routing_type] || routingDecision.routing_type;

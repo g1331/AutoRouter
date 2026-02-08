@@ -24,15 +24,6 @@ vi.mock("@/hooks/use-upstreams", () => ({
   }),
 }));
 
-// Mock upstream groups hook
-vi.mock("@/hooks/use-upstream-groups", () => ({
-  useAllUpstreamGroups: () => ({
-    data: [],
-    isLoading: false,
-    error: null,
-  }),
-}));
-
 describe("UpstreamFormDialog", () => {
   let queryClient: QueryClient;
 
@@ -52,9 +43,8 @@ describe("UpstreamFormDialog", () => {
     is_default: false,
     timeout: 60,
     is_active: true,
-    group_id: null,
     weight: 1,
-    group_name: null,
+    priority: 0,
     health_status: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -169,7 +159,7 @@ describe("UpstreamFormDialog", () => {
           base_url: "https://api.example.com/v1",
           api_key: "sk-test-key",
           description: null,
-          group_id: null,
+          priority: 0,
           weight: 1,
           provider_type: null,
           allowed_models: null,
@@ -268,7 +258,7 @@ describe("UpstreamFormDialog", () => {
             base_url: "https://api.openai.com/v1",
             api_key: "sk-new-key",
             description: "Production OpenAI API",
-            group_id: null,
+            priority: 0,
             weight: 1,
             provider_type: null,
             allowed_models: null,
@@ -302,7 +292,7 @@ describe("UpstreamFormDialog", () => {
             provider: "openai",
             base_url: "https://api.openai.com/v1",
             description: "Production OpenAI API",
-            group_id: null,
+            priority: 0,
             weight: 1,
             provider_type: null,
             allowed_models: null,

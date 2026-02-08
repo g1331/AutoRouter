@@ -1,8 +1,6 @@
 import type {
   UpstreamResponse as ServiceUpstreamResponse,
   PaginatedUpstreams,
-  UpstreamGroupResponse as ServiceUpstreamGroupResponse,
-  PaginatedUpstreamGroups,
 } from "@/lib/services/upstream-crud";
 import type {
   ApiKeyListItem,
@@ -64,9 +62,8 @@ export interface UpstreamApiResponse {
   timeout: number;
   is_active: boolean;
   config: string | null;
-  group_id: string | null;
   weight: number;
-  group_name: string | null;
+  priority: number;
   provider_type: string | null;
   allowed_models: string[] | null;
   model_redirects: Record<string, string> | null;
@@ -86,25 +83,6 @@ export interface PaginatedApiResponse<T> {
   total_pages: number;
 }
 
-/**
- * API response format for upstream group (snake_case).
- * This matches the actual response format used by the API routes.
- */
-export interface UpstreamGroupApiResponse {
-  id: string;
-  name: string;
-  provider: string;
-  strategy: string;
-  health_check_interval: number;
-  health_check_timeout: number;
-  is_active: boolean;
-  config: string | null;
-  upstream_count?: number;
-  healthy_count?: number;
-  created_at: string;
-  updated_at: string;
-}
-
 // ========== Upstream Transformers ==========
 
 /**
@@ -122,9 +100,8 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
     timeout: upstream.timeout,
     is_active: upstream.isActive,
     config: upstream.config,
-    group_id: upstream.groupId,
     weight: upstream.weight,
-    group_name: upstream.groupName,
+    priority: upstream.priority,
     provider_type: upstream.providerType,
     allowed_models: upstream.allowedModels,
     model_redirects: upstream.modelRedirects,
@@ -150,46 +127,6 @@ export function transformPaginatedUpstreams(
 ): PaginatedApiResponse<UpstreamApiResponse> {
   return {
     items: result.items.map(transformUpstreamToApi),
-    total: result.total,
-    page: result.page,
-    page_size: result.pageSize,
-    total_pages: result.totalPages,
-  };
-}
-
-// ========== Upstream Group Transformers ==========
-
-/**
- * Transform a service layer upstream group response to API response format.
- * Converts camelCase properties to snake_case for API consistency.
- */
-export function transformUpstreamGroupToApi(
-  group: ServiceUpstreamGroupResponse
-): UpstreamGroupApiResponse {
-  return {
-    id: group.id,
-    name: group.name,
-    provider: group.provider,
-    strategy: group.strategy,
-    health_check_interval: group.healthCheckInterval,
-    health_check_timeout: group.healthCheckTimeout,
-    is_active: group.isActive,
-    config: group.config,
-    upstream_count: group.upstreamCount,
-    healthy_count: group.healthyCount,
-    created_at: group.createdAt.toISOString(),
-    updated_at: group.updatedAt.toISOString(),
-  };
-}
-
-/**
- * Transform paginated upstream group results to API response format.
- */
-export function transformPaginatedUpstreamGroups(
-  result: PaginatedUpstreamGroups
-): PaginatedApiResponse<UpstreamGroupApiResponse> {
-  return {
-    items: result.items.map(transformUpstreamGroupToApi),
     total: result.total,
     page: result.page,
     page_size: result.pageSize,
@@ -327,8 +264,9 @@ export interface RequestLogApiResponse {
   error_message: string | null;
   // Routing decision fields
   routing_type: string | null;
-  group_name: string | null;
-  lb_strategy: string | null;
+  priority_tier: number | null;
+  group_name: string | null; // Deprecated: kept for historical data
+  lb_strategy: string | null; // Deprecated: kept for historical data
   failover_attempts: number;
   failover_history: FailoverAttempt[] | null;
   routing_decision: RoutingDecisionLog | null;
@@ -362,6 +300,7 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
     error_message: log.errorMessage,
     // Routing decision fields
     routing_type: log.routingType,
+    priority_tier: log.priorityTier,
     group_name: log.groupName,
     lb_strategy: log.lbStrategy,
     failover_attempts: log.failoverAttempts,

@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   UpstreamNotFoundError,
-  UpstreamGroupNotFoundError,
   type HealthStatus,
   type HealthCheckResult,
 } from "@/lib/services/health-checker";
@@ -29,9 +28,6 @@ vi.mock("@/lib/db", () => ({
         findFirst: vi.fn(),
         findMany: vi.fn(),
       },
-      upstreamGroups: {
-        findFirst: vi.fn(),
-      },
       upstreamHealth: {
         findFirst: vi.fn(),
       },
@@ -49,7 +45,6 @@ vi.mock("@/lib/db", () => ({
     })),
   },
   upstreams: {},
-  upstreamGroups: {},
   upstreamHealth: {},
 }));
 
@@ -109,7 +104,6 @@ describe("health-checker", () => {
       apiKeyEncrypted: string;
       timeout: number;
       isActive: boolean;
-      groupId: string | null;
       health: {
         id: string;
         upstreamId: string;
@@ -119,11 +113,6 @@ describe("health-checker", () => {
         failureCount: number;
         latencyMs: number | null;
         errorMessage: string | null;
-      } | null;
-      group: {
-        id: string;
-        name: string;
-        healthCheckTimeout: number | null;
       } | null;
     }> = {}
   ) {
@@ -135,9 +124,7 @@ describe("health-checker", () => {
       apiKeyEncrypted: "encrypted:sk-test-key",
       timeout: 60,
       isActive: true,
-      groupId: null,
       health: null,
-      group: null,
       ...overrides,
     };
   }
@@ -181,23 +168,6 @@ describe("health-checker", () => {
 
     it("should be instanceof Error", () => {
       const error = new UpstreamNotFoundError("test");
-      expect(error).toBeInstanceOf(Error);
-    });
-  });
-
-  describe("UpstreamGroupNotFoundError", () => {
-    it("should have correct name", () => {
-      const error = new UpstreamGroupNotFoundError("Group not found: test-id");
-      expect(error.name).toBe("UpstreamGroupNotFoundError");
-    });
-
-    it("should have correct message", () => {
-      const error = new UpstreamGroupNotFoundError("Upstream group not found: test-id");
-      expect(error.message).toBe("Upstream group not found: test-id");
-    });
-
-    it("should be instanceof Error", () => {
-      const error = new UpstreamGroupNotFoundError("test");
       expect(error).toBeInstanceOf(Error);
     });
   });
@@ -285,86 +255,6 @@ describe("health-checker", () => {
         latencyMs: 150,
         errorMessage: "Connection timeout",
       });
-    });
-  });
-
-  describe("getGroupHealthStatus", () => {
-    it("should return health status for all upstreams in a group", async () => {
-      const { getGroupHealthStatus } = await import("@/lib/services/health-checker");
-      const { db } = await import("@/lib/db");
-
-      const mockGroup = { id: "group-1", name: "test-group" };
-      const mockUpstreams = [
-        createMockUpstream({ id: "upstream-1", name: "upstream-1", health: createMockHealth() }),
-        createMockUpstream({
-          id: "upstream-2",
-          name: "upstream-2",
-          health: createMockHealth({
-            id: "health-2",
-            upstreamId: "upstream-2",
-            isHealthy: false,
-            failureCount: 2,
-          }),
-        }),
-      ];
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(mockGroup);
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue(mockUpstreams);
-
-      const result = await getGroupHealthStatus("group-1");
-
-      expect(result).toHaveLength(2);
-      expect(result[0].upstreamId).toBe("upstream-1");
-      expect(result[0].isHealthy).toBe(true);
-      expect(result[1].upstreamId).toBe("upstream-2");
-      expect(result[1].isHealthy).toBe(false);
-      expect(result[1].failureCount).toBe(2);
-    });
-
-    it("should throw UpstreamGroupNotFoundError for non-existent group", async () => {
-      const { getGroupHealthStatus, UpstreamGroupNotFoundError } =
-        await import("@/lib/services/health-checker");
-      const { db } = await import("@/lib/db");
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
-
-      await expect(getGroupHealthStatus("non-existent-group")).rejects.toThrow(
-        UpstreamGroupNotFoundError
-      );
-      await expect(getGroupHealthStatus("non-existent-group")).rejects.toThrow(
-        "Upstream group not found: non-existent-group"
-      );
-    });
-
-    it("should return empty array for group with no upstreams", async () => {
-      const { getGroupHealthStatus } = await import("@/lib/services/health-checker");
-      const { db } = await import("@/lib/db");
-
-      const mockGroup = { id: "group-1", name: "empty-group" };
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(mockGroup);
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([]);
-
-      const result = await getGroupHealthStatus("group-1");
-
-      expect(result).toEqual([]);
-    });
-
-    it("should return default health values for upstreams without health records", async () => {
-      const { getGroupHealthStatus } = await import("@/lib/services/health-checker");
-      const { db } = await import("@/lib/db");
-
-      const mockGroup = { id: "group-1", name: "test-group" };
-      const mockUpstreams = [createMockUpstream({ id: "upstream-1", health: null })];
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(mockGroup);
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue(mockUpstreams);
-
-      const result = await getGroupHealthStatus("group-1");
-
-      expect(result[0].isHealthy).toBe(true);
-      expect(result[0].failureCount).toBe(0);
-      expect(result[0].lastCheckAt).toBeNull();
     });
   });
 
@@ -609,46 +499,13 @@ describe("health-checker", () => {
       expect(result.healthStatus.isHealthy).toBe(false);
     });
 
-    it("should use group health check timeout when available", async () => {
+    it("should use provided timeout over upstream timeout", async () => {
       const { checkUpstreamHealth } = await import("@/lib/services/health-checker");
       const { db } = await import("@/lib/db");
       const { testUpstreamConnection } = await import("@/lib/services/upstream-connection-tester");
 
-      const mockGroup = { id: "group-1", name: "test-group", healthCheckTimeout: 15 };
       const mockHealth = createMockHealth();
-      const mockUpstream = createMockUpstream({ health: mockHealth, group: mockGroup });
-
-      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(mockUpstream);
-      vi.mocked(testUpstreamConnection).mockResolvedValue({
-        success: true,
-        message: "Connection successful",
-        latencyMs: 100,
-        statusCode: 200,
-        testedAt: new Date("2024-01-15T12:00:00.000Z"),
-      });
-      vi.mocked(db.update).mockReturnValue({
-        set: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue(undefined),
-        }),
-      } as unknown as MockUpdateChain);
-
-      await checkUpstreamHealth("upstream-1");
-
-      expect(testUpstreamConnection).toHaveBeenCalledWith(
-        expect.objectContaining({
-          timeout: 15, // Group's health check timeout
-        })
-      );
-    });
-
-    it("should use provided timeout over group timeout", async () => {
-      const { checkUpstreamHealth } = await import("@/lib/services/health-checker");
-      const { db } = await import("@/lib/db");
-      const { testUpstreamConnection } = await import("@/lib/services/upstream-connection-tester");
-
-      const mockGroup = { id: "group-1", name: "test-group", healthCheckTimeout: 15 };
-      const mockHealth = createMockHealth();
-      const mockUpstream = createMockUpstream({ health: mockHealth, group: mockGroup });
+      const mockUpstream = createMockUpstream({ health: mockHealth });
 
       vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(mockUpstream);
       vi.mocked(testUpstreamConnection).mockResolvedValue({
@@ -716,7 +573,6 @@ describe("health-checker", () => {
       const mockUpstream = createMockUpstream({
         health: mockHealth,
         timeout: null,
-        group: null,
       });
 
       vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(mockUpstream);
@@ -740,73 +596,6 @@ describe("health-checker", () => {
           timeout: 10, // Default timeout
         })
       );
-    });
-  });
-
-  describe("checkGroupHealth", () => {
-    it("should check health for all active upstreams in a group", async () => {
-      const { checkGroupHealth } = await import("@/lib/services/health-checker");
-      const { db } = await import("@/lib/db");
-      const { testUpstreamConnection } = await import("@/lib/services/upstream-connection-tester");
-
-      const mockGroup = { id: "group-1", name: "test-group", healthCheckTimeout: 10 };
-      const mockUpstreams = [
-        createMockUpstream({ id: "upstream-1", health: createMockHealth() }),
-        createMockUpstream({
-          id: "upstream-2",
-          name: "upstream-2",
-          health: createMockHealth({ id: "health-2", upstreamId: "upstream-2" }),
-        }),
-      ];
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(mockGroup);
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue(mockUpstreams);
-      // Return different results for different upstream queries
-      vi.mocked(db.query.upstreams.findFirst)
-        .mockResolvedValueOnce(mockUpstreams[0])
-        .mockResolvedValueOnce(mockUpstreams[1]);
-      vi.mocked(testUpstreamConnection).mockResolvedValue({
-        success: true,
-        message: "Connection successful",
-        latencyMs: 100,
-        statusCode: 200,
-        testedAt: new Date("2024-01-15T12:00:00.000Z"),
-      });
-      vi.mocked(db.update).mockReturnValue({
-        set: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue(undefined),
-        }),
-      } as unknown as MockUpdateChain);
-
-      const results = await checkGroupHealth("group-1");
-
-      expect(results).toHaveLength(2);
-      expect(results[0].success).toBe(true);
-      expect(results[1].success).toBe(true);
-    });
-
-    it("should throw UpstreamGroupNotFoundError for non-existent group", async () => {
-      const { checkGroupHealth, UpstreamGroupNotFoundError } =
-        await import("@/lib/services/health-checker");
-      const { db } = await import("@/lib/db");
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
-
-      await expect(checkGroupHealth("non-existent")).rejects.toThrow(UpstreamGroupNotFoundError);
-    });
-
-    it("should return empty array for group with no active upstreams", async () => {
-      const { checkGroupHealth } = await import("@/lib/services/health-checker");
-      const { db } = await import("@/lib/db");
-
-      const mockGroup = { id: "group-1", name: "empty-group", healthCheckTimeout: 10 };
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(mockGroup);
-      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([]);
-
-      const results = await checkGroupHealth("group-1");
-
-      expect(results).toEqual([]);
     });
   });
 

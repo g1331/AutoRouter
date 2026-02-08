@@ -1,5 +1,5 @@
 import { eq, and } from "drizzle-orm";
-import { db, upstreams, upstreamGroups, type Upstream } from "../db";
+import { db, upstreams, type Upstream } from "../db";
 import { getCircuitBreakerState, CircuitBreakerStateEnum } from "./circuit-breaker";
 
 /**
@@ -43,7 +43,6 @@ export interface CandidateUpstream {
  */
 export interface ModelRouterResult {
   upstream: Upstream | null;
-  groupName: string | null;
   providerType: ProviderType | null;
   resolvedModel: string;
   candidateUpstreams: CandidateUpstream[];
@@ -52,12 +51,11 @@ export interface ModelRouterResult {
     originalModel: string;
     resolvedModel: string;
     providerType: ProviderType | null;
-    groupName: string | null;
     upstreamName: string | null;
     allowedModelsFilter: boolean;
     modelRedirectApplied: boolean;
     circuitBreakerFilter: boolean;
-    routingType: "provider_type" | "group" | "none";
+    routingType: "provider_type" | "none";
     candidateCount: number;
     finalCandidateCount: number;
   };
@@ -225,52 +223,18 @@ export async function filterUpstreamsByCircuitBreaker(upstreamList: Upstream[]):
 }
 
 /**
- * Get upstreams by provider type directly (fallback to group-based if needed)
+ * Get upstreams by provider type
  */
 export async function getUpstreamsByProviderType(providerType: ProviderType): Promise<{
   upstreams: Upstream[];
-  groupName: string | null;
-  routingType: "provider_type" | "group";
+  routingType: "provider_type";
 }> {
-  // First, try to find upstreams with matching provider_type field
   const providerTypeUpstreams = await db.query.upstreams.findMany({
     where: and(eq(upstreams.providerType, providerType), eq(upstreams.isActive, true)),
   });
 
-  if (providerTypeUpstreams.length > 0) {
-    return {
-      upstreams: providerTypeUpstreams,
-      groupName: null,
-      routingType: "provider_type",
-    };
-  }
-
-  // Fallback: find upstreams by group name
-  const group = await db.query.upstreamGroups.findFirst({
-    where: eq(upstreamGroups.name, providerType),
-  });
-
-  if (group) {
-    const groupUpstreams = await db.query.upstreams.findMany({
-      where: and(eq(upstreams.groupId, group.id), eq(upstreams.isActive, true)),
-    });
-
-    if (groupUpstreams.length > 0) {
-      // Log deprecation warning
-      console.warn(
-        `[model-router] Using deprecated group-based routing for provider type: ${providerType}. Consider setting provider_type field on upstreams.`
-      );
-      return {
-        upstreams: groupUpstreams,
-        groupName: group.name,
-        routingType: "group",
-      };
-    }
-  }
-
   return {
-    upstreams: [],
-    groupName: null,
+    upstreams: providerTypeUpstreams,
     routingType: "provider_type",
   };
 }
@@ -306,7 +270,6 @@ export async function routeByModel(model: string): Promise<ModelRouterResult> {
   if (!providerType) {
     return {
       upstream: null,
-      groupName: null,
       providerType: null,
       resolvedModel: model,
       candidateUpstreams: [],
@@ -315,7 +278,6 @@ export async function routeByModel(model: string): Promise<ModelRouterResult> {
         originalModel,
         resolvedModel: model,
         providerType: null,
-        groupName: null,
         upstreamName: null,
         allowedModelsFilter: false,
         modelRedirectApplied: false,
@@ -327,12 +289,8 @@ export async function routeByModel(model: string): Promise<ModelRouterResult> {
     };
   }
 
-  // Step 2: Get upstreams by provider type (with fallback to group-based)
-  const {
-    upstreams: upstreamList,
-    groupName,
-    routingType,
-  } = await getUpstreamsByProviderType(providerType);
+  // Step 2: Get upstreams by provider type
+  const { upstreams: upstreamList, routingType } = await getUpstreamsByProviderType(providerType);
 
   if (upstreamList.length === 0) {
     throw new NoUpstreamGroupError(model);
@@ -400,7 +358,6 @@ export async function routeByModel(model: string): Promise<ModelRouterResult> {
 
   return {
     upstream: selectedUpstream,
-    groupName,
     providerType,
     resolvedModel: finalResolvedModel,
     candidateUpstreams: allCandidates,
@@ -409,7 +366,6 @@ export async function routeByModel(model: string): Promise<ModelRouterResult> {
       originalModel,
       resolvedModel: finalResolvedModel,
       providerType,
-      groupName,
       upstreamName: selectedUpstream?.name ?? null,
       allowedModelsFilter: usingModelFilter,
       modelRedirectApplied: redirectApplied,

@@ -22,9 +22,6 @@ type PartialUpstream = Partial<Upstream> & { id: string; name: string };
 vi.mock("@/lib/db", () => ({
   db: {
     query: {
-      upstreamGroups: {
-        findFirst: vi.fn(),
-      },
       upstreams: {
         findMany: vi.fn(),
       },
@@ -34,7 +31,6 @@ vi.mock("@/lib/db", () => ({
     },
   },
   upstreams: {},
-  upstreamGroups: {},
   circuitBreakerStates: {},
 }));
 
@@ -241,9 +237,8 @@ describe("model-router", () => {
     });
 
     it("should throw NoUpstreamGroupError when no upstreams exist for provider type", async () => {
-      // Mock no upstreams for provider_type and no matching group
+      // Mock no upstreams for provider_type
       vi.mocked(db.query.upstreams.findMany).mockResolvedValue([]);
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
 
       await expect(routeByModel("gpt-4")).rejects.toThrow(NoUpstreamGroupError);
     });
@@ -252,7 +247,6 @@ describe("model-router", () => {
       const result = await routeByModel("unknown-model");
       expect(result.upstream).toBeNull();
       expect(result.providerType).toBeNull();
-      expect(result.groupName).toBeNull();
     });
 
     it("should route to upstream with matching allowedModels", async () => {
@@ -455,38 +449,11 @@ describe("model-router", () => {
 
       expect(result.upstreams).toHaveLength(1);
       expect(result.upstreams[0].id).toBe("upstream-1");
-      expect(result.groupName).toBeNull();
       expect(result.routingType).toBe("provider_type");
-    });
-
-    it("should fallback to group-based routing when no provider_type match", async () => {
-      // First query returns empty (no provider_type match)
-      vi.mocked(db.query.upstreams.findMany)
-        .mockResolvedValueOnce([])
-        // Group query returns group
-        .mockResolvedValueOnce([
-          {
-            id: "upstream-1",
-            name: "openai-1",
-            groupId: "group-id",
-          },
-        ] as unknown as Awaited<ReturnType<typeof db.query.upstreams.findMany>>);
-
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue({
-        id: "group-id",
-        name: "openai",
-      } as unknown as Awaited<ReturnType<typeof db.query.upstreamGroups.findFirst>>);
-
-      const result = await getUpstreamsByProviderType("openai");
-
-      expect(result.upstreams).toHaveLength(1);
-      expect(result.groupName).toBe("openai");
-      expect(result.routingType).toBe("group");
     });
 
     it("should return empty array when no upstreams found", async () => {
       vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([]);
-      vi.mocked(db.query.upstreamGroups.findFirst).mockResolvedValue(null);
 
       const result = await getUpstreamsByProviderType("openai");
 

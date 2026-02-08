@@ -49,11 +49,6 @@ export interface APIKeyRevealResponse {
 // ========== Load Balancing 相关类型 ==========
 
 /**
- * Load balancer strategy for upstream groups
- */
-export type LoadBalancerStrategy = "round_robin" | "weighted" | "least_connections";
-
-/**
  * Supported AI provider types (for API compatibility)
  */
 export type Provider = "openai" | "anthropic";
@@ -62,46 +57,6 @@ export type Provider = "openai" | "anthropic";
  * Provider type for model-based routing
  */
 export type ProviderType = "anthropic" | "openai" | "google" | "custom";
-
-// ========== Upstream Group 相关类型 ==========
-
-export interface UpstreamGroupCreate {
-  name: string;
-  provider: Provider;
-  strategy?: LoadBalancerStrategy;
-  health_check_interval?: number; // seconds (default: 30)
-  health_check_timeout?: number; // seconds (default: 10)
-  is_active?: boolean;
-  config?: string | null; // JSON config
-}
-
-export interface UpstreamGroupUpdate {
-  name?: string;
-  provider?: Provider;
-  strategy?: LoadBalancerStrategy;
-  health_check_interval?: number;
-  health_check_timeout?: number;
-  is_active?: boolean;
-  config?: string | null;
-}
-
-export interface UpstreamGroupResponse {
-  id: string; // UUID
-  name: string;
-  provider: Provider;
-  strategy: LoadBalancerStrategy;
-  health_check_interval: number;
-  health_check_timeout: number;
-  is_active: boolean;
-  config: string | null;
-  upstream_count?: number; // Optional count of upstreams in group
-  healthy_count?: number; // Optional count of healthy upstreams
-  created_at: string; // ISO 8601 date string
-  updated_at: string; // ISO 8601 date string
-}
-
-// Type alias for convenience
-export type UpstreamGroup = UpstreamGroupResponse;
 
 // ========== Upstream Health 相关类型 ==========
 
@@ -165,8 +120,8 @@ export interface UpstreamCreate {
   description?: string | null;
   is_default?: boolean;
   timeout?: number;
-  group_id?: string | null; // UUID - optional group membership
   weight?: number; // Load balancing weight (default: 1)
+  priority?: number; // Priority tier (default: 0, lower = higher priority)
   provider_type?: ProviderType | null; // Provider type for model-based routing
   allowed_models?: string[] | null; // List of supported model names
   model_redirects?: Record<string, string> | null; // Model name mapping
@@ -181,8 +136,8 @@ export interface UpstreamUpdate {
   description?: string | null;
   is_default?: boolean;
   timeout?: number;
-  group_id?: string | null; // UUID - optional group membership (null to remove from group)
   weight?: number; // Load balancing weight
+  priority?: number; // Priority tier (lower = higher priority)
   provider_type?: ProviderType | null; // Provider type for model-based routing
   allowed_models?: string[] | null; // List of supported model names
   model_redirects?: Record<string, string> | null; // Model name mapping
@@ -199,9 +154,8 @@ export interface UpstreamResponse {
   is_default: boolean;
   timeout: number;
   is_active: boolean;
-  group_id: string | null; // UUID - group membership
   weight: number; // Load balancing weight
-  group_name?: string | null; // Group name for display (populated when grouped)
+  priority: number; // Priority tier (lower = higher priority)
   health_status?: UpstreamHealthResponse | null; // Health status (populated when requested)
   circuit_breaker?: CircuitBreakerStatus | null; // Circuit breaker status
   provider_type: ProviderType | null; // Provider type for model-based routing
@@ -261,7 +215,7 @@ export interface FailoverAttempt {
 /**
  * Routing type for request logs
  */
-export type RoutingType = "direct" | "group" | "default";
+export type RoutingType = "direct" | "provider_type" | "tiered";
 
 /**
  * Circuit breaker state for routing decision log
@@ -345,8 +299,9 @@ export interface RequestLogResponse {
   error_message: string | null;
   // Routing decision fields
   routing_type: RoutingType | null;
-  group_name: string | null;
-  lb_strategy: string | null;
+  group_name: string | null; // Deprecated: kept for historical data
+  lb_strategy: string | null; // Deprecated: kept for historical data
+  priority_tier: number | null; // Priority tier of the selected upstream
   failover_attempts: number;
   failover_history: FailoverAttempt[] | null;
   routing_decision: RoutingDecisionLog | null; // Complete routing decision info
@@ -368,7 +323,6 @@ export interface PaginatedResponse<T> {
 
 export type PaginatedAPIKeysResponse = PaginatedResponse<APIKeyResponse>;
 export type PaginatedUpstreamsResponse = PaginatedResponse<UpstreamResponse>;
-export type PaginatedUpstreamGroupsResponse = PaginatedResponse<UpstreamGroupResponse>;
 export type PaginatedRequestLogsResponse = PaginatedResponse<RequestLogResponse>;
 
 // ========== 错误响应类型 ==========

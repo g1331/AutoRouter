@@ -3,8 +3,6 @@ import {
   toISOStringOrNull,
   transformUpstreamToApi,
   transformPaginatedUpstreams,
-  transformUpstreamGroupToApi,
-  transformPaginatedUpstreamGroups,
   transformApiKeyToApi,
   transformApiKeyCreateToApi,
   transformApiKeyRevealToApi,
@@ -70,8 +68,7 @@ describe("api-transformers", () => {
         config: '{"model": "gpt-4"}',
         created_at: "2024-01-15T10:00:00.000Z",
         updated_at: "2024-01-15T12:00:00.000Z",
-        group_id: undefined,
-        group_name: undefined,
+        priority: undefined,
         weight: undefined,
         provider_type: undefined,
         allowed_models: undefined,
@@ -161,153 +158,6 @@ describe("api-transformers", () => {
       };
 
       const result = transformPaginatedUpstreams(paginatedResult);
-
-      expect(result.items).toHaveLength(0);
-      expect(result.total).toBe(0);
-      expect(result.total_pages).toBe(0);
-    });
-  });
-
-  describe("transformUpstreamGroupToApi", () => {
-    it("should transform upstream group to API response format", () => {
-      const group = {
-        id: "group-123",
-        name: "openai-pool",
-        provider: "openai",
-        strategy: "round_robin",
-        healthCheckInterval: 30,
-        healthCheckTimeout: 10,
-        isActive: true,
-        config: '{"maxRetries": 3}',
-        createdAt: new Date("2024-01-15T10:00:00.000Z"),
-        updatedAt: new Date("2024-01-15T12:00:00.000Z"),
-      };
-
-      const result = transformUpstreamGroupToApi(group);
-
-      expect(result).toEqual({
-        id: "group-123",
-        name: "openai-pool",
-        provider: "openai",
-        strategy: "round_robin",
-        health_check_interval: 30,
-        health_check_timeout: 10,
-        is_active: true,
-        config: '{"maxRetries": 3}',
-        created_at: "2024-01-15T10:00:00.000Z",
-        updated_at: "2024-01-15T12:00:00.000Z",
-        upstream_count: undefined,
-        healthy_count: undefined,
-      });
-    });
-
-    it("should include upstream_count and healthy_count when provided", () => {
-      const group = {
-        id: "group-456",
-        name: "anthropic-pool",
-        provider: "anthropic",
-        strategy: "weighted",
-        healthCheckInterval: 60,
-        healthCheckTimeout: 15,
-        isActive: true,
-        config: null,
-        upstreamCount: 5,
-        healthyCount: 3,
-        createdAt: new Date("2024-01-15T10:00:00.000Z"),
-        updatedAt: new Date("2024-01-15T12:00:00.000Z"),
-      };
-
-      const result = transformUpstreamGroupToApi(group);
-
-      expect(result.upstream_count).toBe(5);
-      expect(result.healthy_count).toBe(3);
-    });
-
-    it("should handle null config", () => {
-      const group = {
-        id: "group-789",
-        name: "test-group",
-        provider: "openai",
-        strategy: "least_connections",
-        healthCheckInterval: 30,
-        healthCheckTimeout: 10,
-        isActive: false,
-        config: null,
-        createdAt: new Date("2024-01-10T08:00:00.000Z"),
-        updatedAt: new Date("2024-01-10T08:00:00.000Z"),
-      };
-
-      const result = transformUpstreamGroupToApi(group);
-
-      expect(result.config).toBeNull();
-      expect(result.is_active).toBe(false);
-    });
-  });
-
-  describe("transformPaginatedUpstreamGroups", () => {
-    it("should transform paginated upstream groups to API response format", () => {
-      const paginatedResult = {
-        items: [
-          {
-            id: "group-1",
-            name: "openai-pool",
-            provider: "openai",
-            strategy: "round_robin",
-            healthCheckInterval: 30,
-            healthCheckTimeout: 10,
-            isActive: true,
-            config: null,
-            upstreamCount: 3,
-            healthyCount: 2,
-            createdAt: new Date("2024-01-15T10:00:00.000Z"),
-            updatedAt: new Date("2024-01-15T10:00:00.000Z"),
-          },
-          {
-            id: "group-2",
-            name: "anthropic-pool",
-            provider: "anthropic",
-            strategy: "weighted",
-            healthCheckInterval: 60,
-            healthCheckTimeout: 15,
-            isActive: true,
-            config: null,
-            upstreamCount: 2,
-            healthyCount: 2,
-            createdAt: new Date("2024-01-14T10:00:00.000Z"),
-            updatedAt: new Date("2024-01-14T10:00:00.000Z"),
-          },
-        ],
-        total: 25,
-        page: 2,
-        pageSize: 10,
-        totalPages: 3,
-      };
-
-      const result = transformPaginatedUpstreamGroups(paginatedResult);
-
-      expect(result.items).toHaveLength(2);
-      expect(result.total).toBe(25);
-      expect(result.page).toBe(2);
-      expect(result.page_size).toBe(10);
-      expect(result.total_pages).toBe(3);
-      expect(result.items[0].name).toBe("openai-pool");
-      expect(result.items[0].upstream_count).toBe(3);
-      expect(result.items[0].healthy_count).toBe(2);
-      expect(result.items[1].name).toBe("anthropic-pool");
-      expect(result.items[1].upstream_count).toBe(2);
-      expect(result.items[1].healthy_count).toBe(2);
-    });
-
-    it("should handle empty items array", () => {
-      const paginatedResult = {
-        items: [],
-        total: 0,
-        page: 1,
-        pageSize: 20,
-        totalPages: 0,
-      };
-
-      const result = transformPaginatedUpstreamGroups(paginatedResult);
 
       expect(result.items).toHaveLength(0);
       expect(result.total).toBe(0);

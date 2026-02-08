@@ -13,7 +13,6 @@ export {
 export {
   // Error classes
   UpstreamNotFoundError,
-  UpstreamGroupNotFoundError,
   // Upstream CRUD functions
   createUpstream,
   updateUpstream,
@@ -25,28 +24,11 @@ export {
   getUpstreamByName,
   getDecryptedApiKey,
   maskApiKey,
-  // Upstream Group CRUD functions
-  createUpstreamGroup,
-  updateUpstreamGroup,
-  deleteUpstreamGroup,
-  listUpstreamGroups,
-  getUpstreamGroupById,
-  getUpstreamGroupByName,
-  // Upstream Group Membership functions
-  addUpstreamToGroup,
-  removeUpstreamFromGroup,
-  getUpstreamsInGroup,
-  getStandaloneUpstreams,
   // Upstream types
   type UpstreamCreateInput,
   type UpstreamUpdateInput,
   type UpstreamResponse,
   type PaginatedUpstreams,
-  // Upstream Group types
-  type UpstreamGroupCreateInput,
-  type UpstreamGroupUpdateInput,
-  type UpstreamGroupResponse,
-  type PaginatedUpstreamGroups,
 } from "./upstream-crud";
 
 // Re-export model router functions and types

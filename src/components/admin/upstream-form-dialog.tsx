@@ -35,7 +35,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreateUpstream, useUpdateUpstream } from "@/hooks/use-upstreams";
-import { useAllUpstreamGroups } from "@/hooks/use-upstream-groups";
 import type { Upstream, Provider, ProviderType } from "@/types/api";
 import { TagInput } from "@/components/ui/tag-input";
 import { KeyValueInput } from "@/components/ui/key-value-input";
@@ -64,7 +63,7 @@ const createUpstreamFormSchema = z.object({
   base_url: z.string().url(),
   api_key: z.string().min(1),
   description: z.string().max(500),
-  group_id: z.string().nullable(),
+  priority: z.number().int().min(0).max(100),
   weight: z.number().int().min(1).max(100),
   provider_type: z.enum(["anthropic", "openai", "google", "custom"]).nullable(),
   allowed_models: z.array(z.string()).nullable(),
@@ -79,7 +78,7 @@ const editUpstreamFormSchema = z.object({
   base_url: z.string().url(),
   api_key: z.string(),
   description: z.string().max(500),
-  group_id: z.string().nullable(),
+  priority: z.number().int().min(0).max(100),
   weight: z.number().int().min(1).max(100),
   provider_type: z.enum(["anthropic", "openai", "google", "custom"]).nullable(),
   allowed_models: z.array(z.string()).nullable(),
@@ -101,7 +100,6 @@ export function UpstreamFormDialog({
   const isEdit = !!upstream;
   const createMutation = useCreateUpstream();
   const updateMutation = useUpdateUpstream();
-  const { data: upstreamGroups = [], isLoading: groupsLoading } = useAllUpstreamGroups();
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
 
@@ -113,19 +111,13 @@ export function UpstreamFormDialog({
       base_url: "",
       api_key: "",
       description: "",
-      group_id: null,
+      priority: 0,
       weight: 1,
       provider_type: null,
       allowed_models: null,
       model_redirects: null,
       circuit_breaker_config: null,
     },
-  });
-
-  // Watch group_id to conditionally show weight field
-  const selectedGroupId = useWatch({
-    control: form.control,
-    name: "group_id",
   });
 
   // Watch circuit_breaker_config for controlled inputs
@@ -142,7 +134,7 @@ export function UpstreamFormDialog({
         base_url: upstream.base_url,
         api_key: "",
         description: upstream.description || "",
-        group_id: upstream.group_id || null,
+        priority: upstream.priority ?? 0,
         weight: upstream.weight ?? 1,
         provider_type: upstream.provider_type || null,
         allowed_models: upstream.allowed_models || null,
@@ -163,7 +155,7 @@ export function UpstreamFormDialog({
         base_url: "",
         api_key: "",
         description: "",
-        group_id: null,
+        priority: 0,
         weight: 1,
         provider_type: null,
         allowed_models: null,
@@ -183,7 +175,7 @@ export function UpstreamFormDialog({
           base_url: string;
           api_key?: string;
           description: string | null;
-          group_id?: string | null;
+          priority?: number;
           weight?: number;
           provider_type?: ProviderType | null;
           allowed_models?: string[] | null;
@@ -199,7 +191,7 @@ export function UpstreamFormDialog({
           provider: data.provider,
           base_url: data.base_url,
           description: data.description || null,
-          group_id: data.group_id || null,
+          priority: data.priority,
           weight: data.weight,
           provider_type: data.provider_type,
           allowed_models: data.allowed_models,
@@ -221,7 +213,7 @@ export function UpstreamFormDialog({
           base_url: data.base_url,
           api_key: data.api_key!,
           description: data.description || null,
-          group_id: data.group_id || null,
+          priority: data.priority,
           weight: data.weight,
           provider_type: data.provider_type,
           allowed_models: data.allowed_models,
@@ -313,58 +305,47 @@ export function UpstreamFormDialog({
 
           <FormField
             control={form.control}
-            name="group_id"
+            name="priority"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t("group")}</FormLabel>
-                <Select
-                  onValueChange={(value) => field.onChange(value === "__none__" ? null : value)}
-                  value={field.value || "__none__"}
-                  disabled={groupsLoading}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder={t("groupPlaceholder")} />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="__none__">{t("noGroup")}</SelectItem>
-                    {upstreamGroups.map((group) => (
-                      <SelectItem key={group.id} value={group.id}>
-                        {group.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormDescription>{t("groupDescription")}</FormDescription>
+                <FormLabel>{t("priority")}</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    placeholder={t("priorityPlaceholder")}
+                    {...field}
+                    onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 0)}
+                  />
+                </FormControl>
+                <FormDescription>{t("priorityDescription")}</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
           />
 
-          {selectedGroupId && (
-            <FormField
-              control={form.control}
-              name="weight"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("weight")}</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={100}
-                      placeholder={t("weightPlaceholder")}
-                      {...field}
-                      onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
-                    />
-                  </FormControl>
-                  <FormDescription>{t("weightDescription")}</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
+          <FormField
+            control={form.control}
+            name="weight"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("weight")}</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={100}
+                    placeholder={t("weightPlaceholder")}
+                    {...field}
+                    onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
+                  />
+                </FormControl>
+                <FormDescription>{t("weightDescription")}</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
           <FormField
             control={form.control}

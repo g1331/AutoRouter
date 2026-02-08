@@ -26,21 +26,19 @@ interface UpstreamsTableProps {
   onTest: (upstream: Upstream) => void;
 }
 
-interface GroupedUpstreams {
-  groupName: string;
+interface TierGroup {
+  priority: number;
   upstreams: Upstream[];
   healthySummary: { healthy: number; total: number };
   circuitSummary: { closed: number; total: number };
   maxWeight: number;
 }
 
-const UNGROUPED_KEY = "__UNGROUPED__";
-
 /**
  * Cassette Futurism Upstreams Data Table
  *
  * Terminal-style data display with:
- * - Group-based collapsible sections
+ * - Priority tier collapsible sections
  * - LED status indicators
  * - ASCII progress bars for weight
  * - Mono font for URL data
@@ -51,61 +49,49 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
   const locale = useLocale();
   const dateLocale = getDateLocale(locale);
 
-  // Track collapsed state for each group
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  // Track collapsed state for each tier
+  const [collapsedTiers, setCollapsedTiers] = useState<Set<number>>(new Set());
 
-  // Group upstreams by group_name
-  const groupedData = useMemo(() => {
-    const groups = new Map<string, Upstream[]>();
+  // Group upstreams by priority tier
+  const tieredData = useMemo(() => {
+    const tiers = new Map<number, Upstream[]>();
 
     upstreams.forEach((upstream) => {
-      const key = upstream.group_name || UNGROUPED_KEY;
-      if (!groups.has(key)) {
-        groups.set(key, []);
+      const key = upstream.priority ?? 0;
+      if (!tiers.has(key)) {
+        tiers.set(key, []);
       }
-      groups.get(key)!.push(upstream);
+      tiers.get(key)!.push(upstream);
     });
 
-    // Convert to array and calculate summaries
-    const result: GroupedUpstreams[] = [];
+    // Sort by priority (lowest number = highest priority)
+    const sortedKeys = Array.from(tiers.keys()).sort((a, b) => a - b);
 
-    // Named groups first (sorted alphabetically)
-    const sortedKeys = Array.from(groups.keys())
-      .filter((k) => k !== UNGROUPED_KEY)
-      .sort();
+    const result: TierGroup[] = sortedKeys.map((key) => {
+      const tierUpstreams = tiers.get(key)!;
+      const healthyCount = tierUpstreams.filter((u) => u.health_status?.is_healthy).length;
+      const closedCount = tierUpstreams.filter((u) => u.circuit_breaker?.state === "closed").length;
+      const maxWeight = Math.max(...tierUpstreams.map((u) => u.weight));
 
-    // Add ungrouped at the end if exists
-    if (groups.has(UNGROUPED_KEY)) {
-      sortedKeys.push(UNGROUPED_KEY);
-    }
-
-    sortedKeys.forEach((key) => {
-      const groupUpstreams = groups.get(key)!;
-      const healthyCount = groupUpstreams.filter((u) => u.health_status?.is_healthy).length;
-      const closedCount = groupUpstreams.filter(
-        (u) => u.circuit_breaker?.state === "closed"
-      ).length;
-      const maxWeight = Math.max(...groupUpstreams.map((u) => u.weight));
-
-      result.push({
-        groupName: key,
-        upstreams: groupUpstreams,
-        healthySummary: { healthy: healthyCount, total: groupUpstreams.length },
-        circuitSummary: { closed: closedCount, total: groupUpstreams.length },
+      return {
+        priority: key,
+        upstreams: tierUpstreams,
+        healthySummary: { healthy: healthyCount, total: tierUpstreams.length },
+        circuitSummary: { closed: closedCount, total: tierUpstreams.length },
         maxWeight,
-      });
+      };
     });
 
     return result;
   }, [upstreams]);
 
-  const toggleGroup = (groupName: string) => {
-    setCollapsedGroups((prev) => {
+  const toggleTier = (priority: number) => {
+    setCollapsedTiers((prev) => {
       const next = new Set(prev);
-      if (next.has(groupName)) {
-        next.delete(groupName);
+      if (next.has(priority)) {
+        next.delete(priority);
       } else {
-        next.add(groupName);
+        next.add(priority);
       }
       return next;
     });
@@ -158,7 +144,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
     return "degraded"; // half_open
   };
 
-  const getGroupHealthLedStatus = (summary: { healthy: number; total: number }): LedStatus => {
+  const getTierHealthLedStatus = (summary: { healthy: number; total: number }): LedStatus => {
     if (summary.healthy === summary.total) return "healthy";
     if (summary.healthy === 0) return "offline";
     return "degraded";
@@ -201,7 +187,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
       {/* Terminal Header */}
       <TerminalHeader systemId="UPSTREAM_ARRAY" nodeCount={upstreams.length} />
 
-      {/* Grouped Table */}
+      {/* Tiered Table */}
       <div className="border border-t-0 border-surface-400 overflow-hidden">
         <Table>
           <TableHeader>
@@ -219,17 +205,15 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
             </TableRow>
           </TableHeader>
           <TableBody>
-            {groupedData.map((group) => {
-              const isCollapsed = collapsedGroups.has(group.groupName);
-              const isUngrouped = group.groupName === UNGROUPED_KEY;
-              const displayName = isUngrouped ? "UNGROUPED" : group.groupName.toUpperCase();
+            {tieredData.map((tier) => {
+              const isCollapsed = collapsedTiers.has(tier.priority);
 
               return (
-                <Fragment key={`group-${group.groupName}`}>
-                  {/* Group Header Row */}
+                <Fragment key={`tier-${tier.priority}`}>
+                  {/* Tier Header Row */}
                   <TableRow
                     className="bg-surface-300 hover:bg-surface-300 cursor-pointer"
-                    onClick={() => toggleGroup(group.groupName)}
+                    onClick={() => toggleTier(tier.priority)}
                   >
                     <TableCell colSpan={10} className="py-2">
                       <div className="flex items-center justify-between">
@@ -248,16 +232,20 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                             )}
                           </Button>
                           <span className="font-mono text-xs text-amber-500 font-semibold tracking-wider">
-                            GROUP: {displayName}
+                            TIER P{tier.priority}
+                          </span>
+                          <span className="font-mono text-xs text-amber-700">
+                            ({tier.upstreams.length}{" "}
+                            {tier.upstreams.length === 1 ? "upstream" : "upstreams"})
                           </span>
                         </div>
 
                         <div className="flex items-center gap-4 font-mono text-xs">
                           {/* Health Summary */}
                           <div className="flex items-center gap-2">
-                            <StatusLed status={getGroupHealthLedStatus(group.healthySummary)} />
+                            <StatusLed status={getTierHealthLedStatus(tier.healthySummary)} />
                             <span className="text-amber-600">
-                              {group.healthySummary.healthy}/{group.healthySummary.total} HEALTHY
+                              {tier.healthySummary.healthy}/{tier.healthySummary.total} HEALTHY
                             </span>
                           </div>
 
@@ -265,14 +253,14 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                           <div className="flex items-center gap-2">
                             <span className="text-amber-600">CIRCUIT:</span>
                             <AsciiProgress
-                              value={group.circuitSummary.closed}
-                              max={group.circuitSummary.total}
+                              value={tier.circuitSummary.closed}
+                              max={tier.circuitSummary.total}
                               width={10}
                               showPercentage
                               variant={
-                                group.circuitSummary.closed === group.circuitSummary.total
+                                tier.circuitSummary.closed === tier.circuitSummary.total
                                   ? "success"
-                                  : group.circuitSummary.closed === 0
+                                  : tier.circuitSummary.closed === 0
                                     ? "error"
                                     : "warning"
                               }
@@ -285,7 +273,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
 
                   {/* Upstream Rows */}
                   {!isCollapsed &&
-                    group.upstreams.map((upstream, index) => (
+                    tier.upstreams.map((upstream, index) => (
                       <TableRow
                         key={upstream.id}
                         className={cn(
@@ -312,7 +300,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                         <TableCell>
                           <AsciiProgress
                             value={upstream.weight}
-                            max={group.maxWeight}
+                            max={tier.maxWeight}
                             width={10}
                             showValue
                           />

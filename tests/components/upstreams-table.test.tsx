@@ -25,9 +25,8 @@ describe("UpstreamsTable", () => {
     timeout: 60,
     is_active: true,
     description: "Test description",
-    group_id: null,
     weight: 1,
-    group_name: null,
+    priority: 0,
     health_status: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -135,8 +134,8 @@ describe("UpstreamsTable", () => {
     });
   });
 
-  describe("Group-based Organization", () => {
-    it("displays UNGROUPED section for upstreams without group", () => {
+  describe("Priority Tier Organization", () => {
+    it("displays TIER P0 section for upstreams with default priority", () => {
       render(
         <UpstreamsTable
           upstreams={[mockUpstream]}
@@ -146,32 +145,32 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      expect(screen.getByText("GROUP: UNGROUPED")).toBeInTheDocument();
+      expect(screen.getByText("TIER P0")).toBeInTheDocument();
     });
 
-    it("displays named group section for upstreams with group", () => {
-      const groupedUpstream = { ...mockUpstream, group_name: "openai" };
+    it("displays tier section for upstreams with specific priority", () => {
+      const priorityUpstream = { ...mockUpstream, priority: 1 };
       render(
         <UpstreamsTable
-          upstreams={[groupedUpstream]}
+          upstreams={[priorityUpstream]}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
           onTest={mockOnTest}
         />
       );
 
-      expect(screen.getByText("GROUP: OPENAI")).toBeInTheDocument();
+      expect(screen.getByText("TIER P1")).toBeInTheDocument();
     });
 
-    it("groups upstreams by group_name", () => {
+    it("groups upstreams by priority", () => {
       const upstreams = [
-        { ...mockUpstream, id: "1", name: "Upstream 1", group_name: "openai" },
-        { ...mockUpstream, id: "2", name: "Upstream 2", group_name: "openai" },
+        { ...mockUpstream, id: "1", name: "Upstream 1", priority: 0 },
+        { ...mockUpstream, id: "2", name: "Upstream 2", priority: 0 },
         {
           ...mockUpstream,
           id: "3",
           name: "Upstream 3",
-          group_name: "anthropic",
+          priority: 1,
         },
       ];
       render(
@@ -183,14 +182,14 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      expect(screen.getByText("GROUP: OPENAI")).toBeInTheDocument();
-      expect(screen.getByText("GROUP: ANTHROPIC")).toBeInTheDocument();
+      expect(screen.getByText("TIER P0")).toBeInTheDocument();
+      expect(screen.getByText("TIER P1")).toBeInTheDocument();
     });
 
-    it("displays health summary in group header", () => {
+    it("displays health summary in tier header", () => {
       const healthyUpstream = {
         ...mockUpstream,
-        group_name: "test",
+        priority: 0,
         health_status: { is_healthy: true, last_check: new Date().toISOString() },
       };
       render(
@@ -206,8 +205,8 @@ describe("UpstreamsTable", () => {
     });
   });
 
-  describe("Collapsible Groups", () => {
-    it("shows expand/collapse button in group header", () => {
+  describe("Collapsible Tiers", () => {
+    it("shows expand/collapse button in tier header", () => {
       render(
         <UpstreamsTable
           upstreams={[mockUpstream]}
@@ -221,7 +220,7 @@ describe("UpstreamsTable", () => {
       expect(collapseButton).toBeInTheDocument();
     });
 
-    it("collapses group when header is clicked", () => {
+    it("collapses tier when header is clicked", () => {
       render(
         <UpstreamsTable
           upstreams={[mockUpstream]}
@@ -234,15 +233,15 @@ describe("UpstreamsTable", () => {
       // Initially upstream is visible
       expect(screen.getByText("Test Upstream")).toBeInTheDocument();
 
-      // Click group header to collapse
-      const groupHeader = screen.getByText("GROUP: UNGROUPED").closest("tr");
-      fireEvent.click(groupHeader!);
+      // Click tier header to collapse
+      const tierHeader = screen.getByText("TIER P0").closest("tr");
+      fireEvent.click(tierHeader!);
 
       // Upstream should be hidden
       expect(screen.queryByText("Test Upstream")).not.toBeInTheDocument();
     });
 
-    it("expands group when collapsed header is clicked", () => {
+    it("expands tier when collapsed header is clicked", () => {
       render(
         <UpstreamsTable
           upstreams={[mockUpstream]}
@@ -252,14 +251,14 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      const groupHeader = screen.getByText("GROUP: UNGROUPED").closest("tr");
+      const tierHeader = screen.getByText("TIER P0").closest("tr");
 
       // Collapse
-      fireEvent.click(groupHeader!);
+      fireEvent.click(tierHeader!);
       expect(screen.queryByText("Test Upstream")).not.toBeInTheDocument();
 
       // Expand
-      fireEvent.click(groupHeader!);
+      fireEvent.click(tierHeader!);
       expect(screen.getByText("Test Upstream")).toBeInTheDocument();
     });
   });

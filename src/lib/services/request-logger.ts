@@ -19,9 +19,8 @@ export interface LogRequestInput {
   durationMs: number | null;
   errorMessage?: string | null;
   // Routing decision fields
-  routingType?: "auto" | null;
-  groupName?: string | null;
-  lbStrategy?: string | null;
+  routingType?: "tiered" | "direct" | "provider_type" | null;
+  priorityTier?: number | null;
   failoverAttempts?: number;
   failoverHistory?: FailoverAttempt[] | null;
   routingDecision?: RoutingDecisionLog | null;
@@ -38,9 +37,8 @@ export interface StartRequestLogInput {
   path: string | null;
   model: string | null;
   // Routing decision fields
-  routingType?: "auto" | null;
-  groupName?: string | null;
-  lbStrategy?: string | null;
+  routingType?: "tiered" | "direct" | "provider_type" | null;
+  priorityTier?: number | null;
   routingDecision?: RoutingDecisionLog | null;
 }
 
@@ -65,9 +63,8 @@ export interface UpdateRequestLogInput {
   durationMs?: number | null;
   errorMessage?: string | null;
   // Routing decision fields
-  routingType?: "auto" | null;
-  groupName?: string | null;
-  lbStrategy?: string | null;
+  routingType?: "tiered" | "direct" | "provider_type" | null;
+  priorityTier?: number | null;
   failoverAttempts?: number;
   failoverHistory?: FailoverAttempt[] | null;
   routingDecision?: RoutingDecisionLog | null;
@@ -111,8 +108,9 @@ export interface RequestLogResponse {
   errorMessage: string | null;
   // Routing decision fields
   routingType: string | null;
-  groupName: string | null;
-  lbStrategy: string | null;
+  priorityTier: number | null;
+  groupName: string | null; // Deprecated: kept for historical data
+  lbStrategy: string | null; // Deprecated: kept for historical data
   failoverAttempts: number;
   failoverHistory: FailoverAttempt[] | null;
   routingDecision: RoutingDecisionLog | null;
@@ -161,8 +159,7 @@ export async function logRequestStart(input: StartRequestLogInput): Promise<Requ
       errorMessage: null,
       // Routing decision fields
       routingType: input.routingType ?? null,
-      groupName: input.groupName ?? null,
-      lbStrategy: input.lbStrategy ?? null,
+      priorityTier: input.priorityTier ?? null,
       // Failover fields are only known when request finishes.
       failoverAttempts: 0,
       failoverHistory: null,
@@ -204,8 +201,7 @@ export async function updateRequestLog(
   if (input.errorMessage !== undefined) updateValues.errorMessage = input.errorMessage;
 
   if (input.routingType !== undefined) updateValues.routingType = input.routingType;
-  if (input.groupName !== undefined) updateValues.groupName = input.groupName;
-  if (input.lbStrategy !== undefined) updateValues.lbStrategy = input.lbStrategy;
+  if (input.priorityTier !== undefined) updateValues.priorityTier = input.priorityTier;
 
   if (input.failoverAttempts !== undefined) updateValues.failoverAttempts = input.failoverAttempts;
   if (input.failoverHistory !== undefined) {
@@ -256,8 +252,7 @@ export async function logRequest(input: LogRequestInput): Promise<RequestLog> {
       errorMessage: input.errorMessage ?? null,
       // Routing decision fields
       routingType: input.routingType ?? null,
-      groupName: input.groupName ?? null,
-      lbStrategy: input.lbStrategy ?? null,
+      priorityTier: input.priorityTier ?? null,
       failoverAttempts: input.failoverAttempts ?? 0,
       failoverHistory: input.failoverHistory ? JSON.stringify(input.failoverHistory) : null,
       routingDecision: input.routingDecision ? JSON.stringify(input.routingDecision) : null,
@@ -508,6 +503,7 @@ export async function listRequestLogs(
     errorMessage: log.errorMessage,
     // Routing decision fields
     routingType: log.routingType,
+    priorityTier: log.priorityTier,
     groupName: log.groupName,
     lbStrategy: log.lbStrategy,
     failoverAttempts: log.failoverAttempts,

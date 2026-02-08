@@ -719,9 +719,10 @@ describe("request-logger", () => {
         statusCode: 200,
         durationMs: 500,
         errorMessage: null,
-        routingType: "group",
-        groupName: "openai-group",
-        lbStrategy: "round_robin",
+        routingType: "tiered",
+        priorityTier: 0,
+        groupName: null,
+        lbStrategy: null,
         failoverAttempts: 1,
         failoverHistory: JSON.stringify([
           {
@@ -753,9 +754,8 @@ describe("request-logger", () => {
         totalTokens: 150,
         statusCode: 200,
         durationMs: 500,
-        routingType: "group",
-        groupName: "openai-group",
-        lbStrategy: "round_robin",
+        routingType: "tiered",
+        priorityTier: 0,
         failoverAttempts: 1,
         failoverHistory: [
           {
@@ -769,9 +769,8 @@ describe("request-logger", () => {
         ],
       });
 
-      expect(result.routingType).toBe("group");
-      expect(result.groupName).toBe("openai-group");
-      expect(result.lbStrategy).toBe("round_robin");
+      expect(result.routingType).toBe("tiered");
+      expect(result.priorityTier).toBe(0);
       expect(result.failoverAttempts).toBe(1);
     });
 

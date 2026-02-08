@@ -20,10 +20,7 @@ import {
   selectFromProviderType,
   recordConnection,
   releaseConnection,
-  getUpstreamGroupByName,
   NoHealthyUpstreamsError,
-  UpstreamGroupNotFoundError,
-  LoadBalancerStrategy,
 } from "@/lib/services/load-balancer";
 import { markHealthy, markUnhealthy } from "@/lib/services/health-checker";
 import {
@@ -75,8 +72,7 @@ type RouteContext = { params: Promise<{ path: string[] }> };
  */
 function transformToRoutingDecisionLog(
   routerResult: ModelRouterResult,
-  selectedUpstreamId: string | null,
-  lbStrategy: string | null
+  selectedUpstreamId: string | null
 ): RoutingDecisionLog {
   // Transform candidates to simplified format (handle undefined)
   const candidates: RoutingCandidate[] = (routerResult.candidateUpstreams || []).map((c) => ({
@@ -104,7 +100,7 @@ function transformToRoutingDecisionLog(
     candidate_count: routerResult.routingDecision.candidateCount,
     final_candidate_count: routerResult.routingDecision.finalCandidateCount,
     selected_upstream_id: selectedUpstreamId,
-    selection_strategy: lbStrategy || "weighted",
+    selection_strategy: "weighted",
   };
 }
 
@@ -112,9 +108,8 @@ function transformToRoutingDecisionLog(
  * Routing decision information for logging.
  */
 interface RoutingDecision {
-  routingType: "auto";
-  groupName: string | null;
-  lbStrategy: string | null;
+  routingType: "tiered";
+  priorityTier: number | null;
   providerType: ProviderType | null;
   resolvedModel: string | null;
   failoverAttempts: number;
@@ -213,7 +208,6 @@ async function forwardWithFailover(
       // and filtering by allowed upstream IDs (API key authorization)
       const selection = await selectFromProviderType(
         providerType,
-        LoadBalancerStrategy.WEIGHTED,
         failedUpstreamIds.length > 0 ? failedUpstreamIds : undefined,
         allowedUpstreamIds
       );
@@ -513,9 +507,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
   // Model-based routing
   let selectedUpstream: Upstream | undefined;
-  let useLoadBalancer = false;
-  let groupStrategy: string | null = null;
-  let groupName: string | null = null;
+  let priorityTier: number | null = null;
   let providerType: ProviderType | null = null;
   let resolvedModel = model;
   let allowedUpstreamIds: string[] = [];
@@ -523,8 +515,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   const recorderEnabled = isRecorderEnabled();
   const inboundBody = recorderEnabled ? await readRequestBody(request) : null;
 
-  // Routing type is always "auto" for model-based routing
-  const routingType = "auto" as const;
+  // Routing type is always "tiered" for priority-based routing
+  const routingType = "tiered" as const;
 
   try {
     // Route by model
@@ -535,33 +527,14 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     }
 
     selectedUpstream = routerResult.upstream;
-    groupName = routerResult.groupName;
     providerType = routerResult.providerType;
     resolvedModel = routerResult.resolvedModel;
-
-    // Get group details for load balancing
-    if (groupName) {
-      const group = await getUpstreamGroupByName(groupName);
-      if (group) {
-        groupStrategy = group.strategy;
-        useLoadBalancer = true;
-      }
-    }
 
     // Get API key's allowed upstream IDs for authorization filtering
     const upstreamPermissions = await db.query.apiKeyUpstreams.findMany({
       where: eq(apiKeyUpstreams.apiKeyId, validApiKey.id),
     });
     allowedUpstreamIds = upstreamPermissions.map((p) => p.upstreamId);
-
-    // For non-load-balanced routing, validate API key has permission for this upstream
-    if (!useLoadBalancer && !allowedUpstreamIds.includes(selectedUpstream.id)) {
-      // Log the actual reason internally but return generic error to downstream
-      console.warn(
-        `[Auth] API key ${validApiKey.id} not authorized for upstream '${selectedUpstream.name}'`
-      );
-      return createUnifiedErrorResponse("SERVICE_UNAVAILABLE");
-    }
   } catch (error) {
     if (error instanceof NoUpstreamGroupError) {
       return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED");
@@ -576,11 +549,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   // Build initial routing decision log (will be updated with final upstream after selection)
   const initialRoutingDecisionLog =
     routerResult && routerResult.routingDecision
-      ? transformToRoutingDecisionLog(
-          routerResult,
-          useLoadBalancer ? null : (selectedUpstream?.id ?? null),
-          groupStrategy
-        )
+      ? transformToRoutingDecisionLog(routerResult, selectedUpstream?.id ?? null)
       : null;
 
   // Create an in-progress log entry so the admin UI can show active requests.
@@ -588,13 +557,12 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   try {
     const startLog = await logRequestStart({
       apiKeyId: validApiKey.id,
-      upstreamId: useLoadBalancer ? null : (selectedUpstream?.id ?? null),
+      upstreamId: null,
       method: request.method,
       path,
       model: resolvedModel,
       routingType,
-      groupName,
-      lbStrategy: groupStrategy,
+      priorityTier: null,
       routingDecision: initialRoutingDecisionLog,
     });
     requestLogId = startLog.id;
@@ -607,8 +575,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     let result: ProxyResult;
     let upstreamForLogging: Upstream;
 
-    if (useLoadBalancer && providerType) {
-      // Use load balancer with circuit breaker failover for provider-type routing
+    if (providerType) {
+      // Use tiered routing with circuit breaker failover
       // Pass allowedUpstreamIds to filter by API key authorization
       const {
         result: proxyResult,
@@ -618,11 +586,13 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       result = proxyResult;
       upstreamForLogging = selected;
       failoverHistory = history;
+      priorityTier = selected.priority;
     } else if (selectedUpstream) {
       // Direct upstream routing (no load balancing)
       const upstreamForProxy = prepareUpstreamForProxy(selectedUpstream);
       result = await forwardRequest(request, upstreamForProxy, path, requestId);
       upstreamForLogging = selectedUpstream;
+      priorityTier = selectedUpstream.priority;
     } else {
       return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED");
     }
@@ -630,8 +600,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     // Build routing decision for logging
     const routingDecision: RoutingDecision = {
       routingType,
-      groupName,
-      lbStrategy: groupStrategy,
+      priorityTier,
       providerType,
       resolvedModel,
       failoverAttempts: failoverHistory.length,
@@ -641,12 +610,11 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     // Build final routing decision log with actual selected upstream
     const finalRoutingDecisionLog =
       routerResult && routerResult.routingDecision
-        ? transformToRoutingDecisionLog(routerResult, upstreamForLogging.id, groupStrategy)
+        ? transformToRoutingDecisionLog(routerResult, upstreamForLogging.id)
         : null;
 
-    // For load-balanced routing, the upstream is only known after selection. Update it early
-    // so the in-progress row shows the upstream as soon as possible.
-    if (requestLogId && useLoadBalancer) {
+    // Update the in-progress log with the actual upstream
+    if (requestLogId) {
       void updateRequestLog(requestLogId, {
         upstreamId: upstreamForLogging.id,
         routingDecision: finalRoutingDecisionLog,
@@ -686,8 +654,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               durationMs: Date.now() - startTime,
               errorMessage: null,
               routingType: routingDecision.routingType,
-              groupName: routingDecision.groupName,
-              lbStrategy: routingDecision.lbStrategy,
+              priorityTier: routingDecision.priorityTier,
               failoverAttempts: routingDecision.failoverAttempts,
               failoverHistory:
                 routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
@@ -711,8 +678,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             statusCode: result.statusCode,
             durationMs: Date.now() - startTime,
             routingType: routingDecision.routingType,
-            groupName: routingDecision.groupName,
-            lbStrategy: routingDecision.lbStrategy,
+            priorityTier: routingDecision.priorityTier,
             failoverAttempts: routingDecision.failoverAttempts,
             failoverHistory:
               routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
@@ -804,8 +770,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           durationMs,
           errorMessage: null,
           routingType: routingDecision.routingType,
-          groupName: routingDecision.groupName,
-          lbStrategy: routingDecision.lbStrategy,
+          priorityTier: routingDecision.priorityTier,
           failoverAttempts: routingDecision.failoverAttempts,
           failoverHistory:
             routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
@@ -828,8 +793,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           statusCode: result.statusCode,
           durationMs,
           routingType: routingDecision.routingType,
-          groupName: routingDecision.groupName,
-          lbStrategy: routingDecision.lbStrategy,
+          priorityTier: routingDecision.priorityTier,
           failoverAttempts: routingDecision.failoverAttempts,
           failoverHistory:
             routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
@@ -923,8 +887,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         durationMs,
         errorMessage: error instanceof Error ? error.message : "Unknown error",
         routingType,
-        groupName,
-        lbStrategy: groupStrategy,
+        priorityTier,
         failoverAttempts: failoverHistory.length,
         failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
         routingDecision: initialRoutingDecisionLog,
@@ -943,8 +906,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         durationMs,
         errorMessage: error instanceof Error ? error.message : "Unknown error",
         routingType,
-        groupName,
-        lbStrategy: groupStrategy,
+        priorityTier,
         failoverAttempts: failoverHistory.length,
         failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
         routingDecision: initialRoutingDecisionLog,
@@ -970,7 +932,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       return createUnifiedErrorResponse("ALL_UPSTREAMS_UNAVAILABLE");
     }
 
-    if (error instanceof UpstreamGroupNotFoundError) {
+    if (error instanceof NoUpstreamGroupError) {
       return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED");
     }
 
