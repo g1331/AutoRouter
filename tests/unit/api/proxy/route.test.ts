@@ -564,6 +564,132 @@ describe("proxy route upstream selection", () => {
     expect(forwardRequest).toHaveBeenCalledTimes(3);
   });
 
+  it("should degrade from tier 0 to tier 1 when tier 0 upstream fails", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { markHealthy, markUnhealthy } = await import("@/lib/services/health-checker");
+    const { recordSuccess, recordFailure } = await import("@/lib/services/circuit-breaker");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-tier0" },
+      { upstreamId: "up-tier1" },
+    ]);
+
+    const tier0Upstream = {
+      id: "up-tier0",
+      name: "primary",
+      provider: "anthropic",
+      baseUrl: "https://api.anthropic.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 0,
+    };
+
+    const tier1Upstream = {
+      id: "up-tier1",
+      name: "fallback",
+      provider: "anthropic",
+      baseUrl: "https://api.fallback.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 1,
+    };
+
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream: tier0Upstream,
+      providerType: "anthropic",
+      resolvedModel: "claude-test",
+      candidateUpstreams: [],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "claude-test",
+        resolvedModel: "claude-test",
+        providerType: "anthropic",
+        upstreamName: "primary",
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 2,
+        finalCandidateCount: 2,
+      },
+    });
+
+    // First call returns tier 0 upstream, second call degrades to tier 1
+    vi.mocked(selectFromProviderType)
+      .mockResolvedValueOnce({
+        upstream: tier0Upstream,
+        providerType: "anthropic",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        healthFiltered: 0,
+        totalCandidates: 2,
+      })
+      .mockResolvedValueOnce({
+        upstream: tier1Upstream,
+        providerType: "anthropic",
+        selectedTier: 1,
+        circuitBreakerFiltered: 0,
+        healthFiltered: 0,
+        totalCandidates: 2,
+      });
+
+    // Tier 0 returns 500, tier 1 succeeds
+    vi.mocked(forwardRequest)
+      .mockResolvedValueOnce({
+        statusCode: 500,
+        headers: new Headers(),
+        body: new Uint8Array(),
+        isStream: false,
+        usage: null,
+      })
+      .mockResolvedValueOnce({
+        statusCode: 200,
+        headers: new Headers(),
+        body: new Uint8Array(),
+        isStream: false,
+        usage: null,
+      });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-test",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, { params: Promise.resolve({ path: ["messages"] }) });
+
+    expect(response.status).toBe(200);
+
+    // Tier 0 upstream failed and was marked unhealthy
+    expect(markUnhealthy).toHaveBeenCalledWith("up-tier0", "HTTP 500 error");
+    expect(recordFailure).toHaveBeenCalledWith("up-tier0", "http_500");
+
+    // Tier 1 upstream succeeded
+    expect(markHealthy).toHaveBeenCalledWith("up-tier1", 100);
+    expect(recordSuccess).toHaveBeenCalledWith("up-tier1");
+
+    // selectFromProviderType called twice: first returns tier 0, second returns tier 1
+    expect(selectFromProviderType).toHaveBeenCalledTimes(2);
+
+    // Final response served by tier 1 fallback upstream
+    expect(forwardRequest).toHaveBeenCalledTimes(2);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(tier1Upstream);
+  });
+
   it("should return 400 when no upstream group configured for model", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");

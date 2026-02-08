@@ -308,6 +308,82 @@ describe("UpstreamFormDialog", () => {
     });
   });
 
+  describe("Priority Field", () => {
+    it("creates upstream with custom priority value", async () => {
+      mockCreateMutateAsync.mockResolvedValueOnce({});
+
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      const nameInput = screen.getByPlaceholderText("upstreamNamePlaceholder");
+      const urlInput = screen.getByPlaceholderText("baseUrlPlaceholder");
+      const apiKeyInput = screen.getByPlaceholderText("apiKeyPlaceholder");
+      const priorityInput = screen.getByPlaceholderText("priorityPlaceholder");
+
+      fireEvent.change(nameInput, { target: { value: "Fallback Upstream" } });
+      fireEvent.change(urlInput, { target: { value: "https://api.example.com/v1" } });
+      fireEvent.change(apiKeyInput, { target: { value: "sk-test-key" } });
+      fireEvent.change(priorityInput, { target: { value: "2" } });
+
+      const submitButton = screen.getByText("create");
+      fireEvent.click(submitButton);
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            priority: 2,
+          })
+        );
+      });
+    });
+
+    it("pre-fills priority when editing upstream with non-zero priority", () => {
+      const highPriorityUpstream: Upstream = {
+        ...mockUpstream,
+        id: "upstream-fallback",
+        name: "Fallback Provider",
+        priority: 3,
+      };
+
+      render(
+        <UpstreamFormDialog
+          upstream={highPriorityUpstream}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      const priorityInput = screen.getByPlaceholderText("priorityPlaceholder");
+      expect(priorityInput).toHaveValue(3);
+    });
+
+    it("submits edited upstream with updated priority", async () => {
+      mockUpdateMutateAsync.mockResolvedValueOnce({});
+
+      render(
+        <UpstreamFormDialog upstream={mockUpstream} open={true} onOpenChange={mockOnOpenChange} />,
+        { wrapper: Wrapper }
+      );
+
+      const priorityInput = screen.getByPlaceholderText("priorityPlaceholder");
+      fireEvent.change(priorityInput, { target: { value: "5" } });
+
+      const submitButton = screen.getByText("save");
+      fireEvent.click(submitButton);
+
+      await waitFor(() => {
+        expect(mockUpdateMutateAsync).toHaveBeenCalledWith({
+          id: "upstream-1",
+          data: expect.objectContaining({
+            priority: 5,
+          }),
+        });
+      });
+    });
+  });
+
   describe("Dialog Actions", () => {
     it("calls onOpenChange when cancel is clicked", () => {
       render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {

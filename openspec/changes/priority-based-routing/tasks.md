@@ -51,11 +51,11 @@
 - [x] 6.3 每个 providerType 区域内按 priority 分层展示，层级标签（P0/P1/P2）有明确视觉层次
 - [x] 6.4 层级内 upstream 卡片展示 weight、健康状态、circuit breaker 状态，熔断状态用醒目颜色标识
 - [x] 6.5 更新 i18n 翻译条目（en.json, zh.json）新增 priority 相关文案
-- [ ] 6.6 前端交互测试：创建/编辑 upstream 的 priority 字段、列表页分层展示
+- [x] 6.6 前端交互测试：创建/编辑 upstream 的 priority 字段、列表页分层展示
 
 ## 7. 集成测试与清理
 
-- [ ] 7.1 端到端测试：请求经过分层路由 → 同层 weighted 选择 → 熔断降级到下一层
+- [x] 7.1 端到端测试：请求经过分层路由 → 同层 weighted 选择 → 熔断降级到下一层
 - [x] 7.2 清理已有测试中引用 group 的测试用例
 - [x] 7.3 运行完整测试套件确认无回归（`pnpm test:run`）
 - [x] 7.4 运行 lint 和类型检查（`pnpm lint && pnpm exec tsc --noEmit`）
