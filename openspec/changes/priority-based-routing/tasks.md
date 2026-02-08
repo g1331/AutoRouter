@@ -6,7 +6,7 @@
 - [x] 1.4 从 `schema.ts` 移除 `upstreamGroups` 相关导出（表、关系、类型）
 - [x] 1.5 在 `config.ts` 的 `configSchema` 新增 `healthCheckInterval`（默认 30）和 `healthCheckTimeout`（默认 10）环境变量
 - [x] 1.6 在 request_logs 表新增 `priority_tier` 字段（integer, nullable）
-- [ ] 1.7 生成并验证 Drizzle migration（`pnpm db:generate`）
+- [x] 1.7 生成并验证 Drizzle migration（`pnpm db:generate`）
 - [x] 1.8 编写 schema 变更的单元测试（priority 默认值、非负校验）
 
 ## 2. 服务层 — Group 代码移除
