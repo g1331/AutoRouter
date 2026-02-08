@@ -18,7 +18,6 @@ const circuitBreakerConfigSchema = z.object({
 
 const createUpstreamSchema = z.object({
   name: z.string().min(1).max(64),
-  provider: z.enum(["openai", "anthropic"]),
   base_url: z.string().url(),
   api_key: z.string().min(1),
   is_default: z.boolean().default(false),
@@ -26,7 +25,7 @@ const createUpstreamSchema = z.object({
   config: z.string().nullable().optional(),
   weight: z.number().int().min(1).max(100).default(1),
   priority: z.number().int().min(0).default(0),
-  provider_type: z.enum(["anthropic", "openai", "google", "custom"]).nullable().optional(),
+  provider_type: z.enum(["anthropic", "openai", "google", "custom"]).default("openai"),
   allowed_models: z.array(z.string()).nullable().optional(),
   model_redirects: z.record(z.string(), z.string()).nullable().optional(),
   circuit_breaker_config: circuitBreakerConfigSchema.nullable().optional(),
@@ -67,7 +66,6 @@ export async function POST(request: NextRequest) {
 
     const input: UpstreamCreateInput = {
       name: validated.name,
-      provider: validated.provider,
       baseUrl: validated.base_url,
       apiKey: validated.api_key,
       isDefault: validated.is_default,
@@ -75,7 +73,7 @@ export async function POST(request: NextRequest) {
       config: validated.config ?? null,
       weight: validated.weight,
       priority: validated.priority,
-      providerType: validated.provider_type ?? null,
+      providerType: validated.provider_type,
       allowedModels: validated.allowed_models ?? null,
       modelRedirects: validated.model_redirects ?? null,
       circuitBreakerConfig: validated.circuit_breaker_config

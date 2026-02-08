@@ -41,7 +41,7 @@ vi.mock("@/lib/db", () => ({
   upstreams: {
     id: "id",
     name: "name",
-    provider: "provider",
+    providerType: "provider",
   },
 }));
 
@@ -562,7 +562,7 @@ describe("stats-service", () => {
       expect(result.apiKeys[0].name).toBe("Unknown");
       expect(result.apiKeys[0].keyPrefix).toBe("sk-****");
       expect(result.upstreams[0].name).toBe("Unknown");
-      expect(result.upstreams[0].provider).toBe("unknown");
+      expect(result.upstreams[0].providerType).toBe("unknown");
     });
 
     it("should handle null totalTokens", async () => {

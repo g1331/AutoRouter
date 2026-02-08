@@ -76,7 +76,7 @@ export function DeleteUpstreamDialog({ upstream, open, onClose }: DeleteUpstream
                   {t("provider")}:
                 </span>
                 <span className="type-body-medium text-[rgb(var(--md-sys-color-on-error-container))]">
-                  {upstream.provider}
+                  {upstream.provider_type}
                 </span>
               </div>
               <div className="flex justify-between">

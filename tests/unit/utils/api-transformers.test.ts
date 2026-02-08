@@ -43,7 +43,7 @@ describe("api-transformers", () => {
       const upstream = {
         id: "upstream-123",
         name: "openai-prod",
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyMasked: "sk-***key",
         isDefault: true,
@@ -59,7 +59,7 @@ describe("api-transformers", () => {
       expect(result).toEqual({
         id: "upstream-123",
         name: "openai-prod",
-        provider: "openai",
+        provider_type: "openai",
         base_url: "https://api.openai.com",
         api_key_masked: "sk-***key",
         is_default: true,
@@ -70,7 +70,6 @@ describe("api-transformers", () => {
         updated_at: "2024-01-15T12:00:00.000Z",
         priority: undefined,
         weight: undefined,
-        provider_type: undefined,
         allowed_models: undefined,
         model_redirects: undefined,
         circuit_breaker: null,
@@ -81,7 +80,7 @@ describe("api-transformers", () => {
       const upstream = {
         id: "upstream-456",
         name: "anthropic-prod",
-        provider: "anthropic",
+        providerType: "anthropic",
         baseUrl: "https://api.anthropic.com",
         apiKeyMasked: "sk-***abc",
         isDefault: false,
@@ -107,7 +106,7 @@ describe("api-transformers", () => {
           {
             id: "upstream-1",
             name: "openai",
-            provider: "openai",
+            providerType: "openai",
             baseUrl: "https://api.openai.com",
             apiKeyMasked: "sk-***1",
             isDefault: true,
@@ -120,7 +119,7 @@ describe("api-transformers", () => {
           {
             id: "upstream-2",
             name: "anthropic",
-            provider: "anthropic",
+            providerType: "anthropic",
             baseUrl: "https://api.anthropic.com",
             apiKeyMasked: "sk-***2",
             isDefault: false,
@@ -661,7 +660,7 @@ describe("api-transformers", () => {
       const item = {
         id: "upstream-456",
         name: "OpenAI Production",
-        provider: "openai",
+        providerType: "openai",
         requestCount: 10000,
         totalTokens: 3000000,
       };
@@ -671,7 +670,7 @@ describe("api-transformers", () => {
       expect(result).toEqual({
         id: "upstream-456",
         name: "OpenAI Production",
-        provider: "openai",
+        provider_type: "openai",
         request_count: 10000,
         total_tokens: 3000000,
       });
@@ -713,7 +712,7 @@ describe("api-transformers", () => {
           {
             id: "upstream-1",
             name: "OpenAI",
-            provider: "openai",
+            providerType: "openai",
             requestCount: 10000,
             totalTokens: 3000000,
           },

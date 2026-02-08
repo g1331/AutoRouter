@@ -44,7 +44,6 @@ export const upstreams = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     name: varchar("name", { length: 64 }).notNull().unique(),
-    provider: varchar("provider", { length: 32 }).notNull(),
     baseUrl: text("base_url").notNull(),
     apiKeyEncrypted: text("api_key_encrypted").notNull(),
     isDefault: boolean("is_default").notNull().default(false),
@@ -53,8 +52,7 @@ export const upstreams = pgTable(
     config: text("config"), // JSON stored as text
     weight: integer("weight").notNull().default(1),
     priority: integer("priority").notNull().default(0),
-    // Model-based routing fields
-    providerType: varchar("provider_type", { length: 32 }), // "anthropic" | "openai" | "google" | "custom"
+    providerType: varchar("provider_type", { length: 32 }).notNull().default("openai"), // "anthropic" | "openai" | "google" | "custom"
     allowedModels: json("allowed_models").$type<string[] | null>(), // JSON array of supported model names
     modelRedirects: json("model_redirects").$type<Record<string, string> | null>(), // JSON object mapping incoming model to target model
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

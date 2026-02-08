@@ -38,7 +38,6 @@ export const upstreams = sqliteTable(
       .primaryKey()
       .$defaultFn(() => randomUUID()),
     name: text("name").notNull().unique(),
-    provider: text("provider").notNull(),
     baseUrl: text("base_url").notNull(),
     apiKeyEncrypted: text("api_key_encrypted").notNull(),
     isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
@@ -47,8 +46,7 @@ export const upstreams = sqliteTable(
     config: text("config"), // JSON stored as text
     weight: integer("weight").notNull().default(1),
     priority: integer("priority").notNull().default(0),
-    // Model-based routing fields
-    providerType: text("provider_type"), // "anthropic" | "openai" | "google" | "custom"
+    providerType: text("provider_type").notNull().default("openai"), // "anthropic" | "openai" | "google" | "custom"
     allowedModels: text("allowed_models", { mode: "json" }).$type<string[] | null>(),
     modelRedirects: text("model_redirects", { mode: "json" }).$type<Record<
       string,

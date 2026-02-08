@@ -97,33 +97,15 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
     });
   };
 
-  const formatProvider = (provider: string) => {
+  const formatProvider = (providerType: string) => {
     const providerMap: Record<string, { label: string; variant: BadgeProps["variant"] }> = {
       openai: { label: "OpenAI", variant: "success" },
       anthropic: { label: "Anthropic", variant: "secondary" },
-      azure: { label: "Azure", variant: "info" },
-      gemini: { label: "Gemini", variant: "warning" },
-    };
-
-    const config = providerMap[provider.toLowerCase()] || {
-      label: provider,
-      variant: "neutral" as const,
-    };
-
-    return <Badge variant={config.variant}>{config.label}</Badge>;
-  };
-
-  const formatProviderType = (providerType: string | null) => {
-    if (!providerType) return null;
-
-    const typeMap: Record<string, { label: string; variant: BadgeProps["variant"] }> = {
-      anthropic: { label: "Anthropic", variant: "default" },
-      openai: { label: "OpenAI", variant: "success" },
       google: { label: "Google", variant: "warning" },
       custom: { label: "Custom", variant: "outline" },
     };
 
-    const config = typeMap[providerType.toLowerCase()] || {
+    const config = providerMap[providerType.toLowerCase()] || {
       label: providerType,
       variant: "neutral" as const,
     };
@@ -194,7 +176,6 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
             <TableRow>
               <TableHead className="w-8"></TableHead>
               <TableHead>{tCommon("name")}</TableHead>
-              <TableHead>{t("tableProvider")}</TableHead>
               <TableHead>{t("providerType")}</TableHead>
               <TableHead>{t("tableWeight")}</TableHead>
               <TableHead>{t("tableHealth")}</TableHead>
@@ -215,7 +196,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                     className="bg-surface-300 hover:bg-surface-300 cursor-pointer"
                     onClick={() => toggleTier(tier.priority)}
                   >
-                    <TableCell colSpan={10} className="py-2">
+                    <TableCell colSpan={9} className="py-2">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <Button
@@ -289,14 +270,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                       >
                         <TableCell></TableCell>
                         <TableCell className="font-medium">{upstream.name}</TableCell>
-                        <TableCell>{formatProvider(upstream.provider)}</TableCell>
-                        <TableCell>
-                          {upstream.provider_type ? (
-                            formatProviderType(upstream.provider_type)
-                          ) : (
-                            <span className="text-muted-foreground text-sm">—</span>
-                          )}
-                        </TableCell>
+                        <TableCell>{formatProvider(upstream.provider_type)}</TableCell>
                         <TableCell>
                           <AsciiProgress
                             value={upstream.weight}

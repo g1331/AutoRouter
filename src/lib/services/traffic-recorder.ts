@@ -27,7 +27,7 @@ export interface TrafficRecordFixture {
   meta: {
     requestId: string;
     createdAt: string;
-    provider: string;
+    providerType: string;
     route: string;
     model: string | null;
     durationMs: number;
@@ -39,7 +39,7 @@ export interface TrafficRecordFixture {
     upstream: {
       id: string;
       name: string;
-      provider: string;
+      providerType: string;
       baseUrl: string;
     };
     request: TrafficRecordRequest;
@@ -51,7 +51,7 @@ export interface TrafficRecordFixture {
 export interface BuildFixtureParams {
   requestId: string;
   startTime: number;
-  provider: string;
+  providerType: string;
   route: string;
   model: string | null;
   inboundRequest: {
@@ -64,7 +64,7 @@ export interface BuildFixtureParams {
   upstream: {
     id: string;
     name: string;
-    provider: string;
+    providerType: string;
     baseUrl: string;
   };
   outboundHeaders: Headers | Record<string, string>;
@@ -303,7 +303,7 @@ export function buildFixture(params: BuildFixtureParams): TrafficRecordFixture {
     meta: {
       requestId: params.requestId,
       createdAt: new Date().toISOString(),
-      provider: params.provider,
+      providerType: params.providerType,
       route: params.route,
       model: params.model,
       durationMs: Date.now() - params.startTime,
@@ -319,7 +319,7 @@ export function buildFixture(params: BuildFixtureParams): TrafficRecordFixture {
       upstream: {
         id: params.upstream.id,
         name: params.upstream.name,
-        provider: params.upstream.provider,
+        providerType: params.upstream.providerType,
         baseUrl: redactUrl(params.upstream.baseUrl),
       },
       request: {
@@ -344,7 +344,7 @@ export function buildFixture(params: BuildFixtureParams): TrafficRecordFixture {
 
 export async function recordTrafficFixture(fixture: TrafficRecordFixture): Promise<string> {
   const timestamp = fixture.meta.createdAt.replace(/[:.]/g, "-");
-  const filePath = buildFixturePath(fixture.meta.provider, fixture.meta.route, timestamp);
+  const filePath = buildFixturePath(fixture.meta.providerType, fixture.meta.route, timestamp);
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, JSON.stringify(fixture, null, 2), "utf-8");
   return filePath;

@@ -26,8 +26,8 @@ describe("LeaderboardSection", () => {
       { name: "Test Key", key_prefix: "sk-test", request_count: 1000, total_tokens: 30000 },
     ],
     upstreams: [
-      { name: "OpenAI", provider: "openai", request_count: 12000, total_tokens: 400000 },
-      { name: "Anthropic", provider: "anthropic", request_count: 8000, total_tokens: 280000 },
+      { name: "OpenAI", provider_type: "openai", request_count: 12000, total_tokens: 400000 },
+      { name: "Anthropic", provider_type: "anthropic", request_count: 8000, total_tokens: 280000 },
     ],
     models: [
       { model: "gpt-4", request_count: 10000, total_tokens: 350000 },

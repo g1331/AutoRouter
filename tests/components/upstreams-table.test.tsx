@@ -18,7 +18,7 @@ describe("UpstreamsTable", () => {
   const mockUpstream: Upstream = {
     id: "test-id-1",
     name: "Test Upstream",
-    provider: "openai",
+    provider_type: "openai",
     base_url: "https://api.openai.com/v1",
     api_key_masked: "sk-***1234",
     is_default: false,
@@ -27,6 +27,8 @@ describe("UpstreamsTable", () => {
     description: "Test description",
     weight: 1,
     priority: 0,
+    allowed_models: null,
+    model_redirects: null,
     health_status: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -110,7 +112,7 @@ describe("UpstreamsTable", () => {
       );
 
       expect(screen.getByText("name")).toBeInTheDocument();
-      expect(screen.getByText("tableProvider")).toBeInTheDocument();
+      expect(screen.getByText("providerType")).toBeInTheDocument();
       expect(screen.getByText("tableWeight")).toBeInTheDocument();
       expect(screen.getByText("tableHealth")).toBeInTheDocument();
       expect(screen.getByText("tableCircuitBreaker")).toBeInTheDocument();
@@ -341,7 +343,7 @@ describe("UpstreamsTable", () => {
     });
 
     it("renders Anthropic badge with secondary variant", () => {
-      const anthropicUpstream = { ...mockUpstream, provider: "anthropic" };
+      const anthropicUpstream = { ...mockUpstream, provider_type: "anthropic" as const };
       render(
         <UpstreamsTable
           upstreams={[anthropicUpstream]}
@@ -355,38 +357,38 @@ describe("UpstreamsTable", () => {
       expect(badge).toBeInTheDocument();
     });
 
-    it("renders Azure badge with info variant", () => {
-      const azureUpstream = { ...mockUpstream, provider: "azure" };
+    it("renders Google badge with warning variant", () => {
+      const googleUpstream = { ...mockUpstream, provider_type: "google" as const };
       render(
         <UpstreamsTable
-          upstreams={[azureUpstream]}
+          upstreams={[googleUpstream]}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
           onTest={mockOnTest}
         />
       );
 
-      const badge = screen.getByText("Azure");
+      const badge = screen.getByText("Google");
       expect(badge).toBeInTheDocument();
     });
 
-    it("renders Gemini badge with warning variant", () => {
-      const geminiUpstream = { ...mockUpstream, provider: "gemini" };
+    it("renders Custom badge with outline variant", () => {
+      const customUpstream = { ...mockUpstream, provider_type: "custom" as const };
       render(
         <UpstreamsTable
-          upstreams={[geminiUpstream]}
+          upstreams={[customUpstream]}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
           onTest={mockOnTest}
         />
       );
 
-      const badge = screen.getByText("Gemini");
+      const badge = screen.getByText("Custom");
       expect(badge).toBeInTheDocument();
     });
 
     it("renders unknown provider as-is", () => {
-      const unknownUpstream = { ...mockUpstream, provider: "custom-provider" };
+      const unknownUpstream = { ...mockUpstream, provider_type: "custom-provider" as const };
       render(
         <UpstreamsTable
           upstreams={[unknownUpstream]}
@@ -401,7 +403,7 @@ describe("UpstreamsTable", () => {
     });
 
     it("handles case-insensitive provider matching", () => {
-      const upperCaseProvider = { ...mockUpstream, provider: "OPENAI" };
+      const upperCaseProvider = { ...mockUpstream, provider_type: "OPENAI" as const };
       render(
         <UpstreamsTable
           upstreams={[upperCaseProvider]}
@@ -520,7 +522,7 @@ describe("UpstreamsTable", () => {
           ...mockUpstream,
           id: "test-id-2",
           name: "Second Upstream",
-          provider: "anthropic",
+          provider_type: "anthropic" as const,
           base_url: "https://api.anthropic.com/v1",
         },
       ];

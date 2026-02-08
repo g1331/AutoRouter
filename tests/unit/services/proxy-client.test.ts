@@ -63,7 +63,7 @@ describe("proxy-client", () => {
     const openaiUpstream: UpstreamForProxy = {
       id: "1",
       name: "openai",
-      provider: "openai",
+      providerType: "openai",
       baseUrl: "https://api.openai.com",
       apiKey: "sk-test-key",
       timeout: 60,
@@ -72,7 +72,7 @@ describe("proxy-client", () => {
     const anthropicUpstream: UpstreamForProxy = {
       id: "2",
       name: "anthropic",
-      provider: "anthropic",
+      providerType: "anthropic",
       baseUrl: "https://api.anthropic.com",
       apiKey: "ant-test-key",
       timeout: 60,
@@ -659,7 +659,7 @@ describe("proxy-client", () => {
       const upstream: Upstream = {
         id: "upstream-1",
         name: "Test Upstream",
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com/v1",
         apiKeyEncrypted: "encrypted-key-123",
         apiKeyMasked: "sk-***123",
@@ -677,7 +677,7 @@ describe("proxy-client", () => {
       expect(result).toEqual({
         id: "upstream-1",
         name: "Test Upstream",
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com/v1",
         apiKey: "decrypted-encrypted-key-123",
         timeout: 120,
@@ -688,7 +688,7 @@ describe("proxy-client", () => {
       const upstream: Upstream = {
         id: "upstream-2",
         name: "Anthropic",
-        provider: "anthropic",
+        providerType: "anthropic",
         baseUrl: "https://api.anthropic.com/v1",
         apiKeyEncrypted: "ant-encrypted",
         apiKeyMasked: "ant-***",
@@ -703,7 +703,7 @@ describe("proxy-client", () => {
 
       const result = prepareUpstreamForProxy(upstream);
 
-      expect(result.provider).toBe("anthropic");
+      expect(result.providerType).toBe("anthropic");
       expect(result.apiKey).toBe("decrypted-ant-encrypted");
     });
   });
@@ -712,7 +712,7 @@ describe("proxy-client", () => {
     const mockUpstream: UpstreamForProxy = {
       id: "test-upstream",
       name: "Test OpenAI",
-      provider: "openai",
+      providerType: "openai",
       baseUrl: "https://api.openai.com/v1",
       apiKey: "sk-test-key",
       timeout: 30,
@@ -778,7 +778,7 @@ describe("proxy-client", () => {
     it("should inject x-api-key for Anthropic", async () => {
       const anthropicUpstream: UpstreamForProxy = {
         ...mockUpstream,
-        provider: "anthropic",
+        providerType: "anthropic",
         baseUrl: "https://api.anthropic.com/v1",
         apiKey: "ant-key",
       };

@@ -116,7 +116,7 @@ export function TestUpstreamDialog({
                   {t("provider")}:
                 </span>
                 <span className="type-body-medium text-[rgb(var(--md-sys-color-on-surface))]">
-                  {upstream.provider}
+                  {upstream.provider_type}
                 </span>
               </div>
               <div className="flex justify-between">

@@ -134,7 +134,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const decryptedApiKey = getDecryptedApiKey(upstream);
 
     const input: TestUpstreamInput = {
-      provider: upstream.provider,
+      providerType: upstream.providerType,
       baseUrl: upstream.baseUrl,
       apiKey: decryptedApiKey,
       timeout: upstream.timeout,

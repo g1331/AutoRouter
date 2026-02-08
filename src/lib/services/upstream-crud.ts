@@ -28,7 +28,6 @@ export class UpstreamNotFoundError extends Error {
 
 export interface UpstreamCreateInput {
   name: string;
-  provider: string;
   baseUrl: string;
   apiKey: string;
   isDefault?: boolean;
@@ -36,7 +35,7 @@ export interface UpstreamCreateInput {
   config?: string | null;
   weight?: number;
   priority?: number;
-  providerType?: string | null;
+  providerType?: string;
   allowedModels?: string[] | null;
   modelRedirects?: Record<string, string> | null;
   circuitBreakerConfig?: {
@@ -49,7 +48,6 @@ export interface UpstreamCreateInput {
 
 export interface UpstreamUpdateInput {
   name?: string;
-  provider?: string;
   baseUrl?: string;
   apiKey?: string;
   isDefault?: boolean;
@@ -58,7 +56,7 @@ export interface UpstreamUpdateInput {
   config?: string | null;
   weight?: number;
   priority?: number;
-  providerType?: string | null;
+  providerType?: string;
   allowedModels?: string[] | null;
   modelRedirects?: Record<string, string> | null;
   circuitBreakerConfig?: {
@@ -72,7 +70,6 @@ export interface UpstreamUpdateInput {
 export interface UpstreamResponse {
   id: string;
   name: string;
-  provider: string;
   baseUrl: string;
   apiKeyMasked: string;
   isDefault: boolean;
@@ -81,7 +78,7 @@ export interface UpstreamResponse {
   config: string | null;
   weight: number;
   priority: number;
-  providerType: string | null;
+  providerType: string;
   allowedModels: string[] | null;
   modelRedirects: Record<string, string> | null;
   createdAt: Date;
@@ -116,7 +113,6 @@ export function maskApiKey(apiKey: string): string {
 export async function createUpstream(input: UpstreamCreateInput): Promise<UpstreamResponse> {
   const {
     name,
-    provider,
     baseUrl,
     apiKey,
     isDefault = false,
@@ -124,7 +120,7 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     config,
     weight = 1,
     priority = 0,
-    providerType,
+    providerType = "openai",
     allowedModels,
     modelRedirects,
   } = input;
@@ -148,7 +144,6 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     .insert(upstreams)
     .values({
       name,
-      provider,
       baseUrl,
       apiKeyEncrypted,
       isDefault,
@@ -157,7 +152,7 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
       config: config ?? null,
       weight,
       priority,
-      providerType: providerType ?? null,
+      providerType,
       allowedModels: allowedModels ?? null,
       modelRedirects: modelRedirects ?? null,
       createdAt: now,
@@ -181,7 +176,6 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
   return {
     id: newUpstream.id,
     name: newUpstream.name,
-    provider: newUpstream.provider,
     baseUrl: newUpstream.baseUrl,
     apiKeyMasked: maskApiKey(apiKey),
     isDefault: newUpstream.isDefault,
@@ -229,7 +223,6 @@ export async function updateUpstream(
   };
 
   if (input.name !== undefined) updateValues.name = input.name;
-  if (input.provider !== undefined) updateValues.provider = input.provider;
   if (input.baseUrl !== undefined) updateValues.baseUrl = input.baseUrl;
   if (input.apiKey !== undefined) updateValues.apiKeyEncrypted = encrypt(input.apiKey);
   if (input.isDefault !== undefined) updateValues.isDefault = input.isDefault;
@@ -288,7 +281,6 @@ export async function updateUpstream(
   return {
     id: updated.id,
     name: updated.name,
-    provider: updated.provider,
     baseUrl: updated.baseUrl,
     apiKeyMasked,
     isDefault: updated.isDefault,
@@ -393,7 +385,6 @@ export async function listUpstreams(
     return {
       id: upstream.id,
       name: upstream.name,
-      provider: upstream.provider,
       baseUrl: upstream.baseUrl,
       apiKeyMasked: maskedKey,
       isDefault: upstream.isDefault,
@@ -453,7 +444,6 @@ export async function getUpstreamById(upstreamId: string): Promise<UpstreamRespo
   return {
     id: upstream.id,
     name: upstream.name,
-    provider: upstream.provider,
     baseUrl: upstream.baseUrl,
     apiKeyMasked: maskedKey,
     isDefault: upstream.isDefault,

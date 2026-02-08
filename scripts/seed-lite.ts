@@ -20,7 +20,6 @@ async function main() {
   await db.insert(upstreams).values({
     id: upstreamId,
     name: "local-openai-1",
-    provider: "openai",
     baseUrl: "https://api.openai.com/v1",
     apiKeyEncrypted: encrypt(process.env.UPSTREAM_API_KEY || "sk-mock"),
     isDefault: true,

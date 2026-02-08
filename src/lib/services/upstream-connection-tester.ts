@@ -148,8 +148,8 @@ async function resolveAndValidateHostname(
  * Can be used to test either a new configuration or an existing upstream.
  */
 export interface TestUpstreamInput {
-  /** Provider type (openai or anthropic) */
-  provider: string;
+  /** Provider type (openai, anthropic, google, custom) */
+  providerType: string;
   /** Base URL of the upstream API */
   baseUrl: string;
   /** API key for authentication (plain text, will not be stored) */
@@ -223,7 +223,7 @@ export function formatTestUpstreamResponse(result: TestUpstreamResult) {
  * - **unknown**: Unsupported provider, malformed URL, or unexpected errors
  *
  * @param input - Upstream test configuration
- * @param input.provider - Provider type, must be "openai" or "anthropic"
+ * @param input.providerType - Provider type, must be "openai", "anthropic", "google", or "custom"
  * @param input.baseUrl - Base URL of the upstream API (e.g., "https://api.openai.com")
  * @param input.apiKey - API key for authentication (plain text, not encrypted)
  * @param input.timeout - Optional timeout in seconds (defaults to 10, max recommended 300)
@@ -287,18 +287,23 @@ export function formatTestUpstreamResponse(result: TestUpstreamResult) {
 export async function testUpstreamConnection(
   input: TestUpstreamInput
 ): Promise<TestUpstreamResult> {
-  const { provider, baseUrl, apiKey, timeout = 10 } = input;
+  const { providerType, baseUrl, apiKey, timeout = 10 } = input;
   const testedAt = new Date();
 
   // Validate provider
-  if (provider !== "openai" && provider !== "anthropic") {
+  if (
+    providerType !== "openai" &&
+    providerType !== "anthropic" &&
+    providerType !== "google" &&
+    providerType !== "custom"
+  ) {
     return {
       success: false,
-      message: `Unsupported provider: ${provider}`,
+      message: `Unsupported provider: ${providerType}`,
       latencyMs: null,
       statusCode: null,
       errorType: "unknown",
-      errorDetails: `Provider must be "openai" or "anthropic", got "${provider}"`,
+      errorDetails: `Provider must be "openai", "anthropic", "google", or "custom", got "${providerType}"`,
       testedAt,
     };
   }
@@ -357,11 +362,11 @@ export async function testUpstreamConnection(
 
   const headers: Record<string, string> = {};
 
-  if (provider === "openai") {
-    headers["Authorization"] = `Bearer ${apiKey}`;
-  } else if (provider === "anthropic") {
+  if (providerType === "anthropic") {
     headers["x-api-key"] = apiKey;
     headers["anthropic-version"] = "2023-06-01";
+  } else {
+    headers["Authorization"] = `Bearer ${apiKey}`;
   }
 
   // Create abort controller for timeout

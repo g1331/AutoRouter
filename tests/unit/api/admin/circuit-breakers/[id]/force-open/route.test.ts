@@ -29,7 +29,7 @@ describe("POST /api/admin/circuit-breakers/{upstreamId}/force-open", () => {
   const mockUpstream = {
     id: "upstream-1",
     name: "OpenAI Upstream",
-    provider: "openai",
+    providerType: "openai",
     baseUrl: "https://api.openai.com",
     apiKeyEncrypted: "encrypted-key",
     isDefault: true,

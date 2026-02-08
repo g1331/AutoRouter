@@ -41,7 +41,7 @@ export interface LeaderboardApiKeyItem {
 export interface LeaderboardUpstreamItem {
   id: string;
   name: string;
-  provider: string;
+  providerType: string;
   requestCount: number;
   totalTokens: number;
 }
@@ -283,22 +283,22 @@ export async function getLeaderboardStats(
 
   // Fetch upstream details
   const upstreamIds = upstreamsResult.map((r) => r.upstreamId!);
-  const upstreamMap = new Map<string, { name: string; provider: string }>();
+  const upstreamMap = new Map<string, { name: string; providerType: string }>();
 
   if (upstreamIds.length > 0) {
     const upstreamDetails = await db.query.upstreams.findMany({
       where: inArray(upstreams.id, upstreamIds),
-      columns: { id: true, name: true, provider: true },
+      columns: { id: true, name: true, providerType: true },
     });
     for (const u of upstreamDetails) {
-      upstreamMap.set(u.id, { name: u.name, provider: u.provider });
+      upstreamMap.set(u.id, { name: u.name, providerType: u.providerType });
     }
   }
 
   const upstreamsLeaderboard: LeaderboardUpstreamItem[] = upstreamsResult.map((row) => ({
     id: row.upstreamId!,
     name: upstreamMap.get(row.upstreamId!)?.name || "Unknown",
-    provider: upstreamMap.get(row.upstreamId!)?.provider || "unknown",
+    providerType: upstreamMap.get(row.upstreamId!)?.providerType || "unknown",
     requestCount: row.requestCount,
     totalTokens: row.totalTokens ? Number(row.totalTokens) : 0,
   }));

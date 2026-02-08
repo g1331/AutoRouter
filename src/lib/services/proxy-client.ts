@@ -2,17 +2,12 @@ import type { Upstream } from "../db";
 import { decrypt } from "../utils/encryption";
 
 /**
- * Provider types for upstream services.
- */
-export type Provider = "openai" | "anthropic";
-
-/**
  * Upstream configuration for proxying.
  */
 export interface UpstreamForProxy {
   id: string;
   name: string;
-  provider: Provider;
+  providerType: string;
   baseUrl: string;
   apiKey: string; // Decrypted API key
   timeout: number;
@@ -79,10 +74,10 @@ export function injectAuthHeader(
   delete result["authorization"];
   delete result["x-api-key"];
 
-  if (upstream.provider === "openai") {
-    result["Authorization"] = `Bearer ${upstream.apiKey}`;
-  } else if (upstream.provider === "anthropic") {
+  if (upstream.providerType === "anthropic") {
     result["x-api-key"] = upstream.apiKey;
+  } else {
+    result["Authorization"] = `Bearer ${upstream.apiKey}`;
   }
 
   return result;
@@ -320,7 +315,7 @@ export async function forwardRequest(
     `[IN] Request ${requestId}:`,
     `Method: ${request.method}`,
     `Path: ${path}`,
-    `Upstream: ${upstream.name} (${upstream.provider})`
+    `Upstream: ${upstream.name} (${upstream.providerType})`
   );
 
   // Log request body summary
@@ -458,7 +453,7 @@ export function prepareUpstreamForProxy(upstream: Upstream): UpstreamForProxy {
   return {
     id: upstream.id,
     name: upstream.name,
-    provider: upstream.provider as Provider,
+    providerType: upstream.providerType,
     baseUrl: upstream.baseUrl,
     apiKey: decrypt(upstream.apiKeyEncrypted),
     timeout: upstream.timeout,

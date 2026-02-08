@@ -32,7 +32,7 @@ vi.mock("@/lib/services/proxy-client", () => ({
   prepareUpstreamForProxy: vi.fn((upstream) => ({
     id: upstream.id,
     name: upstream.name,
-    provider: upstream.provider,
+    providerType: upstream.providerType,
     baseUrl: upstream.baseUrl,
     apiKey: "decrypted-key",
     timeout: upstream.timeout ?? 60,
@@ -135,7 +135,7 @@ describe("proxy route upstream selection", () => {
     const anthropicUpstream = {
       id: "up-anthropic",
       name: "anthropic-one",
-      provider: "anthropic",
+      providerType: "anthropic",
       baseUrl: "https://api.anthropic.com",
       isDefault: false,
       isActive: true,
@@ -198,7 +198,7 @@ describe("proxy route upstream selection", () => {
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(anthropicUpstream);
     expect(forwardRequest).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ provider: "anthropic" }),
+      expect.objectContaining({ providerType: "anthropic" }),
       "messages",
       expect.any(String)
     );
@@ -223,7 +223,7 @@ describe("proxy route upstream selection", () => {
     const failingUpstream = {
       id: "up-anthropic-1",
       name: "anthropic-1",
-      provider: "anthropic",
+      providerType: "anthropic",
       baseUrl: "https://api.anthropic.com",
       isDefault: false,
       isActive: true,
@@ -233,7 +233,7 @@ describe("proxy route upstream selection", () => {
     const healthyUpstream = {
       id: "up-anthropic-2",
       name: "anthropic-2",
-      provider: "anthropic",
+      providerType: "anthropic",
       baseUrl: "https://api.anthropic.com",
       isDefault: false,
       isActive: true,
@@ -356,7 +356,7 @@ describe("proxy route upstream selection", () => {
     const upstream1 = {
       id: "up-anthropic-1",
       name: "anthropic-1",
-      provider: "anthropic",
+      providerType: "anthropic",
       baseUrl: "https://api.anthropic.com",
       isDefault: false,
       isActive: true,
@@ -436,7 +436,7 @@ describe("proxy route upstream selection", () => {
       {
         id: "up-anthropic-1",
         name: "anthropic-1",
-        provider: "anthropic",
+        providerType: "anthropic",
         baseUrl: "https://api.anthropic.com",
         isDefault: false,
         isActive: true,
@@ -445,7 +445,7 @@ describe("proxy route upstream selection", () => {
       {
         id: "up-anthropic-2",
         name: "anthropic-2",
-        provider: "anthropic",
+        providerType: "anthropic",
         baseUrl: "https://api.anthropic.com",
         isDefault: false,
         isActive: true,
@@ -454,7 +454,7 @@ describe("proxy route upstream selection", () => {
       {
         id: "up-anthropic-3",
         name: "anthropic-3",
-        provider: "anthropic",
+        providerType: "anthropic",
         baseUrl: "https://api.anthropic.com",
         isDefault: false,
         isActive: true,
@@ -583,7 +583,7 @@ describe("proxy route upstream selection", () => {
     const tier0Upstream = {
       id: "up-tier0",
       name: "primary",
-      provider: "anthropic",
+      providerType: "anthropic",
       baseUrl: "https://api.anthropic.com",
       isDefault: false,
       isActive: true,
@@ -594,7 +594,7 @@ describe("proxy route upstream selection", () => {
     const tier1Upstream = {
       id: "up-tier1",
       name: "fallback",
-      provider: "anthropic",
+      providerType: "anthropic",
       baseUrl: "https://api.fallback.com",
       isDefault: false,
       isActive: true,
@@ -764,7 +764,7 @@ describe("proxy route upstream selection", () => {
     const anthropicUpstream = {
       id: "up-anthropic",
       name: "anthropic-one",
-      provider: "anthropic",
+      providerType: "anthropic",
       baseUrl: "https://api.anthropic.com",
       isDefault: false,
       isActive: true,
@@ -835,7 +835,7 @@ describe("proxy route upstream selection", () => {
     const failingUpstream = {
       id: "up-anthropic-1",
       name: "anthropic-1",
-      provider: "anthropic",
+      providerType: "anthropic",
       baseUrl: "https://api.anthropic.com",
       isDefault: false,
       isActive: true,
@@ -845,7 +845,7 @@ describe("proxy route upstream selection", () => {
     const healthyUpstream = {
       id: "up-anthropic-2",
       name: "anthropic-2",
-      provider: "anthropic",
+      providerType: "anthropic",
       baseUrl: "https://api.anthropic.com",
       isDefault: false,
       isActive: true,
@@ -981,7 +981,6 @@ describe("proxy route upstream selection", () => {
       const duckUpstream = {
         id: "up-duck",
         name: "duck",
-        provider: "openai",
         providerType: "openai",
         baseUrl: "https://jp.duckcoding.com/v1",
         isDefault: false,
@@ -992,7 +991,6 @@ describe("proxy route upstream selection", () => {
       const privnodeUpstream = {
         id: "up-privnode",
         name: "privnode-cx",
-        provider: "openai",
         providerType: "openai",
         baseUrl: "https://privnode.com/v1",
         isDefault: false,
@@ -1087,7 +1085,6 @@ describe("proxy route upstream selection", () => {
       const duckUpstream = {
         id: "up-duck",
         name: "duck",
-        provider: "openai",
         providerType: "openai",
         baseUrl: "https://jp.duckcoding.com/v1",
         isDefault: false,
@@ -1168,7 +1165,6 @@ describe("proxy route upstream selection", () => {
       const privnodeUpstream = {
         id: "up-privnode",
         name: "privnode-cx",
-        provider: "openai",
         providerType: "openai",
         baseUrl: "https://privnode.com/v1",
         isDefault: false,
@@ -1179,7 +1175,6 @@ describe("proxy route upstream selection", () => {
       const rightcodeUpstream = {
         id: "up-rightcode",
         name: "rightcode",
-        provider: "openai",
         providerType: "openai",
         baseUrl: "https://rightcode.com/v1",
         isDefault: false,

@@ -49,12 +49,7 @@ export interface APIKeyRevealResponse {
 // ========== Load Balancing 相关类型 ==========
 
 /**
- * Supported AI provider types (for API compatibility)
- */
-export type Provider = "openai" | "anthropic";
-
-/**
- * Provider type for model-based routing
+ * Provider type for routing and authentication
  */
 export type ProviderType = "anthropic" | "openai" | "google" | "custom";
 
@@ -114,7 +109,6 @@ export type UpstreamHealth = UpstreamHealthResponse;
 
 export interface UpstreamCreate {
   name: string;
-  provider: Provider;
   base_url: string;
   api_key: string;
   description?: string | null;
@@ -122,7 +116,7 @@ export interface UpstreamCreate {
   timeout?: number;
   weight?: number; // Load balancing weight (default: 1)
   priority?: number; // Priority tier (default: 0, lower = higher priority)
-  provider_type?: ProviderType | null; // Provider type for model-based routing
+  provider_type?: ProviderType; // Provider type for routing and auth (default: "openai")
   allowed_models?: string[] | null; // List of supported model names
   model_redirects?: Record<string, string> | null; // Model name mapping
   circuit_breaker_config?: CircuitBreakerConfig | null; // Circuit breaker configuration
@@ -130,7 +124,6 @@ export interface UpstreamCreate {
 
 export interface UpstreamUpdate {
   name?: string;
-  provider?: Provider;
   base_url?: string;
   api_key?: string; // 留空表示不更新
   description?: string | null;
@@ -138,7 +131,7 @@ export interface UpstreamUpdate {
   timeout?: number;
   weight?: number; // Load balancing weight
   priority?: number; // Priority tier (lower = higher priority)
-  provider_type?: ProviderType | null; // Provider type for model-based routing
+  provider_type?: ProviderType; // Provider type for routing and auth
   allowed_models?: string[] | null; // List of supported model names
   model_redirects?: Record<string, string> | null; // Model name mapping
   circuit_breaker_config?: CircuitBreakerConfig | null; // Circuit breaker configuration
@@ -147,7 +140,6 @@ export interface UpstreamUpdate {
 export interface UpstreamResponse {
   id: string; // UUID
   name: string;
-  provider: Provider;
   base_url: string;
   description: string | null;
   api_key_masked: string; // "sk-***1234"
@@ -158,7 +150,7 @@ export interface UpstreamResponse {
   priority: number; // Priority tier (lower = higher priority)
   health_status?: UpstreamHealthResponse | null; // Health status (populated when requested)
   circuit_breaker?: CircuitBreakerStatus | null; // Circuit breaker status
-  provider_type: ProviderType | null; // Provider type for model-based routing
+  provider_type: ProviderType; // Provider type for routing and auth
   allowed_models: string[] | null; // List of supported model names
   model_redirects: Record<string, string> | null; // Model name mapping
   created_at: string; // ISO 8601 date string
@@ -173,7 +165,7 @@ export type Upstream = UpstreamResponse;
  */
 export interface TestUpstreamRequest {
   name?: string; // Optional name for the upstream
-  provider: "openai" | "anthropic";
+  provider_type: ProviderType;
   base_url: string;
   api_key: string;
   timeout?: number; // Optional timeout in seconds (defaults to 10)
@@ -374,7 +366,7 @@ export interface LeaderboardAPIKeyItem {
 export interface LeaderboardUpstreamItem {
   id: string; // UUID
   name: string;
-  provider: string;
+  provider_type: string;
   request_count: number;
   total_tokens: number;
 }

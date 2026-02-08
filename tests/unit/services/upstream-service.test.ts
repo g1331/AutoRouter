@@ -172,7 +172,7 @@ describe("upstream-service", () => {
       });
 
       const result = await testUpstreamConnection({
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key-12345678",
         timeout: 10,
@@ -205,7 +205,7 @@ describe("upstream-service", () => {
       });
 
       const result = await testUpstreamConnection({
-        provider: "anthropic",
+        providerType: "anthropic",
         baseUrl: "https://api.anthropic.com",
         apiKey: "sk-ant-api03-test-key",
         timeout: 10,
@@ -239,7 +239,7 @@ describe("upstream-service", () => {
       });
 
       const result = await testUpstreamConnection({
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key",
         timeout: 10,
@@ -258,7 +258,7 @@ describe("upstream-service", () => {
       });
 
       const result = await testUpstreamConnection({
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKey: "sk-invalid-key",
         timeout: 10,
@@ -282,7 +282,7 @@ describe("upstream-service", () => {
       });
 
       const result = await testUpstreamConnection({
-        provider: "anthropic",
+        providerType: "anthropic",
         baseUrl: "https://api.anthropic.com",
         apiKey: "sk-ant-invalid",
         timeout: 10,
@@ -301,7 +301,7 @@ describe("upstream-service", () => {
       mockFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
 
       const result = await testUpstreamConnection({
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://invalid.example.com",
         apiKey: "sk-test-key",
         timeout: 10,
@@ -324,7 +324,7 @@ describe("upstream-service", () => {
       mockFetch.mockRejectedValueOnce(abortError);
 
       const result = await testUpstreamConnection({
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key",
         timeout: 5,
@@ -343,7 +343,7 @@ describe("upstream-service", () => {
       const { testUpstreamConnection } = await import("@/lib/services/upstream-service");
 
       const result = await testUpstreamConnection({
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "not-a-valid-url",
         apiKey: "sk-test-key",
         timeout: 10,
@@ -367,7 +367,7 @@ describe("upstream-service", () => {
       });
 
       const result = await testUpstreamConnection({
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com/wrong",
         apiKey: "sk-test-key",
         timeout: 10,
@@ -391,7 +391,7 @@ describe("upstream-service", () => {
       });
 
       const result = await testUpstreamConnection({
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key",
         timeout: 10,
@@ -414,7 +414,7 @@ describe("upstream-service", () => {
       });
 
       const result = await testUpstreamConnection({
-        provider: "anthropic",
+        providerType: "anthropic",
         baseUrl: "https://api.anthropic.com",
         apiKey: "sk-ant-test",
         timeout: 10,
@@ -430,7 +430,7 @@ describe("upstream-service", () => {
       const { testUpstreamConnection } = await import("@/lib/services/upstream-service");
 
       const result = await testUpstreamConnection({
-        provider: "unsupported-provider",
+        providerType: "unsupported-provider",
         baseUrl: "https://api.example.com",
         apiKey: "test-key",
         timeout: 10,
@@ -453,7 +453,7 @@ describe("upstream-service", () => {
       });
 
       const result = await testUpstreamConnection({
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key",
         timeout: 10,
@@ -475,7 +475,7 @@ describe("upstream-service", () => {
       });
 
       await testUpstreamConnection({
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com/",
         apiKey: "sk-test-key",
         timeout: 10,
@@ -495,7 +495,7 @@ describe("upstream-service", () => {
       mockFetch.mockRejectedValueOnce(abortError);
 
       const result = await testUpstreamConnection({
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key",
       });
@@ -513,7 +513,7 @@ describe("upstream-service", () => {
       });
 
       const result = await testUpstreamConnection({
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKey: "sk-invalid-key",
         timeout: 10,
@@ -532,7 +532,7 @@ describe("upstream-service", () => {
       mockFetch.mockRejectedValueOnce("unexpected error string");
 
       const result = await testUpstreamConnection({
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key",
         timeout: 10,
@@ -562,7 +562,7 @@ describe("upstream-service", () => {
       );
 
       const result = await testUpstreamConnection({
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key",
         timeout: 10,
@@ -582,7 +582,7 @@ describe("upstream-service", () => {
       vi.mocked(db.query.upstreams.findFirst).mockResolvedValueOnce({
         id: "existing-id",
         name: "test-upstream",
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyEncrypted: "encrypted:sk-test",
         isDefault: false,
@@ -596,7 +596,7 @@ describe("upstream-service", () => {
       await expect(
         createUpstream({
           name: "test-upstream",
-          provider: "openai",
+          providerType: "openai",
           baseUrl: "https://api.openai.com",
           apiKey: "sk-test",
         })
@@ -611,7 +611,7 @@ describe("upstream-service", () => {
       const mockUpstream = {
         id: "new-id",
         name: "new-upstream",
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyEncrypted: "encrypted:sk-newkey",
         isDefault: false,
@@ -631,7 +631,7 @@ describe("upstream-service", () => {
 
       const result = await createUpstream({
         name: "new-upstream",
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKey: "sk-newkey",
       });
@@ -648,7 +648,7 @@ describe("upstream-service", () => {
       const mockUpstream = {
         id: "new-id",
         name: "test",
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyEncrypted: "encrypted:sk-test",
         isDefault: false,
@@ -669,7 +669,7 @@ describe("upstream-service", () => {
 
       await createUpstream({
         name: "test",
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test",
       });
@@ -703,7 +703,7 @@ describe("upstream-service", () => {
         .mockResolvedValueOnce({
           id: "upstream-1",
           name: "original-name",
-          provider: "openai",
+          providerType: "openai",
           baseUrl: "https://api.openai.com",
           apiKeyEncrypted: "encrypted:sk-test",
           isDefault: false,
@@ -717,7 +717,7 @@ describe("upstream-service", () => {
         .mockResolvedValueOnce({
           id: "upstream-2",
           name: "conflicting-name",
-          provider: "openai",
+          providerType: "openai",
           baseUrl: "https://api.openai.com",
           apiKeyEncrypted: "encrypted:sk-test2",
           isDefault: false,
@@ -740,7 +740,7 @@ describe("upstream-service", () => {
       const existingUpstream = {
         id: "upstream-1",
         name: "original-name",
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyEncrypted: "encrypted:sk-test",
         isDefault: false,
@@ -792,7 +792,7 @@ describe("upstream-service", () => {
       vi.mocked(db.query.upstreams.findFirst).mockResolvedValueOnce({
         id: "upstream-1",
         name: "test-upstream",
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyEncrypted: "encrypted:sk-test",
         isDefault: false,
@@ -831,7 +831,7 @@ describe("upstream-service", () => {
       vi.mocked(db.query.upstreams.findFirst).mockResolvedValueOnce({
         id: "upstream-1",
         name: "test-upstream",
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyEncrypted: "encrypted:sk-test-key-12345",
         isDefault: false,
@@ -857,7 +857,7 @@ describe("upstream-service", () => {
       vi.mocked(db.query.upstreams.findFirst).mockResolvedValueOnce({
         id: "upstream-1",
         name: "test-upstream",
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyEncrypted: "invalid-encrypted-data",
         isDefault: false,
@@ -898,7 +898,7 @@ describe("upstream-service", () => {
         {
           id: "upstream-1",
           name: "openai",
-          provider: "openai",
+          providerType: "openai",
           baseUrl: "https://api.openai.com",
           apiKeyEncrypted: "encrypted:sk-1",
           isDefault: true,
@@ -911,7 +911,7 @@ describe("upstream-service", () => {
         {
           id: "upstream-2",
           name: "anthropic",
-          provider: "anthropic",
+          providerType: "anthropic",
           baseUrl: "https://api.anthropic.com",
           apiKeyEncrypted: "encrypted:sk-2",
           isDefault: false,
@@ -950,7 +950,7 @@ describe("upstream-service", () => {
       const mockUpstream = {
         id: "upstream-1",
         name: "default-upstream",
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyEncrypted: "encrypted:sk-default",
         isDefault: true,
@@ -988,7 +988,7 @@ describe("upstream-service", () => {
       const mockUpstream = {
         id: "upstream-1",
         name: "test-upstream",
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyEncrypted: "encrypted:sk-test",
         isDefault: false,
@@ -1015,7 +1015,7 @@ describe("upstream-service", () => {
       const mockUpstream = {
         id: "upstream-1",
         name: "test-upstream",
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyEncrypted: "encrypted:sk-secret-key",
         isDefault: false,

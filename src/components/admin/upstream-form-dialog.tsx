@@ -35,7 +35,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreateUpstream, useUpdateUpstream } from "@/hooks/use-upstreams";
-import type { Upstream, Provider, ProviderType } from "@/types/api";
+import type { Upstream, ProviderType } from "@/types/api";
 import { TagInput } from "@/components/ui/tag-input";
 import { KeyValueInput } from "@/components/ui/key-value-input";
 
@@ -59,13 +59,12 @@ const circuitBreakerConfigSchema = z
 // Schema for create mode - api_key is required
 const createUpstreamFormSchema = z.object({
   name: z.string().min(1).max(100),
-  provider: z.enum(["openai", "anthropic"]),
   base_url: z.string().url(),
   api_key: z.string().min(1),
   description: z.string().max(500),
   priority: z.number().int().min(0).max(100),
   weight: z.number().int().min(1).max(100),
-  provider_type: z.enum(["anthropic", "openai", "google", "custom"]).nullable(),
+  provider_type: z.enum(["anthropic", "openai", "google", "custom"]),
   allowed_models: z.array(z.string()).nullable(),
   model_redirects: z.record(z.string(), z.string()).nullable(),
   circuit_breaker_config: circuitBreakerConfigSchema,
@@ -74,13 +73,12 @@ const createUpstreamFormSchema = z.object({
 // Schema for edit mode - api_key is optional (leave empty to keep unchanged)
 const editUpstreamFormSchema = z.object({
   name: z.string().min(1).max(100),
-  provider: z.enum(["openai", "anthropic"]),
   base_url: z.string().url(),
   api_key: z.string(),
   description: z.string().max(500),
   priority: z.number().int().min(0).max(100),
   weight: z.number().int().min(1).max(100),
-  provider_type: z.enum(["anthropic", "openai", "google", "custom"]).nullable(),
+  provider_type: z.enum(["anthropic", "openai", "google", "custom"]),
   allowed_models: z.array(z.string()).nullable(),
   model_redirects: z.record(z.string(), z.string()).nullable(),
   circuit_breaker_config: circuitBreakerConfigSchema,
@@ -107,13 +105,12 @@ export function UpstreamFormDialog({
     resolver: zodResolver(isEdit ? editUpstreamFormSchema : createUpstreamFormSchema),
     defaultValues: {
       name: "",
-      provider: "openai",
       base_url: "",
       api_key: "",
       description: "",
       priority: 0,
       weight: 1,
-      provider_type: null,
+      provider_type: "openai",
       allowed_models: null,
       model_redirects: null,
       circuit_breaker_config: null,
@@ -130,13 +127,12 @@ export function UpstreamFormDialog({
     if (upstream && open) {
       form.reset({
         name: upstream.name,
-        provider: upstream.provider,
         base_url: upstream.base_url,
         api_key: "",
         description: upstream.description || "",
         priority: upstream.priority ?? 0,
         weight: upstream.weight ?? 1,
-        provider_type: upstream.provider_type || null,
+        provider_type: upstream.provider_type || "openai",
         allowed_models: upstream.allowed_models || null,
         model_redirects: upstream.model_redirects || null,
         circuit_breaker_config: upstream.circuit_breaker?.config
@@ -151,13 +147,12 @@ export function UpstreamFormDialog({
     } else if (!open) {
       form.reset({
         name: "",
-        provider: "openai",
         base_url: "",
         api_key: "",
         description: "",
         priority: 0,
         weight: 1,
-        provider_type: null,
+        provider_type: "openai",
         allowed_models: null,
         model_redirects: null,
         circuit_breaker_config: null,
@@ -171,13 +166,12 @@ export function UpstreamFormDialog({
         // 只有填写了 api_key 才更新
         const updateData: {
           name: string;
-          provider: Provider;
           base_url: string;
           api_key?: string;
           description: string | null;
           priority?: number;
           weight?: number;
-          provider_type?: ProviderType | null;
+          provider_type?: ProviderType;
           allowed_models?: string[] | null;
           model_redirects?: Record<string, string> | null;
           circuit_breaker_config?: {
@@ -188,7 +182,6 @@ export function UpstreamFormDialog({
           } | null;
         } = {
           name: data.name,
-          provider: data.provider,
           base_url: data.base_url,
           description: data.description || null,
           priority: data.priority,
@@ -209,7 +202,6 @@ export function UpstreamFormDialog({
         // 创建模式: api_key 必填，schema 已验证非空
         await createMutation.mutateAsync({
           name: data.name,
-          provider: data.provider,
           base_url: data.base_url,
           api_key: data.api_key!,
           description: data.description || null,
@@ -254,21 +246,24 @@ export function UpstreamFormDialog({
 
           <FormField
             control={form.control}
-            name="provider"
+            name="provider_type"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t("provider")} *</FormLabel>
+                <FormLabel>{t("providerType")} *</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder={t("providerPlaceholder")} />
+                      <SelectValue placeholder={t("providerTypePlaceholder")} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     <SelectItem value="openai">OpenAI</SelectItem>
                     <SelectItem value="anthropic">Anthropic</SelectItem>
+                    <SelectItem value="google">Google</SelectItem>
+                    <SelectItem value="custom">{t("custom")}</SelectItem>
                   </SelectContent>
                 </Select>
+                <FormDescription>{t("providerTypeDescription")}</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -366,35 +361,6 @@ export function UpstreamFormDialog({
             <h3 className="text-sm font-medium text-muted-foreground mb-4">
               {t("modelBasedRouting")}
             </h3>
-
-            <FormField
-              control={form.control}
-              name="provider_type"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("providerType")}</FormLabel>
-                  <Select
-                    onValueChange={(value) => field.onChange(value === "__none__" ? null : value)}
-                    value={field.value || "__none__"}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder={t("providerTypePlaceholder")} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="__none__">{t("noProviderType")}</SelectItem>
-                      <SelectItem value="anthropic">Anthropic</SelectItem>
-                      <SelectItem value="openai">OpenAI</SelectItem>
-                      <SelectItem value="google">Google</SelectItem>
-                      <SelectItem value="custom">{t("custom")}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>{t("providerTypeDescription")}</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <FormField
               control={form.control}

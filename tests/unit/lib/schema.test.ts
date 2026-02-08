@@ -92,9 +92,9 @@ describe("lib/db/schema", () => {
       expect(upstreams.name.name).toBe("name");
     });
 
-    it("has provider column", () => {
-      expect(upstreams.provider).toBeDefined();
-      expect(upstreams.provider.name).toBe("provider");
+    it("has providerType column", () => {
+      expect(upstreams.providerType).toBeDefined();
+      expect(upstreams.providerType.name).toBe("provider_type");
     });
 
     it("has baseUrl column", () => {

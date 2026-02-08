@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
       upstreams: stats.upstreams.map((u) => ({
         id: u.id,
         name: u.name,
-        provider: u.provider,
+        provider_type: u.providerType,
         request_count: u.requestCount,
         total_tokens: u.totalTokens,
       })),

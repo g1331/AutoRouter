@@ -135,7 +135,7 @@ describe("upstream-crud", () => {
         {
           id: "test-id",
           name: "test-upstream",
-          provider: "openai",
+          providerType: "openai",
           baseUrl: "https://api.openai.com",
           apiKeyEncrypted: "encrypted:sk-test-key",
           isDefault: false,
@@ -157,7 +157,7 @@ describe("upstream-crud", () => {
 
       const result = await createUpstream({
         name: "test-upstream",
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key",
       });
@@ -179,7 +179,6 @@ describe("upstream-crud", () => {
         {
           id: "test-id",
           name: "test-upstream",
-          provider: "openai",
           baseUrl: "https://api.openai.com",
           apiKeyEncrypted: "encrypted:sk-test-key",
           isDefault: false,
@@ -204,7 +203,7 @@ describe("upstream-crud", () => {
 
       const result = await createUpstream({
         name: "test-upstream",
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key",
         priority: 10,
@@ -225,7 +224,6 @@ describe("upstream-crud", () => {
         {
           id: "test-id",
           name: "test-upstream",
-          provider: "openai",
           baseUrl: "https://api.openai.com",
           apiKeyEncrypted: "encrypted:sk-test-key",
           isDefault: false,
@@ -250,10 +248,9 @@ describe("upstream-crud", () => {
 
       const result = await createUpstream({
         name: "test-upstream",
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key",
-        providerType: "openai",
         allowedModels: ["gpt-4", "gpt-4-turbo"],
         modelRedirects: { "gpt-4-turbo": "gpt-4" },
       });
@@ -275,7 +272,7 @@ describe("upstream-crud", () => {
       await expect(
         createUpstream({
           name: "test-upstream",
-          provider: "openai",
+          providerType: "openai",
           baseUrl: "https://api.openai.com",
           apiKey: "sk-test-key",
         })
@@ -292,7 +289,7 @@ describe("upstream-crud", () => {
         .mockResolvedValueOnce({
           id: "test-id",
           name: "test-upstream",
-          provider: "openai",
+          providerType: "openai",
           baseUrl: "https://api.openai.com",
           apiKeyEncrypted: "encrypted:sk-test-key",
         } as unknown as PartialUpstream)
@@ -302,7 +299,7 @@ describe("upstream-crud", () => {
         {
           id: "test-id",
           name: "updated-upstream",
-          provider: "openai",
+          providerType: "openai",
           baseUrl: "https://api.openai.com",
           apiKeyEncrypted: "encrypted:sk-test-key",
           isDefault: false,
@@ -336,7 +333,7 @@ describe("upstream-crud", () => {
       vi.mocked(db.query.upstreams.findFirst).mockResolvedValueOnce({
         id: "test-id",
         name: "test-upstream",
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyEncrypted: "encrypted:sk-test-key",
         priority: 0,
@@ -347,7 +344,7 @@ describe("upstream-crud", () => {
         {
           id: "test-id",
           name: "test-upstream",
-          provider: "openai",
+          providerType: "openai",
           baseUrl: "https://api.openai.com",
           apiKeyEncrypted: "encrypted:sk-test-key",
           isDefault: false,
@@ -449,7 +446,7 @@ describe("upstream-crud", () => {
         {
           id: "id-1",
           name: "upstream-1",
-          provider: "openai",
+          providerType: "openai",
           baseUrl: "https://api.openai.com",
           apiKeyEncrypted: "encrypted:sk-key-1",
           isDefault: false,
@@ -464,7 +461,7 @@ describe("upstream-crud", () => {
         {
           id: "id-2",
           name: "upstream-2",
-          provider: "anthropic",
+          providerType: "anthropic",
           baseUrl: "https://api.anthropic.com",
           apiKeyEncrypted: "encrypted:sk-key-2",
           isDefault: true,
@@ -502,7 +499,7 @@ describe("upstream-crud", () => {
         {
           id: "id-1",
           name: "upstream-1",
-          provider: "openai",
+          providerType: "openai",
           baseUrl: "https://api.openai.com",
           apiKeyEncrypted: "invalid-encrypted",
           isDefault: false,
@@ -537,7 +534,7 @@ describe("upstream-crud", () => {
       vi.mocked(db.query.upstreams.findFirst).mockResolvedValue({
         id: "test-id",
         name: "test-upstream",
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyEncrypted: "encrypted:sk-test-key",
         isDefault: false,

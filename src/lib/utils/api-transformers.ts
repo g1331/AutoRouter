@@ -55,7 +55,6 @@ export interface UpstreamCircuitBreakerApiResponse {
 export interface UpstreamApiResponse {
   id: string;
   name: string;
-  provider: string;
   base_url: string;
   api_key_masked: string;
   is_default: boolean;
@@ -64,7 +63,7 @@ export interface UpstreamApiResponse {
   config: string | null;
   weight: number;
   priority: number;
-  provider_type: string | null;
+  provider_type: string;
   allowed_models: string[] | null;
   model_redirects: Record<string, string> | null;
   created_at: string;
@@ -93,7 +92,6 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
   return {
     id: upstream.id,
     name: upstream.name,
-    provider: upstream.provider,
     base_url: upstream.baseUrl,
     api_key_masked: upstream.apiKeyMasked,
     is_default: upstream.isDefault,
@@ -382,7 +380,7 @@ export interface LeaderboardApiKeyApiResponse {
 export interface LeaderboardUpstreamApiResponse {
   id: string;
   name: string;
-  provider: string;
+  provider_type: string;
   request_count: number;
   total_tokens: number;
 }
@@ -484,7 +482,7 @@ export function transformLeaderboardUpstreamToApi(
   return {
     id: item.id,
     name: item.name,
-    provider: item.provider,
+    provider_type: item.providerType,
     request_count: item.requestCount,
     total_tokens: item.totalTokens,
   };

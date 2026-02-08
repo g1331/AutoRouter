@@ -22,7 +22,6 @@ const circuitBreakerConfigSchema = z.object({
 
 const updateUpstreamSchema = z.object({
   name: z.string().min(1).max(64).optional(),
-  provider: z.enum(["openai", "anthropic"]).optional(),
   base_url: z.string().url().optional(),
   api_key: z.string().min(1).optional(),
   is_default: z.boolean().optional(),
@@ -31,7 +30,7 @@ const updateUpstreamSchema = z.object({
   config: z.string().nullable().optional(),
   weight: z.number().int().min(1).max(100).optional(),
   priority: z.number().int().min(0).optional(),
-  provider_type: z.enum(["anthropic", "openai", "google", "custom"]).nullable().optional(),
+  provider_type: z.enum(["anthropic", "openai", "google", "custom"]).optional(),
   allowed_models: z.array(z.string()).nullable().optional(),
   model_redirects: z.record(z.string(), z.string()).nullable().optional(),
   circuit_breaker_config: circuitBreakerConfigSchema.nullable().optional(),
@@ -77,7 +76,6 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     const input: UpstreamUpdateInput = {};
     if (validated.name !== undefined) input.name = validated.name;
-    if (validated.provider !== undefined) input.provider = validated.provider;
     if (validated.base_url !== undefined) input.baseUrl = validated.base_url;
     if (validated.api_key !== undefined) input.apiKey = validated.api_key;
     if (validated.is_default !== undefined) input.isDefault = validated.is_default;

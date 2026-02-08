@@ -296,7 +296,7 @@ export async function checkUpstreamHealth(
 
   // Perform the health check
   const result: TestUpstreamResult = await testUpstreamConnection({
-    provider: upstream.provider,
+    providerType: upstream.providerType,
     baseUrl: upstream.baseUrl,
     apiKey,
     timeout: effectiveTimeout,
@@ -559,7 +559,7 @@ export async function probeUpstream(upstreamId: string): Promise<boolean> {
 
     // Perform a lightweight health check
     const result: TestUpstreamResult = await testUpstreamConnection({
-      provider: upstream.provider as "openai" | "anthropic",
+      providerType: upstream.providerType,
       baseUrl: upstream.baseUrl,
       apiKey,
       timeout: 5, // Short timeout for probes

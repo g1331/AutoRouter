@@ -69,7 +69,6 @@ describe("Admin Upstreams API with new fields", () => {
       mockCreateUpstream.mockResolvedValueOnce({
         id: "upstream-1",
         name: "openai-upstream",
-        provider: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyMasked: "sk-***1234",
         isDefault: false,
@@ -93,7 +92,6 @@ describe("Admin Upstreams API with new fields", () => {
         },
         body: JSON.stringify({
           name: "openai-upstream",
-          provider: "openai",
           base_url: "https://api.openai.com",
           api_key: "sk-test-key-12345678",
           provider_type: "openai",
@@ -116,7 +114,6 @@ describe("Admin Upstreams API with new fields", () => {
       mockCreateUpstream.mockResolvedValueOnce({
         id: "upstream-1",
         name: "openai-upstream",
-        provider: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyMasked: "sk-***1234",
         isDefault: false,
@@ -140,7 +137,6 @@ describe("Admin Upstreams API with new fields", () => {
         },
         body: JSON.stringify({
           name: "openai-upstream",
-          provider: "openai",
           base_url: "https://api.openai.com",
           api_key: "sk-test-key-12345678",
           provider_type: "openai",
@@ -164,7 +160,6 @@ describe("Admin Upstreams API with new fields", () => {
       mockCreateUpstream.mockResolvedValueOnce({
         id: "upstream-1",
         name: "anthropic-upstream",
-        provider: "anthropic",
         baseUrl: "https://api.anthropic.com",
         apiKeyMasked: "sk-***1234",
         isDefault: false,
@@ -188,7 +183,6 @@ describe("Admin Upstreams API with new fields", () => {
         },
         body: JSON.stringify({
           name: "anthropic-upstream",
-          provider: "anthropic",
           base_url: "https://api.anthropic.com",
           api_key: "sk-test-key-12345678",
           provider_type: "anthropic",
@@ -212,7 +206,6 @@ describe("Admin Upstreams API with new fields", () => {
       mockCreateUpstream.mockResolvedValueOnce({
         id: "upstream-1",
         name: "multi-model-upstream",
-        provider: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyMasked: "sk-***1234",
         isDefault: false,
@@ -236,7 +229,6 @@ describe("Admin Upstreams API with new fields", () => {
         },
         body: JSON.stringify({
           name: "multi-model-upstream",
-          provider: "openai",
           base_url: "https://api.openai.com",
           api_key: "sk-test-key-12345678",
           provider_type: "openai",
@@ -262,7 +254,6 @@ describe("Admin Upstreams API with new fields", () => {
         mockCreateUpstream.mockResolvedValueOnce({
           id: `upstream-${providerType}`,
           name: `${providerType}-upstream`,
-          provider: "openai",
           baseUrl: "https://api.example.com",
           apiKeyMasked: "sk-***1234",
           isDefault: false,
@@ -286,7 +277,6 @@ describe("Admin Upstreams API with new fields", () => {
           },
           body: JSON.stringify({
             name: `${providerType}-upstream`,
-            provider: "openai",
             base_url: "https://api.example.com",
             api_key: "sk-test-key-12345678",
             provider_type: providerType,
@@ -309,7 +299,6 @@ describe("Admin Upstreams API with new fields", () => {
         },
         body: JSON.stringify({
           name: "invalid-upstream",
-          provider: "openai",
           base_url: "https://api.openai.com",
           api_key: "sk-test-key-12345678",
           provider_type: "invalid-provider",
@@ -327,7 +316,6 @@ describe("Admin Upstreams API with new fields", () => {
       mockCreateUpstream.mockResolvedValueOnce({
         id: "upstream-1",
         name: "basic-upstream",
-        provider: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyMasked: "sk-***1234",
         isDefault: false,
@@ -336,7 +324,7 @@ describe("Admin Upstreams API with new fields", () => {
         config: null,
         weight: 1,
         priority: 0,
-        providerType: null,
+        providerType: "openai",
         allowedModels: null,
         modelRedirects: null,
         createdAt: new Date(),
@@ -351,10 +339,8 @@ describe("Admin Upstreams API with new fields", () => {
         },
         body: JSON.stringify({
           name: "basic-upstream",
-          provider: "openai",
           base_url: "https://api.openai.com",
           api_key: "sk-test-key-12345678",
-          provider_type: null,
           allowed_models: null,
           model_redirects: null,
         }),
@@ -380,7 +366,6 @@ describe("Admin Upstreams API with new fields", () => {
       mockUpdateUpstream.mockResolvedValueOnce({
         id: "upstream-1",
         name: "updated-upstream",
-        provider: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyMasked: "sk-***1234",
         isDefault: false,
@@ -424,7 +409,6 @@ describe("Admin Upstreams API with new fields", () => {
       mockUpdateUpstream.mockResolvedValueOnce({
         id: "upstream-1",
         name: "updated-upstream",
-        provider: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyMasked: "sk-***1234",
         isDefault: false,
@@ -468,7 +452,6 @@ describe("Admin Upstreams API with new fields", () => {
       mockUpdateUpstream.mockResolvedValueOnce({
         id: "upstream-1",
         name: "updated-upstream",
-        provider: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyMasked: "sk-***1234",
         isDefault: false,
@@ -506,7 +489,6 @@ describe("Admin Upstreams API with new fields", () => {
       mockUpdateUpstream.mockResolvedValueOnce({
         id: "upstream-1",
         name: "updated-upstream",
-        provider: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyMasked: "sk-***1234",
         isDefault: false,
@@ -541,7 +523,6 @@ describe("Admin Upstreams API with new fields", () => {
       mockUpdateUpstream.mockResolvedValueOnce({
         id: "upstream-1",
         name: "updated-upstream",
-        provider: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyMasked: "sk-***1234",
         isDefault: false,
@@ -594,7 +575,6 @@ describe("Admin Upstreams API with new fields", () => {
           {
             id: "upstream-1",
             name: "openai-upstream",
-            provider: "openai",
             baseUrl: "https://api.openai.com",
             apiKeyMasked: "sk-***1234",
             isDefault: false,
@@ -612,7 +592,6 @@ describe("Admin Upstreams API with new fields", () => {
           {
             id: "upstream-2",
             name: "anthropic-upstream",
-            provider: "anthropic",
             baseUrl: "https://api.anthropic.com",
             apiKeyMasked: "sk-***5678",
             isDefault: false,
@@ -658,7 +637,6 @@ describe("Admin Upstreams API with new fields", () => {
           {
             id: "upstream-1",
             name: "legacy-upstream",
-            provider: "openai",
             baseUrl: "https://api.openai.com",
             apiKeyMasked: "sk-***1234",
             isDefault: false,
@@ -712,7 +690,6 @@ describe("Admin Upstreams API with new fields", () => {
       mockGetUpstreamById.mockResolvedValueOnce({
         id: "upstream-1",
         name: "detailed-upstream",
-        provider: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyMasked: "sk-***1234",
         isDefault: false,

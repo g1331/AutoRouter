@@ -64,7 +64,6 @@ function makeUpstream(opts: MockUpstreamOpts = {}) {
   return {
     id,
     name: opts.name ?? `upstream-${idCounter}`,
-    provider: "openai",
     baseUrl: "https://api.openai.com/v1",
     apiKeyEncrypted: "encrypted-key",
     isDefault: false,

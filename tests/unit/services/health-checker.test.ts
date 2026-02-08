@@ -99,7 +99,7 @@ describe("health-checker", () => {
     overrides: Partial<{
       id: string;
       name: string;
-      provider: string;
+      providerType: string;
       baseUrl: string;
       apiKeyEncrypted: string;
       timeout: number;
@@ -119,7 +119,7 @@ describe("health-checker", () => {
     return {
       id: "upstream-1",
       name: "test-upstream",
-      provider: "openai",
+      providerType: "openai",
       baseUrl: "https://api.openai.com",
       apiKeyEncrypted: "encrypted:sk-test-key",
       timeout: 60,
@@ -460,7 +460,7 @@ describe("health-checker", () => {
       expect(result.errorMessage).toBeNull();
       expect(result.healthStatus.isHealthy).toBe(true);
       expect(testUpstreamConnection).toHaveBeenCalledWith({
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key",
         timeout: 60,
@@ -998,7 +998,7 @@ describe("health-checker", () => {
       const mockUpstream = createMockUpstream({
         id: "upstream-1",
         isActive: true,
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyEncrypted: "encrypted-key",
       });
@@ -1023,7 +1023,7 @@ describe("health-checker", () => {
       const mockUpstream = createMockUpstream({
         id: "upstream-1",
         isActive: true,
-        provider: "openai",
+        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKeyEncrypted: "encrypted-key",
       });

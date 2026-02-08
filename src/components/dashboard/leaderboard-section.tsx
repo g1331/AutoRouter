@@ -129,7 +129,7 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
     data?.upstreams.map((item, index) => ({
       rank: index + 1,
       name: item.name,
-      subtitle: item.provider,
+      subtitle: item.provider_type,
       requestCount: item.request_count,
       totalTokens: item.total_tokens,
     })) ?? [];

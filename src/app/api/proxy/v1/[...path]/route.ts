@@ -703,7 +703,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             const fixture = buildFixture({
               requestId,
               startTime,
-              provider: upstreamForLogging.provider,
+              providerType: upstreamForLogging.providerType,
               route: path,
               model: resolvedModel,
               inboundRequest: {
@@ -716,7 +716,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               upstream: {
                 id: upstreamForLogging.id,
                 name: upstreamForLogging.name,
-                provider: upstreamForLogging.provider,
+                providerType: upstreamForLogging.providerType,
                 baseUrl: upstreamForProxy.baseUrl,
               },
               outboundHeaders,
@@ -820,7 +820,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         const fixture = buildFixture({
           requestId,
           startTime,
-          provider: upstreamForLogging.provider,
+          providerType: upstreamForLogging.providerType,
           route: path,
           model: resolvedModel,
           inboundRequest: {
@@ -833,7 +833,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           upstream: {
             id: upstreamForLogging.id,
             name: upstreamForLogging.name,
-            provider: upstreamForLogging.provider,
+            providerType: upstreamForLogging.providerType,
             baseUrl: upstreamForProxy.baseUrl,
           },
           outboundHeaders,
