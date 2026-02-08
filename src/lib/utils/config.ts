@@ -24,6 +24,9 @@ const configSchema = z
     encryptionKeyFile: z.string().optional(),
     adminToken: z.string().min(1).optional(),
 
+    // Logging
+    logLevel: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).optional(),
+
     // Features
     allowKeyReveal: z.coerce.boolean().default(false),
     debugLogHeaders: z.coerce.boolean().default(false),
@@ -72,6 +75,7 @@ function loadConfig(): Config {
     encryptionKey: process.env.ENCRYPTION_KEY,
     encryptionKeyFile: process.env.ENCRYPTION_KEY_FILE,
     adminToken: process.env.ADMIN_TOKEN,
+    logLevel: process.env.LOG_LEVEL,
     allowKeyReveal: process.env.ALLOW_KEY_REVEAL,
     debugLogHeaders: process.env.DEBUG_LOG_HEADERS,
     logRetentionDays: process.env.LOG_RETENTION_DAYS,

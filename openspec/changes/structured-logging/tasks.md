@@ -1,8 +1,8 @@
 ## 1. 基础设施搭建
 
-- [ ] 1.1 安装 `pino` 依赖和 `pino-pretty`（devDependency）
-- [ ] 1.2 创建 `src/lib/utils/logger.ts`：导出根 logger 实例和 `createLogger(name)` 工厂函数，复用 `config.ts` 中的 `LOG_LEVEL`，开发环境使用 pino-pretty transport
-- [ ] 1.3 为 logger 模块编写单元测试
+- [x] 1.1 安装 `pino` 依赖和 `pino-pretty`（devDependency）
+- [x] 1.2 创建 `src/lib/utils/logger.ts`：导出根 logger 实例和 `createLogger(name)` 工厂函数，复用 `config.ts` 中的 `LOG_LEVEL`，开发环境使用 pino-pretty transport
+- [x] 1.3 为 logger 模块编写单元测试
 
 ## 2. 服务层替换
 
