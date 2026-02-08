@@ -15,7 +15,7 @@
 
 ## 3. 代理路由替换
 
-- [ ] 3.1 替换 `src/app/api/proxy/v1/[...path]/route.ts` 中的 `console.*` 为 logger（使用 child logger 传播 requestId）
+- [x] 3.1 替换 `src/app/api/proxy/v1/[...path]/route.ts` 中的 `console.*` 为 logger（使用 child logger 传播 requestId）
 
 ## 4. Admin API 路由替换
 

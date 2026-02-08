@@ -60,6 +60,9 @@ import {
   buildFixture,
   recordTrafficFixture,
 } from "@/lib/services/traffic-recorder";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("proxy-route");
 
 // Edge runtime for streaming support
 export const runtime = "nodejs";
@@ -196,7 +199,7 @@ async function forwardWithFailover(
   while (true) {
     // Check if downstream client has disconnected
     if (request.signal.aborted) {
-      console.warn(`[${requestId}] Client disconnected during failover, stopping retries`);
+      log.warn({ requestId }, "client disconnected during failover, stopping retries");
       throw new ClientDisconnectedError("Client disconnected during failover");
     }
 
@@ -301,7 +304,7 @@ async function forwardWithFailover(
 
       // Check if client disconnected
       if (request.signal.aborted) {
-        console.warn(`[${requestId}] Client disconnected during request, stopping`);
+        log.warn({ requestId }, "client disconnected during request, stopping");
         throw new ClientDisconnectedError("Client disconnected during request");
       }
 
@@ -368,7 +371,7 @@ function wrapStreamWithConnectionTracking(
 
       // Set up abort listener if signal provided
       const abortHandler = () => {
-        console.warn(`[Stream] Client disconnected, cancelling upstream stream`);
+        log.warn({ upstreamId }, "client disconnected, cancelling upstream stream");
         reader?.cancel("Client disconnected");
         releaseConnection(upstreamId);
         try {
@@ -386,7 +389,7 @@ function wrapStreamWithConnectionTracking(
         while (true) {
           // Check if client disconnected
           if (abortSignal?.aborted) {
-            console.warn(`[Stream] Client already disconnected, stopping stream`);
+            log.warn({ upstreamId }, "client already disconnected, stopping stream");
             break;
           }
 
@@ -404,7 +407,7 @@ function wrapStreamWithConnectionTracking(
       } catch (error) {
         // Check if this is due to client disconnect
         if (abortSignal?.aborted) {
-          console.warn(`[Stream] Stream error due to client disconnect`);
+          log.warn({ upstreamId }, "stream error due to client disconnect");
           releaseConnection(upstreamId);
           return;
         }
@@ -567,7 +570,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     });
     requestLogId = startLog.id;
   } catch (e) {
-    console.error("Failed to create in-progress request log:", e);
+    log.error({ err: e, requestId }, "failed to create in-progress request log");
   }
 
   // Forward request to upstream
@@ -618,7 +621,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       void updateRequestLog(requestLogId, {
         upstreamId: upstreamForLogging.id,
         routingDecision: finalRoutingDecisionLog,
-      }).catch((e) => console.error("Failed to update request log upstream:", e));
+      }).catch((e) => log.error({ err: e, requestId }, "failed to update request log upstream"));
     }
 
     // Create response headers
@@ -685,7 +688,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             routingDecision: finalRoutingDecisionLog,
           });
         })
-        .catch((e) => console.error("Failed to log request:", e));
+        .catch((e) => log.error({ err: e, requestId }, "failed to log request"));
 
       // Set streaming headers
       responseHeaders.set("Content-Type", "text/event-stream");
@@ -728,7 +731,9 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             });
             return recordTrafficFixture(fixture);
           })
-          .catch((error) => console.error("Failed to record stream fixture:", error));
+          .catch((error) =>
+            log.error({ err: error, requestId }, "failed to record stream fixture")
+          );
       }
 
       return new Response(responseStream, {
@@ -846,7 +851,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         });
 
         void recordTrafficFixture(fixture).catch((error) =>
-          console.error("Failed to record fixture:", error)
+          log.error({ err: error, requestId }, "failed to record fixture")
         );
       }
 
@@ -915,7 +920,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
     // Handle client disconnect silently (no response needed)
     if (error instanceof ClientDisconnectedError) {
-      console.warn(`[${requestId}] Client disconnected, no response sent`);
+      log.warn({ requestId }, "client disconnected, no response sent");
       return createUnifiedErrorResponse("CLIENT_DISCONNECTED");
     }
 
@@ -936,7 +941,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED");
     }
 
-    console.error(`Proxy error for request ${requestId}:`, error);
+    log.error({ err: error, requestId }, "proxy error");
     return createUnifiedErrorResponse("SERVICE_UNAVAILABLE");
   }
 }
