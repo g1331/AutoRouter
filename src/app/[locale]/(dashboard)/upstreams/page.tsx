@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { Topbar } from "@/components/admin/topbar";
 import { UpstreamsTable } from "@/components/admin/upstreams-table";
@@ -9,7 +9,7 @@ import { DeleteUpstreamDialog } from "@/components/admin/delete-upstream-dialog"
 import { TestUpstreamDialog } from "@/components/admin/test-upstream-dialog";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Plus, Server } from "lucide-react";
-import { useUpstreams, useTestUpstream } from "@/hooks/use-upstreams";
+import { useUpstreams, useTestUpstream, useUpstreamHealth } from "@/hooks/use-upstreams";
 import type { Upstream } from "@/types/api";
 
 /**
@@ -38,11 +38,36 @@ export default function UpstreamsPage() {
     upstreamPage,
     pageSize
   );
+  const { data: healthData } = useUpstreamHealth();
   const {
     mutate: testUpstreamMutation,
     data: testResult,
     isPending: isTestLoading,
   } = useTestUpstream();
+
+  // Merge health data into upstreams
+  const upstreamsWithHealth = useMemo(() => {
+    const items = upstreamsData?.items || [];
+    if (!healthData?.data) return items;
+    const healthMap = new Map(healthData.data.map((h) => [h.upstream_id, h]));
+    return items.map((u) => {
+      const h = healthMap.get(u.id);
+      if (!h) return u;
+      return {
+        ...u,
+        health_status: {
+          upstream_id: h.upstream_id,
+          upstream_name: h.upstream_name,
+          is_healthy: h.is_healthy,
+          last_check_at: h.last_check_at,
+          last_success_at: h.last_success_at,
+          failure_count: h.failure_count,
+          latency_ms: h.latency_ms,
+          error_message: h.error_message,
+        },
+      };
+    });
+  }, [upstreamsData, healthData]);
 
   // Trigger test when testUpstream changes
   useEffect(() => {
@@ -83,7 +108,7 @@ export default function UpstreamsPage() {
         ) : (
           <>
             <UpstreamsTable
-              upstreams={upstreamsData?.items || []}
+              upstreams={upstreamsWithHealth}
               onEdit={setEditUpstream}
               onDelete={setDeleteUpstream}
               onTest={setTestUpstream}
