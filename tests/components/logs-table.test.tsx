@@ -787,7 +787,16 @@ describe("LogsTable", () => {
       // Check for the FAILOVER line with upstream name
       expect(screen.getByText(/FAILOVER: failed-upstream/)).toBeInTheDocument();
       expect(screen.getByText(/Request timed out/)).toBeInTheDocument();
-      expect(screen.getByText(new RegExp(`@${attemptedAt}`))).toBeInTheDocument();
+      const expectedAttemptTime = new Date(attemptedAt).toLocaleString("en", {
+        hour12: false,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+      expect(screen.getByText(new RegExp(`@${expectedAttemptTime}`))).toBeInTheDocument();
     });
 
     it("displays two-column layout with token details on left and routing on right", () => {

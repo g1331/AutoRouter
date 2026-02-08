@@ -24,6 +24,7 @@ interface RoutingDecisionDisplayProps {
   routingType: string | null;
   groupName: string | null;
   failoverAttempts: number;
+  latestFailoverTime?: string | null;
   compact?: boolean;
 }
 
@@ -37,6 +38,7 @@ export function RoutingDecisionDisplay({
   routingType,
   groupName,
   failoverAttempts,
+  latestFailoverTime = null,
   compact = true,
 }: RoutingDecisionDisplayProps) {
   const t = useTranslations("logs");
@@ -176,7 +178,16 @@ export function RoutingDecisionDisplay({
             <div className="font-mono text-xs text-amber-700">
               {routingDecision.selection_strategy} ({routingDecision.routing_type})
             </div>
+            <div className="font-mono text-xs text-amber-600 mt-2">
+              {t("failoverTime")}: {latestFailoverTime ?? "-"}
+            </div>
           </div>
+        </div>
+      )}
+
+      {!routingDecision && (
+        <div className="font-mono text-xs text-amber-600">
+          {t("failoverTime")}: {latestFailoverTime ?? "-"}
         </div>
       )}
 

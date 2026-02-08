@@ -242,6 +242,25 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
     return String(total);
   };
 
+  const formatFailoverAttemptTime = (attemptedAt: string | null | undefined) => {
+    if (!attemptedAt) return "-";
+
+    const parsedDate = new Date(attemptedAt);
+    if (Number.isNaN(parsedDate.getTime())) {
+      return attemptedAt;
+    }
+
+    return parsedDate.toLocaleString(locale, {
+      hour12: false,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  };
+
   // Check if row has error state
   const hasErrorState = (log: RequestLog): boolean => {
     return log.status_code !== null && log.status_code >= 400;
@@ -349,6 +368,13 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                   const isError = hasErrorState(log);
                   const upstreamDisplayName =
                     log.upstream_id === null ? null : (log.upstream_name ?? t("upstreamUnknown"));
+                  const latestFailoverAttemptAt =
+                    log.failover_history && log.failover_history.length > 0
+                      ? log.failover_history[log.failover_history.length - 1]?.attempted_at
+                      : null;
+                  const latestFailoverTime = hasFailover
+                    ? formatFailoverAttemptTime(latestFailoverAttemptAt ?? log.created_at)
+                    : null;
 
                   return (
                     <Fragment key={log.id}>
@@ -393,6 +419,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                             routingType={log.routing_type}
                             groupName={log.group_name}
                             failoverAttempts={log.failover_attempts}
+                            latestFailoverTime={latestFailoverTime}
                             compact={true}
                           />
                         </TableCell>
@@ -475,6 +502,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                       routingType={log.routing_type}
                                       groupName={log.group_name}
                                       failoverAttempts={log.failover_attempts}
+                                      latestFailoverTime={latestFailoverTime}
                                       compact={false}
                                     />
                                   ) : (
@@ -501,33 +529,41 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                       const statusText = `${attempt.error_type}${
                                         attempt.status_code ? `/${attempt.status_code}` : ""
                                       }`;
+                                      const attemptTimeLabel = formatFailoverAttemptTime(
+                                        attempt.attempted_at
+                                      );
 
                                       return (
-                                        <div key={index} className="flex items-start">
-                                          <span className="text-surface-500 mr-2">{prefix}</span>
-                                          <span className="text-amber-500">
-                                            FAILOVER: {attemptUpstreamName} →{" "}
-                                            <span
-                                              className={cn(
-                                                attempt.error_type === "timeout" &&
-                                                  "text-amber-600",
-                                                attempt.error_type === "http_5xx" &&
-                                                  "text-status-error",
-                                                attempt.error_type === "http_429" &&
-                                                  "text-orange-500"
-                                              )}
-                                            >
-                                              [{statusText}]
-                                            </span>
-                                            <span
-                                              className="text-amber-700 ml-2"
+                                        <div key={index} className="flex items-start gap-2 py-1">
+                                          <span className="text-surface-500 mt-0.5">{prefix}</span>
+                                          <div className="min-w-0 flex-1">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                              <span className="text-amber-500">
+                                                FAILOVER: {attemptUpstreamName} →
+                                              </span>
+                                              <span
+                                                className={cn(
+                                                  "font-mono text-xs",
+                                                  attempt.error_type === "timeout" &&
+                                                    "text-amber-600",
+                                                  attempt.error_type === "http_5xx" &&
+                                                    "text-status-error",
+                                                  attempt.error_type === "http_429" &&
+                                                    "text-orange-500"
+                                                )}
+                                              >
+                                                [{statusText}]
+                                              </span>
+                                            </div>
+                                            <div
+                                              className="text-amber-700 break-all"
                                               title={attempt.error_message}
                                             >
                                               {attempt.error_message}
-                                            </span>
-                                            <span className="text-surface-500 ml-2">
-                                              @{attempt.attempted_at}
-                                            </span>
+                                            </div>
+                                          </div>
+                                          <span className="text-amber-600 ml-2 text-xs font-mono whitespace-nowrap">
+                                            @{attemptTimeLabel}
                                           </span>
                                         </div>
                                       );
