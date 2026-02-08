@@ -30,7 +30,7 @@
 
 ## 5. 验证与收尾
 
-- [ ] 5.1 全量搜索确认 `src/` 下无残留 `console.(log|warn|error|info|debug)` 调用
-- [ ] 5.2 运行 `pnpm lint` 和 `pnpm exec tsc --noEmit` 确保无类型和 lint 错误
-- [ ] 5.3 运行 `pnpm test:run` 确保所有测试通过
-- [ ] 5.4 更新 `.env.example`（如有）添加 `LOG_LEVEL` 说明
+- [x] 5.1 全量搜索确认 `src/` 下无残留 `console.(log|warn|error|info|debug)` 调用
+- [x] 5.2 运行 `pnpm lint` 和 `pnpm exec tsc --noEmit` 确保无类型和 lint 错误
+- [x] 5.3 运行 `pnpm test:run` 确保所有测试通过
+- [x] 5.4 更新 `.env.example`（如有）添加 `LOG_LEVEL` 说明
