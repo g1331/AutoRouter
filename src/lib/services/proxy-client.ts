@@ -315,7 +315,7 @@ export async function forwardRequest(
 
   // Log request info
   const reqLog = log.child({ requestId });
-  reqLog.debug(
+  reqLog.info(
     { method: request.method, path, upstream: upstream.name, provider: upstream.providerType },
     "upstream request"
   );
@@ -324,16 +324,19 @@ export async function forwardRequest(
   if (body.byteLength > 0) {
     try {
       const bodyJson = JSON.parse(new TextDecoder().decode(body));
-      reqLog.debug(
+      const messageCount =
+        (bodyJson.messages || []).length ||
+        (Array.isArray(bodyJson.input) ? bodyJson.input.length : 0);
+      reqLog.info(
         {
           model: bodyJson.model || "N/A",
           stream: bodyJson.stream || false,
-          messages: (bodyJson.messages || []).length,
+          messages: messageCount,
         },
         "request body"
       );
     } catch {
-      reqLog.debug({ bytes: body.byteLength }, "request body (non-JSON)");
+      reqLog.info({ bytes: body.byteLength }, "request body (non-JSON)");
     }
   }
 
@@ -353,7 +356,7 @@ export async function forwardRequest(
     clearTimeout(timeoutId);
 
     // Log response metadata
-    reqLog.debug(
+    reqLog.info(
       {
         status: upstreamResponse.status,
         contentType: upstreamResponse.headers.get("content-type") || "unknown",
