@@ -519,21 +519,8 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                         <TableRow className="bg-surface-300/30">
                           <TableCell colSpan={9} className="p-0">
                             <div className="px-4 py-3 border-t border-dashed border-divider space-y-4 font-mono text-xs">
-                              {/* Two-column layout: Token Details (left) and Routing Decision (right) */}
-                              <div className="grid grid-cols-[340px_minmax(0,1fr)] gap-3">
-                                {/* Token Details */}
-                                <div className="w-[340px]">
-                                  <TokenDetailContent
-                                    promptTokens={log.prompt_tokens}
-                                    completionTokens={log.completion_tokens}
-                                    totalTokens={log.total_tokens}
-                                    cachedTokens={log.cached_tokens}
-                                    reasoningTokens={log.reasoning_tokens}
-                                    cacheCreationTokens={log.cache_creation_tokens}
-                                    cacheReadTokens={log.cache_read_tokens}
-                                  />
-                                </div>
-
+                              {/* Two-column layout: Routing Decision (left) and Token Details (right) */}
+                              <div className="grid grid-cols-[minmax(0,1fr)_340px] gap-3">
                                 {/* Routing Decision Details */}
                                 <div className="space-y-3">
                                   {hasRoutingDecision ? (
@@ -551,7 +538,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                     <div className="text-amber-700">{t("noRoutingDecision")}</div>
                                   )}
 
-                                  {/* Failover History - Integrated with right column */}
+                                  {/* Failover History - Integrated with left column */}
                                   {hasFailover && log.failover_history && (
                                     <div>
                                       <div className="flex items-center gap-2 mb-1">
@@ -616,6 +603,19 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                       </div>
                                     </div>
                                   )}
+                                </div>
+
+                                {/* Token Details */}
+                                <div className="w-[340px]">
+                                  <TokenDetailContent
+                                    promptTokens={log.prompt_tokens}
+                                    completionTokens={log.completion_tokens}
+                                    totalTokens={log.total_tokens}
+                                    cachedTokens={log.cached_tokens}
+                                    reasoningTokens={log.reasoning_tokens}
+                                    cacheCreationTokens={log.cache_creation_tokens}
+                                    cacheReadTokens={log.cache_read_tokens}
+                                  />
                                 </div>
                               </div>
 
