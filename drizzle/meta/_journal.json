@@ -57,6 +57,13 @@
       "when": 1770529626282,
       "tag": "0007_fearless_young_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1770539651986,
+      "tag": "0008_lowly_grey_gargoyle",
+      "breakpoints": true
     }
   ]
 }
