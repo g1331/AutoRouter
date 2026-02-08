@@ -1,5 +1,8 @@
 import type { Upstream } from "../db";
 import { decrypt } from "../utils/encryption";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("proxy-client");
 
 /**
  * Upstream configuration for proxying.
@@ -311,24 +314,26 @@ export async function forwardRequest(
   const body = await request.arrayBuffer();
 
   // Log request info
-  console.warn(
-    `[IN] Request ${requestId}:`,
-    `Method: ${request.method}`,
-    `Path: ${path}`,
-    `Upstream: ${upstream.name} (${upstream.providerType})`
+  const reqLog = log.child({ requestId });
+  reqLog.debug(
+    { method: request.method, path, upstream: upstream.name, provider: upstream.providerType },
+    "upstream request"
   );
 
   // Log request body summary
   if (body.byteLength > 0) {
     try {
       const bodyJson = JSON.parse(new TextDecoder().decode(body));
-      console.warn(
-        `[BODY] model: ${bodyJson.model || "N/A"},`,
-        `stream: ${bodyJson.stream || false},`,
-        `messages: ${(bodyJson.messages || []).length} messages`
+      reqLog.debug(
+        {
+          model: bodyJson.model || "N/A",
+          stream: bodyJson.stream || false,
+          messages: (bodyJson.messages || []).length,
+        },
+        "request body"
       );
     } catch {
-      console.warn(`[BODY] ${body.byteLength} bytes (non-JSON)`);
+      reqLog.debug({ bytes: body.byteLength }, "request body (non-JSON)");
     }
   }
 
@@ -348,10 +353,12 @@ export async function forwardRequest(
     clearTimeout(timeoutId);
 
     // Log response metadata
-    console.warn(
-      `[OUT] Response ${requestId}:`,
-      `status=${upstreamResponse.status},`,
-      `content-type=${upstreamResponse.headers.get("content-type") || "unknown"}`
+    reqLog.debug(
+      {
+        status: upstreamResponse.status,
+        contentType: upstreamResponse.headers.get("content-type") || "unknown",
+      },
+      "upstream response"
     );
 
     // Filter response headers
@@ -372,11 +379,9 @@ export async function forwardRequest(
       const transformedStream = upstreamResponse.body.pipeThrough(
         createSSETransformer((u) => {
           usage = u;
-          console.warn(
-            `Request ${requestId} usage:`,
-            `prompt=${u.promptTokens},`,
-            `completion=${u.completionTokens},`,
-            `total=${u.totalTokens}`
+          reqLog.debug(
+            { prompt: u.promptTokens, completion: u.completionTokens, total: u.totalTokens },
+            "token usage"
           );
         })
       );
@@ -413,11 +418,13 @@ export async function forwardRequest(
           const extracted = extractUsage(data);
           if (extracted) {
             usage = extracted;
-            console.warn(
-              `Request ${requestId} usage:`,
-              `prompt=${usage.promptTokens},`,
-              `completion=${usage.completionTokens},`,
-              `total=${usage.totalTokens}`
+            reqLog.debug(
+              {
+                prompt: usage.promptTokens,
+                completion: usage.completionTokens,
+                total: usage.totalTokens,
+              },
+              "token usage"
             );
           }
         } catch {
@@ -437,11 +444,11 @@ export async function forwardRequest(
     clearTimeout(timeoutId);
 
     if (error instanceof Error && error.name === "AbortError") {
-      console.error(`Request ${requestId} timed out after ${upstream.timeout}s`);
+      reqLog.error({ timeout: upstream.timeout }, "upstream request timed out");
       throw new Error(`Upstream request timed out after ${upstream.timeout}s`);
     }
 
-    console.error(`Request ${requestId} failed:`, error);
+    reqLog.error({ err: error }, "upstream request failed");
     throw error;
   }
 }

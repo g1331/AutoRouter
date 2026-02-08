@@ -3,6 +3,9 @@ import { randomBytes } from "crypto";
 import { db, apiKeys, apiKeyUpstreams, upstreams, type ApiKey } from "../db";
 import { hashApiKey, verifyApiKey } from "../utils/auth";
 import { encrypt, decrypt, EncryptionError } from "../utils/encryption";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("key-manager");
 
 export class ApiKeyNotFoundError extends Error {
   constructor(message: string) {
@@ -141,7 +144,7 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
     );
   }
 
-  console.warn(`Created API key: ${keyPrefix}, name='${name}', upstreams=${upstreamIds.length}`);
+  log.info({ keyPrefix, name, upstreams: upstreamIds.length }, "created API key");
 
   return {
     id: newKey.id,
@@ -171,7 +174,7 @@ export async function deleteApiKey(keyId: string): Promise<void> {
 
   await db.delete(apiKeys).where(eq(apiKeys.id, keyId));
 
-  console.warn(`Deleted API key: ${existing.keyPrefix}, name='${existing.name}'`);
+  log.info({ keyPrefix: existing.keyPrefix, name: existing.name }, "deleted API key");
 }
 
 /**
@@ -320,7 +323,7 @@ export async function findAndVerifyApiKey(keyValue: string): Promise<ApiKey | nu
         return candidate;
       }
     } catch {
-      console.warn(`bcrypt verification failed for key ${candidate.keyPrefix}`);
+      log.warn({ keyPrefix: candidate.keyPrefix }, "bcrypt verification failed");
     }
   }
 
@@ -437,7 +440,7 @@ export async function updateApiKey(
       currentUpstreamIds = upstreamLinks.map((link) => link.upstreamId);
     }
 
-    console.warn(`Updated API key: ${updatedKey.keyPrefix}, name='${updatedKey.name}'`);
+    log.info({ keyPrefix: updatedKey.keyPrefix, name: updatedKey.name }, "updated API key");
 
     return {
       id: updatedKey.id,

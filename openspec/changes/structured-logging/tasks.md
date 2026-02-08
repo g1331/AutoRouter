@@ -6,12 +6,12 @@
 
 ## 2. 服务层替换
 
-- [ ] 2.1 替换 `src/lib/services/proxy-client.ts` 中的 `console.warn` 为 `logger.debug`（带 requestId child logger）
-- [ ] 2.2 替换 `src/lib/services/key-manager.ts` 中的 `console.warn` 为 `logger.info`（审计事件）
-- [ ] 2.3 替换 `src/lib/services/health-checker.ts` 中的 `console.error/warn` 为对应级别 logger
-- [ ] 2.4 替换 `src/lib/services/upstream-connection-tester.ts` 中的 `console.*` 为 logger
-- [ ] 2.5 替换 `src/lib/services/upstream-crud.ts` 中的 `console.*` 为 logger
-- [ ] 2.6 替换 `src/lib/utils/encryption.ts` 中的 `console.*` 为 logger
+- [x] 2.1 替换 `src/lib/services/proxy-client.ts` 中的 `console.warn` 为 `logger.debug`（带 requestId child logger）
+- [x] 2.2 替换 `src/lib/services/key-manager.ts` 中的 `console.warn` 为 `logger.info`（审计事件）
+- [x] 2.3 替换 `src/lib/services/health-checker.ts` 中的 `console.error/warn` 为对应级别 logger
+- [x] 2.4 替换 `src/lib/services/upstream-connection-tester.ts` 中的 `console.*` 为 logger
+- [x] 2.5 替换 `src/lib/services/upstream-crud.ts` 中的 `console.*` 为 logger
+- [x] 2.6 替换 `src/lib/utils/encryption.ts` 中的 `console.*` 为 logger
 
 ## 3. 代理路由替换
 

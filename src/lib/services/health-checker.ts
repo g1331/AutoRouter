@@ -2,7 +2,10 @@ import { eq, and, gte, lte, sql, count, avg } from "drizzle-orm";
 import { db, upstreams, upstreamHealth, requestLogs } from "../db";
 import { config } from "../utils/config";
 import { decrypt } from "../utils/encryption";
+import { createLogger } from "../utils/logger";
 import { testUpstreamConnection, type TestUpstreamResult } from "./upstream-connection-tester";
+
+const log = createLogger("health-checker");
 import { UpstreamNotFoundError } from "./upstream-crud";
 import {
   getCircuitBreakerState,
@@ -279,7 +282,7 @@ export async function checkUpstreamHealth(
     apiKey = decrypt(upstream.apiKeyEncrypted);
   } catch (error) {
     // Cannot decrypt API key - mark as unhealthy
-    console.error(`Failed to decrypt API key for upstream ${upstreamId}:`, error);
+    log.error({ err: error, upstreamId }, "failed to decrypt API key for health check");
     const healthStatus = await markUnhealthy(upstreamId, "Failed to decrypt API key");
     return {
       upstreamId,
@@ -553,7 +556,7 @@ export async function probeUpstream(upstreamId: string): Promise<boolean> {
     try {
       apiKey = decrypt(upstream.apiKeyEncrypted);
     } catch (error) {
-      console.error(`Failed to decrypt API key for upstream ${upstreamId}:`, error);
+      log.error({ err: error, upstreamId }, "failed to decrypt API key for probe");
       return false;
     }
 
@@ -567,7 +570,7 @@ export async function probeUpstream(upstreamId: string): Promise<boolean> {
 
     return result.success;
   } catch (error) {
-    console.error(`Probe failed for upstream ${upstreamId}:`, error);
+    log.error({ err: error, upstreamId }, "probe failed");
     return false;
   }
 }

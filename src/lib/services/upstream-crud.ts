@@ -1,7 +1,10 @@
 import { eq, desc, count } from "drizzle-orm";
 import { db, upstreams, circuitBreakerStates, type Upstream } from "../db";
 import { encrypt, decrypt } from "../utils/encryption";
+import { createLogger } from "../utils/logger";
 import { CircuitBreakerStateEnum } from "./circuit-breaker";
+
+const log = createLogger("upstream-crud");
 
 const MIN_KEY_LENGTH_FOR_MASKING = 7;
 
@@ -376,7 +379,7 @@ export async function listUpstreams(
       const decryptedKey = decrypt(upstream.apiKeyEncrypted);
       maskedKey = maskApiKey(decryptedKey);
     } catch (e) {
-      console.error(`Failed to decrypt upstream key for masking: ${upstream.name}, error: ${e}`);
+      log.error({ err: e, upstream: upstream.name }, "failed to decrypt upstream key for masking");
       maskedKey = "***error***";
     }
 
