@@ -165,12 +165,14 @@ describe("load-balancer", () => {
       await expect(selectFromProviderType("openai")).rejects.toThrow(NoHealthyUpstreamsError);
     });
 
-    it("should throw NoHealthyUpstreamsError when all upstreams are unhealthy", async () => {
+    it("should still select unhealthy upstreams (health is display-only)", async () => {
       const u1 = makeUpstream({ id: "u1", isHealthy: false });
       const u2 = makeUpstream({ id: "u2", isHealthy: false });
       mockFindMany.mockResolvedValue([u1, u2]);
 
-      await expect(selectFromProviderType("openai")).rejects.toThrow(NoHealthyUpstreamsError);
+      // Unhealthy upstreams should still be selected — only circuit breaker blocks routing
+      const result = await selectFromProviderType("openai");
+      expect(["u1", "u2"]).toContain(result.upstream.id);
     });
 
     it("should throw NoHealthyUpstreamsError when all upstreams are circuit-broken", async () => {
@@ -211,14 +213,15 @@ describe("load-balancer", () => {
         expect(result.selectedTier).toBe(1);
       });
 
-      it("should degrade to tier 1 when all tier 0 upstreams are unhealthy", async () => {
+      it("should NOT degrade when tier 0 upstreams are unhealthy (health is display-only)", async () => {
         const p0 = makeUpstream({ id: "p0", priority: 0, isHealthy: false });
         const p1 = makeUpstream({ id: "p1", priority: 1 });
         mockFindMany.mockResolvedValue([p0, p1]);
 
+        // Unhealthy does not cause degradation — only circuit breaker does
         const result = await selectFromProviderType("openai");
-        expect(result.upstream.id).toBe("p1");
-        expect(result.selectedTier).toBe(1);
+        expect(result.upstream.id).toBe("p0");
+        expect(result.selectedTier).toBe(0);
       });
 
       it("should degrade to tier 2 when tier 0 and tier 1 are all unavailable", async () => {
@@ -233,16 +236,17 @@ describe("load-balancer", () => {
         expect(result.selectedTier).toBe(2);
       });
 
-      it("should degrade through mixed unhealthy and circuit-broken tiers", async () => {
+      it("should degrade only due to circuit breaker, not health status", async () => {
         const p0 = makeUpstream({ id: "p0", priority: 0, isHealthy: false });
         const p1 = makeUpstream({ id: "p1", priority: 1 });
         const p2 = makeUpstream({ id: "p2", priority: 2 });
         mockFindMany.mockResolvedValue([p0, p1, p2]);
         setCBOpen("p1");
 
+        // p0 is unhealthy but still selectable; p1 is circuit-broken
         const result = await selectFromProviderType("openai");
-        expect(result.upstream.id).toBe("p2");
-        expect(result.selectedTier).toBe(2);
+        expect(result.upstream.id).toBe("p0");
+        expect(result.selectedTier).toBe(0);
       });
 
       it("should return selectedTier matching the priority of the chosen upstream", async () => {
@@ -388,16 +392,22 @@ describe("load-balancer", () => {
     });
 
     // =========================================================================
-    // Health-based filtering
+    // Health status is display-only; circuit breaker drives routing
     // =========================================================================
-    describe("health-based filtering", () => {
-      it("should skip unhealthy upstreams and select healthy ones", async () => {
+    describe("health vs circuit breaker filtering", () => {
+      it("should select unhealthy upstream when circuit breaker is closed", async () => {
         const unhealthy = makeUpstream({ id: "sick", priority: 0, isHealthy: false });
         const healthy = makeUpstream({ id: "ok", priority: 0 });
         mockFindMany.mockResolvedValue([unhealthy, healthy]);
 
-        const result = await selectFromProviderType("openai");
-        expect(result.upstream.id).toBe("ok");
+        // Both should be selectable since health doesn't affect routing
+        const selected = new Set<string>();
+        for (let i = 0; i < 50; i++) {
+          const result = await selectFromProviderType("openai");
+          selected.add(result.upstream.id);
+        }
+        expect(selected.has("sick")).toBe(true);
+        expect(selected.has("ok")).toBe(true);
       });
 
       it("should skip circuit-broken upstreams and select closed ones", async () => {
@@ -428,7 +438,7 @@ describe("load-balancer", () => {
         await expect(selectFromProviderType("openai")).rejects.toThrow(NoHealthyUpstreamsError);
       });
 
-      it("should treat upstream with no health record as healthy", async () => {
+      it("should treat upstream with no health record as selectable", async () => {
         const u1 = makeUpstream({ id: "no-health", priority: 0 });
         // Simulate no health record by setting health to null
         (u1 as Record<string, unknown>).health = null;
@@ -443,24 +453,24 @@ describe("load-balancer", () => {
     // Combined scenarios
     // =========================================================================
     describe("combined scenarios", () => {
-      it("should handle mix of excluded, unhealthy, and circuit-broken across tiers", async () => {
+      it("should handle mix of excluded and circuit-broken across tiers", async () => {
         const p0a = makeUpstream({ id: "p0a", priority: 0 }); // will be excluded
-        const p0b = makeUpstream({ id: "p0b", priority: 0, isHealthy: false }); // unhealthy
+        const p0b = makeUpstream({ id: "p0b", priority: 0, isHealthy: false }); // unhealthy but selectable
         const p1a = makeUpstream({ id: "p1a", priority: 1 }); // circuit-broken
-        const p1b = makeUpstream({ id: "p1b", priority: 1 }); // the only viable one
+        const p1b = makeUpstream({ id: "p1b", priority: 1 }); // viable
         mockFindMany.mockResolvedValue([p0a, p0b, p1a, p1b]);
         setCBOpen("p1a");
 
+        // p0a excluded, p0b unhealthy but still selectable → selected from tier 0
         const result = await selectFromProviderType("openai", ["p0a"]);
-        expect(result.upstream.id).toBe("p1b");
-        expect(result.selectedTier).toBe(1);
+        expect(result.upstream.id).toBe("p0b");
+        expect(result.selectedTier).toBe(0);
       });
 
-      it("should throw when every upstream is unavailable for different reasons", async () => {
+      it("should throw when every upstream is excluded or circuit-broken", async () => {
         const excluded = makeUpstream({ id: "ex" });
-        const unhealthy = makeUpstream({ id: "sick", isHealthy: false });
         const broken = makeUpstream({ id: "broken" });
-        mockFindMany.mockResolvedValue([excluded, unhealthy, broken]);
+        mockFindMany.mockResolvedValue([excluded, broken]);
         setCBOpen("broken");
 
         await expect(selectFromProviderType("openai", ["ex"])).rejects.toThrow(

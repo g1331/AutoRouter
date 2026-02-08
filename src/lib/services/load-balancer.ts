@@ -45,7 +45,6 @@ export interface ProviderTypeSelectionResult {
   providerType: ProviderType;
   selectedTier: number;
   circuitBreakerFiltered: number;
-  healthFiltered: number;
   totalCandidates: number;
 }
 
@@ -120,25 +119,24 @@ export function filterByCircuitBreaker(upstreamList: UpstreamWithCircuitBreaker[
 }
 
 /**
- * Filter upstreams by health status and optional exclusion list.
+ * Filter upstreams by exclusion list only.
+ * Health status is NOT used for routing decisions — only circuit breaker state matters.
  */
-export function filterByHealth(
+export function filterByExclusions(
   upstreamList: UpstreamWithCircuitBreaker[],
   excludeIds?: string[]
 ): {
   allowed: UpstreamWithCircuitBreaker[];
   excludedCount: number;
 } {
-  const allowed = upstreamList.filter(
-    (u) => u.isHealthy && (!excludeIds || !excludeIds.includes(u.upstream.id))
-  );
+  const allowed = upstreamList.filter((u) => !excludeIds || !excludeIds.includes(u.upstream.id));
   const excludedCount = upstreamList.length - allowed.length;
 
   return { allowed, excludedCount };
 }
 
 /**
- * Select upstream using weighted strategy with health score consideration.
+ * Select upstream using weighted strategy with latency-based scoring.
  */
 function selectWeightedWithHealthScore(
   upstreamList: UpstreamWithCircuitBreaker[]
@@ -148,20 +146,16 @@ function selectWeightedWithHealthScore(
   }
 
   const scoredUpstreams = upstreamList.map((u) => {
-    let healthScore = 1.0;
+    let score = 1.0;
 
     if (u.latencyMs !== null && u.latencyMs > 0) {
       const latencyPenalty = Math.min(u.latencyMs / 500, 0.5);
-      healthScore -= latencyPenalty;
+      score -= latencyPenalty;
     }
 
-    if (!u.isHealthy) {
-      healthScore -= 0.5;
-    }
+    score = Math.max(score, 0.1);
 
-    healthScore = Math.max(healthScore, 0.1);
-
-    const effectiveWeight = u.upstream.weight * healthScore;
+    const effectiveWeight = u.upstream.weight * score;
 
     return { ...u, effectiveWeight };
   });
@@ -269,28 +263,24 @@ export async function selectFromProviderType(
   const sortedTiers = [...tierMap.entries()].sort((a, b) => a[0] - b[0]);
 
   let totalCircuitBreakerFiltered = 0;
-  let totalHealthFiltered = 0;
-
   // Try each tier in priority order
   for (const [tier, tierUpstreams] of sortedTiers) {
     // Filter by circuit breaker
     const afterCircuitBreaker = filterByCircuitBreaker(tierUpstreams);
     totalCircuitBreakerFiltered += afterCircuitBreaker.excludedCount;
 
-    // Filter by health and exclusions
-    const afterHealth = filterByHealth(afterCircuitBreaker.allowed, excludeIds);
-    totalHealthFiltered += afterHealth.excludedCount;
+    // Filter by exclusion list (health status is display-only, not used for routing)
+    const afterExclusions = filterByExclusions(afterCircuitBreaker.allowed, excludeIds);
 
-    if (afterHealth.allowed.length > 0) {
+    if (afterExclusions.allowed.length > 0) {
       // Select from this tier using weighted strategy
-      const selected = selectWeightedWithHealthScore(afterHealth.allowed);
+      const selected = selectWeightedWithHealthScore(afterExclusions.allowed);
 
       return {
         upstream: selected.upstream,
         providerType,
         selectedTier: tier,
         circuitBreakerFiltered: totalCircuitBreakerFiltered,
-        healthFiltered: totalHealthFiltered,
         totalCandidates,
       };
     }

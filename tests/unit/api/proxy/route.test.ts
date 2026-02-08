@@ -168,7 +168,7 @@ describe("proxy route upstream selection", () => {
       providerType: "anthropic",
       selectedTier: 0,
       circuitBreakerFiltered: 0,
-      healthFiltered: 0,
+
       totalCandidates: 1,
     });
 
@@ -267,7 +267,7 @@ describe("proxy route upstream selection", () => {
         providerType: "anthropic",
         selectedTier: 0,
         circuitBreakerFiltered: 0,
-        healthFiltered: 0,
+
         totalCandidates: 2,
       })
       .mockResolvedValueOnce({
@@ -275,7 +275,7 @@ describe("proxy route upstream selection", () => {
         providerType: "anthropic",
         selectedTier: 0,
         circuitBreakerFiltered: 0,
-        healthFiltered: 0,
+
         totalCandidates: 2,
       });
 
@@ -489,7 +489,7 @@ describe("proxy route upstream selection", () => {
         providerType: "anthropic",
         selectedTier: 0,
         circuitBreakerFiltered: 0,
-        healthFiltered: 0,
+
         totalCandidates: 3,
       })
       .mockResolvedValueOnce({
@@ -497,7 +497,7 @@ describe("proxy route upstream selection", () => {
         providerType: "anthropic",
         selectedTier: 0,
         circuitBreakerFiltered: 0,
-        healthFiltered: 0,
+
         totalCandidates: 3,
       })
       .mockResolvedValueOnce({
@@ -505,7 +505,7 @@ describe("proxy route upstream selection", () => {
         providerType: "anthropic",
         selectedTier: 0,
         circuitBreakerFiltered: 0,
-        healthFiltered: 0,
+
         totalCandidates: 3,
       })
       .mockRejectedValueOnce(new NoHealthyUpstreamsError("No healthy upstreams available"));
@@ -629,7 +629,7 @@ describe("proxy route upstream selection", () => {
         providerType: "anthropic",
         selectedTier: 0,
         circuitBreakerFiltered: 0,
-        healthFiltered: 0,
+
         totalCandidates: 2,
       })
       .mockResolvedValueOnce({
@@ -637,7 +637,7 @@ describe("proxy route upstream selection", () => {
         providerType: "anthropic",
         selectedTier: 1,
         circuitBreakerFiltered: 0,
-        healthFiltered: 0,
+
         totalCandidates: 2,
       });
 
@@ -879,7 +879,7 @@ describe("proxy route upstream selection", () => {
         providerType: "anthropic",
         selectedTier: 0,
         circuitBreakerFiltered: 0,
-        healthFiltered: 0,
+
         totalCandidates: 2,
       })
       .mockResolvedValueOnce({
@@ -887,7 +887,7 @@ describe("proxy route upstream selection", () => {
         providerType: "anthropic",
         selectedTier: 0,
         circuitBreakerFiltered: 0,
-        healthFiltered: 0,
+
         totalCandidates: 2,
       });
 
@@ -1028,7 +1028,7 @@ describe("proxy route upstream selection", () => {
         providerType: "openai",
         selectedTier: 0,
         circuitBreakerFiltered: 0,
-        healthFiltered: 0,
+
         totalCandidates: 1,
       });
 
@@ -1214,7 +1214,7 @@ describe("proxy route upstream selection", () => {
           providerType: "openai",
           selectedTier: 0,
           circuitBreakerFiltered: 0,
-          healthFiltered: 0,
+
           totalCandidates: 2,
         })
         // Second attempt: rightcode succeeds
@@ -1223,7 +1223,6 @@ describe("proxy route upstream selection", () => {
           providerType: "openai",
           selectedTier: 0,
           circuitBreakerFiltered: 0,
-          healthFiltered: 1,
           totalCandidates: 2,
         });
 
