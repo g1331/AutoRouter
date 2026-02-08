@@ -520,9 +520,9 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                           <TableCell colSpan={9} className="p-0">
                             <div className="px-4 py-3 border-t border-dashed border-divider space-y-4 font-mono text-xs">
                               {/* Two-column layout: Token Details (left) and Routing Decision (right) */}
-                              <div className="grid grid-cols-2 gap-6">
+                              <div className="grid grid-cols-[340px_minmax(0,1fr)] gap-3">
                                 {/* Token Details */}
-                                <div>
+                                <div className="w-[340px]">
                                   <TokenDetailContent
                                     promptTokens={log.prompt_tokens}
                                     completionTokens={log.completion_tokens}
@@ -535,7 +535,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                 </div>
 
                                 {/* Routing Decision Details */}
-                                <div>
+                                <div className="space-y-3">
                                   {hasRoutingDecision ? (
                                     <RoutingDecisionDisplay
                                       routingDecision={log.routing_decision}
@@ -550,69 +550,74 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                   ) : (
                                     <div className="text-amber-700">{t("noRoutingDecision")}</div>
                                   )}
+
+                                  {/* Failover History - Integrated with right column */}
+                                  {hasFailover && log.failover_history && (
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <AlertCircle className="w-4 h-4 text-amber-600" />
+                                        <span className="font-medium text-amber-700">
+                                          {t("failoverDetails", { count: log.failover_attempts })}
+                                        </span>
+                                      </div>
+                                      <div className="space-y-1 pl-2 text-amber-600">
+                                        {log.failover_history.map((attempt, index) => {
+                                          const isLast = index === log.failover_history!.length - 1;
+                                          const prefix = isLast ? "└─" : "├─";
+                                          const attemptUpstreamName =
+                                            attempt.upstream_name || t("upstreamUnknown");
+                                          const statusText = `${attempt.error_type}${
+                                            attempt.status_code ? `/${attempt.status_code}` : ""
+                                          }`;
+                                          const attemptTimeLabel = formatFailoverAttemptTime(
+                                            attempt.attempted_at
+                                          );
+
+                                          return (
+                                            <div
+                                              key={index}
+                                              className="flex items-start gap-2 py-1"
+                                            >
+                                              <span className="text-surface-500 mt-0.5">
+                                                {prefix}
+                                              </span>
+                                              <div className="min-w-0">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                  <span className="text-amber-500">
+                                                    FAILOVER: {attemptUpstreamName} →
+                                                  </span>
+                                                  <span
+                                                    className={cn(
+                                                      "font-mono text-xs",
+                                                      attempt.error_type === "timeout" &&
+                                                        "text-amber-600",
+                                                      attempt.error_type === "http_5xx" &&
+                                                        "text-status-error",
+                                                      attempt.error_type === "http_429" &&
+                                                        "text-orange-500"
+                                                    )}
+                                                  >
+                                                    [{statusText}]
+                                                  </span>
+                                                  <span className="text-amber-600 text-xs font-mono whitespace-nowrap">
+                                                    {attemptTimeLabel}
+                                                  </span>
+                                                </div>
+                                                <div
+                                                  className="text-amber-700 break-all"
+                                                  title={attempt.error_message}
+                                                >
+                                                  {attempt.error_message}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
-
-                              {/* Failover History - Terminal Style */}
-                              {hasFailover && log.failover_history && (
-                                <div>
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <AlertCircle className="w-4 h-4 text-amber-600" />
-                                    <span className="font-medium text-amber-700">
-                                      {t("failoverDetails", { count: log.failover_attempts })}
-                                    </span>
-                                  </div>
-                                  <div className="space-y-1 pl-2 text-amber-600">
-                                    {log.failover_history.map((attempt, index) => {
-                                      const isLast = index === log.failover_history!.length - 1;
-                                      const prefix = isLast ? "└─" : "├─";
-                                      const attemptUpstreamName =
-                                        attempt.upstream_name || t("upstreamUnknown");
-                                      const statusText = `${attempt.error_type}${
-                                        attempt.status_code ? `/${attempt.status_code}` : ""
-                                      }`;
-                                      const attemptTimeLabel = formatFailoverAttemptTime(
-                                        attempt.attempted_at
-                                      );
-
-                                      return (
-                                        <div key={index} className="flex items-start gap-2 py-1">
-                                          <span className="text-surface-500 mt-0.5">{prefix}</span>
-                                          <div className="min-w-0 flex-1">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                              <span className="text-amber-500">
-                                                FAILOVER: {attemptUpstreamName} →
-                                              </span>
-                                              <span
-                                                className={cn(
-                                                  "font-mono text-xs",
-                                                  attempt.error_type === "timeout" &&
-                                                    "text-amber-600",
-                                                  attempt.error_type === "http_5xx" &&
-                                                    "text-status-error",
-                                                  attempt.error_type === "http_429" &&
-                                                    "text-orange-500"
-                                                )}
-                                              >
-                                                [{statusText}]
-                                              </span>
-                                            </div>
-                                            <div
-                                              className="text-amber-700 break-all"
-                                              title={attempt.error_message}
-                                            >
-                                              {attempt.error_message}
-                                            </div>
-                                          </div>
-                                          <span className="text-amber-600 ml-2 text-xs font-mono whitespace-nowrap">
-                                            @{attemptTimeLabel}
-                                          </span>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              )}
 
                               {/* Error Details - Terminal Style */}
                               {isError && (

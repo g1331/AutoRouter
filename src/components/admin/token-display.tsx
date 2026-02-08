@@ -3,6 +3,7 @@
 import { Database } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 interface TokenDisplayProps {
   promptTokens: number;
@@ -111,7 +112,7 @@ export function TokenDetailContent({
   }
 
   return (
-    <div className="min-w-[180px] font-mono text-xs">
+    <div className="min-w-[180px] max-w-[460px] font-mono text-xs">
       {/* Header */}
       <div className="text-amber-500 uppercase tracking-wider mb-2 text-[10px] border-b border-amber-500/30 pb-1">
         {t("tokenDetails")}
@@ -120,12 +121,17 @@ export function TokenDetailContent({
       {/* Main token rows */}
       <div className="space-y-1">
         {mainRows.map((row, idx) => (
-          <div key={idx} className="flex justify-between items-center">
+          <div key={idx} className="grid grid-cols-[auto_auto] items-center gap-x-3">
             <span className={row.highlight ? "text-amber-500" : "text-amber-700"}>
               {row.indent ? "  " : ""}
               {row.label}
             </span>
-            <span className={row.highlight ? "text-amber-500" : "text-amber-700"}>
+            <span
+              className={cn(
+                row.highlight ? "text-amber-500" : "text-amber-700",
+                "text-right justify-self-end"
+              )}
+            >
               {row.value.toLocaleString()}
             </span>
           </div>
@@ -136,9 +142,11 @@ export function TokenDetailContent({
       {cacheRows.length > 0 && (
         <div className="border-t border-amber-500/20 mt-2 pt-2 space-y-1">
           {cacheRows.map((row, idx) => (
-            <div key={idx} className="flex justify-between items-center">
+            <div key={idx} className="grid grid-cols-[auto_auto] items-center gap-x-3">
               <span className="text-status-info">{row.label}</span>
-              <span className="text-status-info">{row.value.toLocaleString()}</span>
+              <span className="text-status-info text-right justify-self-end">
+                {row.value.toLocaleString()}
+              </span>
             </div>
           ))}
         </div>
@@ -146,9 +154,11 @@ export function TokenDetailContent({
 
       {/* Total */}
       <div className="border-t border-amber-500/30 mt-2 pt-2">
-        <div className="flex justify-between items-center">
+        <div className="grid grid-cols-[auto_auto] items-center gap-x-3">
           <span className="text-amber-500 font-medium">{t("tokenTotal")}</span>
-          <span className="text-amber-500 font-medium">{totalTokens.toLocaleString()}</span>
+          <span className="text-amber-500 font-medium text-right justify-self-end">
+            {totalTokens.toLocaleString()}
+          </span>
         </div>
       </div>
     </div>

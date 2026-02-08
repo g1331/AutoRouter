@@ -796,7 +796,7 @@ describe("LogsTable", () => {
         minute: "2-digit",
         second: "2-digit",
       });
-      expect(screen.getByText(new RegExp(`@${expectedAttemptTime}`))).toBeInTheDocument();
+      expect(screen.getByText(new RegExp(expectedAttemptTime))).toBeInTheDocument();
     });
 
     it("displays two-column layout with token details on left and routing on right", () => {
