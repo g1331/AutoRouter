@@ -19,14 +19,14 @@
 
 ## 4. Admin API 路由替换
 
-- [ ] 4.1 替换 `src/app/api/admin/keys/route.ts` 和 `src/app/api/admin/keys/[id]/route.ts` 中的 `console.error`
-- [ ] 4.2 替换 `src/app/api/admin/keys/[id]/reveal/route.ts` 中的 `console.error`
-- [ ] 4.3 替换 `src/app/api/admin/upstreams/route.ts`、`src/app/api/admin/upstreams/[id]/route.ts` 中的 `console.error`
-- [ ] 4.4 替换 `src/app/api/admin/upstreams/test/route.ts`、`src/app/api/admin/upstreams/[id]/test/route.ts` 中的 `console.error`
-- [ ] 4.5 替换 `src/app/api/admin/upstreams/health/route.ts` 中的 `console.error`
-- [ ] 4.6 替换 `src/app/api/admin/circuit-breakers/route.ts`、`[id]/route.ts`、`[id]/force-open/route.ts`、`[id]/force-close/route.ts` 中的 `console.error`
-- [ ] 4.7 替换 `src/app/api/admin/stats/route.ts`、`overview/route.ts`、`timeseries/route.ts`、`leaderboard/route.ts` 中的 `console.error`
-- [ ] 4.8 替换 `src/app/api/admin/logs/route.ts`、`src/app/api/admin/health/route.ts` 中的 `console.error`
+- [x] 4.1 替换 `src/app/api/admin/keys/route.ts` 和 `src/app/api/admin/keys/[id]/route.ts` 中的 `console.error`
+- [x] 4.2 替换 `src/app/api/admin/keys/[id]/reveal/route.ts` 中的 `console.error`
+- [x] 4.3 替换 `src/app/api/admin/upstreams/route.ts`、`src/app/api/admin/upstreams/[id]/route.ts` 中的 `console.error`
+- [x] 4.4 替换 `src/app/api/admin/upstreams/test/route.ts`、`src/app/api/admin/upstreams/[id]/test/route.ts` 中的 `console.error`
+- [x] 4.5 替换 `src/app/api/admin/upstreams/health/route.ts` 中的 `console.error`
+- [x] 4.6 替换 `src/app/api/admin/circuit-breakers/route.ts`、`[id]/route.ts`、`[id]/force-open/route.ts`、`[id]/force-close/route.ts` 中的 `console.error`
+- [x] 4.7 替换 `src/app/api/admin/stats/route.ts`、`overview/route.ts`、`timeseries/route.ts`、`leaderboard/route.ts` 中的 `console.error`
+- [x] 4.8 替换 `src/app/api/admin/logs/route.ts`、`src/app/api/admin/health/route.ts` 中的 `console.error`
 
 ## 5. 验证与收尾
 

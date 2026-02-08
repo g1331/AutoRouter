@@ -4,6 +4,9 @@ import { errorResponse } from "@/lib/utils/api-auth";
 import { revealApiKey, ApiKeyNotFoundError, LegacyApiKeyError } from "@/lib/services/key-manager";
 import { transformApiKeyRevealToApi } from "@/lib/utils/api-transformers";
 import { config } from "@/lib/utils/config";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("admin-keys");
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -44,7 +47,7 @@ async function handleReveal(request: NextRequest, context: RouteContext) {
     if (error instanceof LegacyApiKeyError) {
       return errorResponse("Legacy keys (bcrypt-only) cannot be revealed.", 400);
     }
-    console.error("Failed to reveal API key:", error);
+    log.error({ err: error }, "failed to reveal API key");
     return errorResponse("Internal server error", 500);
   }
 }

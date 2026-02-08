@@ -3,6 +3,9 @@ import { validateAdminAuth } from "@/lib/utils/auth";
 import { getPaginationParams, errorResponse } from "@/lib/utils/api-auth";
 import { listRequestLogs, type ListRequestLogsFilter } from "@/lib/services/request-logger";
 import { transformPaginatedRequestLogs } from "@/lib/utils/api-transformers";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("admin-logs");
 
 /**
  * GET /api/admin/logs - List request logs
@@ -47,7 +50,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(transformPaginatedRequestLogs(result));
   } catch (error) {
-    console.error("Failed to list request logs:", error);
+    log.error({ err: error }, "failed to list request logs");
     return errorResponse("Internal server error", 500);
   }
 }

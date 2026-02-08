@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateAdminAuth } from "@/lib/utils/auth";
 import { errorResponse } from "@/lib/utils/api-auth";
 import { getAllHealthStatus, formatHealthStatusResponse } from "@/lib/services/health-checker";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("admin-upstreams");
 
 /**
  * GET /api/admin/upstreams/health - Get health status for upstreams
@@ -30,7 +33,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error("Failed to get upstream health status:", error);
+    log.error({ err: error }, "failed to get upstream health status");
     return errorResponse("Internal server error", 500);
   }
 }

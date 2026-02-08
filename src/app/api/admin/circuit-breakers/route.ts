@@ -3,6 +3,9 @@ import { validateAdminAuth } from "@/lib/utils/auth";
 import { errorResponse, getPaginationParams } from "@/lib/utils/api-auth";
 import { db, circuitBreakerStates, upstreams } from "@/lib/db";
 import { desc, eq, sql } from "drizzle-orm";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("admin-circuit-breakers");
 
 export interface CircuitBreakerStateResponse {
   id: string;
@@ -111,7 +114,7 @@ export async function GET(request: NextRequest): Promise<Response> {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error("Failed to list circuit breaker states:", error);
+    log.error({ err: error }, "failed to list circuit breaker states");
     return errorResponse("Internal server error", 500);
   }
 }

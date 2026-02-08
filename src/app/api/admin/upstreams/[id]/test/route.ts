@@ -9,6 +9,9 @@ import {
 } from "@/lib/services/upstream-service";
 import { db, upstreams } from "@/lib/db";
 import { eq } from "drizzle-orm";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("admin-upstreams");
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -146,10 +149,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // Return test results
     return NextResponse.json(formatTestUpstreamResponse(result));
   } catch (error) {
-    console.error(
-      "Failed to test upstream connection:",
-      error instanceof Error ? error.message : "Unknown error"
-    );
+    log.error({ err: error }, "failed to test upstream connection");
     return errorResponse("Internal server error", 500);
   }
 }

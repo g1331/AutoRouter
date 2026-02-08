@@ -8,6 +8,9 @@ import {
 } from "@/lib/services/upstream-service";
 import { transformPaginatedUpstreams, transformUpstreamToApi } from "@/lib/utils/api-transformers";
 import { z } from "zod";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("admin-upstreams");
 
 const circuitBreakerConfigSchema = z.object({
   failure_threshold: z.number().int().min(1).max(100).optional(),
@@ -46,7 +49,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(transformPaginatedUpstreams(result));
   } catch (error) {
-    console.error("Failed to list upstreams:", error);
+    log.error({ err: error }, "failed to list upstreams");
     return errorResponse("Internal server error", 500);
   }
 }
@@ -96,7 +99,7 @@ export async function POST(request: NextRequest) {
         400
       );
     }
-    console.error("Failed to create upstream:", error);
+    log.error({ err: error }, "failed to create upstream");
     return errorResponse(error instanceof Error ? error.message : "Internal server error", 500);
   }
 }

@@ -10,6 +10,9 @@ import {
 } from "@/lib/services/upstream-service";
 import { transformUpstreamToApi } from "@/lib/utils/api-transformers";
 import { z } from "zod";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("admin-upstreams");
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -55,7 +58,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json(transformUpstreamToApi(upstream));
   } catch (error) {
-    console.error("Failed to get upstream:", error);
+    log.error({ err: error }, "failed to get upstream");
     return errorResponse("Internal server error", 500);
   }
 }
@@ -111,7 +114,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         400
       );
     }
-    console.error("Failed to update upstream:", error);
+    log.error({ err: error }, "failed to update upstream");
     return errorResponse(error instanceof Error ? error.message : "Internal server error", 500);
   }
 }
@@ -133,7 +136,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     if (error instanceof UpstreamNotFoundError) {
       return errorResponse("Upstream not found", 404);
     }
-    console.error("Failed to delete upstream:", error);
+    log.error({ err: error }, "failed to delete upstream");
     return errorResponse("Internal server error", 500);
   }
 }

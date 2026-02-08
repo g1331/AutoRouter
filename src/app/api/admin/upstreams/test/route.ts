@@ -7,6 +7,9 @@ import {
   type TestUpstreamInput,
 } from "@/lib/services/upstream-service";
 import { z } from "zod";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("admin-upstreams");
 
 const testUpstreamSchema = z.object({
   name: z.string().min(1).max(64).optional(),
@@ -140,10 +143,7 @@ export async function POST(request: NextRequest) {
         400
       );
     }
-    console.error(
-      "Failed to test upstream connection:",
-      error instanceof Error ? error.message : "Unknown error"
-    );
+    log.error({ err: error }, "failed to test upstream connection");
     return errorResponse("Internal server error", 500);
   }
 }

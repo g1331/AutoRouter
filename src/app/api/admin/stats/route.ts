@@ -12,6 +12,9 @@ import {
   transformStatsTimeseriesToApi,
   transformStatsLeaderboardToApi,
 } from "@/lib/utils/api-transformers";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("admin-stats");
 
 /**
  * GET /api/admin/stats - Get dashboard statistics
@@ -46,7 +49,7 @@ export async function GET(request: NextRequest) {
 
     return errorResponse("Invalid type parameter", 400);
   } catch (error) {
-    console.error("Failed to get stats:", error);
+    log.error({ err: error }, "failed to get stats");
     return errorResponse("Internal server error", 500);
   }
 }

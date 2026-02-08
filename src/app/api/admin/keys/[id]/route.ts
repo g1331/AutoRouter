@@ -10,6 +10,9 @@ import {
 } from "@/lib/services/key-manager";
 import { transformApiKeyToApi } from "@/lib/utils/api-transformers";
 import { z } from "zod";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("admin-keys");
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -32,7 +35,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json(transformApiKeyToApi(apiKey));
   } catch (error) {
-    console.error("Failed to get API key:", error);
+    log.error({ err: error }, "failed to get API key");
     return errorResponse("Internal server error", 500);
   }
 }
@@ -54,7 +57,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     if (error instanceof ApiKeyNotFoundError) {
       return errorResponse("API key not found", 404);
     }
-    console.error("Failed to delete API key:", error);
+    log.error({ err: error }, "failed to delete API key");
     return errorResponse("Internal server error", 500);
   }
 }
@@ -124,7 +127,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     if (error instanceof ApiKeyNotFoundError) {
       return errorResponse("API key not found", 404);
     }
-    console.error("Failed to update API key:", error);
+    log.error({ err: error }, "failed to update API key");
 
     if (error instanceof Error) {
       // Treat service-level validation failures as 400s.

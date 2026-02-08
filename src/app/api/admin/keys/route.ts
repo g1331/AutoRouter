@@ -7,6 +7,9 @@ import {
   transformApiKeyCreateToApi,
 } from "@/lib/utils/api-transformers";
 import { z } from "zod";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("admin-keys");
 
 const createApiKeySchema = z.object({
   name: z.string().min(1).max(255),
@@ -30,7 +33,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(transformPaginatedApiKeys(result));
   } catch (error) {
-    console.error("Failed to list API keys:", error);
+    log.error({ err: error }, "failed to list API keys");
     return errorResponse("Internal server error", 500);
   }
 }
@@ -65,7 +68,7 @@ export async function POST(request: NextRequest) {
         400
       );
     }
-    console.error("Failed to create API key:", error);
+    log.error({ err: error }, "failed to create API key");
     return errorResponse(error instanceof Error ? error.message : "Internal server error", 500);
   }
 }

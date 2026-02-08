@@ -4,6 +4,9 @@ import { errorResponse } from "@/lib/utils/api-auth";
 import { db, circuitBreakerStates, upstreams } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import type { CircuitBreakerStateResponse } from "../route";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("admin-circuit-breakers");
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -71,7 +74,7 @@ export async function GET(request: NextRequest, context: RouteContext): Promise<
 
     return NextResponse.json({ data: response });
   } catch (error) {
-    console.error("Failed to get circuit breaker state:", error);
+    log.error({ err: error }, "failed to get circuit breaker state");
     return errorResponse("Internal server error", 500);
   }
 }

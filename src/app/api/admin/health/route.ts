@@ -11,6 +11,9 @@ import {
   formatHealthMetricsResponse,
 } from "@/lib/services/health-checker";
 import { UpstreamNotFoundError } from "@/lib/services/upstream-crud";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("admin-health");
 
 /**
  * GET /api/admin/health - Get health status for all upstreams or a specific upstream
@@ -103,7 +106,7 @@ export async function GET(request: NextRequest) {
     if (error instanceof UpstreamNotFoundError) {
       return errorResponse(error.message, 404);
     }
-    console.error("Failed to get health status:", error);
+    log.error({ err: error }, "failed to get health status");
     return errorResponse("Internal server error", 500);
   }
 }

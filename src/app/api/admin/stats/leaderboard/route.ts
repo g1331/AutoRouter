@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateAdminAuth } from "@/lib/utils/auth";
 import { errorResponse } from "@/lib/utils/api-auth";
 import { getLeaderboardStats, type TimeRange } from "@/lib/services/stats-service";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("admin-stats");
 
 /**
  * GET /api/admin/stats/leaderboard - Get leaderboard statistics
@@ -45,7 +48,7 @@ export async function GET(request: NextRequest) {
       })),
     });
   } catch (error) {
-    console.error("Failed to get leaderboard stats:", error);
+    log.error({ err: error }, "failed to get leaderboard stats");
     return errorResponse("Internal server error", 500);
   }
 }

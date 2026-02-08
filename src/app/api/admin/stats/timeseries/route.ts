@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateAdminAuth } from "@/lib/utils/auth";
 import { errorResponse } from "@/lib/utils/api-auth";
 import { getTimeseriesStats, type TimeRange } from "@/lib/services/stats-service";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("admin-stats");
 
 /**
  * GET /api/admin/stats/timeseries - Get timeseries statistics
@@ -35,7 +38,7 @@ export async function GET(request: NextRequest) {
       })),
     });
   } catch (error) {
-    console.error("Failed to get timeseries stats:", error);
+    log.error({ err: error }, "failed to get timeseries stats");
     return errorResponse("Internal server error", 500);
   }
 }

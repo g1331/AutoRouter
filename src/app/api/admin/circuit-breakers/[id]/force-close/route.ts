@@ -4,6 +4,9 @@ import { errorResponse } from "@/lib/utils/api-auth";
 import { forceClose } from "@/lib/services/circuit-breaker";
 import { db, upstreams } from "@/lib/db";
 import { eq } from "drizzle-orm";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("admin-circuit-breakers");
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -41,7 +44,7 @@ export async function POST(request: NextRequest, context: RouteContext): Promise
       action: "force_close",
     });
   } catch (error) {
-    console.error("Failed to force circuit breaker closed:", error);
+    log.error({ err: error }, "failed to force circuit breaker closed");
     return errorResponse("Internal server error", 500);
   }
 }
