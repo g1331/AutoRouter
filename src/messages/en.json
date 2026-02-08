@@ -197,6 +197,7 @@
     "errorType": "Error",
     "statusCode": "Status",
     "time": "Time",
+    "failoverDuration": "Failover Duration",
     "failoverTime": "Failover Time",
     "tokenDetails": "TOKEN DETAILS",
     "tokenInput": "Input",

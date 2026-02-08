@@ -200,6 +200,7 @@
     "errorType": "错误类型",
     "statusCode": "状态码",
     "time": "时间",
+    "failoverDuration": "故障转移耗时",
     "failoverTime": "故障转移时间",
     "tokenDetails": "TOKEN 明细",
     "tokenInput": "输入",

@@ -261,6 +261,19 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
     });
   };
 
+  const formatFailoverDuration = (durationMs: number | null | undefined) => {
+    if (durationMs === null || durationMs === undefined || Number.isNaN(durationMs)) {
+      return "-";
+    }
+
+    const safeDurationMs = Math.max(0, Math.round(durationMs));
+    if (safeDurationMs < 1000) {
+      return `${safeDurationMs}ms`;
+    }
+
+    return `${(safeDurationMs / 1000).toFixed(2)}s`;
+  };
+
   // Check if row has error state
   const hasErrorState = (log: RequestLog): boolean => {
     return log.status_code !== null && log.status_code >= 400;
@@ -372,8 +385,35 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                     log.failover_history && log.failover_history.length > 0
                       ? log.failover_history[log.failover_history.length - 1]?.attempted_at
                       : null;
+                  const firstFailoverAttemptAt =
+                    log.failover_history && log.failover_history.length > 0
+                      ? log.failover_history[0]?.attempted_at
+                      : null;
                   const latestFailoverTime = hasFailover
                     ? formatFailoverAttemptTime(latestFailoverAttemptAt ?? log.created_at)
+                    : null;
+                  const requestStartMs = new Date(log.created_at).getTime();
+                  const requestEndMs =
+                    log.duration_ms !== null && !Number.isNaN(requestStartMs)
+                      ? requestStartMs + log.duration_ms
+                      : NaN;
+                  const firstFailoverMs = firstFailoverAttemptAt
+                    ? new Date(firstFailoverAttemptAt).getTime()
+                    : NaN;
+
+                  let failoverDurationMs: number | null = null;
+                  if (hasFailover) {
+                    if (!Number.isNaN(firstFailoverMs) && !Number.isNaN(requestEndMs)) {
+                      failoverDurationMs = Math.max(0, requestEndMs - firstFailoverMs);
+                    } else if (!Number.isNaN(firstFailoverMs) && !Number.isNaN(requestStartMs)) {
+                      failoverDurationMs = Math.max(0, requestStartMs - firstFailoverMs);
+                    } else if (log.duration_ms !== null) {
+                      failoverDurationMs = log.duration_ms;
+                    }
+                  }
+
+                  const failoverDuration = hasFailover
+                    ? formatFailoverDuration(failoverDurationMs)
                     : null;
 
                   return (
@@ -420,6 +460,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                             groupName={log.group_name}
                             failoverAttempts={log.failover_attempts}
                             latestFailoverTime={latestFailoverTime}
+                            failoverDuration={failoverDuration}
                             compact={true}
                           />
                         </TableCell>
@@ -503,6 +544,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                       groupName={log.group_name}
                                       failoverAttempts={log.failover_attempts}
                                       latestFailoverTime={latestFailoverTime}
+                                      failoverDuration={failoverDuration}
                                       compact={false}
                                     />
                                   ) : (

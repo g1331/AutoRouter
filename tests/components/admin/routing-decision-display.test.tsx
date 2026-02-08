@@ -23,6 +23,7 @@ vi.mock("next-intl", () => ({
       tooltipStrategy: "Strategy",
       noRoutingDecision: "No routing decision data",
       failoverTime: "Failover Time",
+      failoverDuration: "Failover Duration",
       more: "more",
       "exclusionReason.circuit_open": "Circuit breaker open",
       "exclusionReason.model_not_allowed": "Model not allowed",
@@ -402,7 +403,7 @@ describe("RoutingDecisionDisplay", () => {
       expect(screen.getByText("No routing decision data")).toBeInTheDocument();
     });
 
-    it("should show fallback failover time placeholder", () => {
+    it("should not show failover time when no failover happened", () => {
       render(
         <RoutingDecisionDisplay
           upstreamName="openai-primary"
@@ -414,7 +415,7 @@ describe("RoutingDecisionDisplay", () => {
         />
       );
 
-      expect(screen.getByText("Failover Time: -")).toBeInTheDocument();
+      expect(screen.queryByText(/Failover Time:/)).not.toBeInTheDocument();
     });
 
     it("should show provided failover time without at-prefix", () => {
@@ -425,12 +426,12 @@ describe("RoutingDecisionDisplay", () => {
           routingDecision={mockRoutingDecision}
           groupName={null}
           failoverAttempts={1}
-          latestFailoverTime="2026/02/08 18:00:00"
+          failoverDuration="420ms"
           compact={false}
         />
       );
 
-      expect(screen.getByText("Failover Time: 2026/02/08 18:00:00")).toBeInTheDocument();
+      expect(screen.getByText(/Failover Duration: 420ms/)).toBeInTheDocument();
     });
   });
 
