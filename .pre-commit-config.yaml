@@ -8,12 +8,16 @@ repos:
     hooks:
       - id: check-added-large-files
         args: ["--maxkb=500"]
+        exclude: ^docs/images/
       - id: check-yaml
+        exclude: (\.claude|\.codex|openspec)/
       - id: check-toml
       - id: check-json
       - id: end-of-file-fixer
+        exclude: (\.claude|\.codex|openspec)/
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
+        exclude: (\.claude|\.codex|openspec)/
 
   # ============================================================
   # TypeScript / Next.js
@@ -25,7 +29,7 @@ repos:
         entry: pnpm exec prettier --check
         language: system
         files: \.(js|jsx|ts|tsx|css|json|md|yml|yaml)$
-        exclude: (node_modules|\.next|drizzle)/
+        exclude: (node_modules|\.next|drizzle|\.claude|\.codex|openspec)/
 
       - id: eslint
         name: eslint

@@ -115,6 +115,12 @@
 </details>
 
 <details>
+<summary><b>Logs - 请求日志</b></summary>
+<br>
+<img src="docs/images/logs-dark.png" alt="Logs" width="100%">
+</details>
+
+<details>
 <summary><b>Login - 登录界面</b></summary>
 <br>
 <img src="docs/images/login-dark.png" alt="Login" width="100%">

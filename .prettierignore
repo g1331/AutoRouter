@@ -6,3 +6,6 @@ dist
 coverage
 pnpm-lock.yaml
 drizzle
+.claude
+.codex
+openspec
