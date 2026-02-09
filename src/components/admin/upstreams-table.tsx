@@ -168,6 +168,180 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
     );
   };
 
+  // Render the CMD action bar for an upstream (shared between table and card views)
+  const renderActionBar = (upstream: Upstream) => (
+    <div className="cf-scanlines relative flex flex-wrap items-center gap-1.5 px-2 py-0.5 bg-black-900/40 border border-surface-400/50 rounded-cf-sm">
+      <span className="font-mono text-[9px] text-amber-700 tracking-widest select-none">
+        CMD://
+      </span>
+      <div className="flex items-center gap-1.5 ml-auto">
+        {/* Emergency actions group */}
+        {upstream.circuit_breaker && upstream.circuit_breaker.state !== "closed" && (
+          <>
+            <Button
+              variant="ghost"
+              type="button"
+              size="sm"
+              className={cn(
+                "group relative h-7 px-1.5 overflow-hidden",
+                "border-2 border-status-error/60 text-status-error",
+                "bg-black-900/60 hover:bg-black-900/70",
+                "cf-scanlines cf-data-scan cf-pulse-glow",
+                "shadow-[inset_0_0_0_1px_rgba(220,38,38,0.12)]",
+                "hover:shadow-cf-glow-error",
+                "active:translate-y-[1px]"
+              )}
+              onClick={async (e) => {
+                e.stopPropagation();
+                try {
+                  await forceCircuitBreakerMutation.mutateAsync({
+                    upstreamId: upstream.id,
+                    action: "close",
+                  });
+                  toast.success(t("recoverCircuitBreakerSuccess"));
+                } catch (error) {
+                  toast.error(
+                    error instanceof Error ? error.message : t("recoverCircuitBreakerFailed")
+                  );
+                }
+              }}
+              disabled={
+                forceCircuitBreakerMutation.isPending &&
+                forceCircuitBreakerMutation.variables?.upstreamId === upstream.id
+              }
+              aria-label={`${t("recoverCircuitBreaker")}: ${upstream.name}`}
+            >
+              <span
+                className="absolute inset-0 opacity-80"
+                style={{
+                  background:
+                    "repeating-linear-gradient(135deg, rgba(220,38,38,0.14) 0px, rgba(220,38,38,0.14) 6px, transparent 6px, transparent 12px)",
+                }}
+                aria-hidden="true"
+              />
+              <span className="relative z-20 flex items-center gap-1.5">
+                <StatusLed status="offline" className="scale-75" />
+                <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="text-[11px] font-mono uppercase tracking-widest hidden lg:inline">
+                  {t("recoverCircuitBreaker")}
+                </span>
+              </span>
+            </Button>
+            <span className="h-3 w-px bg-amber-500/20" aria-hidden="true" />
+          </>
+        )}
+        {/* State toggle */}
+        <Button
+          variant="ghost"
+          size="sm"
+          type="button"
+          data-state={upstream.is_active ? "on" : "off"}
+          className={cn(
+            "group relative h-7 px-1.5 overflow-hidden",
+            "border-2 bg-black-900/60 hover:bg-black-900/70",
+            "cf-scanlines cf-data-scan",
+            "shadow-[inset_0_0_0_1px_rgba(255,191,0,0.10)]",
+            "hover:shadow-cf-glow-subtle",
+            "active:translate-y-[1px]",
+            upstream.is_active
+              ? "text-amber-400 border-amber-500/60"
+              : "text-amber-600 border-amber-500/30"
+          )}
+          onClick={async (e) => {
+            e.stopPropagation();
+            try {
+              await toggleActiveMutation.mutateAsync({
+                id: upstream.id,
+                nextActive: !upstream.is_active,
+              });
+            } catch {
+              // Error toast handled in hook
+            }
+          }}
+          disabled={
+            toggleActiveMutation.isPending && toggleActiveMutation.variables?.id === upstream.id
+          }
+          aria-label={`${upstream.is_active ? t("quickDisable") : t("quickEnable")}: ${upstream.name}`}
+        >
+          <span className="relative z-20 flex items-center gap-1.5">
+            <StatusLed status={upstream.is_active ? "healthy" : "degraded"} className="scale-75" />
+            {upstream.is_active ? (
+              <PowerOff className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : (
+              <Power className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+            <span className="text-[10px] font-mono uppercase tracking-widest hidden lg:inline">
+              {upstream.is_active ? t("quickDisable") : t("quickEnable")}
+            </span>
+            <span className="ml-1 hidden lg:flex items-center gap-1" aria-hidden="true">
+              <span
+                className={cn(
+                  "relative h-[14px] w-[34px] rounded-cf-sm border border-amber-500/40 bg-black-900/70",
+                  "shadow-[inset_0_0_0_1px_rgba(0,0,0,0.35)]"
+                )}
+              >
+                <span
+                  className={cn(
+                    "absolute top-[1px] left-[1px] h-[10px] w-[14px] rounded-[2px]",
+                    "transition-transform duration-200 ease-out",
+                    "shadow-[0_0_10px_rgba(255,191,0,0.25)]",
+                    upstream.is_active
+                      ? "translate-x-0 bg-amber-500"
+                      : "translate-x-[16px] bg-surface-400"
+                  )}
+                />
+              </span>
+            </span>
+          </span>
+        </Button>
+        {/* Separator */}
+        <span className="h-3 w-px bg-amber-500/20" aria-hidden="true" />
+        {/* CRUD actions group */}
+        <div className="flex items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon"
+            type="button"
+            className="h-7 w-7 text-green-500 hover:bg-green-500/10"
+            onClick={(e) => {
+              e.stopPropagation();
+              onTest(upstream);
+            }}
+            aria-label={`${tCommon("test")}: ${upstream.name}`}
+          >
+            <Play className="h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            type="button"
+            className="h-7 w-7 text-amber-500 hover:bg-amber-500/10"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(upstream);
+            }}
+            aria-label={`${tCommon("edit")}: ${upstream.name}`}
+          >
+            <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            type="button"
+            className="h-7 w-7 text-status-error hover:bg-status-error-muted"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(upstream);
+            }}
+            aria-label={`${tCommon("delete")}: ${upstream.name}`}
+          >
+            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+
   if (upstreams.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -190,326 +364,308 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
           className="border-0 rounded-none"
         />
 
-        {/* Tiered Table */}
-        <Table
-          frame="none"
-          containerClassName="rounded-none"
-          className="table-fixed min-w-[1200px]"
-        >
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-8"></TableHead>
-              <TableHead className="w-[220px]">{tCommon("name")}</TableHead>
-              <TableHead className="w-[120px]">{t("providerType")}</TableHead>
-              <TableHead className="w-[120px]">{t("tableWeight")}</TableHead>
-              <TableHead className="w-[150px]">{t("tableHealth")}</TableHead>
-              <TableHead className="w-[170px]">{t("tableCircuitBreaker")}</TableHead>
-              <TableHead className="w-[340px]">{t("tableBaseUrl")}</TableHead>
-              <TableHead className="w-[150px]">{tCommon("createdAt")}</TableHead>
-              <TableHead className="w-[330px] text-right">{tCommon("actions")}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {tieredData.map((tier) => {
-              const isCollapsed = collapsedTiers.has(tier.priority);
+        {/* Desktop: Table Layout */}
+        <div className="hidden lg:block">
+          <Table
+            frame="none"
+            containerClassName="rounded-none"
+            className="table-fixed min-w-[1200px]"
+          >
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-8"></TableHead>
+                <TableHead className="w-[220px]">{tCommon("name")}</TableHead>
+                <TableHead className="w-[120px]">{t("providerType")}</TableHead>
+                <TableHead className="w-[120px]">{t("tableWeight")}</TableHead>
+                <TableHead className="w-[150px]">{t("tableHealth")}</TableHead>
+                <TableHead className="w-[170px]">{t("tableCircuitBreaker")}</TableHead>
+                <TableHead className="w-[340px]">{t("tableBaseUrl")}</TableHead>
+                <TableHead className="w-[150px]">{tCommon("createdAt")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {tieredData.map((tier) => {
+                const isCollapsed = collapsedTiers.has(tier.priority);
 
-              return (
-                <Fragment key={`tier-${tier.priority}`}>
-                  {/* Tier Header Row */}
-                  <TableRow
-                    className="bg-surface-300 hover:bg-surface-300 cursor-pointer"
-                    onClick={() => toggleTier(tier.priority)}
-                  >
-                    <TableCell colSpan={9} className="py-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-amber-500"
-                            aria-expanded={!isCollapsed}
-                            aria-label={isCollapsed ? tCommon("expand") : tCommon("collapse")}
-                          >
-                            {isCollapsed ? (
-                              <ChevronRight className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </Button>
-                          <span className="font-mono text-xs text-amber-500 font-semibold tracking-wider">
-                            TIER P{tier.priority}
-                          </span>
-                          <span className="font-mono text-xs text-amber-700">
-                            ({tier.upstreams.length}{" "}
-                            {tier.upstreams.length === 1 ? "upstream" : "upstreams"})
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-4 font-mono text-xs">
-                          {/* Health Summary */}
-                          <div className="flex items-center gap-2">
-                            <StatusLed status={getTierHealthLedStatus(tier.healthySummary)} />
-                            <span className="text-amber-600">
-                              {tier.healthySummary.healthy}/{tier.healthySummary.total} HEALTHY
+                return (
+                  <Fragment key={`tier-${tier.priority}`}>
+                    {/* Tier Header Row */}
+                    <TableRow
+                      className="bg-surface-300 hover:bg-surface-300 cursor-pointer"
+                      onClick={() => toggleTier(tier.priority)}
+                    >
+                      <TableCell colSpan={8} className="py-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-amber-500"
+                              aria-expanded={!isCollapsed}
+                              aria-label={isCollapsed ? tCommon("expand") : tCommon("collapse")}
+                            >
+                              {isCollapsed ? (
+                                <ChevronRight className="h-4 w-4" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4" />
+                              )}
+                            </Button>
+                            <span className="font-mono text-xs text-amber-500 font-semibold tracking-wider">
+                              TIER P{tier.priority}
+                            </span>
+                            <span className="font-mono text-xs text-amber-700">
+                              ({tier.upstreams.length}{" "}
+                              {tier.upstreams.length === 1 ? "upstream" : "upstreams"})
                             </span>
                           </div>
 
-                          {/* Circuit Summary */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-amber-600">CIRCUIT:</span>
-                            <AsciiProgress
-                              value={tier.circuitSummary.closed}
-                              max={tier.circuitSummary.total}
-                              width={10}
-                              showPercentage
-                              variant={
-                                tier.circuitSummary.closed === tier.circuitSummary.total
-                                  ? "success"
-                                  : tier.circuitSummary.closed === 0
-                                    ? "error"
-                                    : "warning"
-                              }
-                            />
+                          <div className="flex items-center gap-4 font-mono text-xs">
+                            {/* Health Summary */}
+                            <div className="flex items-center gap-2">
+                              <StatusLed status={getTierHealthLedStatus(tier.healthySummary)} />
+                              <span className="text-amber-600">
+                                {tier.healthySummary.healthy}/{tier.healthySummary.total} HEALTHY
+                              </span>
+                            </div>
+
+                            {/* Circuit Summary */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-amber-600">CIRCUIT:</span>
+                              <AsciiProgress
+                                value={tier.circuitSummary.closed}
+                                max={tier.circuitSummary.total}
+                                width={10}
+                                showPercentage
+                                variant={
+                                  tier.circuitSummary.closed === tier.circuitSummary.total
+                                    ? "success"
+                                    : tier.circuitSummary.closed === 0
+                                      ? "error"
+                                      : "warning"
+                                }
+                              />
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                      </TableCell>
+                    </TableRow>
 
-                  {/* Upstream Rows */}
-                  {!isCollapsed &&
-                    tier.upstreams.map((upstream, index) => (
-                      <TableRow
-                        key={upstream.id}
-                        className={cn(
-                          "motion-safe:animate-[cf-flicker-in_0.3s_ease-out]",
-                          hasErrorState(upstream) &&
-                            "shadow-[inset_0_0_20px_-10px_var(--status-error)]",
-                          // Stagger animation delay
-                          index === 0 && "motion-safe:[animation-delay:0ms]",
-                          index === 1 && "motion-safe:[animation-delay:50ms]",
-                          index === 2 && "motion-safe:[animation-delay:100ms]",
-                          index >= 3 && "motion-safe:[animation-delay:150ms]"
-                        )}
-                      >
-                        <TableCell></TableCell>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center justify-between gap-3 min-w-0">
-                            <span className="truncate">{upstream.name}</span>
-                            <Badge
-                              variant={upstream.is_active ? "success" : "neutral"}
-                              className="min-w-[52px] justify-center"
-                            >
-                              {upstream.is_active ? t("active") : t("inactive")}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell>{formatProvider(upstream.provider_type)}</TableCell>
-                        <TableCell>
-                          <AsciiProgress
-                            value={upstream.weight}
-                            max={tier.maxWeight}
-                            width={10}
-                            showValue
-                          />
-                        </TableCell>
-                        <TableCell>
+                    {/* Upstream Rows */}
+                    {!isCollapsed &&
+                      tier.upstreams.map((upstream, index) => (
+                        <Fragment key={upstream.id}>
+                          {/* Data Row */}
+                          <TableRow
+                            className={cn(
+                              "border-b-0 [&>td]:pb-0",
+                              "motion-safe:animate-[cf-flicker-in_0.3s_ease-out]",
+                              hasErrorState(upstream) &&
+                                "shadow-[inset_0_0_20px_-10px_var(--status-error)]",
+                              index === 0 && "motion-safe:[animation-delay:0ms]",
+                              index === 1 && "motion-safe:[animation-delay:50ms]",
+                              index === 2 && "motion-safe:[animation-delay:100ms]",
+                              index >= 3 && "motion-safe:[animation-delay:150ms]"
+                            )}
+                          >
+                            <TableCell></TableCell>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center justify-between gap-3 min-w-0">
+                                <span className="truncate">{upstream.name}</span>
+                                <Badge
+                                  variant={upstream.is_active ? "success" : "neutral"}
+                                  className="min-w-[52px] justify-center"
+                                >
+                                  {upstream.is_active ? t("active") : t("inactive")}
+                                </Badge>
+                              </div>
+                            </TableCell>
+                            <TableCell>{formatProvider(upstream.provider_type)}</TableCell>
+                            <TableCell>
+                              <AsciiProgress
+                                value={upstream.weight}
+                                max={tier.maxWeight}
+                                width={10}
+                                showValue
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <StatusLed
+                                status={getHealthLedStatus(upstream)}
+                                label={getHealthLabel(upstream)}
+                                showLabel
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <StatusLed
+                                status={getCircuitLedStatus(upstream)}
+                                label={getCircuitBreakerLabel(upstream)}
+                                showLabel
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <code className="px-2 py-1 bg-surface-300 text-amber-500 rounded-cf-sm font-mono text-xs border border-divider max-w-xs truncate inline-block">
+                                {upstream.base_url}
+                              </code>
+                            </TableCell>
+                            <TableCell>
+                              {formatDistanceToNow(new Date(upstream.created_at), {
+                                addSuffix: true,
+                                locale: dateLocale,
+                              })}
+                            </TableCell>
+                          </TableRow>
+                          {/* Actions Row */}
+                          <TableRow
+                            className={cn(
+                              "motion-safe:animate-[cf-flicker-in_0.3s_ease-out]",
+                              index === 0 && "motion-safe:[animation-delay:0ms]",
+                              index === 1 && "motion-safe:[animation-delay:50ms]",
+                              index === 2 && "motion-safe:[animation-delay:100ms]",
+                              index >= 3 && "motion-safe:[animation-delay:150ms]"
+                            )}
+                          >
+                            <TableCell colSpan={8} className="pt-0 pb-1.5 px-4">
+                              {renderActionBar(upstream)}
+                            </TableCell>
+                          </TableRow>
+                        </Fragment>
+                      ))}
+                  </Fragment>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* Mobile/Tablet: Card Layout */}
+        <div className="lg:hidden divide-y divide-dashed divide-divider">
+          {tieredData.map((tier) => {
+            const isCollapsed = collapsedTiers.has(tier.priority);
+
+            return (
+              <Fragment key={`tier-mobile-${tier.priority}`}>
+                {/* Tier Header */}
+                <div
+                  className="flex items-center justify-between px-3 py-2 bg-surface-300 cursor-pointer"
+                  onClick={() => toggleTier(tier.priority)}
+                >
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-amber-500"
+                      aria-expanded={!isCollapsed}
+                      aria-label={isCollapsed ? tCommon("expand") : tCommon("collapse")}
+                    >
+                      {isCollapsed ? (
+                        <ChevronRight className="h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <span className="font-mono text-xs text-amber-500 font-semibold tracking-wider">
+                      TIER P{tier.priority}
+                    </span>
+                    <span className="font-mono text-xs text-amber-700">
+                      ({tier.upstreams.length})
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 font-mono text-xs">
+                    <StatusLed status={getTierHealthLedStatus(tier.healthySummary)} />
+                    <span className="text-amber-600">
+                      {tier.healthySummary.healthy}/{tier.healthySummary.total}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Upstream Cards */}
+                {!isCollapsed &&
+                  tier.upstreams.map((upstream, index) => (
+                    <div
+                      key={upstream.id}
+                      className={cn(
+                        "mx-2 my-2 px-2.5 py-2 space-y-1.5",
+                        "border border-surface-400/50 rounded-cf-sm bg-surface-200/30",
+                        "motion-safe:animate-[cf-flicker-in_0.3s_ease-out]",
+                        hasErrorState(upstream) &&
+                          "shadow-[inset_0_0_20px_-10px_var(--status-error)]",
+                        index === 0 && "motion-safe:[animation-delay:0ms]",
+                        index === 1 && "motion-safe:[animation-delay:50ms]",
+                        index === 2 && "motion-safe:[animation-delay:100ms]",
+                        index >= 3 && "motion-safe:[animation-delay:150ms]"
+                      )}
+                    >
+                      {/* Card Header: Name + Badge + Provider */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="font-mono text-xs text-amber-500 font-medium truncate">
+                            {upstream.name}
+                          </span>
+                          <Badge
+                            variant={upstream.is_active ? "success" : "neutral"}
+                            className="min-w-[44px] justify-center shrink-0 text-[10px] px-1.5 py-0"
+                          >
+                            {upstream.is_active ? t("active") : t("inactive")}
+                          </Badge>
+                        </div>
+                        <span className="font-mono text-[10px] text-amber-600 shrink-0">
+                          {formatProvider(upstream.provider_type)}
+                        </span>
+                      </div>
+
+                      {/* Card Body: Stats Grid - aligned label:value pairs */}
+                      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-6 gap-y-0.5 font-mono text-[11px]">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-amber-700 shrink-0">{t("tableHealth")}</span>
                           <StatusLed
                             status={getHealthLedStatus(upstream)}
                             label={getHealthLabel(upstream)}
                             showLabel
                           />
-                        </TableCell>
-                        <TableCell>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-amber-700 shrink-0">
+                            {t("tableCircuitBreaker")}
+                          </span>
                           <StatusLed
                             status={getCircuitLedStatus(upstream)}
                             label={getCircuitBreakerLabel(upstream)}
                             showLabel
                           />
-                        </TableCell>
-                        <TableCell>
-                          <code className="px-2 py-1 bg-surface-300 text-amber-500 rounded-cf-sm font-mono text-xs border border-divider max-w-xs truncate inline-block">
-                            {upstream.base_url}
-                          </code>
-                        </TableCell>
-                        <TableCell>
-                          {formatDistanceToNow(new Date(upstream.created_at), {
-                            addSuffix: true,
-                            locale: dateLocale,
-                          })}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            {upstream.circuit_breaker &&
-                              upstream.circuit_breaker.state !== "closed" && (
-                                <Button
-                                  variant="ghost"
-                                  type="button"
-                                  size="sm"
-                                  className={cn(
-                                    "group relative h-8 px-2 overflow-hidden",
-                                    "border-2 border-status-error/60 text-status-error",
-                                    "bg-black-900/60 hover:bg-black-900/70",
-                                    "cf-scanlines cf-data-scan cf-pulse-glow",
-                                    "shadow-[inset_0_0_0_1px_rgba(220,38,38,0.12)]",
-                                    "hover:shadow-cf-glow-error",
-                                    "active:translate-y-[1px]"
-                                  )}
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    try {
-                                      await forceCircuitBreakerMutation.mutateAsync({
-                                        upstreamId: upstream.id,
-                                        action: "close",
-                                      });
-                                      toast.success(t("recoverCircuitBreakerSuccess"));
-                                    } catch (error) {
-                                      toast.error(
-                                        error instanceof Error
-                                          ? error.message
-                                          : t("recoverCircuitBreakerFailed")
-                                      );
-                                    }
-                                  }}
-                                  disabled={
-                                    forceCircuitBreakerMutation.isPending &&
-                                    forceCircuitBreakerMutation.variables?.upstreamId ===
-                                      upstream.id
-                                  }
-                                  aria-label={`${t("recoverCircuitBreaker")}: ${upstream.name}`}
-                                >
-                                  <span
-                                    className="absolute inset-0 opacity-80"
-                                    style={{
-                                      background:
-                                        "repeating-linear-gradient(135deg, rgba(220,38,38,0.14) 0px, rgba(220,38,38,0.14) 6px, transparent 6px, transparent 12px)",
-                                    }}
-                                    aria-hidden="true"
-                                  />
-                                  <span className="relative z-20 flex items-center gap-2">
-                                    <StatusLed status="offline" className="scale-90" />
-                                    <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-                                    <span className="text-[11px] font-mono uppercase tracking-widest">
-                                      {t("recoverCircuitBreaker")}
-                                    </span>
-                                  </span>
-                                </Button>
-                              )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              type="button"
-                              data-state={upstream.is_active ? "on" : "off"}
-                              className={cn(
-                                "group relative h-8 px-2 overflow-hidden",
-                                "border-2 bg-black-900/60 hover:bg-black-900/70",
-                                "cf-scanlines cf-data-scan",
-                                "shadow-[inset_0_0_0_1px_rgba(255,191,0,0.10)]",
-                                "hover:shadow-cf-glow-subtle",
-                                "active:translate-y-[1px]",
-                                upstream.is_active
-                                  ? "text-amber-400 border-amber-500/60"
-                                  : "text-amber-600 border-amber-500/30"
-                              )}
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                try {
-                                  await toggleActiveMutation.mutateAsync({
-                                    id: upstream.id,
-                                    nextActive: !upstream.is_active,
-                                  });
-                                } catch {
-                                  // Error toast handled in hook
-                                }
-                              }}
-                              disabled={
-                                toggleActiveMutation.isPending &&
-                                toggleActiveMutation.variables?.id === upstream.id
-                              }
-                              aria-label={`${upstream.is_active ? t("quickDisable") : t("quickEnable")}: ${upstream.name}`}
-                            >
-                              <span className="relative z-20 flex items-center gap-2">
-                                <StatusLed
-                                  status={upstream.is_active ? "healthy" : "degraded"}
-                                  className="scale-90"
-                                />
-                                {upstream.is_active ? (
-                                  <PowerOff className="h-4 w-4" aria-hidden="true" />
-                                ) : (
-                                  <Power className="h-4 w-4" aria-hidden="true" />
-                                )}
-                                <span className="text-[11px] font-mono uppercase tracking-widest">
-                                  {upstream.is_active ? t("quickDisable") : t("quickEnable")}
-                                </span>
-                                <span className="ml-1 flex items-center gap-1" aria-hidden="true">
-                                  <span
-                                    className={cn(
-                                      "relative h-[14px] w-[34px] rounded-cf-sm border border-amber-500/40 bg-black-900/70",
-                                      "shadow-[inset_0_0_0_1px_rgba(0,0,0,0.35)]"
-                                    )}
-                                  >
-                                    <span
-                                      className={cn(
-                                        "absolute top-[1px] left-[1px] h-[10px] w-[14px] rounded-[2px]",
-                                        "transition-transform duration-200 ease-out",
-                                        "shadow-[0_0_10px_rgba(255,191,0,0.25)]",
-                                        upstream.is_active
-                                          ? "translate-x-0 bg-amber-500"
-                                          : "translate-x-[16px] bg-surface-400"
-                                      )}
-                                    />
-                                  </span>
-                                </span>
-                              </span>
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              type="button"
-                              className="h-8 w-8 text-green-500 hover:bg-green-500/10"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onTest(upstream);
-                              }}
-                              aria-label={`${tCommon("test")}: ${upstream.name}`}
-                            >
-                              <Play className="h-4 w-4" aria-hidden="true" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              type="button"
-                              className="h-8 w-8 text-amber-500 hover:bg-amber-500/10"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onEdit(upstream);
-                              }}
-                              aria-label={`${tCommon("edit")}: ${upstream.name}`}
-                            >
-                              <Pencil className="h-4 w-4" aria-hidden="true" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              type="button"
-                              className="h-8 w-8 text-status-error hover:bg-status-error-muted"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onDelete(upstream);
-                              }}
-                              aria-label={`${tCommon("delete")}: ${upstream.name}`}
-                            >
-                              <Trash2 className="h-4 w-4" aria-hidden="true" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                </Fragment>
-              );
-            })}
-          </TableBody>
-        </Table>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-amber-700 shrink-0">{t("tableWeight")}</span>
+                          <AsciiProgress
+                            value={upstream.weight}
+                            max={tier.maxWeight}
+                            width={8}
+                            showValue
+                          />
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-amber-700 shrink-0">{tCommon("createdAt")}</span>
+                          <span className="text-amber-500 truncate text-right">
+                            {formatDistanceToNow(new Date(upstream.created_at), {
+                              addSuffix: true,
+                              locale: dateLocale,
+                            })}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* URL */}
+                      <code className="block px-2 py-0.5 bg-surface-300 text-amber-500 rounded-cf-sm font-mono text-[11px] border border-divider truncate">
+                        {upstream.base_url}
+                      </code>
+
+                      {/* Actions */}
+                      {renderActionBar(upstream)}
+                    </div>
+                  ))}
+              </Fragment>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
