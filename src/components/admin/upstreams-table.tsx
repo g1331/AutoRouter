@@ -191,18 +191,22 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
         />
 
         {/* Tiered Table */}
-        <Table frame="none" containerClassName="rounded-none">
+        <Table
+          frame="none"
+          containerClassName="rounded-none"
+          className="table-fixed min-w-[1200px]"
+        >
           <TableHeader>
             <TableRow>
               <TableHead className="w-8"></TableHead>
-              <TableHead>{tCommon("name")}</TableHead>
-              <TableHead>{t("providerType")}</TableHead>
-              <TableHead>{t("tableWeight")}</TableHead>
-              <TableHead>{t("tableHealth")}</TableHead>
-              <TableHead>{t("tableCircuitBreaker")}</TableHead>
-              <TableHead>{t("tableBaseUrl")}</TableHead>
-              <TableHead>{tCommon("createdAt")}</TableHead>
-              <TableHead className="text-right">{tCommon("actions")}</TableHead>
+              <TableHead className="w-[220px]">{tCommon("name")}</TableHead>
+              <TableHead className="w-[120px]">{t("providerType")}</TableHead>
+              <TableHead className="w-[120px]">{t("tableWeight")}</TableHead>
+              <TableHead className="w-[150px]">{t("tableHealth")}</TableHead>
+              <TableHead className="w-[170px]">{t("tableCircuitBreaker")}</TableHead>
+              <TableHead className="w-[340px]">{t("tableBaseUrl")}</TableHead>
+              <TableHead className="w-[150px]">{tCommon("createdAt")}</TableHead>
+              <TableHead className="w-[330px] text-right">{tCommon("actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
