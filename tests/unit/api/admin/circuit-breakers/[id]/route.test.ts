@@ -132,9 +132,9 @@ describe("GET /api/admin/circuit-breakers/{upstreamId}", () => {
     expect(data.data.last_failure_at).toBe("2024-01-02T10:00:00.000Z");
     expect(data.data.opened_at).toBe("2024-01-02T10:00:00.000Z");
     expect(data.data.config).toEqual({
-      failureThreshold: 5,
-      successThreshold: 3,
-      openDuration: 60000,
+      failure_threshold: 5,
+      success_threshold: 3,
+      open_duration: 60,
     });
   });
 

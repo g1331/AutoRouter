@@ -1,6 +1,12 @@
 import { eq, and } from "drizzle-orm";
 import { db, upstreams, type Upstream, type CircuitBreakerState } from "../db";
-import { getCircuitBreakerState, CircuitBreakerStateEnum } from "./circuit-breaker";
+import {
+  acquireCircuitBreakerPermit,
+  CircuitBreakerOpenError,
+  DEFAULT_CONFIG as CB_DEFAULT_CONFIG,
+  getCircuitBreakerState,
+  CircuitBreakerStateEnum,
+} from "./circuit-breaker";
 import { VALID_PROVIDER_TYPES, type ProviderType } from "./model-router";
 
 // Re-export for convenience
@@ -34,7 +40,7 @@ export interface UpstreamWithCircuitBreaker {
   isHealthy: boolean;
   latencyMs: number | null;
   circuitState: CircuitBreakerState["state"] | null;
-  isCircuitClosed: boolean;
+  circuitBreaker: CircuitBreakerState | null;
 }
 
 /**
@@ -98,7 +104,12 @@ export function filterHealthyUpstreams(
 }
 
 /**
- * Filter upstreams by circuit breaker state (only CLOSED or HALF_OPEN allowed).
+ * Filter upstreams by circuit breaker state and timing.
+ *
+ * Rules:
+ * - CLOSED: allow
+ * - OPEN: allow only when openDuration has elapsed (eligible to probe)
+ * - HALF_OPEN: allow only when probeInterval has elapsed since lastProbeAt (eligible to probe)
  */
 export function filterByCircuitBreaker(upstreamList: UpstreamWithCircuitBreaker[]): {
   allowed: UpstreamWithCircuitBreaker[];
@@ -107,12 +118,56 @@ export function filterByCircuitBreaker(upstreamList: UpstreamWithCircuitBreaker[
   const allowed: UpstreamWithCircuitBreaker[] = [];
   let excludedCount = 0;
 
+  const nowMs = Date.now();
+
   for (const u of upstreamList) {
-    if (u.isCircuitClosed) {
+    const cb = u.circuitBreaker;
+    if (!cb) {
       allowed.push(u);
-    } else {
-      excludedCount++;
+      continue;
     }
+
+    const config = { ...CB_DEFAULT_CONFIG, ...(cb.config ?? {}) };
+
+    if (cb.state === CircuitBreakerStateEnum.CLOSED) {
+      allowed.push(u);
+      continue;
+    }
+
+    if (cb.state === CircuitBreakerStateEnum.OPEN) {
+      if (!cb.openedAt) {
+        allowed.push(u);
+        continue;
+      }
+
+      const elapsedMs = nowMs - cb.openedAt.getTime();
+      if (elapsedMs >= config.openDuration) {
+        allowed.push(u);
+        continue;
+      }
+
+      excludedCount++;
+      continue;
+    }
+
+    if (cb.state === CircuitBreakerStateEnum.HALF_OPEN) {
+      if (!cb.lastProbeAt) {
+        allowed.push(u);
+        continue;
+      }
+
+      const elapsedMs = nowMs - cb.lastProbeAt.getTime();
+      if (elapsedMs >= config.probeInterval) {
+        allowed.push(u);
+        continue;
+      }
+
+      excludedCount++;
+      continue;
+    }
+
+    // Unknown state: be permissive
+    allowed.push(u);
   }
 
   return { allowed, excludedCount };
@@ -197,14 +252,13 @@ export async function getUpstreamsByProviderType(
       const cbState = await getCircuitBreakerState(upstream.id);
       const isHealthy = upstream.health?.isHealthy ?? true;
       const circuitState = cbState?.state ?? null;
-      const isCircuitClosed = !circuitState || circuitState === CircuitBreakerStateEnum.CLOSED;
 
       return {
         upstream,
         isHealthy,
         latencyMs: upstream.health?.latencyMs ?? null,
         circuitState,
-        isCircuitClosed,
+        circuitBreaker: cbState,
       };
     })
   );
@@ -273,16 +327,35 @@ export async function selectFromProviderType(
     const afterExclusions = filterByExclusions(afterCircuitBreaker.allowed, excludeIds);
 
     if (afterExclusions.allowed.length > 0) {
-      // Select from this tier using weighted strategy
-      const selected = selectWeightedWithHealthScore(afterExclusions.allowed);
+      const candidates = [...afterExclusions.allowed];
 
-      return {
-        upstream: selected.upstream,
-        providerType,
-        selectedTier: tier,
-        circuitBreakerFiltered: totalCircuitBreakerFiltered,
-        totalCandidates,
-      };
+      while (candidates.length > 0) {
+        // Select from this tier using weighted strategy
+        const selected = selectWeightedWithHealthScore(candidates);
+
+        try {
+          // Reserve circuit breaker permit right before returning the selected upstream.
+          await acquireCircuitBreakerPermit(selected.upstream.id);
+
+          return {
+            upstream: selected.upstream,
+            providerType,
+            selectedTier: tier,
+            circuitBreakerFiltered: totalCircuitBreakerFiltered,
+            totalCandidates,
+          };
+        } catch (error) {
+          if (error instanceof CircuitBreakerOpenError) {
+            totalCircuitBreakerFiltered += 1;
+            const idx = candidates.findIndex((u) => u.upstream.id === selected.upstream.id);
+            if (idx >= 0) {
+              candidates.splice(idx, 1);
+              continue;
+            }
+          }
+          throw error;
+        }
+      }
     }
 
     // This tier exhausted, continue to next tier (degradation)

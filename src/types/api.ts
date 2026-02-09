@@ -74,8 +74,8 @@ export type CircuitBreakerState = "closed" | "open" | "half_open";
 export interface CircuitBreakerConfig {
   failure_threshold?: number;
   success_threshold?: number;
-  open_duration?: number; // milliseconds
-  probe_interval?: number; // milliseconds
+  open_duration?: number; // seconds
+  probe_interval?: number; // seconds
 }
 
 export interface CircuitBreakerStatus {

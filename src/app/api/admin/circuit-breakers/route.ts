@@ -18,13 +18,33 @@ export interface CircuitBreakerStateResponse {
   opened_at: string | null;
   last_probe_at: string | null;
   config: {
+    failure_threshold?: number;
+    success_threshold?: number;
+    open_duration?: number; // seconds
+    probe_interval?: number; // seconds
+  } | null;
+  created_at: string;
+  updated_at: string;
+}
+
+function formatCircuitBreakerConfigSeconds(
+  config: {
     failureThreshold?: number;
     successThreshold?: number;
     openDuration?: number;
     probeInterval?: number;
-  } | null;
-  created_at: string;
-  updated_at: string;
+  } | null
+): CircuitBreakerStateResponse["config"] {
+  if (!config) return null;
+
+  return {
+    failure_threshold: config.failureThreshold,
+    success_threshold: config.successThreshold,
+    open_duration:
+      config.openDuration !== undefined ? Math.round(config.openDuration / 1000) : undefined,
+    probe_interval:
+      config.probeInterval !== undefined ? Math.round(config.probeInterval / 1000) : undefined,
+  };
 }
 
 export interface CircuitBreakerListResponse {
@@ -95,7 +115,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       last_failure_at: row.cb.lastFailureAt?.toISOString() ?? null,
       opened_at: row.cb.openedAt?.toISOString() ?? null,
       last_probe_at: row.cb.lastProbeAt?.toISOString() ?? null,
-      config: row.cb.config,
+      config: formatCircuitBreakerConfigSeconds(row.cb.config),
       created_at: row.cb.createdAt.toISOString(),
       updated_at: row.cb.updatedAt.toISOString(),
     }));

@@ -67,7 +67,20 @@ export async function GET(request: NextRequest, context: RouteContext): Promise<
       last_failure_at: cbState.lastFailureAt?.toISOString() ?? null,
       opened_at: cbState.openedAt?.toISOString() ?? null,
       last_probe_at: cbState.lastProbeAt?.toISOString() ?? null,
-      config: cbState.config,
+      config: cbState.config
+        ? {
+            failure_threshold: cbState.config.failureThreshold,
+            success_threshold: cbState.config.successThreshold,
+            open_duration:
+              cbState.config.openDuration !== undefined
+                ? Math.round(cbState.config.openDuration / 1000)
+                : undefined,
+            probe_interval:
+              cbState.config.probeInterval !== undefined
+                ? Math.round(cbState.config.probeInterval / 1000)
+                : undefined,
+          }
+        : null,
       created_at: cbState.createdAt.toISOString(),
       updated_at: cbState.updatedAt.toISOString(),
     };

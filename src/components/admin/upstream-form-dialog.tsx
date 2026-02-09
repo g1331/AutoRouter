@@ -51,8 +51,8 @@ const circuitBreakerConfigSchema = z
   .object({
     failure_threshold: z.number().int().min(1).max(100).optional(),
     success_threshold: z.number().int().min(1).max(100).optional(),
-    open_duration: z.number().int().min(1000).max(300000).optional(),
-    probe_interval: z.number().int().min(1000).max(60000).optional(),
+    open_duration: z.number().int().min(1).max(300).optional(),
+    probe_interval: z.number().int().min(1).max(60).optional(),
   })
   .nullable();
 
@@ -458,10 +458,10 @@ export function UpstreamFormDialog({
                 <label className="text-sm font-medium">{t("openDuration")}</label>
                 <Input
                   type="number"
-                  min={1000}
-                  max={300000}
-                  step={1000}
-                  placeholder="30000"
+                  min={1}
+                  max={300}
+                  step={1}
+                  placeholder="300"
                   value={circuitBreakerConfig?.open_duration ?? ""}
                   onChange={(e) => {
                     const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
@@ -480,10 +480,10 @@ export function UpstreamFormDialog({
                 <label className="text-sm font-medium">{t("probeInterval")}</label>
                 <Input
                   type="number"
-                  min={1000}
-                  max={60000}
-                  step={1000}
-                  placeholder="10000"
+                  min={1}
+                  max={60}
+                  step={1}
+                  placeholder="30"
                   value={circuitBreakerConfig?.probe_interval ?? ""}
                   onChange={(e) => {
                     const val = e.target.value ? parseInt(e.target.value, 10) : undefined;

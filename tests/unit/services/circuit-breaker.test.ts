@@ -30,7 +30,9 @@ vi.mock("@/lib/db", () => ({
 import {
   CircuitBreakerStateEnum,
   DEFAULT_CONFIG,
+  CircuitBreakerOpenError,
   canRequestPass,
+  acquireCircuitBreakerPermit,
   recordSuccess,
   recordFailure,
   forceOpen,
@@ -55,8 +57,8 @@ describe("Circuit Breaker", () => {
     it("should have correct default config", () => {
       expect(DEFAULT_CONFIG.failureThreshold).toBe(5);
       expect(DEFAULT_CONFIG.successThreshold).toBe(2);
-      expect(DEFAULT_CONFIG.openDuration).toBe(30);
-      expect(DEFAULT_CONFIG.probeInterval).toBe(10);
+      expect(DEFAULT_CONFIG.openDuration).toBe(300000);
+      expect(DEFAULT_CONFIG.probeInterval).toBe(30000);
     });
   });
 
@@ -145,7 +147,7 @@ describe("Circuit Breaker", () => {
         state: CircuitBreakerStateEnum.OPEN,
         failureCount: 5,
         successCount: 0,
-        openedAt: new Date(Date.now() - 40000), // 40 seconds ago
+        openedAt: new Date(Date.now() - 400000), // 400 seconds ago
         config: null,
       });
       mockUpdate.mockReturnValue({
@@ -156,6 +158,65 @@ describe("Circuit Breaker", () => {
 
       const canPass = await canRequestPass(upstreamId);
       expect(canPass).toBe(true);
+    });
+  });
+
+  describe("acquireCircuitBreakerPermit", () => {
+    it("should throw CircuitBreakerOpenError when OPEN and duration not elapsed", async () => {
+      mockFindFirst.mockResolvedValue({
+        id: "cb-1",
+        upstreamId,
+        state: CircuitBreakerStateEnum.OPEN,
+        failureCount: 5,
+        successCount: 0,
+        openedAt: new Date(),
+        config: null,
+      });
+
+      await expect(acquireCircuitBreakerPermit(upstreamId)).rejects.toThrow(
+        CircuitBreakerOpenError
+      );
+      expect(mockUpdate).not.toHaveBeenCalled();
+    });
+
+    it("should transition to HALF_OPEN when OPEN duration elapsed", async () => {
+      mockFindFirst.mockResolvedValue({
+        id: "cb-1",
+        upstreamId,
+        state: CircuitBreakerStateEnum.OPEN,
+        failureCount: 5,
+        successCount: 0,
+        openedAt: new Date(Date.now() - 400000), // 400 seconds ago
+        config: null,
+      });
+      mockUpdate.mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue(undefined),
+        }),
+      });
+
+      await expect(acquireCircuitBreakerPermit(upstreamId)).resolves.toBeUndefined();
+      expect(mockUpdate).toHaveBeenCalled();
+    });
+
+    it("should allow first probe in HALF_OPEN when lastProbeAt is null (updates lastProbeAt)", async () => {
+      mockFindFirst.mockResolvedValue({
+        id: "cb-1",
+        upstreamId,
+        state: CircuitBreakerStateEnum.HALF_OPEN,
+        failureCount: 3,
+        successCount: 0,
+        lastProbeAt: null,
+        config: null,
+      });
+      mockUpdate.mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue(undefined),
+        }),
+      });
+
+      await expect(acquireCircuitBreakerPermit(upstreamId)).resolves.toBeUndefined();
+      expect(mockUpdate).toHaveBeenCalled();
     });
   });
 
@@ -307,7 +368,7 @@ describe("Circuit Breaker", () => {
       });
 
       const remaining = await getRemainingOpenSeconds(upstreamId);
-      expect(remaining).toBe(20); // 30 - 10 = 20
+      expect(remaining).toBe(290); // 300 - 10 = 290
     });
   });
 
@@ -327,7 +388,7 @@ describe("Circuit Breaker", () => {
         }),
       });
 
-      await updateCircuitBreakerConfig(upstreamId, { openDuration: 60 });
+      await updateCircuitBreakerConfig(upstreamId, { openDuration: 60000 });
 
       expect(mockUpdate).toHaveBeenCalled();
     });

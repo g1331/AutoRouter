@@ -153,12 +153,12 @@ export function CircuitBreakerDialog({ upstream, trigger }: CircuitBreakerDialog
                   )}
                   {status.config.open_duration !== undefined && (
                     <div className="text-muted-foreground">
-                      {t("openDuration")}: {status.config.open_duration}ms
+                      {t("openDuration")}: {status.config.open_duration}s
                     </div>
                   )}
                   {status.config.probe_interval !== undefined && (
                     <div className="text-muted-foreground">
-                      {t("probeInterval")}: {status.config.probe_interval}ms
+                      {t("probeInterval")}: {status.config.probe_interval}s
                     </div>
                   )}
                 </div>

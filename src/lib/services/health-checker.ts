@@ -429,8 +429,9 @@ export async function getCircuitBreakerStatus(
   let remainingOpenSeconds = 0;
   if (cbState.state === CircuitBreakerStateEnum.OPEN && cbState.openedAt) {
     const config = { ...CB_DEFAULT_CONFIG, ...(cbState.config ?? {}) };
-    const elapsedSeconds = (Date.now() - cbState.openedAt.getTime()) / 1000;
-    remainingOpenSeconds = Math.max(0, Math.ceil(config.openDuration - elapsedSeconds));
+    const elapsedMs = Date.now() - cbState.openedAt.getTime();
+    const remainingMs = Math.max(0, config.openDuration - elapsedMs);
+    remainingOpenSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
   }
 
   return {
@@ -748,8 +749,8 @@ export function formatCircuitBreakerStatusResponse(status: CircuitBreakerStatus)
     config: {
       failure_threshold: status.config.failureThreshold,
       success_threshold: status.config.successThreshold,
-      open_duration: status.config.openDuration,
-      probe_interval: status.config.probeInterval,
+      open_duration: Math.round(status.config.openDuration / 1000),
+      probe_interval: Math.round(status.config.probeInterval / 1000),
     },
   };
 }

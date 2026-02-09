@@ -16,8 +16,8 @@ export enum CircuitBreakerStateEnum {
 export interface CircuitBreakerConfig {
   failureThreshold: number;
   successThreshold: number;
-  openDuration: number; // seconds
-  probeInterval: number; // seconds
+  openDuration: number; // milliseconds
+  probeInterval: number; // milliseconds
 }
 
 /**
@@ -26,8 +26,8 @@ export interface CircuitBreakerConfig {
 export const DEFAULT_CONFIG: CircuitBreakerConfig = {
   failureThreshold: 5,
   successThreshold: 2,
-  openDuration: 30,
-  probeInterval: 10,
+  openDuration: 5 * 60_000,
+  probeInterval: 30_000,
 };
 
 /**
@@ -107,13 +107,14 @@ export async function canRequestPass(upstreamId: string): Promise<boolean> {
     const openedAt = state.openedAt;
 
     if (!openedAt) {
-      // Should not happen, but treat as expired
+      // Should not happen, but treat as expired and self-heal by transitioning
+      await transitionToHalfOpen(upstreamId);
       return true;
     }
 
-    const elapsedSeconds = (Date.now() - openedAt.getTime()) / 1000;
+    const elapsedMs = Date.now() - openedAt.getTime();
 
-    if (elapsedSeconds >= config.openDuration) {
+    if (elapsedMs >= config.openDuration) {
       // Transition to half-open
       await transitionToHalfOpen(upstreamId);
       return true;
@@ -133,9 +134,9 @@ export async function canRequestPass(upstreamId: string): Promise<boolean> {
       return true;
     }
 
-    const elapsedSeconds = (Date.now() - lastProbeAt.getTime()) / 1000;
+    const elapsedMs = Date.now() - lastProbeAt.getTime();
 
-    if (elapsedSeconds >= config.probeInterval) {
+    if (elapsedMs >= config.probeInterval) {
       await updateLastProbeAt(upstreamId);
       return true;
     }
@@ -144,6 +145,60 @@ export async function canRequestPass(upstreamId: string): Promise<boolean> {
   }
 
   return true;
+}
+
+/**
+ * Acquire a circuit breaker permit for making a request.
+ *
+ * This function is intended to be called right before actually sending a request.
+ * It performs state transitions (OPEN -> HALF_OPEN) and reserves probe slots
+ * (HALF_OPEN probe interval) by updating timestamps in the database.
+ *
+ * Throws CircuitBreakerOpenError when the circuit should block the request.
+ */
+export async function acquireCircuitBreakerPermit(upstreamId: string): Promise<void> {
+  const state = await getOrCreateCircuitBreakerState(upstreamId);
+  const config = getEffectiveConfig(state.config);
+
+  if (state.state === CircuitBreakerStateEnum.CLOSED) {
+    return;
+  }
+
+  if (state.state === CircuitBreakerStateEnum.OPEN) {
+    const openedAt = state.openedAt;
+
+    if (!openedAt) {
+      await transitionToHalfOpen(upstreamId);
+      return;
+    }
+
+    const elapsedMs = Date.now() - openedAt.getTime();
+    if (elapsedMs >= config.openDuration) {
+      await transitionToHalfOpen(upstreamId);
+      return;
+    }
+
+    const remainingMs = Math.max(0, config.openDuration - elapsedMs);
+    throw new CircuitBreakerOpenError(upstreamId, Math.ceil(remainingMs / 1000));
+  }
+
+  if (state.state === CircuitBreakerStateEnum.HALF_OPEN) {
+    const lastProbeAt = state.lastProbeAt;
+
+    if (!lastProbeAt) {
+      await updateLastProbeAt(upstreamId);
+      return;
+    }
+
+    const elapsedMs = Date.now() - lastProbeAt.getTime();
+    if (elapsedMs >= config.probeInterval) {
+      await updateLastProbeAt(upstreamId);
+      return;
+    }
+
+    const remainingMs = Math.max(0, config.probeInterval - elapsedMs);
+    throw new CircuitBreakerOpenError(upstreamId, Math.ceil(remainingMs / 1000));
+  }
 }
 
 /**
@@ -298,10 +353,10 @@ export async function getRemainingOpenSeconds(upstreamId: string): Promise<numbe
   }
 
   const config = getEffectiveConfig(state.config);
-  const elapsedSeconds = (Date.now() - state.openedAt.getTime()) / 1000;
-  const remaining = Math.max(0, config.openDuration - elapsedSeconds);
+  const elapsedMs = Date.now() - state.openedAt.getTime();
+  const remainingMs = Math.max(0, config.openDuration - elapsedMs);
 
-  return Math.ceil(remaining);
+  return Math.ceil(remainingMs / 1000);
 }
 
 /**

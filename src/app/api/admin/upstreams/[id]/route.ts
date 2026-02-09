@@ -19,9 +19,20 @@ type RouteContext = { params: Promise<{ id: string }> };
 const circuitBreakerConfigSchema = z.object({
   failure_threshold: z.number().int().min(1).max(100).optional(),
   success_threshold: z.number().int().min(1).max(100).optional(),
-  open_duration: z.number().int().min(1000).max(300000).optional(),
-  probe_interval: z.number().int().min(1000).max(60000).optional(),
+  // seconds (preferred) or legacy milliseconds
+  open_duration: z.number().int().min(1).max(300000).optional(),
+  probe_interval: z.number().int().min(1).max(60000).optional(),
 });
+
+function normalizeDurationToMs(
+  value: number | undefined,
+  kind: "open_duration" | "probe_interval"
+): number | undefined {
+  if (value === undefined) return undefined;
+  // Backward compatible: if the value is within the old ms ranges, it will be > 300 (open) or > 60 (probe).
+  const secondsUpperBound = kind === "open_duration" ? 300 : 60;
+  return value > secondsUpperBound ? value : value * 1000;
+}
 
 const updateUpstreamSchema = z.object({
   name: z.string().min(1).max(64).optional(),
@@ -95,8 +106,14 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         ? {
             failureThreshold: validated.circuit_breaker_config.failure_threshold,
             successThreshold: validated.circuit_breaker_config.success_threshold,
-            openDuration: validated.circuit_breaker_config.open_duration,
-            probeInterval: validated.circuit_breaker_config.probe_interval,
+            openDuration: normalizeDurationToMs(
+              validated.circuit_breaker_config.open_duration,
+              "open_duration"
+            ),
+            probeInterval: normalizeDurationToMs(
+              validated.circuit_breaker_config.probe_interval,
+              "probe_interval"
+            ),
           }
         : null;
     }

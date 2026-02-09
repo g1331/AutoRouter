@@ -74,8 +74,8 @@ vi.mock("@/lib/services/circuit-breaker", () => ({
   DEFAULT_CONFIG: {
     failureThreshold: 5,
     successThreshold: 2,
-    openDuration: 30,
-    probeInterval: 10,
+    openDuration: 300000,
+    probeInterval: 30000,
   },
   getCircuitBreakerState: vi.fn(),
   recordSuccess: vi.fn(),
@@ -900,13 +900,13 @@ describe("health-checker", () => {
 
       expect(result).not.toBeNull();
       expect(result?.state).toBe("open");
-      expect(result?.remainingOpenSeconds).toBe(20); // 30 - 10 = 20
+      expect(result?.remainingOpenSeconds).toBe(290); // 300 - 10 = 290
     });
 
     it("should return zero remaining seconds if open duration elapsed", async () => {
       const { getCircuitBreakerStatus } = await import("@/lib/services/health-checker");
 
-      const openedAt = new Date(Date.now() - 40000); // 40 seconds ago
+      const openedAt = new Date(Date.now() - 400000); // 400 seconds ago
       vi.mocked(getCircuitBreakerState).mockResolvedValue({
         id: "cb-1",
         upstreamId: "upstream-1",
@@ -1084,8 +1084,8 @@ describe("health-checker", () => {
         config: {
           failureThreshold: 5,
           successThreshold: 2,
-          openDuration: 30,
-          probeInterval: 10,
+          openDuration: 300000,
+          probeInterval: 30000,
         },
       };
 
@@ -1098,6 +1098,8 @@ describe("health-checker", () => {
       expect(result.last_failure_at).toBe("2024-01-15T10:00:00.000Z");
       expect(result.remaining_open_seconds).toBe(0);
       expect(result.config.failure_threshold).toBe(5);
+      expect(result.config.open_duration).toBe(300);
+      expect(result.config.probe_interval).toBe(30);
     });
 
     it("should format open circuit breaker status", async () => {
@@ -1113,8 +1115,8 @@ describe("health-checker", () => {
         config: {
           failureThreshold: 5,
           successThreshold: 2,
-          openDuration: 30,
-          probeInterval: 10,
+          openDuration: 300000,
+          probeInterval: 30000,
         },
       };
 
@@ -1123,6 +1125,7 @@ describe("health-checker", () => {
       expect(result.state).toBe("open");
       expect(result.opened_at).toBe("2024-01-15T12:00:00.000Z");
       expect(result.remaining_open_seconds).toBe(15);
+      expect(result.config.open_duration).toBe(300);
     });
   });
 });

@@ -22,8 +22,26 @@ vi.mock("@/lib/db", () => ({
 
 // Mock circuit-breaker – load-balancer calls `getCircuitBreakerState`
 const mockGetCircuitBreakerState = vi.fn();
+const mockAcquireCircuitBreakerPermit = vi.fn();
 vi.mock("@/lib/services/circuit-breaker", () => ({
   getCircuitBreakerState: (...args: unknown[]) => mockGetCircuitBreakerState(...args),
+  acquireCircuitBreakerPermit: (...args: unknown[]) => mockAcquireCircuitBreakerPermit(...args),
+  CircuitBreakerOpenError: class CircuitBreakerOpenError extends Error {
+    upstreamId: string;
+    remainingSeconds: number;
+    constructor(upstreamId: string, remainingSeconds: number) {
+      super(`Circuit breaker is OPEN for upstream ${upstreamId}. Retry after ${remainingSeconds}s`);
+      this.name = "CircuitBreakerOpenError";
+      this.upstreamId = upstreamId;
+      this.remainingSeconds = remainingSeconds;
+    }
+  },
+  DEFAULT_CONFIG: {
+    failureThreshold: 5,
+    successThreshold: 2,
+    openDuration: 300000,
+    probeInterval: 30000,
+  },
   CircuitBreakerStateEnum: {
     CLOSED: "closed",
     OPEN: "open",
@@ -142,6 +160,7 @@ describe("load-balancer", () => {
     // Reset connectionCounts map between tests
     resetConnectionCounts();
     setCBAllClosed();
+    mockAcquireCircuitBreakerPermit.mockResolvedValue(undefined);
   });
 
   // =========================================================================
@@ -419,7 +438,7 @@ describe("load-balancer", () => {
         expect(result.upstream.id).toBe("working");
       });
 
-      it("should reject half_open circuit breaker upstreams", async () => {
+      it("should allow half_open upstreams when probe is eligible", async () => {
         const u1 = makeUpstream({ id: "half", priority: 0 });
         mockFindMany.mockResolvedValue([u1]);
         mockGetCircuitBreakerState.mockResolvedValue({
@@ -434,7 +453,28 @@ describe("load-balancer", () => {
           config: null,
         });
 
+        const result = await selectFromProviderType("openai");
+        expect(result.upstream.id).toBe("half");
+        expect(mockAcquireCircuitBreakerPermit).toHaveBeenCalledWith("half");
+      });
+
+      it("should block half_open upstreams when probe interval not elapsed", async () => {
+        const u1 = makeUpstream({ id: "half", priority: 0 });
+        mockFindMany.mockResolvedValue([u1]);
+        mockGetCircuitBreakerState.mockResolvedValue({
+          id: "cb-1",
+          upstreamId: "half",
+          state: "half_open",
+          failureCount: 3,
+          successCount: 0,
+          lastFailureAt: new Date(),
+          openedAt: new Date(),
+          lastProbeAt: new Date(), // just probed
+          config: null,
+        });
+
         await expect(selectFromProviderType("openai")).rejects.toThrow(NoHealthyUpstreamsError);
+        expect(mockAcquireCircuitBreakerPermit).not.toHaveBeenCalled();
       });
 
       it("should treat upstream with no health record as selectable", async () => {
