@@ -1,6 +1,10 @@
 import { eq, and } from "drizzle-orm";
 import { db, upstreams, type Upstream } from "../db";
-import { getCircuitBreakerState, CircuitBreakerStateEnum } from "./circuit-breaker";
+import {
+  getCircuitBreakerState,
+  CircuitBreakerStateEnum,
+  DEFAULT_CONFIG as CB_DEFAULT_CONFIG,
+} from "./circuit-breaker";
 
 /**
  * Valid provider types for model-based routing
@@ -204,19 +208,54 @@ export async function filterUpstreamsByCircuitBreaker(upstreamList: Upstream[]):
 }> {
   const allowed: Upstream[] = [];
   const excluded: ExcludedUpstream[] = [];
+  const nowMs = Date.now();
 
   for (const upstream of upstreamList) {
     const cbState = await getCircuitBreakerState(upstream.id);
 
-    if (cbState && cbState.state === CircuitBreakerStateEnum.OPEN) {
-      excluded.push({
-        id: upstream.id,
-        name: upstream.name,
-        reason: "circuit_open",
-      });
-    } else {
+    if (!cbState) {
       allowed.push(upstream);
+      continue;
     }
+
+    const config = { ...CB_DEFAULT_CONFIG, ...(cbState.config ?? {}) };
+
+    // Exclude OPEN only while still within openDuration.
+    // If openDuration has elapsed, allow it so the request flow can probe and transition to HALF_OPEN.
+    if (cbState.state === CircuitBreakerStateEnum.OPEN) {
+      if (!cbState.openedAt) {
+        allowed.push(upstream);
+        continue;
+      }
+
+      const elapsedMs = nowMs - cbState.openedAt.getTime();
+      if (elapsedMs >= config.openDuration) {
+        allowed.push(upstream);
+        continue;
+      }
+
+      excluded.push({ id: upstream.id, name: upstream.name, reason: "circuit_open" });
+      continue;
+    }
+
+    // Exclude HALF_OPEN only while still within probeInterval since last probe.
+    if (cbState.state === CircuitBreakerStateEnum.HALF_OPEN) {
+      if (!cbState.lastProbeAt) {
+        allowed.push(upstream);
+        continue;
+      }
+
+      const elapsedMs = nowMs - cbState.lastProbeAt.getTime();
+      if (elapsedMs >= config.probeInterval) {
+        allowed.push(upstream);
+        continue;
+      }
+
+      excluded.push({ id: upstream.id, name: upstream.name, reason: "circuit_open" });
+      continue;
+    }
+
+    allowed.push(upstream);
   }
 
   return { allowed, excluded };

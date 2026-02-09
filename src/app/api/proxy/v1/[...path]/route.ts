@@ -32,6 +32,7 @@ import { randomUUID } from "crypto";
 import {
   routeByModel,
   NoUpstreamGroupError,
+  NoHealthyUpstreamError,
   type ProviderType,
   type ModelRouterResult,
 } from "@/lib/services/model-router";
@@ -529,6 +530,20 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED");
     }
 
+    log.debug(
+      {
+        requestId,
+        model,
+        providerType: routerResult.providerType,
+        resolvedModel: routerResult.resolvedModel,
+        candidateCount: routerResult.candidateUpstreams?.length ?? 0,
+        excludedCount: routerResult.excludedUpstreams?.length ?? 0,
+        excluded: routerResult.excludedUpstreams,
+        candidates: routerResult.candidateUpstreams,
+      },
+      "routeByModel decision"
+    );
+
     selectedUpstream = routerResult.upstream;
     providerType = routerResult.providerType;
     resolvedModel = routerResult.resolvedModel;
@@ -541,6 +556,13 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   } catch (error) {
     if (error instanceof NoUpstreamGroupError) {
       return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED");
+    }
+    if (error instanceof NoHealthyUpstreamError) {
+      log.warn(
+        { requestId, model, providerType: error.providerType },
+        "routeByModel no candidates"
+      );
+      return createUnifiedErrorResponse("ALL_UPSTREAMS_UNAVAILABLE");
     }
     throw error;
   }

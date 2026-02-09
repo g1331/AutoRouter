@@ -392,6 +392,9 @@ describe("model-router", () => {
 
   describe("filterUpstreamsByCircuitBreaker", () => {
     it("should filter out OPEN circuit upstreams", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-02-09T00:00:00.000Z"));
+
       const upstreams: PartialUpstream[] = [
         { id: "1", name: "upstream-1" },
         { id: "2", name: "upstream-2" },
@@ -407,6 +410,8 @@ describe("model-router", () => {
           upstreamId: "3",
           state: "open",
           failureCount: 5,
+          openedAt: new Date("2026-02-08T23:59:30.000Z"),
+          config: { openDuration: 5 * 60_000 },
         } as unknown as Awaited<ReturnType<typeof db.query.circuitBreakerStates.findFirst>>);
 
       const result = await filterUpstreamsByCircuitBreaker(upstreams as Upstream[]);
@@ -417,6 +422,8 @@ describe("model-router", () => {
       expect(result.excluded).toHaveLength(1);
       expect(result.excluded[0].id).toBe("3");
       expect(result.excluded[0].reason).toBe("circuit_open");
+
+      vi.useRealTimers();
     });
 
     it("should allow all upstreams when no circuit breaker states", async () => {
@@ -464,6 +471,9 @@ describe("model-router", () => {
 
   describe("routeByModel with circuit breaker", () => {
     it("should skip OPEN circuit upstreams", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-02-09T00:00:00.000Z"));
+
       vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
         // First call - provider_type query
         {
@@ -494,6 +504,8 @@ describe("model-router", () => {
           upstreamId: "upstream-1",
           state: "open",
           failureCount: 5,
+          openedAt: new Date("2026-02-08T23:59:30.000Z"),
+          config: { openDuration: 5 * 60_000 },
         } as unknown as Awaited<ReturnType<typeof db.query.circuitBreakerStates.findFirst>>)
         .mockResolvedValueOnce(null) // second upstream closed (filter)
         .mockResolvedValueOnce({
@@ -501,6 +513,8 @@ describe("model-router", () => {
           upstreamId: "upstream-1",
           state: "open",
           failureCount: 5,
+          openedAt: new Date("2026-02-08T23:59:30.000Z"),
+          config: { openDuration: 5 * 60_000 },
         } as unknown as Awaited<ReturnType<typeof db.query.circuitBreakerStates.findFirst>>)
         .mockResolvedValueOnce(null); // second upstream closed (candidate list)
 
@@ -511,9 +525,14 @@ describe("model-router", () => {
       expect(result.excludedUpstreams).toHaveLength(1);
       expect(result.excludedUpstreams[0].reason).toBe("circuit_open");
       expect(result.routingDecision.circuitBreakerFilter).toBe(true);
+
+      vi.useRealTimers();
     });
 
     it("should throw NoHealthyUpstreamError when all upstreams are OPEN", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-02-09T00:00:00.000Z"));
+
       vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
         // First call - provider_type query
         {
@@ -533,9 +552,47 @@ describe("model-router", () => {
         upstreamId: "upstream-1",
         state: "open",
         failureCount: 5,
+        openedAt: new Date("2026-02-08T23:59:30.000Z"),
+        config: { openDuration: 5 * 60_000 },
       } as unknown as Awaited<ReturnType<typeof db.query.circuitBreakerStates.findFirst>>);
 
       await expect(routeByModel("gpt-4")).rejects.toThrow(NoHealthyUpstreamError);
+
+      vi.useRealTimers();
+    });
+
+    it("should allow OPEN circuit upstream when openDuration has elapsed (eligible to probe)", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-02-09T00:10:00.000Z"));
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        {
+          id: "upstream-1",
+          name: "openai-1",
+          providerType: "openai",
+          allowedModels: null,
+          modelRedirects: null,
+          weight: 1,
+          isActive: true,
+        },
+      ] as unknown as Awaited<ReturnType<typeof db.query.upstreams.findMany>>);
+
+      // OPEN since 00:00:00, openDuration=5min -> eligible at 00:10:00
+      vi.mocked(db.query.circuitBreakerStates.findFirst).mockResolvedValue({
+        id: "cb-1",
+        upstreamId: "upstream-1",
+        state: "open",
+        failureCount: 5,
+        openedAt: new Date("2026-02-09T00:00:00.000Z"),
+        config: { openDuration: 5 * 60_000 },
+      } as unknown as Awaited<ReturnType<typeof db.query.circuitBreakerStates.findFirst>>);
+
+      const result = await routeByModel("gpt-4");
+
+      expect(result.upstream?.id).toBe("upstream-1");
+      expect(result.excludedUpstreams).toHaveLength(0);
+
+      vi.useRealTimers();
     });
 
     it("should return candidate upstreams with circuit state", async () => {

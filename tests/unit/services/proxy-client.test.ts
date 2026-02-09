@@ -487,6 +487,63 @@ describe("proxy-client", () => {
       });
     });
 
+    it("should extract usage from SSE data line without space after colon", async () => {
+      const onUsage = vi.fn();
+      const transformer = createSSETransformer(onUsage);
+
+      const input = 'data:{"type":"message","usage":{"input_tokens":15,"output_tokens":25}}\n\n';
+      const encoder = new TextEncoder();
+      const reader = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(input));
+          controller.close();
+        },
+      })
+        .pipeThrough(transformer)
+        .getReader();
+
+      while (!(await reader.read()).done) {}
+
+      expect(onUsage).toHaveBeenCalledWith({
+        promptTokens: 15,
+        completionTokens: 25,
+        totalTokens: 40,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+      });
+    });
+
+    it("should extract usage from Anthropic message_start nested message.usage", async () => {
+      const onUsage = vi.fn();
+      const transformer = createSSETransformer(onUsage);
+
+      const input =
+        'data:{"type":"message_start","message":{"usage":{"input_tokens":0,"output_tokens":1,"cache_creation_input_tokens":10,"cache_read_input_tokens":0}}}\n\n';
+      const encoder = new TextEncoder();
+      const reader = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(input));
+          controller.close();
+        },
+      })
+        .pipeThrough(transformer)
+        .getReader();
+
+      while (!(await reader.read()).done) {}
+
+      expect(onUsage).toHaveBeenCalledWith({
+        promptTokens: 10,
+        completionTokens: 1,
+        totalTokens: 11,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 10,
+        cacheReadTokens: 0,
+      });
+    });
+
     it("should extract usage from OpenAI Responses API SSE event", async () => {
       const onUsage = vi.fn();
       const transformer = createSSETransformer(onUsage);

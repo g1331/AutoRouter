@@ -214,6 +214,15 @@ export function extractUsage(data: Record<string, unknown>): TokenUsage | null {
     if (result) return result;
   }
 
+  // Anthropic streaming (and some SDKs) nest usage under `message.usage`
+  if (typeof data.message === "object" && data.message !== null) {
+    const message = data.message as Record<string, unknown>;
+    if (typeof message.usage === "object" && message.usage !== null) {
+      const result = extractFromUsageObject(message.usage as Record<string, unknown>);
+      if (result) return result;
+    }
+  }
+
   // OpenAI Responses API streaming: usage is nested in response.completed event
   // Format: { "type": "response.completed", "response": { "usage": { ... } } }
   if (
@@ -252,8 +261,9 @@ export function createSSETransformer(
 
         // Parse SSE event for usage data
         for (const line of event.split("\n")) {
-          if (line.startsWith("data: ")) {
-            const dataStr = line.slice(6).trim();
+          // Some upstreams use `data:{...}` without a space after colon.
+          if (line.startsWith("data:")) {
+            const dataStr = line.slice(5).trim();
 
             if (dataStr === "[DONE]" || dataStr === "") {
               continue;
