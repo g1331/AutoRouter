@@ -1,7 +1,7 @@
 ALTER TABLE "upstream_groups" DISABLE ROW LEVEL SECURITY;--> statement-breakpoint
-DROP TABLE "upstream_groups" CASCADE;--> statement-breakpoint
 ALTER TABLE "upstreams" DROP CONSTRAINT "upstreams_group_id_upstream_groups_id_fk";
 --> statement-breakpoint
+DROP TABLE "upstream_groups" CASCADE;--> statement-breakpoint
 DROP INDEX "upstreams_group_id_idx";--> statement-breakpoint
 DROP INDEX "upstreams_provider_type_idx";--> statement-breakpoint
 ALTER TABLE "request_logs" ADD COLUMN "priority_tier" integer;--> statement-breakpoint
