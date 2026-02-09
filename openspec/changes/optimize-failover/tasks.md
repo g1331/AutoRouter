@@ -85,9 +85,10 @@
 - [x] 5.2 Modify selection strategies to work without group requirement
 - [x] 5.3 Integrate circuit breaker state check in upstream selection
 - [x] 5.4 Add support for weighted selection based on health scores
-- [ ] 5.5 Implement sticky session preference (optional, if time permits)
 - [x] 5.6 **Write unit tests** for `selectFromProviderType()`
 - [x] 5.7 **Write unit tests** for circuit breaker exclusion logic
+
+说明：Sticky session preference 已从本 change 范围移出，后续如需实现，将作为独立范围评审与交付。
 
 **提交节点**: `feat(failover): load-balancer - add provider_type based selection`
 
