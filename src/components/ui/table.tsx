@@ -10,9 +10,33 @@ import { cn } from "@/lib/utils";
  * - Uppercase monospace headers
  * - Row hover and selection states
  */
-const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
-  ({ className, ...props }, ref) => (
-    <div className="relative w-full overflow-auto rounded-cf-sm border-2 border-amber-500 bg-surface-200">
+export interface TableProps extends React.HTMLAttributes<HTMLTableElement> {
+  /**
+   * Controls the outer container frame style.\n   * Default preserves existing behavior.
+   */
+  frame?: "amber" | "subtle" | "none";
+  /**
+   * Additional className applied to the outer container.
+   */
+  containerClassName?: string;
+}
+
+const FRAME_CLASS: Record<NonNullable<TableProps["frame"]>, string> = {
+  amber: "border-2 border-amber-500",
+  subtle: "border border-divider",
+  none: "border-0",
+};
+
+const Table = React.forwardRef<HTMLTableElement, TableProps>(
+  ({ className, frame = "amber", containerClassName, ...props }, ref) => (
+    <div
+      className={cn(
+        "relative w-full overflow-auto bg-surface-200",
+        "rounded-cf-sm",
+        FRAME_CLASS[frame],
+        containerClassName
+      )}
+    >
       <table
         ref={ref}
         className={cn("w-full caption-bottom text-sm font-mono text-amber-500", className)}

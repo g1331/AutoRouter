@@ -167,7 +167,13 @@
     "updateSuccess": "API Key 更新成功",
     "updateFailed": "更新 API Key 失败",
     "keyActive": "启用状态",
-    "keyActiveDesc": "禁用后此 Key 将无法访问 API"
+    "keyActiveDesc": "禁用后此 Key 将无法访问 API",
+    "enabled": "启用",
+    "disabled": "停用",
+    "quickEnable": "启用",
+    "quickDisable": "停用",
+    "enableSuccess": "API Key 已启用",
+    "disableSuccess": "API Key 已停用"
   },
   "logs": {
     "title": "请求日志",
@@ -360,7 +366,12 @@
     "unhealthy": "异常",
     "unknown": "未知",
     "active": "启用",
-    "inactive": "停用"
+    "inactive": "停用",
+    "quickEnable": "启用",
+    "quickDisable": "停用",
+    "recoverCircuitBreaker": "恢复熔断",
+    "recoverCircuitBreakerSuccess": "已提前结束熔断",
+    "recoverCircuitBreakerFailed": "提前结束熔断失败"
   },
   "circuitBreaker": {
     "title": "熔断器状态",

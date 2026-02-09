@@ -353,7 +353,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
       ) : (
         <>
           <div className="border border-t-0 border-surface-400 overflow-hidden">
-            <Table>
+            <Table frame="none">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-8"></TableHead>

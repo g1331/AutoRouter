@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { CircuitBreakerDetailResponse } from "@/types/api";
+import { useAuth } from "@/providers/auth-provider";
 
 const CIRCUIT_BREAKER_KEYS = {
   all: ["circuit-breakers"] as const,
@@ -12,15 +13,14 @@ const CIRCUIT_BREAKER_KEYS = {
  * Get circuit breaker status for a specific upstream
  */
 export function useCircuitBreakerStatus(upstreamId: string, enabled: boolean = true) {
+  const { apiClient } = useAuth();
   return useQuery<CircuitBreakerDetailResponse>({
     queryKey: CIRCUIT_BREAKER_KEYS.detail(upstreamId),
     queryFn: async () => {
-      const response = await fetch(`/api/admin/circuit-breakers/${upstreamId}`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch circuit breaker status");
-      }
-      const data = await response.json();
-      return data.data;
+      const response = await apiClient.get<{ data: CircuitBreakerDetailResponse }>(
+        `/admin/circuit-breakers/${upstreamId}`
+      );
+      return response.data;
     },
     enabled: enabled && !!upstreamId,
     refetchInterval: 5000, // Refetch every 5 seconds
@@ -31,6 +31,7 @@ export function useCircuitBreakerStatus(upstreamId: string, enabled: boolean = t
  * Force circuit breaker to open or closed state
  */
 export function useForceCircuitBreaker() {
+  const { apiClient } = useAuth();
   const queryClient = useQueryClient();
 
   return useMutation<
@@ -38,18 +39,13 @@ export function useForceCircuitBreaker() {
     Error,
     { upstreamId: string; action: "open" | "close" }
   >({
-    mutationFn: async ({ upstreamId, action }) => {
+    mutationFn: ({ upstreamId, action }) => {
       const endpoint =
         action === "open"
-          ? `/api/admin/circuit-breakers/${upstreamId}/force-open`
-          : `/api/admin/circuit-breakers/${upstreamId}/force-close`;
+          ? `/admin/circuit-breakers/${upstreamId}/force-open`
+          : `/admin/circuit-breakers/${upstreamId}/force-close`;
 
-      const response = await fetch(endpoint, { method: "POST" });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || `Failed to force ${action} circuit breaker`);
-      }
-      return response.json();
+      return apiClient.post<{ success: boolean; message: string }>(endpoint);
     },
     onSuccess: (_, { upstreamId }) => {
       // Invalidate circuit breaker status
@@ -74,6 +70,7 @@ export function useCircuitBreakerList({
   page?: number;
   pageSize?: number;
 }) {
+  const { apiClient } = useAuth();
   return useQuery<{
     data: CircuitBreakerDetailResponse[];
     pagination: {
@@ -90,11 +87,15 @@ export function useCircuitBreakerList({
       params.append("page", page.toString());
       params.append("page_size", pageSize.toString());
 
-      const response = await fetch(`/api/admin/circuit-breakers?${params.toString()}`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch circuit breaker list");
-      }
-      return response.json();
+      return apiClient.get<{
+        data: CircuitBreakerDetailResponse[];
+        pagination: {
+          page: number;
+          pageSize: number;
+          total: number;
+          totalPages: number;
+        };
+      }>(`/admin/circuit-breakers?${params.toString()}`);
     },
     refetchInterval: 5000,
   });

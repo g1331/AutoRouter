@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { QueryKey } from "@tanstack/react-query";
 import { useAuth } from "@/providers/auth-provider";
 import type {
   Upstream,
@@ -104,6 +105,83 @@ export function useUpdateUpstream() {
     },
     onError: (error: Error) => {
       toast.error(`更新失败: ${error.message}`);
+    },
+  });
+}
+
+/**
+ * Toggle upstream active status (optimistic update)
+ */
+export function useToggleUpstreamActive() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    Upstream,
+    Error,
+    { id: string; nextActive: boolean },
+    {
+      previousPaginated: Array<[QueryKey, PaginatedUpstreamsResponse | undefined]>;
+      previousAll: Upstream[] | undefined;
+    }
+  >({
+    mutationFn: ({ id, nextActive }) =>
+      apiClient.put<Upstream>(`/admin/upstreams/${id}`, { is_active: nextActive }),
+    onMutate: async ({ id, nextActive }) => {
+      await queryClient.cancelQueries({ queryKey: ["upstreams"] });
+
+      const previousPaginated = queryClient.getQueriesData<PaginatedUpstreamsResponse>({
+        queryKey: ["upstreams"],
+        predicate: (query) =>
+          query.queryKey[0] === "upstreams" && typeof query.queryKey[1] === "number",
+      });
+
+      const previousAll = queryClient.getQueryData<Upstream[]>(["upstreams", "all"]);
+
+      queryClient.setQueriesData<PaginatedUpstreamsResponse>(
+        {
+          queryKey: ["upstreams"],
+          predicate: (query) =>
+            query.queryKey[0] === "upstreams" && typeof query.queryKey[1] === "number",
+        },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            items: old.items.map((upstream) =>
+              upstream.id === id ? { ...upstream, is_active: nextActive } : upstream
+            ),
+          };
+        }
+      );
+
+      queryClient.setQueryData<Upstream[]>(["upstreams", "all"], (old) => {
+        if (!old) return old;
+        return old.map((upstream) =>
+          upstream.id === id ? { ...upstream, is_active: nextActive } : upstream
+        );
+      });
+
+      return { previousPaginated, previousAll };
+    },
+    onError: (error, _variables, context) => {
+      if (context?.previousPaginated) {
+        for (const [queryKey, data] of context.previousPaginated) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
+      if (context?.previousAll) {
+        queryClient.setQueryData(["upstreams", "all"], context.previousAll);
+      }
+      toast.error(`更新失败: ${error.message}`);
+    },
+    onSuccess: (_data, variables) => {
+      toast.success(variables.nextActive ? "Upstream 已启用" : "Upstream 已停用");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["upstreams"] });
+      queryClient.invalidateQueries({ queryKey: ["upstreams", "health"] });
+      queryClient.invalidateQueries({ queryKey: ["stats", "upstreams"] });
     },
   });
 }

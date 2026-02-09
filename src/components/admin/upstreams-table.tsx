@@ -3,7 +3,17 @@
 import { formatDistanceToNow } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
 import { useState, useMemo, Fragment } from "react";
-import { Pencil, Trash2, Server, Play, ChevronDown, ChevronRight } from "lucide-react";
+import {
+  Pencil,
+  Trash2,
+  Server,
+  Play,
+  ChevronDown,
+  ChevronRight,
+  Power,
+  PowerOff,
+  ShieldCheck,
+} from "lucide-react";
 import type { Upstream } from "@/types/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +28,9 @@ import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { getDateLocale } from "@/lib/date-locale";
 import { StatusLed, AsciiProgress, TerminalHeader, type LedStatus } from "@/components/ui/terminal";
 import { cn } from "@/lib/utils";
+import { useToggleUpstreamActive } from "@/hooks/use-upstreams";
+import { useForceCircuitBreaker } from "@/hooks/use-circuit-breaker";
+import { toast } from "sonner";
 
 interface UpstreamsTableProps {
   upstreams: Upstream[];
@@ -48,6 +61,9 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
   const tCommon = useTranslations("common");
   const locale = useLocale();
   const dateLocale = getDateLocale(locale);
+
+  const toggleActiveMutation = useToggleUpstreamActive();
+  const forceCircuitBreakerMutation = useForceCircuitBreaker();
 
   // Track collapsed state for each tier
   const [collapsedTiers, setCollapsedTiers] = useState<Set<number>>(new Set());
@@ -166,12 +182,16 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
 
   return (
     <div className="space-y-0">
-      {/* Terminal Header */}
-      <TerminalHeader systemId="UPSTREAM_ARRAY" nodeCount={upstreams.length} />
+      <div className="rounded-cf-sm border border-surface-400 overflow-hidden bg-surface-200">
+        {/* Terminal Header */}
+        <TerminalHeader
+          systemId="UPSTREAM_ARRAY"
+          nodeCount={upstreams.length}
+          className="border-0 rounded-none"
+        />
 
-      {/* Tiered Table */}
-      <div className="border border-t-0 border-surface-400 overflow-hidden">
-        <Table>
+        {/* Tiered Table */}
+        <Table frame="none" containerClassName="rounded-none">
           <TableHeader>
             <TableRow>
               <TableHead className="w-8"></TableHead>
@@ -269,7 +289,17 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                         )}
                       >
                         <TableCell></TableCell>
-                        <TableCell className="font-medium">{upstream.name}</TableCell>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center justify-between gap-3 min-w-0">
+                            <span className="truncate">{upstream.name}</span>
+                            <Badge
+                              variant={upstream.is_active ? "success" : "neutral"}
+                              className="min-w-[52px] justify-center"
+                            >
+                              {upstream.is_active ? t("active") : t("inactive")}
+                            </Badge>
+                          </div>
+                        </TableCell>
                         <TableCell>{formatProvider(upstream.provider_type)}</TableCell>
                         <TableCell>
                           <AsciiProgress
@@ -306,6 +336,128 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
+                            {upstream.circuit_breaker &&
+                              upstream.circuit_breaker.state !== "closed" && (
+                                <Button
+                                  variant="ghost"
+                                  type="button"
+                                  size="sm"
+                                  className={cn(
+                                    "group relative h-8 px-2 overflow-hidden",
+                                    "border-2 border-status-error/60 text-status-error",
+                                    "bg-black-900/60 hover:bg-black-900/70",
+                                    "cf-scanlines cf-data-scan cf-pulse-glow",
+                                    "shadow-[inset_0_0_0_1px_rgba(220,38,38,0.12)]",
+                                    "hover:shadow-cf-glow-error",
+                                    "active:translate-y-[1px]"
+                                  )}
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try {
+                                      await forceCircuitBreakerMutation.mutateAsync({
+                                        upstreamId: upstream.id,
+                                        action: "close",
+                                      });
+                                      toast.success(t("recoverCircuitBreakerSuccess"));
+                                    } catch (error) {
+                                      toast.error(
+                                        error instanceof Error
+                                          ? error.message
+                                          : t("recoverCircuitBreakerFailed")
+                                      );
+                                    }
+                                  }}
+                                  disabled={
+                                    forceCircuitBreakerMutation.isPending &&
+                                    forceCircuitBreakerMutation.variables?.upstreamId ===
+                                      upstream.id
+                                  }
+                                  aria-label={`${t("recoverCircuitBreaker")}: ${upstream.name}`}
+                                >
+                                  <span
+                                    className="absolute inset-0 opacity-80"
+                                    style={{
+                                      background:
+                                        "repeating-linear-gradient(135deg, rgba(220,38,38,0.14) 0px, rgba(220,38,38,0.14) 6px, transparent 6px, transparent 12px)",
+                                    }}
+                                    aria-hidden="true"
+                                  />
+                                  <span className="relative z-20 flex items-center gap-2">
+                                    <StatusLed status="offline" className="scale-90" />
+                                    <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                                    <span className="text-[11px] font-mono uppercase tracking-widest">
+                                      {t("recoverCircuitBreaker")}
+                                    </span>
+                                  </span>
+                                </Button>
+                              )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              type="button"
+                              data-state={upstream.is_active ? "on" : "off"}
+                              className={cn(
+                                "group relative h-8 px-2 overflow-hidden",
+                                "border-2 bg-black-900/60 hover:bg-black-900/70",
+                                "cf-scanlines cf-data-scan",
+                                "shadow-[inset_0_0_0_1px_rgba(255,191,0,0.10)]",
+                                "hover:shadow-cf-glow-subtle",
+                                "active:translate-y-[1px]",
+                                upstream.is_active
+                                  ? "text-amber-400 border-amber-500/60"
+                                  : "text-amber-600 border-amber-500/30"
+                              )}
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  await toggleActiveMutation.mutateAsync({
+                                    id: upstream.id,
+                                    nextActive: !upstream.is_active,
+                                  });
+                                } catch {
+                                  // Error toast handled in hook
+                                }
+                              }}
+                              disabled={
+                                toggleActiveMutation.isPending &&
+                                toggleActiveMutation.variables?.id === upstream.id
+                              }
+                              aria-label={`${upstream.is_active ? t("quickDisable") : t("quickEnable")}: ${upstream.name}`}
+                            >
+                              <span className="relative z-20 flex items-center gap-2">
+                                <StatusLed
+                                  status={upstream.is_active ? "healthy" : "degraded"}
+                                  className="scale-90"
+                                />
+                                {upstream.is_active ? (
+                                  <PowerOff className="h-4 w-4" aria-hidden="true" />
+                                ) : (
+                                  <Power className="h-4 w-4" aria-hidden="true" />
+                                )}
+                                <span className="text-[11px] font-mono uppercase tracking-widest">
+                                  {upstream.is_active ? t("quickDisable") : t("quickEnable")}
+                                </span>
+                                <span className="ml-1 flex items-center gap-1" aria-hidden="true">
+                                  <span
+                                    className={cn(
+                                      "relative h-[14px] w-[34px] rounded-cf-sm border border-amber-500/40 bg-black-900/70",
+                                      "shadow-[inset_0_0_0_1px_rgba(0,0,0,0.35)]"
+                                    )}
+                                  >
+                                    <span
+                                      className={cn(
+                                        "absolute top-[1px] left-[1px] h-[10px] w-[14px] rounded-[2px]",
+                                        "transition-transform duration-200 ease-out",
+                                        "shadow-[0_0_10px_rgba(255,191,0,0.25)]",
+                                        upstream.is_active
+                                          ? "translate-x-0 bg-amber-500"
+                                          : "translate-x-[16px] bg-surface-400"
+                                      )}
+                                    />
+                                  </span>
+                                </span>
+                              </span>
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"

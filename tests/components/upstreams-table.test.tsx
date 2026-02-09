@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { UpstreamsTable } from "@/components/admin/upstreams-table";
 import type { Upstream } from "@/types/api";
@@ -12,6 +12,32 @@ vi.mock("next-intl", () => ({
 // Mock date-locale
 vi.mock("@/lib/date-locale", () => ({
   getDateLocale: () => undefined,
+}));
+
+// Mock sonner toast
+vi.mock("sonner", () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
+const mockToggleUpstreamActive = vi.fn();
+vi.mock("@/hooks/use-upstreams", () => ({
+  useToggleUpstreamActive: () => ({
+    mutateAsync: mockToggleUpstreamActive,
+    isPending: false,
+    variables: undefined,
+  }),
+}));
+
+const mockForceCircuitBreaker = vi.fn();
+vi.mock("@/hooks/use-circuit-breaker", () => ({
+  useForceCircuitBreaker: () => ({
+    mutateAsync: mockForceCircuitBreaker,
+    isPending: false,
+    variables: undefined,
+  }),
 }));
 
 describe("UpstreamsTable", () => {
@@ -133,6 +159,78 @@ describe("UpstreamsTable", () => {
 
       expect(screen.getByText("Test Upstream")).toBeInTheDocument();
       expect(screen.getByText("https://api.openai.com/v1")).toBeInTheDocument();
+    });
+
+    it("shows active badge for active upstream", () => {
+      render(
+        <UpstreamsTable
+          upstreams={[mockUpstream]}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onTest={mockOnTest}
+        />
+      );
+
+      expect(screen.getByText("active")).toBeInTheDocument();
+    });
+  });
+
+  describe("Quick Actions", () => {
+    it("calls toggle mutation when toggle button is clicked", async () => {
+      mockToggleUpstreamActive.mockResolvedValueOnce(undefined);
+      render(
+        <UpstreamsTable
+          upstreams={[mockUpstream]}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onTest={mockOnTest}
+        />
+      );
+
+      const toggleButton = screen.getByLabelText("quickDisable: Test Upstream");
+      fireEvent.click(toggleButton);
+
+      await waitFor(() => {
+        expect(mockToggleUpstreamActive).toHaveBeenCalledWith({
+          id: "test-id-1",
+          nextActive: false,
+        });
+      });
+    });
+
+    it("shows recover button when circuit breaker is open and calls force-close", async () => {
+      mockForceCircuitBreaker.mockResolvedValueOnce(undefined);
+
+      const upstreamWithOpenCircuit: Upstream = {
+        ...mockUpstream,
+        circuit_breaker: {
+          state: "open",
+          failure_count: 5,
+          success_count: 0,
+          last_failure_at: null,
+          opened_at: null,
+          config: null,
+        },
+      };
+
+      render(
+        <UpstreamsTable
+          upstreams={[upstreamWithOpenCircuit]}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onTest={mockOnTest}
+        />
+      );
+
+      const recoverButton = screen.getByLabelText("recoverCircuitBreaker: Test Upstream");
+      fireEvent.click(recoverButton);
+
+      await waitFor(() => {
+        expect(mockForceCircuitBreaker).toHaveBeenCalledWith({
+          upstreamId: "test-id-1",
+          action: "close",
+        });
+      });
     });
   });
 

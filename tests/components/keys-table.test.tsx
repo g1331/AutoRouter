@@ -24,10 +24,16 @@ vi.mock("sonner", () => ({
 
 // Mock the useRevealAPIKey hook
 const mockRevealKey = vi.fn();
+const mockToggleKeyActive = vi.fn();
 vi.mock("@/hooks/use-api-keys", () => ({
   useRevealAPIKey: () => ({
     mutateAsync: mockRevealKey,
     isPending: false,
+  }),
+  useToggleAPIKeyActive: () => ({
+    mutateAsync: mockToggleKeyActive,
+    isPending: false,
+    variables: undefined,
   }),
 }));
 
@@ -101,6 +107,12 @@ describe("KeysTable", () => {
 
       expect(screen.getByText("Test API Key")).toBeInTheDocument();
       expect(screen.getByText("Test description")).toBeInTheDocument();
+    });
+
+    it("shows enabled badge for active key", () => {
+      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
+
+      expect(screen.getByText("enabled")).toBeInTheDocument();
     });
 
     it("masks long key prefix", () => {
@@ -434,6 +446,20 @@ describe("KeysTable", () => {
 
       const searchInput = screen.getByPlaceholderText("searchKeys");
       expect(searchInput).toHaveClass("max-w-md");
+    });
+  });
+
+  describe("Active Toggle", () => {
+    it("calls toggle mutation when toggle button is clicked", async () => {
+      mockToggleKeyActive.mockResolvedValueOnce(undefined);
+      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
+
+      const toggleButton = screen.getByLabelText("quickDisable: Test API Key");
+      fireEvent.click(toggleButton);
+
+      await waitFor(() => {
+        expect(mockToggleKeyActive).toHaveBeenCalledWith({ id: "test-id-1", nextActive: false });
+      });
     });
   });
 });

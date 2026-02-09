@@ -167,7 +167,13 @@
     "updateSuccess": "API Key updated successfully",
     "updateFailed": "Failed to update API Key",
     "keyActive": "Active Status",
-    "keyActiveDesc": "Disabled keys cannot access the API"
+    "keyActiveDesc": "Disabled keys cannot access the API",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "quickEnable": "Enable",
+    "quickDisable": "Disable",
+    "enableSuccess": "API Key enabled",
+    "disableSuccess": "API Key disabled"
   },
   "logs": {
     "title": "Request Logs",
@@ -360,7 +366,12 @@
     "unhealthy": "unhealthy",
     "unknown": "unknown",
     "active": "Active",
-    "inactive": "Inactive"
+    "inactive": "Inactive",
+    "quickEnable": "Enable",
+    "quickDisable": "Disable",
+    "recoverCircuitBreaker": "Recover",
+    "recoverCircuitBreakerSuccess": "Circuit breaker recovered",
+    "recoverCircuitBreakerFailed": "Failed to recover circuit breaker"
   },
   "circuitBreaker": {
     "title": "Circuit Breaker Status",

@@ -2,10 +2,11 @@
 
 import { formatDistanceToNow } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
-import { Trash2, Copy, Check, Key, Eye, EyeOff, Pencil } from "lucide-react";
+import { Trash2, Copy, Check, Key, Eye, EyeOff, Pencil, Power, PowerOff } from "lucide-react";
 import { useState } from "react";
 import type { APIKey } from "@/types/api";
 import { useRevealAPIKey } from "@/hooks/use-api-keys";
+import { useToggleAPIKeyActive } from "@/hooks/use-api-keys";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -19,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { getDateLocale } from "@/lib/date-locale";
+import { cn } from "@/lib/utils";
 
 interface KeysTableProps {
   keys: APIKey[];
@@ -40,6 +42,7 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
   const [revealedKeys, setRevealedKeys] = useState<Map<string, string>>(new Map());
   const [searchQuery, setSearchQuery] = useState("");
   const { mutateAsync: revealKey, isPending: isRevealing } = useRevealAPIKey();
+  const toggleActiveMutation = useToggleAPIKeyActive();
   const t = useTranslations("keys");
   const tCommon = useTranslations("common");
   const locale = useLocale();
@@ -169,8 +172,8 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
         onChange={(e) => setSearchQuery(e.target.value)}
         className="max-w-md"
       />
-      <div className="rounded-cf-sm border border-divider overflow-hidden">
-        <Table>
+      <div className="rounded-cf-sm border border-divider overflow-hidden bg-surface-200">
+        <Table frame="none" containerClassName="rounded-none">
           <TableHeader>
             <TableRow>
               <TableHead>{tCommon("name")}</TableHead>
@@ -185,7 +188,14 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
           <TableBody>
             {filteredKeys.map((key) => (
               <TableRow key={key.id}>
-                <TableCell className="font-medium">{key.name}</TableCell>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-2">
+                    <span>{key.name}</span>
+                    <Badge variant={key.is_active ? "success" : "neutral"}>
+                      {key.is_active ? t("enabled") : t("disabled")}
+                    </Badge>
+                  </div>
+                </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <code className="px-2 py-1 bg-surface-300 text-amber-500 rounded-cf-sm font-mono text-xs border border-divider">
@@ -237,6 +247,63 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      type="button"
+                      data-state={key.is_active ? "on" : "off"}
+                      className="group relative h-8 px-2 overflow-hidden border-2 border-amber-500/40 bg-black-900/60 text-amber-400 hover:bg-black-900/70 cf-scanlines cf-data-scan shadow-[inset_0_0_0_1px_rgba(255,191,0,0.10)] hover:shadow-cf-glow-subtle active:translate-y-[1px]"
+                      onClick={async () => {
+                        try {
+                          await toggleActiveMutation.mutateAsync({
+                            id: key.id,
+                            nextActive: !key.is_active,
+                          });
+                        } catch {
+                          // Error toast handled in hook
+                        }
+                      }}
+                      disabled={
+                        toggleActiveMutation.isPending &&
+                        toggleActiveMutation.variables?.id === key.id
+                      }
+                      aria-label={`${key.is_active ? t("quickDisable") : t("quickEnable")}: ${key.name}`}
+                    >
+                      <span className="relative z-20 flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "inline-flex items-center justify-center",
+                            "text-[12px] leading-none",
+                            key.is_active ? "text-status-success" : "text-amber-500"
+                          )}
+                          aria-hidden="true"
+                        >
+                          {key.is_active ? "◉" : "◎"}
+                        </span>
+                        {key.is_active ? (
+                          <PowerOff className="h-4 w-4" aria-hidden="true" />
+                        ) : (
+                          <Power className="h-4 w-4" aria-hidden="true" />
+                        )}
+                        <span className="text-[11px] font-mono uppercase tracking-widest">
+                          {key.is_active ? t("quickDisable") : t("quickEnable")}
+                        </span>
+                        <span className="ml-1 flex items-center gap-1" aria-hidden="true">
+                          <span className="relative h-[14px] w-[34px] rounded-cf-sm border border-amber-500/40 bg-black-900/70 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.35)]">
+                            <span
+                              className={cn(
+                                "absolute top-[1px] left-[1px] h-[10px] w-[14px] rounded-[2px]",
+                                "transition-transform duration-200 ease-out",
+                                "shadow-[0_0_10px_rgba(255,191,0,0.25)]",
+                                key.is_active
+                                  ? "translate-x-0 bg-status-success"
+                                  : "translate-x-[16px] bg-surface-400"
+                              )}
+                            />
+                          </span>
+                        </span>
+                      </span>
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"

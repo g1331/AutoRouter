@@ -129,6 +129,7 @@ export interface UpstreamUpdate {
   description?: string | null;
   is_default?: boolean;
   timeout?: number;
+  is_active?: boolean;
   weight?: number; // Load balancing weight
   priority?: number; // Priority tier (lower = higher priority)
   provider_type?: ProviderType; // Provider type for routing and auth
