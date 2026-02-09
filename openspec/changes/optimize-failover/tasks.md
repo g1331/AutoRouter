@@ -151,7 +151,7 @@
 - [x] 9.1 Run full test suite: `pnpm test:run` - 1341 passed, 13 skipped
 - [x] 9.2 Run type check: `pnpm exec tsc --noEmit` - Passed
 - [x] 9.3 Run lint: `pnpm lint` - 0 errors, 14 warnings (unused vars in tests)
-- [ ] 9.4 Run build: `pnpm build` - Skipped (requires env vars)
+- [x] 9.4 Run build: `pnpm build` - PASS
 - [x] 9.5 Test database migration on existing data - Migration verified
 - [x] 9.6 Test end-to-end failover scenario - Covered by integration tests
 - [x] 9.7 **Verify** decision path is logged correctly - Verified in proxy route
