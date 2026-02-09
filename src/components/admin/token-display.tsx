@@ -58,6 +58,8 @@ export function TokenDetailContent({
   cacheReadTokens,
 }: TokenDisplayProps) {
   const t = useTranslations("logs");
+  const effectiveCacheRead = getEffectiveCacheRead(cacheReadTokens, cachedTokens);
+  const newInputTokens = Math.max(promptTokens - effectiveCacheRead, 0);
 
   // Build main token rows (input, output, reasoning breakdown)
   const mainRows: Array<{
@@ -69,6 +71,32 @@ export function TokenDetailContent({
     { label: t("tokenInput"), value: promptTokens, highlight: true },
     { label: t("tokenOutput"), value: completionTokens, highlight: true },
   ];
+
+  // Input breakdown: cache hit is a subset of input_tokens (not additive).
+  if (effectiveCacheRead > 0) {
+    mainRows.splice(1, 0, {
+      label: t("tokenCacheHit"),
+      value: effectiveCacheRead,
+      highlight: false,
+      indent: true,
+    });
+    mainRows.splice(2, 0, {
+      label: t("tokenInputNew"),
+      value: newInputTokens,
+      highlight: false,
+      indent: true,
+    });
+  }
+
+  // Anthropic: cache creation tokens (subset of input tokens) can be useful to show explicitly.
+  if (cacheCreationTokens > 0) {
+    mainRows.splice(1, 0, {
+      label: t("tokenCacheWrite"),
+      value: cacheCreationTokens,
+      highlight: false,
+      indent: true,
+    });
+  }
 
   // Show reasoning breakdown if present (OpenAI o1/o3 models)
   // Split output into: reasoning + reply
@@ -88,29 +116,6 @@ export function TokenDetailContent({
     });
   }
 
-  // Build cache token rows (separate group)
-  // - Anthropic: has both cache_creation_tokens and cache_read_tokens
-  // - OpenAI: only has cached_tokens (equivalent to cache read)
-  const cacheRows: Array<{
-    label: string;
-    value: number;
-  }> = [];
-
-  if (cacheCreationTokens > 0) {
-    cacheRows.push({
-      label: t("tokenCacheWrite"),
-      value: cacheCreationTokens,
-    });
-  }
-
-  const effectiveCacheRead = getEffectiveCacheRead(cacheReadTokens, cachedTokens);
-  if (effectiveCacheRead > 0) {
-    cacheRows.push({
-      label: t("tokenCacheRead"),
-      value: effectiveCacheRead,
-    });
-  }
-
   return (
     <div className="min-w-[180px] max-w-[460px] font-mono text-xs">
       {/* Header */}
@@ -122,8 +127,12 @@ export function TokenDetailContent({
       <div className="space-y-1">
         {mainRows.map((row, idx) => (
           <div key={idx} className="grid grid-cols-[auto_auto] items-center gap-x-3">
-            <span className={row.highlight ? "text-amber-500" : "text-amber-700"}>
-              {row.indent ? "  " : ""}
+            <span
+              className={cn(
+                row.highlight ? "text-amber-500" : "text-amber-700",
+                row.indent ? "pl-4" : ""
+              )}
+            >
               {row.label}
             </span>
             <span
@@ -137,20 +146,6 @@ export function TokenDetailContent({
           </div>
         ))}
       </div>
-
-      {/* Cache rows (separate group with divider) */}
-      {cacheRows.length > 0 && (
-        <div className="border-t border-amber-500/20 mt-2 pt-2 space-y-1">
-          {cacheRows.map((row, idx) => (
-            <div key={idx} className="grid grid-cols-[auto_auto] items-center gap-x-3">
-              <span className="text-status-info">{row.label}</span>
-              <span className="text-status-info text-right justify-self-end">
-                {row.value.toLocaleString()}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Total */}
       <div className="border-t border-amber-500/30 mt-2 pt-2">
@@ -179,28 +174,44 @@ export function TokenDisplay({
   completionTokens,
   totalTokens,
   cachedTokens,
+  cacheCreationTokens,
   cacheReadTokens,
 }: TokenDisplayProps) {
+  const t = useTranslations("logs");
+
   if (totalTokens === 0) {
     return <span className="text-amber-700">-</span>;
   }
 
   const effectiveCacheRead = getEffectiveCacheRead(cacheReadTokens, cachedTokens);
+  const newInputTokens = Math.max(promptTokens - effectiveCacheRead, 0);
 
   return (
     <div className="flex flex-col text-xs font-mono">
       {/* Row 1: Total tokens - amber-500, primary emphasis */}
       <span className="text-amber-500">{totalTokens.toLocaleString()}</span>
-      {/* Row 2: Input / Output breakdown - amber-700, secondary */}
+      {/* Row 2: New Input / Output breakdown - amber-700, secondary */}
       <span className="text-amber-700 text-[10px]">
-        {promptTokens.toLocaleString()} / {completionTokens.toLocaleString()}
+        {newInputTokens.toLocaleString()} / {completionTokens.toLocaleString()}
       </span>
-      {/* Row 3: Cache indicator - info color with Database icon */}
-      {effectiveCacheRead > 0 && (
-        <Badge variant="info" className="mt-0.5 px-1.5 py-0 text-[9px] w-fit gap-0.5">
-          <Database className="w-2.5 h-2.5" aria-hidden="true" />
-          {effectiveCacheRead.toLocaleString()}
-        </Badge>
+      {/* Row 3: Cache indicators */}
+      {(effectiveCacheRead > 0 || cacheCreationTokens > 0) && (
+        <div className="flex flex-wrap gap-1 mt-0.5">
+          {effectiveCacheRead > 0 && (
+            <Badge variant="info" className="px-1.5 py-0 text-[9px] w-fit gap-0.5">
+              <Database className="w-2.5 h-2.5" aria-hidden="true" />
+              <span>{t("tokenCacheHitShort")}</span>
+              <span>{effectiveCacheRead.toLocaleString()}</span>
+            </Badge>
+          )}
+          {cacheCreationTokens > 0 && (
+            <Badge variant="info" className="px-1.5 py-0 text-[9px] w-fit gap-0.5">
+              <Database className="w-2.5 h-2.5" aria-hidden="true" />
+              <span>{t("tokenCacheWriteShort")}</span>
+              <span>{cacheCreationTokens.toLocaleString()}</span>
+            </Badge>
+          )}
+        </div>
       )}
     </div>
   );

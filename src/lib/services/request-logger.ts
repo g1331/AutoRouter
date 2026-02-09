@@ -394,14 +394,16 @@ export function extractTokenUsage(responseBody: Record<string, unknown> | null):
     const cacheCreationTokens = getIntValue(usage, "cache_creation_input_tokens");
     const cacheReadTokens = getIntValue(usage, "cache_read_input_tokens");
 
-    // Prefer Anthropic's input_tokens when present; fall back to cache token counts only when missing
-    const promptTokensValue =
-      "input_tokens" in usage ? inputTokens : Math.max(cacheReadTokens, cacheCreationTokens);
+    // Anthropic may send streaming usage objects where input_tokens is present but 0,
+    // while cache_*_input_tokens carries the real input usage.
+    const cacheFallbackTokens = cacheReadTokens + cacheCreationTokens;
+    const promptTokensValue = inputTokens > 0 ? inputTokens : cacheFallbackTokens;
+    const totalTokensValue = getIntValue(usage, "total_tokens", promptTokensValue + outputTokens);
 
     return {
       promptTokens: promptTokensValue,
       completionTokens: outputTokens,
-      totalTokens: promptTokensValue + outputTokens,
+      totalTokens: totalTokensValue,
       cachedTokens: cacheReadTokens, // Anthropic cache_read is the cached tokens
       reasoningTokens: 0,
       cacheCreationTokens,

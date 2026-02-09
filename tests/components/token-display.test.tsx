@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { TokenDisplay, TokenDetailContent } from "@/components/admin/token-display";
 
@@ -89,7 +89,9 @@ describe("TokenDisplay", () => {
         />
       );
 
-      expect(screen.getByText("50")).toBeInTheDocument();
+      const cacheHitBadge = screen.getByText("tokenCacheHitShort").closest("div");
+      expect(cacheHitBadge).not.toBeNull();
+      expect(within(cacheHitBadge as HTMLElement).getByText("50")).toBeInTheDocument();
     });
 
     it("does not show cache badge when cachedTokens is 0", () => {
@@ -146,7 +148,9 @@ describe("TokenDisplay", () => {
       );
 
       // Should render cache badge with cachedTokens value
-      expect(screen.getByText("50")).toBeInTheDocument();
+      const cacheHitBadge = screen.getByText("tokenCacheHitShort").closest("div");
+      expect(cacheHitBadge).not.toBeNull();
+      expect(within(cacheHitBadge as HTMLElement).getByText("50")).toBeInTheDocument();
     });
 
     it("shows cache read using cacheReadTokens when both are present (Anthropic)", () => {
@@ -163,7 +167,43 @@ describe("TokenDisplay", () => {
       );
 
       // Cache badge should use cacheReadTokens (30) not cachedTokens (50)
-      expect(screen.getByText("30")).toBeInTheDocument();
+      const cacheHitBadge = screen.getByText("tokenCacheHitShort").closest("div");
+      expect(cacheHitBadge).not.toBeNull();
+      expect(within(cacheHitBadge as HTMLElement).getByText("30")).toBeInTheDocument();
+    });
+
+    it("shows new input (prompt - cache hit) in breakdown", () => {
+      render(
+        <TokenDisplay
+          promptTokens={100}
+          completionTokens={200}
+          totalTokens={300}
+          cachedTokens={50}
+          reasoningTokens={0}
+          cacheCreationTokens={0}
+          cacheReadTokens={0}
+        />
+      );
+
+      expect(screen.getByText("50 / 200")).toBeInTheDocument();
+    });
+
+    it("shows cache write badge when cacheCreationTokens > 0", () => {
+      render(
+        <TokenDisplay
+          promptTokens={1000}
+          completionTokens={200}
+          totalTokens={1200}
+          cachedTokens={0}
+          reasoningTokens={0}
+          cacheCreationTokens={100}
+          cacheReadTokens={800}
+        />
+      );
+
+      const cacheWriteBadge = screen.getByText("tokenCacheWriteShort").closest("div");
+      expect(cacheWriteBadge).not.toBeNull();
+      expect(within(cacheWriteBadge as HTMLElement).getByText("100")).toBeInTheDocument();
     });
   });
 });
@@ -270,7 +310,7 @@ describe("TokenDetailContent", () => {
       expect(screen.getByText("25")).toBeInTheDocument();
     });
 
-    it("shows cache read when cacheReadTokens > 0 (Anthropic)", () => {
+    it("shows cache hit + new input breakdown when cacheReadTokens > 0 (Anthropic)", () => {
       render(
         <TokenDetailContent
           promptTokens={100}
@@ -283,11 +323,19 @@ describe("TokenDetailContent", () => {
         />
       );
 
-      expect(screen.getByText("tokenCacheRead")).toBeInTheDocument();
-      expect(screen.getByText("50")).toBeInTheDocument();
+      expect(screen.getByText("tokenCacheHit")).toBeInTheDocument();
+      expect(screen.getByText("tokenInputNew")).toBeInTheDocument();
+
+      const cacheHitRow = screen.getByText("tokenCacheHit").closest("div");
+      expect(cacheHitRow).not.toBeNull();
+      expect(within(cacheHitRow as HTMLElement).getByText("50")).toBeInTheDocument();
+
+      const newInputRow = screen.getByText("tokenInputNew").closest("div");
+      expect(newInputRow).not.toBeNull();
+      expect(within(newInputRow as HTMLElement).getByText("50")).toBeInTheDocument();
     });
 
-    it("shows cache read using cachedTokens when cacheReadTokens is 0 (OpenAI)", () => {
+    it("shows cache hit using cachedTokens when cacheReadTokens is 0 (OpenAI)", () => {
       render(
         <TokenDetailContent
           promptTokens={100}
@@ -300,7 +348,8 @@ describe("TokenDetailContent", () => {
         />
       );
 
-      expect(screen.getByText("tokenCacheRead")).toBeInTheDocument();
+      expect(screen.getByText("tokenCacheHit")).toBeInTheDocument();
+      expect(screen.getByText("tokenInputNew")).toBeInTheDocument();
       expect(screen.getByText("80")).toBeInTheDocument();
     });
 
@@ -318,11 +367,13 @@ describe("TokenDetailContent", () => {
       );
 
       // Should show 50 (cacheReadTokens), not 80 (cachedTokens)
-      expect(screen.getByText("50")).toBeInTheDocument();
+      const cacheHitRow = screen.getByText("tokenCacheHit").closest("div");
+      expect(cacheHitRow).not.toBeNull();
+      expect(within(cacheHitRow as HTMLElement).getByText("50")).toBeInTheDocument();
       expect(screen.queryByText("80")).not.toBeInTheDocument();
     });
 
-    it("shows both cache write and cache read (Anthropic full scenario)", () => {
+    it("shows cache write + hit + new input (Anthropic full scenario)", () => {
       render(
         <TokenDetailContent
           promptTokens={1000}
@@ -336,9 +387,15 @@ describe("TokenDetailContent", () => {
       );
 
       expect(screen.getByText("tokenCacheWrite")).toBeInTheDocument();
-      expect(screen.getByText("tokenCacheRead")).toBeInTheDocument();
+      expect(screen.getByText("tokenCacheHit")).toBeInTheDocument();
+      expect(screen.getByText("tokenInputNew")).toBeInTheDocument();
       expect(screen.getByText("100")).toBeInTheDocument();
       expect(screen.getByText("800")).toBeInTheDocument();
+
+      // new input = 1000 - 800 = 200 (assert within the "tokenInputNew" row)
+      const newInputRow = screen.getByText("tokenInputNew").closest("div");
+      expect(newInputRow).not.toBeNull();
+      expect(within(newInputRow as HTMLElement).getByText("200")).toBeInTheDocument();
     });
 
     it("does not show cache section when no cache tokens present", () => {
@@ -355,7 +412,8 @@ describe("TokenDetailContent", () => {
       );
 
       expect(screen.queryByText("tokenCacheWrite")).not.toBeInTheDocument();
-      expect(screen.queryByText("tokenCacheRead")).not.toBeInTheDocument();
+      expect(screen.queryByText("tokenCacheHit")).not.toBeInTheDocument();
+      expect(screen.queryByText("tokenInputNew")).not.toBeInTheDocument();
     });
   });
 
@@ -381,8 +439,9 @@ describe("TokenDetailContent", () => {
       expect(screen.getByText("tokenReasoning")).toBeInTheDocument();
       expect(screen.getByText("tokenReply")).toBeInTheDocument();
 
-      // Cache (OpenAI style - cachedTokens maps to cacheRead)
-      expect(screen.getByText("tokenCacheRead")).toBeInTheDocument();
+      // Cache (OpenAI style - cachedTokens maps to cache hit)
+      expect(screen.getByText("tokenCacheHit")).toBeInTheDocument();
+      expect(screen.getByText("tokenInputNew")).toBeInTheDocument();
 
       // Total
       expect(screen.getByText("tokenTotal")).toBeInTheDocument();

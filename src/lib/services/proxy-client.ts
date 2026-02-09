@@ -155,13 +155,19 @@ function extractFromUsageObject(usage: Record<string, unknown>): TokenUsage | nu
     "cache_creation_input_tokens" in usage ||
     "cache_read_input_tokens" in usage
   ) {
-    const promptTokens = getIntValue(usage, "input_tokens");
+    const promptTokensRaw = getIntValue(usage, "input_tokens");
     const completionTokens = getIntValue(usage, "output_tokens");
-    const totalTokens = getIntValue(usage, "total_tokens", promptTokens + completionTokens);
+    const totalTokensRaw = getIntValue(usage, "total_tokens");
 
     // Anthropic cache token format
     const cacheCreationTokens = getIntValue(usage, "cache_creation_input_tokens");
     const cacheReadTokens = getIntValue(usage, "cache_read_input_tokens");
+
+    // Anthropic streaming may include input_tokens as 0 while cache_*_input_tokens is populated.
+    const cacheFallbackTokens = cacheCreationTokens + cacheReadTokens;
+    const promptTokens = promptTokensRaw > 0 ? promptTokensRaw : cacheFallbackTokens;
+    const totalTokens =
+      totalTokensRaw > 0 ? totalTokensRaw : Math.max(promptTokens + completionTokens, 0);
 
     // OpenAI Responses API detailed usage format (when present)
     let cachedTokensFromDetails = 0;

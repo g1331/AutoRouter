@@ -359,6 +359,29 @@ describe("request-logger", () => {
           cacheReadTokens: 1200,
         });
       });
+
+      it("should fall back to cache tokens when input_tokens is 0 (streaming usage)", () => {
+        const response = {
+          usage: {
+            input_tokens: 0,
+            output_tokens: 167,
+            cache_creation_input_tokens: 26856,
+            cache_read_input_tokens: 0,
+          },
+        };
+
+        const usage = extractTokenUsage(response);
+
+        expect(usage).toEqual({
+          promptTokens: 26856,
+          completionTokens: 167,
+          totalTokens: 27023,
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 26856,
+          cacheReadTokens: 0,
+        });
+      });
     });
 
     describe("edge cases", () => {
