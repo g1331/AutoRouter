@@ -48,6 +48,6 @@
 
 ## 8. Verification
 
-- [ ] 8.1 Run full test suite (`pnpm test:run`) and fix any failures
-- [ ] 8.2 Run type check (`pnpm exec tsc --noEmit`) and lint (`pnpm lint`)
-- [ ] 8.3 Verify build succeeds (`pnpm build`)
+- [x] 8.1 Run full test suite (`pnpm test:run`) and fix any failures
+- [x] 8.2 Run type check (`pnpm exec tsc --noEmit`) and lint (`pnpm lint`)
+- [x] 8.3 Verify build succeeds (`pnpm build`)
