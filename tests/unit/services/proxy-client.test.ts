@@ -40,6 +40,10 @@ describe("proxy-client", () => {
         "Transfer-Encoding": "chunked",
         Host: "example.com",
         Upgrade: "websocket",
+        "X-Forwarded-For": "127.0.0.1",
+        "X-Forwarded-Host": "localhost:3000",
+        "X-Forwarded-Port": "3000",
+        "X-Forwarded-Proto": "http",
       });
 
       const filtered = filterHeaders(headers);
@@ -50,6 +54,10 @@ describe("proxy-client", () => {
       expect(filtered["transfer-encoding"]).toBeUndefined();
       expect(filtered["host"]).toBeUndefined();
       expect(filtered["upgrade"]).toBeUndefined();
+      expect(filtered["x-forwarded-for"]).toBeUndefined();
+      expect(filtered["x-forwarded-host"]).toBeUndefined();
+      expect(filtered["x-forwarded-port"]).toBeUndefined();
+      expect(filtered["x-forwarded-proto"]).toBeUndefined();
     });
 
     it("should handle empty headers", () => {
@@ -78,7 +86,31 @@ describe("proxy-client", () => {
       timeout: 60,
     };
 
-    it("should inject Bearer token for OpenAI", () => {
+    it("should preserve Authorization format when client uses Authorization", () => {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        authorization: "Bearer client-key",
+      };
+
+      const result = injectAuthHeader(headers, anthropicUpstream);
+
+      expect(result["Authorization"]).toBe("Bearer ant-test-key");
+      expect(result["x-api-key"]).toBeUndefined();
+    });
+
+    it("should preserve x-api-key format when client uses x-api-key", () => {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "x-api-key": "client-api-key",
+      };
+
+      const result = injectAuthHeader(headers, anthropicUpstream);
+
+      expect(result["x-api-key"]).toBe("ant-test-key");
+      expect(result["Authorization"]).toBeUndefined();
+    });
+
+    it("should default to Authorization when no auth header present", () => {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
       };
@@ -87,17 +119,6 @@ describe("proxy-client", () => {
 
       expect(result["Authorization"]).toBe("Bearer sk-test-key");
       expect(result["x-api-key"]).toBeUndefined();
-    });
-
-    it("should inject x-api-key for Anthropic", () => {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-
-      const result = injectAuthHeader(headers, anthropicUpstream);
-
-      expect(result["x-api-key"]).toBe("ant-test-key");
-      expect(result["Authorization"]).toBeUndefined();
     });
 
     it("should preserve client anthropic-version header", () => {
@@ -111,7 +132,7 @@ describe("proxy-client", () => {
       expect(result["anthropic-version"]).toBe("2024-01-01");
     });
 
-    it("should remove client auth headers", () => {
+    it("should use x-api-key when client sends both auth headers", () => {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         authorization: "Bearer client-key",
@@ -120,9 +141,9 @@ describe("proxy-client", () => {
 
       const result = injectAuthHeader(headers, openaiUpstream);
 
-      expect(result["Authorization"]).toBe("Bearer sk-test-key");
+      expect(result["x-api-key"]).toBe("sk-test-key");
       expect(result["authorization"]).toBeUndefined();
-      expect(result["x-api-key"]).toBeUndefined();
+      expect(result["Authorization"]).toBeUndefined();
     });
   });
 
@@ -856,7 +877,7 @@ describe("proxy-client", () => {
       expect(fetchCall[1].headers["Authorization"]).toBe("Bearer sk-test-key");
     });
 
-    it("should inject x-api-key for Anthropic", async () => {
+    it("should inject Bearer token for Anthropic", async () => {
       const anthropicUpstream: UpstreamForProxy = {
         ...mockUpstream,
         providerType: "anthropic",
@@ -880,7 +901,7 @@ describe("proxy-client", () => {
       await forwardRequest(request, anthropicUpstream, "messages", "req-123");
 
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-      expect(fetchCall[1].headers["x-api-key"]).toBe("ant-key");
+      expect(fetchCall[1].headers["Authorization"]).toBe("Bearer ant-key");
     });
 
     it("should return non-streaming response with usage extraction", async () => {

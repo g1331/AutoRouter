@@ -38,7 +38,7 @@ export interface ProxyResult {
   usagePromise?: Promise<TokenUsage | null>;
 }
 
-// Headers that should not be forwarded to upstream (hop-by-hop headers)
+// Headers that should not be forwarded to upstream
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
   "keep-alive",
@@ -49,6 +49,11 @@ const HOP_BY_HOP_HEADERS = new Set([
   "transfer-encoding",
   "upgrade",
   "host",
+  // Next.js injects these describing the client→AutoRouter hop; not relevant to upstream
+  "x-forwarded-for",
+  "x-forwarded-host",
+  "x-forwarded-port",
+  "x-forwarded-proto",
 ]);
 
 /**
@@ -65,7 +70,8 @@ export function filterHeaders(headers: Headers): Record<string, string> {
 }
 
 /**
- * Inject authentication header based on provider type.
+ * Replace authentication credentials with upstream API key.
+ * Detects which auth header the client used and preserves the same format.
  */
 export function injectAuthHeader(
   headers: Record<string, string>,
@@ -73,11 +79,16 @@ export function injectAuthHeader(
 ): Record<string, string> {
   const result = { ...headers };
 
+  // Detect which auth format the client used
+  const usesApiKey = "x-api-key" in result;
+
   // Remove any existing auth headers from client
   delete result["authorization"];
+  delete result["Authorization"];
   delete result["x-api-key"];
 
-  if (upstream.providerType === "anthropic") {
+  // Preserve the client's auth header format
+  if (usesApiKey) {
     result["x-api-key"] = upstream.apiKey;
   } else {
     result["Authorization"] = `Bearer ${upstream.apiKey}`;
