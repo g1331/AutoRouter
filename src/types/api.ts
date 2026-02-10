@@ -107,6 +107,12 @@ export type UpstreamHealth = UpstreamHealthResponse;
 
 // ========== Upstream 相关类型 ==========
 
+export interface AffinityMigrationConfig {
+  enabled: boolean;
+  metric: "tokens" | "length";
+  threshold: number;
+}
+
 export interface UpstreamCreate {
   name: string;
   base_url: string;
@@ -120,6 +126,7 @@ export interface UpstreamCreate {
   allowed_models?: string[] | null; // List of supported model names
   model_redirects?: Record<string, string> | null; // Model name mapping
   circuit_breaker_config?: CircuitBreakerConfig | null; // Circuit breaker configuration
+  affinity_migration?: AffinityMigrationConfig | null; // Session affinity migration configuration
 }
 
 export interface UpstreamUpdate {
@@ -136,6 +143,7 @@ export interface UpstreamUpdate {
   allowed_models?: string[] | null; // List of supported model names
   model_redirects?: Record<string, string> | null; // Model name mapping
   circuit_breaker_config?: CircuitBreakerConfig | null; // Circuit breaker configuration
+  affinity_migration?: AffinityMigrationConfig | null; // Session affinity migration configuration
 }
 
 export interface UpstreamResponse {
@@ -154,6 +162,7 @@ export interface UpstreamResponse {
   provider_type: ProviderType; // Provider type for routing and auth
   allowed_models: string[] | null; // List of supported model names
   model_redirects: Record<string, string> | null; // Model name mapping
+  affinity_migration: AffinityMigrationConfig | null; // Session affinity migration configuration
   created_at: string; // ISO 8601 date string
   updated_at: string; // ISO 8601 date string
 }

@@ -48,6 +48,7 @@ describe("UpstreamFormDialog", () => {
     allowed_models: null,
     model_redirects: null,
     health_status: null,
+    affinity_migration: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
@@ -166,6 +167,7 @@ describe("UpstreamFormDialog", () => {
           allowed_models: null,
           model_redirects: null,
           circuit_breaker_config: null,
+          affinity_migration: null,
         });
       });
     });
@@ -264,6 +266,7 @@ describe("UpstreamFormDialog", () => {
             allowed_models: null,
             model_redirects: null,
             circuit_breaker_config: null,
+            affinity_migration: null,
           },
         });
       });
@@ -297,6 +300,7 @@ describe("UpstreamFormDialog", () => {
             allowed_models: null,
             model_redirects: null,
             circuit_breaker_config: null,
+            affinity_migration: null,
             // api_key should NOT be included when empty
           },
         });

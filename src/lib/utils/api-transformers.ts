@@ -66,6 +66,11 @@ export interface UpstreamApiResponse {
   provider_type: string;
   allowed_models: string[] | null;
   model_redirects: Record<string, string> | null;
+  affinity_migration: {
+    enabled: boolean;
+    metric: "tokens" | "length";
+    threshold: number;
+  } | null;
   created_at: string;
   updated_at: string;
   circuit_breaker: UpstreamCircuitBreakerApiResponse | null;
@@ -103,6 +108,7 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
     provider_type: upstream.providerType,
     allowed_models: upstream.allowedModels,
     model_redirects: upstream.modelRedirects,
+    affinity_migration: upstream.affinityMigration,
     created_at: upstream.createdAt.toISOString(),
     updated_at: upstream.updatedAt.toISOString(),
     circuit_breaker: upstream.circuitBreaker

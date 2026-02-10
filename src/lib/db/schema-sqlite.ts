@@ -52,6 +52,11 @@ export const upstreams = sqliteTable(
       string,
       string
     > | null>(),
+    affinityMigration: text("affinity_migration", { mode: "json" }).$type<{
+      enabled: boolean;
+      metric: "tokens" | "length";
+      threshold: number;
+    } | null>(), // Session affinity migration configuration
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },

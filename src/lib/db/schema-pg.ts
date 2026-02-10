@@ -55,6 +55,11 @@ export const upstreams = pgTable(
     providerType: varchar("provider_type", { length: 32 }).notNull().default("openai"), // "anthropic" | "openai" | "google" | "custom"
     allowedModels: json("allowed_models").$type<string[] | null>(), // JSON array of supported model names
     modelRedirects: json("model_redirects").$type<Record<string, string> | null>(), // JSON object mapping incoming model to target model
+    affinityMigration: json("affinity_migration").$type<{
+      enabled: boolean;
+      metric: "tokens" | "length";
+      threshold: number;
+    } | null>(), // Session affinity migration configuration
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

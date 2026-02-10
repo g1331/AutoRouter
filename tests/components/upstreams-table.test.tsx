@@ -56,6 +56,7 @@ describe("UpstreamsTable", () => {
     allowed_models: null,
     model_redirects: null,
     health_status: null,
+    affinity_migration: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };

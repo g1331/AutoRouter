@@ -64,6 +64,13 @@
       "when": 1770539651986,
       "tag": "0008_lowly_grey_gargoyle",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1770729856245,
+      "tag": "0009_illegal_vargas",
+      "breakpoints": true
     }
   ]
 }

@@ -58,6 +58,7 @@ import {
   releaseConnection,
   getConnectionCount,
 } from "@/lib/services/load-balancer";
+import { affinityStore } from "@/lib/services/session-affinity";
 
 // ---------------------------------------------------------------------------
 // Helpers – mock upstream factory
@@ -74,6 +75,11 @@ interface MockUpstreamOpts {
   isActive?: boolean;
   isHealthy?: boolean;
   cbState?: "closed" | "open" | "half_open";
+  affinityMigration?: {
+    enabled: boolean;
+    metric: "tokens" | "length";
+    threshold: number;
+  } | null;
 }
 
 function makeUpstream(opts: MockUpstreamOpts = {}) {
@@ -93,6 +99,7 @@ function makeUpstream(opts: MockUpstreamOpts = {}) {
     providerType: opts.providerType ?? "openai",
     allowedModels: null,
     modelRedirects: null,
+    affinityMigration: opts.affinityMigration ?? null,
     createdAt: new Date(),
     updatedAt: new Date(),
     health:
@@ -159,6 +166,8 @@ describe("load-balancer", () => {
     idCounter = 0;
     // Reset connectionCounts map between tests
     resetConnectionCounts();
+    // Clear affinity store between tests
+    affinityStore.clear();
     setCBAllClosed();
     mockAcquireCircuitBreakerPermit.mockResolvedValue(undefined);
   });
@@ -515,6 +524,287 @@ describe("load-balancer", () => {
         await expect(selectFromProviderType("openai", ["ex"])).rejects.toThrow(
           NoHealthyUpstreamsError
         );
+      });
+    });
+
+    // =========================================================================
+    // Session affinity
+    // =========================================================================
+    describe("session affinity", () => {
+      it("should use affinity binding when session exists and upstream is available", async () => {
+        const u1 = makeUpstream({ id: "u1", priority: 0 });
+        const u2 = makeUpstream({ id: "u2", priority: 0 });
+        mockFindMany.mockResolvedValue([u1, u2]);
+
+        // Pre-populate affinity cache
+        affinityStore.set("key1", "openai", "session-abc", "u1", 1024);
+
+        const result = await selectFromProviderType("openai", undefined, undefined, {
+          apiKeyId: "key1",
+          sessionId: "session-abc",
+          contentLength: 2048,
+        });
+
+        expect(result.upstream.id).toBe("u1");
+        expect(result.affinityHit).toBe(true);
+        expect(result.affinityMigrated).toBe(false);
+      });
+
+      it("should reselect when bound upstream is unavailable (circuit open)", async () => {
+        const u1 = makeUpstream({ id: "u1", priority: 0 });
+        const u2 = makeUpstream({ id: "u2", priority: 0 });
+        mockFindMany.mockResolvedValue([u1, u2]);
+        setCBOpen("u1");
+
+        // Pre-populate affinity cache with u1
+        affinityStore.set("key1", "openai", "session-abc", "u1", 1024);
+
+        const result = await selectFromProviderType("openai", undefined, undefined, {
+          apiKeyId: "key1",
+          sessionId: "session-abc",
+          contentLength: 2048,
+        });
+
+        expect(result.upstream.id).toBe("u2");
+        expect(result.affinityHit).toBe(false);
+      });
+
+      it("should update affinity cache when reselecting due to unavailable upstream", async () => {
+        const u1 = makeUpstream({ id: "u1", priority: 0 });
+        const u2 = makeUpstream({ id: "u2", priority: 0 });
+        mockFindMany.mockResolvedValue([u1, u2]);
+        setCBOpen("u1");
+
+        // Pre-populate affinity cache with u1
+        affinityStore.set("key1", "openai", "session-abc", "u1", 1024);
+
+        await selectFromProviderType("openai", undefined, undefined, {
+          apiKeyId: "key1",
+          sessionId: "session-abc",
+          contentLength: 2048,
+        });
+
+        // Cache should be updated to u2
+        const entry = affinityStore.get("key1", "openai", "session-abc");
+        expect(entry?.upstreamId).toBe("u2");
+      });
+
+      it("should create new affinity entry on first request", async () => {
+        const u1 = makeUpstream({ id: "u1", priority: 0 });
+        mockFindMany.mockResolvedValue([u1]);
+
+        // No pre-populated cache
+        expect(affinityStore.has("key1", "openai", "session-abc")).toBe(false);
+
+        await selectFromProviderType("openai", undefined, undefined, {
+          apiKeyId: "key1",
+          sessionId: "session-abc",
+          contentLength: 1024,
+        });
+
+        // Cache should be created
+        const entry = affinityStore.get("key1", "openai", "session-abc");
+        expect(entry).not.toBeNull();
+        expect(entry?.upstreamId).toBe("u1");
+      });
+
+      it("should behave normally without sessionId (no affinity)", async () => {
+        const u1 = makeUpstream({ id: "u1", priority: 0 });
+        const u2 = makeUpstream({ id: "u2", priority: 0 });
+        mockFindMany.mockResolvedValue([u1, u2]);
+
+        const result = await selectFromProviderType("openai");
+
+        expect(result.affinityHit).toBe(false);
+        expect(["u1", "u2"]).toContain(result.upstream.id);
+      });
+
+      it("should migrate to higher priority upstream when threshold allows", async () => {
+        const p0 = makeUpstream({
+          id: "p0",
+          priority: 0,
+          affinityMigration: { enabled: true, metric: "tokens", threshold: 50000 },
+        });
+        const p1 = makeUpstream({ id: "p1", priority: 1 });
+        mockFindMany.mockResolvedValue([p0, p1]);
+
+        // Session bound to lower priority upstream
+        affinityStore.set("key1", "openai", "session-abc", "p1", 1024);
+        // Set cumulative tokens below threshold
+        affinityStore.updateCumulativeTokens("key1", "openai", "session-abc", {
+          inputTokens: 1000,
+          cacheReadTokens: 0,
+          cacheCreationTokens: 0,
+        });
+
+        const result = await selectFromProviderType("openai", undefined, undefined, {
+          apiKeyId: "key1",
+          sessionId: "session-abc",
+          contentLength: 2048,
+        });
+
+        expect(result.upstream.id).toBe("p0");
+        expect(result.affinityHit).toBe(true);
+        expect(result.affinityMigrated).toBe(true);
+      });
+
+      it("should NOT migrate when cumulative tokens exceed threshold", async () => {
+        const p0 = makeUpstream({
+          id: "p0",
+          priority: 0,
+          affinityMigration: { enabled: true, metric: "tokens", threshold: 50000 },
+        });
+        const p1 = makeUpstream({ id: "p1", priority: 1 });
+        mockFindMany.mockResolvedValue([p0, p1]);
+
+        // Session bound to lower priority upstream
+        affinityStore.set("key1", "openai", "session-abc", "p1", 1024);
+        // Set cumulative tokens above threshold
+        affinityStore.updateCumulativeTokens("key1", "openai", "session-abc", {
+          inputTokens: 60000,
+          cacheReadTokens: 0,
+          cacheCreationTokens: 0,
+        });
+
+        const result = await selectFromProviderType("openai", undefined, undefined, {
+          apiKeyId: "key1",
+          sessionId: "session-abc",
+          contentLength: 2048,
+        });
+
+        expect(result.upstream.id).toBe("p1");
+        expect(result.affinityHit).toBe(true);
+        expect(result.affinityMigrated).toBe(false);
+      });
+
+      it("should migrate based on content length when metric is length", async () => {
+        const p0 = makeUpstream({
+          id: "p0",
+          priority: 0,
+          affinityMigration: { enabled: true, metric: "length", threshold: 10000 },
+        });
+        const p1 = makeUpstream({ id: "p1", priority: 1 });
+        mockFindMany.mockResolvedValue([p0, p1]);
+
+        // Session bound to lower priority upstream
+        affinityStore.set("key1", "openai", "session-abc", "p1", 1024);
+
+        // Content length below threshold
+        const result = await selectFromProviderType("openai", undefined, undefined, {
+          apiKeyId: "key1",
+          sessionId: "session-abc",
+          contentLength: 5000,
+        });
+
+        expect(result.upstream.id).toBe("p0");
+        expect(result.affinityMigrated).toBe(true);
+      });
+
+      it("should NOT migrate when higher priority upstream has migration disabled", async () => {
+        const p0 = makeUpstream({
+          id: "p0",
+          priority: 0,
+          affinityMigration: { enabled: false, metric: "tokens", threshold: 50000 },
+        });
+        const p1 = makeUpstream({ id: "p1", priority: 1 });
+        mockFindMany.mockResolvedValue([p0, p1]);
+
+        // Session bound to lower priority upstream
+        affinityStore.set("key1", "openai", "session-abc", "p1", 1024);
+
+        const result = await selectFromProviderType("openai", undefined, undefined, {
+          apiKeyId: "key1",
+          sessionId: "session-abc",
+          contentLength: 2048,
+        });
+
+        expect(result.upstream.id).toBe("p1");
+        expect(result.affinityMigrated).toBe(false);
+      });
+
+      it("should NOT migrate when higher priority upstream has no migration config", async () => {
+        const p0 = makeUpstream({ id: "p0", priority: 0, affinityMigration: null });
+        const p1 = makeUpstream({ id: "p1", priority: 1 });
+        mockFindMany.mockResolvedValue([p0, p1]);
+
+        // Session bound to lower priority upstream
+        affinityStore.set("key1", "openai", "session-abc", "p1", 1024);
+
+        const result = await selectFromProviderType("openai", undefined, undefined, {
+          apiKeyId: "key1",
+          sessionId: "session-abc",
+          contentLength: 2048,
+        });
+
+        expect(result.upstream.id).toBe("p1");
+        expect(result.affinityMigrated).toBe(false);
+      });
+
+      it("should update affinity cache after migration", async () => {
+        const p0 = makeUpstream({
+          id: "p0",
+          priority: 0,
+          affinityMigration: { enabled: true, metric: "tokens", threshold: 50000 },
+        });
+        const p1 = makeUpstream({ id: "p1", priority: 1 });
+        mockFindMany.mockResolvedValue([p0, p1]);
+
+        // Session bound to lower priority upstream
+        affinityStore.set("key1", "openai", "session-abc", "p1", 1024);
+
+        await selectFromProviderType("openai", undefined, undefined, {
+          apiKeyId: "key1",
+          sessionId: "session-abc",
+          contentLength: 2048,
+        });
+
+        // Cache should be updated to p0
+        const entry = affinityStore.get("key1", "openai", "session-abc");
+        expect(entry?.upstreamId).toBe("p0");
+      });
+
+      it("should allow migration when cumulativeTokens is 0 (first request)", async () => {
+        const p0 = makeUpstream({
+          id: "p0",
+          priority: 0,
+          affinityMigration: { enabled: true, metric: "tokens", threshold: 50000 },
+        });
+        const p1 = makeUpstream({ id: "p1", priority: 1 });
+        mockFindMany.mockResolvedValue([p0, p1]);
+
+        // Session bound to lower priority upstream with 0 tokens
+        affinityStore.set("key1", "openai", "session-abc", "p1", 1024);
+
+        const result = await selectFromProviderType("openai", undefined, undefined, {
+          apiKeyId: "key1",
+          sessionId: "session-abc",
+          contentLength: 2048,
+        });
+
+        expect(result.upstream.id).toBe("p0");
+        expect(result.affinityMigrated).toBe(true);
+      });
+
+      it("should NOT migrate when already on highest priority upstream", async () => {
+        const p0 = makeUpstream({
+          id: "p0",
+          priority: 0,
+          affinityMigration: { enabled: true, metric: "tokens", threshold: 50000 },
+        });
+        const p1 = makeUpstream({ id: "p1", priority: 1 });
+        mockFindMany.mockResolvedValue([p0, p1]);
+
+        // Session already bound to highest priority upstream
+        affinityStore.set("key1", "openai", "session-abc", "p0", 1024);
+
+        const result = await selectFromProviderType("openai", undefined, undefined, {
+          apiKeyId: "key1",
+          sessionId: "session-abc",
+          contentLength: 2048,
+        });
+
+        expect(result.upstream.id).toBe("p0");
+        expect(result.affinityMigrated).toBe(false);
       });
     });
   });

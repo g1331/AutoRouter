@@ -323,15 +323,19 @@ describe("proxy route upstream selection", () => {
     // selectFromProviderType was called twice - first without exclusions, second with failed upstream excluded
     // Both calls include allowedUpstreamIds from API key authorization
     expect(selectFromProviderType).toHaveBeenCalledTimes(2);
-    expect(selectFromProviderType).toHaveBeenNthCalledWith(1, "anthropic", undefined, [
-      "up-anthropic-1",
-      "up-anthropic-2",
-    ]);
+    expect(selectFromProviderType).toHaveBeenNthCalledWith(
+      1,
+      "anthropic",
+      undefined,
+      ["up-anthropic-1", "up-anthropic-2"],
+      undefined
+    );
     expect(selectFromProviderType).toHaveBeenNthCalledWith(
       2,
       "anthropic",
       ["up-anthropic-1"],
-      ["up-anthropic-1", "up-anthropic-2"]
+      ["up-anthropic-1", "up-anthropic-2"],
+      undefined
     );
 
     expect(forwardRequest).toHaveBeenCalledTimes(2);
@@ -1084,7 +1088,8 @@ describe("proxy route upstream selection", () => {
       expect(selectFromProviderType).toHaveBeenCalledWith(
         "openai",
         undefined, // excludeIds
-        ["up-privnode"] // allowedUpstreamIds - only authorized upstreams
+        ["up-privnode"], // allowedUpstreamIds - only authorized upstreams
+        undefined // affinityContext
       );
       // Verify the request was forwarded to privnode, not duck
       expect(prepareUpstreamForProxy).toHaveBeenCalledWith(privnodeUpstream);
@@ -1281,15 +1286,19 @@ describe("proxy route upstream selection", () => {
       expect(response.status).toBe(200);
       // Verify both calls to selectFromProviderType included allowedUpstreamIds
       expect(selectFromProviderType).toHaveBeenCalledTimes(2);
-      expect(selectFromProviderType).toHaveBeenNthCalledWith(1, "openai", undefined, [
-        "up-privnode",
-        "up-rightcode",
-      ]);
+      expect(selectFromProviderType).toHaveBeenNthCalledWith(
+        1,
+        "openai",
+        undefined,
+        ["up-privnode", "up-rightcode"],
+        undefined
+      );
       expect(selectFromProviderType).toHaveBeenNthCalledWith(
         2,
         "openai",
         ["up-privnode"], // excludeIds - failed upstream
-        ["up-privnode", "up-rightcode"] // allowedUpstreamIds
+        ["up-privnode", "up-rightcode"], // allowedUpstreamIds
+        undefined // affinityContext
       );
       expect(markUnhealthy).toHaveBeenCalledWith("up-privnode", "HTTP 500 error");
       expect(markHealthy).toHaveBeenCalledWith("up-rightcode", 100);
