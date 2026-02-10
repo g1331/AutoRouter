@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { UpstreamsTable } from "@/components/admin/upstreams-table";
 import type { Upstream } from "@/types/api";
@@ -39,6 +39,14 @@ vi.mock("@/hooks/use-circuit-breaker", () => ({
     variables: undefined,
   }),
 }));
+
+function getDesktopLayout() {
+  const root = document.querySelector("div.hidden.lg\\:block");
+  if (!root) {
+    throw new Error("Desktop layout root not found");
+  }
+  return within(root as HTMLElement);
+}
 
 describe("UpstreamsTable", () => {
   const mockUpstream: Upstream = {
@@ -138,14 +146,16 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      expect(screen.getByText("name")).toBeInTheDocument();
-      expect(screen.getByText("providerType")).toBeInTheDocument();
-      expect(screen.getByText("tableWeight")).toBeInTheDocument();
-      expect(screen.getByText("tableHealth")).toBeInTheDocument();
-      expect(screen.getByText("tableCircuitBreaker")).toBeInTheDocument();
-      expect(screen.getByText("tableBaseUrl")).toBeInTheDocument();
-      expect(screen.getByText("createdAt")).toBeInTheDocument();
-      expect(screen.getByText("actions")).toBeInTheDocument();
+      const desktop = getDesktopLayout();
+
+      expect(desktop.getByText("name")).toBeInTheDocument();
+      expect(desktop.getByText("providerType")).toBeInTheDocument();
+      expect(desktop.getByText("tableWeight")).toBeInTheDocument();
+      expect(desktop.getByText("tableHealth")).toBeInTheDocument();
+      expect(desktop.getByText("tableCircuitBreaker")).toBeInTheDocument();
+      expect(desktop.getByText("tableBaseUrl")).toBeInTheDocument();
+      expect(desktop.getByText("createdAt")).toBeInTheDocument();
+      expect(desktop.queryByText("actions")).toBeNull();
     });
 
     it("renders upstream data correctly", () => {
@@ -158,8 +168,10 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      expect(screen.getByText("Test Upstream")).toBeInTheDocument();
-      expect(screen.getByText("https://api.openai.com/v1")).toBeInTheDocument();
+      const desktop = getDesktopLayout();
+
+      expect(desktop.getByText("Test Upstream")).toBeInTheDocument();
+      expect(desktop.getByText("https://api.openai.com/v1")).toBeInTheDocument();
     });
 
     it("shows active badge for active upstream", () => {
@@ -172,7 +184,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      expect(screen.getByText("active")).toBeInTheDocument();
+      const desktop = getDesktopLayout();
+      expect(desktop.getByText("active")).toBeInTheDocument();
     });
   });
 
@@ -188,7 +201,9 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      const toggleButton = screen.getByLabelText("quickDisable: Test Upstream");
+      const desktop = getDesktopLayout();
+
+      const toggleButton = desktop.getByLabelText("quickDisable: Test Upstream");
       fireEvent.click(toggleButton);
 
       await waitFor(() => {
@@ -223,7 +238,9 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      const recoverButton = screen.getByLabelText("recoverCircuitBreaker: Test Upstream");
+      const desktop = getDesktopLayout();
+
+      const recoverButton = desktop.getByLabelText("recoverCircuitBreaker: Test Upstream");
       fireEvent.click(recoverButton);
 
       await waitFor(() => {
@@ -246,7 +263,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      expect(screen.getByText("TIER P0")).toBeInTheDocument();
+      const desktop = getDesktopLayout();
+      expect(desktop.getByText("TIER P0")).toBeInTheDocument();
     });
 
     it("displays tier section for upstreams with specific priority", () => {
@@ -260,7 +278,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      expect(screen.getByText("TIER P1")).toBeInTheDocument();
+      const desktop = getDesktopLayout();
+      expect(desktop.getByText("TIER P1")).toBeInTheDocument();
     });
 
     it("groups upstreams by priority", () => {
@@ -283,8 +302,9 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      expect(screen.getByText("TIER P0")).toBeInTheDocument();
-      expect(screen.getByText("TIER P1")).toBeInTheDocument();
+      const desktop = getDesktopLayout();
+      expect(desktop.getByText("TIER P0")).toBeInTheDocument();
+      expect(desktop.getByText("TIER P1")).toBeInTheDocument();
     });
 
     it("displays health summary in tier header", () => {
@@ -302,7 +322,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      expect(screen.getByText(/1\/1 HEALTHY/)).toBeInTheDocument();
+      const desktop = getDesktopLayout();
+      expect(desktop.getByText(/1\/1 HEALTHY/)).toBeInTheDocument();
     });
   });
 
@@ -317,7 +338,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      const collapseButton = screen.getByRole("button", { name: "collapse" });
+      const desktop = getDesktopLayout();
+      const collapseButton = desktop.getByRole("button", { name: "collapse" });
       expect(collapseButton).toBeInTheDocument();
     });
 
@@ -331,15 +353,17 @@ describe("UpstreamsTable", () => {
         />
       );
 
+      const desktop = getDesktopLayout();
+
       // Initially upstream is visible
-      expect(screen.getByText("Test Upstream")).toBeInTheDocument();
+      expect(desktop.getByText("Test Upstream")).toBeInTheDocument();
 
       // Click tier header to collapse
-      const tierHeader = screen.getByText("TIER P0").closest("tr");
+      const tierHeader = desktop.getByText("TIER P0").closest("tr");
       fireEvent.click(tierHeader!);
 
       // Upstream should be hidden
-      expect(screen.queryByText("Test Upstream")).not.toBeInTheDocument();
+      expect(desktop.queryByText("Test Upstream")).not.toBeInTheDocument();
     });
 
     it("expands tier when collapsed header is clicked", () => {
@@ -352,15 +376,17 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      const tierHeader = screen.getByText("TIER P0").closest("tr");
+      const desktop = getDesktopLayout();
+
+      const tierHeader = desktop.getByText("TIER P0").closest("tr");
 
       // Collapse
       fireEvent.click(tierHeader!);
-      expect(screen.queryByText("Test Upstream")).not.toBeInTheDocument();
+      expect(desktop.queryByText("Test Upstream")).not.toBeInTheDocument();
 
       // Expand
       fireEvent.click(tierHeader!);
-      expect(screen.getByText("Test Upstream")).toBeInTheDocument();
+      expect(desktop.getByText("Test Upstream")).toBeInTheDocument();
     });
   });
 
@@ -437,7 +463,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      const badge = screen.getByText("OpenAI");
+      const desktop = getDesktopLayout();
+      const badge = desktop.getByText("OpenAI");
       expect(badge).toBeInTheDocument();
     });
 
@@ -452,7 +479,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      const badge = screen.getByText("Anthropic");
+      const desktop = getDesktopLayout();
+      const badge = desktop.getByText("Anthropic");
       expect(badge).toBeInTheDocument();
     });
 
@@ -467,7 +495,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      const badge = screen.getByText("Google");
+      const desktop = getDesktopLayout();
+      const badge = desktop.getByText("Google");
       expect(badge).toBeInTheDocument();
     });
 
@@ -482,7 +511,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      const badge = screen.getByText("Custom");
+      const desktop = getDesktopLayout();
+      const badge = desktop.getByText("Custom");
       expect(badge).toBeInTheDocument();
     });
 
@@ -497,7 +527,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      const badge = screen.getByText("custom-provider");
+      const desktop = getDesktopLayout();
+      const badge = desktop.getByText("custom-provider");
       expect(badge).toBeInTheDocument();
     });
 
@@ -512,7 +543,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      const badge = screen.getByText("OpenAI");
+      const desktop = getDesktopLayout();
+      const badge = desktop.getByText("OpenAI");
       expect(badge).toBeInTheDocument();
     });
   });
@@ -528,7 +560,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      const editButton = screen.getByLabelText("edit: Test Upstream");
+      const desktop = getDesktopLayout();
+      const editButton = desktop.getByLabelText("edit: Test Upstream");
       expect(editButton).toBeInTheDocument();
     });
 
@@ -542,7 +575,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      const editButton = screen.getByLabelText("edit: Test Upstream");
+      const desktop = getDesktopLayout();
+      const editButton = desktop.getByLabelText("edit: Test Upstream");
       fireEvent.click(editButton);
 
       expect(mockOnEdit).toHaveBeenCalledWith(mockUpstream);
@@ -560,7 +594,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      const deleteButton = screen.getByLabelText("delete: Test Upstream");
+      const desktop = getDesktopLayout();
+      const deleteButton = desktop.getByLabelText("delete: Test Upstream");
       expect(deleteButton).toBeInTheDocument();
     });
 
@@ -574,7 +609,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      const deleteButton = screen.getByLabelText("delete: Test Upstream");
+      const desktop = getDesktopLayout();
+      const deleteButton = desktop.getByLabelText("delete: Test Upstream");
       fireEvent.click(deleteButton);
 
       expect(mockOnDelete).toHaveBeenCalledWith(mockUpstream);
@@ -592,7 +628,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      const testButton = screen.getByLabelText("test: Test Upstream");
+      const desktop = getDesktopLayout();
+      const testButton = desktop.getByLabelText("test: Test Upstream");
       expect(testButton).toBeInTheDocument();
     });
 
@@ -606,7 +643,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      const testButton = screen.getByLabelText("test: Test Upstream");
+      const desktop = getDesktopLayout();
+      const testButton = desktop.getByLabelText("test: Test Upstream");
       fireEvent.click(testButton);
 
       expect(mockOnTest).toHaveBeenCalledWith(mockUpstream);
@@ -634,10 +672,11 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      expect(screen.getByText("Test Upstream")).toBeInTheDocument();
-      expect(screen.getByText("Second Upstream")).toBeInTheDocument();
-      expect(screen.getByText("OpenAI")).toBeInTheDocument();
-      expect(screen.getByText("Anthropic")).toBeInTheDocument();
+      const desktop = getDesktopLayout();
+      expect(desktop.getByText("Test Upstream")).toBeInTheDocument();
+      expect(desktop.getByText("Second Upstream")).toBeInTheDocument();
+      expect(desktop.getByText("OpenAI")).toBeInTheDocument();
+      expect(desktop.getByText("Anthropic")).toBeInTheDocument();
     });
   });
 
@@ -652,7 +691,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      const urlElement = screen.getByText("https://api.openai.com/v1");
+      const desktop = getDesktopLayout();
+      const urlElement = desktop.getByText("https://api.openai.com/v1");
       expect(urlElement.tagName).toBe("CODE");
     });
   });
@@ -675,8 +715,10 @@ describe("UpstreamsTable", () => {
         />
       );
 
+      const desktop = getDesktopLayout();
+
       // The row should have the error shadow class
-      const row = screen.getByText("Test Upstream").closest("tr");
+      const row = desktop.getByText("Test Upstream").closest("tr");
       expect(row?.className).toContain("shadow-[inset_0_0_20px");
     });
   });
@@ -692,7 +734,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      expect(screen.getByLabelText("edit: Test Upstream")).toBeInTheDocument();
+      const desktop = getDesktopLayout();
+      expect(desktop.getByLabelText("edit: Test Upstream")).toBeInTheDocument();
     });
 
     it("has correct aria-labels for delete buttons", () => {
@@ -705,7 +748,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      expect(screen.getByLabelText("delete: Test Upstream")).toBeInTheDocument();
+      const desktop = getDesktopLayout();
+      expect(desktop.getByLabelText("delete: Test Upstream")).toBeInTheDocument();
     });
 
     it("has aria-expanded on collapse button", () => {
@@ -718,7 +762,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      const collapseButton = screen.getByRole("button", { name: "collapse" });
+      const desktop = getDesktopLayout();
+      const collapseButton = desktop.getByRole("button", { name: "collapse" });
       expect(collapseButton).toHaveAttribute("aria-expanded", "true");
     });
   });

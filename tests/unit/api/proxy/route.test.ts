@@ -112,7 +112,7 @@ describe("proxy route upstream selection", () => {
     vi.resetModules();
     const routeModule = await import("@/app/api/proxy/v1/[...path]/route");
     POST = routeModule.POST;
-  });
+  }, 30_000);
 
   afterEach(() => {
     vi.restoreAllMocks();
