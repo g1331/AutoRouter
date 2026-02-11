@@ -199,6 +199,8 @@ export function RoutingDecisionTimeline({
   const hasFailoverWithoutHistory = failoverAttempts > 0 && !hasFailoverHistory;
   const isSuccess =
     statusCode !== null && statusCode !== undefined && statusCode >= 200 && statusCode < 300;
+  const isError =
+    statusCode !== null && statusCode !== undefined && (statusCode < 200 || statusCode >= 300);
 
   return (
     <div className="space-y-0 font-mono text-xs">
@@ -344,7 +346,12 @@ export function RoutingDecisionTimeline({
             <Server className="w-3 h-3 text-amber-600" />
             <span className="text-amber-700">{t("timelineFinalUpstream")}:</span>
             <span
-              className={cn("font-medium", isSuccess ? "text-status-success" : "text-status-error")}
+              className={cn(
+                "font-medium",
+                isSuccess && "text-status-success",
+                isError && "text-status-error",
+                !isSuccess && !isError && "text-amber-500"
+              )}
             >
               {upstreamName || "-"}
             </span>

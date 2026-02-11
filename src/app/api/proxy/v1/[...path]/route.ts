@@ -506,7 +506,7 @@ async function extractRequestContext(
     }
 
     const bodyJson = JSON.parse(bodyText) as Record<string, unknown>;
-    const model = (bodyJson.model as string) || null;
+    const model = typeof bodyJson.model === "string" ? bodyJson.model || null : null;
 
     // Extract session ID based on provider type
     const sessionId = providerType
