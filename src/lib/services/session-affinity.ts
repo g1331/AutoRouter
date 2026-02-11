@@ -37,6 +37,7 @@ export interface AffinityMigrationConfig {
 const DEFAULT_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_TTL_MS = 30 * 60 * 1000; // 30 minutes
 const CLEANUP_INTERVAL_MS = 60 * 1000; // 1 minute
+const MAX_CACHE_ENTRIES = 10_000;
 
 // ============================================================================
 // Session Affinity Store
@@ -48,7 +49,8 @@ export class SessionAffinityStore {
 
   constructor(
     private defaultTtlMs: number = DEFAULT_TTL_MS,
-    private maxTtlMs: number = MAX_TTL_MS
+    private maxTtlMs: number = MAX_TTL_MS,
+    private maxEntries: number = MAX_CACHE_ENTRIES
   ) {
     this.startCleanupTimer();
   }
@@ -118,6 +120,11 @@ export class SessionAffinityStore {
       contentLength,
       cumulativeTokens,
     });
+
+    // Evict oldest entry when capacity exceeded
+    if (this.cache.size > this.maxEntries) {
+      this.evictOldest();
+    }
   }
 
   /**
@@ -136,8 +143,12 @@ export class SessionAffinityStore {
       return;
     }
 
-    // Calculate total input tokens including cache tokens
-    entry.cumulativeTokens += usage.totalInputTokens;
+    if (Number.isFinite(usage.totalInputTokens) && usage.totalInputTokens > 0) {
+      entry.cumulativeTokens += usage.totalInputTokens;
+    }
+
+    // Refresh TTL so entry doesn't expire during long-running requests
+    entry.lastAccessedAt = Date.now();
   }
 
   /**
@@ -174,6 +185,25 @@ export class SessionAffinityStore {
    */
   clear(): void {
     this.cache.clear();
+  }
+
+  /**
+   * Evict the least recently accessed entry
+   */
+  private evictOldest(): void {
+    let oldestKey: string | null = null;
+    let oldestTime = Infinity;
+
+    for (const [key, entry] of this.cache.entries()) {
+      if (entry.lastAccessedAt < oldestTime) {
+        oldestTime = entry.lastAccessedAt;
+        oldestKey = key;
+      }
+    }
+
+    if (oldestKey) {
+      this.cache.delete(oldestKey);
+    }
   }
 
   /**
