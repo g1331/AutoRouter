@@ -472,6 +472,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "routing_duration_ms": {
+          "name": "routing_duration_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "error_message": {
           "name": "error_message",
           "type": "text",

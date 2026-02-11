@@ -632,9 +632,7 @@ describe("load-balancer", () => {
         affinityStore.set("key1", "openai", "session-abc", "p1", 1024);
         // Set cumulative tokens below threshold
         affinityStore.updateCumulativeTokens("key1", "openai", "session-abc", {
-          inputTokens: 1000,
-          cacheReadTokens: 0,
-          cacheCreationTokens: 0,
+          totalInputTokens: 1000,
         });
 
         const result = await selectFromProviderType("openai", undefined, undefined, {
@@ -661,9 +659,7 @@ describe("load-balancer", () => {
         affinityStore.set("key1", "openai", "session-abc", "p1", 1024);
         // Set cumulative tokens above threshold
         affinityStore.updateCumulativeTokens("key1", "openai", "session-abc", {
-          inputTokens: 60000,
-          cacheReadTokens: 0,
-          cacheCreationTokens: 0,
+          totalInputTokens: 60000,
         });
 
         const result = await selectFromProviderType("openai", undefined, undefined, {

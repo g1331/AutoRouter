@@ -38,9 +38,7 @@ describe("SessionAffinityStore", () => {
     it("should update existing entry preserving cumulative tokens", () => {
       store.set("key1", "anthropic", "session-abc", "upstream-1", 1024);
       store.updateCumulativeTokens("key1", "anthropic", "session-abc", {
-        inputTokens: 100,
-        cacheReadTokens: 50,
-        cacheCreationTokens: 25,
+        totalInputTokens: 175,
       });
 
       // Update to new upstream
@@ -160,9 +158,7 @@ describe("SessionAffinityStore", () => {
       store.set("key1", "anthropic", "session-abc", "upstream-1", 1024);
 
       store.updateCumulativeTokens("key1", "anthropic", "session-abc", {
-        inputTokens: 100,
-        cacheReadTokens: 50,
-        cacheCreationTokens: 25,
+        totalInputTokens: 175,
       });
 
       const entry = store.get("key1", "anthropic", "session-abc");
@@ -173,15 +169,11 @@ describe("SessionAffinityStore", () => {
       store.set("key1", "anthropic", "session-abc", "upstream-1", 1024);
 
       store.updateCumulativeTokens("key1", "anthropic", "session-abc", {
-        inputTokens: 100,
-        cacheReadTokens: 0,
-        cacheCreationTokens: 0,
+        totalInputTokens: 100,
       });
 
       store.updateCumulativeTokens("key1", "anthropic", "session-abc", {
-        inputTokens: 200,
-        cacheReadTokens: 50,
-        cacheCreationTokens: 25,
+        totalInputTokens: 275,
       });
 
       const entry = store.get("key1", "anthropic", "session-abc");
@@ -191,9 +183,7 @@ describe("SessionAffinityStore", () => {
     it("should do nothing for non-existent entry", () => {
       // Should not throw
       store.updateCumulativeTokens("key1", "anthropic", "non-existent", {
-        inputTokens: 100,
-        cacheReadTokens: 50,
-        cacheCreationTokens: 25,
+        totalInputTokens: 175,
       });
 
       expect(store.size()).toBe(0);

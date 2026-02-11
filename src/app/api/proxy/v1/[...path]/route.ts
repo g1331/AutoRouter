@@ -776,9 +776,14 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           // Update session affinity cumulative tokens if we have a session
           if (affinityContext?.sessionId && providerType && usage) {
             const affinityUsage: AffinityUsage = {
-              inputTokens: usage.promptTokens || 0,
-              cacheReadTokens: usage.cacheReadTokens || 0,
-              cacheCreationTokens: usage.cacheCreationTokens || 0,
+              // OpenAI: promptTokens already includes cacheReadTokens (subset of prompt_tokens)
+              // Anthropic: promptTokens excludes cache tokens, add them separately
+              totalInputTokens:
+                providerType === "anthropic"
+                  ? (usage.promptTokens || 0) +
+                    (usage.cacheReadTokens || 0) +
+                    (usage.cacheCreationTokens || 0)
+                  : usage.promptTokens || 0,
             };
             affinityStore.updateCumulativeTokens(
               affinityContext.apiKeyId,
@@ -924,9 +929,14 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       // Update session affinity cumulative tokens if we have a session
       if (affinityContext?.sessionId && providerType && usage) {
         const affinityUsage: AffinityUsage = {
-          inputTokens: usage.promptTokens || 0,
-          cacheReadTokens: usage.cacheReadTokens || 0,
-          cacheCreationTokens: usage.cacheCreationTokens || 0,
+          // OpenAI: promptTokens already includes cacheReadTokens (subset of prompt_tokens)
+          // Anthropic: promptTokens excludes cache tokens, add them separately
+          totalInputTokens:
+            providerType === "anthropic"
+              ? (usage.promptTokens || 0) +
+                (usage.cacheReadTokens || 0) +
+                (usage.cacheCreationTokens || 0)
+              : usage.promptTokens || 0,
         };
         affinityStore.updateCumulativeTokens(
           affinityContext.apiKeyId,

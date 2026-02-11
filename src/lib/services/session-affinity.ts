@@ -21,9 +21,7 @@ export interface AffinityEntry {
 }
 
 export interface AffinityUsage {
-  inputTokens: number;
-  cacheReadTokens: number;
-  cacheCreationTokens: number;
+  totalInputTokens: number;
 }
 
 export interface AffinityMigrationConfig {
@@ -139,9 +137,7 @@ export class SessionAffinityStore {
     }
 
     // Calculate total input tokens including cache tokens
-    const totalInputTokens = usage.inputTokens + usage.cacheReadTokens + usage.cacheCreationTokens;
-
-    entry.cumulativeTokens += totalInputTokens;
+    entry.cumulativeTokens += usage.totalInputTokens;
   }
 
   /**
@@ -352,6 +348,9 @@ export function shouldMigrate(
   if (config.metric === "tokens") {
     conversationSize = cumulativeTokens;
   } else {
+    if (!Number.isFinite(contentLength) || contentLength <= 0) {
+      return null;
+    }
     conversationSize = contentLength;
   }
 
