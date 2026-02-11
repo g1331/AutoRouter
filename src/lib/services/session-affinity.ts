@@ -283,6 +283,8 @@ function extractAnthropicSessionId(bodyJson: Record<string, unknown> | null): st
   return null;
 }
 
+const MAX_SESSION_ID_LENGTH = 128;
+
 /**
  * Extract session ID from OpenAI request
  * Uses session_id header directly
@@ -290,10 +292,13 @@ function extractAnthropicSessionId(bodyJson: Record<string, unknown> | null): st
 function extractOpenAISessionId(
   headers: Record<string, string | string[] | undefined>
 ): string | null {
-  const sessionId = headers["session_id"];
+  const raw = headers["session_id"] ?? headers["session-id"];
 
-  if (typeof sessionId === "string" && sessionId.length > 0) {
-    return sessionId;
+  if (typeof raw === "string") {
+    const sessionId = raw.trim();
+    if (sessionId.length > 0 && sessionId.length <= MAX_SESSION_ID_LENGTH) {
+      return sessionId;
+    }
   }
 
   return null;

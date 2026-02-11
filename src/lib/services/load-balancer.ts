@@ -429,7 +429,7 @@ export async function selectFromProviderType(
 
       return {
         ...result,
-        affinityHit: false,
+        affinityHit: true,
         affinityMigrated: false,
       };
     }

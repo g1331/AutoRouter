@@ -566,7 +566,7 @@ describe("load-balancer", () => {
         });
 
         expect(result.upstream.id).toBe("u2");
-        expect(result.affinityHit).toBe(false);
+        expect(result.affinityHit).toBe(true);
       });
 
       it("should update affinity cache when reselecting due to unavailable upstream", async () => {
