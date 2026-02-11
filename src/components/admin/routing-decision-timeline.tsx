@@ -390,20 +390,20 @@ function TimelineStage({
   isLast?: boolean;
   children: React.ReactNode;
 }) {
-  const circledNumbers = ["", "\u2460", "\u2461", "\u2462", "\u2463", "\u2464"];
   return (
-    <div className={cn("relative pl-6", !isLast && "pb-3")}>
+    <div className={cn("relative pl-8", !isLast && "pb-3")}>
       {/* Vertical connector line */}
       {!isLast && (
-        <div className="absolute left-[9px] top-5 bottom-0 w-px border-l border-dashed border-surface-500" />
+        <div className="absolute left-[11px] top-7 bottom-0 w-px border-l border-dashed border-surface-500" />
       )}
-      {/* Stage number */}
-      <div className="absolute left-0 top-0 text-amber-500 font-medium text-xs">
-        {circledNumbers[number] || number}
-      </div>
-      {/* Stage header */}
-      <div className="font-semibold text-amber-500 mb-1 uppercase text-xs tracking-wider">
-        {label}
+      {/* Stage header with CSS circle number */}
+      <div className="flex items-center gap-2 mb-1">
+        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 text-black font-bold text-[10px]">
+          {number}
+        </span>
+        <span className="font-semibold text-amber-500 uppercase text-xs tracking-wider">
+          {label}
+        </span>
       </div>
       {/* Stage content */}
       <div className="text-amber-700">{children}</div>
