@@ -55,6 +55,7 @@ describe("request-logger", () => {
           reasoningTokens: 0,
           cacheCreationTokens: 0,
           cacheReadTokens: 0,
+          rawInputTokens: 100,
         });
       });
 
@@ -76,6 +77,7 @@ describe("request-logger", () => {
           reasoningTokens: 0,
           cacheCreationTokens: 0,
           cacheReadTokens: 0,
+          rawInputTokens: 100,
         });
       });
 
@@ -98,6 +100,7 @@ describe("request-logger", () => {
           reasoningTokens: 0,
           cacheCreationTokens: 0,
           cacheReadTokens: 0,
+          rawInputTokens: 100,
         });
       });
 
@@ -118,6 +121,7 @@ describe("request-logger", () => {
           reasoningTokens: 0,
           cacheCreationTokens: 0,
           cacheReadTokens: 0,
+          rawInputTokens: 100,
         });
       });
     });
@@ -143,6 +147,7 @@ describe("request-logger", () => {
           reasoningTokens: 0,
           cacheCreationTokens: 0,
           cacheReadTokens: 0,
+          rawInputTokens: 80,
         });
       });
 
@@ -163,6 +168,7 @@ describe("request-logger", () => {
           reasoningTokens: 0,
           cacheCreationTokens: 0,
           cacheReadTokens: 0,
+          rawInputTokens: 50,
         });
       });
 
@@ -183,6 +189,7 @@ describe("request-logger", () => {
           reasoningTokens: 0,
           cacheCreationTokens: 0,
           cacheReadTokens: 0,
+          rawInputTokens: 0,
         });
       });
     });
@@ -210,6 +217,7 @@ describe("request-logger", () => {
           reasoningTokens: 0,
           cacheCreationTokens: 0,
           cacheReadTokens: 800,
+          rawInputTokens: 1000,
         });
       });
 
@@ -235,6 +243,7 @@ describe("request-logger", () => {
           reasoningTokens: 150,
           cacheCreationTokens: 0,
           cacheReadTokens: 0,
+          rawInputTokens: 500,
         });
       });
 
@@ -265,6 +274,7 @@ describe("request-logger", () => {
           reasoningTokens: 300,
           cacheCreationTokens: 0,
           cacheReadTokens: 1500,
+          rawInputTokens: 2000,
         });
       });
 
@@ -288,6 +298,7 @@ describe("request-logger", () => {
           reasoningTokens: 0,
           cacheCreationTokens: 0,
           cacheReadTokens: 0,
+          rawInputTokens: 100,
         });
       });
     });
@@ -312,6 +323,7 @@ describe("request-logger", () => {
           reasoningTokens: 0,
           cacheCreationTokens: 400,
           cacheReadTokens: 0,
+          rawInputTokens: 500,
         });
       });
 
@@ -334,6 +346,7 @@ describe("request-logger", () => {
           reasoningTokens: 0,
           cacheCreationTokens: 0,
           cacheReadTokens: 800,
+          rawInputTokens: 1000,
         });
       });
 
@@ -357,6 +370,7 @@ describe("request-logger", () => {
           reasoningTokens: 0,
           cacheCreationTokens: 500,
           cacheReadTokens: 1200,
+          rawInputTokens: 2000,
         });
       });
 
@@ -380,6 +394,7 @@ describe("request-logger", () => {
           reasoningTokens: 0,
           cacheCreationTokens: 26856,
           cacheReadTokens: 0,
+          rawInputTokens: 0,
         });
       });
     });
@@ -396,6 +411,7 @@ describe("request-logger", () => {
           reasoningTokens: 0,
           cacheCreationTokens: 0,
           cacheReadTokens: 0,
+          rawInputTokens: 0,
         });
       });
 
@@ -415,6 +431,7 @@ describe("request-logger", () => {
           reasoningTokens: 0,
           cacheCreationTokens: 0,
           cacheReadTokens: 0,
+          rawInputTokens: 0,
         });
       });
 
@@ -433,6 +450,7 @@ describe("request-logger", () => {
           reasoningTokens: 0,
           cacheCreationTokens: 0,
           cacheReadTokens: 0,
+          rawInputTokens: 0,
         });
       });
 
@@ -454,6 +472,7 @@ describe("request-logger", () => {
           reasoningTokens: 0,
           cacheCreationTokens: 0,
           cacheReadTokens: 0,
+          rawInputTokens: 0,
         });
       });
 
@@ -476,6 +495,7 @@ describe("request-logger", () => {
           reasoningTokens: 0,
           cacheCreationTokens: 0,
           cacheReadTokens: 0,
+          rawInputTokens: 100,
         });
       });
 
@@ -494,6 +514,7 @@ describe("request-logger", () => {
           reasoningTokens: 0,
           cacheCreationTokens: 0,
           cacheReadTokens: 0,
+          rawInputTokens: 0,
         });
       });
     });

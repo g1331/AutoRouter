@@ -481,6 +481,42 @@ function wrapStreamWithConnectionTracking(
 }
 
 /**
+ * Compute total input tokens for affinity tracking, avoiding double-count.
+ *
+ * OpenAI: promptTokens already includes cached tokens (subset of prompt_tokens).
+ * Anthropic: when input_tokens > 0, total = input_tokens + cache tokens;
+ * when input_tokens === 0 (fallback), promptTokens already equals cache tokens.
+ * Use rawInputTokens to distinguish these cases precisely.
+ */
+function computeAffinityTokens(
+  providerType: ProviderType,
+  usage: {
+    promptTokens: number;
+    cacheReadTokens?: number;
+    cacheCreationTokens?: number;
+    rawInputTokens?: number;
+  }
+): number {
+  const prompt = usage.promptTokens || 0;
+
+  if (providerType !== "anthropic") {
+    return prompt;
+  }
+
+  const rawInput = usage.rawInputTokens ?? 0;
+  const cacheRead = usage.cacheReadTokens || 0;
+  const cacheCreation = usage.cacheCreationTokens || 0;
+
+  // rawInputTokens > 0: promptTokens is the raw input_tokens (excludes cache), add cache separately
+  // rawInputTokens === 0: promptTokens was already set to cacheRead + cacheCreation by fallback
+  if (rawInput > 0) {
+    return rawInput + cacheRead + cacheCreation;
+  }
+
+  return prompt;
+}
+
+/**
  * Request context extracted from incoming request
  */
 interface RequestContext {
@@ -774,14 +810,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           // Update session affinity cumulative tokens if we have a session
           if (affinityContext?.sessionId && providerType && usage) {
             const affinityUsage: AffinityUsage = {
-              // OpenAI: promptTokens already includes cacheReadTokens (subset of prompt_tokens)
-              // Anthropic: promptTokens excludes cache tokens, add them separately
-              totalInputTokens:
-                providerType === "anthropic"
-                  ? (usage.promptTokens || 0) +
-                    (usage.cacheReadTokens || 0) +
-                    (usage.cacheCreationTokens || 0)
-                  : usage.promptTokens || 0,
+              totalInputTokens: computeAffinityTokens(providerType, usage),
             };
             affinityStore.updateCumulativeTokens(
               affinityContext.apiKeyId,
@@ -927,14 +956,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       // Update session affinity cumulative tokens if we have a session
       if (affinityContext?.sessionId && providerType && usage) {
         const affinityUsage: AffinityUsage = {
-          // OpenAI: promptTokens already includes cacheReadTokens (subset of prompt_tokens)
-          // Anthropic: promptTokens excludes cache tokens, add them separately
-          totalInputTokens:
-            providerType === "anthropic"
-              ? (usage.promptTokens || 0) +
-                (usage.cacheReadTokens || 0) +
-                (usage.cacheCreationTokens || 0)
-              : usage.promptTokens || 0,
+          totalInputTokens: computeAffinityTokens(providerType, usage),
         };
         affinityStore.updateCumulativeTokens(
           affinityContext.apiKeyId,

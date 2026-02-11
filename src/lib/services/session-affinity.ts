@@ -305,7 +305,7 @@ function extractAnthropicSessionId(bodyJson: Record<string, unknown> | null): st
   }
 
   // Extract UUID from "..._session_{uuid}" format
-  const match = userId.match(/_session_([a-f0-9-]{36})/i);
+  const match = userId.match(/(?:^|_)session_([a-f0-9-]{36})/i);
   if (match) {
     return match[1].toLowerCase();
   }

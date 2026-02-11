@@ -349,6 +349,7 @@ export function extractTokenUsage(responseBody: Record<string, unknown> | null):
   reasoningTokens: number;
   cacheCreationTokens: number;
   cacheReadTokens: number;
+  rawInputTokens: number;
 } {
   const defaultResult = {
     promptTokens: 0,
@@ -358,6 +359,7 @@ export function extractTokenUsage(responseBody: Record<string, unknown> | null):
     reasoningTokens: 0,
     cacheCreationTokens: 0,
     cacheReadTokens: 0,
+    rawInputTokens: 0,
   };
 
   if (!responseBody) {
@@ -405,6 +407,7 @@ export function extractTokenUsage(responseBody: Record<string, unknown> | null):
       reasoningTokens,
       cacheCreationTokens: 0,
       cacheReadTokens: cachedTokens, // OpenAI cached_tokens is equivalent to cache_read
+      rawInputTokens: promptTokens,
     };
   }
 
@@ -435,6 +438,7 @@ export function extractTokenUsage(responseBody: Record<string, unknown> | null):
       reasoningTokens: 0,
       cacheCreationTokens,
       cacheReadTokens,
+      rawInputTokens: inputTokens,
     };
   }
 
