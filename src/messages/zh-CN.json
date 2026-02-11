@@ -267,7 +267,7 @@
     "timelineAffinityMigrated": "已迁移",
     "timelineNoSession": "无会话",
     "timelineSelected": "选中",
-    "timelineDirectSuccess": "直接成功，无故障转移",
+    "timelineDirectSuccess": "未触发故障转移",
     "timelineFinalUpstream": "上游",
     "timelineTotalDuration": "总耗时",
     "timelineRoutingOverhead": "决策层耗时",

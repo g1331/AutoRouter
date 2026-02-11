@@ -267,7 +267,7 @@
     "timelineAffinityMigrated": "Migrated",
     "timelineNoSession": "No session",
     "timelineSelected": "Selected",
-    "timelineDirectSuccess": "Direct success, no failover",
+    "timelineDirectSuccess": "No failover triggered",
     "timelineFinalUpstream": "Upstream",
     "timelineTotalDuration": "Total duration",
     "timelineRoutingOverhead": "Routing overhead",

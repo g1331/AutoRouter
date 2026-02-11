@@ -683,9 +683,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     let upstreamForLogging: Upstream;
 
     // Prepare affinity context if session ID is available
-    const contentLength = request.headers.get("content-length")
-      ? parseInt(request.headers.get("content-length")!, 10)
-      : 0;
+    const contentLength = parseInt(request.headers.get("content-length") ?? "", 10) || 0;
     const affinityContext = sessionId
       ? {
           apiKeyId: validApiKey.id,
