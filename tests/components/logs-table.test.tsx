@@ -807,9 +807,9 @@ describe("LogsTable", () => {
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
       fireEvent.click(expandButton);
 
-      // Check for grid layout with two columns
-      const gridContainer = container.querySelector("[class*='grid'][class*='grid-cols']");
-      expect(gridContainer).toBeInTheDocument();
+      // Check for flex layout with two columns
+      const flexContainer = container.querySelector("[class*='flex'][class*='items-start']");
+      expect(flexContainer).toBeInTheDocument();
     });
 
     it("shows error details in terminal style for error rows", () => {

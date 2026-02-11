@@ -268,6 +268,7 @@
     "timelineNoSession": "无会话",
     "timelineSelected": "选中",
     "timelineDirectSuccess": "未触发故障转移",
+    "timelineFailoverNoDetails": "发生过故障转移（{count} 次尝试），详情不可用",
     "timelineFinalUpstream": "上游",
     "timelineTotalDuration": "总耗时",
     "timelineRoutingOverhead": "决策层耗时",

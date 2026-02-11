@@ -195,7 +195,8 @@ export function RoutingDecisionTimeline({
 
   // ---------- Expanded View: 5-Stage Timeline ----------
   const hasSession = !!sessionId;
-  const hasFailover = failoverAttempts > 0 && failoverHistory && failoverHistory.length > 0;
+  const hasFailoverHistory = failoverAttempts > 0 && failoverHistory && failoverHistory.length > 0;
+  const hasFailoverWithoutHistory = failoverAttempts > 0 && !hasFailoverHistory;
   const isSuccess =
     statusCode !== null && statusCode !== undefined && statusCode >= 200 && statusCode < 300;
 
@@ -322,11 +323,15 @@ export function RoutingDecisionTimeline({
 
       {/* Stage 4: Execution & Retries */}
       <TimelineStage number={4} label={t("timelineExecutionRetries")}>
-        {hasFailover ? (
+        {hasFailoverHistory ? (
           <RetryTimeline
             failoverHistory={failoverHistory!}
             failoverDurationMs={failoverDurationMs ?? null}
           />
+        ) : hasFailoverWithoutHistory ? (
+          <div className="text-amber-600">
+            {t("timelineFailoverNoDetails", { count: failoverAttempts })}
+          </div>
         ) : (
           <div className="text-amber-700">{t("timelineDirectSuccess")}</div>
         )}
@@ -474,7 +479,7 @@ function RetryTimeline({
             <div className="pl-2 space-y-0.5">
               <div className="flex items-center gap-2 text-amber-700">
                 <span className="tabular-nums">{formatAttemptTime(attempt.attempted_at)}</span>
-                <span>{attempt.upstream_name}</span>
+                <span>{attempt.upstream_name || t("upstreamUnknown")}</span>
                 <span className="text-amber-500">●</span>
               </div>
               <div className="flex items-center gap-2">
