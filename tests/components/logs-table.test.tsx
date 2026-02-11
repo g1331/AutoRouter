@@ -37,6 +37,7 @@ describe("LogsTable", () => {
     cache_read_tokens: 0,
     status_code: 200,
     duration_ms: 1500,
+    routing_duration_ms: null,
     error_message: null,
     routing_type: null,
     group_name: null,
@@ -44,6 +45,10 @@ describe("LogsTable", () => {
     failover_attempts: 0,
     failover_history: null,
     routing_decision: null,
+    priority_tier: null,
+    session_id: null,
+    affinity_hit: false,
+    affinity_migrated: false,
     created_at: new Date().toISOString(),
   };
 
@@ -733,7 +738,7 @@ describe("LogsTable", () => {
       expect(screen.getByText("tokenTotal")).toBeInTheDocument();
     });
 
-    it("shows routing decision in expanded view when available", () => {
+    it("shows routing decision timeline in expanded view when available", () => {
       const logWithRouting: RequestLog = {
         ...logWithFailoverBase,
         routing_decision: mockRoutingDecision,
@@ -745,20 +750,21 @@ describe("LogsTable", () => {
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
       fireEvent.click(expandButton);
 
-      // Both token details and routing decision should be visible
+      // Both token details and timeline stages should be visible
       expect(screen.getByText("tokenDetails")).toBeInTheDocument();
-      expect(screen.getByText("tooltipModelResolution")).toBeInTheDocument();
+      expect(screen.getByText("timelineModelResolution")).toBeInTheDocument();
     });
 
-    it("shows noRoutingDecision message when routing decision is null", () => {
+    it("shows session affinity stage when routing decision is null", () => {
       render(<LogsTable logs={[logWithFailoverBase]} />);
 
       // Click expand button
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
       fireEvent.click(expandButton);
 
-      // Should show "no routing decision" message
-      expect(screen.getByText("noRoutingDecision")).toBeInTheDocument();
+      // Timeline still renders session affinity and execution stages even without routing decision
+      expect(screen.getByText("timelineSessionAffinity")).toBeInTheDocument();
+      expect(screen.getByText("timelineExecutionRetries")).toBeInTheDocument();
     });
 
     it("collapses row on second click", () => {
@@ -775,31 +781,21 @@ describe("LogsTable", () => {
       expect(screen.queryByText("tokenDetails")).not.toBeInTheDocument();
     });
 
-    it("shows failover history with terminal-style formatting", () => {
+    it("shows failover history in timeline retry format", () => {
       render(<LogsTable logs={[logWithFailoverBase]} />);
 
       // Click expand button
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
       fireEvent.click(expandButton);
 
-      // Failover history should be visible with terminal-style formatting
-      expect(screen.getByText(/failoverDetails/)).toBeInTheDocument();
-      // Check for the FAILOVER line with upstream name
-      expect(screen.getByText(/FAILOVER: failed-upstream/)).toBeInTheDocument();
+      // Retry timeline should show attempt with upstream name and error message
+      expect(screen.getAllByText(/retryAttempt/).length).toBeGreaterThan(0);
+      expect(screen.getByText(/failed-upstream/)).toBeInTheDocument();
       expect(screen.getByText(/Request timed out/)).toBeInTheDocument();
-      const expectedAttemptTime = new Date(attemptedAt).toLocaleString("en", {
-        hour12: false,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      });
-      expect(screen.getByText(new RegExp(expectedAttemptTime))).toBeInTheDocument();
+      expect(screen.getByText(/retryTotalDuration/)).toBeInTheDocument();
     });
 
-    it("displays two-column layout with token details on left and routing on right", () => {
+    it("displays two-column layout with timeline and token details", () => {
       const logWithRouting: RequestLog = {
         ...logWithFailoverBase,
         routing_decision: mockRoutingDecision,
@@ -811,8 +807,8 @@ describe("LogsTable", () => {
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
       fireEvent.click(expandButton);
 
-      // Check for grid layout
-      const gridContainer = container.querySelector(".grid.grid-cols-2");
+      // Check for grid layout with two columns
+      const gridContainer = container.querySelector("[class*='grid'][class*='grid-cols']");
       expect(gridContainer).toBeInTheDocument();
     });
 

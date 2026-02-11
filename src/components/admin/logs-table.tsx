@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useRef, Fragment } from "react";
 import { formatDistanceToNow, subDays, startOfDay } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
-import { ScrollText, Filter, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
+import { ScrollText, Filter, ChevronDown, ChevronUp } from "lucide-react";
 import type { RequestLog, TimeRange } from "@/types/api";
 import {
   Table,
@@ -25,7 +25,7 @@ import { TimeRangeSelector } from "@/components/dashboard/time-range-selector";
 import { getDateLocale } from "@/lib/date-locale";
 import { cn } from "@/lib/utils";
 import { TokenDisplay, TokenDetailContent } from "@/components/admin/token-display";
-import { RoutingDecisionDisplay } from "@/components/admin/routing-decision-display";
+import { RoutingDecisionTimeline } from "@/components/admin/routing-decision-timeline";
 import { StatusLed, TerminalHeader, type LedStatus } from "@/components/ui/terminal";
 
 interface LogsTableProps {
@@ -242,38 +242,6 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
     return String(total);
   };
 
-  const formatFailoverAttemptTime = (attemptedAt: string | null | undefined) => {
-    if (!attemptedAt) return "-";
-
-    const parsedDate = new Date(attemptedAt);
-    if (Number.isNaN(parsedDate.getTime())) {
-      return attemptedAt;
-    }
-
-    return parsedDate.toLocaleString(locale, {
-      hour12: false,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-  };
-
-  const formatFailoverDuration = (durationMs: number | null | undefined) => {
-    if (durationMs === null || durationMs === undefined || Number.isNaN(durationMs)) {
-      return "-";
-    }
-
-    const safeDurationMs = Math.max(0, Math.round(durationMs));
-    if (safeDurationMs < 1000) {
-      return `${safeDurationMs}ms`;
-    }
-
-    return `${(safeDurationMs / 1000).toFixed(2)}s`;
-  };
-
   // Check if row has error state
   const hasErrorState = (log: RequestLog): boolean => {
     return log.status_code !== null && log.status_code >= 400;
@@ -381,17 +349,10 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                   const isError = hasErrorState(log);
                   const upstreamDisplayName =
                     log.upstream_id === null ? null : (log.upstream_name ?? t("upstreamUnknown"));
-                  const latestFailoverAttemptAt =
-                    log.failover_history && log.failover_history.length > 0
-                      ? log.failover_history[log.failover_history.length - 1]?.attempted_at
-                      : null;
                   const firstFailoverAttemptAt =
                     log.failover_history && log.failover_history.length > 0
                       ? log.failover_history[0]?.attempted_at
                       : null;
-                  const latestFailoverTime = hasFailover
-                    ? formatFailoverAttemptTime(latestFailoverAttemptAt ?? log.created_at)
-                    : null;
                   const requestStartMs = new Date(log.created_at).getTime();
                   const requestEndMs =
                     log.duration_ms !== null && !Number.isNaN(requestStartMs)
@@ -411,10 +372,6 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                       failoverDurationMs = log.duration_ms;
                     }
                   }
-
-                  const failoverDuration = hasFailover
-                    ? formatFailoverDuration(failoverDurationMs)
-                    : null;
 
                   return (
                     <Fragment key={log.id}>
@@ -453,14 +410,15 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                           })}
                         </TableCell>
                         <TableCell>
-                          <RoutingDecisionDisplay
+                          <RoutingDecisionTimeline
                             routingDecision={log.routing_decision}
                             upstreamName={upstreamDisplayName}
                             routingType={log.routing_type}
                             groupName={log.group_name}
                             failoverAttempts={log.failover_attempts}
-                            latestFailoverTime={latestFailoverTime}
-                            failoverDuration={failoverDuration}
+                            sessionId={log.session_id}
+                            affinityHit={log.affinity_hit}
+                            affinityMigrated={log.affinity_migrated}
                             compact={true}
                           />
                         </TableCell>
@@ -519,94 +477,32 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                         <TableRow className="bg-surface-300/30">
                           <TableCell colSpan={9} className="p-0">
                             <div className="px-4 py-3 border-t border-dashed border-divider space-y-4 font-mono text-xs">
-                              {/* Two-column layout: Routing Decision (left) and Token Details (right) */}
-                              <div className="grid grid-cols-[minmax(0,1fr)_340px] gap-3">
-                                {/* Routing Decision Details */}
-                                <div className="space-y-3">
-                                  {hasRoutingDecision ? (
-                                    <RoutingDecisionDisplay
-                                      routingDecision={log.routing_decision}
-                                      upstreamName={upstreamDisplayName}
-                                      routingType={log.routing_type}
-                                      groupName={log.group_name}
-                                      failoverAttempts={log.failover_attempts}
-                                      latestFailoverTime={latestFailoverTime}
-                                      failoverDuration={failoverDuration}
-                                      compact={false}
-                                    />
-                                  ) : (
-                                    <div className="text-amber-700">{t("noRoutingDecision")}</div>
-                                  )}
-
-                                  {/* Failover History - Integrated with left column */}
-                                  {hasFailover && log.failover_history && (
-                                    <div>
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <AlertCircle className="w-4 h-4 text-amber-600" />
-                                        <span className="font-medium text-amber-700">
-                                          {t("failoverDetails", { count: log.failover_attempts })}
-                                        </span>
-                                      </div>
-                                      <div className="space-y-1 pl-2 text-amber-600">
-                                        {log.failover_history.map((attempt, index) => {
-                                          const isLast = index === log.failover_history!.length - 1;
-                                          const prefix = isLast ? "└─" : "├─";
-                                          const attemptUpstreamName =
-                                            attempt.upstream_name || t("upstreamUnknown");
-                                          const statusText = `${attempt.error_type}${
-                                            attempt.status_code ? `/${attempt.status_code}` : ""
-                                          }`;
-                                          const attemptTimeLabel = formatFailoverAttemptTime(
-                                            attempt.attempted_at
-                                          );
-
-                                          return (
-                                            <div
-                                              key={index}
-                                              className="flex items-start gap-2 py-1"
-                                            >
-                                              <span className="text-surface-500 mt-0.5">
-                                                {prefix}
-                                              </span>
-                                              <div className="min-w-0">
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                  <span className="text-amber-500">
-                                                    FAILOVER: {attemptUpstreamName} →
-                                                  </span>
-                                                  <span
-                                                    className={cn(
-                                                      "font-mono text-xs",
-                                                      attempt.error_type === "timeout" &&
-                                                        "text-amber-600",
-                                                      attempt.error_type === "http_5xx" &&
-                                                        "text-status-error",
-                                                      attempt.error_type === "http_429" &&
-                                                        "text-orange-500"
-                                                    )}
-                                                  >
-                                                    [{statusText}]
-                                                  </span>
-                                                  <span className="text-amber-600 text-xs font-mono whitespace-nowrap">
-                                                    {attemptTimeLabel}
-                                                  </span>
-                                                </div>
-                                                <div
-                                                  className="text-amber-700 break-all"
-                                                  title={attempt.error_message}
-                                                >
-                                                  {attempt.error_message}
-                                                </div>
-                                              </div>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  )}
+                              {/* Two-column layout: Decision Timeline (left) and Token Details (right) */}
+                              <div className="flex items-start gap-6">
+                                {/* Routing Decision Timeline */}
+                                <div className="min-w-0 shrink-0">
+                                  <RoutingDecisionTimeline
+                                    routingDecision={log.routing_decision}
+                                    upstreamName={upstreamDisplayName}
+                                    routingType={log.routing_type}
+                                    groupName={log.group_name}
+                                    failoverAttempts={log.failover_attempts}
+                                    failoverHistory={log.failover_history}
+                                    failoverDurationMs={failoverDurationMs}
+                                    routingDurationMs={log.routing_duration_ms}
+                                    durationMs={log.duration_ms}
+                                    statusCode={log.status_code}
+                                    cachedTokens={log.cached_tokens}
+                                    cacheReadTokens={log.cache_read_tokens}
+                                    sessionId={log.session_id}
+                                    affinityHit={log.affinity_hit}
+                                    affinityMigrated={log.affinity_migrated}
+                                    compact={false}
+                                  />
                                 </div>
 
                                 {/* Token Details */}
-                                <div className="w-[340px]">
+                                <div className="w-[340px] shrink-0">
                                   <TokenDetailContent
                                     promptTokens={log.prompt_tokens}
                                     completionTokens={log.completion_tokens}

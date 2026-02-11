@@ -298,6 +298,7 @@ export interface RequestLogResponse {
   cache_read_tokens: number;
   status_code: number | null;
   duration_ms: number | null;
+  routing_duration_ms: number | null;
   error_message: string | null;
   // Routing decision fields
   routing_type: RoutingType | null;
@@ -307,6 +308,10 @@ export interface RequestLogResponse {
   failover_attempts: number;
   failover_history: FailoverAttempt[] | null;
   routing_decision: RoutingDecisionLog | null; // Complete routing decision info
+  // Session affinity fields
+  session_id: string | null;
+  affinity_hit: boolean;
+  affinity_migrated: boolean;
   created_at: string; // ISO 8601 date string
 }
 

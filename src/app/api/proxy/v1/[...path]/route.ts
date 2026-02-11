@@ -197,10 +197,14 @@ async function forwardWithFailover(
   selectedUpstream: Upstream;
   failedUpstreamIds: string[];
   failoverHistory: FailoverAttempt[];
+  affinityHit: boolean;
+  affinityMigrated: boolean;
 }> {
   const failedUpstreamIds: string[] = [];
   const failoverHistory: FailoverAttempt[] = [];
   let lastError: Error | null = null;
+  let affinityHit = false;
+  let affinityMigrated = false;
 
   // Clone the request body once for potential retries
   const requestClone = request.clone();
@@ -236,6 +240,11 @@ async function forwardWithFailover(
       );
 
       selectedUpstream = selection.upstream;
+      // Capture affinity info from first successful selection
+      if (failedUpstreamIds.length === 0) {
+        affinityHit = selection.affinityHit ?? false;
+        affinityMigrated = selection.affinityMigrated ?? false;
+      }
     } catch (error) {
       if (error instanceof NoHealthyUpstreamsError) {
         hasMoreUpstreams = false;
@@ -314,10 +323,19 @@ async function forwardWithFailover(
           selectedUpstream,
           failedUpstreamIds,
           failoverHistory,
+          affinityHit,
+          affinityMigrated,
         };
       }
 
-      return { result, selectedUpstream, failedUpstreamIds, failoverHistory };
+      return {
+        result,
+        selectedUpstream,
+        failedUpstreamIds,
+        failoverHistory,
+        affinityHit,
+        affinityMigrated,
+      };
     } catch (error) {
       // Release connection on error
       releaseConnection(selectedUpstream.id);
@@ -508,6 +526,7 @@ async function extractRequestContext(
 async function handleProxy(request: NextRequest, context: RouteContext): Promise<Response> {
   const requestId = randomUUID().slice(0, 8);
   const startTime = Date.now();
+  let routingDurationMs: number | null = null;
 
   // Extract path
   const { path: pathSegments } = await context.params;
@@ -630,6 +649,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   // Track failover history outside try block for error logging
   let failoverHistory: FailoverAttempt[] = [];
   let requestLogId: string | null = null;
+  let isAffinityHit = false;
+  let isAffinityMigrated = false;
 
   // Build initial routing decision log (will be updated with final upstream after selection)
   const initialRoutingDecisionLog =
@@ -649,6 +670,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       routingType,
       priorityTier: null,
       routingDecision: initialRoutingDecisionLog,
+      sessionId,
     });
     requestLogId = startLog.id;
   } catch (e) {
@@ -672,6 +694,9 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         }
       : null;
 
+    // Capture routing decision time (before actual upstream request begins)
+    routingDurationMs = Date.now() - startTime;
+
     if (providerType) {
       // Use tiered routing with circuit breaker failover
       // Pass allowedUpstreamIds to filter by API key authorization
@@ -680,6 +705,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         result: proxyResult,
         selectedUpstream: selected,
         failoverHistory: history,
+        affinityHit: afHit,
+        affinityMigrated: afMigrated,
       } = await forwardWithFailover(
         request,
         providerType,
@@ -691,6 +718,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       result = proxyResult;
       upstreamForLogging = selected;
       failoverHistory = history;
+      isAffinityHit = afHit;
+      isAffinityMigrated = afMigrated;
       priorityTier = selected.priority;
     } else if (selectedUpstream) {
       // Direct upstream routing (no load balancing)
@@ -781,6 +810,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               cacheReadTokens: usage?.cacheReadTokens || 0,
               statusCode: result.statusCode,
               durationMs: Date.now() - startTime,
+              routingDurationMs,
               errorMessage: null,
               routingType: routingDecision.routingType,
               priorityTier: routingDecision.priorityTier,
@@ -788,6 +818,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               failoverHistory:
                 routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
               routingDecision: finalRoutingDecisionLog,
+              affinityHit: isAffinityHit,
+              affinityMigrated: isAffinityMigrated,
             });
           }
 
@@ -806,12 +838,16 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             cacheReadTokens: usage?.cacheReadTokens || 0,
             statusCode: result.statusCode,
             durationMs: Date.now() - startTime,
+            routingDurationMs,
             routingType: routingDecision.routingType,
             priorityTier: routingDecision.priorityTier,
             failoverAttempts: routingDecision.failoverAttempts,
             failoverHistory:
               routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
             routingDecision: finalRoutingDecisionLog,
+            sessionId,
+            affinityHit: isAffinityHit,
+            affinityMigrated: isAffinityMigrated,
           });
         })
         .catch((e) => log.error({ err: e, requestId }, "failed to log request"));
@@ -923,6 +959,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           cacheReadTokens: usage?.cacheReadTokens || 0,
           statusCode: result.statusCode,
           durationMs,
+          routingDurationMs,
           errorMessage: null,
           routingType: routingDecision.routingType,
           priorityTier: routingDecision.priorityTier,
@@ -930,6 +967,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           failoverHistory:
             routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
           routingDecision: finalRoutingDecisionLog,
+          affinityHit: isAffinityHit,
+          affinityMigrated: isAffinityMigrated,
         });
       } else {
         await logRequest({
@@ -947,12 +986,16 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           cacheReadTokens: usage?.cacheReadTokens || 0,
           statusCode: result.statusCode,
           durationMs,
+          routingDurationMs,
           routingType: routingDecision.routingType,
           priorityTier: routingDecision.priorityTier,
           failoverAttempts: routingDecision.failoverAttempts,
           failoverHistory:
             routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
           routingDecision: finalRoutingDecisionLog,
+          sessionId,
+          affinityHit: isAffinityHit,
+          affinityMigrated: isAffinityMigrated,
         });
       }
 
@@ -1040,6 +1083,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         totalTokens: 0,
         statusCode: getHttpStatusForError(errorCode),
         durationMs,
+        routingDurationMs,
         errorMessage: error instanceof Error ? error.message : "Unknown error",
         routingType,
         priorityTier,
@@ -1059,6 +1103,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         totalTokens: 0,
         statusCode: getHttpStatusForError(errorCode),
         durationMs,
+        routingDurationMs,
         errorMessage: error instanceof Error ? error.message : "Unknown error",
         routingType,
         priorityTier,

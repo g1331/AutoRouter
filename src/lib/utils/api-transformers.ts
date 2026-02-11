@@ -265,6 +265,7 @@ export interface RequestLogApiResponse {
   cache_read_tokens: number;
   status_code: number | null;
   duration_ms: number | null;
+  routing_duration_ms: number | null;
   error_message: string | null;
   // Routing decision fields
   routing_type: string | null;
@@ -274,6 +275,10 @@ export interface RequestLogApiResponse {
   failover_attempts: number;
   failover_history: FailoverAttempt[] | null;
   routing_decision: RoutingDecisionLog | null;
+  // Session affinity fields
+  session_id: string | null;
+  affinity_hit: boolean;
+  affinity_migrated: boolean;
   created_at: string;
 }
 
@@ -301,6 +306,7 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
     cache_read_tokens: log.cacheReadTokens,
     status_code: log.statusCode,
     duration_ms: log.durationMs,
+    routing_duration_ms: log.routingDurationMs,
     error_message: log.errorMessage,
     // Routing decision fields
     routing_type: log.routingType,
@@ -310,6 +316,9 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
     failover_attempts: log.failoverAttempts,
     failover_history: log.failoverHistory,
     routing_decision: log.routingDecision,
+    session_id: log.sessionId,
+    affinity_hit: log.affinityHit,
+    affinity_migrated: log.affinityMigrated,
     created_at: log.createdAt.toISOString(),
   };
 }
