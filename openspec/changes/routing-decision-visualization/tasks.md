@@ -61,4 +61,4 @@
 - [x] 9.1 运行 TypeScript 类型检查（`pnpm exec tsc --noEmit`）
 - [x] 9.2 运行 ESLint（`pnpm lint`）
 - [x] 9.3 运行 Prettier 格式化（`pnpm format`）
-- [ ] 9.4 提交所有变更（遵循提交规范）
+- [x] 9.4 提交所有变更（遵循提交规范）
