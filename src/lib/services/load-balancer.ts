@@ -346,12 +346,15 @@ export async function selectFromProviderType(
     const affinityEntry = affinityStore.get(apiKeyId, providerType, sessionId);
 
     if (affinityEntry) {
-      // Check if bound upstream is still available
+      // Check if bound upstream is still available and not excluded
       const boundUpstream = filteredUpstreams.find(
         (u) => u.upstream.id === affinityEntry.upstreamId
       );
 
-      if (boundUpstream && isUpstreamAvailable(boundUpstream)) {
+      // Respect excludeIds: if bound upstream is excluded, skip affinity and reselect
+      const isExcluded = excludeIds?.includes(affinityEntry.upstreamId) ?? false;
+
+      if (boundUpstream && isUpstreamAvailable(boundUpstream) && !isExcluded) {
         // Check if we should migrate to higher priority upstream
         const migrationTarget = evaluateMigration(
           boundUpstream,
