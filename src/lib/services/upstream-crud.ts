@@ -47,6 +47,11 @@ export interface UpstreamCreateInput {
     openDuration?: number;
     probeInterval?: number;
   } | null;
+  affinityMigration?: {
+    enabled: boolean;
+    metric: "tokens" | "length";
+    threshold: number;
+  } | null;
 }
 
 export interface UpstreamUpdateInput {
@@ -68,6 +73,11 @@ export interface UpstreamUpdateInput {
     openDuration?: number;
     probeInterval?: number;
   } | null;
+  affinityMigration?: {
+    enabled: boolean;
+    metric: "tokens" | "length";
+    threshold: number;
+  } | null;
 }
 
 export interface UpstreamResponse {
@@ -84,6 +94,11 @@ export interface UpstreamResponse {
   providerType: string;
   allowedModels: string[] | null;
   modelRedirects: Record<string, string> | null;
+  affinityMigration: {
+    enabled: boolean;
+    metric: "tokens" | "length";
+    threshold: number;
+  } | null;
   createdAt: Date;
   updatedAt: Date;
   circuitBreaker?: UpstreamCircuitBreakerStatus | null;
@@ -126,6 +141,7 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     providerType = "openai",
     allowedModels,
     modelRedirects,
+    affinityMigration,
   } = input;
 
   // Check if name already exists
@@ -158,6 +174,7 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
       providerType,
       allowedModels: allowedModels ?? null,
       modelRedirects: modelRedirects ?? null,
+      affinityMigration: affinityMigration ?? null,
       createdAt: now,
       updatedAt: now,
     })
@@ -190,6 +207,7 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     providerType: newUpstream.providerType,
     allowedModels: newUpstream.allowedModels,
     modelRedirects: newUpstream.modelRedirects,
+    affinityMigration: newUpstream.affinityMigration,
     createdAt: newUpstream.createdAt,
     updatedAt: newUpstream.updatedAt,
   };
@@ -237,6 +255,8 @@ export async function updateUpstream(
   if (input.providerType !== undefined) updateValues.providerType = input.providerType;
   if (input.allowedModels !== undefined) updateValues.allowedModels = input.allowedModels;
   if (input.modelRedirects !== undefined) updateValues.modelRedirects = input.modelRedirects;
+  if (input.affinityMigration !== undefined)
+    updateValues.affinityMigration = input.affinityMigration;
 
   const [updated] = await db
     .update(upstreams)
@@ -295,6 +315,7 @@ export async function updateUpstream(
     providerType: updated.providerType,
     allowedModels: updated.allowedModels,
     modelRedirects: updated.modelRedirects,
+    affinityMigration: updated.affinityMigration,
     createdAt: updated.createdAt,
     updatedAt: updated.updatedAt,
   };
@@ -399,6 +420,7 @@ export async function listUpstreams(
       providerType: upstream.providerType,
       allowedModels: upstream.allowedModels,
       modelRedirects: upstream.modelRedirects,
+      affinityMigration: upstream.affinityMigration,
       createdAt: upstream.createdAt,
       updatedAt: upstream.updatedAt,
       circuitBreaker: cbState
@@ -458,6 +480,7 @@ export async function getUpstreamById(upstreamId: string): Promise<UpstreamRespo
     providerType: upstream.providerType,
     allowedModels: upstream.allowedModels,
     modelRedirects: upstream.modelRedirects,
+    affinityMigration: upstream.affinityMigration,
     createdAt: upstream.createdAt,
     updatedAt: upstream.updatedAt,
   };

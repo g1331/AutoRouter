@@ -86,7 +86,7 @@ describe("proxy-client", () => {
       timeout: 60,
     };
 
-    it("should preserve Authorization format when client uses Authorization", () => {
+    it("should preserve authorization header key casing when client uses authorization", () => {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         authorization: "Bearer client-key",
@@ -94,7 +94,8 @@ describe("proxy-client", () => {
 
       const result = injectAuthHeader(headers, anthropicUpstream);
 
-      expect(result["Authorization"]).toBe("Bearer ant-test-key");
+      expect(result["authorization"]).toBe("Bearer ant-test-key");
+      expect(result["Authorization"]).toBeUndefined();
       expect(result["x-api-key"]).toBeUndefined();
     });
 

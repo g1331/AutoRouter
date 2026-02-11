@@ -8,6 +8,7 @@ import {
   CircuitBreakerStateEnum,
 } from "./circuit-breaker";
 import { VALID_PROVIDER_TYPES, type ProviderType } from "./model-router";
+import { affinityStore, shouldMigrate, type AffinityMigrationConfig } from "./session-affinity";
 
 // Re-export for convenience
 export { VALID_PROVIDER_TYPES };
@@ -52,6 +53,8 @@ export interface ProviderTypeSelectionResult {
   selectedTier: number;
   circuitBreakerFiltered: number;
   totalCandidates: number;
+  affinityHit?: boolean; // Whether session affinity was used
+  affinityMigrated?: boolean; // Whether session was migrated to higher priority upstream
 }
 
 // In-memory state for load balancing (per-instance, not distributed)
@@ -265,22 +268,56 @@ export async function getUpstreamsByProviderType(
 }
 
 /**
+ * Check if an upstream is available (circuit breaker allows traffic).
+ */
+function isUpstreamAvailable(u: UpstreamWithCircuitBreaker): boolean {
+  const cb = u.circuitBreaker;
+  if (!cb) return true;
+
+  const config = { ...CB_DEFAULT_CONFIG, ...(cb.config ?? {}) };
+
+  if (cb.state === CircuitBreakerStateEnum.CLOSED) return true;
+
+  if (cb.state === CircuitBreakerStateEnum.OPEN) {
+    if (!cb.openedAt) return true;
+    const elapsedMs = Date.now() - cb.openedAt.getTime();
+    return elapsedMs >= config.openDuration;
+  }
+
+  if (cb.state === CircuitBreakerStateEnum.HALF_OPEN) {
+    if (!cb.lastProbeAt) return true;
+    const elapsedMs = Date.now() - cb.lastProbeAt.getTime();
+    return elapsedMs >= config.probeInterval;
+  }
+
+  return true;
+}
+
+/**
  * Select upstream from a provider type using tiered priority routing.
  *
  * Algorithm:
- * 1. Fetch all active upstreams matching providerType (with circuit breaker state)
- * 2. Filter by allowedUpstreamIds (API key authorization)
- * 3. Group by priority (ascending — lower number = higher priority)
- * 4. For each tier (starting from highest priority):
+ * 1. Check session affinity cache (if sessionId provided)
+ *    a. If hit and upstream available → check migration → return
+ *    b. If hit but upstream unavailable → reselect and update cache
+ * 2. Fetch all active upstreams matching providerType (with circuit breaker state)
+ * 3. Filter by allowedUpstreamIds (API key authorization)
+ * 4. Group by priority (ascending — lower number = higher priority)
+ * 5. For each tier (starting from highest priority):
  *    a. Filter out excluded IDs and circuit-breaker-OPEN upstreams
  *    b. If available upstreams remain → select by weighted random → return
  *    c. If none available → proceed to next tier
- * 5. All tiers exhausted → throw NoHealthyUpstreamsError
+ * 6. All tiers exhausted → throw NoHealthyUpstreamsError
  */
 export async function selectFromProviderType(
   providerType: ProviderType,
   excludeIds?: string[],
-  allowedUpstreamIds?: string[]
+  allowedUpstreamIds?: string[],
+  affinityContext?: {
+    apiKeyId: string;
+    sessionId: string;
+    contentLength: number;
+  }
 ): Promise<ProviderTypeSelectionResult> {
   if (!VALID_PROVIDER_TYPES.includes(providerType)) {
     throw new Error(`Invalid provider type: ${providerType}`);
@@ -303,9 +340,162 @@ export async function selectFromProviderType(
     );
   }
 
+  // Check session affinity if context provided
+  if (affinityContext) {
+    const { apiKeyId, sessionId, contentLength } = affinityContext;
+    const affinityEntry = affinityStore.get(apiKeyId, providerType, sessionId);
+
+    if (affinityEntry) {
+      // Check if bound upstream is still available and not excluded
+      const boundUpstream = filteredUpstreams.find(
+        (u) => u.upstream.id === affinityEntry.upstreamId
+      );
+
+      // Respect excludeIds: if bound upstream is excluded, skip affinity and reselect
+      const isExcluded = excludeIds?.includes(affinityEntry.upstreamId) ?? false;
+
+      if (boundUpstream && isUpstreamAvailable(boundUpstream) && !isExcluded) {
+        // Check if we should migrate to higher priority upstream
+        // Filter out excluded upstreams from migration candidates
+        const availableForMigration = filteredUpstreams.filter(
+          (u) => !excludeIds?.includes(u.upstream.id) && isUpstreamAvailable(u)
+        );
+        const migrationTarget = evaluateMigration(
+          boundUpstream,
+          availableForMigration,
+          contentLength,
+          affinityEntry.cumulativeTokens
+        );
+
+        if (migrationTarget && migrationTarget.upstream.id !== boundUpstream.upstream.id) {
+          // Migrate to higher priority upstream
+          try {
+            await acquireCircuitBreakerPermit(migrationTarget.upstream.id);
+            affinityStore.set(
+              apiKeyId,
+              providerType,
+              sessionId,
+              migrationTarget.upstream.id,
+              contentLength
+            );
+
+            return {
+              upstream: migrationTarget.upstream,
+              providerType,
+              selectedTier: migrationTarget.upstream.priority,
+              circuitBreakerFiltered: 0,
+              totalCandidates,
+              affinityHit: true,
+              affinityMigrated: true,
+            };
+          } catch (error) {
+            if (!(error instanceof CircuitBreakerOpenError)) {
+              throw error;
+            }
+            // Migration failed, fall through to use bound upstream
+          }
+        }
+
+        // Use bound upstream (no migration)
+        try {
+          await acquireCircuitBreakerPermit(boundUpstream.upstream.id);
+          return {
+            upstream: boundUpstream.upstream,
+            providerType,
+            selectedTier: boundUpstream.upstream.priority,
+            circuitBreakerFiltered: 0,
+            totalCandidates,
+            affinityHit: true,
+            affinityMigrated: false,
+          };
+        } catch (error) {
+          if (!(error instanceof CircuitBreakerOpenError)) {
+            throw error;
+          }
+          // Bound upstream circuit opened, fall through to reselect
+        }
+      }
+
+      // Bound upstream unavailable, need to reselect and update cache
+      const result = await performTieredSelection(
+        filteredUpstreams,
+        providerType,
+        excludeIds,
+        totalCandidates
+      );
+
+      // Update affinity cache with new selection
+      affinityStore.set(apiKeyId, providerType, sessionId, result.upstream.id, contentLength);
+
+      return {
+        ...result,
+        affinityHit: true,
+        affinityMigrated: false,
+      };
+    }
+  }
+
+  // No affinity or cache miss - perform normal tiered selection
+  const result = await performTieredSelection(
+    filteredUpstreams,
+    providerType,
+    excludeIds,
+    totalCandidates
+  );
+
+  // Update affinity cache if context provided
+  if (affinityContext) {
+    const { apiKeyId, sessionId, contentLength } = affinityContext;
+    affinityStore.set(apiKeyId, providerType, sessionId, result.upstream.id, contentLength);
+  }
+
+  return {
+    ...result,
+    affinityHit: false,
+    affinityMigrated: false,
+  };
+}
+
+/**
+ * Evaluate if session should migrate to a higher priority upstream.
+ */
+function evaluateMigration(
+  currentUpstream: UpstreamWithCircuitBreaker,
+  allUpstreams: UpstreamWithCircuitBreaker[],
+  contentLength: number,
+  cumulativeTokens: number
+): UpstreamWithCircuitBreaker | null {
+  const candidates = allUpstreams.map((u) => ({
+    id: u.upstream.id,
+    priority: u.upstream.priority,
+    affinityMigration: u.upstream.affinityMigration as AffinityMigrationConfig | null,
+  }));
+
+  const current = {
+    id: currentUpstream.upstream.id,
+    priority: currentUpstream.upstream.priority,
+    affinityMigration: currentUpstream.upstream.affinityMigration as AffinityMigrationConfig | null,
+  };
+
+  const target = shouldMigrate(current, candidates, contentLength, cumulativeTokens);
+
+  if (!target) return null;
+
+  return allUpstreams.find((u) => u.upstream.id === target.id) ?? null;
+}
+
+/**
+ * Perform tiered selection without affinity.
+ */
+async function performTieredSelection(
+  upstreams: UpstreamWithCircuitBreaker[],
+  providerType: ProviderType,
+  excludeIds: string[] | undefined,
+  totalCandidates: number
+): Promise<Omit<ProviderTypeSelectionResult, "affinityHit" | "affinityMigrated">> {
   // Group by priority (ascending)
   const tierMap = new Map<number, UpstreamWithCircuitBreaker[]>();
-  for (const u of filteredUpstreams) {
+  for (const u of upstreams) {
     const priority = u.upstream.priority;
     if (!tierMap.has(priority)) {
       tierMap.set(priority, []);
@@ -317,6 +507,7 @@ export async function selectFromProviderType(
   const sortedTiers = [...tierMap.entries()].sort((a, b) => a[0] - b[0]);
 
   let totalCircuitBreakerFiltered = 0;
+
   // Try each tier in priority order
   for (const [tier, tierUpstreams] of sortedTiers) {
     // Filter by circuit breaker

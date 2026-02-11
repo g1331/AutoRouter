@@ -61,6 +61,11 @@ import {
   buildFixture,
   recordTrafficFixture,
 } from "@/lib/services/traffic-recorder";
+import {
+  extractSessionId,
+  affinityStore,
+  type AffinityUsage,
+} from "@/lib/services/session-affinity";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("proxy-route");
@@ -173,6 +178,7 @@ function isFailoverableError(error: unknown): boolean {
  * - Detects downstream client disconnect to stop unnecessary retries
  * - First-chunk validation for streaming responses
  * - Only selects from authorized upstreams (API key permission filtering)
+ * - Session affinity support for prompt cache optimization
  */
 async function forwardWithFailover(
   request: NextRequest,
@@ -180,16 +186,25 @@ async function forwardWithFailover(
   path: string,
   requestId: string,
   allowedUpstreamIds: string[],
+  affinityContext: {
+    apiKeyId: string;
+    sessionId: string | null;
+    contentLength: number;
+  } | null,
   config: FailoverConfig = DEFAULT_FAILOVER_CONFIG
 ): Promise<{
   result: ProxyResult;
   selectedUpstream: Upstream;
   failedUpstreamIds: string[];
   failoverHistory: FailoverAttempt[];
+  affinityHit: boolean;
+  affinityMigrated: boolean;
 }> {
   const failedUpstreamIds: string[] = [];
   const failoverHistory: FailoverAttempt[] = [];
   let lastError: Error | null = null;
+  let affinityHit = false;
+  let affinityMigrated = false;
 
   // Clone the request body once for potential retries
   const requestClone = request.clone();
@@ -210,13 +225,26 @@ async function forwardWithFailover(
     try {
       // Select an upstream using provider type, excluding previously failed ones
       // and filtering by allowed upstream IDs (API key authorization)
+      // Pass session affinity context if available
       const selection = await selectFromProviderType(
         providerType,
         failedUpstreamIds.length > 0 ? failedUpstreamIds : undefined,
-        allowedUpstreamIds
+        allowedUpstreamIds,
+        affinityContext?.sessionId
+          ? {
+              apiKeyId: affinityContext.apiKeyId,
+              sessionId: affinityContext.sessionId,
+              contentLength: affinityContext.contentLength,
+            }
+          : undefined
       );
 
       selectedUpstream = selection.upstream;
+      // Capture affinity info from first successful selection
+      if (failedUpstreamIds.length === 0) {
+        affinityHit = selection.affinityHit ?? false;
+        affinityMigrated = selection.affinityMigrated ?? false;
+      }
     } catch (error) {
       if (error instanceof NoHealthyUpstreamsError) {
         hasMoreUpstreams = false;
@@ -295,10 +323,19 @@ async function forwardWithFailover(
           selectedUpstream,
           failedUpstreamIds,
           failoverHistory,
+          affinityHit,
+          affinityMigrated,
         };
       }
 
-      return { result, selectedUpstream, failedUpstreamIds, failoverHistory };
+      return {
+        result,
+        selectedUpstream,
+        failedUpstreamIds,
+        failoverHistory,
+        affinityHit,
+        affinityMigrated,
+      };
     } catch (error) {
       // Release connection on error
       releaseConnection(selectedUpstream.id);
@@ -444,20 +481,79 @@ function wrapStreamWithConnectionTracking(
 }
 
 /**
- * Extract model from request body
+ * Compute total input tokens for affinity tracking, avoiding double-count.
+ *
+ * OpenAI: promptTokens already includes cached tokens (subset of prompt_tokens).
+ * Anthropic: when input_tokens > 0, total = input_tokens + cache tokens;
+ * when input_tokens === 0 (fallback), promptTokens already equals cache tokens.
+ * Use rawInputTokens to distinguish these cases precisely.
  */
-async function extractModelFromRequest(request: NextRequest): Promise<string | null> {
+function computeAffinityTokens(
+  providerType: ProviderType,
+  usage: {
+    promptTokens: number;
+    cacheReadTokens?: number;
+    cacheCreationTokens?: number;
+    rawInputTokens?: number;
+  }
+): number {
+  const prompt = usage.promptTokens || 0;
+
+  if (providerType !== "anthropic") {
+    return prompt;
+  }
+
+  const rawInput = usage.rawInputTokens ?? 0;
+  const cacheRead = usage.cacheReadTokens || 0;
+  const cacheCreation = usage.cacheCreationTokens || 0;
+
+  // rawInputTokens > 0: promptTokens is the raw input_tokens (excludes cache), add cache separately
+  // rawInputTokens === 0: promptTokens was already set to cacheRead + cacheCreation by fallback
+  if (rawInput > 0) {
+    return rawInput + cacheRead + cacheCreation;
+  }
+
+  return prompt;
+}
+
+/**
+ * Request context extracted from incoming request
+ */
+interface RequestContext {
+  model: string | null;
+  sessionId: string | null;
+  bodyJson: Record<string, unknown> | null;
+}
+
+/**
+ * Extract request context (model, sessionId) from request body and headers.
+ * Single-pass extraction to avoid parsing body multiple times.
+ */
+async function extractRequestContext(
+  request: NextRequest,
+  providerType: ProviderType | null
+): Promise<RequestContext> {
   try {
     const clonedRequest = request.clone();
     const bodyText = await clonedRequest.text();
-    if (bodyText) {
-      const body = JSON.parse(bodyText);
-      return body.model || null;
+
+    if (!bodyText) {
+      return { model: null, sessionId: null, bodyJson: null };
     }
+
+    const bodyJson = JSON.parse(bodyText) as Record<string, unknown>;
+    const model = typeof bodyJson.model === "string" ? bodyJson.model || null : null;
+
+    // Extract session ID based on provider type
+    const sessionId = providerType
+      ? extractSessionId(providerType, Object.fromEntries(request.headers.entries()), bodyJson)
+      : null;
+
+    return { model, sessionId, bodyJson };
   } catch {
     // Not JSON or empty body
+    return { model: null, sessionId: null, bodyJson: null };
   }
-  return null;
 }
 
 /**
@@ -466,6 +562,7 @@ async function extractModelFromRequest(request: NextRequest): Promise<string | n
 async function handleProxy(request: NextRequest, context: RouteContext): Promise<Response> {
   const requestId = randomUUID().slice(0, 8);
   const startTime = Date.now();
+  let routingDurationMs: number | null = null;
 
   // Extract path
   const { path: pathSegments } = await context.params;
@@ -502,8 +599,17 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
   }
 
+  // Recorder setup
+  const recorderEnabled = isRecorderEnabled();
+  const inboundBody = recorderEnabled ? await readRequestBody(request) : null;
+
+  // Routing type is always "tiered" for priority-based routing
+  const routingType = "tiered" as const;
+
   // Extract model from request body for model-based routing
-  const model = await extractModelFromRequest(request);
+  // First pass: extract model without provider type (sessionId will be extracted later)
+  const tempContext = await extractRequestContext(request, null);
+  const model = tempContext.model;
 
   if (!model) {
     return NextResponse.json({ error: "Missing required field: model" }, { status: 400 });
@@ -516,11 +622,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   let resolvedModel = model;
   let allowedUpstreamIds: string[] = [];
   let routerResult: ModelRouterResult | null = null;
-  const recorderEnabled = isRecorderEnabled();
-  const inboundBody = recorderEnabled ? await readRequestBody(request) : null;
-
-  // Routing type is always "tiered" for priority-based routing
-  const routingType = "tiered" as const;
+  let sessionId: string | null = null;
+  const bodyJson: Record<string, unknown> | null = tempContext.bodyJson;
 
   try {
     // Route by model
@@ -548,6 +651,18 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     providerType = routerResult.providerType;
     resolvedModel = routerResult.resolvedModel;
 
+    // Extract session ID now that we know the provider type
+    if (providerType && bodyJson) {
+      sessionId = extractSessionId(
+        providerType,
+        Object.fromEntries(request.headers.entries()),
+        bodyJson
+      );
+      if (sessionId) {
+        log.debug({ requestId, providerType, sessionId }, "session affinity: extracted sessionId");
+      }
+    }
+
     // Get API key's allowed upstream IDs for authorization filtering
     const upstreamPermissions = await db.query.apiKeyUpstreams.findMany({
       where: eq(apiKeyUpstreams.apiKeyId, validApiKey.id),
@@ -570,6 +685,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   // Track failover history outside try block for error logging
   let failoverHistory: FailoverAttempt[] = [];
   let requestLogId: string | null = null;
+  let isAffinityHit = false;
+  let isAffinityMigrated = false;
 
   // Build initial routing decision log (will be updated with final upstream after selection)
   const initialRoutingDecisionLog =
@@ -589,6 +706,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       routingType,
       priorityTier: null,
       routingDecision: initialRoutingDecisionLog,
+      sessionId,
     });
     requestLogId = startLog.id;
   } catch (e) {
@@ -600,17 +718,42 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     let result: ProxyResult;
     let upstreamForLogging: Upstream;
 
+    // Prepare affinity context if session ID is available
+    const contentLength = parseInt(request.headers.get("content-length") ?? "", 10) || 0;
+    const affinityContext = sessionId
+      ? {
+          apiKeyId: validApiKey.id,
+          sessionId,
+          contentLength,
+        }
+      : null;
+
+    // Capture routing decision time (before actual upstream request begins)
+    routingDurationMs = Date.now() - startTime;
+
     if (providerType) {
       // Use tiered routing with circuit breaker failover
       // Pass allowedUpstreamIds to filter by API key authorization
+      // Pass affinityContext for session affinity
       const {
         result: proxyResult,
         selectedUpstream: selected,
         failoverHistory: history,
-      } = await forwardWithFailover(request, providerType, path, requestId, allowedUpstreamIds);
+        affinityHit: afHit,
+        affinityMigrated: afMigrated,
+      } = await forwardWithFailover(
+        request,
+        providerType,
+        path,
+        requestId,
+        allowedUpstreamIds,
+        affinityContext
+      );
       result = proxyResult;
       upstreamForLogging = selected;
       failoverHistory = history;
+      isAffinityHit = afHit;
+      isAffinityMigrated = afMigrated;
       priorityTier = selected.priority;
     } else if (selectedUpstream) {
       // Direct upstream routing (no load balancing)
@@ -664,6 +807,28 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
       void usagePromise
         .then((usage) => {
+          // Update session affinity cumulative tokens if we have a session
+          if (affinityContext?.sessionId && providerType && usage) {
+            const affinityUsage: AffinityUsage = {
+              totalInputTokens: computeAffinityTokens(providerType, usage),
+            };
+            affinityStore.updateCumulativeTokens(
+              affinityContext.apiKeyId,
+              providerType,
+              affinityContext.sessionId,
+              affinityUsage
+            );
+            log.debug(
+              {
+                requestId,
+                sessionId: affinityContext.sessionId,
+                upstreamId: upstreamForLogging.id,
+                tokens: affinityUsage,
+              },
+              "session affinity: updated cumulative tokens"
+            );
+          }
+
           if (requestLogId) {
             return updateRequestLog(requestLogId, {
               upstreamId: upstreamForLogging.id,
@@ -677,6 +842,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               cacheReadTokens: usage?.cacheReadTokens || 0,
               statusCode: result.statusCode,
               durationMs: Date.now() - startTime,
+              routingDurationMs,
               errorMessage: null,
               routingType: routingDecision.routingType,
               priorityTier: routingDecision.priorityTier,
@@ -684,6 +850,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               failoverHistory:
                 routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
               routingDecision: finalRoutingDecisionLog,
+              affinityHit: isAffinityHit,
+              affinityMigrated: isAffinityMigrated,
             });
           }
 
@@ -702,12 +870,16 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             cacheReadTokens: usage?.cacheReadTokens || 0,
             statusCode: result.statusCode,
             durationMs: Date.now() - startTime,
+            routingDurationMs,
             routingType: routingDecision.routingType,
             priorityTier: routingDecision.priorityTier,
             failoverAttempts: routingDecision.failoverAttempts,
             failoverHistory:
               routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
             routingDecision: finalRoutingDecisionLog,
+            sessionId,
+            affinityHit: isAffinityHit,
+            affinityMigrated: isAffinityMigrated,
           });
         })
         .catch((e) => log.error({ err: e, requestId }, "failed to log request"));
@@ -781,6 +953,28 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         }
       }
 
+      // Update session affinity cumulative tokens if we have a session
+      if (affinityContext?.sessionId && providerType && usage) {
+        const affinityUsage: AffinityUsage = {
+          totalInputTokens: computeAffinityTokens(providerType, usage),
+        };
+        affinityStore.updateCumulativeTokens(
+          affinityContext.apiKeyId,
+          providerType,
+          affinityContext.sessionId,
+          affinityUsage
+        );
+        log.debug(
+          {
+            requestId,
+            sessionId: affinityContext.sessionId,
+            upstreamId: upstreamForLogging.id,
+            tokens: affinityUsage,
+          },
+          "session affinity: updated cumulative tokens"
+        );
+      }
+
       // Log request
       if (requestLogId) {
         await updateRequestLog(requestLogId, {
@@ -795,6 +989,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           cacheReadTokens: usage?.cacheReadTokens || 0,
           statusCode: result.statusCode,
           durationMs,
+          routingDurationMs,
           errorMessage: null,
           routingType: routingDecision.routingType,
           priorityTier: routingDecision.priorityTier,
@@ -802,6 +997,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           failoverHistory:
             routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
           routingDecision: finalRoutingDecisionLog,
+          affinityHit: isAffinityHit,
+          affinityMigrated: isAffinityMigrated,
         });
       } else {
         await logRequest({
@@ -819,12 +1016,16 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           cacheReadTokens: usage?.cacheReadTokens || 0,
           statusCode: result.statusCode,
           durationMs,
+          routingDurationMs,
           routingType: routingDecision.routingType,
           priorityTier: routingDecision.priorityTier,
           failoverAttempts: routingDecision.failoverAttempts,
           failoverHistory:
             routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
           routingDecision: finalRoutingDecisionLog,
+          sessionId,
+          affinityHit: isAffinityHit,
+          affinityMigrated: isAffinityMigrated,
         });
       }
 
@@ -912,6 +1113,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         totalTokens: 0,
         statusCode: getHttpStatusForError(errorCode),
         durationMs,
+        routingDurationMs,
         errorMessage: error instanceof Error ? error.message : "Unknown error",
         routingType,
         priorityTier,
@@ -931,6 +1133,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         totalTokens: 0,
         statusCode: getHttpStatusForError(errorCode),
         durationMs,
+        routingDurationMs,
         errorMessage: error instanceof Error ? error.message : "Unknown error",
         routingType,
         priorityTier,

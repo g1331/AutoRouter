@@ -38,6 +38,7 @@ import { useCreateUpstream, useUpdateUpstream } from "@/hooks/use-upstreams";
 import type { Upstream, ProviderType } from "@/types/api";
 import { TagInput } from "@/components/ui/tag-input";
 import { KeyValueInput } from "@/components/ui/key-value-input";
+import { Switch } from "@/components/ui/switch";
 
 interface UpstreamFormDialogProps {
   upstream?: Upstream | null;
@@ -56,6 +57,15 @@ const circuitBreakerConfigSchema = z
   })
   .nullable();
 
+// Affinity migration config schema
+const affinityMigrationConfigSchema = z
+  .object({
+    enabled: z.boolean(),
+    metric: z.enum(["tokens", "length"]),
+    threshold: z.number().int().min(1).max(10000000),
+  })
+  .nullable();
+
 // Schema for create mode - api_key is required
 const createUpstreamFormSchema = z.object({
   name: z.string().min(1).max(100),
@@ -68,6 +78,7 @@ const createUpstreamFormSchema = z.object({
   allowed_models: z.array(z.string()).nullable(),
   model_redirects: z.record(z.string(), z.string()).nullable(),
   circuit_breaker_config: circuitBreakerConfigSchema,
+  affinity_migration: affinityMigrationConfigSchema,
 });
 
 // Schema for edit mode - api_key is optional (leave empty to keep unchanged)
@@ -82,6 +93,7 @@ const editUpstreamFormSchema = z.object({
   allowed_models: z.array(z.string()).nullable(),
   model_redirects: z.record(z.string(), z.string()).nullable(),
   circuit_breaker_config: circuitBreakerConfigSchema,
+  affinity_migration: affinityMigrationConfigSchema,
 });
 
 type UpstreamFormData = z.infer<typeof createUpstreamFormSchema>;
@@ -114,6 +126,7 @@ export function UpstreamFormDialog({
       allowed_models: null,
       model_redirects: null,
       circuit_breaker_config: null,
+      affinity_migration: null,
     },
   });
 
@@ -121,6 +134,12 @@ export function UpstreamFormDialog({
   const circuitBreakerConfig = useWatch({
     control: form.control,
     name: "circuit_breaker_config",
+  });
+
+  // Watch affinity_migration for controlled inputs
+  const affinityMigration = useWatch({
+    control: form.control,
+    name: "affinity_migration",
   });
 
   useEffect(() => {
@@ -143,6 +162,7 @@ export function UpstreamFormDialog({
               probe_interval: upstream.circuit_breaker.config.probe_interval,
             }
           : null,
+        affinity_migration: upstream.affinity_migration,
       });
     } else if (!open) {
       form.reset({
@@ -156,6 +176,7 @@ export function UpstreamFormDialog({
         allowed_models: null,
         model_redirects: null,
         circuit_breaker_config: null,
+        affinity_migration: null,
       });
     }
   }, [upstream, open, form]);
@@ -180,6 +201,11 @@ export function UpstreamFormDialog({
             open_duration?: number;
             probe_interval?: number;
           } | null;
+          affinity_migration?: {
+            enabled: boolean;
+            metric: "tokens" | "length";
+            threshold: number;
+          } | null;
         } = {
           name: data.name,
           base_url: data.base_url,
@@ -190,6 +216,7 @@ export function UpstreamFormDialog({
           allowed_models: data.allowed_models,
           model_redirects: data.model_redirects,
           circuit_breaker_config: data.circuit_breaker_config,
+          affinity_migration: data.affinity_migration,
         };
         if (data.api_key) {
           updateData.api_key = data.api_key;
@@ -211,6 +238,7 @@ export function UpstreamFormDialog({
           allowed_models: data.allowed_models,
           model_redirects: data.model_redirects,
           circuit_breaker_config: data.circuit_breaker_config,
+          affinity_migration: data.affinity_migration,
         });
       }
 
@@ -497,6 +525,101 @@ export function UpstreamFormDialog({
                 />
                 <p className="text-xs text-muted-foreground">{t("probeIntervalDesc")}</p>
               </div>
+            </div>
+          </div>
+
+          {/* Session Affinity Migration Configuration Section */}
+          <div className="border-t pt-6 mt-6">
+            <h3 className="text-sm font-medium text-muted-foreground mb-4">
+              {t("affinityMigrationConfig")}
+            </h3>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <label className="text-sm font-medium">{t("affinityMigrationEnabled")}</label>
+                  <p className="text-xs text-muted-foreground">
+                    {t("affinityMigrationEnabledDesc")}
+                  </p>
+                </div>
+                <Switch
+                  checked={affinityMigration?.enabled ?? false}
+                  onCheckedChange={(checked) => {
+                    const currentConfig = form.getValues("affinity_migration");
+                    form.setValue(
+                      "affinity_migration",
+                      checked
+                        ? {
+                            enabled: true,
+                            metric: currentConfig?.metric ?? "tokens",
+                            threshold: currentConfig?.threshold ?? 50000,
+                          }
+                        : null,
+                      { shouldValidate: true }
+                    );
+                  }}
+                />
+              </div>
+
+              {affinityMigration?.enabled && (
+                <>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">{t("affinityMigrationMetric")}</label>
+                    <Select
+                      value={affinityMigration.metric}
+                      onValueChange={(value: "tokens" | "length") => {
+                        form.setValue(
+                          "affinity_migration",
+                          {
+                            ...affinityMigration,
+                            metric: value,
+                          },
+                          { shouldValidate: true }
+                        );
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="tokens">{t("metricTokens")}</SelectItem>
+                        <SelectItem value="length">{t("metricLength")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {t("affinityMigrationMetricDesc")}
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">{t("affinityMigrationThreshold")}</label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={10000000}
+                      step={1}
+                      placeholder="50000"
+                      value={affinityMigration.threshold}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10) || 50000;
+                        form.setValue(
+                          "affinity_migration",
+                          {
+                            ...affinityMigration,
+                            threshold: val,
+                          },
+                          { shouldValidate: true }
+                        );
+                      }}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {affinityMigration.metric === "tokens"
+                        ? t("affinityMigrationThresholdTokensDesc")
+                        : t("affinityMigrationThresholdLengthDesc")}
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

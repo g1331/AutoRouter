@@ -79,19 +79,26 @@ export function injectAuthHeader(
 ): Record<string, string> {
   const result = { ...headers };
 
-  // Detect which auth format the client used
-  const usesApiKey = "x-api-key" in result;
+  const keys = Object.keys(result);
+  const apiKeyHeaderKey = keys.find((k) => k.toLowerCase() === "x-api-key");
+  const authorizationHeaderKey = keys.find((k) => k.toLowerCase() === "authorization");
 
-  // Remove any existing auth headers from client
-  delete result["authorization"];
-  delete result["Authorization"];
-  delete result["x-api-key"];
+  // Detect which auth format the client used (case-insensitive)
+  const usesApiKey = apiKeyHeaderKey !== undefined;
 
-  // Preserve the client's auth header format
+  // Remove any existing auth headers from client (case-insensitive)
+  for (const key of keys) {
+    const lower = key.toLowerCase();
+    if (lower === "authorization" || lower === "x-api-key") {
+      delete result[key];
+    }
+  }
+
+  // Preserve the client's auth header key casing when possible
   if (usesApiKey) {
-    result["x-api-key"] = upstream.apiKey;
+    result[apiKeyHeaderKey ?? "x-api-key"] = upstream.apiKey;
   } else {
-    result["Authorization"] = `Bearer ${upstream.apiKey}`;
+    result[authorizationHeaderKey ?? "Authorization"] = `Bearer ${upstream.apiKey}`;
   }
 
   return result;

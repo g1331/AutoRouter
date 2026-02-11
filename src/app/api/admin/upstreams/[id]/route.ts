@@ -24,6 +24,12 @@ const circuitBreakerConfigSchema = z.object({
   probe_interval: z.number().int().min(1).max(60000).optional(),
 });
 
+const affinityMigrationConfigSchema = z.object({
+  enabled: z.boolean(),
+  metric: z.enum(["tokens", "length"]),
+  threshold: z.number().int().min(1).max(10000000),
+});
+
 function normalizeDurationToMs(
   value: number | undefined,
   kind: "open_duration" | "probe_interval"
@@ -48,6 +54,7 @@ const updateUpstreamSchema = z.object({
   allowed_models: z.array(z.string()).nullable().optional(),
   model_redirects: z.record(z.string(), z.string()).nullable().optional(),
   circuit_breaker_config: circuitBreakerConfigSchema.nullable().optional(),
+  affinity_migration: affinityMigrationConfigSchema.nullable().optional(),
 });
 
 /**
@@ -116,6 +123,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
             ),
           }
         : null;
+    }
+    if (validated.affinity_migration !== undefined) {
+      input.affinityMigration = validated.affinity_migration ?? null;
     }
 
     const result = await updateUpstream(id, input);

@@ -52,6 +52,11 @@ export const upstreams = sqliteTable(
       string,
       string
     > | null>(),
+    affinityMigration: text("affinity_migration", { mode: "json" }).$type<{
+      enabled: boolean;
+      metric: "tokens" | "length";
+      threshold: number;
+    } | null>(), // Session affinity migration configuration
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },
@@ -169,6 +174,7 @@ export const requestLogs = sqliteTable(
     cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
     statusCode: integer("status_code"),
     durationMs: integer("duration_ms"),
+    routingDurationMs: integer("routing_duration_ms"),
     errorMessage: text("error_message"),
     // Routing decision fields
     routingType: text("routing_type"), // 'direct' | 'provider_type' | 'tiered'
@@ -178,6 +184,10 @@ export const requestLogs = sqliteTable(
     failoverAttempts: integer("failover_attempts").notNull().default(0), // Number of failover attempts
     failoverHistory: text("failover_history"), // JSON array of failover attempt records
     routingDecision: text("routing_decision"), // JSON object with complete routing decision info
+    // Session affinity fields
+    sessionId: text("session_id"),
+    affinityHit: integer("affinity_hit", { mode: "boolean" }).notNull().default(false),
+    affinityMigrated: integer("affinity_migrated", { mode: "boolean" }).notNull().default(false),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },
   (table) => [

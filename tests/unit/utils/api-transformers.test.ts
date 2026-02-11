@@ -50,6 +50,7 @@ describe("api-transformers", () => {
         timeout: 60,
         isActive: true,
         config: '{"model": "gpt-4"}',
+        affinityMigration: null,
         createdAt: new Date("2024-01-15T10:00:00.000Z"),
         updatedAt: new Date("2024-01-15T12:00:00.000Z"),
       };
@@ -72,6 +73,7 @@ describe("api-transformers", () => {
         weight: undefined,
         allowed_models: undefined,
         model_redirects: undefined,
+        affinity_migration: null,
         circuit_breaker: null,
       });
     });
@@ -87,6 +89,7 @@ describe("api-transformers", () => {
         timeout: 30,
         isActive: false,
         config: null,
+        affinityMigration: null,
         createdAt: new Date("2024-01-10T08:00:00.000Z"),
         updatedAt: new Date("2024-01-10T08:00:00.000Z"),
       };
@@ -113,6 +116,7 @@ describe("api-transformers", () => {
             timeout: 60,
             isActive: true,
             config: null,
+            affinityMigration: null,
             createdAt: new Date("2024-01-15T10:00:00.000Z"),
             updatedAt: new Date("2024-01-15T10:00:00.000Z"),
           },
@@ -126,6 +130,7 @@ describe("api-transformers", () => {
             timeout: 30,
             isActive: true,
             config: null,
+            affinityMigration: null,
             createdAt: new Date("2024-01-14T10:00:00.000Z"),
             updatedAt: new Date("2024-01-14T10:00:00.000Z"),
           },

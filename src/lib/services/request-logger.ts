@@ -17,6 +17,7 @@ export interface LogRequestInput {
   cacheReadTokens?: number;
   statusCode: number | null;
   durationMs: number | null;
+  routingDurationMs?: number | null;
   errorMessage?: string | null;
   // Routing decision fields
   routingType?: "tiered" | "direct" | "provider_type" | null;
@@ -24,6 +25,10 @@ export interface LogRequestInput {
   failoverAttempts?: number;
   failoverHistory?: FailoverAttempt[] | null;
   routingDecision?: RoutingDecisionLog | null;
+  // Session affinity fields
+  sessionId?: string | null;
+  affinityHit?: boolean;
+  affinityMigrated?: boolean;
 }
 
 /**
@@ -40,6 +45,7 @@ export interface StartRequestLogInput {
   routingType?: "tiered" | "direct" | "provider_type" | null;
   priorityTier?: number | null;
   routingDecision?: RoutingDecisionLog | null;
+  sessionId?: string | null;
 }
 
 /**
@@ -61,6 +67,7 @@ export interface UpdateRequestLogInput {
   cacheReadTokens?: number;
   statusCode?: number | null;
   durationMs?: number | null;
+  routingDurationMs?: number | null;
   errorMessage?: string | null;
   // Routing decision fields
   routingType?: "tiered" | "direct" | "provider_type" | null;
@@ -68,6 +75,10 @@ export interface UpdateRequestLogInput {
   failoverAttempts?: number;
   failoverHistory?: FailoverAttempt[] | null;
   routingDecision?: RoutingDecisionLog | null;
+  // Session affinity fields
+  sessionId?: string | null;
+  affinityHit?: boolean;
+  affinityMigrated?: boolean;
 }
 
 /**
@@ -105,6 +116,7 @@ export interface RequestLogResponse {
   cacheReadTokens: number;
   statusCode: number | null;
   durationMs: number | null;
+  routingDurationMs: number | null;
   errorMessage: string | null;
   // Routing decision fields
   routingType: string | null;
@@ -114,6 +126,10 @@ export interface RequestLogResponse {
   failoverAttempts: number;
   failoverHistory: FailoverAttempt[] | null;
   routingDecision: RoutingDecisionLog | null;
+  // Session affinity fields
+  sessionId: string | null;
+  affinityHit: boolean;
+  affinityMigrated: boolean;
   createdAt: Date;
 }
 
@@ -164,6 +180,7 @@ export async function logRequestStart(input: StartRequestLogInput): Promise<Requ
       failoverAttempts: 0,
       failoverHistory: null,
       routingDecision: input.routingDecision ? JSON.stringify(input.routingDecision) : null,
+      sessionId: input.sessionId ?? null,
       createdAt: new Date(),
     })
     .returning();
@@ -198,6 +215,8 @@ export async function updateRequestLog(
 
   if (input.statusCode !== undefined) updateValues.statusCode = input.statusCode;
   if (input.durationMs !== undefined) updateValues.durationMs = input.durationMs;
+  if (input.routingDurationMs !== undefined)
+    updateValues.routingDurationMs = input.routingDurationMs;
   if (input.errorMessage !== undefined) updateValues.errorMessage = input.errorMessage;
 
   if (input.routingType !== undefined) updateValues.routingType = input.routingType;
@@ -214,6 +233,10 @@ export async function updateRequestLog(
       ? JSON.stringify(input.routingDecision)
       : null;
   }
+
+  if (input.sessionId !== undefined) updateValues.sessionId = input.sessionId;
+  if (input.affinityHit !== undefined) updateValues.affinityHit = input.affinityHit;
+  if (input.affinityMigrated !== undefined) updateValues.affinityMigrated = input.affinityMigrated;
 
   if (Object.keys(updateValues).length === 0) {
     return null;
@@ -249,6 +272,7 @@ export async function logRequest(input: LogRequestInput): Promise<RequestLog> {
       cacheReadTokens: input.cacheReadTokens ?? 0,
       statusCode: input.statusCode,
       durationMs: input.durationMs,
+      routingDurationMs: input.routingDurationMs ?? null,
       errorMessage: input.errorMessage ?? null,
       // Routing decision fields
       routingType: input.routingType ?? null,
@@ -256,6 +280,9 @@ export async function logRequest(input: LogRequestInput): Promise<RequestLog> {
       failoverAttempts: input.failoverAttempts ?? 0,
       failoverHistory: input.failoverHistory ? JSON.stringify(input.failoverHistory) : null,
       routingDecision: input.routingDecision ? JSON.stringify(input.routingDecision) : null,
+      sessionId: input.sessionId ?? null,
+      affinityHit: input.affinityHit ?? false,
+      affinityMigrated: input.affinityMigrated ?? false,
       createdAt: new Date(),
     })
     .returning();
@@ -322,6 +349,7 @@ export function extractTokenUsage(responseBody: Record<string, unknown> | null):
   reasoningTokens: number;
   cacheCreationTokens: number;
   cacheReadTokens: number;
+  rawInputTokens: number;
 } {
   const defaultResult = {
     promptTokens: 0,
@@ -331,6 +359,7 @@ export function extractTokenUsage(responseBody: Record<string, unknown> | null):
     reasoningTokens: 0,
     cacheCreationTokens: 0,
     cacheReadTokens: 0,
+    rawInputTokens: 0,
   };
 
   if (!responseBody) {
@@ -378,6 +407,7 @@ export function extractTokenUsage(responseBody: Record<string, unknown> | null):
       reasoningTokens,
       cacheCreationTokens: 0,
       cacheReadTokens: cachedTokens, // OpenAI cached_tokens is equivalent to cache_read
+      rawInputTokens: promptTokens,
     };
   }
 
@@ -408,6 +438,7 @@ export function extractTokenUsage(responseBody: Record<string, unknown> | null):
       reasoningTokens: 0,
       cacheCreationTokens,
       cacheReadTokens,
+      rawInputTokens: inputTokens,
     };
   }
 
@@ -502,6 +533,7 @@ export async function listRequestLogs(
     cacheReadTokens: log.cacheReadTokens,
     statusCode: log.statusCode,
     durationMs: log.durationMs,
+    routingDurationMs: log.routingDurationMs ?? null,
     errorMessage: log.errorMessage,
     // Routing decision fields
     routingType: log.routingType,
@@ -511,6 +543,9 @@ export async function listRequestLogs(
     failoverAttempts: log.failoverAttempts,
     failoverHistory: log.failoverHistory ? parseFailoverHistory(log.failoverHistory) : null,
     routingDecision: log.routingDecision ? parseRoutingDecision(log.routingDecision) : null,
+    sessionId: log.sessionId ?? null,
+    affinityHit: log.affinityHit,
+    affinityMigrated: log.affinityMigrated,
     createdAt: log.createdAt,
   }));
 
