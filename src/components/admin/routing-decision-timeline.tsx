@@ -506,7 +506,7 @@ function RetryTimeline({
 
       {hiddenCount > 0 && (
         <div className="text-amber-600 text-[11px]">
-          ...{t("retryHiddenAttempts", { count: hiddenCount })}
+          {t("retryHiddenAttempts", { count: hiddenCount })}
         </div>
       )}
 
