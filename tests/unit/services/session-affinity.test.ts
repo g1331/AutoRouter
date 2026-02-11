@@ -107,14 +107,14 @@ describe("SessionAffinityStore", () => {
       shortStore.set("key1", "anthropic", "session-abc", "upstream-1", 1024);
 
       // Get multiple times to refresh sliding window
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 30));
       expect(shortStore.get("key1", "anthropic", "session-abc")).not.toBeNull();
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 30));
       expect(shortStore.get("key1", "anthropic", "session-abc")).not.toBeNull();
 
-      // Wait for max TTL to expire
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      // Wait for max TTL to expire (need >100ms since max TTL)
+      await new Promise((resolve) => setTimeout(resolve, 60));
 
       const entry = shortStore.get("key1", "anthropic", "session-abc");
       expect(entry).toBeNull();

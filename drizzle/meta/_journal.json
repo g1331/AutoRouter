@@ -68,13 +68,6 @@
     {
       "idx": 9,
       "version": "7",
-      "when": 1770729856245,
-      "tag": "0009_illegal_vargas",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "7",
       "when": 1770736450650,
       "tag": "0010_mysterious_menace",
       "breakpoints": true

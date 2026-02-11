@@ -356,9 +356,13 @@ export async function selectFromProviderType(
 
       if (boundUpstream && isUpstreamAvailable(boundUpstream) && !isExcluded) {
         // Check if we should migrate to higher priority upstream
+        // Filter out excluded upstreams from migration candidates
+        const availableForMigration = filteredUpstreams.filter(
+          (u) => !excludeIds?.includes(u.upstream.id)
+        );
         const migrationTarget = evaluateMigration(
           boundUpstream,
-          filteredUpstreams,
+          availableForMigration,
           contentLength,
           affinityEntry.cumulativeTokens
         );

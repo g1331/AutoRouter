@@ -15,6 +15,7 @@ import type { ProviderType } from "@/types/api";
 export interface AffinityEntry {
   upstreamId: string;
   lastAccessedAt: number;
+  createdAt: number; // For max TTL calculation (absolute lifetime)
   contentLength: number;
   cumulativeTokens: number;
 }
@@ -75,15 +76,16 @@ export class SessionAffinityStore {
 
     const now = Date.now();
     const age = now - entry.lastAccessedAt;
+    const lifetime = now - entry.createdAt;
 
-    // Check if entry has expired
+    // Check if entry has expired (sliding window TTL)
     if (age > this.defaultTtlMs) {
       this.cache.delete(key);
       return null;
     }
 
-    // Check max TTL limit
-    if (age > this.maxTtlMs) {
+    // Check max TTL limit (absolute lifetime, regardless of activity)
+    if (lifetime > this.maxTtlMs) {
       this.cache.delete(key);
       return null;
     }
@@ -114,6 +116,7 @@ export class SessionAffinityStore {
     this.cache.set(key, {
       upstreamId,
       lastAccessedAt: now,
+      createdAt: existing ? existing.createdAt : now,
       contentLength,
       cumulativeTokens,
     });
@@ -186,7 +189,9 @@ export class SessionAffinityStore {
 
     for (const [key, entry] of this.cache.entries()) {
       const age = now - entry.lastAccessedAt;
-      if (age > this.defaultTtlMs || age > this.maxTtlMs) {
+      const lifetime = now - entry.createdAt;
+      // Check both sliding window TTL and absolute max lifetime
+      if (age > this.defaultTtlMs || lifetime > this.maxTtlMs) {
         this.cache.delete(key);
         cleaned++;
       }
