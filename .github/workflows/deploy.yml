@@ -149,6 +149,12 @@ jobs:
 
             # Optional
             PORT=3331
+
+            # Traffic Recorder
+            RECORDER_ENABLED=true
+            # RECORDER_FIXTURES_DIR=tests/fixtures
+            RECORDER_REDACT_SENSITIVE=false
+            RECORDER_MODE=failure
             EOF
               echo ".env file generated successfully"
             fi
@@ -166,6 +172,24 @@ jobs:
 
             # Update image tag in .env
             sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=${{ needs.build.outputs.version }}|" .env
+
+            # Ensure recorder settings exist and apply deploy defaults
+            if ! grep -q "^RECORDER_ENABLED=" .env; then
+              echo "RECORDER_ENABLED=true" >> .env
+            fi
+            if ! grep -q "^RECORDER_REDACT_SENSITIVE=" .env; then
+              echo "RECORDER_REDACT_SENSITIVE=false" >> .env
+            fi
+            if ! grep -q "^RECORDER_MODE=" .env; then
+              echo "RECORDER_MODE=failure" >> .env
+            fi
+            if ! grep -q "^RECORDER_FIXTURES_DIR=" .env; then
+              echo "RECORDER_FIXTURES_DIR=tests/fixtures" >> .env
+            fi
+
+            sed -i "s|^RECORDER_ENABLED=.*|RECORDER_ENABLED=true|" .env
+            sed -i "s|^RECORDER_REDACT_SENSITIVE=.*|RECORDER_REDACT_SENSITIVE=false|" .env
+            sed -i "s|^RECORDER_MODE=.*|RECORDER_MODE=failure|" .env
 
             # Restart services
             docker compose pull
