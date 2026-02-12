@@ -56,13 +56,45 @@ const HOP_BY_HOP_HEADERS = new Set([
   "x-forwarded-proto",
 ]);
 
+// Infrastructure / edge headers that should never be forwarded upstream.
+// These describe proxy hops or client network identity and may cause upstream
+// routing/policy noise when passed through.
+const INFRASTRUCTURE_REQUEST_HEADERS = new Set([
+  "cf-connecting-ip",
+  "cf-connecting-ipv6",
+  "cf-ipcountry",
+  "cf-ray",
+  "cf-visitor",
+  "cf-worker",
+  "cdn-loop",
+  "forwarded",
+  "remote-host",
+  "true-client-ip",
+  "via",
+  "x-client-ip",
+  "x-cluster-client-ip",
+  "x-forwarded-client-cert",
+  "x-real-ip",
+]);
+
+const INFRASTRUCTURE_REQUEST_PREFIXES = ["x-envoy-", "x-vercel-"];
+
+function isInfrastructureRequestHeader(headerName: string): boolean {
+  const lower = headerName.toLowerCase();
+  return (
+    INFRASTRUCTURE_REQUEST_HEADERS.has(lower) ||
+    INFRASTRUCTURE_REQUEST_PREFIXES.some((prefix) => lower.startsWith(prefix))
+  );
+}
+
 /**
  * Filter out hop-by-hop headers and return safe headers for forwarding.
  */
 export function filterHeaders(headers: Headers): Record<string, string> {
   const filtered: Record<string, string> = {};
   headers.forEach((value, key) => {
-    if (!HOP_BY_HOP_HEADERS.has(key.toLowerCase())) {
+    const lower = key.toLowerCase();
+    if (!HOP_BY_HOP_HEADERS.has(lower) && !isInfrastructureRequestHeader(lower)) {
       filtered[key] = value;
     }
   });

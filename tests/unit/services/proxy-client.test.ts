@@ -32,7 +32,7 @@ describe("proxy-client", () => {
       expect(filtered["accept"]).toBe("application/json");
     });
 
-    it("should remove hop-by-hop headers", () => {
+    it("should remove hop-by-hop and infrastructure headers", () => {
       const headers = new Headers({
         "Content-Type": "application/json",
         Connection: "keep-alive",
@@ -44,6 +44,16 @@ describe("proxy-client", () => {
         "X-Forwarded-Host": "localhost:3000",
         "X-Forwarded-Port": "3000",
         "X-Forwarded-Proto": "http",
+        "CF-Connecting-IP": "1.2.3.4",
+        "CF-IPCountry": "CN",
+        "CF-Ray": "abcd-xyz",
+        "CF-Visitor": '{"scheme":"https"}',
+        "CDN-Loop": "cloudflare",
+        "X-Real-IP": "1.2.3.4",
+        "Remote-Host": "172.71.1.1",
+        Forwarded: "for=1.2.3.4;proto=https",
+        Via: "1.1 cloudflare",
+        "X-Envoy-External-Address": "1.2.3.4",
       });
 
       const filtered = filterHeaders(headers);
@@ -58,6 +68,40 @@ describe("proxy-client", () => {
       expect(filtered["x-forwarded-host"]).toBeUndefined();
       expect(filtered["x-forwarded-port"]).toBeUndefined();
       expect(filtered["x-forwarded-proto"]).toBeUndefined();
+      expect(filtered["cf-connecting-ip"]).toBeUndefined();
+      expect(filtered["cf-ipcountry"]).toBeUndefined();
+      expect(filtered["cf-ray"]).toBeUndefined();
+      expect(filtered["cf-visitor"]).toBeUndefined();
+      expect(filtered["cdn-loop"]).toBeUndefined();
+      expect(filtered["x-real-ip"]).toBeUndefined();
+      expect(filtered["remote-host"]).toBeUndefined();
+      expect(filtered["forwarded"]).toBeUndefined();
+      expect(filtered["via"]).toBeUndefined();
+      expect(filtered["x-envoy-external-address"]).toBeUndefined();
+    });
+
+    it("should preserve application headers that are not infrastructure headers", () => {
+      const headers = new Headers({
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+        "X-Custom-Header": "value",
+        Originator: "codex_cli_rs",
+        session_id: "sess_123",
+        "x-codex-beta-features": "collab",
+        "x-codex-turn-metadata": '{"trace":1}',
+        "cf-aig-authorization": "Bearer aig-token",
+      });
+
+      const filtered = filterHeaders(headers);
+
+      expect(filtered["content-type"]).toBe("application/json");
+      expect(filtered["accept"]).toBe("text/event-stream");
+      expect(filtered["x-custom-header"]).toBe("value");
+      expect(filtered["originator"]).toBe("codex_cli_rs");
+      expect(filtered["session_id"]).toBe("sess_123");
+      expect(filtered["x-codex-beta-features"]).toBe("collab");
+      expect(filtered["x-codex-turn-metadata"]).toBe('{"trace":1}');
+      expect(filtered["cf-aig-authorization"]).toBe("Bearer aig-token");
     });
 
     it("should handle empty headers", () => {
