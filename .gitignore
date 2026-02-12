@@ -70,3 +70,7 @@ tests/fixtures/
 .worktrees/
 .security-key
 logs/security/
+
+# Playwright artifacts
+playwright-report/
+test-results/

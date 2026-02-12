@@ -12,6 +12,8 @@
     "format:check": "prettier --check .",
     "test": "vitest",
     "test:run": "vitest run",
+    "e2e": "playwright test -c playwright.e2e.config.ts",
+    "e2e:headed": "playwright test -c playwright.e2e.config.ts --headed",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
@@ -54,8 +56,10 @@
     "zod": "^4.1.13"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.1",
     "@babel/types": "^7.28.6",
     "@libsql/client": "^0.17.0",
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4.1.17",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",

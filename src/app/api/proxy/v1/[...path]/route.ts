@@ -1391,7 +1391,9 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     const failureReason = resolveFailureReason(error, didSendUpstream, lastFailoverAttempt);
     const actualUpstreamId =
       lastFailoverAttempt?.upstream_id ?? (didSendUpstream ? (selectedUpstream?.id ?? null) : null);
-    const candidateUpstreamId = selectedUpstream?.id ?? null;
+    const candidateUpstreamId = didSendUpstream
+      ? (lastFailoverAttempt?.upstream_id ?? selectedUpstream?.id ?? null)
+      : null;
 
     const errorStatusCode = getHttpStatusForError(errorCode);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";

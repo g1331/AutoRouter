@@ -277,6 +277,7 @@
     "timelineFailureStage": "失败阶段",
     "timelineTotalDuration": "总耗时",
     "timelineRoutingOverhead": "决策层耗时",
+    "timelineGatewayProcessing": "网关处理耗时",
     "timelineUpstreamLatency": "上游响应耗时",
     "timelineCacheEffect": "缓存效果",
     "failureStage": {

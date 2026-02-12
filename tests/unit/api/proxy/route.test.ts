@@ -1646,6 +1646,7 @@ describe("proxy route upstream selection", () => {
     const { routeByModel } = await import("@/lib/services/model-router");
     const { selectFromProviderType, NoAuthorizedUpstreamsError } =
       await import("@/lib/services/load-balancer");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
@@ -1716,6 +1717,15 @@ describe("proxy route upstream selection", () => {
     });
     expect(data.error.request_id).toEqual(expect.any(String));
     expect(forwardRequest).not.toHaveBeenCalled();
+    expect(updateRequestLog).toHaveBeenCalled();
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload?.routingDecision).toEqual(
+      expect.objectContaining({
+        candidate_upstream_id: null,
+        actual_upstream_id: null,
+        did_send_upstream: false,
+      })
+    );
   });
 
   it.skip("should handle streaming response failover with circuit breaker", async () => {
@@ -1973,6 +1983,7 @@ describe("proxy route upstream selection", () => {
       const { routeByModel } = await import("@/lib/services/model-router");
       const { selectFromProviderType, NoHealthyUpstreamsError } =
         await import("@/lib/services/load-balancer");
+      const { updateRequestLog } = await import("@/lib/services/request-logger");
 
       vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
         { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
@@ -2047,6 +2058,15 @@ describe("proxy route upstream selection", () => {
       });
       expect(data.error.request_id).toEqual(expect.any(String));
       expect(forwardRequest).not.toHaveBeenCalled();
+      expect(updateRequestLog).toHaveBeenCalled();
+      const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+      expect(updateLogPayload?.routingDecision).toEqual(
+        expect.objectContaining({
+          candidate_upstream_id: null,
+          actual_upstream_id: null,
+          did_send_upstream: false,
+        })
+      );
     });
 
     it("should filter unauthorized upstreams during failover", async () => {

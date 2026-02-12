@@ -277,6 +277,7 @@
     "timelineFailureStage": "Failure stage",
     "timelineTotalDuration": "Total duration",
     "timelineRoutingOverhead": "Routing overhead",
+    "timelineGatewayProcessing": "Gateway processing",
     "timelineUpstreamLatency": "Upstream latency",
     "timelineCacheEffect": "Cache effect",
     "failureStage": {

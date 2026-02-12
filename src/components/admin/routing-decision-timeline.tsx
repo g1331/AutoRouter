@@ -278,7 +278,9 @@ export function RoutingDecisionTimeline({
             </div>
             {routingDecision.candidates.map((c) => {
               const selectedCandidateId =
-                routingDecision.candidate_upstream_id ?? routingDecision.selected_upstream_id;
+                didSendUpstream === false
+                  ? null
+                  : (routingDecision.candidate_upstream_id ?? routingDecision.selected_upstream_id);
               const isSelected = c.id === selectedCandidateId;
               return (
                 <div
@@ -386,14 +388,27 @@ export function RoutingDecisionTimeline({
           </div>
           {routingDurationMs != null && durationMs != null && (
             <>
+              {/** Split total duration into routing + gateway processing + upstream latency */}
               <div className="flex items-center gap-2 pl-5">
                 <span className="text-amber-600">{t("timelineRoutingOverhead")}:</span>
                 <span className="text-orange-500">{formatMs(routingDurationMs)}</span>
               </div>
+              {didSendUpstream === false && (
+                <div className="flex items-center gap-2 pl-5">
+                  <span className="text-amber-600">{t("timelineGatewayProcessing")}:</span>
+                  <span className="text-amber-500">
+                    {formatMs(Math.max(0, durationMs - routingDurationMs))}
+                  </span>
+                </div>
+              )}
               <div className="flex items-center gap-2 pl-5">
                 <span className="text-amber-600">{t("timelineUpstreamLatency")}:</span>
-                <span className="text-status-success">
-                  {formatMs(Math.max(0, durationMs - routingDurationMs))}
+                <span
+                  className={didSendUpstream === false ? "text-orange-500" : "text-status-success"}
+                >
+                  {didSendUpstream === false
+                    ? t("timelineNoUpstreamSent")
+                    : formatMs(Math.max(0, durationMs - routingDurationMs))}
                 </span>
               </div>
             </>
