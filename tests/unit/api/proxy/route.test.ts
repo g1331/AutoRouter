@@ -58,11 +58,19 @@ vi.mock("@/lib/services/load-balancer", () => {
     }
   }
 
+  class NoAuthorizedUpstreamsError extends NoHealthyUpstreamsError {
+    constructor(providerType: string) {
+      super(`No authorized upstreams found for provider type: ${providerType}`);
+      this.name = "NoAuthorizedUpstreamsError";
+    }
+  }
+
   return {
     selectFromProviderType: vi.fn(),
     recordConnection: vi.fn(),
     releaseConnection: vi.fn(),
     NoHealthyUpstreamsError,
+    NoAuthorizedUpstreamsError,
   };
 });
 
@@ -99,6 +107,14 @@ vi.mock("@/lib/services/model-router", () => ({
     constructor(message: string) {
       super(message);
       this.name = "NoUpstreamGroupError";
+    }
+  },
+  NoHealthyUpstreamError: class NoHealthyUpstreamError extends Error {
+    providerType: string;
+    constructor(message: string, providerType: string = "openai") {
+      super(message);
+      this.name = "NoHealthyUpstreamError";
+      this.providerType = providerType;
     }
   },
 }));
@@ -240,6 +256,7 @@ describe("proxy route upstream selection", () => {
     const { selectFromProviderType } = await import("@/lib/services/load-balancer");
     const { markHealthy, markUnhealthy } = await import("@/lib/services/health-checker");
     const { recordSuccess, recordFailure } = await import("@/lib/services/circuit-breaker");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
@@ -369,6 +386,14 @@ describe("proxy route upstream selection", () => {
 
     expect(forwardRequest).toHaveBeenCalledTimes(2);
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(healthyUpstream);
+    expect(updateRequestLog).toHaveBeenCalled();
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload?.routingDecision).toEqual(
+      expect.objectContaining({
+        candidate_upstream_id: "up-anthropic-2",
+        actual_upstream_id: "up-anthropic-2",
+      })
+    );
   });
 
   it("should return 503 when circuit breaker is open for all upstreams", async () => {
@@ -377,6 +402,7 @@ describe("proxy route upstream selection", () => {
     const { routeByModel } = await import("@/lib/services/model-router");
     const { selectFromProviderType, NoHealthyUpstreamsError } =
       await import("@/lib/services/load-balancer");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
@@ -438,13 +464,23 @@ describe("proxy route upstream selection", () => {
 
     expect(response.status).toBe(503);
     expect(data).toEqual({
-      error: {
+      error: expect.objectContaining({
         message: "\u670d\u52a1\u6682\u65f6\u4e0d\u53ef\u7528\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5",
         type: "service_unavailable",
         code: "ALL_UPSTREAMS_UNAVAILABLE",
-      },
+        reason: "NO_HEALTHY_CANDIDATES",
+        did_send_upstream: false,
+      }),
     });
+    expect(data.error.request_id).toEqual(expect.any(String));
     expect(forwardRequest).not.toHaveBeenCalled();
+    expect(updateRequestLog).toHaveBeenCalled();
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload?.routingDecision).toEqual(
+      expect.objectContaining({
+        failure_stage: "candidate_selection",
+      })
+    );
   });
 
   it("should record failure fixture when upstreams are unavailable and recorder is enabled", async () => {
@@ -547,17 +583,22 @@ describe("proxy route upstream selection", () => {
         error: expect.objectContaining({ message: "upstream failed once" }),
       })
     );
-    expect(fixtureParams.downstreamResponse).toEqual({
-      statusCode: 503,
-      headers: { "content-type": "application/json" },
-      bodyJson: {
-        error: {
-          message: "服务暂时不可用，请稍后重试",
-          type: "service_unavailable",
-          code: "ALL_UPSTREAMS_UNAVAILABLE",
+    expect(fixtureParams.downstreamResponse).toEqual(
+      expect.objectContaining({
+        statusCode: 503,
+        headers: { "content-type": "application/json" },
+        bodyJson: {
+          error: expect.objectContaining({
+            message: "服务暂时不可用，请稍后重试",
+            type: "service_unavailable",
+            code: "ALL_UPSTREAMS_UNAVAILABLE",
+            reason: "UPSTREAM_HTTP_ERROR",
+            did_send_upstream: true,
+          }),
         },
-      },
-    });
+      })
+    );
+    expect(fixtureParams.downstreamResponse.bodyJson.error.request_id).toEqual(expect.any(String));
     expect(fixtureParams.response.statusCode).toBe(500);
     const failoverHistory = fixtureParams.failoverHistory as
       | Array<{
@@ -580,6 +621,284 @@ describe("proxy route upstream selection", () => {
     );
 
     expect(recordTrafficFixture).toHaveBeenCalledTimes(1);
+  });
+
+  it("should not inject upstream auth headers when request was never sent upstream", async () => {
+    process.env.RECORDER_ENABLED = "true";
+
+    const { db } = await import("@/lib/db");
+    const { forwardRequest, injectAuthHeader } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType, NoAuthorizedUpstreamsError } =
+      await import("@/lib/services/load-balancer");
+    const { buildFixture, recordTrafficFixture } = await import("@/lib/services/traffic-recorder");
+
+    const routedUpstream = {
+      id: "up-route",
+      name: "route-only",
+      providerType: "openai",
+      baseUrl: "https://route-only.example/v1",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-authorized-other" },
+    ]);
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream: routedUpstream,
+      providerType: "openai",
+      resolvedModel: "gpt-5.2",
+      candidateUpstreams: [routedUpstream],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "gpt-5.2",
+        resolvedModel: "gpt-5.2",
+        providerType: "openai",
+        upstreamName: routedUpstream.name,
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 1,
+        finalCandidateCount: 1,
+      },
+    });
+    vi.mocked(selectFromProviderType).mockRejectedValueOnce(
+      new NoAuthorizedUpstreamsError("openai")
+    );
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.2",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["chat", "completions"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(data).toEqual({
+      error: expect.objectContaining({
+        code: "NO_AUTHORIZED_UPSTREAMS",
+        reason: "NO_AUTHORIZED_UPSTREAMS",
+        did_send_upstream: false,
+      }),
+    });
+    expect(forwardRequest).not.toHaveBeenCalled();
+    expect(injectAuthHeader).not.toHaveBeenCalled();
+    expect(db.query.upstreams.findFirst).not.toHaveBeenCalled();
+
+    expect(buildFixture).toHaveBeenCalledTimes(1);
+    const fixtureParams = vi.mocked(buildFixture).mock.calls[0][0];
+    expect(fixtureParams.upstream).toEqual(
+      expect.objectContaining({
+        id: "unknown",
+        name: "not-sent",
+      })
+    );
+    expect(fixtureParams.outboundHeaders).toEqual({});
+    expect(fixtureParams.outboundRequestSent).toBe(false);
+    expect(recordTrafficFixture).toHaveBeenCalledTimes(1);
+  });
+
+  it("should classify downstream disconnect as CLIENT_DISCONNECTED reason", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+
+    const upstream = {
+      id: "up-openai",
+      name: "openai-main",
+      providerType: "openai",
+      baseUrl: "https://api.openai.com/v1",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: upstream.id },
+    ]);
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      resolvedModel: "gpt-5.2",
+      candidateUpstreams: [upstream],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "gpt-5.2",
+        resolvedModel: "gpt-5.2",
+        providerType: "openai",
+        upstreamName: upstream.name,
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 1,
+        finalCandidateCount: 1,
+      },
+    });
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+
+    const abortController = new AbortController();
+    vi.mocked(forwardRequest).mockImplementationOnce(async () => {
+      abortController.abort();
+      throw new Error("simulated downstream disconnect");
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.2",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+      signal: abortController.signal,
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["chat", "completions"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(499);
+    expect(data).toEqual({
+      error: expect.objectContaining({
+        code: "CLIENT_DISCONNECTED",
+        reason: "CLIENT_DISCONNECTED",
+        did_send_upstream: true,
+      }),
+    });
+    expect(data.error.user_hint).toContain("调用方连接已中断");
+    expect(data.error.request_id).toEqual(expect.any(String));
+  });
+
+  it("should preserve did_send_upstream when disconnect happens between retries", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+
+    const firstUpstream = {
+      id: "up-first",
+      name: "primary",
+      providerType: "openai",
+      baseUrl: "https://primary.example/v1",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: firstUpstream.id },
+      { upstreamId: "up-second" },
+    ]);
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream: firstUpstream,
+      providerType: "openai",
+      resolvedModel: "gpt-5.2",
+      candidateUpstreams: [firstUpstream],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "gpt-5.2",
+        resolvedModel: "gpt-5.2",
+        providerType: "openai",
+        upstreamName: firstUpstream.name,
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 2,
+        finalCandidateCount: 2,
+      },
+    });
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: firstUpstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 2,
+    });
+
+    const abortController = new AbortController();
+    vi.mocked(forwardRequest).mockImplementationOnce(async () => {
+      abortController.abort();
+      return {
+        statusCode: 500,
+        headers: new Headers({ "content-type": "application/json" }),
+        body: new TextEncoder().encode(JSON.stringify({ error: { message: "temporary failure" } })),
+        isStream: false,
+        usage: null,
+      };
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.2",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+      signal: abortController.signal,
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["chat", "completions"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(499);
+    expect(data).toEqual({
+      error: expect.objectContaining({
+        code: "CLIENT_DISCONNECTED",
+        reason: "CLIENT_DISCONNECTED",
+        did_send_upstream: true,
+      }),
+    });
+    expect(forwardRequest).toHaveBeenCalledTimes(1);
+    expect(selectFromProviderType).toHaveBeenCalledTimes(1);
+    expect(updateRequestLog).toHaveBeenCalled();
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload?.upstreamId).toBe("up-first");
+    expect(updateLogPayload?.routingDecision).toEqual(
+      expect.objectContaining({
+        actual_upstream_id: "up-first",
+        did_send_upstream: true,
+      })
+    );
   });
 
   it("should skip failure fixture when RECORDER_MODE is success", async () => {
@@ -973,12 +1292,15 @@ describe("proxy route upstream selection", () => {
     // After exhausting all attempts, should return 503 with unified error format
     expect(response.status).toBe(503);
     expect(data).toEqual({
-      error: {
+      error: expect.objectContaining({
         message: "\u670d\u52a1\u6682\u65f6\u4e0d\u53ef\u7528\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5",
         type: "service_unavailable",
         code: "ALL_UPSTREAMS_UNAVAILABLE",
-      },
+        reason: "UPSTREAM_HTTP_ERROR",
+        did_send_upstream: true,
+      }),
     });
+    expect(data.error.request_id).toEqual(expect.any(String));
 
     // All 3 upstreams should be marked unhealthy and have circuit breaker failures recorded
     expect(markUnhealthy).toHaveBeenCalledTimes(3);
@@ -1306,12 +1628,15 @@ describe("proxy route upstream selection", () => {
     // Should return unified error format without exposing model name
     expect(response.status).toBe(503);
     expect(data).toEqual({
-      error: {
+      error: expect.objectContaining({
         message: "\u670d\u52a1\u6682\u65f6\u4e0d\u53ef\u7528\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5",
         type: "service_unavailable",
         code: "NO_UPSTREAMS_CONFIGURED",
-      },
+        reason: "NO_HEALTHY_CANDIDATES",
+        did_send_upstream: false,
+      }),
     });
+    expect(data.error.request_id).toEqual(expect.any(String));
     expect(forwardRequest).not.toHaveBeenCalled();
   });
 
@@ -1319,6 +1644,8 @@ describe("proxy route upstream selection", () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
     const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType, NoAuthorizedUpstreamsError } =
+      await import("@/lib/services/load-balancer");
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
@@ -1357,6 +1684,9 @@ describe("proxy route upstream selection", () => {
         finalCandidateCount: 1,
       },
     });
+    vi.mocked(selectFromProviderType).mockRejectedValueOnce(
+      new NoAuthorizedUpstreamsError("anthropic")
+    );
 
     const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
       method: "POST",
@@ -1374,14 +1704,17 @@ describe("proxy route upstream selection", () => {
     const data = await response.json();
 
     // Should return unified error format without exposing upstream name
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(403);
     expect(data).toEqual({
-      error: {
-        message: "\u670d\u52a1\u6682\u65f6\u4e0d\u53ef\u7528\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5",
-        type: "service_unavailable",
-        code: "SERVICE_UNAVAILABLE",
-      },
+      error: expect.objectContaining({
+        message: "当前密钥未绑定可用上游，请先完成授权配置",
+        type: "client_error",
+        code: "NO_AUTHORIZED_UPSTREAMS",
+        reason: "NO_AUTHORIZED_UPSTREAMS",
+        did_send_upstream: false,
+      }),
     });
+    expect(data.error.request_id).toEqual(expect.any(String));
     expect(forwardRequest).not.toHaveBeenCalled();
   });
 
@@ -1702,14 +2035,17 @@ describe("proxy route upstream selection", () => {
       });
       const data = await response.json();
 
-      expect(response.status).toBe(503);
+      expect(response.status).toBe(403);
       expect(data).toEqual({
-        error: {
-          message: "\u670d\u52a1\u6682\u65f6\u4e0d\u53ef\u7528\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5",
-          type: "service_unavailable",
-          code: "ALL_UPSTREAMS_UNAVAILABLE",
-        },
+        error: expect.objectContaining({
+          message: "当前密钥未绑定可用上游，请先完成授权配置",
+          type: "client_error",
+          code: "NO_AUTHORIZED_UPSTREAMS",
+          reason: "NO_AUTHORIZED_UPSTREAMS",
+          did_send_upstream: false,
+        }),
       });
+      expect(data.error.request_id).toEqual(expect.any(String));
       expect(forwardRequest).not.toHaveBeenCalled();
     });
 

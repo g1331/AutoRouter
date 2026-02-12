@@ -25,6 +25,16 @@ export class NoHealthyUpstreamsError extends Error {
 }
 
 /**
+ * Error thrown when API key has no authorized upstreams for provider type.
+ */
+export class NoAuthorizedUpstreamsError extends NoHealthyUpstreamsError {
+  constructor(providerType: ProviderType) {
+    super(`No authorized upstreams found for provider type: ${providerType}`);
+    this.name = "NoAuthorizedUpstreamsError";
+  }
+}
+
+/**
  * Upstream with health information for load balancing decisions.
  */
 export interface UpstreamWithHealth {
@@ -335,9 +345,7 @@ export async function selectFromProviderType(
   const totalCandidates = filteredUpstreams.length;
 
   if (totalCandidates === 0) {
-    throw new NoHealthyUpstreamsError(
-      `No authorized upstreams found for provider type: ${providerType}`
-    );
+    throw new NoAuthorizedUpstreamsError(providerType);
   }
 
   // Check session affinity if context provided

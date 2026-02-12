@@ -235,6 +235,16 @@ export type RoutingCircuitState = "closed" | "open" | "half_open";
 export type RoutingDecisionType = "provider_type" | "group" | "none";
 
 /**
+ * Failure stage for request lifecycle diagnostics.
+ */
+export type RoutingFailureStage =
+  | "auth_filter"
+  | "candidate_selection"
+  | "upstream_request"
+  | "upstream_response"
+  | "downstream_streaming";
+
+/**
  * Candidate upstream in routing decision
  */
 export interface RoutingCandidate {
@@ -283,6 +293,10 @@ export interface RoutingDecisionLog {
 
   // Selection info
   selected_upstream_id: string | null;
+  candidate_upstream_id?: string | null;
+  actual_upstream_id?: string | null;
+  did_send_upstream?: boolean;
+  failure_stage?: RoutingFailureStage | null;
   selection_strategy: string; // lb_strategy
 }
 

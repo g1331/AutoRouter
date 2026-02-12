@@ -31,6 +31,49 @@ describe("Unified Error", () => {
       });
     });
 
+    it("should create correct error body for NO_AUTHORIZED_UPSTREAMS", () => {
+      const body = createUnifiedErrorBody("NO_AUTHORIZED_UPSTREAMS");
+      expect(body).toEqual({
+        error: {
+          message: "当前密钥未绑定可用上游，请先完成授权配置",
+          type: "client_error",
+          code: "NO_AUTHORIZED_UPSTREAMS",
+        },
+      });
+    });
+
+    it("should include optional diagnostic fields when provided", () => {
+      const body = createUnifiedErrorBody("ALL_UPSTREAMS_UNAVAILABLE", {
+        reason: "UPSTREAM_HTTP_ERROR",
+        did_send_upstream: true,
+        request_id: "abc123",
+        user_hint: "hint",
+      });
+      expect(body.error).toEqual(
+        expect.objectContaining({
+          code: "ALL_UPSTREAMS_UNAVAILABLE",
+          reason: "UPSTREAM_HTTP_ERROR",
+          did_send_upstream: true,
+          request_id: "abc123",
+          user_hint: "hint",
+        })
+      );
+    });
+
+    it("should accept CLIENT_DISCONNECTED as a diagnostic reason", () => {
+      const body = createUnifiedErrorBody("CLIENT_DISCONNECTED", {
+        reason: "CLIENT_DISCONNECTED",
+        did_send_upstream: true,
+      });
+      expect(body.error).toEqual(
+        expect.objectContaining({
+          code: "CLIENT_DISCONNECTED",
+          reason: "CLIENT_DISCONNECTED",
+          did_send_upstream: true,
+        })
+      );
+    });
+
     it("should create correct error body for REQUEST_TIMEOUT", () => {
       const body = createUnifiedErrorBody("REQUEST_TIMEOUT");
       expect(body).toEqual({
@@ -78,6 +121,11 @@ describe("Unified Error", () => {
       expect(response.status).toBe(504);
     });
 
+    it("should return 403 for NO_AUTHORIZED_UPSTREAMS", async () => {
+      const response = createUnifiedErrorResponse("NO_AUTHORIZED_UPSTREAMS");
+      expect(response.status).toBe(403);
+    });
+
     it("should return 499 for CLIENT_DISCONNECTED", async () => {
       const response = createUnifiedErrorResponse("CLIENT_DISCONNECTED");
       expect(response.status).toBe(499);
@@ -110,6 +158,7 @@ describe("Unified Error", () => {
   describe("getHttpStatusForError", () => {
     const testCases: Array<{ code: UnifiedErrorCode; expectedStatus: number }> = [
       { code: "ALL_UPSTREAMS_UNAVAILABLE", expectedStatus: 503 },
+      { code: "NO_AUTHORIZED_UPSTREAMS", expectedStatus: 403 },
       { code: "NO_UPSTREAMS_CONFIGURED", expectedStatus: 503 },
       { code: "SERVICE_UNAVAILABLE", expectedStatus: 503 },
       { code: "REQUEST_TIMEOUT", expectedStatus: 504 },

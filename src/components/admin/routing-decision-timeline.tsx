@@ -135,13 +135,20 @@ export function RoutingDecisionTimeline({
     return labels[routingDecision.routing_type] || routingDecision.routing_type;
   }, [routingDecision, routingType, t]);
 
+  const didSendUpstream = routingDecision?.did_send_upstream;
+  const finalUpstreamLabel =
+    didSendUpstream === false ? t("timelineNoUpstreamSent") : (upstreamName ?? "-");
+  const failureStageLabel = routingDecision?.failure_stage
+    ? t(`failureStage.${routingDecision.failure_stage}`)
+    : null;
+
   // ---------- Compact View ----------
   if (compact) {
     return (
       <div className="space-y-1">
         <div className="flex items-center gap-1.5">
           <Server className="w-3.5 h-3.5 text-amber-600" />
-          <span className="font-mono text-xs">{upstreamName || "-"}</span>
+          <span className="font-mono text-xs">{finalUpstreamLabel}</span>
         </div>
         <div className="flex items-center gap-1 flex-wrap">
           {routingTypeLabel && (
@@ -270,7 +277,9 @@ export function RoutingDecisionTimeline({
               </span>
             </div>
             {routingDecision.candidates.map((c) => {
-              const isSelected = c.id === routingDecision.selected_upstream_id;
+              const selectedCandidateId =
+                routingDecision.candidate_upstream_id ?? routingDecision.selected_upstream_id;
+              const isSelected = c.id === selectedCandidateId;
               return (
                 <div
                   key={c.id}
@@ -353,9 +362,23 @@ export function RoutingDecisionTimeline({
                 !isSuccess && !isError && "text-amber-500"
               )}
             >
-              {upstreamName || "-"}
+              {finalUpstreamLabel}
             </span>
           </div>
+          {didSendUpstream !== undefined && (
+            <div className="flex items-center gap-2">
+              <span className="text-amber-700">{t("timelineUpstreamSent")}:</span>
+              <span className={didSendUpstream ? "text-status-success" : "text-orange-500"}>
+                {didSendUpstream ? t("timelineSentYes") : t("timelineSentNo")}
+              </span>
+            </div>
+          )}
+          {failureStageLabel && !isSuccess && (
+            <div className="flex items-center gap-2">
+              <span className="text-amber-700">{t("timelineFailureStage")}:</span>
+              <span className="text-status-error">{failureStageLabel}</span>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <Timer className="w-3 h-3 text-amber-600" />
             <span className="text-amber-700">{t("timelineTotalDuration")}:</span>

@@ -21,6 +21,7 @@ import {
   recordConnection,
   releaseConnection,
   NoHealthyUpstreamsError,
+  NoAuthorizedUpstreamsError,
 } from "@/lib/services/load-balancer";
 import { markHealthy, markUnhealthy } from "@/lib/services/health-checker";
 import {
@@ -48,12 +49,14 @@ import {
   createSSEErrorEvent,
   getHttpStatusForError,
   type UnifiedErrorCode,
+  type UnifiedErrorReason,
 } from "@/lib/services/unified-error";
 import type {
   RoutingDecisionLog,
   RoutingCandidate,
   RoutingExcluded,
   RoutingCircuitState,
+  RoutingFailureStage,
 } from "@/types/api";
 import {
   shouldRecordFixture,
@@ -81,9 +84,17 @@ type RouteContext = { params: Promise<{ path: string[] }> };
 /**
  * Transform ModelRouterResult to RoutingDecisionLog for storage.
  */
+interface RoutingDecisionDiagnostics {
+  candidateUpstreamId?: string | null;
+  actualUpstreamId?: string | null;
+  didSendUpstream?: boolean;
+  failureStage?: RoutingFailureStage | null;
+}
+
 function transformToRoutingDecisionLog(
   routerResult: ModelRouterResult,
-  selectedUpstreamId: string | null
+  selectedUpstreamId: string | null,
+  diagnostics?: RoutingDecisionDiagnostics
 ): RoutingDecisionLog {
   // Transform candidates to simplified format (handle undefined)
   const candidates: RoutingCandidate[] = (routerResult.candidateUpstreams || []).map((c) => ({
@@ -111,6 +122,12 @@ function transformToRoutingDecisionLog(
     candidate_count: routerResult.routingDecision.candidateCount,
     final_candidate_count: routerResult.routingDecision.finalCandidateCount,
     selected_upstream_id: selectedUpstreamId,
+    candidate_upstream_id: diagnostics?.candidateUpstreamId ?? selectedUpstreamId,
+    actual_upstream_id: diagnostics?.actualUpstreamId ?? null,
+    ...(typeof diagnostics?.didSendUpstream === "boolean"
+      ? { did_send_upstream: diagnostics.didSendUpstream }
+      : {}),
+    ...(diagnostics?.failureStage !== undefined ? { failure_stage: diagnostics.failureStage } : {}),
     selection_strategy: "weighted",
   };
 }
@@ -129,6 +146,18 @@ interface RoutingDecision {
 
 interface FailoverErrorWithHistory extends Error {
   failoverHistory?: FailoverAttempt[];
+  didSendUpstream?: boolean;
+}
+
+function attachFailoverContext<T extends Error>(
+  error: T,
+  failoverHistory: FailoverAttempt[],
+  didSendUpstream: boolean
+): T & FailoverErrorWithHistory {
+  const enrichedError = error as T & FailoverErrorWithHistory;
+  enrichedError.failoverHistory = [...failoverHistory];
+  enrichedError.didSendUpstream = didSendUpstream;
+  return enrichedError;
 }
 
 /**
@@ -172,6 +201,87 @@ function isFailoverableError(error: unknown): boolean {
     );
   }
   return false;
+}
+
+function isNoAuthorizedUpstreamsError(error: unknown): boolean {
+  if (error instanceof NoAuthorizedUpstreamsError) {
+    return true;
+  }
+  if (!(error instanceof NoHealthyUpstreamsError)) {
+    return false;
+  }
+  return error.message.toLowerCase().includes("no authorized upstreams");
+}
+
+function isDownstreamStreamingError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const message = error.message.toLowerCase();
+  const hasStreamToken = /\bstream(?:ing)?\b/.test(message);
+  const hasDownstreamContext =
+    message.includes("downstream") || message.includes("client") || message.includes("sse");
+  return hasStreamToken && hasDownstreamContext;
+}
+
+function resolveFailureStage(
+  error: unknown,
+  didSendUpstream: boolean,
+  lastFailoverAttempt: FailoverAttempt | undefined
+): RoutingFailureStage {
+  if (isNoAuthorizedUpstreamsError(error)) {
+    return "auth_filter";
+  }
+  if (isDownstreamStreamingError(error)) {
+    return "downstream_streaming";
+  }
+  if (!didSendUpstream) {
+    return "candidate_selection";
+  }
+  if (lastFailoverAttempt?.status_code != null) {
+    return "upstream_response";
+  }
+  return "upstream_request";
+}
+
+function resolveFailureReason(
+  error: unknown,
+  didSendUpstream: boolean,
+  lastFailoverAttempt: FailoverAttempt | undefined
+): UnifiedErrorReason {
+  if (isNoAuthorizedUpstreamsError(error)) {
+    return "NO_AUTHORIZED_UPSTREAMS";
+  }
+  if (error instanceof ClientDisconnectedError) {
+    return "CLIENT_DISCONNECTED";
+  }
+  if (!didSendUpstream) {
+    return "NO_HEALTHY_CANDIDATES";
+  }
+  if (lastFailoverAttempt?.status_code != null) {
+    return "UPSTREAM_HTTP_ERROR";
+  }
+  return "UPSTREAM_NETWORK_ERROR";
+}
+
+function getUserHint(
+  errorCode: UnifiedErrorCode,
+  reason: UnifiedErrorReason,
+  providerType: ProviderType | null
+): string {
+  if (errorCode === "NO_AUTHORIZED_UPSTREAMS") {
+    return `当前密钥没有可用的 ${providerType ?? "目标"} 上游授权，请在密钥配置中绑定至少一个启用上游`;
+  }
+  if (reason === "NO_HEALTHY_CANDIDATES") {
+    return "当前没有可用上游候选，请检查上游启用状态、熔断状态与模型路由配置";
+  }
+  if (reason === "UPSTREAM_HTTP_ERROR" || reason === "UPSTREAM_NETWORK_ERROR") {
+    return "请求已尝试发送到上游，请检查上游服务状态或稍后重试";
+  }
+  if (reason === "CLIENT_DISCONNECTED") {
+    return "调用方连接已中断，请检查客户端超时配置、网络链路或重试策略";
+  }
+  return "请稍后重试，或联系管理员检查上游配置与健康状态";
 }
 
 const MAX_FAILOVER_ERROR_BODY_BYTES = 256 * 1024;
@@ -284,6 +394,7 @@ async function forwardWithFailover(
   const failedUpstreamIds: string[] = [];
   const failoverHistory: FailoverAttempt[] = [];
   let lastError: Error | null = null;
+  let didSendUpstream = false;
   let affinityHit = false;
   let affinityMigrated = false;
 
@@ -297,7 +408,11 @@ async function forwardWithFailover(
     // Check if downstream client has disconnected
     if (request.signal.aborted) {
       log.warn({ requestId }, "client disconnected during failover, stopping retries");
-      throw new ClientDisconnectedError("Client disconnected during failover");
+      throw attachFailoverContext(
+        new ClientDisconnectedError("Client disconnected during failover"),
+        failoverHistory,
+        didSendUpstream
+      );
     }
 
     let selectedUpstream: Upstream | null = null;
@@ -327,10 +442,21 @@ async function forwardWithFailover(
         affinityMigrated = selection.affinityMigrated ?? false;
       }
     } catch (error) {
+      if (isNoAuthorizedUpstreamsError(error)) {
+        throw attachFailoverContext(
+          error instanceof Error ? error : new Error(String(error)),
+          failoverHistory,
+          didSendUpstream
+        );
+      }
       if (error instanceof NoHealthyUpstreamsError) {
         hasMoreUpstreams = false;
       } else {
-        throw error;
+        throw attachFailoverContext(
+          error instanceof Error ? error : new Error(String(error)),
+          failoverHistory,
+          didSendUpstream
+        );
       }
     }
 
@@ -340,13 +466,16 @@ async function forwardWithFailover(
       // to indicate all failover attempts have been exhausted
       const exhaustedError = new NoHealthyUpstreamsError(
         lastError?.message ?? "All upstreams exhausted"
-      ) as FailoverErrorWithHistory;
-      exhaustedError.failoverHistory = [...failoverHistory];
-      throw exhaustedError;
+      );
+      throw attachFailoverContext(exhaustedError, failoverHistory, didSendUpstream);
     }
 
     if (!selectedUpstream) {
-      throw new NoHealthyUpstreamsError("No upstream available");
+      throw attachFailoverContext(
+        new NoHealthyUpstreamsError("No upstream available"),
+        failoverHistory,
+        didSendUpstream
+      );
     }
 
     attemptCount++;
@@ -365,6 +494,7 @@ async function forwardWithFailover(
 
       const upstreamForProxy = prepareUpstreamForProxy(selectedUpstream);
       attemptUpstreamBaseUrl = upstreamForProxy.baseUrl;
+      didSendUpstream = true;
       const result = await forwardRequest(proxyRequest, upstreamForProxy, path, requestId);
 
       // Check if response indicates we should failover
@@ -436,7 +566,11 @@ async function forwardWithFailover(
       // Check if client disconnected
       if (request.signal.aborted) {
         log.warn({ requestId }, "client disconnected during request, stopping");
-        throw new ClientDisconnectedError("Client disconnected during request");
+        throw attachFailoverContext(
+          new ClientDisconnectedError("Client disconnected during request"),
+          failoverHistory,
+          didSendUpstream
+        );
       }
 
       // Record failure in circuit breaker for failoverable errors
@@ -466,7 +600,10 @@ async function forwardWithFailover(
       }
 
       // Non-failoverable error - rethrow
-      throw error;
+      const nonFailoverError = (error instanceof Error ? error : new Error(String(error))) as
+        | Error
+        | FailoverErrorWithHistory;
+      throw attachFailoverContext(nonFailoverError, failoverHistory, didSendUpstream);
     }
   }
 }
@@ -727,7 +864,12 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     routerResult = await routeByModel(model);
 
     if (!routerResult.upstream) {
-      return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED");
+      return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED", {
+        reason: "NO_HEALTHY_CANDIDATES",
+        did_send_upstream: false,
+        request_id: requestId,
+        user_hint: "未找到可匹配该模型的上游，请先检查模型路由和上游配置",
+      });
     }
 
     log.debug(
@@ -767,14 +909,24 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     allowedUpstreamIds = upstreamPermissions.map((p) => p.upstreamId);
   } catch (error) {
     if (error instanceof NoUpstreamGroupError) {
-      return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED");
+      return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED", {
+        reason: "NO_HEALTHY_CANDIDATES",
+        did_send_upstream: false,
+        request_id: requestId,
+        user_hint: "未找到可匹配该模型的上游，请先检查模型路由和上游配置",
+      });
     }
     if (error instanceof NoHealthyUpstreamError) {
       log.warn(
         { requestId, model, providerType: error.providerType },
         "routeByModel no candidates"
       );
-      return createUnifiedErrorResponse("ALL_UPSTREAMS_UNAVAILABLE");
+      return createUnifiedErrorResponse("ALL_UPSTREAMS_UNAVAILABLE", {
+        reason: "NO_HEALTHY_CANDIDATES",
+        did_send_upstream: false,
+        request_id: requestId,
+        user_hint: "当前没有可用上游候选，请检查上游启用状态和熔断状态",
+      });
     }
     throw error;
   }
@@ -784,11 +936,17 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   let requestLogId: string | null = null;
   let isAffinityHit = false;
   let isAffinityMigrated = false;
+  let didSendDirectRequest = false;
 
   // Build initial routing decision log (will be updated with final upstream after selection)
   const initialRoutingDecisionLog =
     routerResult && routerResult.routingDecision
-      ? transformToRoutingDecisionLog(routerResult, selectedUpstream?.id ?? null)
+      ? transformToRoutingDecisionLog(routerResult, selectedUpstream?.id ?? null, {
+          candidateUpstreamId: selectedUpstream?.id ?? null,
+          actualUpstreamId: null,
+          didSendUpstream: false,
+          failureStage: null,
+        })
       : null;
 
   // Create an in-progress log entry so the admin UI can show active requests.
@@ -855,11 +1013,17 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     } else if (selectedUpstream) {
       // Direct upstream routing (no load balancing)
       const upstreamForProxy = prepareUpstreamForProxy(selectedUpstream);
+      didSendDirectRequest = true;
       result = await forwardRequest(request, upstreamForProxy, path, requestId);
       upstreamForLogging = selectedUpstream;
       priorityTier = selectedUpstream.priority;
     } else {
-      return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED");
+      return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED", {
+        reason: "NO_HEALTHY_CANDIDATES",
+        did_send_upstream: false,
+        request_id: requestId,
+        user_hint: "未找到可匹配该模型的上游，请先检查模型路由和上游配置",
+      });
     }
 
     // Build routing decision for logging
@@ -875,7 +1039,12 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     // Build final routing decision log with actual selected upstream
     const finalRoutingDecisionLog =
       routerResult && routerResult.routingDecision
-        ? transformToRoutingDecisionLog(routerResult, upstreamForLogging.id)
+        ? transformToRoutingDecisionLog(routerResult, upstreamForLogging.id, {
+            candidateUpstreamId: upstreamForLogging.id,
+            actualUpstreamId: upstreamForLogging.id,
+            didSendUpstream: true,
+            failureStage: null,
+          })
         : null;
 
     // Update the in-progress log with the actual upstream
@@ -1019,6 +1188,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
                 headers: result.headers,
                 streamChunks: chunks,
               },
+              outboundRequestSent: true,
+              outboundResponseSource: "upstream",
             });
             return recordTrafficFixture(fixture);
           })
@@ -1168,6 +1339,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             bodyText: responseText,
             bodyJson: responseJson,
           },
+          outboundRequestSent: true,
+          outboundResponseSource: "upstream",
         });
 
         void recordTrafficFixture(fixture).catch((error) =>
@@ -1191,13 +1364,20 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     }
 
     const durationMs = Date.now() - startTime;
-
-    // Determine which upstream to log (for load balanced requests, we may not have one if all failed)
-    const logUpstreamId = selectedUpstream?.id ?? null;
+    const lastFailoverAttempt = failoverHistory[failoverHistory.length - 1];
+    const didSendUpstream =
+      typeof (error as FailoverErrorWithHistory | null)?.didSendUpstream === "boolean"
+        ? Boolean((error as FailoverErrorWithHistory).didSendUpstream)
+        : failoverHistory.length > 0 || didSendDirectRequest;
 
     // Determine error code for unified response
     let errorCode: UnifiedErrorCode = "SERVICE_UNAVAILABLE";
-    if (error instanceof NoHealthyUpstreamsError || error instanceof CircuitBreakerOpenError) {
+    if (isNoAuthorizedUpstreamsError(error)) {
+      errorCode = "NO_AUTHORIZED_UPSTREAMS";
+    } else if (
+      error instanceof NoHealthyUpstreamsError ||
+      error instanceof CircuitBreakerOpenError
+    ) {
       errorCode = "ALL_UPSTREAMS_UNAVAILABLE";
     } else if (error instanceof NoUpstreamGroupError) {
       errorCode = "NO_UPSTREAMS_CONFIGURED";
@@ -1206,24 +1386,48 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     } else if (error instanceof Error && error.message.includes("timed out")) {
       errorCode = "REQUEST_TIMEOUT";
     }
+
+    const failureStage = resolveFailureStage(error, didSendUpstream, lastFailoverAttempt);
+    const failureReason = resolveFailureReason(error, didSendUpstream, lastFailoverAttempt);
+    const actualUpstreamId =
+      lastFailoverAttempt?.upstream_id ?? (didSendUpstream ? (selectedUpstream?.id ?? null) : null);
+    const candidateUpstreamId = selectedUpstream?.id ?? null;
+
     const errorStatusCode = getHttpStatusForError(errorCode);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    const lastFailoverAttempt = failoverHistory[failoverHistory.length - 1];
-    const downstreamErrorBody = createUnifiedErrorBody(errorCode);
+    const errorDetails = {
+      reason: failureReason,
+      did_send_upstream: didSendUpstream,
+      request_id: requestId,
+      user_hint: getUserHint(errorCode, failureReason, providerType),
+    } as const;
+    const downstreamErrorBody = createUnifiedErrorBody(errorCode, errorDetails);
+
+    const failureRoutingDecisionLog =
+      routerResult && routerResult.routingDecision
+        ? transformToRoutingDecisionLog(routerResult, actualUpstreamId, {
+            candidateUpstreamId,
+            actualUpstreamId,
+            didSendUpstream,
+            failureStage,
+          })
+        : initialRoutingDecisionLog;
 
     if (shouldRecordFailure && inboundBody) {
       const fallbackOutboundHeaders = filterHeaders(new Headers(request.headers));
       const fallbackProviderType = selectedUpstream?.providerType ?? providerType ?? "unknown";
       const fallbackUpstream = {
-        id: selectedUpstream?.id ?? "unknown",
-        name: selectedUpstream?.name ?? "unknown",
+        id: didSendUpstream ? (selectedUpstream?.id ?? "unknown") : "unknown",
+        name: didSendUpstream ? (selectedUpstream?.name ?? "unknown") : "not-sent",
         providerType: fallbackProviderType,
-        baseUrl: selectedUpstream?.baseUrl ?? "unknown",
+        baseUrl: didSendUpstream ? (selectedUpstream?.baseUrl ?? "unknown") : "unknown",
       };
-      let outboundHeaders: Headers | Record<string, string> = fallbackOutboundHeaders;
+      let outboundHeaders: Headers | Record<string, string> = didSendUpstream
+        ? fallbackOutboundHeaders
+        : {};
       let upstreamForFixture = fallbackUpstream;
 
-      if (lastFailoverAttempt?.upstream_id) {
+      if (didSendUpstream && lastFailoverAttempt?.upstream_id) {
         upstreamForFixture = {
           id: lastFailoverAttempt.upstream_id,
           name: lastFailoverAttempt.upstream_name,
@@ -1251,7 +1455,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             "failed to resolve attempted upstream for failure fixture"
           );
         }
-      } else if (selectedUpstream) {
+      } else if (didSendUpstream && selectedUpstream) {
         try {
           const upstreamForProxy = prepareUpstreamForProxy(selectedUpstream);
           outboundHeaders = injectAuthHeader(fallbackOutboundHeaders, upstreamForProxy);
@@ -1293,6 +1497,9 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               ? (lastFailoverAttempt?.response_body_text ?? null)
               : null,
         },
+        outboundRequestSent: didSendUpstream,
+        outboundResponseSource:
+          didSendUpstream && lastFailoverAttempt?.status_code != null ? "upstream" : "gateway",
         downstreamResponse: {
           statusCode: errorStatusCode,
           headers: { "content-type": "application/json" },
@@ -1309,7 +1516,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     // Log failed request (internal logging with full details)
     if (requestLogId) {
       await updateRequestLog(requestLogId, {
-        upstreamId: logUpstreamId,
+        upstreamId: actualUpstreamId,
         model: resolvedModel,
         promptTokens: 0,
         completionTokens: 0,
@@ -1322,12 +1529,12 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         priorityTier,
         failoverAttempts: failoverHistory.length,
         failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
-        routingDecision: initialRoutingDecisionLog,
+        routingDecision: failureRoutingDecisionLog,
       });
     } else {
       await logRequest({
         apiKeyId: validApiKey.id,
-        upstreamId: logUpstreamId,
+        upstreamId: actualUpstreamId,
         method: request.method,
         path,
         model: resolvedModel,
@@ -1342,20 +1549,20 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         priorityTier,
         failoverAttempts: failoverHistory.length,
         failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
-        routingDecision: initialRoutingDecisionLog,
+        routingDecision: failureRoutingDecisionLog,
       });
     }
 
     // Handle client disconnect silently (no response needed)
     if (error instanceof ClientDisconnectedError) {
       log.warn({ requestId }, "client disconnected, no response sent");
-      return createUnifiedErrorResponse(errorCode);
+      return createUnifiedErrorResponse(errorCode, errorDetails);
     }
 
     if (errorCode === "SERVICE_UNAVAILABLE") {
       log.error({ err: error, requestId }, "proxy error");
     }
-    return createUnifiedErrorResponse(errorCode);
+    return createUnifiedErrorResponse(errorCode, errorDetails);
   }
 }
 

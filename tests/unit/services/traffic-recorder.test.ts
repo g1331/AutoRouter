@@ -479,6 +479,17 @@ describe("traffic recorder", () => {
       });
     });
 
+    it("records outbound diagnostics when provided", () => {
+      const fixture = buildFixture({
+        ...baseParams,
+        outboundRequestSent: false,
+        outboundResponseSource: "gateway",
+      });
+
+      expect(fixture.outbound.didSendUpstream).toBe(false);
+      expect(fixture.outbound.responseSource).toBe("gateway");
+    });
+
     it("preserves sensitive fields when RECORDER_REDACT_SENSITIVE=false", () => {
       process.env.RECORDER_REDACT_SENSITIVE = "false";
       const fixture = buildFixture(baseParams);

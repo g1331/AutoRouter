@@ -43,6 +43,8 @@ export interface TrafficRecordFixture {
       providerType: string;
       baseUrl: string;
     };
+    didSendUpstream?: boolean;
+    responseSource?: "upstream" | "gateway";
     request: TrafficRecordRequest;
     response: TrafficRecordResponse;
   };
@@ -84,6 +86,8 @@ export interface BuildFixtureParams {
     bodyJson?: unknown | null;
     streamChunks?: string[];
   };
+  outboundRequestSent?: boolean;
+  outboundResponseSource?: "upstream" | "gateway";
   downstreamResponse?: {
     statusCode: number;
     headers: Headers | Record<string, string>;
@@ -414,6 +418,10 @@ export function buildFixture(params: BuildFixtureParams): TrafficRecordFixture {
         providerType: params.upstream.providerType,
         baseUrl: formatUrlForFixture(params.upstream.baseUrl),
       },
+      ...(typeof params.outboundRequestSent === "boolean"
+        ? { didSendUpstream: params.outboundRequestSent }
+        : {}),
+      ...(params.outboundResponseSource ? { responseSource: params.outboundResponseSource } : {}),
       request: {
         method: params.inboundRequest.method,
         path: params.inboundRequest.path,

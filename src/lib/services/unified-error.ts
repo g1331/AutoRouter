@@ -12,6 +12,7 @@ import { NextResponse } from "next/server";
  */
 export type UnifiedErrorCode =
   | "ALL_UPSTREAMS_UNAVAILABLE"
+  | "NO_AUTHORIZED_UPSTREAMS"
   | "NO_UPSTREAMS_CONFIGURED"
   | "SERVICE_UNAVAILABLE"
   | "REQUEST_TIMEOUT"
@@ -24,6 +25,23 @@ export type UnifiedErrorCode =
 export type UnifiedErrorType = "service_unavailable" | "timeout" | "client_error" | "stream_error";
 
 /**
+ * Optional error reason details for better diagnostics.
+ */
+export type UnifiedErrorReason =
+  | "NO_AUTHORIZED_UPSTREAMS"
+  | "CLIENT_DISCONNECTED"
+  | "NO_HEALTHY_CANDIDATES"
+  | "UPSTREAM_HTTP_ERROR"
+  | "UPSTREAM_NETWORK_ERROR";
+
+export interface UnifiedErrorDetails {
+  reason?: UnifiedErrorReason;
+  did_send_upstream?: boolean;
+  request_id?: string;
+  user_hint?: string;
+}
+
+/**
  * Unified error response structure.
  * Compatible with OpenAI API error format.
  */
@@ -32,6 +50,10 @@ export interface UnifiedErrorResponse {
     message: string;
     type: UnifiedErrorType;
     code: UnifiedErrorCode;
+    reason?: UnifiedErrorReason;
+    did_send_upstream?: boolean;
+    request_id?: string;
+    user_hint?: string;
   };
 }
 
@@ -40,6 +62,7 @@ export interface UnifiedErrorResponse {
  */
 const ERROR_MESSAGES: Record<UnifiedErrorCode, string> = {
   ALL_UPSTREAMS_UNAVAILABLE: "服务暂时不可用，请稍后重试",
+  NO_AUTHORIZED_UPSTREAMS: "当前密钥未绑定可用上游，请先完成授权配置",
   NO_UPSTREAMS_CONFIGURED: "服务暂时不可用，请稍后重试",
   SERVICE_UNAVAILABLE: "服务暂时不可用，请稍后重试",
   REQUEST_TIMEOUT: "请求超时，请稍后重试",
@@ -52,6 +75,7 @@ const ERROR_MESSAGES: Record<UnifiedErrorCode, string> = {
  */
 const ERROR_TYPES: Record<UnifiedErrorCode, UnifiedErrorType> = {
   ALL_UPSTREAMS_UNAVAILABLE: "service_unavailable",
+  NO_AUTHORIZED_UPSTREAMS: "client_error",
   NO_UPSTREAMS_CONFIGURED: "service_unavailable",
   SERVICE_UNAVAILABLE: "service_unavailable",
   REQUEST_TIMEOUT: "timeout",
@@ -64,6 +88,7 @@ const ERROR_TYPES: Record<UnifiedErrorCode, UnifiedErrorType> = {
  */
 const HTTP_STATUS_CODES: Record<UnifiedErrorCode, number> = {
   ALL_UPSTREAMS_UNAVAILABLE: 503,
+  NO_AUTHORIZED_UPSTREAMS: 403,
   NO_UPSTREAMS_CONFIGURED: 503,
   SERVICE_UNAVAILABLE: 503,
   REQUEST_TIMEOUT: 504,
@@ -75,14 +100,24 @@ const HTTP_STATUS_CODES: Record<UnifiedErrorCode, number> = {
  * Create a unified error response body.
  *
  * @param code - The error code
+ * @param details - Optional diagnostic details for downstream users
  * @returns The unified error response object
  */
-export function createUnifiedErrorBody(code: UnifiedErrorCode): UnifiedErrorResponse {
+export function createUnifiedErrorBody(
+  code: UnifiedErrorCode,
+  details?: UnifiedErrorDetails
+): UnifiedErrorResponse {
   return {
     error: {
       message: ERROR_MESSAGES[code],
       type: ERROR_TYPES[code],
       code,
+      ...(details?.reason ? { reason: details.reason } : {}),
+      ...(typeof details?.did_send_upstream === "boolean"
+        ? { did_send_upstream: details.did_send_upstream }
+        : {}),
+      ...(details?.request_id ? { request_id: details.request_id } : {}),
+      ...(details?.user_hint ? { user_hint: details.user_hint } : {}),
     },
   };
 }
@@ -91,10 +126,14 @@ export function createUnifiedErrorBody(code: UnifiedErrorCode): UnifiedErrorResp
  * Create a unified error NextResponse.
  *
  * @param code - The error code
+ * @param details - Optional diagnostic details for downstream users
  * @returns A NextResponse with the unified error format
  */
-export function createUnifiedErrorResponse(code: UnifiedErrorCode): NextResponse {
-  return NextResponse.json(createUnifiedErrorBody(code), {
+export function createUnifiedErrorResponse(
+  code: UnifiedErrorCode,
+  details?: UnifiedErrorDetails
+): NextResponse {
+  return NextResponse.json(createUnifiedErrorBody(code, details), {
     status: HTTP_STATUS_CODES[code],
   });
 }
@@ -104,10 +143,11 @@ export function createUnifiedErrorResponse(code: UnifiedErrorCode): NextResponse
  * This is sent when an error occurs after streaming has started.
  *
  * @param code - The error code
+ * @param details - Optional diagnostic details for downstream users
  * @returns SSE formatted error event string
  */
-export function createSSEErrorEvent(code: UnifiedErrorCode): string {
-  const errorBody = createUnifiedErrorBody(code);
+export function createSSEErrorEvent(code: UnifiedErrorCode, details?: UnifiedErrorDetails): string {
+  const errorBody = createUnifiedErrorBody(code, details);
   const data = JSON.stringify(errorBody);
   return `event: error\ndata: ${data}\n\n`;
 }
