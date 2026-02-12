@@ -123,8 +123,27 @@ const SENSITIVE_HEADER_NAMES = new Set([
   "x-codex-beta-features",
 ]);
 
+export type RecorderMode = "all" | "success" | "failure";
+export type RecorderOutcome = "success" | "failure";
+
 export function isRecorderEnabled(): boolean {
   return process.env.RECORDER_ENABLED === "true" || process.env.RECORDER_ENABLED === "1";
+}
+
+export function getRecorderMode(): RecorderMode {
+  const value = process.env.RECORDER_MODE?.trim().toLowerCase();
+  if (value === "success" || value === "failure" || value === "all") {
+    return value;
+  }
+  return "all";
+}
+
+export function shouldRecordFixture(outcome: RecorderOutcome): boolean {
+  if (!isRecorderEnabled()) {
+    return false;
+  }
+  const mode = getRecorderMode();
+  return mode === "all" || mode === outcome;
 }
 
 export function getFixtureRoot(): string {

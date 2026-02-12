@@ -6,6 +6,8 @@ import {
   buildFixture,
   readStreamChunks,
   isRecorderEnabled,
+  getRecorderMode,
+  shouldRecordFixture,
   isRecorderRedactionEnabled,
   getFixtureRoot,
   buildFixturePath,
@@ -15,6 +17,7 @@ import path from "path";
 describe("traffic recorder", () => {
   beforeEach(() => {
     delete process.env.RECORDER_ENABLED;
+    delete process.env.RECORDER_MODE;
     delete process.env.RECORDER_FIXTURES_DIR;
     delete process.env.RECORDER_REDACT_SENSITIVE;
   });
@@ -117,6 +120,62 @@ describe("traffic recorder", () => {
     it("returns false when RECORDER_ENABLED is any other value", () => {
       process.env.RECORDER_ENABLED = "yes";
       expect(isRecorderEnabled()).toBe(false);
+    });
+  });
+
+  describe("getRecorderMode", () => {
+    it("defaults to all when RECORDER_MODE is not set", () => {
+      expect(getRecorderMode()).toBe("all");
+    });
+
+    it("returns success when RECORDER_MODE is success", () => {
+      process.env.RECORDER_MODE = "success";
+      expect(getRecorderMode()).toBe("success");
+    });
+
+    it("returns failure when RECORDER_MODE is failure", () => {
+      process.env.RECORDER_MODE = "failure";
+      expect(getRecorderMode()).toBe("failure");
+    });
+
+    it("returns all for invalid RECORDER_MODE values", () => {
+      process.env.RECORDER_MODE = "unexpected";
+      expect(getRecorderMode()).toBe("all");
+    });
+  });
+
+  describe("shouldRecordFixture", () => {
+    it("returns false when recorder is disabled", () => {
+      expect(shouldRecordFixture("success")).toBe(false);
+      expect(shouldRecordFixture("failure")).toBe(false);
+    });
+
+    it("returns true for both outcomes in all mode", () => {
+      process.env.RECORDER_ENABLED = "true";
+      process.env.RECORDER_MODE = "all";
+      expect(shouldRecordFixture("success")).toBe(true);
+      expect(shouldRecordFixture("failure")).toBe(true);
+    });
+
+    it("returns true only for success in success mode", () => {
+      process.env.RECORDER_ENABLED = "true";
+      process.env.RECORDER_MODE = "success";
+      expect(shouldRecordFixture("success")).toBe(true);
+      expect(shouldRecordFixture("failure")).toBe(false);
+    });
+
+    it("returns true only for failure in failure mode", () => {
+      process.env.RECORDER_ENABLED = "true";
+      process.env.RECORDER_MODE = "failure";
+      expect(shouldRecordFixture("success")).toBe(false);
+      expect(shouldRecordFixture("failure")).toBe(true);
+    });
+
+    it("falls back to all mode for invalid values", () => {
+      process.env.RECORDER_ENABLED = "true";
+      process.env.RECORDER_MODE = "invalid-mode";
+      expect(shouldRecordFixture("success")).toBe(true);
+      expect(shouldRecordFixture("failure")).toBe(true);
     });
   });
 

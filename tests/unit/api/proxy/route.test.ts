@@ -107,6 +107,12 @@ vi.mock("@/lib/services/traffic-recorder", () => ({
   isRecorderEnabled: vi.fn(
     () => process.env.RECORDER_ENABLED === "true" || process.env.RECORDER_ENABLED === "1"
   ),
+  shouldRecordFixture: vi.fn((outcome: "success" | "failure") => {
+    const enabled = process.env.RECORDER_ENABLED === "true" || process.env.RECORDER_ENABLED === "1";
+    if (!enabled) return false;
+    const mode = (process.env.RECORDER_MODE ?? "all").trim().toLowerCase();
+    return mode === "all" || mode === outcome;
+  }),
   readRequestBody: vi.fn(async (request: Request) => {
     const text = await request.clone().text();
     if (!text) return { text: null, json: null, buffer: null };
@@ -132,6 +138,7 @@ describe("proxy route upstream selection", () => {
     vi.resetAllMocks();
     vi.resetModules();
     delete process.env.RECORDER_ENABLED;
+    delete process.env.RECORDER_MODE;
     const routeModule = await import("@/app/api/proxy/v1/[...path]/route");
     POST = routeModule.POST;
   }, 30_000);
@@ -573,6 +580,260 @@ describe("proxy route upstream selection", () => {
     );
 
     expect(recordTrafficFixture).toHaveBeenCalledTimes(1);
+  });
+
+  it("should skip failure fixture when RECORDER_MODE is success", async () => {
+    process.env.RECORDER_ENABLED = "true";
+    process.env.RECORDER_MODE = "success";
+
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType, NoHealthyUpstreamsError } =
+      await import("@/lib/services/load-balancer");
+    const { buildFixture, recordTrafficFixture } = await import("@/lib/services/traffic-recorder");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([{ upstreamId: "up-1" }]);
+
+    const routeByModelUpstream = {
+      id: "up-route",
+      name: "anthropic-route",
+      providerType: "anthropic",
+      baseUrl: "https://api.route-anthropic.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    const attemptedUpstream = {
+      id: "up-attempt",
+      name: "anthropic-attempt",
+      providerType: "anthropic",
+      baseUrl: "https://api.attempt-anthropic.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream: routeByModelUpstream,
+      providerType: "anthropic",
+      resolvedModel: "claude-test",
+      candidateUpstreams: [],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "claude-test",
+        resolvedModel: "claude-test",
+        providerType: "anthropic",
+        upstreamName: "anthropic-1",
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 1,
+        finalCandidateCount: 1,
+      },
+    });
+
+    vi.mocked(selectFromProviderType)
+      .mockResolvedValueOnce({
+        upstream: attemptedUpstream,
+        providerType: "anthropic",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 1,
+      })
+      .mockRejectedValueOnce(new NoHealthyUpstreamsError("No healthy upstreams available"));
+
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 500,
+      headers: new Headers({ "content-type": "application/json" }),
+      body: new TextEncoder().encode(
+        JSON.stringify({ error: { type: "server_error", message: "upstream failed once" } })
+      ),
+      isStream: false,
+      usage: null,
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-test",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, { params: Promise.resolve({ path: ["messages"] }) });
+    expect(response.status).toBe(503);
+    expect(buildFixture).not.toHaveBeenCalled();
+    expect(recordTrafficFixture).not.toHaveBeenCalled();
+  });
+
+  it("should record success fixture when RECORDER_MODE is success", async () => {
+    process.env.RECORDER_ENABLED = "true";
+    process.env.RECORDER_MODE = "success";
+
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { buildFixture, recordTrafficFixture } = await import("@/lib/services/traffic-recorder");
+
+    const upstream = {
+      id: "up-openai",
+      name: "openai-main",
+      providerType: "openai",
+      baseUrl: "https://api.openai.com/v1",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: upstream.id },
+    ]);
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      resolvedModel: "gpt-4o-mini",
+      candidateUpstreams: [upstream],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "gpt-4o-mini",
+        resolvedModel: "gpt-4o-mini",
+        providerType: "openai",
+        upstreamName: upstream.name,
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 1,
+        finalCandidateCount: 1,
+      },
+    });
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      body: new TextEncoder().encode(JSON.stringify({ id: "ok-1", object: "chat.completion" })),
+      isStream: false,
+      usage: null,
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["chat", "completions"] }),
+    });
+    expect(response.status).toBe(200);
+    expect(buildFixture).toHaveBeenCalledTimes(1);
+    expect(recordTrafficFixture).toHaveBeenCalledTimes(1);
+  });
+
+  it("should skip success fixture when RECORDER_MODE is failure", async () => {
+    process.env.RECORDER_ENABLED = "true";
+    process.env.RECORDER_MODE = "failure";
+
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { buildFixture, recordTrafficFixture } = await import("@/lib/services/traffic-recorder");
+
+    const upstream = {
+      id: "up-openai",
+      name: "openai-main",
+      providerType: "openai",
+      baseUrl: "https://api.openai.com/v1",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: upstream.id },
+    ]);
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      resolvedModel: "gpt-4o-mini",
+      candidateUpstreams: [upstream],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "gpt-4o-mini",
+        resolvedModel: "gpt-4o-mini",
+        providerType: "openai",
+        upstreamName: upstream.name,
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 1,
+        finalCandidateCount: 1,
+      },
+    });
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      body: new TextEncoder().encode(JSON.stringify({ id: "ok-1", object: "chat.completion" })),
+      isStream: false,
+      usage: null,
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["chat", "completions"] }),
+    });
+    expect(response.status).toBe(200);
+    expect(buildFixture).not.toHaveBeenCalled();
+    expect(recordTrafficFixture).not.toHaveBeenCalled();
   });
 
   it("should exhaust all failover attempts and return 502", async () => {

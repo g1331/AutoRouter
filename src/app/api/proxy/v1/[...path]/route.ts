@@ -56,7 +56,7 @@ import type {
   RoutingCircuitState,
 } from "@/types/api";
 import {
-  isRecorderEnabled,
+  shouldRecordFixture,
   readRequestBody,
   readStreamChunks,
   teeStreamForRecording,
@@ -695,7 +695,9 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   }
 
   // Recorder setup
-  const recorderEnabled = isRecorderEnabled();
+  const shouldRecordSuccess = shouldRecordFixture("success");
+  const shouldRecordFailure = shouldRecordFixture("failure");
+  const recorderEnabled = shouldRecordSuccess || shouldRecordFailure;
   const inboundBody = recorderEnabled ? await readRequestBody(request) : null;
 
   // Routing type is always "tiered" for priority-based routing
@@ -893,7 +895,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       let recordingStream: ReadableStream<Uint8Array> | null = null;
       let responseStream = originalStream;
 
-      if (recorderEnabled && inboundBody) {
+      if (shouldRecordSuccess && inboundBody) {
         const [clientStream, recordStream] = teeStreamForRecording(originalStream);
         recordingStream = recordStream;
         responseStream = clientStream;
@@ -984,7 +986,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       responseHeaders.set("Cache-Control", "no-cache");
       responseHeaders.set("Connection", "keep-alive");
 
-      if (recorderEnabled && inboundBody && recordingStream) {
+      if (shouldRecordSuccess && inboundBody && recordingStream) {
         const upstreamForProxy = prepareUpstreamForProxy(upstreamForLogging);
         const outboundHeaders = injectAuthHeader(
           filterHeaders(new Headers(request.headers)),
@@ -1124,7 +1126,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         });
       }
 
-      if (recorderEnabled && inboundBody) {
+      if (shouldRecordSuccess && inboundBody) {
         const upstreamForProxy = prepareUpstreamForProxy(upstreamForLogging);
         const outboundHeaders = injectAuthHeader(
           filterHeaders(new Headers(request.headers)),
@@ -1209,7 +1211,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     const lastFailoverAttempt = failoverHistory[failoverHistory.length - 1];
     const downstreamErrorBody = createUnifiedErrorBody(errorCode);
 
-    if (recorderEnabled && inboundBody) {
+    if (shouldRecordFailure && inboundBody) {
       const fallbackOutboundHeaders = filterHeaders(new Headers(request.headers));
       const fallbackProviderType = selectedUpstream?.providerType ?? providerType ?? "unknown";
       const fallbackUpstream = {
