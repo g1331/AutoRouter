@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile, writeFile } from "fs/promises";
 import path from "path";
+import type { FailoverAttempt } from "./request-logger";
 
 export interface TrafficRecordRequest {
   method: string;
@@ -45,6 +46,14 @@ export interface TrafficRecordFixture {
     request: TrafficRecordRequest;
     response: TrafficRecordResponse;
   };
+  /** Final response returned to downstream client. Present only when it differs from upstream response. */
+  downstream?: {
+    response: TrafficRecordResponse;
+  };
+  /** Failover details for debugging retries. */
+  failover?: {
+    history: FailoverAttempt[];
+  };
 }
 
 /** Parameters for building a fixture from the proxy route. */
@@ -75,6 +84,14 @@ export interface BuildFixtureParams {
     bodyJson?: unknown | null;
     streamChunks?: string[];
   };
+  downstreamResponse?: {
+    statusCode: number;
+    headers: Headers | Record<string, string>;
+    bodyText?: string | null;
+    bodyJson?: unknown | null;
+    streamChunks?: string[];
+  } | null;
+  failoverHistory?: FailoverAttempt[] | null;
 }
 
 /** Parsed inbound request body. */
@@ -114,6 +131,12 @@ export function getFixtureRoot(): string {
   return process.env.RECORDER_FIXTURES_DIR || DEFAULT_FIXTURE_DIR;
 }
 
+export function isRecorderRedactionEnabled(): boolean {
+  const value = process.env.RECORDER_REDACT_SENSITIVE;
+  if (!value) return true;
+  return value !== "false" && value !== "0";
+}
+
 export function redactHeaders(headers: Headers | Record<string, string>): Record<string, string> {
   const entries =
     headers instanceof Headers ? Array.from(headers.entries()) : Object.entries(headers);
@@ -137,6 +160,42 @@ export function redactUrl(url: string): string {
 
 function sanitizePathSegment(segment: string): string {
   return segment.replace(/[^a-zA-Z0-9._-]+/g, "_");
+}
+
+function toHeaderRecord(headers: Headers | Record<string, string>): Record<string, string> {
+  return headers instanceof Headers ? Object.fromEntries(headers.entries()) : { ...headers };
+}
+
+function formatHeadersForFixture(
+  headers: Headers | Record<string, string>
+): Record<string, string> {
+  return isRecorderRedactionEnabled() ? redactHeaders(headers) : toHeaderRecord(headers);
+}
+
+function formatUrlForFixture(url: string): string {
+  return isRecorderRedactionEnabled() ? redactUrl(url) : url;
+}
+
+function formatFailoverHistoryForFixture(history: FailoverAttempt[]): FailoverAttempt[] {
+  const redactionEnabled = isRecorderRedactionEnabled();
+  return history.map((attempt) => {
+    const formatted: FailoverAttempt = {
+      ...attempt,
+      ...(typeof attempt.upstream_base_url === "string"
+        ? { upstream_base_url: formatUrlForFixture(attempt.upstream_base_url) }
+        : {}),
+      ...(attempt.response_headers
+        ? { response_headers: formatHeadersForFixture(attempt.response_headers) }
+        : {}),
+    };
+
+    if (redactionEnabled) {
+      delete formatted.response_body_text;
+      delete formatted.response_body_json;
+    }
+
+    return formatted;
+  });
 }
 
 export function buildFixturePath(provider: string, route: string, timestamp: string): string {
@@ -298,6 +357,20 @@ export function buildFixture(params: BuildFixtureParams): TrafficRecordFixture {
   const streamChunks = params.response.streamChunks
     ? compactSSEChunks(params.response.streamChunks)
     : undefined;
+  const downstreamStreamChunks = params.downstreamResponse?.streamChunks
+    ? compactSSEChunks(params.downstreamResponse.streamChunks)
+    : undefined;
+
+  const downstreamResponseBody =
+    params.downstreamResponse?.bodyJson != null
+      ? { bodyJson: params.downstreamResponse.bodyJson }
+      : params.downstreamResponse
+        ? { bodyText: params.downstreamResponse.bodyText ?? null }
+        : null;
+  const failoverHistory =
+    params.failoverHistory && params.failoverHistory.length > 0
+      ? formatFailoverHistoryForFixture(params.failoverHistory)
+      : null;
 
   return {
     meta: {
@@ -312,7 +385,7 @@ export function buildFixture(params: BuildFixtureParams): TrafficRecordFixture {
     inbound: {
       method: params.inboundRequest.method,
       path: params.inboundRequest.path,
-      headers: redactHeaders(params.inboundRequest.headers),
+      headers: formatHeadersForFixture(params.inboundRequest.headers),
       ...inboundBody,
     },
     outbound: {
@@ -320,21 +393,40 @@ export function buildFixture(params: BuildFixtureParams): TrafficRecordFixture {
         id: params.upstream.id,
         name: params.upstream.name,
         providerType: params.upstream.providerType,
-        baseUrl: redactUrl(params.upstream.baseUrl),
+        baseUrl: formatUrlForFixture(params.upstream.baseUrl),
       },
       request: {
         method: params.inboundRequest.method,
         path: params.inboundRequest.path,
-        headers: redactHeaders(params.outboundHeaders),
+        headers: formatHeadersForFixture(params.outboundHeaders),
         bodyFromInbound: true,
       },
       response: {
         status: params.response.statusCode,
-        headers: redactHeaders(params.response.headers),
+        headers: formatHeadersForFixture(params.response.headers),
         ...responseBody,
         streamChunks,
       },
     },
+    ...(params.downstreamResponse
+      ? {
+          downstream: {
+            response: {
+              status: params.downstreamResponse.statusCode,
+              headers: formatHeadersForFixture(params.downstreamResponse.headers),
+              ...(downstreamResponseBody ?? {}),
+              streamChunks: downstreamStreamChunks,
+            },
+          },
+        }
+      : {}),
+    ...(failoverHistory
+      ? {
+          failover: {
+            history: failoverHistory,
+          },
+        }
+      : {}),
   };
 }
 

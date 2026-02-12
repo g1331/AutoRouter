@@ -37,6 +37,8 @@ vi.mock("@/lib/services/proxy-client", () => ({
     apiKey: "decrypted-key",
     timeout: upstream.timeout ?? 60,
   })),
+  filterHeaders: vi.fn((headers: Headers) => headers),
+  injectAuthHeader: vi.fn((headers: Headers) => headers),
 }));
 
 vi.mock("@/lib/services/request-logger", () => ({
@@ -101,6 +103,25 @@ vi.mock("@/lib/services/model-router", () => ({
   },
 }));
 
+vi.mock("@/lib/services/traffic-recorder", () => ({
+  isRecorderEnabled: vi.fn(
+    () => process.env.RECORDER_ENABLED === "true" || process.env.RECORDER_ENABLED === "1"
+  ),
+  readRequestBody: vi.fn(async (request: Request) => {
+    const text = await request.clone().text();
+    if (!text) return { text: null, json: null, buffer: null };
+    try {
+      return { text, json: JSON.parse(text), buffer: null };
+    } catch {
+      return { text, json: null, buffer: null };
+    }
+  }),
+  readStreamChunks: vi.fn(),
+  teeStreamForRecording: vi.fn((stream: ReadableStream<Uint8Array>) => [stream, stream]),
+  buildFixture: vi.fn((params) => params),
+  recordTrafficFixture: vi.fn(async () => "/tmp/mock-fixture.json"),
+}));
+
 describe("proxy route upstream selection", () => {
   let POST: (
     request: NextRequest,
@@ -110,6 +131,7 @@ describe("proxy route upstream selection", () => {
   beforeEach(async () => {
     vi.resetAllMocks();
     vi.resetModules();
+    delete process.env.RECORDER_ENABLED;
     const routeModule = await import("@/app/api/proxy/v1/[...path]/route");
     POST = routeModule.POST;
   }, 30_000);
@@ -418,6 +440,141 @@ describe("proxy route upstream selection", () => {
     expect(forwardRequest).not.toHaveBeenCalled();
   });
 
+  it("should record failure fixture when upstreams are unavailable and recorder is enabled", async () => {
+    process.env.RECORDER_ENABLED = "true";
+
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType, NoHealthyUpstreamsError } =
+      await import("@/lib/services/load-balancer");
+    const { buildFixture, recordTrafficFixture } = await import("@/lib/services/traffic-recorder");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([{ upstreamId: "up-1" }]);
+
+    const routeByModelUpstream = {
+      id: "up-route",
+      name: "anthropic-route",
+      providerType: "anthropic",
+      baseUrl: "https://api.route-anthropic.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    const attemptedUpstream = {
+      id: "up-attempt",
+      name: "anthropic-attempt",
+      providerType: "anthropic",
+      baseUrl: "https://api.attempt-anthropic.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream: routeByModelUpstream,
+      providerType: "anthropic",
+      resolvedModel: "claude-test",
+      candidateUpstreams: [],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "claude-test",
+        resolvedModel: "claude-test",
+        providerType: "anthropic",
+        upstreamName: "anthropic-1",
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 1,
+        finalCandidateCount: 1,
+      },
+    });
+
+    vi.mocked(selectFromProviderType)
+      .mockResolvedValueOnce({
+        upstream: attemptedUpstream,
+        providerType: "anthropic",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 1,
+      })
+      .mockRejectedValueOnce(new NoHealthyUpstreamsError("No healthy upstreams available"));
+
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 500,
+      headers: new Headers({ "content-type": "application/json", "x-upstream-trace": "trace-1" }),
+      body: new TextEncoder().encode(
+        JSON.stringify({ error: { type: "server_error", message: "upstream failed once" } })
+      ),
+      isStream: false,
+      usage: null,
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-test",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, { params: Promise.resolve({ path: ["messages"] }) });
+    expect(response.status).toBe(503);
+
+    expect(buildFixture).toHaveBeenCalledTimes(1);
+    const fixtureParams = vi.mocked(buildFixture).mock.calls[0][0];
+    expect(fixtureParams.upstream.id).toBe("up-attempt");
+    expect(fixtureParams.upstream.name).toBe("anthropic-attempt");
+    expect(fixtureParams.upstream.baseUrl).toBe("https://api.attempt-anthropic.com");
+    expect(fixtureParams.response.bodyJson).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({ message: "upstream failed once" }),
+      })
+    );
+    expect(fixtureParams.downstreamResponse).toEqual({
+      statusCode: 503,
+      headers: { "content-type": "application/json" },
+      bodyJson: {
+        error: {
+          message: "服务暂时不可用，请稍后重试",
+          type: "service_unavailable",
+          code: "ALL_UPSTREAMS_UNAVAILABLE",
+        },
+      },
+    });
+    expect(fixtureParams.response.statusCode).toBe(500);
+    const failoverHistory = fixtureParams.failoverHistory as
+      | Array<{
+          status_code?: number | null;
+          response_headers?: Record<string, string>;
+          response_body_json?: unknown;
+        }>
+      | undefined;
+    expect(Array.isArray(failoverHistory)).toBe(true);
+    expect(failoverHistory).toHaveLength(1);
+    expect(failoverHistory?.[0]?.status_code).toBe(500);
+    expect(failoverHistory?.[0]).not.toHaveProperty("outbound_request_headers");
+    expect(failoverHistory?.[0]?.response_headers).toEqual(
+      expect.objectContaining({ "content-type": "application/json", "x-upstream-trace": "trace-1" })
+    );
+    expect(failoverHistory?.[0]?.response_body_json).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({ message: "upstream failed once" }),
+      })
+    );
+
+    expect(recordTrafficFixture).toHaveBeenCalledTimes(1);
+  });
+
   it("should exhaust all failover attempts and return 502", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
@@ -566,6 +723,126 @@ describe("proxy route upstream selection", () => {
     expect(markUnhealthy).toHaveBeenCalledTimes(3);
     expect(recordFailure).toHaveBeenCalledTimes(3);
     expect(forwardRequest).toHaveBeenCalledTimes(3);
+  });
+
+  it("should continue failover when failed stream response capture would hang", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { readStreamChunks } = await import("@/lib/services/traffic-recorder");
+
+    vi.mocked(readStreamChunks).mockImplementation(() => new Promise(() => {}));
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-stream-fail" },
+      { upstreamId: "up-fallback-ok" },
+    ]);
+
+    const streamFailUpstream = {
+      id: "up-stream-fail",
+      name: "stream-fail",
+      providerType: "openai",
+      baseUrl: "https://stream-fail.example/v1",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+    const fallbackUpstream = {
+      id: "up-fallback-ok",
+      name: "fallback-ok",
+      providerType: "openai",
+      baseUrl: "https://fallback.example/v1",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream: streamFailUpstream,
+      providerType: "openai",
+      resolvedModel: "gpt-5.2",
+      candidateUpstreams: [streamFailUpstream, fallbackUpstream],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "gpt-5.2",
+        resolvedModel: "gpt-5.2",
+        providerType: "openai",
+        upstreamName: "stream-fail",
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 2,
+        finalCandidateCount: 2,
+      },
+    });
+
+    vi.mocked(selectFromProviderType)
+      .mockResolvedValueOnce({
+        upstream: streamFailUpstream,
+        providerType: "openai",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 2,
+      })
+      .mockResolvedValueOnce({
+        upstream: fallbackUpstream,
+        providerType: "openai",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 2,
+      });
+
+    const hangingErrorStream = new ReadableStream<Uint8Array>({
+      start() {},
+      cancel() {},
+    });
+
+    vi.mocked(forwardRequest)
+      .mockResolvedValueOnce({
+        statusCode: 503,
+        headers: new Headers({ "content-type": "text/event-stream" }),
+        body: hangingErrorStream,
+        isStream: true,
+        usage: null,
+      })
+      .mockResolvedValueOnce({
+        statusCode: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        body: new TextEncoder().encode(JSON.stringify({ ok: true })),
+        isStream: false,
+        usage: null,
+      });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.2",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await Promise.race([
+      POST(request, { params: Promise.resolve({ path: ["chat", "completions"] }) }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("failover retry blocked by stream capture")), 2_000)
+      ),
+    ]);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data).toEqual({ ok: true });
+    expect(forwardRequest).toHaveBeenCalledTimes(2);
+    expect(selectFromProviderType).toHaveBeenCalledTimes(2);
+    expect(readStreamChunks).not.toHaveBeenCalled();
   });
 
   it("should degrade from tier 0 to tier 1 when tier 0 upstream fails", async () => {

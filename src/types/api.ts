@@ -202,6 +202,8 @@ export interface TestUpstreamResponse {
 export interface FailoverAttempt {
   upstream_id: string;
   upstream_name: string;
+  upstream_provider_type?: string;
+  upstream_base_url?: string;
   attempted_at: string; // ISO 8601 date string
   error_type:
     | "timeout"
@@ -212,6 +214,9 @@ export interface FailoverAttempt {
     | "circuit_open";
   error_message: string;
   status_code?: number | null;
+  response_headers?: Record<string, string>;
+  response_body_text?: string | null;
+  response_body_json?: unknown | null;
 }
 
 /**

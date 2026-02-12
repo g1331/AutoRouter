@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractApiKey, getKeyPrefix, verifyApiKey } from "@/lib/utils/auth";
-import { db, apiKeys, apiKeyUpstreams, type Upstream } from "@/lib/db";
+import { db, apiKeys, apiKeyUpstreams, upstreams, type Upstream } from "@/lib/db";
 import { eq, and } from "drizzle-orm";
 import {
   forwardRequest,
@@ -43,9 +43,11 @@ import {
   shouldContinueFailover,
 } from "@/lib/services/failover-config";
 import {
+  createUnifiedErrorBody,
   createUnifiedErrorResponse,
   createSSEErrorEvent,
   getHttpStatusForError,
+  type UnifiedErrorCode,
 } from "@/lib/services/unified-error";
 import type {
   RoutingDecisionLog,
@@ -125,6 +127,10 @@ interface RoutingDecision {
   failoverHistory: FailoverAttempt[];
 }
 
+interface FailoverErrorWithHistory extends Error {
+  failoverHistory?: FailoverAttempt[];
+}
+
 /**
  * Determine error type for failover logging.
  */
@@ -166,6 +172,81 @@ function isFailoverableError(error: unknown): boolean {
     );
   }
   return false;
+}
+
+const MAX_FAILOVER_ERROR_BODY_BYTES = 256 * 1024;
+const FAILOVER_STREAM_CAPTURE_TIMEOUT_MS = 200;
+
+async function captureFailedResponse(result: ProxyResult): Promise<{
+  headers: Record<string, string>;
+  bodyText: string | null;
+  bodyJson: unknown | null;
+}> {
+  const headers = Object.fromEntries(result.headers.entries());
+
+  if (result.isStream) {
+    const reader = (result.body as ReadableStream<Uint8Array>).getReader();
+    const decoder = new TextDecoder();
+    let bodyText: string | null = null;
+
+    try {
+      const timedRead = await Promise.race([
+        reader.read().then((value) => ({ type: "read" as const, value })),
+        new Promise<{ type: "timeout" }>((resolve) =>
+          setTimeout(() => resolve({ type: "timeout" }), FAILOVER_STREAM_CAPTURE_TIMEOUT_MS)
+        ),
+      ]);
+
+      if (timedRead.type === "timeout") {
+        void reader.cancel("failover_stream_capture_timeout").catch(() => undefined);
+        return { headers, bodyText: null, bodyJson: null };
+      }
+
+      const chunkText =
+        !timedRead.value.done && timedRead.value.value ? decoder.decode(timedRead.value.value) : "";
+      if (!chunkText) {
+        return { headers, bodyText: null, bodyJson: null };
+      }
+
+      bodyText =
+        chunkText.length > MAX_FAILOVER_ERROR_BODY_BYTES
+          ? `${chunkText.slice(0, MAX_FAILOVER_ERROR_BODY_BYTES)}...[TRUNCATED]`
+          : chunkText;
+    } finally {
+      reader.releaseLock();
+    }
+
+    if (!bodyText) {
+      return { headers, bodyText: null, bodyJson: null };
+    }
+
+    try {
+      return { headers, bodyText, bodyJson: JSON.parse(bodyText) };
+    } catch {
+      return { headers, bodyText, bodyJson: null };
+    }
+  }
+
+  const bytes = result.body as Uint8Array;
+  const limitedBytes =
+    bytes.byteLength > MAX_FAILOVER_ERROR_BODY_BYTES
+      ? bytes.slice(0, MAX_FAILOVER_ERROR_BODY_BYTES)
+      : bytes;
+  const decoded = limitedBytes.byteLength > 0 ? new TextDecoder().decode(limitedBytes) : null;
+  const bodyText =
+    bytes.byteLength > MAX_FAILOVER_ERROR_BODY_BYTES && decoded
+      ? `${decoded}...[TRUNCATED]`
+      : decoded;
+
+  if (!bodyText) {
+    return { headers, bodyText: null, bodyJson: null };
+  }
+
+  try {
+    return { headers, bodyText, bodyJson: JSON.parse(bodyText) };
+  } catch {
+    return { headers, bodyText, bodyJson: null };
+  }
 }
 
 /**
@@ -257,7 +338,11 @@ async function forwardWithFailover(
     if (!shouldContinueFailover(attemptCount, hasMoreUpstreams, config, request.signal.aborted)) {
       // No more upstreams or hit max attempts - throw NoHealthyUpstreamsError
       // to indicate all failover attempts have been exhausted
-      throw new NoHealthyUpstreamsError(lastError?.message ?? "All upstreams exhausted");
+      const exhaustedError = new NoHealthyUpstreamsError(
+        lastError?.message ?? "All upstreams exhausted"
+      ) as FailoverErrorWithHistory;
+      exhaustedError.failoverHistory = [...failoverHistory];
+      throw exhaustedError;
     }
 
     if (!selectedUpstream) {
@@ -268,6 +353,7 @@ async function forwardWithFailover(
 
     // Track connection for least-connections strategy
     recordConnection(selectedUpstream.id);
+    let attemptUpstreamBaseUrl = selectedUpstream.baseUrl;
 
     try {
       // Create a new request with the buffered body
@@ -278,10 +364,12 @@ async function forwardWithFailover(
       });
 
       const upstreamForProxy = prepareUpstreamForProxy(selectedUpstream);
+      attemptUpstreamBaseUrl = upstreamForProxy.baseUrl;
       const result = await forwardRequest(proxyRequest, upstreamForProxy, path, requestId);
 
       // Check if response indicates we should failover
       if (shouldTriggerFailover(result.statusCode, config)) {
+        const failedResponse = await captureFailedResponse(result);
         // Release connection and mark as unhealthy
         releaseConnection(selectedUpstream.id);
         void markUnhealthy(selectedUpstream.id, `HTTP ${result.statusCode} error`);
@@ -291,10 +379,15 @@ async function forwardWithFailover(
         failoverHistory.push({
           upstream_id: selectedUpstream.id,
           upstream_name: selectedUpstream.name,
+          upstream_provider_type: selectedUpstream.providerType,
+          upstream_base_url: attemptUpstreamBaseUrl,
           attempted_at: new Date().toISOString(),
           error_type: getErrorType(null, result.statusCode),
           error_message: `HTTP ${result.statusCode} error`,
           status_code: result.statusCode,
+          response_headers: failedResponse.headers,
+          response_body_text: failedResponse.bodyText,
+          response_body_json: failedResponse.bodyJson,
         });
         failedUpstreamIds.push(selectedUpstream.id);
         lastError = new Error(`Upstream returned ${result.statusCode}`);
@@ -360,6 +453,8 @@ async function forwardWithFailover(
         failoverHistory.push({
           upstream_id: selectedUpstream.id,
           upstream_name: selectedUpstream.name,
+          upstream_provider_type: selectedUpstream.providerType,
+          upstream_base_url: attemptUpstreamBaseUrl,
           attempted_at: new Date().toISOString(),
           error_type: getErrorType(error instanceof Error ? error : null, null),
           error_message: errorMessage,
@@ -1084,23 +1179,129 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       });
     }
   } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "failoverHistory" in error &&
+      Array.isArray((error as FailoverErrorWithHistory).failoverHistory)
+    ) {
+      failoverHistory = (error as FailoverErrorWithHistory).failoverHistory ?? [];
+    }
+
     const durationMs = Date.now() - startTime;
 
     // Determine which upstream to log (for load balanced requests, we may not have one if all failed)
     const logUpstreamId = selectedUpstream?.id ?? null;
 
     // Determine error code for unified response
-    let errorCode:
-      | "ALL_UPSTREAMS_UNAVAILABLE"
-      | "REQUEST_TIMEOUT"
-      | "CLIENT_DISCONNECTED"
-      | "SERVICE_UNAVAILABLE" = "SERVICE_UNAVAILABLE";
-    if (error instanceof NoHealthyUpstreamsError) {
+    let errorCode: UnifiedErrorCode = "SERVICE_UNAVAILABLE";
+    if (error instanceof NoHealthyUpstreamsError || error instanceof CircuitBreakerOpenError) {
       errorCode = "ALL_UPSTREAMS_UNAVAILABLE";
+    } else if (error instanceof NoUpstreamGroupError) {
+      errorCode = "NO_UPSTREAMS_CONFIGURED";
     } else if (error instanceof ClientDisconnectedError) {
       errorCode = "CLIENT_DISCONNECTED";
     } else if (error instanceof Error && error.message.includes("timed out")) {
       errorCode = "REQUEST_TIMEOUT";
+    }
+    const errorStatusCode = getHttpStatusForError(errorCode);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const lastFailoverAttempt = failoverHistory[failoverHistory.length - 1];
+    const downstreamErrorBody = createUnifiedErrorBody(errorCode);
+
+    if (recorderEnabled && inboundBody) {
+      const fallbackOutboundHeaders = filterHeaders(new Headers(request.headers));
+      const fallbackProviderType = selectedUpstream?.providerType ?? providerType ?? "unknown";
+      const fallbackUpstream = {
+        id: selectedUpstream?.id ?? "unknown",
+        name: selectedUpstream?.name ?? "unknown",
+        providerType: fallbackProviderType,
+        baseUrl: selectedUpstream?.baseUrl ?? "unknown",
+      };
+      let outboundHeaders: Headers | Record<string, string> = fallbackOutboundHeaders;
+      let upstreamForFixture = fallbackUpstream;
+
+      if (lastFailoverAttempt?.upstream_id) {
+        upstreamForFixture = {
+          id: lastFailoverAttempt.upstream_id,
+          name: lastFailoverAttempt.upstream_name,
+          providerType: lastFailoverAttempt.upstream_provider_type ?? fallbackProviderType,
+          baseUrl: lastFailoverAttempt.upstream_base_url ?? selectedUpstream?.baseUrl ?? "unknown",
+        };
+
+        try {
+          const attemptedUpstream = await db.query.upstreams.findFirst({
+            where: eq(upstreams.id, lastFailoverAttempt.upstream_id),
+          });
+          if (attemptedUpstream) {
+            const attemptedUpstreamForProxy = prepareUpstreamForProxy(attemptedUpstream);
+            outboundHeaders = injectAuthHeader(fallbackOutboundHeaders, attemptedUpstreamForProxy);
+            upstreamForFixture = {
+              id: attemptedUpstream.id,
+              name: attemptedUpstream.name,
+              providerType: attemptedUpstream.providerType,
+              baseUrl: attemptedUpstreamForProxy.baseUrl,
+            };
+          }
+        } catch (recorderBuildError) {
+          log.warn(
+            { err: recorderBuildError, requestId },
+            "failed to resolve attempted upstream for failure fixture"
+          );
+        }
+      } else if (selectedUpstream) {
+        try {
+          const upstreamForProxy = prepareUpstreamForProxy(selectedUpstream);
+          outboundHeaders = injectAuthHeader(fallbackOutboundHeaders, upstreamForProxy);
+          upstreamForFixture = {
+            id: selectedUpstream.id,
+            name: selectedUpstream.name,
+            providerType: selectedUpstream.providerType,
+            baseUrl: upstreamForProxy.baseUrl,
+          };
+        } catch (recorderBuildError) {
+          log.warn(
+            { err: recorderBuildError, requestId },
+            "failed to build upstream auth headers for failure fixture"
+          );
+        }
+      }
+
+      const failureFixture = buildFixture({
+        requestId,
+        startTime,
+        providerType: fallbackProviderType,
+        route: path,
+        model: resolvedModel,
+        inboundRequest: {
+          method: request.method,
+          path,
+          headers: request.headers,
+          bodyText: inboundBody.text,
+          bodyJson: inboundBody.json,
+        },
+        upstream: upstreamForFixture,
+        outboundHeaders,
+        response: {
+          statusCode: lastFailoverAttempt?.status_code ?? errorStatusCode,
+          headers: lastFailoverAttempt?.response_headers ?? {},
+          bodyJson: lastFailoverAttempt?.response_body_json ?? null,
+          bodyText:
+            lastFailoverAttempt?.response_body_json == null
+              ? (lastFailoverAttempt?.response_body_text ?? null)
+              : null,
+        },
+        downstreamResponse: {
+          statusCode: errorStatusCode,
+          headers: { "content-type": "application/json" },
+          bodyJson: downstreamErrorBody,
+        },
+        failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
+      });
+
+      void recordTrafficFixture(failureFixture).catch((recordError) =>
+        log.error({ err: recordError, requestId }, "failed to record error fixture")
+      );
     }
 
     // Log failed request (internal logging with full details)
@@ -1111,10 +1312,10 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         promptTokens: 0,
         completionTokens: 0,
         totalTokens: 0,
-        statusCode: getHttpStatusForError(errorCode),
+        statusCode: errorStatusCode,
         durationMs,
         routingDurationMs,
-        errorMessage: error instanceof Error ? error.message : "Unknown error",
+        errorMessage,
         routingType,
         priorityTier,
         failoverAttempts: failoverHistory.length,
@@ -1131,10 +1332,10 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         promptTokens: 0,
         completionTokens: 0,
         totalTokens: 0,
-        statusCode: getHttpStatusForError(errorCode),
+        statusCode: errorStatusCode,
         durationMs,
         routingDurationMs,
-        errorMessage: error instanceof Error ? error.message : "Unknown error",
+        errorMessage,
         routingType,
         priorityTier,
         failoverAttempts: failoverHistory.length,
@@ -1146,28 +1347,13 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     // Handle client disconnect silently (no response needed)
     if (error instanceof ClientDisconnectedError) {
       log.warn({ requestId }, "client disconnected, no response sent");
-      return createUnifiedErrorResponse("CLIENT_DISCONNECTED");
+      return createUnifiedErrorResponse(errorCode);
     }
 
-    // Return unified error response (no upstream details exposed)
-    if (error instanceof NoHealthyUpstreamsError) {
-      return createUnifiedErrorResponse("ALL_UPSTREAMS_UNAVAILABLE");
+    if (errorCode === "SERVICE_UNAVAILABLE") {
+      log.error({ err: error, requestId }, "proxy error");
     }
-
-    if (error instanceof Error && error.message.includes("timed out")) {
-      return createUnifiedErrorResponse("REQUEST_TIMEOUT");
-    }
-
-    if (error instanceof CircuitBreakerOpenError) {
-      return createUnifiedErrorResponse("ALL_UPSTREAMS_UNAVAILABLE");
-    }
-
-    if (error instanceof NoUpstreamGroupError) {
-      return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED");
-    }
-
-    log.error({ err: error, requestId }, "proxy error");
-    return createUnifiedErrorResponse("SERVICE_UNAVAILABLE");
+    return createUnifiedErrorResponse(errorCode);
   }
 }
 

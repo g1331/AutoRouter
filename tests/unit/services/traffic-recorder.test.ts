@@ -6,6 +6,7 @@ import {
   buildFixture,
   readStreamChunks,
   isRecorderEnabled,
+  isRecorderRedactionEnabled,
   getFixtureRoot,
   buildFixturePath,
 } from "@/lib/services/traffic-recorder";
@@ -15,6 +16,7 @@ describe("traffic recorder", () => {
   beforeEach(() => {
     delete process.env.RECORDER_ENABLED;
     delete process.env.RECORDER_FIXTURES_DIR;
+    delete process.env.RECORDER_REDACT_SENSITIVE;
   });
 
   describe("redactHeaders", () => {
@@ -131,6 +133,27 @@ describe("traffic recorder", () => {
     it("returns default directory when RECORDER_FIXTURES_DIR is empty", () => {
       process.env.RECORDER_FIXTURES_DIR = "";
       expect(getFixtureRoot()).toBe("tests/fixtures");
+    });
+  });
+
+  describe("isRecorderRedactionEnabled", () => {
+    it("defaults to true when RECORDER_REDACT_SENSITIVE is not set", () => {
+      expect(isRecorderRedactionEnabled()).toBe(true);
+    });
+
+    it("returns true when RECORDER_REDACT_SENSITIVE is 'true'", () => {
+      process.env.RECORDER_REDACT_SENSITIVE = "true";
+      expect(isRecorderRedactionEnabled()).toBe(true);
+    });
+
+    it("returns false when RECORDER_REDACT_SENSITIVE is 'false'", () => {
+      process.env.RECORDER_REDACT_SENSITIVE = "false";
+      expect(isRecorderRedactionEnabled()).toBe(false);
+    });
+
+    it("returns false when RECORDER_REDACT_SENSITIVE is '0'", () => {
+      process.env.RECORDER_REDACT_SENSITIVE = "0";
+      expect(isRecorderRedactionEnabled()).toBe(false);
     });
   });
 
@@ -361,6 +384,127 @@ describe("traffic recorder", () => {
       const fixture = buildFixture(baseParams);
       expect(fixture.inbound.headers["authorization"]).toBe("[REDACTED]");
       expect(fixture.outbound.request.headers["authorization"]).toBe("[REDACTED]");
+    });
+
+    it("omits downstream section when downstream response is not provided", () => {
+      const fixture = buildFixture(baseParams);
+      expect(fixture.downstream).toBeUndefined();
+    });
+
+    it("records downstream response when provided", () => {
+      const fixture = buildFixture({
+        ...baseParams,
+        downstreamResponse: {
+          statusCode: 503,
+          headers: new Headers({
+            "content-type": "application/json",
+            "x-downstream": "yes",
+          }),
+          bodyJson: {
+            error: {
+              code: "ALL_UPSTREAMS_UNAVAILABLE",
+              message: "服务暂时不可用，请稍后重试",
+            },
+          },
+        },
+      });
+
+      expect(fixture.downstream?.response.status).toBe(503);
+      expect(fixture.downstream?.response.headers["content-type"]).toBe("application/json");
+      expect(fixture.downstream?.response.headers["x-downstream"]).toBe("yes");
+      expect(fixture.downstream?.response.bodyJson).toEqual({
+        error: {
+          code: "ALL_UPSTREAMS_UNAVAILABLE",
+          message: "服务暂时不可用，请稍后重试",
+        },
+      });
+    });
+
+    it("preserves sensitive fields when RECORDER_REDACT_SENSITIVE=false", () => {
+      process.env.RECORDER_REDACT_SENSITIVE = "false";
+      const fixture = buildFixture(baseParams);
+
+      expect(fixture.inbound.headers.authorization).toBe("Bearer sk-test");
+      expect(fixture.outbound.request.headers.authorization).toBe("Bearer sk-upstream");
+      expect(fixture.outbound.upstream.baseUrl).toBe("https://api.openai.com/v1");
+    });
+
+    it("redacts failover history headers and drops failover response body when redaction is enabled", () => {
+      const fixture = buildFixture({
+        ...baseParams,
+        failoverHistory: [
+          {
+            upstream_id: "upstream-1",
+            upstream_name: "openai-primary",
+            upstream_base_url: "https://api.internal.example/v1/chat/completions",
+            attempted_at: "2026-01-01T00:00:00.000Z",
+            error_type: "http_5xx",
+            error_message: "HTTP 500 error",
+            status_code: 500,
+            response_headers: {
+              "content-type": "application/json",
+              "set-cookie": "sid=secret",
+            },
+            response_body_json: {
+              error: {
+                message: "secret payload",
+              },
+            },
+            response_body_text: "secret text",
+          },
+        ],
+      });
+
+      expect(fixture.failover?.history).toHaveLength(1);
+      expect(fixture.failover?.history[0]?.response_headers).toEqual({
+        "content-type": "application/json",
+        "set-cookie": "[REDACTED]",
+      });
+      expect(fixture.failover?.history[0]?.upstream_base_url).toBe(
+        "[REDACTED]/v1/chat/completions"
+      );
+      expect(fixture.failover?.history[0]?.response_body_json).toBeUndefined();
+      expect(fixture.failover?.history[0]?.response_body_text).toBeUndefined();
+    });
+
+    it("keeps failover history body when RECORDER_REDACT_SENSITIVE=false", () => {
+      process.env.RECORDER_REDACT_SENSITIVE = "false";
+      const fixture = buildFixture({
+        ...baseParams,
+        failoverHistory: [
+          {
+            upstream_id: "upstream-1",
+            upstream_name: "openai-primary",
+            upstream_base_url: "https://api.internal.example/v1/chat/completions",
+            attempted_at: "2026-01-01T00:00:00.000Z",
+            error_type: "http_5xx",
+            error_message: "HTTP 500 error",
+            status_code: 500,
+            response_headers: {
+              "content-type": "application/json",
+              "set-cookie": "sid=secret",
+            },
+            response_body_json: {
+              error: {
+                message: "secret payload",
+              },
+            },
+          },
+        ],
+      });
+
+      expect(fixture.failover?.history[0]?.response_headers).toEqual({
+        "content-type": "application/json",
+        "set-cookie": "sid=secret",
+      });
+      expect(fixture.failover?.history[0]?.upstream_base_url).toBe(
+        "https://api.internal.example/v1/chat/completions"
+      );
+      expect(fixture.failover?.history[0]?.response_body_json).toEqual({
+        error: {
+          message: "secret payload",
+        },
+      });
     });
   });
 
