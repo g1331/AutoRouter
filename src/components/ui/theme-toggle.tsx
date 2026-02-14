@@ -115,7 +115,7 @@ export function ThemeToggle() {
 
       <DropdownMenuContent
         align="end"
-        className="w-40 border border-amber-500/50 bg-surface-300 font-mono text-sm shadow-[0_0_20px_rgba(255,191,0,0.15)]"
+        className="min-w-[140px] border border-amber-500/50 bg-surface-300 font-mono text-sm shadow-[0_0_20px_rgba(255,191,0,0.15)]"
       >
         <DropdownMenuRadioGroup value={theme} onValueChange={handleThemeChange}>
           <DropdownMenuRadioItem

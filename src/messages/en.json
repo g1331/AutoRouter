@@ -37,14 +37,17 @@
     "sysReady": "SYS::READY",
     "sysOk": "SYS::OK",
     "expand": "Expand",
-    "collapse": "Collapse"
+    "collapse": "Collapse",
+    "logout": "Sign out of your account"
   },
   "nav": {
     "dashboard": "Dashboard",
     "apiKeys": "API Keys",
     "upstreams": "Upstreams",
     "logs": "Logs",
-    "logout": "Logout"
+    "logout": "Logout",
+    "logoutConfirm": "Are you sure you want to log out?",
+    "settings": "Settings"
   },
   "auth": {
     "title": "AUTOROUTER",

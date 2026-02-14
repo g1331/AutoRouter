@@ -14,6 +14,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+interface LanguageSwitcherProps {
+  compact?: boolean;
+}
+
 /**
  * Cassette Futurism Language Switcher
  *
@@ -23,7 +27,7 @@ import { cn } from "@/lib/utils";
  * - Dropdown menu for language selection
  * - Preserves query string when switching locales
  */
-export function LanguageSwitcher() {
+export function LanguageSwitcher({ compact = false }: LanguageSwitcherProps = {}) {
   const locale = useLocale() as Locale;
   const router = useRouter();
   const pathname = usePathname();
@@ -42,9 +46,9 @@ export function LanguageSwitcher() {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="sm" className="h-9 gap-2" aria-label={t("switch")}>
           <Globe className="h-4 w-4 text-amber-500" aria-hidden="true" />
-          <span className="hidden sm:inline font-mono text-xs text-amber-500">
-            {localeNames[locale]}
-          </span>
+          {!compact && (
+            <span className="font-mono text-xs text-amber-500">{localeNames[locale]}</span>
+          )}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-36">

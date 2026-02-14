@@ -37,14 +37,17 @@
     "sysReady": "SYS::READY",
     "sysOk": "SYS::OK",
     "expand": "展开",
-    "collapse": "收起"
+    "collapse": "收起",
+    "logout": "退出当前账户"
   },
   "nav": {
     "dashboard": "仪表盘",
     "apiKeys": "API Keys",
     "upstreams": "Upstreams",
     "logs": "Logs",
-    "logout": "登出"
+    "logout": "登出",
+    "logoutConfirm": "确定要退出登录吗？",
+    "settings": "设置"
   },
   "auth": {
     "title": "AUTOROUTER",
