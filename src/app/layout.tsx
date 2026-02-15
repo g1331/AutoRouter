@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono, VT323 } from "next/font/google";
 import "./globals.css";
-import { VibeKanbanProvider } from "@/providers/vibe-kanban-provider";
 
 /**
  * Cassette Futurism Design System - Font Configuration
@@ -71,10 +70,7 @@ export default async function RootLayout({ children, params }: RootLayoutProps) 
       className={`${inter.variable} ${jetbrainsMono.variable} ${vt323.variable}`}
     >
       <head />
-      <body className={inter.className}>
-        {children}
-        <VibeKanbanProvider />
-      </body>
+      <body className={inter.className}>{children}</body>
     </html>
   );
 }
