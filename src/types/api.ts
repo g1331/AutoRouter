@@ -319,6 +319,9 @@ export interface RequestLogResponse {
   duration_ms: number | null;
   routing_duration_ms: number | null;
   error_message: string | null;
+  // Performance monitoring fields
+  time_to_first_token_ms: number | null; // Time to first token in milliseconds
+  tokens_per_second: number | null; // Tokens generated per second
   // Routing decision fields
   routing_type: RoutingType | null;
   group_name: string | null; // Deprecated: kept for historical data

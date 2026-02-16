@@ -176,6 +176,9 @@ export const requestLogs = sqliteTable(
     durationMs: integer("duration_ms"),
     routingDurationMs: integer("routing_duration_ms"),
     errorMessage: text("error_message"),
+    // Performance monitoring fields
+    timeToFirstTokenMs: integer("time_to_first_token_ms"), // Time to first token in milliseconds
+    tokensPerSecond: integer("tokens_per_second"), // Tokens generated per second (completion_tokens / generation_time_ms * 1000)
     // Routing decision fields
     routingType: text("routing_type"), // 'direct' | 'provider_type' | 'tiered'
     groupName: text("group_name"), // Deprecated: kept for historical data

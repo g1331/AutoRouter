@@ -36,6 +36,7 @@ export interface ProxyResult {
   isStream: boolean;
   usage?: TokenUsage;
   usagePromise?: Promise<TokenUsage | null>;
+  timeToFirstTokenMs?: number; // Time to first token in milliseconds
 }
 
 // Headers that should not be forwarded to upstream
@@ -359,13 +360,60 @@ async function drainStream(stream: ReadableStream<Uint8Array>): Promise<void> {
 }
 
 /**
+ * Wrap a stream to track time to first chunk.
+ */
+function trackFirstChunkTime(
+  stream: ReadableStream<Uint8Array>,
+  onRequestStartTime: number
+): {
+  stream: ReadableStream<Uint8Array>;
+  timeToFirstChunkMs: number | null;
+} {
+  let firstChunkReceived = false;
+  let timeToFirstChunkMs: number | null = null;
+
+  const trackedStream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const reader = stream.getReader();
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+
+          if (done) {
+            break;
+          }
+
+          // Track time to first chunk
+          if (!firstChunkReceived && value && value.length > 0) {
+            firstChunkReceived = true;
+            timeToFirstChunkMs = Date.now() - onRequestStartTime;
+          }
+
+          controller.enqueue(value);
+        }
+
+        controller.close();
+      } catch (error) {
+        controller.error(error);
+      } finally {
+        reader.releaseLock();
+      }
+    },
+  });
+
+  return { stream: trackedStream, timeToFirstChunkMs };
+}
+
+/**
  * Forward request to upstream service.
  */
 export async function forwardRequest(
   request: Request,
   upstream: UpstreamForProxy,
   path: string,
-  requestId: string
+  requestId: string,
+  onRequestStartTime?: number
 ): Promise<ProxyResult> {
   // Prepare headers
   const originalHeaders = new Headers(request.headers);
@@ -444,6 +492,7 @@ export async function forwardRequest(
     if (contentType.includes("text/event-stream") && upstreamResponse.body) {
       // Streaming response - return stream directly for maximum performance
       let usage: TokenUsage | undefined;
+      const requestStartTime = onRequestStartTime || Date.now();
 
       const transformedStream = upstreamResponse.body.pipeThrough(
         createSSETransformer((u) => {
@@ -455,7 +504,13 @@ export async function forwardRequest(
         })
       );
 
-      const [clientStream, loggingStream] = transformedStream.tee();
+      // Track time to first chunk
+      const { stream: trackedStream, timeToFirstChunkMs } = trackFirstChunkTime(
+        transformedStream,
+        requestStartTime
+      );
+
+      const [clientStream, loggingStream] = trackedStream.tee();
       const usagePromise = (async () => {
         try {
           await drainStream(loggingStream);
@@ -473,6 +528,7 @@ export async function forwardRequest(
         isStream: true,
         usage,
         usagePromise,
+        timeToFirstTokenMs: timeToFirstChunkMs,
       };
     } else {
       // Regular response

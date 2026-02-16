@@ -267,6 +267,9 @@ export interface RequestLogApiResponse {
   duration_ms: number | null;
   routing_duration_ms: number | null;
   error_message: string | null;
+  // Performance monitoring fields
+  time_to_first_token_ms: number | null;
+  tokens_per_second: number | null;
   // Routing decision fields
   routing_type: string | null;
   priority_tier: number | null;
@@ -308,6 +311,9 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
     duration_ms: log.durationMs,
     routing_duration_ms: log.routingDurationMs,
     error_message: log.errorMessage,
+    // Performance monitoring fields
+    time_to_first_token_ms: log.timeToFirstTokenMs,
+    tokens_per_second: log.tokensPerSecond,
     // Routing decision fields
     routing_type: log.routingType,
     priority_tier: log.priorityTier,

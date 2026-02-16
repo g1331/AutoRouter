@@ -171,6 +171,9 @@ export const requestLogs = pgTable(
     durationMs: integer("duration_ms"),
     routingDurationMs: integer("routing_duration_ms"),
     errorMessage: text("error_message"),
+    // Performance monitoring fields
+    timeToFirstTokenMs: integer("time_to_first_token_ms"), // Time to first token in milliseconds
+    tokensPerSecond: integer("tokens_per_second"), // Tokens generated per second (completion_tokens / generation_time_ms * 1000)
     // Routing decision fields
     routingType: varchar("routing_type", { length: 16 }), // 'direct' | 'provider_type' | 'tiered'
     groupName: varchar("group_name", { length: 64 }), // Deprecated: kept for historical data

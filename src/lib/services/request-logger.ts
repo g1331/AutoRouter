@@ -19,6 +19,9 @@ export interface LogRequestInput {
   durationMs: number | null;
   routingDurationMs?: number | null;
   errorMessage?: string | null;
+  // Performance monitoring fields
+  timeToFirstTokenMs?: number | null;
+  tokensPerSecond?: number | null;
   // Routing decision fields
   routingType?: "tiered" | "direct" | "provider_type" | null;
   priorityTier?: number | null;
@@ -69,6 +72,9 @@ export interface UpdateRequestLogInput {
   durationMs?: number | null;
   routingDurationMs?: number | null;
   errorMessage?: string | null;
+  // Performance monitoring fields
+  timeToFirstTokenMs?: number | null;
+  tokensPerSecond?: number | null;
   // Routing decision fields
   routingType?: "tiered" | "direct" | "provider_type" | null;
   priorityTier?: number | null;
@@ -123,6 +129,9 @@ export interface RequestLogResponse {
   durationMs: number | null;
   routingDurationMs: number | null;
   errorMessage: string | null;
+  // Performance monitoring fields
+  timeToFirstTokenMs: number | null;
+  tokensPerSecond: number | null;
   // Routing decision fields
   routingType: string | null;
   priorityTier: number | null;
@@ -178,6 +187,9 @@ export async function logRequestStart(input: StartRequestLogInput): Promise<Requ
       statusCode: null,
       durationMs: null,
       errorMessage: null,
+      // Performance monitoring fields
+      timeToFirstTokenMs: null,
+      tokensPerSecond: null,
       // Routing decision fields
       routingType: input.routingType ?? null,
       priorityTier: input.priorityTier ?? null,
@@ -223,6 +235,10 @@ export async function updateRequestLog(
   if (input.routingDurationMs !== undefined)
     updateValues.routingDurationMs = input.routingDurationMs;
   if (input.errorMessage !== undefined) updateValues.errorMessage = input.errorMessage;
+
+  if (input.timeToFirstTokenMs !== undefined)
+    updateValues.timeToFirstTokenMs = input.timeToFirstTokenMs;
+  if (input.tokensPerSecond !== undefined) updateValues.tokensPerSecond = input.tokensPerSecond;
 
   if (input.routingType !== undefined) updateValues.routingType = input.routingType;
   if (input.priorityTier !== undefined) updateValues.priorityTier = input.priorityTier;
@@ -279,6 +295,9 @@ export async function logRequest(input: LogRequestInput): Promise<RequestLog> {
       durationMs: input.durationMs,
       routingDurationMs: input.routingDurationMs ?? null,
       errorMessage: input.errorMessage ?? null,
+      // Performance monitoring fields
+      timeToFirstTokenMs: input.timeToFirstTokenMs ?? null,
+      tokensPerSecond: input.tokensPerSecond ?? null,
       // Routing decision fields
       routingType: input.routingType ?? null,
       priorityTier: input.priorityTier ?? null,
@@ -540,6 +559,9 @@ export async function listRequestLogs(
     durationMs: log.durationMs,
     routingDurationMs: log.routingDurationMs ?? null,
     errorMessage: log.errorMessage,
+    // Performance monitoring fields
+    timeToFirstTokenMs: log.timeToFirstTokenMs,
+    tokensPerSecond: log.tokensPerSecond,
     // Routing decision fields
     routingType: log.routingType,
     priorityTier: log.priorityTier,

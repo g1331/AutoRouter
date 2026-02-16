@@ -382,7 +382,8 @@ async function forwardWithFailover(
     sessionId: string | null;
     contentLength: number;
   } | null,
-  config: FailoverConfig = DEFAULT_FAILOVER_CONFIG
+  config: FailoverConfig = DEFAULT_FAILOVER_CONFIG,
+  onRequestStartTime?: number
 ): Promise<{
   result: ProxyResult;
   selectedUpstream: Upstream;
@@ -495,7 +496,13 @@ async function forwardWithFailover(
       const upstreamForProxy = prepareUpstreamForProxy(selectedUpstream);
       attemptUpstreamBaseUrl = upstreamForProxy.baseUrl;
       didSendUpstream = true;
-      const result = await forwardRequest(proxyRequest, upstreamForProxy, path, requestId);
+      const result = await forwardRequest(
+        proxyRequest,
+        upstreamForProxy,
+        path,
+        requestId,
+        onRequestStartTime
+      );
 
       // Check if response indicates we should failover
       if (shouldTriggerFailover(result.statusCode, config)) {
@@ -1002,7 +1009,9 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         path,
         requestId,
         allowedUpstreamIds,
-        affinityContext
+        affinityContext,
+        undefined,
+        startTime
       );
       result = proxyResult;
       upstreamForLogging = selected;
@@ -1014,7 +1023,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       // Direct upstream routing (no load balancing)
       const upstreamForProxy = prepareUpstreamForProxy(selectedUpstream);
       didSendDirectRequest = true;
-      result = await forwardRequest(request, upstreamForProxy, path, requestId);
+      result = await forwardRequest(request, upstreamForProxy, path, requestId, startTime);
       upstreamForLogging = selectedUpstream;
       priorityTier = selectedUpstream.priority;
     } else {
@@ -1096,6 +1105,18 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           }
 
           if (requestLogId) {
+            // Calculate tokens per second
+            const durationMs = Date.now() - startTime;
+            const timeToFirstTokenMs = result.timeToFirstTokenMs ?? null;
+            const generationTimeMs =
+              timeToFirstTokenMs !== null ? durationMs - timeToFirstTokenMs : null;
+            const tokensPerSecond =
+              generationTimeMs !== null &&
+              generationTimeMs > 0 &&
+              usage?.completionTokens !== undefined
+                ? Math.round((usage.completionTokens / generationTimeMs) * 1000)
+                : null;
+
             return updateRequestLog(requestLogId, {
               upstreamId: upstreamForLogging.id,
               model: resolvedModel,
@@ -1107,9 +1128,11 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               cacheCreationTokens: usage?.cacheCreationTokens || 0,
               cacheReadTokens: usage?.cacheReadTokens || 0,
               statusCode: result.statusCode,
-              durationMs: Date.now() - startTime,
+              durationMs,
               routingDurationMs,
               errorMessage: null,
+              timeToFirstTokenMs,
+              tokensPerSecond,
               routingType: routingDecision.routingType,
               priorityTier: routingDecision.priorityTier,
               failoverAttempts: routingDecision.failoverAttempts,
@@ -1259,6 +1282,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           durationMs,
           routingDurationMs,
           errorMessage: null,
+          timeToFirstTokenMs: null, // Non-streaming: no TTFT
+          tokensPerSecond: null, // Non-streaming: no TPS
           routingType: routingDecision.routingType,
           priorityTier: routingDecision.priorityTier,
           failoverAttempts: routingDecision.failoverAttempts,
@@ -1285,6 +1310,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           statusCode: result.statusCode,
           durationMs,
           routingDurationMs,
+          timeToFirstTokenMs: null,
+          tokensPerSecond: null,
           routingType: routingDecision.routingType,
           priorityTier: routingDecision.priorityTier,
           failoverAttempts: routingDecision.failoverAttempts,
@@ -1527,6 +1554,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         durationMs,
         routingDurationMs,
         errorMessage,
+        timeToFirstTokenMs: null,
+        tokensPerSecond: null,
         routingType,
         priorityTier,
         failoverAttempts: failoverHistory.length,
@@ -1547,6 +1576,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         durationMs,
         routingDurationMs,
         errorMessage,
+        timeToFirstTokenMs: null,
+        tokensPerSecond: null,
         routingType,
         priorityTier,
         failoverAttempts: failoverHistory.length,
