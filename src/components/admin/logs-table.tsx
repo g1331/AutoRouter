@@ -33,19 +33,6 @@ interface LogsTableProps {
   isLive?: boolean;
 }
 
-/**
- * Cassette Futurism Request Logs Data Table
- *
- * Terminal-style data display with:
- * - Live recording indicator [● REC]
- * - Request rate display [↓ X.X/s]
- * - LED status indicators for response codes
- * - Data scan animation for new entries
- * - Error row glow effect
- * - Terminal-style error details (├─ └─)
- * - Blinking cursor indicator
- * - Stream statistics footer
- */
 export function LogsTable({ logs, isLive = false }: LogsTableProps) {
   const t = useTranslations("logs");
   const locale = useLocale();
@@ -250,11 +237,11 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
   if (logs.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="w-16 h-16 rounded-cf-sm bg-surface-300 border border-divider flex items-center justify-center mb-4">
-          <ScrollText className="w-8 h-8 text-amber-700" aria-hidden="true" />
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80">
+          <ScrollText className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
         </div>
-        <h3 className="font-mono text-lg text-amber-500 mb-2">{t("noLogs")}</h3>
-        <p className="font-sans text-sm text-amber-700">{t("noLogsDesc")}</p>
+        <h3 className="type-title-medium mb-2 text-foreground">{t("noLogs")}</h3>
+        <p className="type-body-medium text-muted-foreground">{t("noLogsDesc")}</p>
       </div>
     );
   }
@@ -270,16 +257,13 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
       />
 
       {/* Filter Controls */}
-      <div className="flex flex-wrap items-center gap-4 p-4 border border-t-0 border-surface-400 bg-surface-200">
+      <div className="flex flex-wrap items-center gap-3 border border-t-0 border-divider bg-surface-200 p-4">
         <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-amber-500" aria-hidden="true" />
-          <span className="font-mono text-xs uppercase tracking-wider text-amber-700">
-            {t("filters")}
-          </span>
+          <Filter className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <span className="type-caption text-muted-foreground">{t("filters")}</span>
         </div>
 
-        {/* Status Code Filter */}
-        <div className="w-[180px]">
+        <div className="w-full sm:w-[180px]">
           <Select value={statusCodeFilter} onValueChange={setStatusCodeFilter}>
             <SelectTrigger>
               <SelectValue placeholder={t("filterStatus")} />
@@ -293,8 +277,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
           </Select>
         </div>
 
-        {/* Model Filter */}
-        <div className="w-[200px]">
+        <div className="w-full sm:w-[220px]">
           <Input
             type="text"
             placeholder={t("filterModel")}
@@ -303,34 +286,32 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
           />
         </div>
 
-        {/* Time Range Filter */}
-        <div className="ml-auto">
+        <div className="w-full sm:ml-auto sm:w-auto">
           <TimeRangeSelector value={timeRangeFilter} onChange={setTimeRangeFilter} />
         </div>
       </div>
 
-      {/* Empty State for Filtered Results */}
       {filteredLogs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center border border-t-0 border-surface-400">
-          <div className="w-16 h-16 rounded-cf-sm bg-surface-300 border border-divider flex items-center justify-center mb-4">
-            <Filter className="w-8 h-8 text-amber-700" aria-hidden="true" />
+        <div className="flex flex-col items-center justify-center border border-t-0 border-divider py-16 text-center">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80">
+            <Filter className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
           </div>
-          <h3 className="font-mono text-lg text-amber-500 mb-2">{t("noMatchingLogs")}</h3>
-          <p className="font-sans text-sm text-amber-700">{t("noMatchingLogsDesc")}</p>
+          <h3 className="type-title-medium mb-2 text-foreground">{t("noMatchingLogs")}</h3>
+          <p className="type-body-medium text-muted-foreground">{t("noMatchingLogsDesc")}</p>
         </div>
       ) : (
         <>
-          <div className="border border-t-0 border-surface-400 overflow-hidden">
+          <div className="overflow-hidden border border-t-0 border-divider">
             <Table frame="none">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-8"></TableHead>
                   <TableHead>{t("tableTime")}</TableHead>
-                  <TableHead>{t("tableUpstream")}</TableHead>
+                  <TableHead className="hidden lg:table-cell">{t("tableUpstream")}</TableHead>
                   <TableHead>{t("tableMethod")}</TableHead>
-                  <TableHead>{t("tablePath")}</TableHead>
-                  <TableHead>{t("tableModel")}</TableHead>
-                  <TableHead>{t("tableTokens")}</TableHead>
+                  <TableHead className="hidden lg:table-cell">{t("tablePath")}</TableHead>
+                  <TableHead className="hidden xl:table-cell">{t("tableModel")}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t("tableTokens")}</TableHead>
                   <TableHead>{t("tableStatus")}</TableHead>
                   <TableHead>{t("tableDuration")}</TableHead>
                 </TableRow>
@@ -392,7 +373,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                 e.stopPropagation();
                                 toggleRow(log.id);
                               }}
-                              className="p-1 hover:bg-surface-300 rounded-cf-sm transition-colors"
+                              className="rounded-cf-sm p-1 transition-colors hover:bg-surface-300"
                               aria-label={isExpanded ? t("collapseDetails") : t("expandDetails")}
                             >
                               {isExpanded ? (
@@ -409,7 +390,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                             locale: dateLocale,
                           })}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden lg:table-cell">
                           <RoutingDecisionTimeline
                             routingDecision={log.routing_decision}
                             upstreamName={upstreamDisplayName}
@@ -423,17 +404,17 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                           />
                         </TableCell>
                         <TableCell>
-                          <code className="px-1.5 py-0.5 bg-surface-300 text-amber-500 rounded-cf-sm font-mono text-xs border border-divider">
+                          <code className="rounded-cf-sm border border-divider bg-surface-300 px-1.5 py-0.5 font-mono text-xs text-foreground">
                             {log.method || "-"}
                           </code>
                         </TableCell>
-                        <TableCell className="font-mono text-xs max-w-[200px] truncate">
+                        <TableCell className="hidden max-w-[200px] truncate font-mono text-xs lg:table-cell">
                           {log.path || <span className="text-amber-700">-</span>}
                         </TableCell>
-                        <TableCell className="font-mono text-xs">
+                        <TableCell className="hidden font-mono text-xs xl:table-cell">
                           {log.model || <span className="text-amber-700">-</span>}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell">
                           <TokenDisplay
                             promptTokens={log.prompt_tokens}
                             completionTokens={log.completion_tokens}
@@ -451,7 +432,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                             <span
                               className={cn(
                                 "text-xs tabular-nums",
-                                log.status_code === null && "text-amber-700",
+                                log.status_code === null && "text-muted-foreground",
                                 log.status_code &&
                                   log.status_code >= 200 &&
                                   log.status_code < 300 &&
@@ -459,7 +440,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                 log.status_code &&
                                   log.status_code >= 400 &&
                                   log.status_code < 500 &&
-                                  "text-amber-500",
+                                  "text-status-warning",
                                 log.status_code && log.status_code >= 500 && "text-status-error"
                               )}
                             >
@@ -477,10 +458,8 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                         <TableRow className="bg-surface-300/30">
                           <TableCell colSpan={9} className="p-0">
                             <div className="px-4 py-3 border-t border-dashed border-divider space-y-4 font-mono text-xs">
-                              {/* Two-column layout: Decision Timeline (left) and Token Details (right) */}
-                              <div className="flex items-start gap-6">
-                                {/* Routing Decision Timeline */}
-                                <div className="min-w-0 shrink-0">
+                              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:gap-6">
+                                <div className="min-w-0 xl:shrink-0">
                                   <RoutingDecisionTimeline
                                     routingDecision={log.routing_decision}
                                     upstreamName={upstreamDisplayName}
@@ -501,8 +480,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                   />
                                 </div>
 
-                                {/* Token Details */}
-                                <div className="w-[340px] shrink-0">
+                                <div className="w-full xl:w-[340px] xl:shrink-0">
                                   <TokenDetailContent
                                     promptTokens={log.prompt_tokens}
                                     completionTokens={log.completion_tokens}
@@ -540,15 +518,14 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
 
           {/* Blinking Cursor Indicator (Live Mode) */}
           {isLive && (
-            <div className="border border-t-0 border-surface-400 px-4 py-2 bg-surface-200">
+            <div className="border border-t-0 border-divider bg-surface-200 px-4 py-2">
               <span className="cf-cursor-blink font-mono text-amber-500" aria-hidden="true" />
             </div>
           )}
 
-          {/* Stream Statistics Footer */}
-          <div className="border border-t-0 border-surface-400 px-4 py-2 bg-surface-300 font-mono text-xs text-amber-600">
-            STREAM STATS: {streamStats.total} requests │ {streamStats.successRate}% success │ avg{" "}
-            {streamStats.avgDuration.toFixed(2)}s │ {formatTokensCompact(streamStats.totalTokens)}{" "}
+          <div className="border border-t-0 border-divider bg-surface-300 px-4 py-2 type-body-small text-muted-foreground">
+            STREAM STATS: {streamStats.total} requests | {streamStats.successRate}% success | avg{" "}
+            {streamStats.avgDuration.toFixed(2)}s | {formatTokensCompact(streamStats.totalTokens)}{" "}
             tokens
           </div>
         </>

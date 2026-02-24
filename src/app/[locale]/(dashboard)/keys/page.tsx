@@ -2,105 +2,109 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Topbar } from "@/components/admin/topbar";
-import { KeysTable } from "@/components/admin/keys-table";
+import { ChevronLeft, ChevronRight, Key } from "lucide-react";
+
 import { CreateKeyDialog } from "@/components/admin/create-key-dialog";
 import { EditKeyDialog } from "@/components/admin/edit-key-dialog";
+import { KeysTable } from "@/components/admin/keys-table";
 import { RevokeKeyDialog } from "@/components/admin/revoke-key-dialog";
+import { Topbar } from "@/components/admin/topbar";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Key } from "lucide-react";
 import { useAPIKeys } from "@/hooks/use-api-keys";
 import type { APIKey } from "@/types/api";
 
-/**
- * Cassette Futurism API Keys Management Page
- *
- * Terminal-style key management with:
- * - Amber text on dark background
- * - Glowing borders and indicators
- * - Mono font for data display
- */
 export default function KeysPage() {
   const [page, setPage] = useState(1);
   const [revokeKey, setRevokeKey] = useState<APIKey | null>(null);
   const [editingKey, setEditingKey] = useState<APIKey | null>(null);
   const pageSize = 10;
+
   const t = useTranslations("keys");
   const tCommon = useTranslations("common");
-
   const { data, isLoading } = useAPIKeys(page, pageSize);
 
   return (
     <>
       <Topbar title={t("pageTitle")} />
-      <div className="p-6 lg:p-8 space-y-6 bg-surface-100 min-h-screen">
-        {/* Action Bar */}
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Key className="w-5 h-5 text-amber-500" aria-hidden="true" />
-              <h3 className="font-mono text-lg font-medium tracking-wide text-amber-500 cf-glow-text">
-                {t("management")}
-              </h3>
-            </div>
-            <p className="font-sans text-sm text-amber-700">{t("managementDesc")}</p>
-          </div>
-          <CreateKeyDialog />
-        </div>
 
-        {/* Table */}
-        {isLoading ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-10 h-10 border-2 border-amber-700 border-t-amber-500 rounded-full animate-spin" />
-              <p className="font-mono text-sm text-amber-700">{tCommon("loading")}</p>
+      <div className="mx-auto max-w-7xl space-y-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+        <Card variant="outlined" className="border-divider bg-surface-200/70">
+          <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 text-amber-500">
+                <Key className="h-4 w-4" aria-hidden="true" />
+                <span className="type-label-medium">{t("management")}</span>
+              </div>
+              <p className="type-body-medium text-muted-foreground">{t("managementDesc")}</p>
             </div>
-          </div>
+            <CreateKeyDialog />
+          </CardContent>
+        </Card>
+
+        {isLoading ? (
+          <Card variant="outlined" className="border-divider bg-surface-200/70">
+            <CardContent className="flex items-center justify-center py-16">
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-9 w-9 animate-spin rounded-full border-2 border-divider border-t-amber-500" />
+                <p className="type-body-small text-muted-foreground">{tCommon("loading")}</p>
+              </div>
+            </CardContent>
+          </Card>
         ) : (
           <>
-            <KeysTable keys={data?.items || []} onRevoke={setRevokeKey} onEdit={setEditingKey} />
+            <Card variant="outlined" className="border-divider bg-surface-200/70">
+              <CardContent className="p-4 sm:p-5">
+                <KeysTable
+                  keys={data?.items || []}
+                  onRevoke={setRevokeKey}
+                  onEdit={setEditingKey}
+                />
+              </CardContent>
+            </Card>
 
-            {/* Pagination */}
             {data && data.total_pages > 1 && (
-              <div className="flex items-center justify-between bg-surface-200 rounded-cf-sm px-6 py-4 border border-divider">
-                <div className="font-mono text-sm text-amber-700">
-                  {tCommon("items")}{" "}
-                  <span className="text-amber-500 font-display">{data.total}</span> ,{" "}
-                  {tCommon("page")} <span className="text-amber-500">{data.page}</span>{" "}
-                  {tCommon("of")} <span className="text-amber-500">{data.total_pages}</span>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage(page - 1)}
-                    disabled={page === 1}
-                    className="gap-1"
-                  >
-                    <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                    {tCommon("previous")}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage(page + 1)}
-                    disabled={page === data.total_pages}
-                    className="gap-1"
-                  >
-                    {tCommon("next")}
-                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                </div>
-              </div>
+              <Card variant="filled" className="border border-divider">
+                <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="type-body-small text-muted-foreground">
+                    {tCommon("items")}{" "}
+                    <span className="font-semibold text-foreground">{data.total}</span> ·{" "}
+                    {tCommon("page")}{" "}
+                    <span className="font-semibold text-foreground">{data.page}</span>{" "}
+                    {tCommon("of")}{" "}
+                    <span className="font-semibold text-foreground">{data.total_pages}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setPage(page - 1)}
+                      disabled={page === 1}
+                      className="gap-1"
+                    >
+                      <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                      {tCommon("previous")}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setPage(page + 1)}
+                      disabled={page === data.total_pages}
+                      className="gap-1"
+                    >
+                      {tCommon("next")}
+                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </>
         )}
       </div>
 
-      {/* Revoke Confirmation Dialog */}
       <RevokeKeyDialog apiKey={revokeKey} open={!!revokeKey} onClose={() => setRevokeKey(null)} />
 
-      {/* Edit Key Dialog */}
       {editingKey && (
         <EditKeyDialog
           apiKey={editingKey}

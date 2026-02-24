@@ -85,10 +85,10 @@ describe("TerminalHeader", () => {
       expect(container.firstChild).toHaveClass("custom-class");
     });
 
-    it("has scanlines effect class", () => {
+    it("uses divider border class", () => {
       const { container } = render(<TerminalHeader systemId="test" />);
 
-      expect(container.firstChild).toHaveClass("cf-scanlines");
+      expect(container.firstChild).toHaveClass("border-divider");
     });
 
     it("uses monospace font", () => {

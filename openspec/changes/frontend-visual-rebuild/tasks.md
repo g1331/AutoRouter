@@ -25,10 +25,10 @@
 
 - [x] 4.1 重构 `src/app/[locale]/(dashboard)/dashboard/page.tsx` 与 `src/components/dashboard/*`（`stats-cards`、`usage-chart`、`leaderboard-section`、`time-range-selector`、`chart-theme`）以匹配新视觉语义。
 - [x] 4.2 为 Dashboard 图表实现明暗双套配色方案，并验证两套方案都不使用炫目蓝紫主导背景。
-- [ ] 4.3 重构 `src/app/[locale]/(dashboard)/keys/page.tsx` 与 `src/components/admin/keys-table.tsx`，提升高密度信息可读性与操作反馈清晰度。
-- [ ] 4.4 重构 `src/app/[locale]/(dashboard)/upstreams/page.tsx` 与 `src/components/admin/upstreams-table.tsx`，统一表格与移动卡片化展示风格。
-- [ ] 4.5 重构 `src/app/[locale]/(dashboard)/logs/page.tsx` 与 `src/components/admin/logs-table.tsx`，保持日志流视图在不同屏幕下的可读与可操作。
-- [ ] 4.6 重构 `src/app/[locale]/(dashboard)/settings/page.tsx` 与相关设置项组件，统一页面骨架与状态样式。
+- [x] 4.3 重构 `src/app/[locale]/(dashboard)/keys/page.tsx` 与 `src/components/admin/keys-table.tsx`，提升高密度信息可读性与操作反馈清晰度。
+- [x] 4.4 重构 `src/app/[locale]/(dashboard)/upstreams/page.tsx` 与 `src/components/admin/upstreams-table.tsx`，统一表格与移动卡片化展示风格。
+- [x] 4.5 重构 `src/app/[locale]/(dashboard)/logs/page.tsx` 与 `src/components/admin/logs-table.tsx`，保持日志流视图在不同屏幕下的可读与可操作。
+- [x] 4.6 重构 `src/app/[locale]/(dashboard)/settings/page.tsx` 与相关设置项组件，统一页面骨架与状态样式。
 - [ ] 4.7 执行 `pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run` 并提交本组改动，禁止与后续任务堆积提交。
 
 ## 5. 旧视觉残留清理与验收

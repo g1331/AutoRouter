@@ -47,15 +47,6 @@ interface TierGroup {
   maxWeight: number;
 }
 
-/**
- * Cassette Futurism Upstreams Data Table
- *
- * Terminal-style data display with:
- * - Priority tier collapsible sections
- * - LED status indicators
- * - ASCII progress bars for weight
- * - Mono font for URL data
- */
 export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: UpstreamsTableProps) {
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
@@ -168,28 +159,19 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
     );
   };
 
-  // Render the CMD action bar for an upstream (shared between table and card views)
+  // Shared action bar between table and card views
   const renderActionBar = (upstream: Upstream) => (
-    <div className="cf-scanlines relative flex flex-wrap items-center gap-1.5 px-2 py-0.5 bg-black-900/40 border border-surface-400/50 rounded-cf-sm">
-      <span className="font-mono text-[9px] text-amber-700 tracking-widest select-none">
-        CMD://
-      </span>
+    <div className="flex flex-wrap items-center gap-1.5 rounded-cf-sm border border-divider bg-surface-300/65 px-2 py-1">
       <div className="flex items-center gap-1.5 ml-auto">
-        {/* Emergency actions group */}
         {upstream.circuit_breaker && upstream.circuit_breaker.state !== "closed" && (
           <>
             <Button
-              variant="ghost"
+              variant="outline"
               type="button"
               size="sm"
               className={cn(
-                "group relative h-7 px-1.5 overflow-hidden",
-                "border-2 border-status-error/60 text-status-error",
-                "bg-black-900/60 hover:bg-black-900/70",
-                "cf-scanlines cf-data-scan cf-pulse-glow",
-                "shadow-[inset_0_0_0_1px_rgba(220,38,38,0.12)]",
-                "hover:shadow-cf-glow-error",
-                "active:translate-y-[1px]"
+                "h-7 gap-1.5 px-2 text-status-error",
+                "border-status-error/50 bg-status-error-muted hover:border-status-error"
               )}
               onClick={async (e) => {
                 e.stopPropagation();
@@ -211,41 +193,20 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
               }
               aria-label={`${t("recoverCircuitBreaker")}: ${upstream.name}`}
             >
-              <span
-                className="absolute inset-0 opacity-80"
-                style={{
-                  background:
-                    "repeating-linear-gradient(135deg, rgba(220,38,38,0.14) 0px, rgba(220,38,38,0.14) 6px, transparent 6px, transparent 12px)",
-                }}
-                aria-hidden="true"
-              />
-              <span className="relative z-20 flex items-center gap-1.5">
-                <StatusLed status="offline" className="scale-75" />
-                <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="text-[11px] font-mono uppercase tracking-widest hidden lg:inline">
-                  {t("recoverCircuitBreaker")}
-                </span>
-              </span>
+              <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="hidden text-xs lg:inline">{t("recoverCircuitBreaker")}</span>
             </Button>
-            <span className="h-3 w-px bg-amber-500/20" aria-hidden="true" />
+            <span className="h-3 w-px bg-divider" aria-hidden="true" />
           </>
         )}
-        {/* State toggle */}
         <Button
-          variant="ghost"
+          variant="secondary"
           size="sm"
           type="button"
           data-state={upstream.is_active ? "on" : "off"}
           className={cn(
-            "group relative h-7 px-1.5 overflow-hidden",
-            "border-2 bg-black-900/60 hover:bg-black-900/70",
-            "cf-scanlines cf-data-scan",
-            "shadow-[inset_0_0_0_1px_rgba(255,191,0,0.10)]",
-            "hover:shadow-cf-glow-subtle",
-            "active:translate-y-[1px]",
-            upstream.is_active
-              ? "text-amber-400 border-amber-500/60"
-              : "text-amber-600 border-amber-500/30"
+            "h-7 gap-1.5 px-2",
+            upstream.is_active ? "text-foreground" : "text-muted-foreground"
           )}
           onClick={async (e) => {
             e.stopPropagation();
@@ -263,40 +224,24 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
           }
           aria-label={`${upstream.is_active ? t("quickDisable") : t("quickEnable")}: ${upstream.name}`}
         >
-          <span className="relative z-20 flex items-center gap-1.5">
-            <StatusLed status={upstream.is_active ? "healthy" : "degraded"} className="scale-75" />
-            {upstream.is_active ? (
-              <PowerOff className="h-3.5 w-3.5" aria-hidden="true" />
-            ) : (
-              <Power className="h-3.5 w-3.5" aria-hidden="true" />
-            )}
-            <span className="text-[10px] font-mono uppercase tracking-widest hidden lg:inline">
-              {upstream.is_active ? t("quickDisable") : t("quickEnable")}
-            </span>
-            <span className="ml-1 hidden lg:flex items-center gap-1" aria-hidden="true">
-              <span
-                className={cn(
-                  "relative h-[14px] w-[34px] rounded-cf-sm border border-amber-500/40 bg-black-900/70",
-                  "shadow-[inset_0_0_0_1px_rgba(0,0,0,0.35)]"
-                )}
-              >
-                <span
-                  className={cn(
-                    "absolute top-[1px] left-[1px] h-[10px] w-[14px] rounded-[2px]",
-                    "transition-transform duration-200 ease-out",
-                    "shadow-[0_0_10px_rgba(255,191,0,0.25)]",
-                    upstream.is_active
-                      ? "translate-x-0 bg-amber-500"
-                      : "translate-x-[16px] bg-surface-400"
-                  )}
-                />
-              </span>
-            </span>
+          <span
+            className={
+              upstream.is_active
+                ? "h-2 w-2 rounded-full bg-status-success"
+                : "h-2 w-2 rounded-full bg-muted-foreground"
+            }
+            aria-hidden="true"
+          />
+          {upstream.is_active ? (
+            <PowerOff className="h-3.5 w-3.5" aria-hidden="true" />
+          ) : (
+            <Power className="h-3.5 w-3.5" aria-hidden="true" />
+          )}
+          <span className="hidden text-xs lg:inline">
+            {upstream.is_active ? t("quickDisable") : t("quickEnable")}
           </span>
         </Button>
-        {/* Separator */}
-        <span className="h-3 w-px bg-amber-500/20" aria-hidden="true" />
-        {/* CRUD actions group */}
+        <span className="h-3 w-px bg-divider" aria-hidden="true" />
         <div className="flex items-center gap-0.5">
           <Button
             variant="ghost"
@@ -315,7 +260,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
             variant="ghost"
             size="icon"
             type="button"
-            className="h-7 w-7 text-amber-500 hover:bg-amber-500/10"
+            className="h-7 w-7 text-foreground hover:bg-surface-400"
             onClick={(e) => {
               e.stopPropagation();
               onEdit(upstream);
@@ -345,18 +290,18 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
   if (upstreams.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="w-16 h-16 rounded-cf-sm bg-surface-300 border border-divider flex items-center justify-center mb-4">
-          <Server className="w-8 h-8 text-amber-700" aria-hidden="true" />
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80">
+          <Server className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
         </div>
-        <h3 className="font-mono text-lg text-amber-500 mb-2">{t("noUpstreams")}</h3>
-        <p className="font-sans text-sm text-amber-700">{t("noUpstreamsDesc")}</p>
+        <h3 className="type-title-medium mb-2 text-foreground">{t("noUpstreams")}</h3>
+        <p className="type-body-medium text-muted-foreground">{t("noUpstreamsDesc")}</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-0">
-      <div className="rounded-cf-sm border border-surface-400 overflow-hidden bg-surface-200">
+      <div className="overflow-hidden rounded-cf-md border border-divider bg-surface-200/70">
         {/* Terminal Header */}
         <TerminalHeader
           systemId="UPSTREAM_ARRAY"
@@ -369,7 +314,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
           <Table
             frame="none"
             containerClassName="rounded-none"
-            className="table-fixed min-w-[1200px]"
+            className="table-fixed min-w-[1040px]"
           >
             <TableHeader>
               <TableRow>
@@ -400,7 +345,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-6 w-6 text-amber-500"
+                              className="h-6 w-6 text-muted-foreground hover:bg-surface-400"
                               aria-expanded={!isCollapsed}
                               aria-label={isCollapsed ? tCommon("expand") : tCommon("collapse")}
                             >
@@ -452,19 +397,14 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
 
                     {/* Upstream Rows */}
                     {!isCollapsed &&
-                      tier.upstreams.map((upstream, index) => (
+                      tier.upstreams.map((upstream) => (
                         <Fragment key={upstream.id}>
                           {/* Data Row */}
                           <TableRow
                             className={cn(
                               "border-b-0 [&>td]:pb-0",
-                              "motion-safe:animate-[cf-flicker-in_0.3s_ease-out]",
                               hasErrorState(upstream) &&
-                                "shadow-[inset_0_0_20px_-10px_var(--status-error)]",
-                              index === 0 && "motion-safe:[animation-delay:0ms]",
-                              index === 1 && "motion-safe:[animation-delay:50ms]",
-                              index === 2 && "motion-safe:[animation-delay:100ms]",
-                              index >= 3 && "motion-safe:[animation-delay:150ms]"
+                                "shadow-[inset_0_0_20px_-10px_var(--status-error)]"
                             )}
                           >
                             <TableCell></TableCell>
@@ -503,7 +443,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                               />
                             </TableCell>
                             <TableCell>
-                              <code className="px-2 py-1 bg-surface-300 text-amber-500 rounded-cf-sm font-mono text-xs border border-divider max-w-xs truncate inline-block">
+                              <code className="inline-block max-w-xs truncate rounded-cf-sm border border-divider bg-surface-300 px-2 py-1 font-mono text-xs text-foreground">
                                 {upstream.base_url}
                               </code>
                             </TableCell>
@@ -515,15 +455,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                             </TableCell>
                           </TableRow>
                           {/* Actions Row */}
-                          <TableRow
-                            className={cn(
-                              "motion-safe:animate-[cf-flicker-in_0.3s_ease-out]",
-                              index === 0 && "motion-safe:[animation-delay:0ms]",
-                              index === 1 && "motion-safe:[animation-delay:50ms]",
-                              index === 2 && "motion-safe:[animation-delay:100ms]",
-                              index >= 3 && "motion-safe:[animation-delay:150ms]"
-                            )}
-                          >
+                          <TableRow>
                             <TableCell colSpan={8} className="pt-0 pb-1.5 px-4">
                               {renderActionBar(upstream)}
                             </TableCell>
@@ -553,7 +485,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6 text-amber-500"
+                      className="h-6 w-6 text-muted-foreground hover:bg-surface-400"
                       aria-expanded={!isCollapsed}
                       aria-label={isCollapsed ? tCommon("expand") : tCommon("collapse")}
                     >
@@ -580,25 +512,20 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
 
                 {/* Upstream Cards */}
                 {!isCollapsed &&
-                  tier.upstreams.map((upstream, index) => (
+                  tier.upstreams.map((upstream) => (
                     <div
                       key={upstream.id}
                       className={cn(
                         "mx-2 my-2 px-2.5 py-2 space-y-1.5",
                         "border border-surface-400/50 rounded-cf-sm bg-surface-200/30",
-                        "motion-safe:animate-[cf-flicker-in_0.3s_ease-out]",
                         hasErrorState(upstream) &&
-                          "shadow-[inset_0_0_20px_-10px_var(--status-error)]",
-                        index === 0 && "motion-safe:[animation-delay:0ms]",
-                        index === 1 && "motion-safe:[animation-delay:50ms]",
-                        index === 2 && "motion-safe:[animation-delay:100ms]",
-                        index >= 3 && "motion-safe:[animation-delay:150ms]"
+                          "shadow-[inset_0_0_20px_-10px_var(--status-error)]"
                       )}
                     >
                       {/* Card Header: Name + Badge + Provider */}
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="font-mono text-xs text-amber-500 font-medium truncate">
+                          <span className="font-mono text-xs text-foreground font-medium truncate">
                             {upstream.name}
                           </span>
                           <Badge
@@ -644,7 +571,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                         </div>
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-amber-700 shrink-0">{tCommon("createdAt")}</span>
-                          <span className="text-amber-500 truncate text-right">
+                          <span className="text-foreground truncate text-right">
                             {formatDistanceToNow(new Date(upstream.created_at), {
                               addSuffix: true,
                               locale: dateLocale,
@@ -654,7 +581,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                       </div>
 
                       {/* URL */}
-                      <code className="block px-2 py-0.5 bg-surface-300 text-amber-500 rounded-cf-sm font-mono text-[11px] border border-divider truncate">
+                      <code className="block truncate rounded-cf-sm border border-divider bg-surface-300 px-2 py-0.5 font-mono text-[11px] text-foreground">
                         {upstream.base_url}
                       </code>
 

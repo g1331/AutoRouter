@@ -20,7 +20,6 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { getDateLocale } from "@/lib/date-locale";
-import { cn } from "@/lib/utils";
 
 interface KeysTableProps {
   keys: APIKey[];
@@ -28,14 +27,6 @@ interface KeysTableProps {
   onEdit: (key: APIKey) => void;
 }
 
-/**
- * Cassette Futurism API Keys Data Table
- *
- * Terminal-style data display with:
- * - Mono font for key data
- * - Amber accents and glow effects
- * - Status badges for expiry
- */
 export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [visibleKeyIds, setVisibleKeyIds] = useState<Set<string>>(new Set());
@@ -133,11 +124,11 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
   if (keys.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="w-16 h-16 rounded-cf-sm bg-surface-300 border border-divider flex items-center justify-center mb-4">
-          <Key className="w-8 h-8 text-amber-700" aria-hidden="true" />
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80">
+          <Key className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
         </div>
-        <h3 className="font-mono text-lg text-amber-500 mb-2">{t("noKeys")}</h3>
-        <p className="font-sans text-sm text-amber-700">{t("noKeysDesc")}</p>
+        <h3 className="type-title-medium mb-2 text-foreground">{t("noKeys")}</h3>
+        <p className="type-body-medium text-muted-foreground">{t("noKeysDesc")}</p>
       </div>
     );
   }
@@ -153,11 +144,11 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
           className="max-w-md"
         />
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="w-16 h-16 rounded-cf-sm bg-surface-300 border border-divider flex items-center justify-center mb-4">
-            <Key className="w-8 h-8 text-amber-700" aria-hidden="true" />
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80">
+            <Key className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
           </div>
-          <h3 className="font-mono text-lg text-amber-500 mb-2">{t("noKeysFound")}</h3>
-          <p className="font-sans text-sm text-amber-700">{t("noKeysFoundDesc")}</p>
+          <h3 className="type-title-medium mb-2 text-foreground">{t("noKeysFound")}</h3>
+          <p className="type-body-medium text-muted-foreground">{t("noKeysFoundDesc")}</p>
         </div>
       </div>
     );
@@ -172,16 +163,16 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
         onChange={(e) => setSearchQuery(e.target.value)}
         className="max-w-md"
       />
-      <div className="rounded-cf-sm border border-divider overflow-hidden bg-surface-200">
-        <Table frame="none" containerClassName="rounded-none">
+      <div className="overflow-hidden rounded-cf-md border border-divider bg-surface-200/70">
+        <Table frame="none" containerClassName="rounded-none bg-transparent">
           <TableHeader>
             <TableRow>
               <TableHead>{tCommon("name")}</TableHead>
               <TableHead>{t("tableKeyPrefix")}</TableHead>
-              <TableHead>{tCommon("description")}</TableHead>
+              <TableHead className="hidden lg:table-cell">{tCommon("description")}</TableHead>
               <TableHead>{t("tableUpstreams")}</TableHead>
               <TableHead>{t("tableExpires")}</TableHead>
-              <TableHead>{tCommon("createdAt")}</TableHead>
+              <TableHead className="hidden md:table-cell">{tCommon("createdAt")}</TableHead>
               <TableHead className="text-right">{tCommon("actions")}</TableHead>
             </TableRow>
           </TableHeader>
@@ -198,7 +189,7 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
-                    <code className="px-2 py-1 bg-surface-300 text-amber-500 rounded-cf-sm font-mono text-xs border border-divider">
+                    <code className="rounded-cf-sm border border-divider bg-surface-300 px-2 py-1 font-mono text-xs text-foreground">
                       {visibleKeyIds.has(key.id)
                         ? revealedKeys.get(key.id) || key.key_prefix
                         : maskKey(key.key_prefix)}
@@ -206,7 +197,7 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7"
+                      className="h-8 w-8"
                       onClick={() => toggleKeyVisibility(key.id)}
                       disabled={isRevealing}
                       aria-label={visibleKeyIds.has(key.id) ? t("hideKey") : t("revealKey")}
@@ -220,7 +211,7 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7"
+                      className="h-8 w-8"
                       onClick={() => copyKey(key.id)}
                       aria-label={copiedId === key.id ? tCommon("copied") : tCommon("copy")}
                     >
@@ -232,27 +223,26 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
                     </Button>
                   </div>
                 </TableCell>
-                <TableCell className="max-w-xs truncate">
-                  {key.description || <span className="text-amber-700">-</span>}
+                <TableCell className="hidden max-w-xs truncate lg:table-cell">
+                  {key.description || <span className="text-muted-foreground">-</span>}
                 </TableCell>
                 <TableCell>
                   <Badge variant="info">{key.upstream_ids.length}</Badge>
                 </TableCell>
                 <TableCell>{formatExpiry(key.expires_at)}</TableCell>
-                <TableCell>
+                <TableCell className="hidden md:table-cell">
                   {formatDistanceToNow(new Date(key.created_at), {
                     addSuffix: true,
                     locale: dateLocale,
                   })}
                 </TableCell>
                 <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-1">
+                  <div className="flex items-center justify-end gap-1.5">
                     <Button
-                      variant="ghost"
+                      variant="secondary"
                       size="sm"
                       type="button"
-                      data-state={key.is_active ? "on" : "off"}
-                      className="group relative h-8 px-2 overflow-hidden border-2 border-amber-500/40 bg-black-900/60 text-amber-400 hover:bg-black-900/70 cf-scanlines cf-data-scan shadow-[inset_0_0_0_1px_rgba(255,191,0,0.10)] hover:shadow-cf-glow-subtle active:translate-y-[1px]"
+                      className="h-8 gap-1.5 px-2.5"
                       onClick={async () => {
                         try {
                           await toggleActiveMutation.mutateAsync({
@@ -269,38 +259,24 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
                       }
                       aria-label={`${key.is_active ? t("quickDisable") : t("quickEnable")}: ${key.name}`}
                     >
-                      <span className="relative z-20 flex items-center gap-2">
-                        <span
-                          className={cn(
-                            "inline-flex items-center justify-center",
-                            "text-[12px] leading-none",
-                            key.is_active ? "text-status-success" : "text-amber-500"
+                      <span
+                        className={
+                          key.is_active
+                            ? "h-2 w-2 rounded-full bg-status-success"
+                            : "h-2 w-2 rounded-full bg-muted-foreground"
+                        }
+                        aria-hidden="true"
+                      />
+                      <span className="text-xs text-foreground">
+                        <span className="mr-1 inline-flex" aria-hidden="true">
+                          {key.is_active ? (
+                            <PowerOff className="h-3.5 w-3.5" aria-hidden="true" />
+                          ) : (
+                            <Power className="h-3.5 w-3.5" aria-hidden="true" />
                           )}
-                          aria-hidden="true"
-                        >
-                          {key.is_active ? "◉" : "◎"}
                         </span>
-                        {key.is_active ? (
-                          <PowerOff className="h-4 w-4" aria-hidden="true" />
-                        ) : (
-                          <Power className="h-4 w-4" aria-hidden="true" />
-                        )}
-                        <span className="text-[11px] font-mono uppercase tracking-widest">
+                        <span className="type-caption">
                           {key.is_active ? t("quickDisable") : t("quickEnable")}
-                        </span>
-                        <span className="ml-1 flex items-center gap-1" aria-hidden="true">
-                          <span className="relative h-[14px] w-[34px] rounded-cf-sm border border-amber-500/40 bg-black-900/70 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.35)]">
-                            <span
-                              className={cn(
-                                "absolute top-[1px] left-[1px] h-[10px] w-[14px] rounded-[2px]",
-                                "transition-transform duration-200 ease-out",
-                                "shadow-[0_0_10px_rgba(255,191,0,0.25)]",
-                                key.is_active
-                                  ? "translate-x-0 bg-status-success"
-                                  : "translate-x-[16px] bg-surface-400"
-                              )}
-                            />
-                          </span>
                         </span>
                       </span>
                     </Button>

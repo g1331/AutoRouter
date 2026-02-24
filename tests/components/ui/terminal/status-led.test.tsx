@@ -94,24 +94,24 @@ describe("StatusLed", () => {
     });
   });
 
-  describe("animation classes", () => {
-    it("applies pulse animation for healthy state", () => {
+  describe("motion style", () => {
+    it("does not apply pulse animation classes for healthy state", () => {
       render(<StatusLed status="healthy" />);
 
       const led = screen.getByRole("status");
       const ledChar = led.querySelector("[aria-hidden='true']");
-      expect(ledChar?.className).toContain("animate-[cf-led-pulse_2s");
+      expect(ledChar?.className).not.toContain("animate-[cf-led-pulse");
     });
 
-    it("applies faster pulse animation for degraded state", () => {
+    it("does not apply pulse animation classes for degraded state", () => {
       render(<StatusLed status="degraded" />);
 
       const led = screen.getByRole("status");
       const ledChar = led.querySelector("[aria-hidden='true']");
-      expect(ledChar?.className).toContain("animate-[cf-led-pulse_1s");
+      expect(ledChar?.className).not.toContain("animate-[cf-led-pulse");
     });
 
-    it("does not apply pulse animation for offline state", () => {
+    it("keeps offline state without pulse animation", () => {
       render(<StatusLed status="offline" />);
 
       const led = screen.getByRole("status");

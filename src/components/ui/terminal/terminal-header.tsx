@@ -25,9 +25,8 @@ export function TerminalHeader({
     <div
       className={cn(
         "relative flex items-center justify-between px-4 py-2",
-        "bg-surface-200 border border-surface-400",
+        "border border-divider bg-surface-200",
         "font-mono text-xs uppercase tracking-wider",
-        "cf-scanlines",
         className
       )}
     >
@@ -55,16 +54,8 @@ export function TerminalHeader({
           </span>
         )}
         {isLive && (
-          <span
-            className="flex items-center gap-1 text-status-error border border-status-error/50 px-2 py-0.5"
-            style={{ textShadow: "0 0 4px var(--status-error)" }}
-          >
-            <span
-              className="motion-safe:animate-[cf-led-pulse_1s_ease-in-out_infinite]"
-              aria-hidden="true"
-            >
-              ●
-            </span>
+          <span className="flex items-center gap-1 border border-status-error/50 px-2 py-0.5 text-status-error">
+            <span aria-hidden="true">●</span>
             <span>REC</span>
           </span>
         )}

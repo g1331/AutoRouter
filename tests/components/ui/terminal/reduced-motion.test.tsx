@@ -12,35 +12,34 @@ import { TerminalHeader } from "@/components/ui/terminal/terminal-header";
  */
 describe("Reduced Motion Support", () => {
   describe("StatusLed", () => {
-    it("uses motion-safe prefix for pulse animations", () => {
+    it("does not rely on motion-safe animation classes", () => {
       render(<StatusLed status="healthy" />);
 
       const led = screen.getByRole("status");
       const ledChar = led.querySelector("[aria-hidden='true']");
 
-      // Animation class should use motion-safe prefix
-      expect(ledChar?.className).toContain("motion-safe:");
+      expect(ledChar?.className).not.toContain("motion-safe:");
     });
 
-    it("healthy state animation uses motion-safe prefix", () => {
+    it("healthy state has no pulse animation class", () => {
       render(<StatusLed status="healthy" />);
 
       const led = screen.getByRole("status");
       const ledChar = led.querySelector("[aria-hidden='true']");
 
-      expect(ledChar?.className).toContain("motion-safe:animate-[cf-led-pulse_2s");
+      expect(ledChar?.className).not.toContain("animate-[cf-led-pulse");
     });
 
-    it("degraded state animation uses motion-safe prefix", () => {
+    it("degraded state has no pulse animation class", () => {
       render(<StatusLed status="degraded" />);
 
       const led = screen.getByRole("status");
       const ledChar = led.querySelector("[aria-hidden='true']");
 
-      expect(ledChar?.className).toContain("motion-safe:animate-[cf-led-pulse_1s");
+      expect(ledChar?.className).not.toContain("animate-[cf-led-pulse");
     });
 
-    it("offline state has no animation (static glow)", () => {
+    it("offline state has no animation", () => {
       render(<StatusLed status="offline" />);
 
       const led = screen.getByRole("status");
@@ -52,29 +51,13 @@ describe("Reduced Motion Support", () => {
   });
 
   describe("TerminalHeader", () => {
-    it("live indicator uses motion-safe prefix for pulse", () => {
+    it("live indicator remains visible without pulse animation", () => {
       render(<TerminalHeader systemId="test" isLive />);
 
-      // Find the pulsing LED element
       const recContainer = screen.getByText("REC").parentElement;
       const ledElement = recContainer?.querySelector("span");
 
-      expect(ledElement?.className).toContain("motion-safe:");
-    });
-  });
-
-  describe("Animation Class Structure", () => {
-    it("motion-safe prefix ensures animation only runs without reduced-motion", () => {
-      render(<StatusLed status="healthy" />);
-
-      const led = screen.getByRole("status");
-      const ledChar = led.querySelector("[aria-hidden='true']");
-      const className = ledChar?.className || "";
-
-      // Verify the class structure follows Tailwind's motion-safe pattern
-      // motion-safe:animate-[...] means animation only applies when
-      // prefers-reduced-motion is not set to "reduce"
-      expect(className).toMatch(/motion-safe:animate-\[/);
+      expect(ledElement?.textContent).toBe("●");
     });
   });
 
@@ -97,22 +80,19 @@ describe("Reduced Motion Support", () => {
       render(<StatusLed status="healthy" />);
 
       const led = screen.getByRole("status");
-      // Color class is on the inner character span
-      const charSpan = led.querySelector("[aria-hidden='true'] .text-status-success");
+      const marker = led.querySelector("[aria-hidden='true']");
 
       // Color classes should not be conditional on motion
-      expect(charSpan).toBeInTheDocument();
+      expect(marker).toHaveClass("text-status-success");
     });
 
-    it("glow effects remain visible regardless of motion preference", () => {
+    it("status marker shape remains visible regardless of motion preference", () => {
       render(<StatusLed status="healthy" />);
 
       const led = screen.getByRole("status");
-      // Glow is now via box-shadow on a rounded-full span
-      const glowSpan = led.querySelector(".rounded-full") as HTMLElement;
+      const marker = led.querySelector("[aria-hidden='true']") as HTMLElement | null;
 
-      // Glow (box-shadow via style) should not be conditional on motion
-      expect(glowSpan?.style.boxShadow).toBeTruthy();
+      expect(marker).toHaveClass("rounded-full");
     });
   });
 
