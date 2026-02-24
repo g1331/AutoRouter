@@ -16,10 +16,10 @@
 
 ## 3. 管理台壳层重构
 
-- [ ] 3.1 重构 `src/components/admin/sidebar.tsx`，完成桌面侧边导航与移动底部导航的新视觉与当前态反馈。
-- [ ] 3.2 重构 `src/components/admin/topbar.tsx` 与 `src/app/[locale]/(dashboard)/layout.tsx`，统一页面壳层结构和响应式间距。
-- [ ] 3.3 校准 `src/app/[locale]/layout.tsx` 的壳层包裹顺序与主题容器行为，保证跨页面视觉一致。
-- [ ] 3.4 执行 `pnpm lint` 与 `pnpm exec tsc --noEmit` 并提交本组改动，禁止与后续任务堆积提交。
+- [x] 3.1 重构 `src/components/admin/sidebar.tsx`，完成桌面侧边导航与移动底部导航的新视觉与当前态反馈。
+- [x] 3.2 重构 `src/components/admin/topbar.tsx` 与 `src/app/[locale]/(dashboard)/layout.tsx`，统一页面壳层结构和响应式间距。
+- [x] 3.3 校准 `src/app/[locale]/layout.tsx` 的壳层包裹顺序与主题容器行为，保证跨页面视觉一致。
+- [x] 3.4 执行 `pnpm lint` 与 `pnpm exec tsc --noEmit` 并提交本组改动，禁止与后续任务堆积提交。
 
 ## 4. 核心页面与数据展示迁移
 

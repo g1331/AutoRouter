@@ -1,13 +1,14 @@
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
-import { routing } from "@/i18n/routing";
+
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { Locale } from "@/i18n/config";
+import { routing } from "@/i18n/routing";
 import { AuthProvider } from "@/providers/auth-provider";
 import { QueryProvider } from "@/providers/query-provider";
 import { ThemeProvider } from "@/providers/theme-provider";
-import { Toaster } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
@@ -21,27 +22,25 @@ interface LocaleLayoutProps {
 export default async function LocaleLayout({ children, params }: LocaleLayoutProps) {
   const { locale } = await params;
 
-  // Ensure that the incoming `locale` is valid
   if (!routing.locales.includes(locale as Locale)) {
     notFound();
   }
 
-  // Enable static rendering
   setRequestLocale(locale);
-
-  // Providing all messages to the client
   const messages = await getMessages();
 
   return (
-    <NextIntlClientProvider messages={messages}>
-      <ThemeProvider>
+    <ThemeProvider>
+      <NextIntlClientProvider messages={messages}>
         <QueryProvider>
           <TooltipProvider>
-            <AuthProvider>{children}</AuthProvider>
+            <AuthProvider>
+              <div className="min-h-dvh bg-background text-foreground">{children}</div>
+              <Toaster />
+            </AuthProvider>
           </TooltipProvider>
         </QueryProvider>
-      </ThemeProvider>
-      <Toaster />
-    </NextIntlClientProvider>
+      </NextIntlClientProvider>
+    </ThemeProvider>
   );
 }
