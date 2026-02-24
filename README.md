@@ -97,9 +97,21 @@
 ## 界面预览
 
 <details open>
+<summary><b>Login - 登录界面</b></summary>
+<br>
+<img src="docs/images/login-dark.png" alt="Login" width="100%">
+</details>
+
+<details open>
 <summary><b>Dashboard - 系统监控</b></summary>
 <br>
 <img src="docs/images/dashboard-dark.png" alt="Dashboard" width="100%">
+</details>
+
+<details open>
+<summary><b>Logs - 请求日志</b></summary>
+<br>
+<img src="docs/images/logs-dark.png" alt="Logs" width="100%">
 </details>
 
 <details>
@@ -112,18 +124,6 @@
 <summary><b>Upstreams - 上游配置</b></summary>
 <br>
 <img src="docs/images/upstreams-dark.png" alt="Upstreams" width="100%">
-</details>
-
-<details>
-<summary><b>Logs - 请求日志</b></summary>
-<br>
-<img src="docs/images/logs-dark.png" alt="Logs" width="100%">
-</details>
-
-<details>
-<summary><b>Login - 登录界面</b></summary>
-<br>
-<img src="docs/images/login-dark.png" alt="Login" width="100%">
 </details>
 
 ---
@@ -220,7 +220,7 @@ pnpm db:push
 pnpm dev
 ```
 
-启动后访问 http://localhost:3000，使用 `ADMIN_TOKEN` 登录。
+启动后访问 <http://localhost:3000，使用> `ADMIN_TOKEN` 登录。
 
 ---
 
