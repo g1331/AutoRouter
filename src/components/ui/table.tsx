@@ -1,49 +1,37 @@
 import * as React from "react";
 
-import { cn } from "@/lib/utils";
+import { cn, warnIfForbiddenVisualStyle } from "@/lib/utils";
 
-/**
- * Cassette Futurism Data Table
- *
- * Terminal-style data display with:
- * - Amber borders and dashed separators
- * - Uppercase monospace headers
- * - Row hover and selection states
- */
 export interface TableProps extends React.HTMLAttributes<HTMLTableElement> {
-  /**
-   * Controls the outer container frame style.\n   * Default preserves existing behavior.
-   */
   frame?: "amber" | "subtle" | "none";
-  /**
-   * Additional className applied to the outer container.
-   */
   containerClassName?: string;
 }
 
 const FRAME_CLASS: Record<NonNullable<TableProps["frame"]>, string> = {
-  amber: "border-2 border-amber-500",
+  amber: "border border-amber-500/45 shadow-cf-glow-subtle",
   subtle: "border border-divider",
   none: "border-0",
 };
 
 const Table = React.forwardRef<HTMLTableElement, TableProps>(
-  ({ className, frame = "amber", containerClassName, ...props }, ref) => (
-    <div
-      className={cn(
-        "relative w-full overflow-auto bg-surface-200",
-        "rounded-cf-sm",
-        FRAME_CLASS[frame],
-        containerClassName
-      )}
-    >
-      <table
-        ref={ref}
-        className={cn("w-full caption-bottom text-sm font-mono text-amber-500", className)}
-        {...props}
-      />
-    </div>
-  )
+  ({ className, frame = "amber", containerClassName, ...props }, ref) => {
+    warnIfForbiddenVisualStyle("Table", containerClassName);
+    return (
+      <div
+        className={cn(
+          "relative w-full overflow-x-auto overflow-y-hidden rounded-cf-md bg-surface-200",
+          FRAME_CLASS[frame],
+          containerClassName
+        )}
+      >
+        <table
+          ref={ref}
+          className={cn("w-full min-w-[640px] caption-bottom text-sm text-foreground", className)}
+          {...props}
+        />
+      </div>
+    );
+  }
 );
 Table.displayName = "Table";
 
@@ -53,10 +41,7 @@ const TableHeader = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <thead
     ref={ref}
-    className={cn(
-      "bg-surface-300 [&_tr]:border-b [&_tr]:border-dashed [&_tr]:border-divider",
-      className
-    )}
+    className={cn("bg-surface-300/90 [&_tr]:border-b [&_tr]:border-divider", className)}
     {...props}
   />
 ));
@@ -81,7 +66,7 @@ const TableFooter = React.forwardRef<
   <tfoot
     ref={ref}
     className={cn(
-      "border-t border-dashed border-divider bg-surface-300 font-mono text-amber-500 [&>tr]:last:border-b-0",
+      "border-t border-divider bg-surface-300 type-label-medium text-muted-foreground [&>tr]:last:border-b-0",
       className
     )}
     {...props}
@@ -94,11 +79,10 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
     <tr
       ref={ref}
       className={cn(
-        "border-b border-dashed border-divider",
-        "border-l-2 border-l-transparent",
+        "border-b border-divider/85",
         "transition-colors duration-cf-normal ease-cf-standard",
-        "hover:bg-surface-400",
-        "data-[state=selected]:border-l-amber-500 data-[state=selected]:bg-surface-300",
+        "hover:bg-surface-300/70",
+        "data-[state=selected]:bg-amber-500/10 data-[state=selected]:[&>td]:text-foreground",
         className
       )}
       {...props}
@@ -114,8 +98,8 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-12 px-4 text-left align-middle",
-      "uppercase font-mono text-xs font-medium tracking-[0.1em] text-amber-500",
+      "h-11 px-4 text-left align-middle",
+      "type-label-medium text-muted-foreground",
       "[&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
       className
     )}
@@ -131,7 +115,7 @@ const TableCell = React.forwardRef<
   <td
     ref={ref}
     className={cn(
-      "h-12 px-4 align-middle font-mono text-amber-500",
+      "h-12 px-4 align-middle type-body-medium text-foreground",
       "[&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
       className
     )}
@@ -146,7 +130,7 @@ const TableCaption = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <caption
     ref={ref}
-    className={cn("mt-4 text-sm font-mono text-amber-700", className)}
+    className={cn("mt-3 type-body-small text-muted-foreground", className)}
     {...props}
   />
 ));

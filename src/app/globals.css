@@ -1,1023 +1,782 @@
-/**
- * Cassette Futurism Design System
- * AutoRouter Admin Console
- *
- * A retro-futuristic visual language inspired by 1980s-90s science fiction interfaces.
- * References: Blade Runner, Alien, 2001: A Space Odyssey
- */
-
 @import "tailwindcss";
 @config "../../tailwind.config.ts";
 
-/* ============================================
-   CSS Variables - Cassette Futurism Tokens
-   ============================================ */
-
-:root {
+:root,
+.dark {
   color-scheme: dark;
 
-  /* === Amber Scale (Primary) === */
-  --cf-amber-50: #fff8e1;
-  --cf-amber-100: #ffecb3;
-  --cf-amber-200: #ffe082;
-  --cf-amber-300: #ffd54f;
-  --cf-amber-400: #ffca28;
-  --cf-amber-500: #ffbf00;
-  --cf-amber-600: #ffb300;
-  --cf-amber-700: #ffa000;
-  --cf-amber-800: #ff8f00;
-  --cf-amber-900: #ff6f00;
+  /* Visual rule: neutral base + restrained accent. Avoid large blue/purple solids or flashy blue/purple gradients. */
+  --vr-surface-0: #111315;
+  --vr-surface-1: #161a1d;
+  --vr-surface-2: #1d2227;
+  --vr-surface-3: #242a31;
+  --vr-surface-4: #2d343c;
 
-  /* === Black Scale (Backgrounds) === */
-  --cf-black-900: #0a0a0a;
-  --cf-black-800: #121212;
-  --cf-black-700: #1a1a1a;
-  --cf-black-600: #242424;
-  --cf-black-500: #2e2e2e;
+  --vr-border: #3a424c;
+  --vr-border-subtle: #2b3139;
 
-  /* === Surface Scale (Semantic) === */
-  --cf-surface-100: #0a0a0a;
-  --cf-surface-200: #121212;
-  --cf-surface-300: #1a1a1a;
-  --cf-surface-400: #242424;
-  --cf-surface-500: #2e2e2e;
-  --cf-surface-600: #3a3a3a;
+  --vr-text: #edf1f4;
+  --vr-text-muted: #b8c0c8;
+  --vr-text-dim: #8d97a1;
 
-  /* === Status Colors === */
-  --cf-status-success: #00ff41;
-  --cf-status-success-muted: rgba(0, 255, 65, 0.15);
-  --cf-status-warning: #ffbf00;
-  --cf-status-warning-muted: rgba(255, 191, 0, 0.15);
-  --cf-status-error: #ff3131;
-  --cf-status-error-muted: rgba(255, 49, 49, 0.15);
-  --cf-status-info: #00d4ff;
-  --cf-status-info-muted: rgba(0, 212, 255, 0.15);
+  --vr-accent-50: #f4ede3;
+  --vr-accent-100: #eadcc7;
+  --vr-accent-200: #dfc8a8;
+  --vr-accent-300: #d1b182;
+  --vr-accent-400: #c6a06a;
+  --vr-accent-500: #bf965c;
+  --vr-accent-600: #a27f4d;
+  --vr-accent-700: #856842;
+  --vr-accent-800: #695136;
+  --vr-accent-900: #4f3d29;
 
-  /* === Functional Tokens === */
-  --cf-disabled-bg: #1a1a1a;
-  --cf-disabled-text: #666666;
-  --cf-disabled-border: #333333;
-  --cf-divider: #333333;
-  --cf-divider-subtle: #1f1f1f;
-  --cf-overlay: rgba(0, 0, 0, 0.7);
-  --cf-overlay-light: rgba(0, 0, 0, 0.5);
+  --vr-status-success: #48a476;
+  --vr-status-warning: #c38d4c;
+  --vr-status-error: #cc6156;
+  --vr-status-info: #6694b8;
 
-  /* === Focus States === */
-  --cf-focus-ring: #ffbf00;
-  --cf-focus-ring-width: 2px;
-  --cf-focus-ring-offset: 2px;
-  --cf-focus-glow: 0 0 0 3px rgba(255, 191, 0, 0.3);
+  --vr-status-success-muted: rgb(72 164 118 / 0.2);
+  --vr-status-warning-muted: rgb(195 141 76 / 0.2);
+  --vr-status-error-muted: rgb(204 97 86 / 0.2);
+  --vr-status-info-muted: rgb(102 148 184 / 0.2);
 
-  /* === Typography === */
-  --cf-font-sans: var(--font-sans), "Inter", "Noto Sans SC", system-ui, sans-serif;
-  --cf-font-mono: var(--font-mono), "JetBrains Mono", "Fira Code", monospace;
-  --cf-font-display: "VT323", var(--font-mono), monospace;
+  --vr-disabled-bg: #1b1f24;
+  --vr-disabled-text: #6d7781;
+  --vr-disabled-border: #2a3139;
 
-  /* === Corners & Borders === */
-  --cf-corner-none: 0;
-  --cf-corner-small: 2px;
-  --cf-corner-medium: 4px;
-  --cf-corner-bevel: 8px 0;
+  --vr-overlay: rgb(8 10 12 / 0.72);
+  --vr-overlay-soft: rgb(8 10 12 / 0.42);
 
-  --cf-border-thin: 1px solid var(--cf-amber-500);
-  --cf-border-medium: 2px solid var(--cf-amber-500);
-  --cf-border-thick: 3px solid var(--cf-amber-500);
+  --vr-grid-dot-rgb: 101 108 117;
 
-  /* === Glow Effects === */
-  --cf-glow-subtle: 0 0 4px var(--cf-amber-500);
-  --cf-glow-medium: 0 0 8px var(--cf-amber-500);
-  --cf-glow-strong: 0 0 16px var(--cf-amber-500), 0 0 32px rgba(255, 191, 0, 0.3);
-  --cf-glow-success: 0 0 8px var(--cf-status-success);
-  --cf-glow-error: 0 0 8px var(--cf-status-error);
-  --cf-glow-info: 0 0 8px var(--cf-status-info);
+  --vr-font-sans:
+    var(--font-sans), "Manrope", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --vr-font-mono: var(--font-mono), "JetBrains Mono", "IBM Plex Mono", "Consolas", monospace;
+  --vr-font-display: var(--vr-font-sans);
 
-  /* === Animation === */
-  --cf-duration-fast: 100ms;
-  --cf-duration-normal: 200ms;
-  --cf-duration-slow: 300ms;
-  --cf-easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
-  --cf-easing-sharp: cubic-bezier(0.4, 0, 0.6, 1);
+  --vr-radius-xs: 6px;
+  --vr-radius-sm: 10px;
+  --vr-radius-md: 14px;
+  --vr-radius-lg: 18px;
 
-  /* === Shadcn/ui Compatibility Mappings === */
-  --background: var(--cf-surface-100);
-  --foreground: var(--cf-amber-500);
-  --card: var(--cf-surface-300);
-  --card-foreground: var(--cf-amber-500);
-  --popover: var(--cf-surface-300);
-  --popover-foreground: var(--cf-amber-500);
-  --primary: var(--cf-amber-500);
-  --primary-foreground: var(--cf-black-900);
-  --secondary: var(--cf-surface-400);
-  --secondary-foreground: var(--cf-amber-500);
-  --muted: var(--cf-surface-400);
-  --muted-foreground: var(--cf-disabled-text);
-  --accent: var(--cf-amber-700);
-  --accent-foreground: var(--cf-black-900);
-  --destructive: var(--cf-status-error);
-  --destructive-foreground: var(--cf-black-900);
-  --border: var(--cf-divider);
-  --input: rgba(255, 191, 0, 0.5);
-  --ring: var(--cf-focus-ring);
-  --radius: var(--cf-corner-small);
+  --vr-focus-ring-width: 2px;
+  --vr-focus-ring-offset: 2px;
+  --vr-focus-ring-shadow: 0 0 0 3px rgb(191 150 92 / 0.38);
 
-  /* Sidebar compatibility */
-  --sidebar: var(--cf-black-900);
-  --sidebar-foreground: var(--cf-amber-500);
-  --sidebar-primary: var(--cf-amber-500);
-  --sidebar-primary-foreground: var(--cf-black-900);
-  --sidebar-accent: var(--cf-surface-300);
-  --sidebar-accent-foreground: var(--cf-amber-500);
-  --sidebar-border: var(--cf-divider-subtle);
-  --sidebar-ring: var(--cf-focus-ring);
+  --vr-shadow-xs: 0 1px 2px rgb(0 0 0 / 0.22);
+  --vr-shadow-sm: 0 6px 18px rgb(0 0 0 / 0.24);
+  --vr-shadow-md: 0 10px 30px rgb(0 0 0 / 0.32);
+  --vr-shadow-lg: 0 18px 42px rgb(0 0 0 / 0.4);
+  --vr-shadow-glow-subtle: 0 0 0 1px rgb(191 150 92 / 0.22), 0 10px 24px rgb(0 0 0 / 0.24);
+  --vr-shadow-glow-medium: 0 0 0 1px rgb(191 150 92 / 0.28), 0 14px 30px rgb(0 0 0 / 0.34);
+  --vr-shadow-glow-strong: 0 0 0 1px rgb(191 150 92 / 0.34), 0 20px 40px rgb(0 0 0 / 0.42);
+
+  --vr-motion-fast: 140ms;
+  --vr-motion-normal: 220ms;
+  --vr-motion-slow: 320ms;
+  --vr-easing-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --vr-easing-sharp: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --background: var(--vr-surface-0);
+  --foreground: var(--vr-text);
+  --card: var(--vr-surface-2);
+  --card-foreground: var(--vr-text);
+  --popover: var(--vr-surface-2);
+  --popover-foreground: var(--vr-text);
+  --primary: var(--vr-accent-500);
+  --primary-foreground: #14171a;
+  --secondary: var(--vr-surface-3);
+  --secondary-foreground: var(--vr-text);
+  --muted: var(--vr-surface-3);
+  --muted-foreground: var(--vr-text-muted);
+  --accent: var(--vr-accent-600);
+  --accent-foreground: #f8f4ee;
+  --destructive: var(--vr-status-error);
+  --destructive-foreground: #fff1ef;
+  --border: var(--vr-border);
+  --input: var(--vr-border);
+  --ring: var(--vr-accent-500);
+  --radius: var(--vr-radius-sm);
+
+  --sidebar: var(--vr-surface-1);
+  --sidebar-foreground: var(--vr-text);
+  --sidebar-primary: var(--vr-accent-500);
+  --sidebar-primary-foreground: #14171a;
+  --sidebar-accent: var(--vr-surface-3);
+  --sidebar-accent-foreground: var(--vr-text);
+  --sidebar-border: var(--vr-border-subtle);
+  --sidebar-ring: var(--vr-accent-500);
+
+  --shape-corner-extra-small: var(--vr-radius-xs);
+  --shape-corner-small: var(--vr-radius-sm);
+  --shape-corner-medium: var(--vr-radius-md);
+  --shape-corner-full: 9999px;
+
+  --status-success: var(--vr-status-success);
+  --status-warning: var(--vr-status-warning);
+  --status-error: var(--vr-status-error);
+  --status-info: var(--vr-status-info);
+
+  --md-sys-color-primary: 191 150 92;
+  --md-sys-color-on-primary: 20 23 26;
+  --md-sys-color-primary-container: 60 49 36;
+  --md-sys-color-on-primary-container: 237 226 208;
+  --md-sys-color-tertiary-container: 42 56 68;
+  --md-sys-color-on-tertiary-container: 207 224 236;
+  --md-sys-color-success: 72 164 118;
+  --md-sys-color-success-container: 35 61 47;
+  --md-sys-color-on-success-container: 208 235 222;
+  --md-sys-color-warning-container: 67 51 34;
+  --md-sys-color-on-warning-container: 246 225 201;
+  --md-sys-color-error: 204 97 86;
+  --md-sys-color-error-container: 66 36 34;
+  --md-sys-color-on-error-container: 245 214 210;
+  --md-sys-color-surface-container-low: 22 26 29;
+  --md-sys-color-surface-container-highest: 45 52 60;
+  --md-sys-color-inverse-surface: 231 225 216;
+  --md-sys-color-on-surface: 237 241 244;
+  --md-sys-color-on-surface-variant: 184 192 200;
+  --md-sys-color-outline: 58 66 76;
+  --md-sys-color-outline-variant: 43 49 57;
 }
-
-/* ============================================
-   Light Theme - Vintage Paper CRT Mode
-   ============================================ */
 
 .light {
   color-scheme: light;
 
-  /* === Amber Scale (Primary) - Darkened for WCAG 4.5:1 contrast on light backgrounds === */
-  --cf-amber-50: #fff2d6;
-  --cf-amber-100: #ffe8b8;
-  --cf-amber-200: #ffdd9c;
-  --cf-amber-300: #e8a800;
-  --cf-amber-400: #c99200;
-  --cf-amber-500: #8b5a00; /* Darkened from #D69500 for ~6.5:1 contrast ratio */
-  --cf-amber-600: #7a4e00;
-  --cf-amber-700: #684200;
-  --cf-amber-800: #573700;
-  --cf-amber-900: #462c00;
+  --vr-surface-0: #f5f3ef;
+  --vr-surface-1: #ffffff;
+  --vr-surface-2: #efebe4;
+  --vr-surface-3: #e5dfd6;
+  --vr-surface-4: #dcd5ca;
 
-  /* === Paper / Surface Scale (Sepia-tinted) === */
-  --cf-black-900: #fdf8ef;
-  --cf-black-800: #f5ede0;
-  --cf-black-700: #ebe2d3;
-  --cf-black-600: #dfd4c3;
-  --cf-black-500: #d1c5b2;
+  --vr-border: #cbc1b3;
+  --vr-border-subtle: #d9d1c4;
 
-  --cf-surface-100: #fdf8ef;
-  --cf-surface-200: #f8f1e5;
-  --cf-surface-300: #f0e8d8;
-  --cf-surface-400: #e5dac6;
-  --cf-surface-500: #d8ccb5;
-  --cf-surface-600: #c9bc9f;
+  --vr-text: #26221b;
+  --vr-text-muted: #60584d;
+  --vr-text-dim: #80776b;
 
-  /* === Status Colors (Contrast-adjusted for light bg) === */
-  --cf-status-success: #0d7a35;
-  --cf-status-success-muted: rgba(13, 122, 53, 0.15);
-  --cf-status-warning: #b86e00;
-  --cf-status-warning-muted: rgba(184, 110, 0, 0.15);
-  --cf-status-error: #c41e1e;
-  --cf-status-error-muted: rgba(196, 30, 30, 0.15);
-  --cf-status-info: #0a6499;
-  --cf-status-info-muted: rgba(10, 100, 153, 0.15);
+  --vr-accent-50: #f8f1e6;
+  --vr-accent-100: #ebdcc5;
+  --vr-accent-200: #dcc5a4;
+  --vr-accent-300: #cdae84;
+  --vr-accent-400: #a17a4f;
+  --vr-accent-500: #8d6840;
+  --vr-accent-600: #795536;
+  --vr-accent-700: #66462d;
+  --vr-accent-800: #523824;
+  --vr-accent-900: #3f2b1c;
 
-  /* === Functional Tokens === */
-  --cf-disabled-bg: #f0e8d8;
-  --cf-disabled-text: #8a7a5a;
-  --cf-disabled-border: #ddd0b8;
-  --cf-divider: #d8c9ac;
-  --cf-divider-subtle: #e8dcc6;
-  --cf-overlay: rgba(253, 248, 239, 0.85);
-  --cf-overlay-light: rgba(253, 248, 239, 0.6);
+  --vr-status-success: #2c7d58;
+  --vr-status-warning: #9c6b36;
+  --vr-status-error: #b24a43;
+  --vr-status-info: #3f6f95;
 
-  /* === Focus States (Using darker amber for light mode) === */
-  --cf-focus-ring: #8b5a00;
-  --cf-focus-glow: 0 0 0 3px rgba(139, 90, 0, 0.3);
+  --vr-status-success-muted: rgb(44 125 88 / 0.16);
+  --vr-status-warning-muted: rgb(156 107 54 / 0.16);
+  --vr-status-error-muted: rgb(178 74 67 / 0.16);
+  --vr-status-info-muted: rgb(63 111 149 / 0.16);
 
-  /* === Glow Effects (Using darker amber for light mode) === */
-  --cf-glow-subtle: 0 0 4px rgba(139, 90, 0, 0.4);
-  --cf-glow-medium: 0 0 8px rgba(139, 90, 0, 0.5);
-  --cf-glow-strong: 0 0 12px rgba(139, 90, 0, 0.6), 0 0 24px rgba(139, 90, 0, 0.25);
+  --vr-disabled-bg: #e9e2d7;
+  --vr-disabled-text: #8a8073;
+  --vr-disabled-border: #d7cdbf;
 
-  /* === Shadcn/ui Compatibility Mappings === */
-  --background: var(--cf-surface-100);
-  --foreground: #2a1f0a;
-  --card: var(--cf-surface-200);
-  --card-foreground: #2a1f0a;
-  --popover: var(--cf-surface-200);
-  --popover-foreground: #2a1f0a;
-  --primary: var(--cf-amber-500);
-  --primary-foreground: #fffaf0;
-  --secondary: var(--cf-surface-400);
-  --secondary-foreground: #3d2e12;
-  --muted: var(--cf-surface-400);
-  --muted-foreground: #6b5a3a;
-  --accent: var(--cf-amber-600);
-  --accent-foreground: #fffaf0;
-  --destructive: var(--cf-status-error);
-  --destructive-foreground: #fffaf0;
-  --border: var(--cf-divider);
-  --input: rgba(42, 31, 10, 0.2);
-  --ring: var(--cf-focus-ring);
+  --vr-overlay: rgb(245 243 239 / 0.72);
+  --vr-overlay-soft: rgb(245 243 239 / 0.45);
 
-  /* Sidebar compatibility */
-  --sidebar: var(--cf-surface-200);
-  --sidebar-foreground: #2a1f0a;
-  --sidebar-primary: var(--cf-amber-500);
-  --sidebar-primary-foreground: #fffaf0;
-  --sidebar-accent: var(--cf-surface-300);
-  --sidebar-accent-foreground: #2a1f0a;
-  --sidebar-border: var(--cf-divider);
-  --sidebar-ring: var(--cf-focus-ring);
+  --vr-grid-dot-rgb: 160 151 138;
+
+  --vr-focus-ring-shadow: 0 0 0 3px rgb(141 104 64 / 0.28);
+
+  --vr-shadow-xs: 0 1px 2px rgb(28 22 12 / 0.1);
+  --vr-shadow-sm: 0 8px 20px rgb(28 22 12 / 0.12);
+  --vr-shadow-md: 0 12px 28px rgb(28 22 12 / 0.16);
+  --vr-shadow-lg: 0 20px 44px rgb(28 22 12 / 0.2);
+  --vr-shadow-glow-subtle: 0 0 0 1px rgb(141 104 64 / 0.2), 0 12px 26px rgb(28 22 12 / 0.13);
+  --vr-shadow-glow-medium: 0 0 0 1px rgb(141 104 64 / 0.25), 0 16px 32px rgb(28 22 12 / 0.17);
+  --vr-shadow-glow-strong: 0 0 0 1px rgb(141 104 64 / 0.3), 0 22px 42px rgb(28 22 12 / 0.21);
+
+  --primary-foreground: #fffdf9;
+  --secondary: var(--vr-surface-2);
+  --muted: var(--vr-surface-2);
+  --accent-foreground: #fffdf9;
+  --destructive-foreground: #fff7f6;
+
+  --sidebar: var(--vr-surface-1);
+  --sidebar-primary-foreground: #fffdf9;
+  --sidebar-accent: var(--vr-surface-2);
+
+  --md-sys-color-primary: 141 104 64;
+  --md-sys-color-on-primary: 255 255 255;
+  --md-sys-color-primary-container: 233 219 198;
+  --md-sys-color-on-primary-container: 59 43 27;
+  --md-sys-color-tertiary-container: 211 224 236;
+  --md-sys-color-on-tertiary-container: 39 64 87;
+  --md-sys-color-success: 44 125 88;
+  --md-sys-color-success-container: 213 232 220;
+  --md-sys-color-on-success-container: 23 69 47;
+  --md-sys-color-warning-container: 241 224 202;
+  --md-sys-color-on-warning-container: 78 50 21;
+  --md-sys-color-error: 178 74 67;
+  --md-sys-color-error-container: 244 218 215;
+  --md-sys-color-on-error-container: 92 30 25;
+  --md-sys-color-surface-container-low: 255 255 255;
+  --md-sys-color-surface-container-highest: 229 223 214;
+  --md-sys-color-inverse-surface: 45 40 33;
+  --md-sys-color-on-surface: 38 34 27;
+  --md-sys-color-on-surface-variant: 96 88 77;
+  --md-sys-color-outline: 203 193 179;
+  --md-sys-color-outline-variant: 217 209 196;
 }
 
-/* ============================================
-   Theme Switch Animation - CRT Power Cycle
-   ============================================ */
+:root,
+.dark,
+.light {
+  --cf-amber-50: var(--vr-accent-50);
+  --cf-amber-100: var(--vr-accent-100);
+  --cf-amber-200: var(--vr-accent-200);
+  --cf-amber-300: var(--vr-accent-300);
+  --cf-amber-400: var(--vr-accent-400);
+  --cf-amber-500: var(--vr-accent-500);
+  --cf-amber-600: var(--vr-accent-600);
+  --cf-amber-700: var(--vr-accent-700);
+  --cf-amber-800: var(--vr-accent-800);
+  --cf-amber-900: var(--vr-accent-900);
 
-@keyframes cf-theme-flash {
-  0% {
-    opacity: 0.95;
-    filter: blur(3px) brightness(1.4);
+  --cf-black-900: var(--vr-surface-0);
+  --cf-black-800: var(--vr-surface-1);
+  --cf-black-700: var(--vr-surface-2);
+  --cf-black-600: var(--vr-surface-3);
+  --cf-black-500: var(--vr-surface-4);
+
+  --cf-surface-100: var(--vr-surface-0);
+  --cf-surface-200: var(--vr-surface-1);
+  --cf-surface-300: var(--vr-surface-2);
+  --cf-surface-400: var(--vr-surface-3);
+  --cf-surface-500: var(--vr-surface-4);
+  --cf-surface-600: var(--vr-surface-4);
+
+  --cf-status-success: var(--vr-status-success);
+  --cf-status-success-muted: var(--vr-status-success-muted);
+  --cf-status-warning: var(--vr-status-warning);
+  --cf-status-warning-muted: var(--vr-status-warning-muted);
+  --cf-status-error: var(--vr-status-error);
+  --cf-status-error-muted: var(--vr-status-error-muted);
+  --cf-status-info: var(--vr-status-info);
+  --cf-status-info-muted: var(--vr-status-info-muted);
+
+  --cf-disabled-bg: var(--vr-disabled-bg);
+  --cf-disabled-text: var(--vr-disabled-text);
+  --cf-disabled-border: var(--vr-disabled-border);
+  --cf-divider: var(--vr-border);
+  --cf-divider-subtle: var(--vr-border-subtle);
+  --cf-overlay: var(--vr-overlay);
+  --cf-overlay-light: var(--vr-overlay-soft);
+
+  --cf-focus-ring: var(--vr-accent-500);
+  --cf-focus-ring-width: var(--vr-focus-ring-width);
+  --cf-focus-ring-offset: var(--vr-focus-ring-offset);
+  --cf-focus-glow: var(--vr-focus-ring-shadow);
+
+  --cf-font-sans: var(--vr-font-sans);
+  --cf-font-mono: var(--vr-font-mono);
+  --cf-font-display: var(--vr-font-display);
+
+  --cf-corner-none: 0;
+  --cf-corner-small: var(--vr-radius-xs);
+  --cf-corner-medium: var(--vr-radius-sm);
+  --cf-corner-bevel: var(--vr-radius-md);
+
+  --cf-border-thin: 1px solid var(--vr-border);
+  --cf-border-medium: 2px solid var(--vr-border);
+  --cf-border-thick: 3px solid var(--vr-border);
+
+  --cf-glow-subtle: var(--vr-shadow-glow-subtle);
+  --cf-glow-medium: var(--vr-shadow-glow-medium);
+  --cf-glow-strong: var(--vr-shadow-glow-strong);
+  --cf-glow-success: 0 0 0 1px rgb(72 164 118 / 0.3);
+  --cf-glow-error: 0 0 0 1px rgb(204 97 86 / 0.3);
+  --cf-glow-info: 0 0 0 1px rgb(102 148 184 / 0.3);
+
+  --cf-duration-fast: var(--vr-motion-fast);
+  --cf-duration-normal: var(--vr-motion-normal);
+  --cf-duration-slow: var(--vr-motion-slow);
+  --cf-easing-standard: var(--vr-easing-standard);
+  --cf-easing-sharp: var(--vr-easing-sharp);
+}
+
+@keyframes vr-theme-fade {
+  from {
+    opacity: 0.72;
   }
-  30% {
-    opacity: 0.7;
-    filter: blur(1px) brightness(1.2);
-  }
-  60% {
-    opacity: 0.3;
-    filter: blur(0.5px) brightness(1);
-  }
-  100% {
+  to {
     opacity: 0;
-    filter: blur(0) brightness(1);
   }
 }
 
-@keyframes cf-theme-scanline {
-  0% {
-    transform: translateY(-100%);
-    opacity: 0.9;
-  }
-  50% {
-    opacity: 0.6;
-  }
-  100% {
-    transform: translateY(100%);
+@keyframes vr-fade-up {
+  from {
     opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-@keyframes cf-toggle-glow {
+@keyframes vr-rise {
+  from {
+    opacity: 0;
+    transform: translateY(20%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes vr-soft-pulse {
   0%,
   100% {
-    box-shadow:
-      0 0 8px var(--cf-amber-500),
-      inset 0 0 4px rgba(255, 191, 0, 0.2);
+    box-shadow: var(--vr-shadow-glow-subtle);
   }
   50% {
-    box-shadow:
-      0 0 16px var(--cf-amber-500),
-      inset 0 0 8px rgba(255, 191, 0, 0.4);
+    box-shadow: var(--vr-shadow-glow-medium);
+  }
+}
+
+@keyframes vr-row-scan {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes vr-caret {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
   }
 }
 
 @keyframes cf-toggle-scanline {
-  0% {
+  from {
     transform: translateY(-100%);
   }
-  100% {
-    transform: translateY(200%);
+  to {
+    transform: translateY(180%);
   }
 }
 
-/* Theme switch overlay - CRT power cycle effect */
-html.theme-switching::before,
-html.theme-switching::after {
+html.theme-switching::before {
   content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 99999;
+  background: radial-gradient(circle at center, var(--vr-overlay-soft) 0%, var(--vr-overlay) 100%);
+  animation: vr-theme-fade 320ms var(--vr-easing-standard) forwards;
 }
-
-html.theme-switching::before {
-  background: radial-gradient(
-    ellipse at center,
-    rgba(255, 191, 0, 0.4) 0%,
-    rgba(255, 191, 0, 0.2) 30%,
-    rgba(0, 0, 0, 0.6) 100%
-  );
-  animation: cf-theme-flash 500ms ease-out forwards;
-}
-
-html.theme-switching::after {
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0px,
-    transparent 2px,
-    rgba(255, 191, 0, 0.5) 2px,
-    rgba(255, 191, 0, 0.5) 4px
-  );
-  animation: cf-theme-scanline 600ms ease-in-out forwards;
-}
-
-/* Light mode overlay uses darker colors */
-html.light.theme-switching::before {
-  background: radial-gradient(
-    ellipse at center,
-    rgba(214, 149, 0, 0.5) 0%,
-    rgba(214, 149, 0, 0.25) 30%,
-    rgba(253, 248, 239, 0.8) 100%
-  );
-}
-
-html.light.theme-switching::after {
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0px,
-    transparent 2px,
-    rgba(214, 149, 0, 0.6) 2px,
-    rgba(214, 149, 0, 0.6) 4px
-  );
-}
-
-/* ============================================
-   Base Styles
-   ============================================ */
 
 @layer base {
   *,
   *::before,
   *::after {
     box-sizing: border-box;
-    border-color: var(--cf-divider);
+    border-color: var(--border);
   }
 
   html {
-    background: var(--cf-black-900);
+    background: var(--background);
   }
 
   body {
-    background: var(--cf-black-900);
-    color: var(--cf-amber-500);
-    font-family: var(--cf-font-sans);
+    min-height: 100dvh;
+    color: var(--foreground);
+    background-color: var(--background);
+    background-image: radial-gradient(
+      circle at 1px 1px,
+      rgb(var(--vr-grid-dot-rgb) / 0.16) 1px,
+      transparent 0
+    );
+    background-size: 24px 24px;
+    font-family: var(--vr-font-sans);
     font-feature-settings:
       "liga" 1,
       "calt" 1;
-    min-height: 100vh;
+    line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 
-  /* Focus ring for all focusable elements */
   :focus-visible {
-    outline: var(--cf-focus-ring-width) solid var(--cf-focus-ring);
-    outline-offset: var(--cf-focus-ring-offset);
+    outline: var(--vr-focus-ring-width) solid transparent;
+    outline-offset: var(--vr-focus-ring-offset);
+    box-shadow: var(--vr-focus-ring-shadow);
   }
 
-  /* Selection */
   ::selection {
-    background: var(--cf-amber-500);
-    color: var(--cf-black-900);
+    background: var(--vr-accent-500);
+    color: var(--primary-foreground);
   }
 
-  /* Scrollbar theming */
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
   }
 
   ::-webkit-scrollbar-track {
-    background: var(--cf-black-800);
+    background: var(--vr-surface-1);
   }
 
   ::-webkit-scrollbar-thumb {
-    background: var(--cf-amber-700);
-    border-radius: var(--cf-corner-small);
+    background: var(--vr-border);
+    border-radius: 9999px;
+    border: 2px solid var(--vr-surface-1);
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--cf-amber-500);
+    background: var(--vr-text-dim);
   }
 
-  /* Firefox scrollbar */
   * {
     scrollbar-width: thin;
-    scrollbar-color: var(--cf-amber-700) var(--cf-black-800);
+    scrollbar-color: var(--vr-border) var(--vr-surface-1);
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
   }
 }
 
-/* ============================================
-   CRT Effects
-   ============================================ */
-
 @layer components {
-  /* Scanlines - use sparingly on hero panels, topbar */
-  .cf-scanlines {
+  .cf-scanlines,
+  .cf-noise,
+  .cf-vignette,
+  .cf-glitch,
+  .cf-retro-grid,
+  .cf-data-scan {
     position: relative;
   }
 
-  .cf-scanlines::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 1px,
-      rgba(0, 0, 0, 0.15) 1px,
-      rgba(0, 0, 0, 0.15) 2px
-    );
-    pointer-events: none;
-    z-index: 10;
+  .cf-scanlines::before,
+  .cf-noise::after,
+  .cf-vignette::before {
+    content: none;
   }
 
-  /* Noise texture - for page backgrounds only */
-  .cf-noise {
-    position: relative;
+  .cf-glow-text,
+  .cf-glow-text-strong,
+  .cf-phosphor-trail,
+  .cf-holo-shimmer {
+    text-shadow: none;
+    -webkit-text-fill-color: currentColor;
   }
 
-  .cf-noise::after {
-    content: "";
-    position: fixed;
-    inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-    opacity: 0.02;
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  /* Glow text - for logos, important numbers */
-  .cf-glow-text {
-    text-shadow: 0 0 4px currentColor;
-  }
-
-  .cf-glow-text-strong {
-    text-shadow:
-      0 0 8px currentColor,
-      0 0 16px currentColor;
-  }
-
-  /* Blinking cursor - login page only */
-  .cf-cursor-blink::after {
-    content: "_";
-    animation: cf-blink 1s step-end infinite;
-  }
-
-  @keyframes cf-blink {
-    0%,
-    50% {
-      opacity: 1;
-    }
-    51%,
-    100% {
-      opacity: 0;
-    }
-  }
-
-  /* Panel with glow border */
   .cf-panel {
-    background: var(--cf-surface-300);
-    border: var(--cf-border-medium);
-    padding: 1rem;
-    transition: box-shadow var(--cf-duration-normal) var(--cf-easing-standard);
+    background: var(--vr-surface-2);
+    border: 1px solid var(--vr-border);
+    border-radius: var(--vr-radius-md);
+    box-shadow: var(--vr-shadow-sm);
+    transition:
+      border-color var(--vr-motion-normal) var(--vr-easing-standard),
+      box-shadow var(--vr-motion-normal) var(--vr-easing-standard),
+      transform var(--vr-motion-normal) var(--vr-easing-standard);
   }
 
   .cf-panel:hover {
-    box-shadow: var(--cf-glow-subtle);
+    border-color: var(--vr-accent-400);
+    box-shadow: var(--vr-shadow-glow-subtle);
   }
 
   .cf-panel-glow {
-    box-shadow: var(--cf-glow-medium);
+    box-shadow: var(--vr-shadow-md);
   }
 
-  /* ============================================
-     Enhanced CRT & Retro Effects
-     ============================================ */
-
-  /* CRT Power-on flicker effect for cards */
-  .cf-flicker-in {
-    animation: cf-flicker-in 0.6s ease-out forwards;
-  }
-
-  @keyframes cf-flicker-in {
-    0% {
-      opacity: 0;
-      filter: brightness(2) blur(2px);
-    }
-    10% {
-      opacity: 0.8;
-      filter: brightness(1.5) blur(1px);
-    }
-    20% {
-      opacity: 0.3;
-      filter: brightness(1) blur(0);
-    }
-    30% {
-      opacity: 0.9;
-      filter: brightness(1.2) blur(0);
-    }
-    50% {
-      opacity: 0.6;
-    }
-    100% {
-      opacity: 1;
-      filter: brightness(1) blur(0);
-    }
-  }
-
-  /* Staggered reveal animation for dashboard elements */
+  .cf-flicker-in,
+  .cf-boot-sequence,
   .cf-stagger-reveal {
-    opacity: 0;
-    transform: translateY(10px);
-    animation: cf-stagger-reveal 0.5s ease-out forwards;
+    animation: vr-fade-up var(--vr-motion-normal) var(--vr-easing-standard) both;
   }
 
-  @keyframes cf-stagger-reveal {
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  /* Counter digit roll animation */
   .cf-counter-roll {
     display: inline-block;
-    animation: cf-counter-roll 0.8s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+    animation: vr-rise var(--vr-motion-normal) var(--vr-easing-standard) both;
   }
 
-  @keyframes cf-counter-roll {
-    0% {
-      transform: translateY(-100%);
-      opacity: 0;
-    }
-    30% {
-      opacity: 1;
-    }
-    100% {
-      transform: translateY(0);
-      opacity: 1;
-    }
-  }
-
-  /* Pulse glow effect for active/important items */
   .cf-pulse-glow {
-    animation: cf-pulse-glow 2s ease-in-out infinite;
+    animation: vr-soft-pulse 2.4s var(--vr-easing-standard) infinite;
   }
 
-  @keyframes cf-pulse-glow {
-    0%,
-    100% {
-      box-shadow: var(--cf-glow-subtle);
-    }
-    50% {
-      box-shadow: var(--cf-glow-medium);
-    }
-  }
-
-  /* Data refresh indicator - scanning line */
-  .cf-data-scan {
-    position: relative;
-    overflow: hidden;
-  }
-
-  .cf-data-scan::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(255, 191, 0, 0.1) 50%,
-      transparent 100%
-    );
-    animation: cf-data-scan 2s ease-in-out infinite;
-  }
-
-  @keyframes cf-data-scan {
-    0% {
-      left: -100%;
-    }
-    100% {
-      left: 100%;
-    }
-  }
-
-  /* Table row scan highlight - used for newly arrived log rows.
-     Uses background-position so it won't shift table layout (unlike animating `left`). */
   .cf-row-scan {
     background-image: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(255, 191, 0, 0.12) 50%,
+      rgb(191 150 92 / 0.14) 50%,
       transparent 100%
     );
     background-size: 200% 100%;
-    animation: cf-row-scan 0.5s ease-out 1;
+    animation: vr-row-scan 420ms var(--vr-easing-standard) 1;
   }
 
-  @keyframes cf-row-scan {
-    0% {
-      background-position: -200% 0;
-    }
-    100% {
-      background-position: 200% 0;
-    }
+  .cf-cursor-blink::after {
+    content: "_";
+    animation: vr-caret 1s step-end infinite;
   }
 
-  /* Terminal typing effect */
   .cf-typing {
     overflow: hidden;
     white-space: nowrap;
-    border-right: 2px solid var(--cf-amber-500);
-    animation:
-      cf-typing 2s steps(40, end),
-      cf-blink-caret 0.75s step-end infinite;
+    border-right: 2px solid var(--vr-accent-500);
   }
 
-  @keyframes cf-typing {
-    from {
-      width: 0;
-    }
-    to {
-      width: 100%;
-    }
-  }
-
-  @keyframes cf-blink-caret {
-    from,
-    to {
-      border-color: transparent;
-    }
-    50% {
-      border-color: var(--cf-amber-500);
-    }
-  }
-
-  /* Holographic shimmer for important values */
-  .cf-holo-shimmer {
-    position: relative;
-    background: linear-gradient(
-      90deg,
-      var(--cf-amber-500) 0%,
-      var(--cf-amber-300) 25%,
-      var(--cf-amber-500) 50%,
-      var(--cf-amber-300) 75%,
-      var(--cf-amber-500) 100%
-    );
-    background-size: 200% 100%;
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    animation: cf-holo-shimmer 3s linear infinite;
-  }
-
-  @keyframes cf-holo-shimmer {
-    0% {
-      background-position: 200% 0;
-    }
-    100% {
-      background-position: -200% 0;
-    }
-  }
-
-  /* CRT screen edge vignette */
-  .cf-vignette::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, 0.4) 100%);
-    pointer-events: none;
-    z-index: 5;
-  }
-
-  /* Retro grid background */
-  .cf-retro-grid {
-    background-image:
-      linear-gradient(rgba(255, 191, 0, 0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 191, 0, 0.03) 1px, transparent 1px);
-    background-size: 20px 20px;
-  }
-
-  /* Phosphor trail effect for numbers */
-  .cf-phosphor-trail {
-    text-shadow:
-      0 0 2px var(--cf-amber-500),
-      0 0 4px var(--cf-amber-500),
-      0 0 8px rgba(255, 191, 0, 0.5),
-      0 0 16px rgba(255, 191, 0, 0.3);
-  }
-
-  /* Boot sequence animation */
-  .cf-boot-sequence {
-    animation: cf-boot-sequence 1.5s ease-out forwards;
-  }
-
-  @keyframes cf-boot-sequence {
-    0% {
-      opacity: 0;
-      transform: scale(0.95);
-      filter: brightness(0);
-    }
-    20% {
-      opacity: 0.3;
-      filter: brightness(2);
-    }
-    40% {
-      opacity: 0.1;
-      filter: brightness(0.5);
-    }
-    60% {
-      opacity: 0.8;
-      filter: brightness(1.2);
-    }
-    80% {
-      opacity: 0.6;
-      filter: brightness(1);
-    }
-    100% {
-      opacity: 1;
-      transform: scale(1);
-      filter: brightness(1);
-    }
-  }
-
-  /* Glitch text effect (subtle) */
-  .cf-glitch {
-    position: relative;
-  }
-
-  .cf-glitch:hover {
-    animation: cf-glitch 0.3s ease-in-out;
-  }
-
-  @keyframes cf-glitch {
-    0%,
-    100% {
-      transform: translate(0);
-    }
-    20% {
-      transform: translate(-2px, 1px);
-    }
-    40% {
-      transform: translate(2px, -1px);
-    }
-    60% {
-      transform: translate(-1px, -1px);
-    }
-    80% {
-      transform: translate(1px, 1px);
-    }
-  }
-
-  /* Status LED indicator */
   .cf-status-led {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    box-shadow: 0 0 4px currentColor;
   }
 
   .cf-status-led-online {
-    background: var(--cf-status-success);
-    color: var(--cf-status-success);
-    animation: cf-led-pulse 2s ease-in-out infinite;
+    background: var(--vr-status-success);
+    box-shadow:
+      0 0 0 1px rgb(72 164 118 / 0.34),
+      0 0 8px rgb(72 164 118 / 0.28);
   }
 
   .cf-status-led-offline {
-    background: var(--cf-status-error);
-    color: var(--cf-status-error);
-  }
-
-  @keyframes cf-led-pulse {
-    0%,
-    100% {
-      opacity: 1;
-      filter: drop-shadow(0 0 4px currentColor);
-    }
-    50% {
-      opacity: 0.7;
-      filter: drop-shadow(0 0 8px currentColor);
-    }
+    background: var(--vr-status-error);
+    box-shadow:
+      0 0 0 1px rgb(204 97 86 / 0.34),
+      0 0 8px rgb(204 97 86 / 0.28);
   }
 }
 
-/* ============================================
-   Typography Utilities
-   ============================================ */
-
 @layer utilities {
-  /* Font families */
+  .font-sans {
+    font-family: var(--vr-font-sans);
+  }
+
   .font-mono {
-    font-family: var(--cf-font-mono);
+    font-family: var(--vr-font-mono);
   }
 
   .font-display {
-    font-family: var(--cf-font-display);
+    font-family: var(--vr-font-display);
   }
 
-  .font-sans {
-    font-family: var(--cf-font-sans);
-  }
-
-  /* Display styles (VT323) */
   .type-display-large {
-    font-family: var(--cf-font-display);
-    font-size: 3rem;
+    font-family: var(--vr-font-display);
+    font-size: clamp(2rem, 3vw, 2.8rem);
+    font-weight: 600;
     line-height: 1.2;
+    letter-spacing: -0.01em;
   }
 
   .type-display-medium {
-    font-family: var(--cf-font-display);
-    font-size: 2.25rem;
-    line-height: 1.2;
+    font-family: var(--vr-font-display);
+    font-size: clamp(1.6rem, 2.2vw, 2.2rem);
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
   }
 
   .type-display-small {
-    font-family: var(--cf-font-display);
-    font-size: 1.5rem;
+    font-family: var(--vr-font-display);
+    font-size: clamp(1.25rem, 1.8vw, 1.7rem);
+    font-weight: 600;
     line-height: 1.3;
   }
 
-  /* Headline styles (JetBrains Mono) */
   .type-headline {
-    font-family: var(--cf-font-mono);
+    font-family: var(--vr-font-display);
     font-size: 1.25rem;
-    font-weight: 500;
-    line-height: 1.4;
+    font-weight: 600;
+    line-height: 1.35;
   }
 
   .type-title-large {
-    font-family: var(--cf-font-mono);
+    font-family: var(--vr-font-display);
     font-size: 1.125rem;
-    font-weight: 500;
+    font-weight: 600;
     line-height: 1.4;
   }
 
   .type-title-medium {
-    font-family: var(--cf-font-mono);
+    font-family: var(--vr-font-display);
     font-size: 1rem;
-    font-weight: 500;
-    line-height: 1.5;
+    font-weight: 600;
+    line-height: 1.45;
   }
 
   .type-title-small {
-    font-family: var(--cf-font-mono);
+    font-family: var(--vr-font-display);
     font-size: 0.875rem;
-    font-weight: 500;
-    line-height: 1.5;
+    font-weight: 600;
+    line-height: 1.45;
   }
 
-  /* Body styles (Inter) */
   .type-body-large {
-    font-family: var(--cf-font-sans);
+    font-family: var(--vr-font-sans);
     font-size: 1rem;
     line-height: 1.6;
   }
 
   .type-body-medium {
-    font-family: var(--cf-font-sans);
+    font-family: var(--vr-font-sans);
     font-size: 0.875rem;
     line-height: 1.6;
   }
 
   .type-body-small {
-    font-family: var(--cf-font-sans);
+    font-family: var(--vr-font-sans);
     font-size: 0.75rem;
-    line-height: 1.5;
+    line-height: 1.55;
   }
 
-  /* Data/code styles (JetBrains Mono) */
-  .type-data {
-    font-family: var(--cf-font-mono);
-    font-size: 0.875rem;
-    line-height: 1.5;
-  }
-
+  .type-data,
   .type-code {
-    font-family: var(--cf-font-mono);
-    font-size: 0.875rem;
+    font-family: var(--vr-font-mono);
+    font-size: 0.8125rem;
     line-height: 1.6;
   }
 
-  /* Label style */
   .type-label {
-    font-family: var(--cf-font-mono);
+    font-family: var(--vr-font-display);
     font-size: 0.75rem;
-    font-weight: 500;
+    font-weight: 600;
+    line-height: 1.35;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
-    line-height: 1.3;
+    letter-spacing: 0.06em;
   }
 
-  /* Caption style */
-  .type-caption {
-    font-family: var(--cf-font-sans);
-    font-size: 0.6875rem;
+  .type-label-medium {
+    font-family: var(--vr-font-display);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: 0.04em;
+  }
+
+  .type-label-large {
+    font-family: var(--vr-font-display);
+    font-size: 0.8125rem;
+    font-weight: 600;
     line-height: 1.4;
+    letter-spacing: 0.03em;
   }
 
-  /* Color utilities */
+  .type-caption {
+    font-family: var(--vr-font-sans);
+    font-size: 0.6875rem;
+    line-height: 1.45;
+  }
+
   .text-amber {
-    color: var(--cf-amber-500);
+    color: var(--vr-accent-500);
   }
 
   .text-amber-muted {
-    color: var(--cf-amber-700);
+    color: var(--vr-accent-700);
   }
 
   .text-success {
-    color: var(--cf-status-success);
-  }
-
-  .text-error {
-    color: var(--cf-status-error);
+    color: var(--vr-status-success);
   }
 
   .text-warning {
-    color: var(--cf-status-warning);
+    color: var(--vr-status-warning);
+  }
+
+  .text-error {
+    color: var(--vr-status-error);
   }
 
   .text-info {
-    color: var(--cf-status-info);
+    color: var(--vr-status-info);
   }
 
   .text-disabled {
-    color: var(--cf-disabled-text);
+    color: var(--vr-disabled-text);
   }
 
   .bg-surface-100 {
-    background: var(--cf-surface-100);
+    background: var(--vr-surface-0);
   }
 
   .bg-surface-200 {
-    background: var(--cf-surface-200);
+    background: var(--vr-surface-1);
   }
 
   .bg-surface-300 {
-    background: var(--cf-surface-300);
+    background: var(--vr-surface-2);
   }
 
   .bg-surface-400 {
-    background: var(--cf-surface-400);
+    background: var(--vr-surface-3);
   }
 
   .bg-surface-500 {
-    background: var(--cf-surface-500);
+    background: var(--vr-surface-4);
   }
 
   .bg-surface-600 {
-    background: var(--cf-surface-600);
+    background: var(--vr-surface-4);
   }
 
-  /* Border utilities */
   .border-amber {
-    border-color: var(--cf-amber-500);
+    border-color: var(--vr-accent-500);
   }
 
   .border-divider {
-    border-color: var(--cf-divider);
+    border-color: var(--vr-border);
   }
 
   .border-divider-subtle {
-    border-color: var(--cf-divider-subtle);
+    border-color: var(--vr-border-subtle);
   }
 
-  /* Glow utilities */
   .glow-amber {
-    box-shadow: var(--cf-glow-medium);
+    box-shadow: var(--vr-shadow-glow-subtle);
   }
 
   .glow-success {
-    box-shadow: var(--cf-glow-success);
+    box-shadow: 0 0 0 1px rgb(72 164 118 / 0.34);
   }
 
   .glow-error {
-    box-shadow: var(--cf-glow-error);
+    box-shadow: 0 0 0 1px rgb(204 97 86 / 0.34);
   }
 }
 
-/* ============================================
-   Accessibility - Reduced Motion
-   ============================================ */
+@media (max-width: 768px) {
+  :root,
+  .dark,
+  .light {
+    --vr-radius-sm: 12px;
+    --vr-radius-md: 16px;
+  }
+
+  body {
+    background-size: 20px 20px;
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .cf-scanlines::before,
-  .cf-noise::after {
-    display: none;
-  }
-
-  .cf-glow-text,
-  .cf-glow-text-strong {
-    text-shadow: none;
-  }
-
-  .cf-cursor-blink::after {
+  html.theme-switching::before {
     animation: none;
-    opacity: 1;
-  }
-
-  /* Disable theme switch animation */
-  html.theme-switching::before,
-  html.theme-switching::after {
-    display: none;
+    opacity: 0;
   }
 
   *,
@@ -1026,52 +785,24 @@ html.light.theme-switching::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
-
-/* ============================================
-   Accessibility - High Contrast
-   ============================================ */
 
 @media (prefers-contrast: more) {
-  :root {
-    --cf-amber-500: #ffd700;
-    --cf-divider: #4a4a4a;
-    --cf-disabled-text: #888888;
-  }
-
-  .cf-scanlines::before,
-  .cf-noise::after {
-    display: none;
-  }
-
-  .cf-glow-text,
-  .cf-glow-text-strong {
-    text-shadow: none;
-    font-weight: 600;
+  :root,
+  .dark,
+  .light {
+    --vr-border: color-mix(in srgb, var(--vr-text) 55%, var(--vr-surface-0));
+    --vr-text-muted: var(--vr-text);
   }
 }
 
-/* ============================================
-   Minimal Effects Mode (User Toggle)
-   ============================================ */
-
-[data-minimal-effects="true"] .cf-scanlines::before,
-[data-minimal-effects="true"] .cf-noise::after {
-  display: none;
-}
-
-[data-minimal-effects="true"] .cf-glow-text,
-[data-minimal-effects="true"] .cf-glow-text-strong {
-  text-shadow: none;
-}
-
-[data-minimal-effects="true"] .cf-row-scan {
+[data-minimal-effects="true"] .cf-row-scan,
+[data-minimal-effects="true"] .cf-pulse-glow,
+[data-minimal-effects="true"] .cf-cursor-blink::after,
+[data-minimal-effects="true"] .cf-flicker-in,
+[data-minimal-effects="true"] .cf-boot-sequence,
+[data-minimal-effects="true"] .cf-stagger-reveal {
   animation: none;
-  background-image: none;
-}
-
-[data-minimal-effects="true"] .cf-cursor-blink::after {
-  animation: none;
-  opacity: 1;
 }

@@ -1,75 +1,62 @@
 import type { Config } from "tailwindcss";
 import animate from "tailwindcss-animate";
 
-/**
- * Cassette Futurism Design System - Tailwind Configuration
- *
- * Extends Tailwind with custom tokens from globals.css CSS variables.
- * All color/font/spacing values reference CSS custom properties for consistency.
- */
-
 const config: Config = {
   darkMode: "class",
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
   theme: {
     extend: {
       colors: {
-        /* Amber Scale (Primary) */
         amber: {
-          50: "var(--cf-amber-50)",
-          100: "var(--cf-amber-100)",
-          200: "var(--cf-amber-200)",
-          300: "var(--cf-amber-300)",
-          400: "var(--cf-amber-400)",
-          500: "var(--cf-amber-500)",
-          600: "var(--cf-amber-600)",
-          700: "var(--cf-amber-700)",
-          800: "var(--cf-amber-800)",
-          900: "var(--cf-amber-900)",
+          50: "var(--vr-accent-50)",
+          100: "var(--vr-accent-100)",
+          200: "var(--vr-accent-200)",
+          300: "var(--vr-accent-300)",
+          400: "var(--vr-accent-400)",
+          500: "var(--vr-accent-500)",
+          600: "var(--vr-accent-600)",
+          700: "var(--vr-accent-700)",
+          800: "var(--vr-accent-800)",
+          900: "var(--vr-accent-900)",
         },
-        /* Black Scale (Backgrounds) */
         black: {
-          900: "var(--cf-black-900)",
-          800: "var(--cf-black-800)",
-          700: "var(--cf-black-700)",
-          600: "var(--cf-black-600)",
-          500: "var(--cf-black-500)",
+          900: "var(--vr-surface-0)",
+          800: "var(--vr-surface-1)",
+          700: "var(--vr-surface-2)",
+          600: "var(--vr-surface-3)",
+          500: "var(--vr-surface-4)",
         },
-        /* Surface Scale (Semantic Backgrounds) */
         surface: {
-          100: "var(--cf-surface-100)",
-          200: "var(--cf-surface-200)",
-          300: "var(--cf-surface-300)",
-          400: "var(--cf-surface-400)",
-          500: "var(--cf-surface-500)",
-          600: "var(--cf-surface-600)",
+          100: "var(--vr-surface-0)",
+          200: "var(--vr-surface-1)",
+          300: "var(--vr-surface-2)",
+          400: "var(--vr-surface-3)",
+          500: "var(--vr-surface-4)",
+          600: "var(--vr-surface-4)",
         },
-        /* Status Colors */
         status: {
-          success: "var(--cf-status-success)",
-          "success-muted": "var(--cf-status-success-muted)",
-          warning: "var(--cf-status-warning)",
-          "warning-muted": "var(--cf-status-warning-muted)",
-          error: "var(--cf-status-error)",
-          "error-muted": "var(--cf-status-error-muted)",
-          info: "var(--cf-status-info)",
-          "info-muted": "var(--cf-status-info-muted)",
+          success: "var(--vr-status-success)",
+          "success-muted": "var(--vr-status-success-muted)",
+          warning: "var(--vr-status-warning)",
+          "warning-muted": "var(--vr-status-warning-muted)",
+          error: "var(--vr-status-error)",
+          "error-muted": "var(--vr-status-error-muted)",
+          info: "var(--vr-status-info)",
+          "info-muted": "var(--vr-status-info-muted)",
         },
-        /* Functional Tokens */
         disabled: {
-          bg: "var(--cf-disabled-bg)",
-          text: "var(--cf-disabled-text)",
-          border: "var(--cf-disabled-border)",
+          bg: "var(--vr-disabled-bg)",
+          text: "var(--vr-disabled-text)",
+          border: "var(--vr-disabled-border)",
         },
         divider: {
-          DEFAULT: "var(--cf-divider)",
-          subtle: "var(--cf-divider-subtle)",
+          DEFAULT: "var(--vr-border)",
+          subtle: "var(--vr-border-subtle)",
         },
         overlay: {
-          DEFAULT: "var(--cf-overlay)",
-          light: "var(--cf-overlay-light)",
+          DEFAULT: "var(--vr-overlay)",
+          light: "var(--vr-overlay-soft)",
         },
-        /* Shadcn/ui Compatibility */
         background: "var(--background)",
         foreground: "var(--foreground)",
         card: {
@@ -103,7 +90,6 @@ const config: Config = {
         border: "var(--border)",
         input: "var(--input)",
         ring: "var(--ring)",
-        /* Sidebar */
         sidebar: {
           DEFAULT: "var(--sidebar)",
           foreground: "var(--sidebar-foreground)",
@@ -116,14 +102,14 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["var(--cf-font-sans)"],
-        mono: ["var(--cf-font-mono)"],
-        display: ["var(--cf-font-display)"],
+        sans: ["var(--vr-font-sans)"],
+        mono: ["var(--vr-font-mono)"],
+        display: ["var(--vr-font-display)"],
       },
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) * 0.75)",
-        sm: "calc(var(--radius) * 0.5)",
+        lg: "var(--vr-radius-lg)",
+        md: "var(--vr-radius-md)",
+        sm: "var(--vr-radius-sm)",
         "cf-none": "var(--cf-corner-none)",
         "cf-sm": "var(--cf-corner-small)",
         "cf-md": "var(--cf-corner-medium)",
@@ -135,28 +121,28 @@ const config: Config = {
         "cf-thick": "3px",
       },
       ringWidth: {
-        cf: "var(--cf-focus-ring-width)",
+        cf: "var(--vr-focus-ring-width)",
       },
       ringOffsetWidth: {
-        cf: "var(--cf-focus-ring-offset)",
+        cf: "var(--vr-focus-ring-offset)",
       },
       boxShadow: {
-        "cf-glow-subtle": "var(--cf-glow-subtle)",
-        "cf-glow-medium": "var(--cf-glow-medium)",
-        "cf-glow-strong": "var(--cf-glow-strong)",
-        "cf-glow-success": "var(--cf-glow-success)",
-        "cf-glow-error": "var(--cf-glow-error)",
-        "cf-glow-info": "var(--cf-glow-info)",
-        "cf-focus": "var(--cf-focus-glow)",
+        "cf-glow-subtle": "var(--vr-shadow-glow-subtle)",
+        "cf-glow-medium": "var(--vr-shadow-glow-medium)",
+        "cf-glow-strong": "var(--vr-shadow-glow-strong)",
+        "cf-glow-success": "0 0 0 1px rgb(72 164 118 / 0.34)",
+        "cf-glow-error": "0 0 0 1px rgb(204 97 86 / 0.34)",
+        "cf-glow-info": "0 0 0 1px rgb(102 148 184 / 0.34)",
+        "cf-focus": "var(--vr-focus-ring-shadow)",
       },
       transitionDuration: {
-        "cf-fast": "var(--cf-duration-fast)",
-        "cf-normal": "var(--cf-duration-normal)",
-        "cf-slow": "var(--cf-duration-slow)",
+        "cf-fast": "var(--vr-motion-fast)",
+        "cf-normal": "var(--vr-motion-normal)",
+        "cf-slow": "var(--vr-motion-slow)",
       },
       transitionTimingFunction: {
-        "cf-standard": "var(--cf-easing-standard)",
-        "cf-sharp": "var(--cf-easing-sharp)",
+        "cf-standard": "var(--vr-easing-standard)",
+        "cf-sharp": "var(--vr-easing-sharp)",
       },
       keyframes: {
         shimmer: {
@@ -169,8 +155,8 @@ const config: Config = {
         },
       },
       animation: {
-        shimmer: "shimmer 2s infinite",
-        scanline: "scanline 1.5s ease-in-out infinite",
+        shimmer: "shimmer 2s linear infinite",
+        scanline: "scanline 1.6s linear infinite",
       },
     },
   },

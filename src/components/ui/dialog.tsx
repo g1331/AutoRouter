@@ -4,7 +4,7 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { cn, warnIfForbiddenVisualStyle } from "@/lib/utils";
 
 const Dialog = DialogPrimitive.Root;
 
@@ -14,10 +14,6 @@ const DialogPortal = DialogPrimitive.Portal;
 
 const DialogClose = DialogPrimitive.Close;
 
-/**
- * Cassette Futurism Dialog Overlay
- * Dark scrim with overlay color
- */
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
@@ -35,49 +31,46 @@ const DialogOverlay = React.forwardRef<
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
-/**
- * Cassette Futurism Dialog Content
- * Panel with amber border and glow effect
- */
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
-  <DialogPortal>
-    <DialogOverlay />
-    <DialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%]",
-        "gap-6 p-6 rounded-cf-sm",
-        "bg-surface-300 border-2 border-amber-500 shadow-cf-glow-subtle",
-        "duration-cf-normal ease-cf-standard",
-        "data-[state=open]:animate-in data-[state=closed]:animate-out",
-        "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-        "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
-        "data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%]",
-        "data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
-        className
-      )}
-      {...props}
-    >
-      {children}
-      <DialogPrimitive.Close
+>(({ className, children, ...props }, ref) => {
+  warnIfForbiddenVisualStyle("DialogContent", className);
+  return (
+    <DialogPortal>
+      <DialogOverlay />
+      <DialogPrimitive.Content
+        ref={ref}
         className={cn(
-          "absolute right-4 top-4 p-2 rounded-cf-sm",
-          "text-amber-500 border border-transparent",
-          "transition-all duration-cf-fast ease-cf-standard",
-          "hover:text-amber-400 hover:border-amber-500 hover:shadow-cf-glow-subtle",
-          "focus:outline-none focus-visible:ring-cf focus-visible:ring-amber-500",
-          "disabled:pointer-events-none"
+          "fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2",
+          "gap-5 rounded-cf-md border border-border bg-card p-6 text-foreground shadow-[var(--vr-shadow-lg)]",
+          "duration-cf-normal ease-cf-standard",
+          "data-[state=open]:animate-in data-[state=closed]:animate-out",
+          "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+          "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+          "data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%]",
+          "data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
+          className
         )}
+        {...props}
       >
-        <X className="h-5 w-5" />
-        <span className="sr-only">Close</span>
-      </DialogPrimitive.Close>
-    </DialogPrimitive.Content>
-  </DialogPortal>
-));
+        {children}
+        <DialogPrimitive.Close
+          className={cn(
+            "absolute right-3 top-3 rounded-cf-sm border border-transparent p-1.5 text-muted-foreground",
+            "transition-all duration-cf-fast ease-cf-standard",
+            "hover:border-border hover:bg-surface-300 hover:text-foreground",
+            "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-card",
+            "disabled:pointer-events-none"
+          )}
+        >
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close</span>
+        </DialogPrimitive.Close>
+      </DialogPrimitive.Content>
+    </DialogPortal>
+  );
+});
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
@@ -99,7 +92,7 @@ const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn("font-mono text-lg font-medium tracking-wide text-amber-500", className)}
+    className={cn("type-title-large text-foreground", className)}
     {...props}
   />
 ));
@@ -111,7 +104,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn("font-sans text-sm leading-relaxed text-amber-700", className)}
+    className={cn("type-body-small text-muted-foreground", className)}
     {...props}
   />
 ));

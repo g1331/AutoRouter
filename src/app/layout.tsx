@@ -1,16 +1,8 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono, VT323 } from "next/font/google";
+import { Manrope, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-/**
- * Cassette Futurism Design System - Font Configuration
- *
- * - Inter: Body text, descriptions (sans-serif with CJK fallback)
- * - JetBrains Mono: Data, UI chrome, code (monospace)
- * - VT323: Display numbers, titles (pixel font)
- */
-
-const inter = Inter({
+const manrope = Manrope({
   subsets: ["latin", "latin-ext"],
   display: "swap",
   variable: "--font-sans",
@@ -42,13 +34,6 @@ const jetbrainsMono = JetBrains_Mono({
   ],
 });
 
-const vt323 = VT323({
-  weight: "400",
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-pixel",
-});
-
 export const metadata: Metadata = {
   title: "AutoRouter Admin",
   description: "AI API Gateway Management Console",
@@ -67,10 +52,10 @@ export default async function RootLayout({ children, params }: RootLayoutProps) 
     <html
       lang={locale}
       suppressHydrationWarning
-      className={`${inter.variable} ${jetbrainsMono.variable} ${vt323.variable}`}
+      className={`${manrope.variable} ${jetbrainsMono.variable}`}
     >
       <head />
-      <body className={inter.className}>{children}</body>
+      <body className={manrope.className}>{children}</body>
     </html>
   );
 }

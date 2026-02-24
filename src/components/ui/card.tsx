@@ -1,28 +1,20 @@
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 
-import { cn } from "@/lib/utils";
+import { cn, warnIfForbiddenVisualStyle } from "@/lib/utils";
 
-/**
- * Cassette Futurism Card Variants
- *
- * Panel-style containers with amber borders and glow effects.
- * - default: Amber border with filled surface background
- * - outlined: Amber border only, transparent background
- * - filled: Solid surface without border
- */
 const cardVariants = cva(
   [
-    "rounded-cf-sm text-amber-500",
+    "rounded-cf-md border text-foreground",
     "transition-all duration-cf-normal ease-cf-standard",
-    "hover:shadow-cf-glow-subtle",
+    "shadow-[var(--vr-shadow-sm)]",
   ].join(" "),
   {
     variants: {
       variant: {
-        default: "bg-surface-300 border-2 border-amber-500",
-        outlined: "bg-transparent border-2 border-amber-500",
-        filled: "bg-surface-300 border-0",
+        default: "bg-card border-border hover:border-amber-400/35 hover:shadow-cf-glow-subtle",
+        outlined: "bg-transparent border-border hover:bg-surface-200/70",
+        filled: "bg-surface-300 border-transparent shadow-[var(--vr-shadow-xs)]",
       },
     },
     defaultVariants: {
@@ -35,9 +27,10 @@ export interface CardProps
   extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof cardVariants> {}
 
 const Card = React.forwardRef<HTMLDivElement, CardProps>(
-  ({ className, variant, ...props }, ref) => (
-    <div ref={ref} className={cn(cardVariants({ variant, className }))} {...props} />
-  )
+  ({ className, variant, ...props }, ref) => {
+    warnIfForbiddenVisualStyle("Card", className);
+    return <div ref={ref} className={cn(cardVariants({ variant, className }))} {...props} />;
+  }
 );
 Card.displayName = "Card";
 
@@ -50,29 +43,21 @@ CardHeader.displayName = "CardHeader";
 
 const CardTitle = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={cn("font-mono text-lg font-medium tracking-wide text-amber-500", className)}
-      {...props}
-    />
+    <div ref={ref} className={cn("type-title-large text-foreground", className)} {...props} />
   )
 );
 CardTitle.displayName = "CardTitle";
 
 const CardDescription = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={cn("font-sans text-sm leading-relaxed text-amber-700", className)}
-      {...props}
-    />
+    <div ref={ref} className={cn("type-body-small text-muted-foreground", className)} {...props} />
   )
 );
 CardDescription.displayName = "CardDescription";
 
 const CardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("p-6 pt-0 text-amber-500", className)} {...props} />
+    <div ref={ref} className={cn("p-6 pt-0 text-foreground", className)} {...props} />
   )
 );
 CardContent.displayName = "CardContent";

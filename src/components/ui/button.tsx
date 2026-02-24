@@ -2,57 +2,46 @@ import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 
-import { cn } from "@/lib/utils";
+import { cn, warnIfForbiddenVisualStyle } from "@/lib/utils";
 
-/**
- * Cassette Futurism Button Variants
- *
- * - default/primary: Amber background, black text (high emphasis)
- * - secondary/outline: Transparent with amber border (medium emphasis)
- * - ghost: Transparent, amber text only (low emphasis)
- * - destructive/danger: Red background for destructive actions
- * - success: Green background for positive actions
- */
 const buttonVariants = cva(
   [
     "inline-flex items-center justify-center gap-2 whitespace-nowrap",
-    "font-mono text-sm font-medium leading-none",
-    "border-2 border-transparent rounded-cf-sm",
+    "rounded-cf-md border text-sm font-semibold",
     "transition-all duration-cf-normal ease-cf-standard",
-    "focus-visible:outline-none focus-visible:ring-cf focus-visible:ring-amber-500",
-    "focus-visible:ring-offset-cf focus-visible:ring-offset-black-900",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+    "focus-visible:ring-offset-2 focus-visible:ring-offset-background",
     "disabled:pointer-events-none disabled:cursor-not-allowed",
-    "disabled:bg-amber-700/30 disabled:text-amber-100/60 disabled:border-amber-700/50",
-    "disabled:shadow-none disabled:hover:shadow-none",
-    "[&_svg]:pointer-events-none [&_svg]:size-[18px] [&_svg]:shrink-0",
+    "disabled:opacity-45 disabled:shadow-none disabled:translate-y-0",
+    "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   ].join(" "),
   {
     variants: {
       variant: {
         default:
-          "bg-amber-500 text-black-900 border-amber-500 hover:bg-amber-400 hover:shadow-cf-glow-subtle active:bg-amber-600",
+          "border-primary bg-primary text-primary-foreground shadow-cf-glow-subtle hover:-translate-y-px hover:bg-amber-400 active:translate-y-0",
         primary:
-          "bg-amber-500 text-black-900 border-amber-500 hover:bg-amber-400 hover:shadow-cf-glow-subtle active:bg-amber-600",
+          "border-primary bg-primary text-primary-foreground shadow-cf-glow-subtle hover:-translate-y-px hover:bg-amber-400 active:translate-y-0",
         secondary:
-          "bg-black-900/60 text-amber-400 border-amber-400 hover:bg-black-900/70 hover:border-amber-300 hover:text-amber-300 active:bg-black-900",
+          "border-border bg-surface-300 text-foreground shadow-[var(--vr-shadow-xs)] hover:bg-surface-400 hover:border-amber-400/50",
         outline:
-          "bg-transparent text-amber-400 border-amber-400 hover:bg-black-900/60 hover:text-amber-300 hover:border-amber-300 active:bg-black-900/70",
+          "border-border bg-transparent text-foreground hover:border-amber-500/70 hover:bg-surface-300",
         tonal:
-          "bg-black-900/50 text-amber-300 border-amber-500/40 hover:bg-black-900/60 hover:border-amber-300 active:bg-black-900/70",
+          "border-amber-500/35 bg-amber-500/12 text-amber-200 hover:border-amber-400/55 hover:bg-amber-500/18 dark:text-amber-100",
         ghost:
-          "bg-transparent text-amber-400 border-transparent hover:bg-black-900/50 hover:text-amber-300 active:text-amber-200",
+          "border-transparent bg-transparent text-foreground hover:bg-surface-300 hover:text-foreground",
         destructive:
-          "bg-status-error text-black-900 border-status-error hover:shadow-cf-glow-error active:brightness-90",
+          "border-status-error bg-status-error text-white shadow-[0_8px_20px_rgb(204_97_86_/_0.22)] hover:brightness-105",
         danger:
-          "bg-status-error text-black-900 border-status-error hover:shadow-cf-glow-error active:brightness-90",
+          "border-status-error bg-status-error text-white shadow-[0_8px_20px_rgb(204_97_86_/_0.22)] hover:brightness-105",
         success:
-          "bg-status-success text-black-900 border-status-success hover:shadow-cf-glow-success active:brightness-90",
-        link: "bg-transparent border-transparent text-amber-500 underline-offset-4 hover:underline hover:text-amber-400 px-0 h-auto",
+          "border-status-success bg-status-success text-white shadow-[0_8px_20px_rgb(72_164_118_/_0.22)] hover:brightness-105",
+        link: "h-auto border-transparent bg-transparent px-0 py-0 text-amber-500 underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-10 px-5",
-        sm: "h-9 px-4 text-xs",
-        lg: "h-12 px-7 text-base",
+        default: "h-10 px-4",
+        sm: "h-9 px-3 text-xs",
+        lg: "h-11 px-6 text-base",
         icon: "h-10 w-10 p-0",
       },
     },
@@ -70,6 +59,7 @@ export interface ButtonProps
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
+    warnIfForbiddenVisualStyle("Button", className);
     const Comp = asChild ? Slot : "button";
     return (
       <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />
