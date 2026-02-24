@@ -1,194 +1,88 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" role="img" aria-labelledby="title desc">
+  <title id="title">AutoRouter Banner</title>
+  <desc id="desc">AutoRouter neutral visual banner with upstream routing flow and metrics.</desc>
+
   <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" style="stop-color:#0a0a0a"/>
-      <stop offset="100%" style="stop-color:#121212"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f8f9fb" />
+      <stop offset="100%" stop-color="#eef1f5" />
     </linearGradient>
-
-    <linearGradient id="amberGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#ff8f00"/>
-      <stop offset="50%" style="stop-color:#ffbf00"/>
-      <stop offset="100%" style="stop-color:#ff8f00"/>
+    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#d9dee6" stroke-width="1" opacity="0.55" />
+    </pattern>
+    <linearGradient id="accentLine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#2f766e" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#2f766e" stop-opacity="0.85" />
     </linearGradient>
-
-    <filter id="titleGlow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="3" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-
-    <filter id="subtleGlow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="1.5" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-
-    <pattern id="scanlines" width="4" height="4" patternUnits="userSpaceOnUse">
-      <rect width="4" height="2" fill="transparent"/>
-      <rect y="2" width="4" height="2" fill="rgba(0,0,0,0.1)"/>
-    </pattern>
-
-    <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
-      <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#ffbf00" stroke-width="0.3" opacity="0.1"/>
-    </pattern>
   </defs>
 
-  <!-- Background -->
-  <rect width="1200" height="300" fill="url(#bgGrad)"/>
-  <rect width="1200" height="300" fill="url(#grid)"/>
+  <rect width="1200" height="300" fill="url(#bg)" />
+  <rect width="1200" height="300" fill="url(#grid)" opacity="0.45" />
 
-  <!-- Top/Bottom borders -->
-  <rect x="0" y="0" width="1200" height="2" fill="url(#amberGrad)" opacity="0.7"/>
-  <rect x="0" y="298" width="1200" height="2" fill="url(#amberGrad)" opacity="0.7"/>
-
-  <!-- Corner brackets -->
-  <g stroke="#ffbf00" stroke-width="2" fill="none" opacity="0.5">
-    <path d="M 25 55 L 25 25 L 55 25"/>
-    <path d="M 1145 25 L 1175 25 L 1175 55"/>
-    <path d="M 25 245 L 25 275 L 55 275"/>
-    <path d="M 1145 275 L 1175 275 L 1175 245"/>
+  <g>
+    <rect x="30" y="26" width="1140" height="248" rx="22" fill="#ffffff" stroke="#dce3ec" stroke-width="1.5" />
+    <rect x="30" y="26" width="1140" height="6" rx="3" fill="#2f766e" opacity="0.18" />
   </g>
 
-  <!-- === LEFT SIDE: Upstreams flowing into center === -->
-  <g filter="url(#subtleGlow)">
-    <!-- OpenAI -->
-    <text x="60" y="95" font-family="'Consolas', monospace" font-size="10" fill="#ffbf00" opacity="0.7">OpenAI</text>
-    <line x1="115" y1="92" x2="200" y2="92" stroke="#ffbf00" stroke-width="1" stroke-dasharray="6,3" opacity="0.5"/>
-    <rect x="200" y="88" width="6" height="6" fill="#ffbf00" opacity="0.9"/>
-    <line x1="206" y1="91" x2="280" y2="120" stroke="#ffbf00" stroke-width="1.5" opacity="0.6"/>
-
-    <!-- Anthropic -->
-    <text x="60" y="125" font-family="'Consolas', monospace" font-size="10" fill="#ffbf00" opacity="0.7">Anthropic</text>
-    <line x1="130" y1="122" x2="200" y2="122" stroke="#ffbf00" stroke-width="1" stroke-dasharray="6,3" opacity="0.5"/>
-    <rect x="200" y="118" width="6" height="6" fill="#ffbf00" opacity="0.9"/>
-    <line x1="206" y1="121" x2="280" y2="120" stroke="#ffbf00" stroke-width="1.5" opacity="0.6"/>
-
-    <!-- Azure -->
-    <text x="60" y="155" font-family="'Consolas', monospace" font-size="10" fill="#ffbf00" opacity="0.7">Azure</text>
-    <line x1="100" y1="152" x2="200" y2="152" stroke="#ffbf00" stroke-width="1" stroke-dasharray="6,3" opacity="0.5"/>
-    <rect x="200" y="148" width="6" height="6" fill="#ffbf00" opacity="0.9"/>
-    <line x1="206" y1="151" x2="280" y2="120" stroke="#ffbf00" stroke-width="1.5" opacity="0.6"/>
-
-    <!-- Merge node -->
-    <circle cx="280" cy="120" r="5" fill="#ffbf00"/>
-
-    <!-- Line to title area -->
-    <line x1="285" y1="120" x2="350" y2="120" stroke="#ffbf00" stroke-width="2" opacity="0.8"/>
-    <polygon points="345,116 355,120 345,124" fill="#ffbf00" opacity="0.8"/>
+  <g font-family="'Segoe UI', 'SF Pro Display', Arial, sans-serif" fill="#223042">
+    <text x="70" y="72" font-size="13" font-weight="600" letter-spacing="0.8">UPSTREAM POOL</text>
+    <text x="932" y="72" font-size="13" font-weight="600" letter-spacing="0.8">CLIENT APPS</text>
   </g>
 
-  <!-- === RIGHT SIDE: Output to clients === -->
-  <g filter="url(#subtleGlow)">
-    <!-- Line from title area -->
-    <polygon points="855,116 845,120 855,124" fill="#ffbf00" opacity="0.8"/>
-    <line x1="850" y1="120" x2="920" y2="120" stroke="#ffbf00" stroke-width="2" opacity="0.8"/>
+  <g font-family="'Segoe UI', 'SF Pro Display', Arial, sans-serif" font-size="12" font-weight="600" fill="#2a3647">
+    <rect x="70" y="88" width="170" height="34" rx="10" fill="#f4f6f9" stroke="#d8e0ea" />
+    <text x="88" y="110">OpenAI Cluster</text>
+    <circle cx="223" cy="105" r="5" fill="#2f766e" />
 
-    <!-- Split node -->
-    <circle cx="920" cy="120" r="5" fill="#ffbf00"/>
+    <rect x="70" y="132" width="170" height="34" rx="10" fill="#f4f6f9" stroke="#d8e0ea" />
+    <text x="88" y="154">Anthropic Cluster</text>
+    <circle cx="223" cy="149" r="5" fill="#2f766e" />
 
-    <!-- Client_01 -->
-    <line x1="925" y1="120" x2="980" y2="85" stroke="#ffbf00" stroke-width="1.5" opacity="0.6"/>
-    <rect x="980" y="81" width="6" height="6" fill="#ffbf00" opacity="0.9"/>
-    <line x1="986" y1="84" x2="1030" y2="84" stroke="#ffbf00" stroke-width="1" stroke-dasharray="6,3" opacity="0.5"/>
-    <text x="1035" y="88" font-family="'Consolas', monospace" font-size="10" fill="#ffbf00" opacity="0.7">Client_01</text>
-
-    <!-- Client_02 -->
-    <line x1="925" y1="120" x2="1000" y2="120" stroke="#ffbf00" stroke-width="1.5" opacity="0.6"/>
-    <rect x="1000" y="116" width="6" height="6" fill="#ffbf00" opacity="0.9"/>
-    <line x1="1006" y1="119" x2="1030" y2="119" stroke="#ffbf00" stroke-width="1" stroke-dasharray="6,3" opacity="0.5"/>
-    <text x="1035" y="123" font-family="'Consolas', monospace" font-size="10" fill="#ffbf00" opacity="0.7">Client_02</text>
-
-    <!-- Client_03 -->
-    <line x1="925" y1="120" x2="980" y2="155" stroke="#ffbf00" stroke-width="1.5" opacity="0.6"/>
-    <rect x="980" y="151" width="6" height="6" fill="#ffbf00" opacity="0.9"/>
-    <line x1="986" y1="154" x2="1030" y2="154" stroke="#ffbf00" stroke-width="1" stroke-dasharray="6,3" opacity="0.5"/>
-    <text x="1035" y="158" font-family="'Consolas', monospace" font-size="10" fill="#ffbf00" opacity="0.7">Client_03</text>
+    <rect x="70" y="176" width="170" height="34" rx="10" fill="#f4f6f9" stroke="#d8e0ea" />
+    <text x="88" y="198">Azure Cluster</text>
+    <circle cx="223" cy="193" r="5" fill="#2f766e" />
   </g>
 
-  <!-- === CENTER: Title with integrated routing box === -->
-  <g transform="translate(600, 120)">
-    <!-- Outer routing frame -->
-    <rect x="-240" y="-35" width="480" height="70" fill="none" stroke="#ffbf00" stroke-width="1" opacity="0.2" rx="2"/>
-
-    <!-- Inner glow box behind title -->
-    <rect x="-200" y="-25" width="400" height="50" fill="#ffbf00" opacity="0.03" rx="2"/>
-
-    <!-- Status indicators - left -->
-    <g transform="translate(-220, -20)">
-      <circle cx="0" cy="0" r="3" fill="#00ff41"/>
-      <circle cx="12" cy="0" r="3" fill="#ffbf00"/>
-      <circle cx="24" cy="0" r="3" fill="#00ff41"/>
-    </g>
-
-    <!-- Status indicators - right -->
-    <g transform="translate(184, -20)">
-      <circle cx="0" cy="0" r="3" fill="#00ff41"/>
-      <circle cx="12" cy="0" r="3" fill="#ffbf00"/>
-      <circle cx="24" cy="0" r="3" fill="#00ff41"/>
-    </g>
-
-    <!-- Main title -->
-    <text x="0" y="8" text-anchor="middle" font-family="'Consolas', 'Monaco', monospace" font-size="48" font-weight="700" fill="#ffbf00" filter="url(#titleGlow)">
-      AutoRouter
-    </text>
+  <g>
+    <path d="M 228 105 C 320 105, 360 118, 452 138" fill="none" stroke="url(#accentLine)" stroke-width="2.4" stroke-linecap="round" />
+    <path d="M 228 149 C 320 149, 360 149, 452 149" fill="none" stroke="url(#accentLine)" stroke-width="2.4" stroke-linecap="round" />
+    <path d="M 228 193 C 320 193, 360 180, 452 160" fill="none" stroke="url(#accentLine)" stroke-width="2.4" stroke-linecap="round" />
   </g>
 
-  <!-- Subtitle -->
-  <text x="600" y="175" text-anchor="middle" font-family="'Consolas', monospace" font-size="14" fill="#ffbf00" opacity="0.6" letter-spacing="2">
-    &gt;_ route your AI requests
-  </text>
-
-  <!-- Decorative line under subtitle -->
-  <rect x="450" y="190" width="300" height="1" fill="url(#amberGrad)" opacity="0.4"/>
-
-  <!-- === BOTTOM: Status bar === -->
-  <g font-family="'Consolas', monospace" font-size="9" fill="#ffbf00">
-    <!-- Stats -->
-    <g opacity="0.35">
-      <text x="280" y="220">REQ/s</text>
-      <text x="280" y="232">1.2K</text>
-
-      <text x="380" y="220">LATENCY</text>
-      <text x="380" y="232">45ms</text>
-
-      <text x="490" y="220">UPSTREAMS</text>
-      <text x="490" y="232">3</text>
-
-      <text x="610" y="220">KEYS</text>
-      <text x="610" y="232">12</text>
-
-      <text x="710" y="220">UPTIME</text>
-      <text x="710" y="232">99.9%</text>
-
-      <text x="820" y="220">MEMORY</text>
-      <text x="820" y="232">128MB</text>
-    </g>
-
-    <!-- System status -->
-    <g transform="translate(45, 260)">
-      <circle cx="0" cy="-3" r="3" fill="#00ff41"/>
-      <text x="10" y="0" opacity="0.5">SYS::ONLINE</text>
-    </g>
-
-    <!-- Version -->
-    <text x="1155" y="260" text-anchor="end" opacity="0.5">v1.0.0</text>
-
-    <!-- Hex coordinates -->
-    <g opacity="0.2" font-size="8">
-      <text x="100" y="280">0x00</text>
-      <text x="300" y="280">0x64</text>
-      <text x="500" y="280">0xC8</text>
-      <text x="700" y="280">0x12C</text>
-      <text x="900" y="280">0x190</text>
-      <text x="1100" y="280">0x1F4</text>
-    </g>
+  <g>
+    <rect x="452" y="98" width="296" height="110" rx="16" fill="#f9fbfc" stroke="#ccd7e4" stroke-width="1.5" />
+    <text x="600" y="138" text-anchor="middle" font-family="'Segoe UI', 'SF Pro Display', Arial, sans-serif" font-size="44" font-weight="700" fill="#1f2d3d">AutoRouter</text>
+    <text x="600" y="164" text-anchor="middle" font-family="'Segoe UI', 'SF Pro Display', Arial, sans-serif" font-size="13" font-weight="600" letter-spacing="0.7" fill="#4a5a70">AI Gateway for Multi-Upstream Routing</text>
+    <rect x="540" y="178" width="120" height="6" rx="3" fill="#2f766e" opacity="0.2" />
   </g>
 
-  <!-- Scanlines -->
-  <rect width="1200" height="300" fill="url(#scanlines)" opacity="0.3"/>
+  <g font-family="'Segoe UI', 'SF Pro Display', Arial, sans-serif" font-size="12" font-weight="600" fill="#2a3647">
+    <rect x="930" y="88" width="170" height="34" rx="10" fill="#f4f6f9" stroke="#d8e0ea" />
+    <circle cx="947" cy="105" r="5" fill="#2f766e" />
+    <text x="960" y="110">Dashboard UI</text>
+
+    <rect x="930" y="132" width="170" height="34" rx="10" fill="#f4f6f9" stroke="#d8e0ea" />
+    <circle cx="947" cy="149" r="5" fill="#2f766e" />
+    <text x="960" y="154">SDK Clients</text>
+
+    <rect x="930" y="176" width="170" height="34" rx="10" fill="#f4f6f9" stroke="#d8e0ea" />
+    <circle cx="947" cy="193" r="5" fill="#2f766e" />
+    <text x="960" y="198">Service Workers</text>
+  </g>
+
+  <g>
+    <path d="M 748 138 C 835 118, 870 105, 930 105" fill="none" stroke="url(#accentLine)" stroke-width="2.4" stroke-linecap="round" />
+    <path d="M 748 149 C 835 149, 870 149, 930 149" fill="none" stroke="url(#accentLine)" stroke-width="2.4" stroke-linecap="round" />
+    <path d="M 748 160 C 835 180, 870 193, 930 193" fill="none" stroke="url(#accentLine)" stroke-width="2.4" stroke-linecap="round" />
+  </g>
+
+  <g font-family="'JetBrains Mono', 'Consolas', monospace" font-size="11" fill="#5b6678">
+    <rect x="70" y="224" width="1040" height="34" rx="10" fill="#f5f7fa" stroke="#d9e0ea" />
+    <text x="94" y="245">REQ/s 1.2K</text>
+    <text x="266" y="245">LATENCY 45ms</text>
+    <text x="466" y="245">UPSTREAMS 4</text>
+    <text x="642" y="245">KEYS 12</text>
+    <text x="788" y="245">SUCCESS 99.9%</text>
+    <text x="978" y="245">AUTO FAILOVER ON</text>
+  </g>
 </svg>
