@@ -65,11 +65,7 @@ export default function LogsPage() {
           </Card>
         ) : (
           <>
-            <Card variant="outlined" className="border-divider bg-surface-200/70">
-              <CardContent className="p-4 sm:p-5">
-                <LogsTable logs={data?.items || []} isLive={refetchInterval !== false} />
-              </CardContent>
-            </Card>
+            <LogsTable logs={data?.items || []} isLive={refetchInterval !== false} />
 
             {data && data.total_pages > 1 && (
               <Card variant="filled" className="border border-divider">

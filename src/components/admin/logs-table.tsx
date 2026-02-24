@@ -213,7 +213,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
 
   const formatDuration = (durationMs: number | null) => {
     if (durationMs === null) {
-      return <span className="text-amber-700">-</span>;
+      return <span className="text-muted-foreground">-</span>;
     }
 
     if (durationMs < 1000) {
@@ -247,17 +247,18 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
   }
 
   return (
-    <div className="space-y-0">
+    <div className="overflow-hidden rounded-cf-md border border-divider bg-surface-200/70">
       {/* Terminal Header */}
       <TerminalHeader
         systemId="REQUEST_STREAM"
         isLive={isLive}
         requestRate={isLive ? requestRate : undefined}
         timeRange={timeRangeFilter.toUpperCase()}
+        className="border-0 border-b border-divider bg-transparent"
       />
 
       {/* Filter Controls */}
-      <div className="flex flex-wrap items-center gap-3 border border-t-0 border-divider bg-surface-200 p-4">
+      <div className="flex flex-wrap items-center gap-3 border-b border-divider bg-surface-200 p-4">
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <span className="type-caption text-muted-foreground">{t("filters")}</span>
@@ -292,7 +293,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
       </div>
 
       {filteredLogs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center border border-t-0 border-divider py-16 text-center">
+        <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80">
             <Filter className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
           </div>
@@ -301,7 +302,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
         </div>
       ) : (
         <>
-          <div className="overflow-hidden border border-t-0 border-divider">
+          <div className="overflow-hidden">
             <Table frame="none">
               <TableHeader>
                 <TableRow>
@@ -360,8 +361,8 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                         className={cn(
                           // Error row glow effect
                           isError && "shadow-[inset_0_0_20px_-10px_var(--status-error)]",
-                          // New row scan highlight (background-position animation; no layout shifting)
-                          isNew && "cf-row-scan",
+                          // New row subtle highlight
+                          isNew && "bg-status-info-muted/25",
                           canExpand && "cursor-pointer hover:bg-surface-300/50"
                         )}
                         onClick={() => canExpand && toggleRow(log.id)}
@@ -377,9 +378,9 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                               aria-label={isExpanded ? t("collapseDetails") : t("expandDetails")}
                             >
                               {isExpanded ? (
-                                <ChevronUp className="w-4 h-4 text-amber-600" />
+                                <ChevronUp className="w-4 h-4 text-muted-foreground" />
                               ) : (
-                                <ChevronDown className="w-4 h-4 text-amber-600" />
+                                <ChevronDown className="w-4 h-4 text-muted-foreground" />
                               )}
                             </button>
                           )}
@@ -409,10 +410,10 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                           </code>
                         </TableCell>
                         <TableCell className="hidden max-w-[200px] truncate font-mono text-xs lg:table-cell">
-                          {log.path || <span className="text-amber-700">-</span>}
+                          {log.path || <span className="text-muted-foreground">-</span>}
                         </TableCell>
                         <TableCell className="hidden font-mono text-xs xl:table-cell">
-                          {log.model || <span className="text-amber-700">-</span>}
+                          {log.model || <span className="text-muted-foreground">-</span>}
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
                           <TokenDisplay
@@ -518,12 +519,18 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
 
           {/* Blinking Cursor Indicator (Live Mode) */}
           {isLive && (
-            <div className="border border-t-0 border-divider bg-surface-200 px-4 py-2">
-              <span className="cf-cursor-blink font-mono text-amber-500" aria-hidden="true" />
+            <div className="border-t border-divider bg-surface-200 px-4 py-2">
+              <span className="inline-flex items-center gap-2 rounded-[6px] border border-status-success/35 bg-status-success-muted px-2 py-0.5 font-mono text-xs text-status-success">
+                <span
+                  className="h-1.5 w-1.5 animate-pulse rounded-full bg-current"
+                  aria-hidden="true"
+                />
+                LIVE
+              </span>
             </div>
           )}
 
-          <div className="border border-t-0 border-divider bg-surface-300 px-4 py-2 type-body-small text-muted-foreground">
+          <div className="border-t border-divider bg-surface-300 px-4 py-2 type-body-small text-muted-foreground">
             STREAM STATS: {streamStats.total} requests | {streamStats.successRate}% success | avg{" "}
             {streamStats.avgDuration.toFixed(2)}s | {formatTokensCompact(streamStats.totalTokens)}{" "}
             tokens

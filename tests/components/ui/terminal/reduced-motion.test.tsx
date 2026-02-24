@@ -16,37 +16,28 @@ describe("Reduced Motion Support", () => {
       render(<StatusLed status="healthy" />);
 
       const led = screen.getByRole("status");
-      const ledChar = led.querySelector("[aria-hidden='true']");
-
-      expect(ledChar?.className).not.toContain("motion-safe:");
+      expect(led.className).not.toContain("motion-safe:");
     });
 
     it("healthy state has no pulse animation class", () => {
       render(<StatusLed status="healthy" />);
 
       const led = screen.getByRole("status");
-      const ledChar = led.querySelector("[aria-hidden='true']");
-
-      expect(ledChar?.className).not.toContain("animate-[cf-led-pulse");
+      expect(led.className).not.toContain("animate-[cf-led-pulse");
     });
 
     it("degraded state has no pulse animation class", () => {
       render(<StatusLed status="degraded" />);
 
       const led = screen.getByRole("status");
-      const ledChar = led.querySelector("[aria-hidden='true']");
-
-      expect(ledChar?.className).not.toContain("animate-[cf-led-pulse");
+      expect(led.className).not.toContain("animate-[cf-led-pulse");
     });
 
     it("offline state has no animation", () => {
       render(<StatusLed status="offline" />);
 
       const led = screen.getByRole("status");
-      const ledChar = led.querySelector("[aria-hidden='true']");
-
-      // Offline state should not have animation class
-      expect(ledChar?.className).not.toContain("animate-[cf-led-pulse");
+      expect(led.className).not.toContain("animate-[cf-led-pulse");
     });
   });
 
@@ -62,37 +53,36 @@ describe("Reduced Motion Support", () => {
   });
 
   describe("Static Visual Indicators", () => {
-    it("LED characters remain visible regardless of motion preference", () => {
+    it("status labels remain visible regardless of motion preference", () => {
       // Healthy
       const { rerender } = render(<StatusLed status="healthy" />);
-      expect(screen.getByText("◉")).toBeInTheDocument();
+      expect(screen.getByText("OK")).toBeInTheDocument();
 
       // Degraded
       rerender(<StatusLed status="degraded" />);
-      expect(screen.getByText("◎")).toBeInTheDocument();
+      expect(screen.getByText("WARN")).toBeInTheDocument();
 
       // Offline
       rerender(<StatusLed status="offline" />);
-      expect(screen.getByText("●")).toBeInTheDocument();
+      expect(screen.getByText("DOWN")).toBeInTheDocument();
     });
 
-    it("LED colors remain visible regardless of motion preference", () => {
+    it("status tone classes remain visible regardless of motion preference", () => {
       render(<StatusLed status="healthy" />);
 
       const led = screen.getByRole("status");
-      const marker = led.querySelector("[aria-hidden='true']");
+      const marker = led.firstElementChild;
 
-      // Color classes should not be conditional on motion
       expect(marker).toHaveClass("text-status-success");
     });
 
-    it("status marker shape remains visible regardless of motion preference", () => {
+    it("status chip shape remains visible regardless of motion preference", () => {
       render(<StatusLed status="healthy" />);
 
       const led = screen.getByRole("status");
-      const marker = led.querySelector("[aria-hidden='true']") as HTMLElement | null;
+      const marker = led.firstElementChild as HTMLElement | null;
 
-      expect(marker).toHaveClass("rounded-full");
+      expect(marker).toHaveClass("rounded-[6px]");
     });
   });
 
@@ -104,13 +94,11 @@ describe("Reduced Motion Support", () => {
       expect(led).toHaveAttribute("aria-label", "Status: healthy");
     });
 
-    it("LED character is marked aria-hidden (decorative)", () => {
+    it("status content stays readable for assistive technologies", () => {
       render(<StatusLed status="healthy" />);
 
       const led = screen.getByRole("status");
-      const ledChar = led.querySelector("[aria-hidden='true']");
-
-      expect(ledChar).toBeInTheDocument();
+      expect(led).toHaveTextContent("OK");
     });
   });
 });

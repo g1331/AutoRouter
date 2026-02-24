@@ -84,7 +84,7 @@ function Skeleton({
           <span
             className={cn(
               "ml-1 inline-block h-[0.85em] w-[0.35em] bg-amber-400/80",
-              "animate-[cf-blink_1s_step-end_infinite]",
+              "animate-pulse",
               // Hide cursor entirely for reduced motion
               "motion-reduce:hidden"
             )}

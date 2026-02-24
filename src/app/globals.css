@@ -143,29 +143,29 @@
 .light {
   color-scheme: light;
 
-  --vr-surface-0: #f5f3ef;
+  --vr-surface-0: #f2f5f8;
   --vr-surface-1: #ffffff;
-  --vr-surface-2: #efebe4;
-  --vr-surface-3: #e5dfd6;
-  --vr-surface-4: #dcd5ca;
+  --vr-surface-2: #f6f8fb;
+  --vr-surface-3: #edf1f6;
+  --vr-surface-4: #e2e8f0;
 
-  --vr-border: #cbc1b3;
-  --vr-border-subtle: #d9d1c4;
+  --vr-border: #c7d0da;
+  --vr-border-subtle: #d8dfe8;
 
-  --vr-text: #26221b;
-  --vr-text-muted: #60584d;
-  --vr-text-dim: #80776b;
+  --vr-text: #1f2933;
+  --vr-text-muted: #5f6b79;
+  --vr-text-dim: #768293;
 
-  --vr-accent-50: #f8f1e6;
-  --vr-accent-100: #ebdcc5;
-  --vr-accent-200: #dcc5a4;
-  --vr-accent-300: #cdae84;
-  --vr-accent-400: #a17a4f;
-  --vr-accent-500: #8d6840;
-  --vr-accent-600: #795536;
-  --vr-accent-700: #66462d;
-  --vr-accent-800: #523824;
-  --vr-accent-900: #3f2b1c;
+  --vr-accent-50: #f5f2ee;
+  --vr-accent-100: #eae3da;
+  --vr-accent-200: #dacfbf;
+  --vr-accent-300: #c5b49d;
+  --vr-accent-400: #9f896d;
+  --vr-accent-500: #857058;
+  --vr-accent-600: #6f5d49;
+  --vr-accent-700: #5b4d3d;
+  --vr-accent-800: #483d30;
+  --vr-accent-900: #382f25;
 
   --vr-status-success: #2c7d58;
   --vr-status-warning: #9c6b36;
@@ -177,24 +177,24 @@
   --vr-status-error-muted: rgb(178 74 67 / 0.16);
   --vr-status-info-muted: rgb(63 111 149 / 0.16);
 
-  --vr-disabled-bg: #e9e2d7;
-  --vr-disabled-text: #8a8073;
-  --vr-disabled-border: #d7cdbf;
+  --vr-disabled-bg: #e7edf4;
+  --vr-disabled-text: #8a95a3;
+  --vr-disabled-border: #d4dce5;
 
-  --vr-overlay: rgb(245 243 239 / 0.72);
-  --vr-overlay-soft: rgb(245 243 239 / 0.45);
+  --vr-overlay: rgb(242 245 248 / 0.78);
+  --vr-overlay-soft: rgb(242 245 248 / 0.48);
 
-  --vr-grid-dot-rgb: 160 151 138;
+  --vr-grid-dot-rgb: 143 154 167;
 
-  --vr-focus-ring-shadow: 0 0 0 3px rgb(141 104 64 / 0.28);
+  --vr-focus-ring-shadow: 0 0 0 3px rgb(133 112 88 / 0.24);
 
-  --vr-shadow-xs: 0 1px 2px rgb(28 22 12 / 0.1);
-  --vr-shadow-sm: 0 8px 20px rgb(28 22 12 / 0.12);
-  --vr-shadow-md: 0 12px 28px rgb(28 22 12 / 0.16);
-  --vr-shadow-lg: 0 20px 44px rgb(28 22 12 / 0.2);
-  --vr-shadow-glow-subtle: 0 0 0 1px rgb(141 104 64 / 0.2), 0 12px 26px rgb(28 22 12 / 0.13);
-  --vr-shadow-glow-medium: 0 0 0 1px rgb(141 104 64 / 0.25), 0 16px 32px rgb(28 22 12 / 0.17);
-  --vr-shadow-glow-strong: 0 0 0 1px rgb(141 104 64 / 0.3), 0 22px 42px rgb(28 22 12 / 0.21);
+  --vr-shadow-xs: 0 1px 2px rgb(15 23 42 / 0.08);
+  --vr-shadow-sm: 0 8px 20px rgb(15 23 42 / 0.11);
+  --vr-shadow-md: 0 12px 28px rgb(15 23 42 / 0.14);
+  --vr-shadow-lg: 0 20px 44px rgb(15 23 42 / 0.18);
+  --vr-shadow-glow-subtle: 0 0 0 1px rgb(133 112 88 / 0.16), 0 10px 24px rgb(15 23 42 / 0.1);
+  --vr-shadow-glow-medium: 0 0 0 1px rgb(133 112 88 / 0.2), 0 14px 30px rgb(15 23 42 / 0.13);
+  --vr-shadow-glow-strong: 0 0 0 1px rgb(133 112 88 / 0.24), 0 18px 38px rgb(15 23 42 / 0.16);
 
   --primary-foreground: #fffdf9;
   --secondary: var(--vr-surface-2);
@@ -206,27 +206,27 @@
   --sidebar-primary-foreground: #fffdf9;
   --sidebar-accent: var(--vr-surface-2);
 
-  --md-sys-color-primary: 141 104 64;
+  --md-sys-color-primary: 133 112 88;
   --md-sys-color-on-primary: 255 255 255;
-  --md-sys-color-primary-container: 233 219 198;
-  --md-sys-color-on-primary-container: 59 43 27;
-  --md-sys-color-tertiary-container: 211 224 236;
-  --md-sys-color-on-tertiary-container: 39 64 87;
+  --md-sys-color-primary-container: 234 227 215;
+  --md-sys-color-on-primary-container: 56 47 37;
+  --md-sys-color-tertiary-container: 218 229 239;
+  --md-sys-color-on-tertiary-container: 43 65 86;
   --md-sys-color-success: 44 125 88;
   --md-sys-color-success-container: 213 232 220;
   --md-sys-color-on-success-container: 23 69 47;
-  --md-sys-color-warning-container: 241 224 202;
-  --md-sys-color-on-warning-container: 78 50 21;
+  --md-sys-color-warning-container: 242 231 214;
+  --md-sys-color-on-warning-container: 83 57 29;
   --md-sys-color-error: 178 74 67;
   --md-sys-color-error-container: 244 218 215;
   --md-sys-color-on-error-container: 92 30 25;
   --md-sys-color-surface-container-low: 255 255 255;
-  --md-sys-color-surface-container-highest: 229 223 214;
-  --md-sys-color-inverse-surface: 45 40 33;
-  --md-sys-color-on-surface: 38 34 27;
-  --md-sys-color-on-surface-variant: 96 88 77;
-  --md-sys-color-outline: 203 193 179;
-  --md-sys-color-outline-variant: 217 209 196;
+  --md-sys-color-surface-container-highest: 226 232 240;
+  --md-sys-color-inverse-surface: 43 51 60;
+  --md-sys-color-on-surface: 31 41 51;
+  --md-sys-color-on-surface-variant: 95 107 121;
+  --md-sys-color-outline: 199 208 219;
+  --md-sys-color-outline-variant: 216 223 232;
 }
 
 :root,
@@ -314,67 +314,6 @@
   }
 }
 
-@keyframes vr-fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes vr-rise {
-  from {
-    opacity: 0;
-    transform: translateY(20%);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes vr-soft-pulse {
-  0%,
-  100% {
-    box-shadow: var(--vr-shadow-glow-subtle);
-  }
-  50% {
-    box-shadow: var(--vr-shadow-glow-medium);
-  }
-}
-
-@keyframes vr-row-scan {
-  from {
-    background-position: -200% 0;
-  }
-  to {
-    background-position: 200% 0;
-  }
-}
-
-@keyframes vr-caret {
-  0%,
-  50% {
-    opacity: 1;
-  }
-  51%,
-  100% {
-    opacity: 0;
-  }
-}
-
-@keyframes cf-toggle-scanline {
-  from {
-    transform: translateY(-100%);
-  }
-  to {
-    transform: translateY(180%);
-  }
-}
-
 html.theme-switching::before {
   content: "";
   position: fixed;
@@ -458,108 +397,6 @@ html.theme-switching::before {
   select {
     font: inherit;
     color: inherit;
-  }
-}
-
-@layer components {
-  .cf-scanlines,
-  .cf-noise,
-  .cf-vignette,
-  .cf-glitch,
-  .cf-retro-grid,
-  .cf-data-scan {
-    position: relative;
-  }
-
-  .cf-scanlines::before,
-  .cf-noise::after,
-  .cf-vignette::before {
-    content: none;
-  }
-
-  .cf-glow-text,
-  .cf-glow-text-strong,
-  .cf-phosphor-trail,
-  .cf-holo-shimmer {
-    text-shadow: none;
-    -webkit-text-fill-color: currentColor;
-  }
-
-  .cf-panel {
-    background: var(--vr-surface-2);
-    border: 1px solid var(--vr-border);
-    border-radius: var(--vr-radius-md);
-    box-shadow: var(--vr-shadow-sm);
-    transition:
-      border-color var(--vr-motion-normal) var(--vr-easing-standard),
-      box-shadow var(--vr-motion-normal) var(--vr-easing-standard),
-      transform var(--vr-motion-normal) var(--vr-easing-standard);
-  }
-
-  .cf-panel:hover {
-    border-color: var(--vr-accent-400);
-    box-shadow: var(--vr-shadow-glow-subtle);
-  }
-
-  .cf-panel-glow {
-    box-shadow: var(--vr-shadow-md);
-  }
-
-  .cf-flicker-in,
-  .cf-boot-sequence,
-  .cf-stagger-reveal {
-    animation: vr-fade-up var(--vr-motion-normal) var(--vr-easing-standard) both;
-  }
-
-  .cf-counter-roll {
-    display: inline-block;
-    animation: vr-rise var(--vr-motion-normal) var(--vr-easing-standard) both;
-  }
-
-  .cf-pulse-glow {
-    animation: vr-soft-pulse 2.4s var(--vr-easing-standard) infinite;
-  }
-
-  .cf-row-scan {
-    background-image: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgb(191 150 92 / 0.14) 50%,
-      transparent 100%
-    );
-    background-size: 200% 100%;
-    animation: vr-row-scan 420ms var(--vr-easing-standard) 1;
-  }
-
-  .cf-cursor-blink::after {
-    content: "_";
-    animation: vr-caret 1s step-end infinite;
-  }
-
-  .cf-typing {
-    overflow: hidden;
-    white-space: nowrap;
-    border-right: 2px solid var(--vr-accent-500);
-  }
-
-  .cf-status-led {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-  }
-
-  .cf-status-led-online {
-    background: var(--vr-status-success);
-    box-shadow:
-      0 0 0 1px rgb(72 164 118 / 0.34),
-      0 0 8px rgb(72 164 118 / 0.28);
-  }
-
-  .cf-status-led-offline {
-    background: var(--vr-status-error);
-    box-shadow:
-      0 0 0 1px rgb(204 97 86 / 0.34),
-      0 0 8px rgb(204 97 86 / 0.28);
   }
 }
 
@@ -796,13 +633,4 @@ html.theme-switching::before {
     --vr-border: color-mix(in srgb, var(--vr-text) 55%, var(--vr-surface-0));
     --vr-text-muted: var(--vr-text);
   }
-}
-
-[data-minimal-effects="true"] .cf-row-scan,
-[data-minimal-effects="true"] .cf-pulse-glow,
-[data-minimal-effects="true"] .cf-cursor-blink::after,
-[data-minimal-effects="true"] .cf-flicker-in,
-[data-minimal-effects="true"] .cf-boot-sequence,
-[data-minimal-effects="true"] .cf-stagger-reveal {
-  animation: none;
 }

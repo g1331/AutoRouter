@@ -29,11 +29,10 @@ function getEffectiveCacheRead(cacheReadTokens: number, cachedTokens: number): n
  *
  * Shows detailed token breakdown in terminal style with grouped sections.
  * Used in expanded row details.
- * Following Cassette Futurism design language:
+ * Following current dashboard design language:
  * - Mono font for data alignment
- * - amber-500 for primary values
- * - amber-700 for secondary/zero values
- * - status-info for cache-related values
+ * - Neutral foreground/muted tones for hierarchy
+ * - status-info badges for cache-related values
  *
  * Display format:
  * ```
@@ -119,7 +118,7 @@ export function TokenDetailContent({
   return (
     <div className="min-w-[180px] max-w-[460px] font-mono text-xs">
       {/* Header */}
-      <div className="text-amber-500 uppercase tracking-wider mb-2 text-[10px] border-b border-amber-500/30 pb-1">
+      <div className="mb-2 border-b border-divider pb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
         {t("tokenDetails")}
       </div>
 
@@ -129,7 +128,7 @@ export function TokenDetailContent({
           <div key={idx} className="grid grid-cols-[auto_auto] items-center gap-x-3">
             <span
               className={cn(
-                row.highlight ? "text-amber-500" : "text-amber-700",
+                row.highlight ? "text-foreground" : "text-muted-foreground",
                 row.indent ? "pl-4" : ""
               )}
             >
@@ -137,7 +136,7 @@ export function TokenDetailContent({
             </span>
             <span
               className={cn(
-                row.highlight ? "text-amber-500" : "text-amber-700",
+                row.highlight ? "text-foreground" : "text-muted-foreground",
                 "text-right justify-self-end"
               )}
             >
@@ -148,10 +147,10 @@ export function TokenDetailContent({
       </div>
 
       {/* Total */}
-      <div className="border-t border-amber-500/30 mt-2 pt-2">
+      <div className="mt-2 border-t border-divider pt-2">
         <div className="grid grid-cols-[auto_auto] items-center gap-x-3">
-          <span className="text-amber-500 font-medium">{t("tokenTotal")}</span>
-          <span className="text-amber-500 font-medium text-right justify-self-end">
+          <span className="font-medium text-foreground">{t("tokenTotal")}</span>
+          <span className="font-medium text-foreground text-right justify-self-end">
             {totalTokens.toLocaleString()}
           </span>
         </div>
@@ -164,9 +163,9 @@ export function TokenDetailContent({
  * Token Display Component
  *
  * Compact display for table cell. Details shown in expanded row.
- * Follows Cassette Futurism design:
- * - Total in amber-500 (primary emphasis)
- * - Input/Output breakdown in amber-700 (secondary info)
+ * Follows the neutral dashboard style:
+ * - Total uses foreground for primary emphasis
+ * - Input/Output breakdown uses muted foreground
  * - Cache indicator with Database icon in info color when effectiveCacheRead > 0
  */
 export function TokenDisplay({
@@ -180,7 +179,7 @@ export function TokenDisplay({
   const t = useTranslations("logs");
 
   if (totalTokens === 0) {
-    return <span className="text-amber-700">-</span>;
+    return <span className="text-muted-foreground">-</span>;
   }
 
   const effectiveCacheRead = getEffectiveCacheRead(cacheReadTokens, cachedTokens);
@@ -188,10 +187,10 @@ export function TokenDisplay({
 
   return (
     <div className="flex flex-col text-xs font-mono">
-      {/* Row 1: Total tokens - amber-500, primary emphasis */}
-      <span className="text-amber-500">{totalTokens.toLocaleString()}</span>
-      {/* Row 2: New Input / Output breakdown - amber-700, secondary */}
-      <span className="text-amber-700 text-[10px]">
+      {/* Row 1: Total tokens - primary emphasis */}
+      <span className="text-foreground">{totalTokens.toLocaleString()}</span>
+      {/* Row 2: New Input / Output breakdown - secondary */}
+      <span className="text-[10px] text-muted-foreground">
         {newInputTokens.toLocaleString()} / {completionTokens.toLocaleString()}
       </span>
       {/* Row 3: Cache indicators */}

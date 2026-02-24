@@ -2,18 +2,8 @@
 
 import { formatDistanceToNow } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
-import { useState, useMemo, Fragment } from "react";
-import {
-  Pencil,
-  Trash2,
-  Server,
-  Play,
-  ChevronDown,
-  ChevronRight,
-  Power,
-  PowerOff,
-  ShieldCheck,
-} from "lucide-react";
+import { useState, useMemo, Fragment, type SyntheticEvent } from "react";
+import { Pencil, Trash2, Server, Play, ChevronDown, ChevronRight, ShieldCheck } from "lucide-react";
 import type { Upstream } from "@/types/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { useToggleUpstreamActive } from "@/hooks/use-upstreams";
 import { useForceCircuitBreaker } from "@/hooks/use-circuit-breaker";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
 
 interface UpstreamsTableProps {
   upstreams: Upstream[];
@@ -152,102 +143,159 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
     return t("healthUnhealthy");
   };
 
-  // Check if upstream has error state (unhealthy or circuit open)
-  const hasErrorState = (upstream: Upstream): boolean => {
-    return (
-      upstream.health_status?.is_healthy === false || upstream.circuit_breaker?.state === "open"
-    );
+  const handleRecoverCircuit = async (upstream: Upstream, e?: SyntheticEvent) => {
+    e?.stopPropagation();
+    try {
+      await forceCircuitBreakerMutation.mutateAsync({
+        upstreamId: upstream.id,
+        action: "close",
+      });
+      toast.success(t("recoverCircuitBreakerSuccess"));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("recoverCircuitBreakerFailed"));
+    }
   };
 
-  // Shared action bar between table and card views
-  const renderActionBar = (upstream: Upstream) => (
-    <div className="flex flex-wrap items-center gap-1.5 rounded-cf-sm border border-divider bg-surface-300/65 px-2 py-1">
-      <div className="flex items-center gap-1.5 ml-auto">
-        {upstream.circuit_breaker && upstream.circuit_breaker.state !== "closed" && (
-          <>
-            <Button
-              variant="outline"
-              type="button"
-              size="sm"
-              className={cn(
-                "h-7 gap-1.5 px-2 text-status-error",
-                "border-status-error/50 bg-status-error-muted hover:border-status-error"
-              )}
-              onClick={async (e) => {
-                e.stopPropagation();
-                try {
-                  await forceCircuitBreakerMutation.mutateAsync({
-                    upstreamId: upstream.id,
-                    action: "close",
-                  });
-                  toast.success(t("recoverCircuitBreakerSuccess"));
-                } catch (error) {
-                  toast.error(
-                    error instanceof Error ? error.message : t("recoverCircuitBreakerFailed")
-                  );
-                }
-              }}
-              disabled={
-                forceCircuitBreakerMutation.isPending &&
-                forceCircuitBreakerMutation.variables?.upstreamId === upstream.id
-              }
-              aria-label={`${t("recoverCircuitBreaker")}: ${upstream.name}`}
-            >
-              <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-              <span className="hidden text-xs lg:inline">{t("recoverCircuitBreaker")}</span>
-            </Button>
-            <span className="h-3 w-px bg-divider" aria-hidden="true" />
-          </>
-        )}
+  const handleToggleActive = async (upstream: Upstream, nextActive: boolean) => {
+    if (nextActive === upstream.is_active) {
+      return;
+    }
+    try {
+      await toggleActiveMutation.mutateAsync({
+        id: upstream.id,
+        nextActive,
+      });
+    } catch {
+      // Error toast handled in hook
+    }
+  };
+
+  const renderDesktopActions = (upstream: Upstream) => (
+    <div className="ml-auto inline-flex min-w-[10rem] items-center justify-end gap-1.5">
+      {upstream.circuit_breaker && upstream.circuit_breaker.state !== "closed" ? (
         <Button
-          variant="secondary"
-          size="sm"
+          variant="ghost"
           type="button"
-          data-state={upstream.is_active ? "on" : "off"}
-          className={cn(
-            "h-7 gap-1.5 px-2",
-            upstream.is_active ? "text-foreground" : "text-muted-foreground"
-          )}
-          onClick={async (e) => {
-            e.stopPropagation();
-            try {
-              await toggleActiveMutation.mutateAsync({
-                id: upstream.id,
-                nextActive: !upstream.is_active,
-              });
-            } catch {
-              // Error toast handled in hook
-            }
+          size="icon"
+          className="h-6 w-6 text-status-error hover:bg-status-error-muted"
+          onClick={(e) => {
+            void handleRecoverCircuit(upstream, e);
           }}
           disabled={
-            toggleActiveMutation.isPending && toggleActiveMutation.variables?.id === upstream.id
+            forceCircuitBreakerMutation.isPending &&
+            forceCircuitBreakerMutation.variables?.upstreamId === upstream.id
           }
-          aria-label={`${upstream.is_active ? t("quickDisable") : t("quickEnable")}: ${upstream.name}`}
+          aria-label={`${t("recoverCircuitBreaker")}: ${upstream.name}`}
         >
-          <span
-            className={
-              upstream.is_active
-                ? "h-2 w-2 rounded-full bg-status-success"
-                : "h-2 w-2 rounded-full bg-muted-foreground"
-            }
-            aria-hidden="true"
-          />
-          {upstream.is_active ? (
-            <PowerOff className="h-3.5 w-3.5" aria-hidden="true" />
-          ) : (
-            <Power className="h-3.5 w-3.5" aria-hidden="true" />
-          )}
-          <span className="hidden text-xs lg:inline">
-            {upstream.is_active ? t("quickDisable") : t("quickEnable")}
-          </span>
+          <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
-        <span className="h-3 w-px bg-divider" aria-hidden="true" />
-        <div className="flex items-center gap-0.5">
+      ) : (
+        <span className="h-6 w-6" aria-hidden="true" />
+      )}
+      <Switch
+        checked={upstream.is_active}
+        onClick={(e) => e.stopPropagation()}
+        onCheckedChange={async (nextActive) => {
+          await handleToggleActive(upstream, nextActive);
+        }}
+        disabled={
+          toggleActiveMutation.isPending && toggleActiveMutation.variables?.id === upstream.id
+        }
+        className="h-5 w-10"
+        aria-label={`${upstream.is_active ? t("quickDisable") : t("quickEnable")}: ${upstream.name}`}
+      />
+      <Button
+        variant="ghost"
+        size="icon"
+        type="button"
+        className="h-6 w-6 text-status-info hover:bg-status-info-muted"
+        onClick={(e) => {
+          e.stopPropagation();
+          onTest(upstream);
+        }}
+        aria-label={`${tCommon("test")}: ${upstream.name}`}
+      >
+        <Play className="h-3.5 w-3.5" aria-hidden="true" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        type="button"
+        className="h-6 w-6 text-foreground hover:bg-surface-400"
+        onClick={(e) => {
+          e.stopPropagation();
+          onEdit(upstream);
+        }}
+        aria-label={`${tCommon("edit")}: ${upstream.name}`}
+      >
+        <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        type="button"
+        className="h-6 w-6 text-status-error hover:bg-status-error-muted"
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete(upstream);
+        }}
+        aria-label={`${tCommon("delete")}: ${upstream.name}`}
+      >
+        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+      </Button>
+    </div>
+  );
+
+  // Shared action bar for mobile/tablet cards
+  const renderActionBar = (upstream: Upstream) => {
+    return (
+      <div className="flex flex-wrap items-center gap-2 rounded-cf-sm border border-divider bg-surface-300/55 px-2.5 py-1.5">
+        {upstream.circuit_breaker && upstream.circuit_breaker.state !== "closed" && (
+          <Button
+            variant="outline"
+            type="button"
+            size="sm"
+            className="h-7 gap-1.5 border-status-error/50 bg-status-error-muted px-2.5 text-status-error hover:border-status-error"
+            onClick={(e) => {
+              void handleRecoverCircuit(upstream, e);
+            }}
+            disabled={
+              forceCircuitBreakerMutation.isPending &&
+              forceCircuitBreakerMutation.variables?.upstreamId === upstream.id
+            }
+            aria-label={`${t("recoverCircuitBreaker")}: ${upstream.name}`}
+          >
+            <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
+        )}
+        <div className="order-1 inline-flex items-center gap-2">
+          <Switch
+            checked={upstream.is_active}
+            onClick={(e) => e.stopPropagation()}
+            onCheckedChange={async (nextActive) => {
+              await handleToggleActive(upstream, nextActive);
+            }}
+            disabled={
+              toggleActiveMutation.isPending && toggleActiveMutation.variables?.id === upstream.id
+            }
+            className="h-5 w-10"
+            aria-label={`${upstream.is_active ? t("quickDisable") : t("quickEnable")}: ${upstream.name}`}
+          />
+          <span
+            className={cn(
+              "text-xs",
+              upstream.is_active ? "text-status-success" : "text-muted-foreground"
+            )}
+          >
+            {upstream.is_active ? t("active") : t("inactive")}
+          </span>
+        </div>
+        <div className="ml-auto flex items-center gap-1">
           <Button
             variant="ghost"
             size="icon"
             type="button"
-            className="h-7 w-7 text-green-500 hover:bg-green-500/10"
+            className="h-7 w-7 text-status-info hover:bg-status-info-muted"
             onClick={(e) => {
               e.stopPropagation();
               onTest(upstream);
@@ -284,8 +332,8 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
           </Button>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   if (upstreams.length === 0) {
     return (
@@ -301,31 +349,33 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
 
   return (
     <div className="space-y-0">
-      <div className="overflow-hidden rounded-cf-md border border-divider bg-surface-200/70">
+      <div className="overflow-hidden rounded-cf-md border border-divider bg-card/92">
         {/* Terminal Header */}
         <TerminalHeader
           systemId="UPSTREAM_ARRAY"
           nodeCount={upstreams.length}
-          className="border-0 rounded-none"
+          className="border-0 border-b border-divider bg-transparent"
         />
 
         {/* Desktop: Table Layout */}
         <div className="hidden lg:block">
           <Table
             frame="none"
-            containerClassName="rounded-none"
-            className="table-fixed min-w-[1040px]"
+            containerClassName="rounded-none bg-transparent"
+            className="w-full table-fixed"
           >
             <TableHeader>
               <TableRow>
-                <TableHead className="w-8"></TableHead>
-                <TableHead className="w-[220px]">{tCommon("name")}</TableHead>
-                <TableHead className="w-[120px]">{t("providerType")}</TableHead>
-                <TableHead className="w-[120px]">{t("tableWeight")}</TableHead>
-                <TableHead className="w-[150px]">{t("tableHealth")}</TableHead>
-                <TableHead className="w-[170px]">{t("tableCircuitBreaker")}</TableHead>
-                <TableHead className="w-[340px]">{t("tableBaseUrl")}</TableHead>
-                <TableHead className="w-[150px]">{tCommon("createdAt")}</TableHead>
+                <TableHead className="w-[18%]">{tCommon("name")}</TableHead>
+                <TableHead className="w-[10%]">{t("providerType")}</TableHead>
+                <TableHead className="w-[10%]">{t("tableWeight")}</TableHead>
+                <TableHead className="w-[11%]">{t("tableHealth")}</TableHead>
+                <TableHead className="w-[12%]">{t("tableCircuitBreaker")}</TableHead>
+                <TableHead className="w-[19%]">{t("tableBaseUrl")}</TableHead>
+                <TableHead className="hidden w-[8%] text-right 2xl:table-cell">
+                  {tCommon("createdAt")}
+                </TableHead>
+                <TableHead className="w-[170px] text-right">{tCommon("actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -340,8 +390,8 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                       onClick={() => toggleTier(tier.priority)}
                     >
                       <TableCell colSpan={8} className="py-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex min-w-0 items-center gap-3">
                             <Button
                               variant="ghost"
                               size="icon"
@@ -355,31 +405,31 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                                 <ChevronDown className="h-4 w-4" />
                               )}
                             </Button>
-                            <span className="font-mono text-xs text-amber-500 font-semibold tracking-wider">
+                            <span className="font-mono text-xs font-semibold tracking-wider text-foreground">
                               TIER P{tier.priority}
                             </span>
-                            <span className="font-mono text-xs text-amber-700">
+                            <span className="font-mono text-xs text-muted-foreground">
                               ({tier.upstreams.length}{" "}
                               {tier.upstreams.length === 1 ? "upstream" : "upstreams"})
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-4 font-mono text-xs">
+                          <div className="flex flex-wrap items-center justify-end gap-3 font-mono text-xs">
                             {/* Health Summary */}
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 whitespace-nowrap">
                               <StatusLed status={getTierHealthLedStatus(tier.healthySummary)} />
-                              <span className="text-amber-600">
+                              <span className="text-muted-foreground">
                                 {tier.healthySummary.healthy}/{tier.healthySummary.total} HEALTHY
                               </span>
                             </div>
 
                             {/* Circuit Summary */}
-                            <div className="flex items-center gap-2">
-                              <span className="text-amber-600">CIRCUIT:</span>
+                            <div className="flex items-center gap-2 whitespace-nowrap">
+                              <span className="text-muted-foreground">CIRCUIT:</span>
                               <AsciiProgress
                                 value={tier.circuitSummary.closed}
                                 max={tier.circuitSummary.total}
-                                width={10}
+                                width={8}
                                 showPercentage
                                 variant={
                                   tier.circuitSummary.closed === tier.circuitSummary.total
@@ -400,14 +450,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                       tier.upstreams.map((upstream) => (
                         <Fragment key={upstream.id}>
                           {/* Data Row */}
-                          <TableRow
-                            className={cn(
-                              "border-b-0 [&>td]:pb-0",
-                              hasErrorState(upstream) &&
-                                "shadow-[inset_0_0_20px_-10px_var(--status-error)]"
-                            )}
-                          >
-                            <TableCell></TableCell>
+                          <TableRow className="[&>td]:align-middle">
                             <TableCell className="font-medium">
                               <div className="flex items-center justify-between gap-3 min-w-0">
                                 <span className="truncate">{upstream.name}</span>
@@ -443,21 +486,18 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                               />
                             </TableCell>
                             <TableCell>
-                              <code className="inline-block max-w-xs truncate rounded-cf-sm border border-divider bg-surface-300 px-2 py-1 font-mono text-xs text-foreground">
+                              <code className="block max-w-full truncate rounded-cf-sm border border-divider bg-surface-300 px-2 py-1 font-mono text-xs text-foreground">
                                 {upstream.base_url}
                               </code>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="hidden whitespace-nowrap pr-2 text-right 2xl:table-cell">
                               {formatDistanceToNow(new Date(upstream.created_at), {
                                 addSuffix: true,
                                 locale: dateLocale,
                               })}
                             </TableCell>
-                          </TableRow>
-                          {/* Actions Row */}
-                          <TableRow>
-                            <TableCell colSpan={8} className="pt-0 pb-1.5 px-4">
-                              {renderActionBar(upstream)}
+                            <TableCell className="min-w-[170px] pl-2 pr-4 text-right">
+                              {renderDesktopActions(upstream)}
                             </TableCell>
                           </TableRow>
                         </Fragment>
@@ -478,7 +518,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
               <Fragment key={`tier-mobile-${tier.priority}`}>
                 {/* Tier Header */}
                 <div
-                  className="flex items-center justify-between px-3 py-2 bg-surface-300 cursor-pointer"
+                  className="flex cursor-pointer items-center justify-between bg-surface-300 px-3 py-2"
                   onClick={() => toggleTier(tier.priority)}
                 >
                   <div className="flex items-center gap-2">
@@ -495,16 +535,16 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                         <ChevronDown className="h-4 w-4" />
                       )}
                     </Button>
-                    <span className="font-mono text-xs text-amber-500 font-semibold tracking-wider">
+                    <span className="font-mono text-xs font-semibold tracking-wider text-foreground">
                       TIER P{tier.priority}
                     </span>
-                    <span className="font-mono text-xs text-amber-700">
+                    <span className="font-mono text-xs text-muted-foreground">
                       ({tier.upstreams.length})
                     </span>
                   </div>
                   <div className="flex items-center gap-3 font-mono text-xs">
                     <StatusLed status={getTierHealthLedStatus(tier.healthySummary)} />
-                    <span className="text-amber-600">
+                    <span className="text-muted-foreground">
                       {tier.healthySummary.healthy}/{tier.healthySummary.total}
                     </span>
                   </div>
@@ -515,16 +555,11 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                   tier.upstreams.map((upstream) => (
                     <div
                       key={upstream.id}
-                      className={cn(
-                        "mx-2 my-2 px-2.5 py-2 space-y-1.5",
-                        "border border-surface-400/50 rounded-cf-sm bg-surface-200/30",
-                        hasErrorState(upstream) &&
-                          "shadow-[inset_0_0_20px_-10px_var(--status-error)]"
-                      )}
+                      className="mx-2 my-2 space-y-2 rounded-cf-sm border border-surface-400/45 bg-surface-200/35 px-2.5 py-2.5"
                     >
                       {/* Card Header: Name + Badge + Provider */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-1.5">
                           <span className="font-mono text-xs text-foreground font-medium truncate">
                             {upstream.name}
                           </span>
@@ -535,15 +570,13 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                             {upstream.is_active ? t("active") : t("inactive")}
                           </Badge>
                         </div>
-                        <span className="font-mono text-[10px] text-amber-600 shrink-0">
-                          {formatProvider(upstream.provider_type)}
-                        </span>
+                        <div className="shrink-0">{formatProvider(upstream.provider_type)}</div>
                       </div>
 
                       {/* Card Body: Stats Grid - aligned label:value pairs */}
-                      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-6 gap-y-0.5 font-mono text-[11px]">
+                      <div className="grid grid-cols-1 gap-x-6 gap-y-1 font-mono text-[11px] sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-amber-700 shrink-0">{t("tableHealth")}</span>
+                          <span className="shrink-0 text-muted-foreground">{t("tableHealth")}</span>
                           <StatusLed
                             status={getHealthLedStatus(upstream)}
                             label={getHealthLabel(upstream)}
@@ -551,7 +584,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                           />
                         </div>
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-amber-700 shrink-0">
+                          <span className="shrink-0 text-muted-foreground">
                             {t("tableCircuitBreaker")}
                           </span>
                           <StatusLed
@@ -561,7 +594,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                           />
                         </div>
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-amber-700 shrink-0">{t("tableWeight")}</span>
+                          <span className="shrink-0 text-muted-foreground">{t("tableWeight")}</span>
                           <AsciiProgress
                             value={upstream.weight}
                             max={tier.maxWeight}
@@ -570,7 +603,9 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                           />
                         </div>
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-amber-700 shrink-0">{tCommon("createdAt")}</span>
+                          <span className="shrink-0 text-muted-foreground">
+                            {tCommon("createdAt")}
+                          </span>
                           <span className="text-foreground truncate text-right">
                             {formatDistanceToNow(new Date(upstream.created_at), {
                               addSuffix: true,
@@ -581,7 +616,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                       </div>
 
                       {/* URL */}
-                      <code className="block truncate rounded-cf-sm border border-divider bg-surface-300 px-2 py-0.5 font-mono text-[11px] text-foreground">
+                      <code className="block break-all rounded-cf-sm border border-divider bg-surface-300 px-2 py-1 font-mono text-[11px] text-foreground">
                         {upstream.base_url}
                       </code>
 

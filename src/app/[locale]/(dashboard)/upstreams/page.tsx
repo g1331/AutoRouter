@@ -70,18 +70,22 @@ export default function UpstreamsPage() {
     <>
       <Topbar title={t("pageTitle")} />
 
-      <div className="mx-auto max-w-7xl space-y-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
-        <Card variant="outlined" className="border-divider bg-surface-200/70">
+      <div className="min-w-0 space-y-5 px-4 py-5 sm:px-6 lg:px-8 lg:py-7 xl:px-10">
+        <Card variant="outlined" className="border-divider/80 bg-card/92">
           <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2 text-amber-500">
+            <div className="min-w-0 space-y-1.5">
+              <div className="flex items-center gap-2 text-foreground">
                 <Server className="h-4 w-4" aria-hidden="true" />
                 <span className="type-label-medium">{t("management")}</span>
               </div>
               <p className="type-body-medium text-muted-foreground">{t("managementDesc")}</p>
             </div>
 
-            <Button onClick={() => setCreateDialogOpen(true)} variant="primary" className="gap-2">
+            <Button
+              onClick={() => setCreateDialogOpen(true)}
+              variant="primary"
+              className="w-full gap-2 sm:w-auto"
+            >
               <Plus className="h-4 w-4" aria-hidden="true" />
               {t("addUpstream")}
             </Button>
@@ -89,7 +93,7 @@ export default function UpstreamsPage() {
         </Card>
 
         {isUpstreamsLoading ? (
-          <Card variant="outlined" className="border-divider bg-surface-200/70">
+          <Card variant="outlined" className="border-divider bg-card/90">
             <CardContent className="flex items-center justify-center py-16">
               <div className="flex flex-col items-center gap-3">
                 <div className="h-9 w-9 animate-spin rounded-full border-2 border-divider border-t-amber-500" />
@@ -99,19 +103,15 @@ export default function UpstreamsPage() {
           </Card>
         ) : (
           <>
-            <Card variant="outlined" className="border-divider bg-surface-200/70">
-              <CardContent className="p-4 sm:p-5">
-                <UpstreamsTable
-                  upstreams={upstreamsWithHealth}
-                  onEdit={setEditUpstream}
-                  onDelete={setDeleteUpstream}
-                  onTest={setTestUpstream}
-                />
-              </CardContent>
-            </Card>
+            <UpstreamsTable
+              upstreams={upstreamsWithHealth}
+              onEdit={setEditUpstream}
+              onDelete={setDeleteUpstream}
+              onTest={setTestUpstream}
+            />
 
             {upstreamsData && upstreamsData.total_pages > 1 && (
-              <Card variant="filled" className="border border-divider">
+              <Card variant="filled" className="border border-divider bg-card/90">
                 <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="type-body-small text-muted-foreground">
                     {tCommon("items")}{" "}

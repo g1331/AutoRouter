@@ -14,48 +14,43 @@ export interface StatusLedProps {
 const LED_CONFIG: Record<
   LedStatus,
   {
-    char: string;
-    colorClass: string;
+    compactLabel: string;
+    toneClass: string;
   }
 > = {
   healthy: {
-    char: "◉",
-    colorClass: "text-status-success",
+    compactLabel: "OK",
+    toneClass: "border-status-success/35 bg-status-success-muted text-status-success",
   },
   degraded: {
-    char: "◎",
-    colorClass: "text-amber-500",
+    compactLabel: "WARN",
+    toneClass: "border-status-warning/35 bg-status-warning-muted text-status-warning",
   },
   offline: {
-    char: "●",
-    colorClass: "text-status-error",
+    compactLabel: "DOWN",
+    toneClass: "border-status-error/35 bg-status-error-muted text-status-error",
   },
 };
 
 export function StatusLed({ status, label, showLabel = false, className }: StatusLedProps) {
   const config = LED_CONFIG[status];
   const displayLabel = label ?? status;
+  const visualLabel = showLabel ? displayLabel : config.compactLabel;
 
   return (
     <span
-      className={cn("inline-flex items-center gap-1.5 font-mono", className)}
+      className={cn("inline-flex items-center font-mono", className)}
       role="status"
       aria-label={`Status: ${displayLabel}`}
     >
       <span
         className={cn(
-          "inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-current/35",
-          config.colorClass
+          "inline-flex items-center whitespace-nowrap rounded-[6px] border px-1.5 py-0.5 text-[11px] leading-none",
+          config.toneClass
         )}
-        aria-hidden="true"
       >
-        <span className="text-[11px] leading-none">{config.char}</span>
+        {visualLabel}
       </span>
-      {showLabel && (
-        <span className={cn(config.colorClass, "text-xs uppercase tracking-[0.06em]")}>
-          {displayLabel}
-        </span>
-      )}
     </span>
   );
 }

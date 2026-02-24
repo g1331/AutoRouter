@@ -19,7 +19,7 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
     return (
       <div
         className={cn(
-          "relative w-full overflow-x-auto overflow-y-hidden rounded-cf-md bg-surface-200",
+          "relative w-full overflow-x-auto overflow-y-hidden rounded-cf-md bg-card",
           FRAME_CLASS[frame],
           containerClassName
         )}
@@ -41,7 +41,7 @@ const TableHeader = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <thead
     ref={ref}
-    className={cn("bg-surface-300/90 [&_tr]:border-b [&_tr]:border-divider", className)}
+    className={cn("bg-surface-300/85 [&_tr]:border-b [&_tr]:border-divider", className)}
     {...props}
   />
 ));
@@ -51,11 +51,7 @@ const TableBody = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-  <tbody
-    ref={ref}
-    className={cn("bg-surface-200 [&_tr:last-child]:border-b-0", className)}
-    {...props}
-  />
+  <tbody ref={ref} className={cn("bg-card [&_tr:last-child]:border-b-0", className)} {...props} />
 ));
 TableBody.displayName = "TableBody";
 

@@ -155,7 +155,7 @@ describe("UpstreamsTable", () => {
       expect(desktop.getByText("tableCircuitBreaker")).toBeInTheDocument();
       expect(desktop.getByText("tableBaseUrl")).toBeInTheDocument();
       expect(desktop.getByText("createdAt")).toBeInTheDocument();
-      expect(desktop.queryByText("actions")).toBeNull();
+      expect(desktop.getByText("actions")).toBeInTheDocument();
     });
 
     it("renders upstream data correctly", () => {
@@ -185,7 +185,7 @@ describe("UpstreamsTable", () => {
       );
 
       const desktop = getDesktopLayout();
-      expect(desktop.getByText("active")).toBeInTheDocument();
+      expect(desktop.getAllByText("active").length).toBeGreaterThan(0);
     });
   });
 
@@ -390,8 +390,8 @@ describe("UpstreamsTable", () => {
     });
   });
 
-  describe("LED Status Indicators", () => {
-    it("displays healthy LED for healthy upstream", () => {
+  describe("Status Indicators", () => {
+    it("displays healthy status label for healthy upstream", () => {
       const healthyUpstream = {
         ...mockUpstream,
         health_status: { is_healthy: true, last_check: new Date().toISOString() },
@@ -405,11 +405,10 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      // Should have healthy LED character
-      expect(screen.getAllByText("◉").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("OK").length).toBeGreaterThan(0);
     });
 
-    it("displays offline LED for unhealthy upstream", () => {
+    it("displays offline status label for unhealthy upstream", () => {
       const unhealthyUpstream = {
         ...mockUpstream,
         health_status: {
@@ -426,8 +425,7 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      // Should have offline LED character
-      expect(screen.getAllByText("●").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("DOWN").length).toBeGreaterThan(0);
     });
   });
 
@@ -697,8 +695,8 @@ describe("UpstreamsTable", () => {
     });
   });
 
-  describe("Error State Glow", () => {
-    it("applies error glow to unhealthy upstream rows", () => {
+  describe("Error State Styling", () => {
+    it("does not render red glow background on unhealthy upstream rows", () => {
       const unhealthyUpstream = {
         ...mockUpstream,
         health_status: {
@@ -717,9 +715,8 @@ describe("UpstreamsTable", () => {
 
       const desktop = getDesktopLayout();
 
-      // The row should have the error shadow class
       const row = desktop.getByText("Test Upstream").closest("tr");
-      expect(row?.className).toContain("shadow-[inset_0_0_20px");
+      expect(row?.className ?? "").not.toContain("shadow-[inset_0_0_20px");
     });
   });
 

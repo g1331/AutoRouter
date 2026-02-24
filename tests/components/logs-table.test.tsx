@@ -127,28 +127,25 @@ describe("LogsTable", () => {
     });
   });
 
-  describe("LED Status Indicators", () => {
-    it("renders healthy LED for 2xx status", () => {
+  describe("Status Indicators", () => {
+    it("renders healthy status chip for 2xx status", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 200 }]} />);
 
-      // Should have healthy LED character (◉)
-      expect(screen.getAllByText("◉").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("OK").length).toBeGreaterThan(0);
       expect(screen.getByText("200")).toBeInTheDocument();
     });
 
-    it("renders degraded LED for 4xx status", () => {
+    it("renders degraded status chip for 4xx status", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 400 }]} />);
 
-      // Should have degraded LED character (◎)
-      expect(screen.getAllByText("◎").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("WARN").length).toBeGreaterThan(0);
       expect(screen.getByText("400")).toBeInTheDocument();
     });
 
-    it("renders offline LED for 5xx status", () => {
+    it("renders offline status chip for 5xx status", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 500 }]} />);
 
-      // Should have offline LED character (●)
-      expect(screen.getAllByText("●").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("DOWN").length).toBeGreaterThan(0);
       expect(screen.getByText("500")).toBeInTheDocument();
     });
 
@@ -243,8 +240,8 @@ describe("LogsTable", () => {
     });
   });
 
-  describe("New Row Scan Highlight", () => {
-    it("applies scan highlight class for newly arrived logs", async () => {
+  describe("New Row Highlight", () => {
+    it("applies subtle highlight class for newly arrived logs", async () => {
       const { rerender } = render(<LogsTable logs={[mockLog]} />);
 
       const newLog: RequestLog = {
@@ -256,7 +253,7 @@ describe("LogsTable", () => {
       rerender(<LogsTable logs={[newLog, mockLog]} />);
 
       const row = screen.getByText("/v1/messages").closest("tr");
-      await waitFor(() => expect(row?.className).toContain("cf-row-scan"));
+      await waitFor(() => expect(row?.className).toContain("bg-status-info-muted/25"));
     });
   });
 
@@ -282,22 +279,15 @@ describe("LogsTable", () => {
     });
   });
 
-  describe("Blinking Cursor", () => {
-    it("shows blinking cursor in live mode", () => {
-      const { container } = render(<LogsTable logs={[mockLog]} isLive />);
-
-      const cursor = container.querySelector(".cf-cursor-blink") as HTMLElement | null;
-      expect(cursor).toBeInTheDocument();
-
-      // The underscore is rendered via CSS ::after to avoid duplicating visible characters.
-      expect(cursor?.textContent).toBe("");
+  describe("Live Marker", () => {
+    it("shows live marker in live mode", () => {
+      render(<LogsTable logs={[mockLog]} isLive />);
+      expect(screen.getByText("LIVE")).toBeInTheDocument();
     });
 
-    it("does not show cursor when not in live mode", () => {
-      const { container } = render(<LogsTable logs={[mockLog]} isLive={false} />);
-
-      const cursor = container.querySelector(".cf-cursor-blink");
-      expect(cursor).not.toBeInTheDocument();
+    it("does not show live marker when not in live mode", () => {
+      render(<LogsTable logs={[mockLog]} isLive={false} />);
+      expect(screen.queryByText("LIVE")).not.toBeInTheDocument();
     });
   });
 

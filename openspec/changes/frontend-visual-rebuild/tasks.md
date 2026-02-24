@@ -29,11 +29,11 @@
 - [x] 4.4 重构 `src/app/[locale]/(dashboard)/upstreams/page.tsx` 与 `src/components/admin/upstreams-table.tsx`，统一表格与移动卡片化展示风格。
 - [x] 4.5 重构 `src/app/[locale]/(dashboard)/logs/page.tsx` 与 `src/components/admin/logs-table.tsx`，保持日志流视图在不同屏幕下的可读与可操作。
 - [x] 4.6 重构 `src/app/[locale]/(dashboard)/settings/page.tsx` 与相关设置项组件，统一页面骨架与状态样式。
-- [ ] 4.7 执行 `pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run` 并提交本组改动，禁止与后续任务堆积提交。
+- [x] 4.7 执行 `pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run` 并提交本组改动，禁止与后续任务堆积提交。
 
 ## 5. 旧视觉残留清理与验收
 
-- [ ] 5.1 清理 `src/` 中旧 `cf-*` 视觉类与无效动效引用，删除不再使用的样式定义与工具类。
-- [ ] 5.2 逐页回归 Dashboard、Keys、Upstreams、Logs、Settings 的桌面与移动端视觉层级、导航反馈、加载与错误态表现。
-- [ ] 5.3 增加专项视觉验收：确认不存在大面积蓝紫纯色与炫目蓝紫渐变，确认整体风格精致且契合管理台功能语境。
-- [ ] 5.4 执行 `pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run` 并提交最终清理改动，形成可直接进入 `/opsx:apply` 的实现清单。
+- [x] 5.1 清理 `src/` 中旧 `cf-*` 视觉类与无效动效引用，删除不再使用的样式定义与工具类。
+- [x] 5.2 逐页回归 Dashboard、Keys、Upstreams、Logs、Settings 的桌面与移动端视觉层级、导航反馈、加载与错误态表现。
+- [x] 5.3 增加专项视觉验收：确认不存在大面积蓝紫纯色与炫目蓝紫渐变，确认整体风格精致且契合管理台功能语境。
+- [x] 5.4 执行 `pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run` 并提交最终清理改动，形成可直接进入 `/opsx:apply` 的实现清单。

@@ -129,7 +129,7 @@ export function RoutingDecisionDisplay({
           <div className="flex items-center gap-0.5 ml-1">
             {indicators.redirect && (
               <span title={t("indicatorRedirect")}>
-                <RefreshCw className="w-3 h-3 text-blue-500" />
+                <RefreshCw className="w-3 h-3 text-status-info" />
               </span>
             )}
             {indicators.failover && (
@@ -168,8 +168,8 @@ export function RoutingDecisionDisplay({
               {routingDecision.model_redirect_applied && (
                 <>
                   <ChevronRight className="w-3 h-3 inline mx-1" />
-                  <span className="text-blue-500">{routingDecision.resolved_model}</span>
-                  <RefreshCw className="w-3 h-3 inline ml-1 text-blue-500" />
+                  <span className="text-status-info">{routingDecision.resolved_model}</span>
+                  <RefreshCw className="w-3 h-3 inline ml-1 text-status-info" />
                 </>
               )}
             </div>

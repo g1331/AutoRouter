@@ -147,7 +147,7 @@ export function RoutingDecisionTimeline({
     return (
       <div className="space-y-1">
         <div className="flex items-center gap-1.5">
-          <Server className="w-3.5 h-3.5 text-amber-600" />
+          <Server className="w-3.5 h-3.5 text-muted-foreground" />
           <span className="font-mono text-xs">{finalUpstreamLabel}</span>
         </div>
         <div className="flex items-center gap-1 flex-wrap">
@@ -157,16 +157,18 @@ export function RoutingDecisionTimeline({
               {routingTypeLabel}
             </Badge>
           )}
-          {groupName && <span className="text-[11px] text-amber-700 font-mono">{groupName}</span>}
+          {groupName && (
+            <span className="text-[11px] font-mono text-muted-foreground">{groupName}</span>
+          )}
           {routingDecision && (
-            <span className="text-[11px] text-amber-600 font-mono">
+            <span className="text-[11px] font-mono text-muted-foreground">
               {routingDecision.final_candidate_count}/{routingDecision.candidate_count}
             </span>
           )}
           <div className="flex items-center gap-0.5 ml-1">
             {indicators.redirect && (
               <span title={t("indicatorRedirect")}>
-                <RefreshCw className="w-3 h-3 text-blue-500" />
+                <RefreshCw className="w-3 h-3 text-status-info" />
               </span>
             )}
             {indicators.failover && (
@@ -181,7 +183,7 @@ export function RoutingDecisionTimeline({
             )}
             {indicators.lowCandidates && (
               <span title={t("indicatorLowCandidates")}>
-                <AlertTriangle className="w-3 h-3 text-amber-500" />
+                <AlertTriangle className="w-3 h-3 text-status-warning" />
               </span>
             )}
             {indicators.affinityHit && !indicators.affinityMigrated && (
@@ -191,7 +193,7 @@ export function RoutingDecisionTimeline({
             )}
             {indicators.affinityMigrated && (
               <span title={t("timelineAffinityMigrated")}>
-                <ArrowUpRight className="w-3 h-3 text-amber-500" />
+                <ArrowUpRight className="w-3 h-3 text-status-warning" />
               </span>
             )}
           </div>
@@ -214,16 +216,16 @@ export function RoutingDecisionTimeline({
       {/* Stage 1: Model Resolution */}
       {routingDecision && (
         <TimelineStage number={1} label={t("timelineModelResolution")}>
-          <div className="text-amber-700">
+          <div className="text-foreground">
             <span>{routingDecision.original_model}</span>
             {routingDecision.model_redirect_applied ? (
               <>
                 <ChevronRight className="w-3 h-3 inline mx-1" />
-                <span className="text-blue-500">{routingDecision.resolved_model}</span>
-                <RefreshCw className="w-3 h-3 inline ml-1 text-blue-500" />
+                <span className="text-status-info">{routingDecision.resolved_model}</span>
+                <RefreshCw className="w-3 h-3 inline ml-1 text-status-info" />
               </>
             ) : (
-              <span className="text-amber-600 ml-2">({t("timelineNoRedirect")})</span>
+              <span className="ml-2 text-muted-foreground">({t("timelineNoRedirect")})</span>
             )}
           </div>
         </TimelineStage>
@@ -233,8 +235,8 @@ export function RoutingDecisionTimeline({
       <TimelineStage number={2} label={t("timelineSessionAffinity")}>
         {hasSession ? (
           <div className="space-y-1">
-            <div className="flex items-center gap-2 text-amber-700">
-              <span className="text-amber-600">{t("timelineSessionId")}:</span>
+            <div className="flex items-center gap-2 text-foreground">
+              <span className="text-muted-foreground">{t("timelineSessionId")}:</span>
               <span title={sessionId!} className="cursor-help">
                 {truncateId(sessionId)}
               </span>
@@ -247,20 +249,20 @@ export function RoutingDecisionTimeline({
                 </span>
               )}
               {affinityHit && affinityMigrated && (
-                <span className="text-amber-500 flex items-center gap-1">
+                <span className="flex items-center gap-1 text-status-warning">
                   <ArrowUpRight className="w-3 h-3" />
                   {t("timelineAffinityMigrated")}
                 </span>
               )}
               {!affinityHit && (
-                <span className="text-amber-700 flex items-center gap-1">
+                <span className="flex items-center gap-1 text-muted-foreground">
                   {t("timelineAffinityMissed")}
                 </span>
               )}
             </div>
           </div>
         ) : (
-          <div className="text-amber-700">{t("timelineNoSession")}</div>
+          <div className="text-muted-foreground">{t("timelineNoSession")}</div>
         )}
       </TimelineStage>
 
@@ -268,7 +270,7 @@ export function RoutingDecisionTimeline({
       {routingDecision && (
         <TimelineStage number={3} label={t("timelineUpstreamSelection")}>
           <div className="space-y-1">
-            <div className="text-amber-600 mb-1">
+            <div className="mb-1 text-muted-foreground">
               {t("tooltipStrategy")}: {routingDecision.selection_strategy} (
               {routingDecision.routing_type})
               <span className="ml-2">
@@ -291,18 +293,16 @@ export function RoutingDecisionTimeline({
                   )}
                 >
                   {isSelected ? (
-                    <span className="text-amber-500">●</span>
+                    <span className="text-foreground">●</span>
                   ) : (
-                    <span className="text-amber-700">○</span>
+                    <span className="text-muted-foreground">○</span>
                   )}
                   <CircuitStateIcon state={c.circuit_state} />
-                  <span
-                    className={cn("text-amber-700", isSelected && "text-amber-500 font-medium")}
-                  >
+                  <span className={cn("text-foreground", isSelected && "font-medium")}>
                     {c.name}
                   </span>
-                  <span className="text-amber-600 ml-auto">w:{c.weight}</span>
-                  <span className="text-amber-600 text-[11px]">
+                  <span className="ml-auto text-muted-foreground">w:{c.weight}</span>
+                  <span className="text-[11px] text-muted-foreground">
                     {t(`circuitState.${c.circuit_state}`)}
                   </span>
                   {isSelected && (
@@ -322,7 +322,7 @@ export function RoutingDecisionTimeline({
                   <div key={e.id} className="flex items-center gap-2 p-1">
                     <span className="text-red-500">&#x2717;</span>
                     <Lock className="w-3 h-3 text-red-500" />
-                    <span className="text-amber-700">{e.name}</span>
+                    <span className="text-foreground">{e.name}</span>
                     <Badge variant="error" className="text-[11px] px-1 py-0 ml-auto">
                       {t(`exclusionReason.${e.reason}`)}
                     </Badge>
@@ -342,11 +342,11 @@ export function RoutingDecisionTimeline({
             failoverDurationMs={failoverDurationMs ?? null}
           />
         ) : hasFailoverWithoutHistory ? (
-          <div className="text-amber-600">
+          <div className="text-muted-foreground">
             {t("timelineFailoverNoDetails", { count: failoverAttempts })}
           </div>
         ) : (
-          <div className="text-amber-700">{t("timelineDirectSuccess")}</div>
+          <div className="text-muted-foreground">{t("timelineDirectSuccess")}</div>
         )}
       </TimelineStage>
 
@@ -354,14 +354,14 @@ export function RoutingDecisionTimeline({
       <TimelineStage number={5} label={t("timelineFinalResult")} isLast>
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <Server className="w-3 h-3 text-amber-600" />
-            <span className="text-amber-700">{t("timelineFinalUpstream")}:</span>
+            <Server className="w-3 h-3 text-muted-foreground" />
+            <span className="text-muted-foreground">{t("timelineFinalUpstream")}:</span>
             <span
               className={cn(
                 "font-medium",
                 isSuccess && "text-status-success",
                 isError && "text-status-error",
-                !isSuccess && !isError && "text-amber-500"
+                !isSuccess && !isError && "text-foreground"
               )}
             >
               {finalUpstreamLabel}
@@ -369,7 +369,7 @@ export function RoutingDecisionTimeline({
           </div>
           {didSendUpstream !== undefined && (
             <div className="flex items-center gap-2">
-              <span className="text-amber-700">{t("timelineUpstreamSent")}:</span>
+              <span className="text-muted-foreground">{t("timelineUpstreamSent")}:</span>
               <span className={didSendUpstream ? "text-status-success" : "text-orange-500"}>
                 {didSendUpstream ? t("timelineSentYes") : t("timelineSentNo")}
               </span>
@@ -377,32 +377,32 @@ export function RoutingDecisionTimeline({
           )}
           {failureStageLabel && !isSuccess && (
             <div className="flex items-center gap-2">
-              <span className="text-amber-700">{t("timelineFailureStage")}:</span>
+              <span className="text-muted-foreground">{t("timelineFailureStage")}:</span>
               <span className="text-status-error">{failureStageLabel}</span>
             </div>
           )}
           <div className="flex items-center gap-2">
-            <Timer className="w-3 h-3 text-amber-600" />
-            <span className="text-amber-700">{t("timelineTotalDuration")}:</span>
-            <span className="text-amber-500">{formatMs(durationMs)}</span>
+            <Timer className="w-3 h-3 text-muted-foreground" />
+            <span className="text-muted-foreground">{t("timelineTotalDuration")}:</span>
+            <span className="text-foreground">{formatMs(durationMs)}</span>
           </div>
           {routingDurationMs != null && durationMs != null && (
             <>
               {/** Split total duration into routing + gateway processing + upstream latency */}
               <div className="flex items-center gap-2 pl-5">
-                <span className="text-amber-600">{t("timelineRoutingOverhead")}:</span>
+                <span className="text-muted-foreground">{t("timelineRoutingOverhead")}:</span>
                 <span className="text-orange-500">{formatMs(routingDurationMs)}</span>
               </div>
               {didSendUpstream === false && (
                 <div className="flex items-center gap-2 pl-5">
-                  <span className="text-amber-600">{t("timelineGatewayProcessing")}:</span>
-                  <span className="text-amber-500">
+                  <span className="text-muted-foreground">{t("timelineGatewayProcessing")}:</span>
+                  <span className="text-foreground">
                     {formatMs(Math.max(0, durationMs - routingDurationMs))}
                   </span>
                 </div>
               )}
               <div className="flex items-center gap-2 pl-5">
-                <span className="text-amber-600">{t("timelineUpstreamLatency")}:</span>
+                <span className="text-muted-foreground">{t("timelineUpstreamLatency")}:</span>
                 <span
                   className={didSendUpstream === false ? "text-orange-500" : "text-status-success"}
                 >
@@ -415,8 +415,8 @@ export function RoutingDecisionTimeline({
           )}
           {(cachedTokens > 0 || cacheReadTokens > 0) && (
             <div className="flex items-center gap-2">
-              <span className="text-amber-700">{t("timelineCacheEffect")}:</span>
-              <span className="text-blue-500">
+              <span className="text-muted-foreground">{t("timelineCacheEffect")}:</span>
+              <span className="text-status-success">
                 {(cacheReadTokens || cachedTokens).toLocaleString()} tokens
               </span>
             </div>
@@ -448,15 +448,15 @@ function TimelineStage({
       )}
       {/* Stage header with CSS circle number */}
       <div className="flex items-center gap-2 mb-1">
-        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 text-black font-bold text-[10px]">
+        <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-divider bg-surface-400 text-[10px] font-bold text-foreground">
           {number}
         </span>
-        <span className="font-semibold text-amber-500 uppercase text-xs tracking-wider">
+        <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
           {label}
         </span>
       </div>
       {/* Stage content */}
-      <div className="text-amber-700">{children}</div>
+      <div className="text-foreground">{children}</div>
     </div>
   );
 }
@@ -478,7 +478,7 @@ function RetryTimeline({
   const errorTypeIcon = (errorType: FailoverAttempt["error_type"]) => {
     switch (errorType) {
       case "timeout":
-        return <Clock className="w-3 h-3 text-amber-600" />;
+        return <Clock className="w-3 h-3 text-status-warning" />;
       case "http_5xx":
         return <Zap className="w-3 h-3 text-status-error" />;
       case "http_429":
@@ -488,7 +488,7 @@ function RetryTimeline({
       case "connection_error":
         return <CircleSlash className="w-3 h-3 text-red-500" />;
       case "circuit_open":
-        return <Lock className="w-3 h-3 text-amber-500" />;
+        return <Lock className="w-3 h-3 text-status-warning" />;
       default:
         return <Zap className="w-3 h-3 text-status-error" />;
     }
@@ -517,15 +517,15 @@ function RetryTimeline({
         return (
           <div key={idx} className="space-y-0.5">
             <div className="flex items-center gap-2">
-              <span className="text-amber-500 font-medium">
+              <span className="font-medium text-foreground">
                 {t("retryAttempt")} {attemptNum}
               </span>
             </div>
             <div className="pl-2 space-y-0.5">
-              <div className="flex items-center gap-2 text-amber-700">
+              <div className="flex items-center gap-2 text-muted-foreground">
                 <span className="tabular-nums">{formatAttemptTime(attempt.attempted_at)}</span>
                 <span>{attempt.upstream_name || t("upstreamUnknown")}</span>
-                <span className="text-amber-500">●</span>
+                <span className="text-muted-foreground">●</span>
               </div>
               <div className="flex items-center gap-2">
                 {errorTypeIcon(attempt.error_type)}
@@ -533,17 +533,17 @@ function RetryTimeline({
                   className={cn(
                     "tabular-nums",
                     attempt.error_type === "http_5xx" && "text-status-error",
-                    attempt.error_type === "timeout" && "text-amber-600",
+                    attempt.error_type === "timeout" && "text-status-warning",
                     attempt.error_type === "http_429" && "text-orange-500"
                   )}
                 >
                   [{statusLabel}]
                 </span>
-                <span className="text-amber-700">{t("retryFailoverTriggered")}</span>
+                <span className="text-muted-foreground">{t("retryFailoverTriggered")}</span>
               </div>
               {attempt.error_message && (
                 <div
-                  className="text-amber-700 text-[11px] pl-5 truncate max-w-md"
+                  className="max-w-md truncate pl-5 text-[11px] text-muted-foreground"
                   title={attempt.error_message}
                 >
                   {attempt.error_message}
@@ -555,19 +555,19 @@ function RetryTimeline({
       })}
 
       {hiddenCount > 0 && (
-        <div className="text-amber-600 text-[11px]">
+        <div className="text-[11px] text-muted-foreground">
           {t("retryHiddenAttempts", { count: hiddenCount })}
         </div>
       )}
 
       {/* Summary bar */}
       <div className="border-t border-dashed border-surface-500 pt-1 mt-1">
-        <div className="flex items-center gap-2 text-amber-600">
+        <div className="flex items-center gap-2 text-muted-foreground">
           <Timer className="w-3 h-3" />
           <span>
             {t("retryTotalDuration")}: {formatMs(failoverDurationMs)}
           </span>
-          <span className="text-amber-700">
+          <span className="text-foreground">
             ({failoverHistory.length} {t("retryAttemptsSummary")})
           </span>
         </div>

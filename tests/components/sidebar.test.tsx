@@ -123,8 +123,7 @@ describe("Sidebar", () => {
     it("renders brand name", () => {
       renderSidebar();
 
-      // appName is uppercased in the component
-      expect(screen.getByText("APPNAME")).toBeInTheDocument();
+      expect(screen.getByText("appName")).toBeInTheDocument();
     });
 
     it("renders version info", () => {
@@ -239,7 +238,7 @@ describe("Sidebar", () => {
     it("has main menu aria label", () => {
       renderSidebar();
 
-      expect(screen.getByRole("navigation", { name: "Main menu" })).toBeInTheDocument();
+      expect(screen.getByRole("navigation", { name: "Main navigation" })).toBeInTheDocument();
     });
 
     it("has bottom navigation for mobile", () => {
@@ -252,7 +251,7 @@ describe("Sidebar", () => {
       renderSidebar();
 
       // Get desktop navigation links (they have title attributes for tooltips)
-      const mainNav = screen.getByRole("navigation", { name: "Main menu" });
+      const mainNav = screen.getByRole("navigation", { name: "Main navigation" });
       const desktopLinks = mainNav.querySelectorAll("a[title]");
 
       expect(desktopLinks.length).toBeGreaterThan(0);
@@ -268,8 +267,8 @@ describe("Sidebar", () => {
       renderSidebar();
 
       const dashboardLinks = screen.getAllByRole("link", { name: /dashboard/i });
-      expect(dashboardLinks[0].className).toContain("border-l-2");
-      expect(dashboardLinks[0].className).toContain("border-l-amber-500");
+      expect(dashboardLinks[0].className).toContain("border");
+      expect(dashboardLinks[0].className).toContain("border-amber-500/45");
     });
 
     it("applies standard border to inactive items", () => {
@@ -277,7 +276,7 @@ describe("Sidebar", () => {
       renderSidebar();
 
       const keysLinks = screen.getAllByRole("link", { name: /apiKeys/i });
-      expect(keysLinks[0].className).toContain("border-l-2");
+      expect(keysLinks[0].className).toContain("border");
       expect(keysLinks[0].className).toContain("border-transparent");
     });
 
@@ -294,8 +293,8 @@ describe("Sidebar", () => {
         const { unmount } = renderSidebar();
 
         const activeLinks = screen.getAllByRole("link", { name });
-        expect(activeLinks[0].className).toContain("border-l-2");
-        expect(activeLinks[0].className).toContain("border-l-amber-500");
+        expect(activeLinks[0].className).toContain("border");
+        expect(activeLinks[0].className).toContain("border-amber-500/45");
 
         unmount();
       });

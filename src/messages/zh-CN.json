@@ -42,9 +42,9 @@
   },
   "nav": {
     "dashboard": "仪表盘",
-    "apiKeys": "API Keys",
-    "upstreams": "Upstreams",
-    "logs": "Logs",
+    "apiKeys": "密钥管理",
+    "upstreams": "上游管理",
+    "logs": "请求日志",
     "logout": "登出",
     "logoutConfirm": "确定要退出登录吗？",
     "settings": "设置"

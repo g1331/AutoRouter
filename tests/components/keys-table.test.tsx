@@ -112,7 +112,7 @@ describe("KeysTable", () => {
     it("shows enabled badge for active key", () => {
       render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
-      expect(screen.getByText("enabled")).toBeInTheDocument();
+      expect(screen.getAllByText("enabled").length).toBeGreaterThan(0);
     });
 
     it("masks long key prefix", () => {
