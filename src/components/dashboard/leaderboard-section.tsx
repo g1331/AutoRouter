@@ -1,38 +1,33 @@
 "use client";
 
-/**
- * Leaderboard section component.
- *
- * Displays top performers across API keys, upstreams, and models.
- */
-
 import { useTranslations } from "next-intl";
+import { Cpu, Key, Server, Trophy } from "lucide-react";
+
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Key, Server, Cpu, Trophy } from "lucide-react";
-import { formatNumber } from "./chart-theme";
 import type { StatsLeaderboardResponse } from "@/types/api";
+
+import { formatNumber } from "./chart-theme";
 
 interface LeaderboardSectionProps {
   data: StatsLeaderboardResponse | undefined;
   isLoading: boolean;
 }
 
-// Rank badge colors
 const RANK_COLORS = [
-  "text-yellow-400", // #1 Gold
-  "text-gray-300", // #2 Silver
-  "text-amber-600", // #3 Bronze
-  "text-amber-700", // #4+
-  "text-amber-700",
+  "text-amber-500",
+  "text-status-info",
+  "text-status-warning",
+  "text-muted-foreground",
+  "text-muted-foreground",
 ];
 
 function RankBadge({ rank }: { rank: number }) {
   const colorClass = RANK_COLORS[Math.min(rank - 1, RANK_COLORS.length - 1)];
   return (
-    <div className="flex items-center gap-1">
-      {rank <= 3 && <Trophy className={`w-3 h-3 ${colorClass}`} />}
-      <span className={`font-mono text-xs ${colorClass}`}>#{rank}</span>
+    <div className="flex items-center gap-1.5">
+      {rank <= 3 && <Trophy className={`h-3.5 w-3.5 ${colorClass}`} />}
+      <span className={`type-label-medium ${colorClass}`}>#{rank}</span>
     </div>
   );
 }
@@ -55,51 +50,48 @@ function LeaderboardTable({ title, icon, items, isLoading, emptyMessage }: Leade
   const t = useTranslations("dashboard");
 
   return (
-    <Card className="cf-panel h-full">
-      <CardContent className="p-4">
-        {/* Header */}
-        <div className="flex items-center gap-2 mb-4 pb-2 border-b border-amber-500/20">
-          <div className="w-8 h-8 rounded-cf-sm bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
+    <Card className="h-full border-border bg-card">
+      <CardContent className="p-4 sm:p-5">
+        <div className="mb-4 flex items-center gap-2 border-b border-divider pb-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-cf-sm border border-amber-500/35 bg-amber-500/10 text-amber-500">
             {icon}
           </div>
-          <h4 className="font-mono text-xs uppercase tracking-wider text-amber-500">{title}</h4>
+          <h4 className="type-label-medium text-foreground">{title}</h4>
         </div>
 
-        {/* Content */}
         {isLoading ? (
           <div className="space-y-3">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="flex items-center justify-between">
-                <Skeleton variant="inline" className="w-32 h-4" />
-                <Skeleton variant="inline" className="w-16 h-4" />
+            {[1, 2, 3, 4, 5].map((row) => (
+              <div key={row} className="flex items-center justify-between">
+                <Skeleton variant="inline" className="h-4 w-32" />
+                <Skeleton variant="inline" className="h-4 w-16" />
               </div>
             ))}
           </div>
         ) : items.length === 0 ? (
-          <p className="font-mono text-xs text-amber-700 text-center py-4">{emptyMessage}</p>
+          <p className="type-body-small py-6 text-center text-muted-foreground">{emptyMessage}</p>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-1">
             {items.map((item) => (
               <div
-                key={item.rank}
-                className="flex items-center justify-between py-1.5 border-b border-amber-500/10 last:border-0"
+                key={`${title}-${item.rank}-${item.name}`}
+                className="flex items-center justify-between gap-3 rounded-cf-sm border border-transparent px-2 py-1.5 transition-colors hover:border-divider hover:bg-surface-300/65"
               >
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="flex min-w-0 items-center gap-3">
                   <RankBadge rank={item.rank} />
                   <div className="min-w-0">
-                    <p className="font-mono text-xs text-amber-500 truncate">{item.name}</p>
+                    <p className="type-body-small truncate text-foreground">{item.name}</p>
                     {item.subtitle && (
-                      <p className="font-mono text-[10px] text-amber-700 truncate">
-                        {item.subtitle}
-                      </p>
+                      <p className="type-caption truncate text-muted-foreground">{item.subtitle}</p>
                     )}
                   </div>
                 </div>
-                <div className="text-right flex-shrink-0 ml-2">
-                  <p className="font-display text-sm text-amber-500">
+
+                <div className="ml-2 flex-shrink-0 text-right">
+                  <p className="type-body-medium text-foreground">
                     {formatNumber(item.requestCount)}
                   </p>
-                  <p className="font-mono text-[10px] text-amber-700">
+                  <p className="type-caption text-muted-foreground">
                     {formatNumber(item.totalTokens)} {t("stats.tokensShort")}
                   </p>
                 </div>
@@ -115,7 +107,6 @@ function LeaderboardTable({ title, icon, items, isLoading, emptyMessage }: Leade
 export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps) {
   const t = useTranslations("dashboard");
 
-  // Transform data for display
   const apiKeyItems =
     data?.api_keys.map((item, index) => ({
       rank: index + 1,
@@ -143,39 +134,35 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
     })) ?? [];
 
   return (
-    <div className="space-y-4">
-      {/* Section Header */}
+    <section className="space-y-4">
       <div className="flex items-center gap-2">
-        <Trophy className="w-4 h-4 text-amber-500" />
-        <h3 className="font-mono text-sm text-amber-500 uppercase tracking-wider">
-          {t("stats.leaderboard")}
-        </h3>
+        <Trophy className="h-4 w-4 text-amber-500" />
+        <h3 className="type-title-medium text-foreground">{t("stats.leaderboard")}</h3>
       </div>
 
-      {/* Three-column grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <LeaderboardTable
           title={t("stats.apiKeyRanking")}
-          icon={<Key className="w-4 h-4 text-amber-500" />}
+          icon={<Key className="h-4 w-4" />}
           items={apiKeyItems}
           isLoading={isLoading}
           emptyMessage={t("stats.noApiKeys")}
         />
         <LeaderboardTable
           title={t("stats.upstreamRanking")}
-          icon={<Server className="w-4 h-4 text-amber-500" />}
+          icon={<Server className="h-4 w-4" />}
           items={upstreamItems}
           isLoading={isLoading}
           emptyMessage={t("stats.noUpstreams")}
         />
         <LeaderboardTable
           title={t("stats.modelRanking")}
-          icon={<Cpu className="w-4 h-4 text-amber-500" />}
+          icon={<Cpu className="h-4 w-4" />}
           items={modelItems}
           isLoading={isLoading}
           emptyMessage={t("stats.noModels")}
         />
       </div>
-    </div>
+    </section>
   );
 }

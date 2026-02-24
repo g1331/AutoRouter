@@ -1,12 +1,7 @@
 "use client";
 
-/**
- * Time range selector component.
- *
- * Terminal-style segmented button for selecting time ranges.
- */
-
 import { useTranslations } from "next-intl";
+
 import { cn } from "@/lib/utils";
 import type { TimeRange } from "@/types/api";
 
@@ -34,17 +29,18 @@ export function TimeRangeSelector({ value, onChange }: TimeRangeSelectorProps) {
   };
 
   return (
-    <div className="inline-flex rounded-cf-sm border border-amber-500/30 bg-surface-200 p-1">
+    <div className="inline-flex rounded-cf-sm border border-border bg-surface-200 p-1">
       {TIME_RANGES.map((range) => (
         <button
           key={range}
+          type="button"
           onClick={() => onChange(range)}
           className={cn(
-            "px-4 py-1.5 font-mono text-xs uppercase tracking-wider transition-all duration-cf-fast",
-            "focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50",
+            "rounded-[8px] px-3.5 py-1.5 type-label-medium transition-all duration-cf-fast ease-cf-standard",
+            "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
             value === range
-              ? "bg-amber-500 text-black-900 shadow-cf-glow-subtle"
-              : "text-amber-500 hover:bg-amber-500/10"
+              ? "bg-amber-500 text-primary-foreground shadow-cf-glow-subtle"
+              : "text-muted-foreground hover:bg-surface-300 hover:text-foreground"
           )}
         >
           {getLabel(range)}

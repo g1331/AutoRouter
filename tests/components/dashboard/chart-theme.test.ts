@@ -1,69 +1,71 @@
 import { describe, it, expect } from "vitest";
+
 import {
+  ChartThemeMode,
   UPSTREAM_COLORS,
+  UPSTREAM_COLORS_DARK,
+  UPSTREAM_COLORS_LIGHT,
   chartTheme,
-  getUpstreamColor,
-  formatNumber,
   formatDuration,
+  formatNumber,
+  getChartTheme,
+  getUpstreamColor,
 } from "@/components/dashboard/chart-theme";
 
 describe("chart-theme", () => {
-  describe("UPSTREAM_COLORS", () => {
-    it("has 8 colors defined", () => {
+  describe("upstream palettes", () => {
+    it("keeps 8 colors in each palette", () => {
+      expect(UPSTREAM_COLORS_DARK).toHaveLength(8);
+      expect(UPSTREAM_COLORS_LIGHT).toHaveLength(8);
       expect(UPSTREAM_COLORS).toHaveLength(8);
     });
 
-    it("has amber-500 as first color", () => {
-      expect(UPSTREAM_COLORS[0]).toBe("#FFBF00");
-    });
-
-    it("all colors are valid hex codes", () => {
-      UPSTREAM_COLORS.forEach((color) => {
+    it("contains valid hex colors", () => {
+      [...UPSTREAM_COLORS_DARK, ...UPSTREAM_COLORS_LIGHT].forEach((color) => {
         expect(color).toMatch(/^#[0-9A-Fa-f]{6}$/);
       });
     });
+
+    it("exposes dark palette through backward-compatible UPSTREAM_COLORS", () => {
+      expect(UPSTREAM_COLORS[0]).toBe(UPSTREAM_COLORS_DARK[0]);
+      expect(UPSTREAM_COLORS[7]).toBe(UPSTREAM_COLORS_DARK[7]);
+    });
   });
 
-  describe("chartTheme", () => {
-    it("has colors configuration", () => {
-      expect(chartTheme.colors).toBeDefined();
-      expect(chartTheme.colors.primary).toBe("#FFBF00");
+  describe("theme structure", () => {
+    it("provides theme configuration for both modes", () => {
+      const modes: ChartThemeMode[] = ["dark", "light"];
+      modes.forEach((mode) => {
+        const theme = getChartTheme(mode);
+        expect(theme.colors.primary).toMatch(/^#[0-9A-Fa-f]{6}$/);
+        expect(theme.colors.grid).toContain("rgba(");
+        expect(theme.colors.tooltip.background).toMatch(/^#[0-9A-Fa-f]{6}$/);
+        expect(theme.colors.tooltip.border).toMatch(/^#[0-9A-Fa-f]{6}$/);
+        expect(theme.spacing.xAxisHeight).toBe(30);
+        expect(theme.spacing.yAxisWidth).toBe(60);
+        expect(theme.fonts.mono).toContain("var(--vr-font-mono)");
+      });
     });
 
-    it("has fonts configuration", () => {
-      expect(chartTheme.fonts).toBeDefined();
-      expect(chartTheme.fonts.mono).toContain("JetBrains Mono");
-    });
-
-    it("has spacing configuration", () => {
-      expect(chartTheme.spacing).toBeDefined();
-      expect(chartTheme.spacing.xAxisHeight).toBe(30);
-      expect(chartTheme.spacing.yAxisWidth).toBe(60);
-    });
-
-    it("has tooltip colors", () => {
-      expect(chartTheme.colors.tooltip).toBeDefined();
-      expect(chartTheme.colors.tooltip.background).toBe("#2A2A2A");
-      expect(chartTheme.colors.tooltip.border).toBe("#FFBF00");
+    it("keeps backward-compatible chartTheme export as dark mode", () => {
+      expect(chartTheme).toEqual(getChartTheme("dark"));
     });
   });
 
   describe("getUpstreamColor", () => {
-    it("returns first color for index 0", () => {
-      expect(getUpstreamColor(0)).toBe("#FFBF00");
+    it("returns color by index in dark mode by default", () => {
+      expect(getUpstreamColor(0)).toBe(UPSTREAM_COLORS_DARK[0]);
+      expect(getUpstreamColor(1)).toBe(UPSTREAM_COLORS_DARK[1]);
     });
 
-    it("returns second color for index 1", () => {
-      expect(getUpstreamColor(1)).toBe("#00D4FF");
+    it("returns light palette when mode is light", () => {
+      expect(getUpstreamColor(0, "light")).toBe(UPSTREAM_COLORS_LIGHT[0]);
+      expect(getUpstreamColor(1, "light")).toBe(UPSTREAM_COLORS_LIGHT[1]);
     });
 
-    it("wraps around when index exceeds array length", () => {
-      expect(getUpstreamColor(8)).toBe("#FFBF00"); // Should wrap to index 0
-      expect(getUpstreamColor(9)).toBe("#00D4FF"); // Should wrap to index 1
-    });
-
-    it("handles large indices correctly", () => {
-      expect(getUpstreamColor(100)).toBe(UPSTREAM_COLORS[100 % 8]);
+    it("wraps around for larger indices", () => {
+      expect(getUpstreamColor(8, "dark")).toBe(UPSTREAM_COLORS_DARK[0]);
+      expect(getUpstreamColor(9, "light")).toBe(UPSTREAM_COLORS_LIGHT[1]);
     });
   });
 
