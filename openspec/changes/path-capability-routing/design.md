@@ -48,7 +48,6 @@ Forward request (same as today)
 
 - 将路由主判定切换为“请求路径与方法优先”。
 - 支持一个上游声明多个能力类型并参与同一套故障转移。
-- 让上游能力配置与展示从纯文字升级为“图标 + 文案”，降低误选概率。
 - 保持现有优先级、权重、熔断、故障转移、鉴权机制不倒退。
 - 提供从旧配置到新配置的平滑迁移，避免一次性手工重配。
 - 让路由日志可观察到“路径能力命中结果”。
@@ -112,17 +111,6 @@ Forward request (same as today)
 
 ### Decision 5: 管理端表单与列表使用“多选能力标签”展示
 
-能力图标映射（首版固定）：
-
-| 能力类型 | 图标语义 | 展示文案 |
-| --- | --- | --- |
-| `anthropic_messages` | 对话气泡 | Claude Messages |
-| `codex_responses` | 终端/代码 | Codex Responses |
-| `openai_chat_compatible` | 聊天气泡 | OpenAI Chat |
-| `openai_extended` | 工具箱 | OpenAI Extended |
-| `gemini_native_generate` | 星光/闪电 | Gemini Native |
-| `gemini_code_assist_internal` | 扳手/IDE | Gemini Code Assist |
-
 关键场景布局示意（上游编辑弹窗）：
 
 ```text
@@ -134,9 +122,9 @@ Forward request (same as today)
 │ 优先级 [..]  权重 [..]                      │
 │                                             │
 │ 支持能力（可多选）                           │
-│ [◉ Claude Messages] [◉ Codex Responses]     │
-│ [○ OpenAI Chat]      [◉ OpenAI Extended]    │
-│ [○ Gemini Native]    [○ Gemini Code Assist] │
+│ [anthropic_messages] [codex_responses]      │
+│ [openai_chat_compatible] [openai_extended]  │
+│ [gemini_native_generate] [gemini_code...]   │
 │                                             │
 │ 兼容字段（高级）                            │
 │ providerType [....] allowedModels [....]    │
@@ -145,16 +133,10 @@ Forward request (same as today)
 └─────────────────────────────────────────────┘
 ```
 
-交互约束：
-
-- 能力项为可多选，不是单选；一个上游可同时选中多个能力卡片。
-- 选中态必须同时体现“图标高亮 + 背景高亮 + 勾选标记”，不能只靠颜色区分。
-- 列表页能力徽章需要完整回显所有已选能力，超出宽度时折行，不折叠为“更多”。
-
 列表视觉层级（从强到弱）：
 
 1. 上游可用性状态（在线/熔断/禁用）  
-2. 支持能力图标徽章（可一眼判断是否可接特定客户端请求，且可看出多能力并存）  
+2. 支持能力标签（可一眼判断是否可接特定客户端请求）  
 3. 优先级和权重信息  
 4. 兼容字段（折叠展示）
 
@@ -174,7 +156,6 @@ Forward request (same as today)
 - [迁移后默认映射不符合个别部署] → 提供批量编辑入口与升级提示，允许逐个上游修正能力集合。
 - [会话亲和性维度变化导致短期命中率波动] → 保留迁移窗口期观测指标，异常时可回退到旧键策略。
 - [前后端字段并存增加复杂度] → 设定明确淘汰阶段，后续单独变更移除旧字段。
-- [图标资产缺失或视觉不一致] → 提供统一图标映射表和兜底通用图标，避免出现空白占位。
 
 ## Migration Plan
 
