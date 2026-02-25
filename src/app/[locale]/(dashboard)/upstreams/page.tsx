@@ -74,7 +74,7 @@ export default function UpstreamsPage() {
         <Card variant="outlined" className="border-divider/80 bg-card/92">
           <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
             <div className="min-w-0 space-y-1.5">
-              <div className="flex items-center gap-2 text-foreground">
+              <div className="flex items-center gap-2 text-amber-500">
                 <Server className="h-4 w-4" aria-hidden="true" />
                 <span className="type-label-medium">{t("management")}</span>
               </div>
