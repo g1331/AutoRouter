@@ -174,6 +174,36 @@ describe("UpstreamFormDialog", () => {
       });
     });
 
+    it("submits selected route capabilities in create mode", async () => {
+      mockCreateMutateAsync.mockResolvedValueOnce({});
+
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("upstreamNamePlaceholder"), {
+        target: { value: "CLI Router Upstream" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("baseUrlPlaceholder"), {
+        target: { value: "https://api.example.com/v1" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("apiKeyPlaceholder"), {
+        target: { value: "sk-test-key" },
+      });
+
+      fireEvent.click(screen.getByText("capabilityCodexResponses"));
+      fireEvent.click(screen.getByText("capabilityOpenAIChatCompatible"));
+      fireEvent.click(screen.getByText("create"));
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            route_capabilities: ["codex_responses", "openai_chat_compatible"],
+          })
+        );
+      });
+    });
+
     it("closes dialog on successful creation", async () => {
       mockCreateMutateAsync.mockResolvedValueOnce({});
 
@@ -199,6 +229,26 @@ describe("UpstreamFormDialog", () => {
   });
 
   describe("Edit Mode", () => {
+    it("echoes selected route capabilities in edit mode", () => {
+      const capabilityUpstream: Upstream = {
+        ...mockUpstream,
+        route_capabilities: ["codex_responses", "openai_chat_compatible"],
+      };
+
+      render(
+        <UpstreamFormDialog
+          upstream={capabilityUpstream}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      expect(screen.getByText("capabilityCodexResponses")).toBeInTheDocument();
+      expect(screen.getByText("capabilityOpenAIChatCompatible")).toBeInTheDocument();
+      expect(screen.getAllByText("selected").length).toBeGreaterThanOrEqual(2);
+    });
+
     it("renders edit dialog title when upstream provided", () => {
       render(
         <UpstreamFormDialog upstream={mockUpstream} open={true} onOpenChange={mockOnOpenChange} />,
