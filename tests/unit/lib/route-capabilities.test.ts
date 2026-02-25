@@ -3,6 +3,7 @@ import {
   getPrimaryProviderByCapabilities,
   normalizeRouteCapabilities,
   resolveRouteCapabilities,
+  areSingleProviderCapabilities,
 } from "@/lib/route-capabilities";
 
 describe("route-capabilities", () => {
@@ -28,5 +29,37 @@ describe("route-capabilities", () => {
         resolveRouteCapabilities(["openai_extended", "anthropic_messages"])
       )
     ).toBe("anthropic");
+  });
+
+  describe("areSingleProviderCapabilities", () => {
+    it("returns true for empty array", () => {
+      expect(areSingleProviderCapabilities([])).toBe(true);
+    });
+
+    it("returns true for single capability", () => {
+      expect(areSingleProviderCapabilities(["anthropic_messages"])).toBe(true);
+    });
+
+    it("returns true for multiple capabilities from the same provider", () => {
+      expect(
+        areSingleProviderCapabilities([
+          "openai_chat_compatible",
+          "openai_extended",
+          "codex_responses",
+        ])
+      ).toBe(true);
+    });
+
+    it("returns false for capabilities from different providers", () => {
+      expect(areSingleProviderCapabilities(["anthropic_messages", "openai_chat_compatible"])).toBe(
+        false
+      );
+    });
+
+    it("returns false for mixed google and openai capabilities", () => {
+      expect(areSingleProviderCapabilities(["gemini_native_generate", "openai_extended"])).toBe(
+        false
+      );
+    });
   });
 });

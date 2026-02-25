@@ -9,7 +9,12 @@ import {
   type UpstreamUpdateInput,
 } from "@/lib/services/upstream-service";
 import { transformUpstreamToApi } from "@/lib/utils/api-transformers";
-import { ROUTE_CAPABILITY_VALUES, normalizeRouteCapabilities } from "@/lib/route-capabilities";
+import {
+  ROUTE_CAPABILITY_VALUES,
+  normalizeRouteCapabilities,
+  areSingleProviderCapabilities,
+  type RouteCapability,
+} from "@/lib/route-capabilities";
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -41,22 +46,32 @@ function normalizeDurationToMs(
   return value > secondsUpperBound ? value : value * 1000;
 }
 
-const updateUpstreamSchema = z.object({
-  name: z.string().min(1).max(64).optional(),
-  base_url: z.string().url().optional(),
-  api_key: z.string().min(1).optional(),
-  is_default: z.boolean().optional(),
-  timeout: z.number().int().positive().optional(),
-  is_active: z.boolean().optional(),
-  config: z.string().nullable().optional(),
-  weight: z.number().int().min(1).max(100).optional(),
-  priority: z.number().int().min(0).optional(),
-  route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)).nullable().optional(),
-  allowed_models: z.array(z.string()).nullable().optional(),
-  model_redirects: z.record(z.string(), z.string()).nullable().optional(),
-  circuit_breaker_config: circuitBreakerConfigSchema.nullable().optional(),
-  affinity_migration: affinityMigrationConfigSchema.nullable().optional(),
-});
+const updateUpstreamSchema = z
+  .object({
+    name: z.string().min(1).max(64).optional(),
+    base_url: z.string().url().optional(),
+    api_key: z.string().min(1).optional(),
+    is_default: z.boolean().optional(),
+    timeout: z.number().int().positive().optional(),
+    is_active: z.boolean().optional(),
+    config: z.string().nullable().optional(),
+    weight: z.number().int().min(1).max(100).optional(),
+    priority: z.number().int().min(0).optional(),
+    route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)).nullable().optional(),
+    allowed_models: z.array(z.string()).nullable().optional(),
+    model_redirects: z.record(z.string(), z.string()).nullable().optional(),
+    circuit_breaker_config: circuitBreakerConfigSchema.nullable().optional(),
+    affinity_migration: affinityMigrationConfigSchema.nullable().optional(),
+  })
+  .refine(
+    (data) =>
+      !data.route_capabilities ||
+      areSingleProviderCapabilities(data.route_capabilities as RouteCapability[]),
+    {
+      message: "All route capabilities must belong to the same provider",
+      path: ["route_capabilities"],
+    }
+  );
 
 /**
  * GET /api/admin/upstreams/[id] - Get upstream details

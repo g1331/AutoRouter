@@ -39,7 +39,7 @@ import type { RouteCapability, Upstream } from "@/types/api";
 import { TagInput } from "@/components/ui/tag-input";
 import { KeyValueInput } from "@/components/ui/key-value-input";
 import { Switch } from "@/components/ui/switch";
-import { ROUTE_CAPABILITY_VALUES } from "@/lib/route-capabilities";
+import { ROUTE_CAPABILITY_VALUES, areSingleProviderCapabilities } from "@/lib/route-capabilities";
 import { RouteCapabilityMultiSelect } from "@/components/admin/route-capability-badges";
 
 interface UpstreamFormDialogProps {
@@ -69,34 +69,44 @@ const affinityMigrationConfigSchema = z
   .nullable();
 
 // Schema for create mode - api_key is required
-const createUpstreamFormSchema = z.object({
-  name: z.string().min(1).max(100),
-  base_url: z.string().url(),
-  api_key: z.string().min(1),
-  description: z.string().max(500),
-  priority: z.number().int().min(0).max(100),
-  weight: z.number().int().min(1).max(100),
-  route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
-  allowed_models: z.array(z.string()).nullable(),
-  model_redirects: z.record(z.string(), z.string()).nullable(),
-  circuit_breaker_config: circuitBreakerConfigSchema,
-  affinity_migration: affinityMigrationConfigSchema,
-});
+const createUpstreamFormSchema = z
+  .object({
+    name: z.string().min(1).max(100),
+    base_url: z.string().url(),
+    api_key: z.string().min(1),
+    description: z.string().max(500),
+    priority: z.number().int().min(0).max(100),
+    weight: z.number().int().min(1).max(100),
+    route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
+    allowed_models: z.array(z.string()).nullable(),
+    model_redirects: z.record(z.string(), z.string()).nullable(),
+    circuit_breaker_config: circuitBreakerConfigSchema,
+    affinity_migration: affinityMigrationConfigSchema,
+  })
+  .refine((data) => areSingleProviderCapabilities(data.route_capabilities), {
+    message: "All route capabilities must belong to the same provider",
+    path: ["route_capabilities"],
+  });
 
 // Schema for edit mode - api_key is optional (leave empty to keep unchanged)
-const editUpstreamFormSchema = z.object({
-  name: z.string().min(1).max(100),
-  base_url: z.string().url(),
-  api_key: z.string(),
-  description: z.string().max(500),
-  priority: z.number().int().min(0).max(100),
-  weight: z.number().int().min(1).max(100),
-  route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
-  allowed_models: z.array(z.string()).nullable(),
-  model_redirects: z.record(z.string(), z.string()).nullable(),
-  circuit_breaker_config: circuitBreakerConfigSchema,
-  affinity_migration: affinityMigrationConfigSchema,
-});
+const editUpstreamFormSchema = z
+  .object({
+    name: z.string().min(1).max(100),
+    base_url: z.string().url(),
+    api_key: z.string(),
+    description: z.string().max(500),
+    priority: z.number().int().min(0).max(100),
+    weight: z.number().int().min(1).max(100),
+    route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
+    allowed_models: z.array(z.string()).nullable(),
+    model_redirects: z.record(z.string(), z.string()).nullable(),
+    circuit_breaker_config: circuitBreakerConfigSchema,
+    affinity_migration: affinityMigrationConfigSchema,
+  })
+  .refine((data) => areSingleProviderCapabilities(data.route_capabilities), {
+    message: "All route capabilities must belong to the same provider",
+    path: ["route_capabilities"],
+  });
 
 type UpstreamFormData = z.infer<typeof createUpstreamFormSchema>;
 

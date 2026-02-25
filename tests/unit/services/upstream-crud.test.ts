@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { maskApiKey, UpstreamNotFoundError } from "@/lib/services/upstream-crud";
+import {
+  maskApiKey,
+  UpstreamNotFoundError,
+  type UpstreamUpdateInput,
+} from "@/lib/services/upstream-crud";
 
 // Type helpers for mocking Drizzle ORM query builder
 type MockInsertChain = {
@@ -420,7 +424,7 @@ describe("upstream-crud", () => {
           "invalid_capability",
           "",
         ],
-      } as any);
+      } as unknown as UpstreamUpdateInput);
 
       expect(set).toHaveBeenCalledWith(
         expect.objectContaining({

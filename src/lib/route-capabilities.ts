@@ -105,6 +105,12 @@ export function resolveRouteCapabilities(
   return normalizeRouteCapabilities(routeCapabilities);
 }
 
+export function areSingleProviderCapabilities(capabilities: readonly RouteCapability[]): boolean {
+  if (capabilities.length <= 1) return true;
+  const first = ROUTE_CAPABILITY_PROVIDER_MAP[capabilities[0]];
+  return capabilities.every((c) => ROUTE_CAPABILITY_PROVIDER_MAP[c] === first);
+}
+
 export function getProviderByRouteCapability(capability: RouteCapability): CapabilityProvider {
   return ROUTE_CAPABILITY_PROVIDER_MAP[capability];
 }
