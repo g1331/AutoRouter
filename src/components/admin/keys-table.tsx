@@ -222,7 +222,14 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
               </div>
 
               <div className="flex items-center gap-2">
-                <code className="block min-w-0 flex-1 truncate rounded-cf-sm border border-divider bg-surface-300 px-2 py-1 font-mono text-xs text-foreground">
+                <code
+                  className={cn(
+                    "block min-w-0 flex-1 rounded-cf-sm border border-divider bg-surface-300 px-2 py-1 font-mono text-xs text-foreground",
+                    visibleKeyIds.has(key.id)
+                      ? "whitespace-normal break-all"
+                      : "truncate whitespace-nowrap"
+                  )}
+                >
                   {visibleKeyIds.has(key.id)
                     ? revealedKeys.get(key.id) || key.key_prefix
                     : maskKey(key.key_prefix)}
@@ -331,7 +338,9 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
             <TableHeader>
               <TableRow>
                 <TableHead>{tCommon("name")}</TableHead>
-                <TableHead>{t("tableKeyPrefix")}</TableHead>
+                <TableHead className="w-[30rem] min-w-[30rem] whitespace-nowrap">
+                  {t("tableKeyPrefix")}
+                </TableHead>
                 <TableHead className="hidden xl:table-cell">{tCommon("description")}</TableHead>
                 <TableHead>{t("tableUpstreams")}</TableHead>
                 <TableHead className="whitespace-nowrap">{t("tableExpires")}</TableHead>
@@ -352,40 +361,49 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
                       </Badge>
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <code className="inline-block max-w-[128px] truncate rounded-cf-sm border border-divider bg-surface-300 px-2 py-1 align-middle font-mono text-xs text-foreground">
+                  <TableCell className="w-[30rem] min-w-[30rem]">
+                    <div className="flex min-w-0 items-start gap-2">
+                      <code
+                        className={cn(
+                          "block min-w-0 flex-1 rounded-cf-sm border border-divider bg-surface-300 px-2 py-1 align-middle font-mono text-xs text-foreground",
+                          visibleKeyIds.has(key.id)
+                            ? "whitespace-normal break-all"
+                            : "truncate whitespace-nowrap"
+                        )}
+                      >
                         {visibleKeyIds.has(key.id)
                           ? revealedKeys.get(key.id) || key.key_prefix
                           : maskKey(key.key_prefix)}
                       </code>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => toggleKeyVisibility(key.id)}
-                        disabled={isRevealing}
-                        aria-label={visibleKeyIds.has(key.id) ? t("hideKey") : t("revealKey")}
-                      >
-                        {visibleKeyIds.has(key.id) ? (
-                          <EyeOff className="h-3.5 w-3.5" aria-hidden="true" />
-                        ) : (
-                          <Eye className="h-3.5 w-3.5" aria-hidden="true" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => copyKey(key.id)}
-                        aria-label={copiedId === key.id ? tCommon("copied") : tCommon("copy")}
-                      >
-                        {copiedId === key.id ? (
-                          <Check className="h-3.5 w-3.5 text-status-success" aria-hidden="true" />
-                        ) : (
-                          <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                        )}
-                      </Button>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => toggleKeyVisibility(key.id)}
+                          disabled={isRevealing}
+                          aria-label={visibleKeyIds.has(key.id) ? t("hideKey") : t("revealKey")}
+                        >
+                          {visibleKeyIds.has(key.id) ? (
+                            <EyeOff className="h-3.5 w-3.5" aria-hidden="true" />
+                          ) : (
+                            <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => copyKey(key.id)}
+                          aria-label={copiedId === key.id ? tCommon("copied") : tCommon("copy")}
+                        >
+                          {copiedId === key.id ? (
+                            <Check className="h-3.5 w-3.5 text-status-success" aria-hidden="true" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell className="hidden max-w-[180px] truncate xl:table-cell">

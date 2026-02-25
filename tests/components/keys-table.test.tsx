@@ -102,6 +102,14 @@ describe("KeysTable", () => {
       expect(screen.getByText("actions")).toBeInTheDocument();
     });
 
+    it("keeps key prefix column width fixed to avoid table jitter", () => {
+      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
+
+      const keyPrefixHeader = screen.getByText("tableKeyPrefix").closest("th");
+      expect(keyPrefixHeader?.className).toContain("w-[30rem]");
+      expect(keyPrefixHeader?.className).toContain("min-w-[30rem]");
+    });
+
     it("renders key data correctly", () => {
       render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
@@ -193,6 +201,10 @@ describe("KeysTable", () => {
       await waitFor(() => {
         expect(screen.getByText("sk-auto-fullkey123")).toBeInTheDocument();
       });
+
+      const revealedCode = screen.getByText("sk-auto-fullkey123").closest("code");
+      expect(revealedCode?.className).toContain("break-all");
+      expect(revealedCode?.className).not.toContain("truncate");
     });
   });
 
