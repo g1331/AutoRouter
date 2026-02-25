@@ -367,7 +367,7 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
                         className={cn(
                           "block min-w-0 flex-1 rounded-cf-sm border border-divider bg-surface-300 px-2 py-1 align-middle font-mono text-xs text-foreground",
                           visibleKeyIds.has(key.id)
-                            ? "whitespace-normal break-all"
+                            ? "overflow-x-auto overflow-y-hidden whitespace-nowrap"
                             : "truncate whitespace-nowrap"
                         )}
                       >

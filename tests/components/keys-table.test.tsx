@@ -203,7 +203,9 @@ describe("KeysTable", () => {
       });
 
       const revealedCode = screen.getByText("sk-auto-fullkey123").closest("code");
-      expect(revealedCode?.className).toContain("break-all");
+      expect(revealedCode?.className).toContain("whitespace-nowrap");
+      expect(revealedCode?.className).toContain("overflow-x-auto");
+      expect(revealedCode?.className).not.toContain("break-all");
       expect(revealedCode?.className).not.toContain("truncate");
     });
   });
