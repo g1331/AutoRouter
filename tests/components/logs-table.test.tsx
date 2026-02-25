@@ -156,6 +156,14 @@ describe("LogsTable", () => {
       const dashes = screen.getAllByText("-");
       expect(dashes.length).toBeGreaterThan(0);
     });
+
+    it("keeps status chip width fixed to align status code column", () => {
+      render(<LogsTable logs={[{ ...mockLog, status_code: 500 }]} />);
+
+      const statusLed = screen.getByRole("status");
+      expect(statusLed.className).toContain("w-14");
+      expect(statusLed.className).toContain("justify-center");
+    });
   });
 
   describe("Token Formatting", () => {
@@ -217,25 +225,31 @@ describe("LogsTable", () => {
     });
   });
 
-  describe("Error Row Glow Effect", () => {
-    it("applies error glow for 4xx status", () => {
+  describe("Error Row Styling", () => {
+    it("applies subtle error accent for 4xx status", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 404 }]} />);
 
       const row = screen.getByText("POST").closest("tr");
-      expect(row?.className).toContain("shadow-[inset_0_0_20px");
+      expect(row?.className).toContain("border-l-2");
+      expect(row?.className).toContain("border-l-status-error/45");
+      expect(row?.className).not.toContain("shadow-[inset_0_0_20px");
     });
 
-    it("applies error glow for 5xx status", () => {
+    it("applies subtle error accent for 5xx status", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 503 }]} />);
 
       const row = screen.getByText("POST").closest("tr");
-      expect(row?.className).toContain("shadow-[inset_0_0_20px");
+      expect(row?.className).toContain("border-l-2");
+      expect(row?.className).toContain("border-l-status-error/45");
+      expect(row?.className).not.toContain("shadow-[inset_0_0_20px");
     });
 
-    it("does not apply error glow for 2xx status", () => {
+    it("does not apply error accent for 2xx status", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 200 }]} />);
 
       const row = screen.getByText("POST").closest("tr");
+      expect(row?.className).not.toContain("border-l-2");
+      expect(row?.className).not.toContain("border-l-status-error/45");
       expect(row?.className).not.toContain("shadow-[inset_0_0_20px");
     });
   });

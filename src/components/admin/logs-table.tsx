@@ -359,11 +359,14 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                     <Fragment key={log.id}>
                       <TableRow
                         className={cn(
-                          // Error row glow effect
-                          isError && "shadow-[inset_0_0_20px_-10px_var(--status-error)]",
+                          // Error row accent (subtle left border, no glow)
+                          isError && "border-l-2 border-l-status-error/45",
                           // New row subtle highlight
                           isNew && "bg-status-info-muted/25",
-                          canExpand && "cursor-pointer hover:bg-surface-300/50"
+                          canExpand &&
+                            (isError
+                              ? "cursor-pointer hover:bg-status-error-muted/15"
+                              : "cursor-pointer hover:bg-surface-300/50")
                         )}
                         onClick={() => canExpand && toggleRow(log.id)}
                       >
@@ -429,7 +432,10 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                         <TableCell>
                           {/* LED Status Indicator */}
                           <span className="inline-flex items-center gap-1.5 font-mono">
-                            <StatusLed status={getStatusLedStatus(log.status_code)} />
+                            <StatusLed
+                              status={getStatusLedStatus(log.status_code)}
+                              className="w-14 shrink-0 justify-center"
+                            />
                             <span
                               className={cn(
                                 "text-xs tabular-nums",
