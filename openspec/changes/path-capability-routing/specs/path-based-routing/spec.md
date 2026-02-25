@@ -7,6 +7,11 @@
 - **WHEN** 收到 `POST /v1/responses` 请求
 - **THEN** 系统将其能力类型判定为 `codex_responses`
 
+#### Scenario: 代理子路径与完整路径都可命中同一能力
+- **WHEN** 收到 `POST /api/proxy/v1/responses` 并在代理内部得到子路径 `responses`
+- **THEN** 系统仍将其能力类型判定为 `codex_responses`
+- **AND** 对 `chat/completions`、`messages`、`messages/count_tokens` 等同类 `v1` 子路径执行同样规则
+
 #### Scenario: 未命中能力路径时直接返回错误
 - **WHEN** 请求路径不在能力映射表内
 - **THEN** 系统返回标准化“未匹配路径能力”错误，不进入模型路由兜底
@@ -32,3 +37,4 @@
 #### Scenario: 未命中能力路径
 - **WHEN** 请求未命中能力路径
 - **THEN** 日志记录错误上下文与请求路径，并明确未进入上游转发链路
+- **AND** 记录告警日志用于区分“路径未命中能力”“能力命中但无候选”“有候选但未授权”“授权候选全部不可用”

@@ -267,7 +267,7 @@ describe("proxy route upstream selection", () => {
       usage: null,
     });
 
-    const request = new NextRequest("http://localhost/api/proxy/v1/v1/responses", {
+    const request = new NextRequest("http://localhost/api/proxy/v1/responses", {
       method: "POST",
       headers: {
         authorization: "Bearer sk-test",
@@ -279,7 +279,7 @@ describe("proxy route upstream selection", () => {
     });
 
     const response = await POST(request, {
-      params: Promise.resolve({ path: ["v1", "responses"] }),
+      params: Promise.resolve({ path: ["responses"] }),
     });
 
     expect(response.status).toBe(200);
@@ -315,7 +315,7 @@ describe("proxy route upstream selection", () => {
     ]);
     vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
 
-    const request = new NextRequest("http://localhost/api/proxy/v1/v1/responses", {
+    const request = new NextRequest("http://localhost/api/proxy/v1/responses", {
       method: "POST",
       headers: {
         authorization: "Bearer sk-test",
@@ -327,7 +327,7 @@ describe("proxy route upstream selection", () => {
     });
 
     const response = await POST(request, {
-      params: Promise.resolve({ path: ["v1", "responses"] }),
+      params: Promise.resolve({ path: ["responses"] }),
     });
     const data = await response.json();
 

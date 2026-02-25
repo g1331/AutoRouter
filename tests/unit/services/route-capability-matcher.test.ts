@@ -5,14 +5,18 @@ describe("matchRouteCapability", () => {
   it("should match anthropic message routes", () => {
     expect(matchRouteCapability("POST", "/v1/messages")).toBe("anthropic_messages");
     expect(matchRouteCapability("POST", "v1/messages/count_tokens")).toBe("anthropic_messages");
+    expect(matchRouteCapability("POST", "messages")).toBe("anthropic_messages");
+    expect(matchRouteCapability("POST", "messages/count_tokens")).toBe("anthropic_messages");
   });
 
   it("should match codex responses route", () => {
     expect(matchRouteCapability("POST", "/v1/responses")).toBe("codex_responses");
+    expect(matchRouteCapability("POST", "responses")).toBe("codex_responses");
   });
 
   it("should match openai chat compatible route", () => {
     expect(matchRouteCapability("POST", "/v1/chat/completions")).toBe("openai_chat_compatible");
+    expect(matchRouteCapability("POST", "chat/completions")).toBe("openai_chat_compatible");
   });
 
   it("should match openai extended routes", () => {
@@ -21,6 +25,8 @@ describe("matchRouteCapability", () => {
     expect(matchRouteCapability("POST", "/v1/moderations")).toBe("openai_extended");
     expect(matchRouteCapability("POST", "/v1/images/generations")).toBe("openai_extended");
     expect(matchRouteCapability("POST", "/v1/images/edits")).toBe("openai_extended");
+    expect(matchRouteCapability("POST", "completions")).toBe("openai_extended");
+    expect(matchRouteCapability("POST", "images/edits")).toBe("openai_extended");
   });
 
   it("should match gemini native routes", () => {

@@ -870,6 +870,10 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   const matchedRouteCapability = matchRouteCapability(request.method, path);
 
   if (!matchedRouteCapability) {
+    log.warn(
+      { requestId, method: request.method, path, matchedRouteCapability: null },
+      "path capability not matched, skipping upstream routing"
+    );
     return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED", {
       reason: "NO_HEALTHY_CANDIDATES",
       did_send_upstream: false,
@@ -919,6 +923,16 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   );
 
   if (capabilityCandidates.length === 0) {
+    log.warn(
+      {
+        requestId,
+        path,
+        matchedRouteCapability,
+        activeUpstreamCount: activeUpstreams.length,
+        capabilityCandidatesCount: capabilityCandidates.length,
+      },
+      "no upstream supports matched route capability"
+    );
     return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED", {
       reason: "NO_HEALTHY_CANDIDATES",
       did_send_upstream: false,
@@ -932,6 +946,17 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   );
 
   if (authorizedCapabilityCandidates.length === 0) {
+    log.warn(
+      {
+        requestId,
+        path,
+        matchedRouteCapability,
+        capabilityCandidatesCount: capabilityCandidates.length,
+        authorizedCapabilityCandidatesCount: authorizedCapabilityCandidates.length,
+        allowedUpstreamCount: allowedUpstreamIds.length,
+      },
+      "no authorized upstream for matched route capability"
+    );
     return createUnifiedErrorResponse("NO_AUTHORIZED_UPSTREAMS", {
       reason: "NO_AUTHORIZED_UPSTREAMS",
       did_send_upstream: false,
@@ -952,6 +977,17 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     .map((upstream) => ({ upstream, reason: "unhealthy" as const }));
 
   if (finalCapabilityCandidates.length === 0) {
+    log.warn(
+      {
+        requestId,
+        path,
+        matchedRouteCapability,
+        capabilityCandidatesCount: capabilityCandidates.length,
+        authorizedCapabilityCandidatesCount: authorizedCapabilityCandidates.length,
+        healthyCapabilityCandidatesCount: finalCapabilityCandidates.length,
+      },
+      "all authorized upstreams are unhealthy for matched route capability"
+    );
     return createUnifiedErrorResponse("ALL_UPSTREAMS_UNAVAILABLE", {
       reason: "NO_HEALTHY_CANDIDATES",
       did_send_upstream: false,

@@ -55,3 +55,11 @@
 - [x] 7.7 更新数据库 schema（PG/SQLite）移除 `upstreams.provider_type` 并清理相关索引依赖
 - [x] 7.8 补齐并修复测试，覆盖纯路径路由、无路径能力错误、去 provider 字段后的 CRUD 与 UI
 - [x] 7.9 完成 `pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run` 并修复阻断项
+
+## 8. 路径子路径回归修复与可观测性补强
+
+- [x] 8.1 复现并新增测试：`matchRouteCapability` 需支持代理内部子路径（如 `responses`、`chat/completions`）
+- [x] 8.2 修复能力匹配标准化逻辑，兼容 `v1/...` 与子路径两种输入形态
+- [x] 8.3 修复代理路由测试样例，覆盖真实 catch-all `params.path` 形态（不再强依赖 `v1` 前缀）
+- [x] 8.4 为路径路由早返回分支补齐结构化告警日志，覆盖未命中能力/无候选/未授权/不健康
+- [x] 8.5 同步 proposal/design/spec，补充路径标准化与 `base_url + path` 拼接约定

@@ -74,6 +74,12 @@ Forward request (same as today)
 | `gemini_native_generate` | `POST /v1beta/models/{model}:generateContent`、`POST /v1beta/models/{model}:streamGenerateContent` |
 | `gemini_code_assist_internal` | `POST /v1internal:generateContent`、`POST /v1internal:streamGenerateContent` |
 
+路径匹配标准化规则：
+
+- 代理入口内部拿到的 `path` 可能是完整路径（例如 `v1/responses`），也可能是子路径（例如 `responses`）。  
+- 对 `v1` 系列接口统一做前缀兼容，确保 `v1/responses` 与 `responses` 命中同一能力。  
+- `v1beta/*`、`v1internal:*` 等非 `v1/` 前缀路径不做该裁剪，按原样匹配。
+
 备选方案：
 - 继续保留模型兜底。缺点是会持续耦合 `model` 与兼容字段，路由原理不单一。
 - 全量用户自定义路径规则。缺点是首版维护成本和错误配置风险过高。
@@ -158,6 +164,23 @@ Forward request (same as today)
 - `capability_candidates_count`
 
 用于快速排查“为什么这次请求走到这个上游”。
+
+并补充早返回告警日志，覆盖以下分支：
+
+- 路径未命中能力
+- 能力命中但无能力候选
+- 能力命中但无授权候选
+- 授权候选全部不可用
+
+### Decision 7: 上游 Base URL 与路径拼接约定
+
+请求转发仍采用 `base_url + "/" + path` 直接拼接。  
+因此对于 `responses`、`chat/completions`、`messages` 这类子路径，若目标上游要求最终地址是 `/v1/...`，则 `base_url` 需要包含 `/v1` 尾巴。
+
+示例：
+
+- `base_url=https://api.openai.com/v1` + `path=responses` -> `https://api.openai.com/v1/responses`（正确）
+- `base_url=https://api.openai.com` + `path=responses` -> `https://api.openai.com/responses`（通常不符合官方接口）
 
 ## Risks / Trade-offs
 
