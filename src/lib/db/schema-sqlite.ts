@@ -47,6 +47,7 @@ export const upstreams = sqliteTable(
     weight: integer("weight").notNull().default(1),
     priority: integer("priority").notNull().default(0),
     providerType: text("provider_type").notNull().default("openai"), // "anthropic" | "openai" | "google" | "custom"
+    routeCapabilities: text("route_capabilities", { mode: "json" }).$type<string[] | null>(),
     allowedModels: text("allowed_models", { mode: "json" }).$type<string[] | null>(),
     modelRedirects: text("model_redirects", { mode: "json" }).$type<Record<
       string,

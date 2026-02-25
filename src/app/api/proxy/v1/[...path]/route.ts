@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractApiKey, getKeyPrefix, verifyApiKey } from "@/lib/utils/auth";
-import { db, apiKeys, apiKeyUpstreams, upstreams, type Upstream } from "@/lib/db";
-import { eq, and } from "drizzle-orm";
+import { db, apiKeys, apiKeyUpstreams, upstreams, upstreamHealth, type Upstream } from "@/lib/db";
+import { eq, and, inArray } from "drizzle-orm";
 import {
   forwardRequest,
   prepareUpstreamForProxy,
@@ -37,6 +37,8 @@ import {
   type ProviderType,
   type ModelRouterResult,
 } from "@/lib/services/model-router";
+import { matchRouteCapability } from "@/lib/services/route-capability-matcher";
+import { ensureRouteCapabilityMigration } from "@/lib/services/route-capability-migration";
 import {
   type FailoverConfig,
   DEFAULT_FAILOVER_CONFIG,
@@ -58,6 +60,12 @@ import type {
   RoutingCircuitState,
   RoutingFailureStage,
 } from "@/types/api";
+import {
+  ROUTE_CAPABILITY_PROVIDER_HINT,
+  resolveRouteCapabilities,
+  type RouteCapability,
+  type RouteMatchSource,
+} from "@/lib/route-capabilities";
 import {
   shouldRecordFixture,
   readRequestBody,
@@ -121,6 +129,56 @@ function transformToRoutingDecisionLog(
     excluded,
     candidate_count: routerResult.routingDecision.candidateCount,
     final_candidate_count: routerResult.routingDecision.finalCandidateCount,
+    selected_upstream_id: selectedUpstreamId,
+    candidate_upstream_id: diagnostics?.candidateUpstreamId ?? selectedUpstreamId,
+    actual_upstream_id: diagnostics?.actualUpstreamId ?? null,
+    ...(typeof diagnostics?.didSendUpstream === "boolean"
+      ? { did_send_upstream: diagnostics.didSendUpstream }
+      : {}),
+    ...(diagnostics?.failureStage !== undefined ? { failure_stage: diagnostics.failureStage } : {}),
+    selection_strategy: "weighted",
+  };
+}
+
+function transformPathRoutingDecisionLog(
+  input: {
+    matchedRouteCapability: RouteCapability;
+    routeMatchSource: RouteMatchSource;
+    providerType: ProviderType | null;
+    model: string | null;
+    capabilityCandidates: Upstream[];
+    finalCandidates: Upstream[];
+    excludedCandidates: Array<{ upstream: Upstream; reason: "unhealthy" | "circuit_open" }>;
+  },
+  selectedUpstreamId: string | null,
+  diagnostics?: RoutingDecisionDiagnostics
+): RoutingDecisionLog {
+  const candidates: RoutingCandidate[] = input.capabilityCandidates.map((upstream) => ({
+    id: upstream.id,
+    name: upstream.name,
+    weight: upstream.weight,
+    circuit_state: "closed",
+  }));
+
+  const excluded: RoutingExcluded[] = input.excludedCandidates.map(({ upstream, reason }) => ({
+    id: upstream.id,
+    name: upstream.name,
+    reason,
+  }));
+
+  return {
+    original_model: input.model ?? "(path-based)",
+    resolved_model: input.model ?? "(path-based)",
+    model_redirect_applied: false,
+    provider_type: input.providerType,
+    routing_type: "path_capability",
+    matched_route_capability: input.matchedRouteCapability,
+    route_match_source: input.routeMatchSource,
+    capability_candidates_count: input.capabilityCandidates.length,
+    candidates,
+    excluded,
+    candidate_count: input.capabilityCandidates.length,
+    final_candidate_count: input.finalCandidates.length,
     selected_upstream_id: selectedUpstreamId,
     candidate_upstream_id: diagnostics?.candidateUpstreamId ?? selectedUpstreamId,
     actual_upstream_id: diagnostics?.actualUpstreamId ?? null,
@@ -374,9 +432,10 @@ async function captureFailedResponse(result: ProxyResult): Promise<{
 async function forwardWithFailover(
   request: NextRequest,
   providerType: ProviderType,
+  routeCapability: RouteCapability | null,
   path: string,
   requestId: string,
-  allowedUpstreamIds: string[],
+  candidateUpstreamIds: string[],
   affinityContext: {
     apiKeyId: string;
     sessionId: string | null;
@@ -422,18 +481,32 @@ async function forwardWithFailover(
       // Select an upstream using provider type, excluding previously failed ones
       // and filtering by allowed upstream IDs (API key authorization)
       // Pass session affinity context if available
-      const selection = await selectFromProviderType(
-        providerType,
-        failedUpstreamIds.length > 0 ? failedUpstreamIds : undefined,
-        allowedUpstreamIds,
-        affinityContext?.sessionId
-          ? {
-              apiKeyId: affinityContext.apiKeyId,
-              sessionId: affinityContext.sessionId,
-              contentLength: affinityContext.contentLength,
+      const excludeIds = failedUpstreamIds.length > 0 ? failedUpstreamIds : undefined;
+      const affinitySelectionContext = affinityContext?.sessionId
+        ? {
+            apiKeyId: affinityContext.apiKeyId,
+            sessionId: affinityContext.sessionId,
+            contentLength: affinityContext.contentLength,
+            affinityScope: routeCapability ?? providerType,
+          }
+        : undefined;
+      const selection = routeCapability
+        ? await selectFromProviderType(
+            providerType,
+            excludeIds,
+            candidateUpstreamIds,
+            affinitySelectionContext,
+            {
+              candidateUpstreamIds,
+              affinityScope: routeCapability,
             }
-          : undefined
-      );
+          )
+        : await selectFromProviderType(
+            providerType,
+            excludeIds,
+            candidateUpstreamIds,
+            affinitySelectionContext
+          );
 
       selectedUpstream = selection.upstream;
       // Capture affinity info from first successful selection
@@ -840,95 +913,221 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   // Routing type is always "tiered" for priority-based routing
   const routingType = "tiered" as const;
 
-  // Extract model from request body for model-based routing
-  // First pass: extract model without provider type (sessionId will be extracted later)
+  await ensureRouteCapabilityMigration();
+
+  // Extract model from request body. For path-based routing, model may be absent.
   const tempContext = await extractRequestContext(request, null);
   const model = tempContext.model;
+  const bodyJson: Record<string, unknown> | null = tempContext.bodyJson;
+  const matchedByPath = matchRouteCapability(request.method, path);
 
-  if (!model) {
-    return NextResponse.json({ error: "Missing required field: model" }, { status: 400 });
-  }
+  // Get API key's authorized upstream IDs
+  const upstreamPermissions = await db.query.apiKeyUpstreams.findMany({
+    where: eq(apiKeyUpstreams.apiKeyId, validApiKey.id),
+  });
+  const allowedUpstreamIds = Array.isArray(upstreamPermissions)
+    ? upstreamPermissions.map((p) => p.upstreamId)
+    : [];
+  const allowedUpstreamIdSet = new Set(allowedUpstreamIds);
 
-  // Model-based routing
+  // Route context
   let selectedUpstream: Upstream | undefined;
   let priorityTier: number | null = null;
   let providerType: ProviderType | null = null;
-  let resolvedModel = model;
-  let allowedUpstreamIds: string[] = [];
+  let resolvedModel: string | null = model;
+  let routeMatchSource: RouteMatchSource = "model_fallback";
+  let matchedRouteCapability: RouteCapability | null = null;
+  let candidateUpstreamIds: string[] = [];
+  let capabilityCandidates: Upstream[] = [];
+  let finalCapabilityCandidates: Upstream[] = [];
+  let excludedCapabilityCandidates: Array<{
+    upstream: Upstream;
+    reason: "unhealthy" | "circuit_open";
+  }> = [];
   let routerResult: ModelRouterResult | null = null;
   let sessionId: string | null = null;
-  const bodyJson: Record<string, unknown> | null = tempContext.bodyJson;
 
-  try {
-    // Route by model
-    routerResult = await routeByModel(model);
+  if (matchedByPath) {
+    routeMatchSource = "path";
+    matchedRouteCapability = matchedByPath;
 
-    if (!routerResult.upstream) {
-      return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED", {
-        reason: "NO_HEALTHY_CANDIDATES",
-        did_send_upstream: false,
-        request_id: requestId,
-        user_hint: "未找到可匹配该模型的上游，请先检查模型路由和上游配置",
-      });
-    }
+    const activeUpstreams = await db.query.upstreams.findMany({
+      where: eq(upstreams.isActive, true),
+    });
 
-    log.debug(
-      {
-        requestId,
-        model,
-        providerType: routerResult.providerType,
-        resolvedModel: routerResult.resolvedModel,
-        candidateCount: routerResult.candidateUpstreams?.length ?? 0,
-        excludedCount: routerResult.excludedUpstreams?.length ?? 0,
-        excluded: routerResult.excludedUpstreams,
-        candidates: routerResult.candidateUpstreams,
-      },
-      "routeByModel decision"
+    const healthRows =
+      activeUpstreams.length > 0
+        ? await db.query.upstreamHealth.findMany({
+            where: inArray(
+              upstreamHealth.upstreamId,
+              activeUpstreams.map((item) => item.id)
+            ),
+          })
+        : [];
+    const healthMap = new Map(healthRows.map((item) => [item.upstreamId, item]));
+
+    capabilityCandidates = activeUpstreams.filter((upstream) =>
+      resolveRouteCapabilities(upstream.routeCapabilities, upstream.providerType).includes(
+        matchedByPath
+      )
     );
 
-    selectedUpstream = routerResult.upstream;
-    providerType = routerResult.providerType;
-    resolvedModel = routerResult.resolvedModel;
-
-    // Extract session ID now that we know the provider type
-    if (providerType && bodyJson) {
-      sessionId = extractSessionId(
-        providerType,
-        Object.fromEntries(request.headers.entries()),
-        bodyJson
-      );
-      if (sessionId) {
-        log.debug({ requestId, providerType, sessionId }, "session affinity: extracted sessionId");
-      }
-    }
-
-    // Get API key's allowed upstream IDs for authorization filtering
-    const upstreamPermissions = await db.query.apiKeyUpstreams.findMany({
-      where: eq(apiKeyUpstreams.apiKeyId, validApiKey.id),
-    });
-    allowedUpstreamIds = upstreamPermissions.map((p) => p.upstreamId);
-  } catch (error) {
-    if (error instanceof NoUpstreamGroupError) {
+    if (capabilityCandidates.length === 0) {
       return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED", {
         reason: "NO_HEALTHY_CANDIDATES",
         did_send_upstream: false,
         request_id: requestId,
-        user_hint: "未找到可匹配该模型的上游，请先检查模型路由和上游配置",
+        user_hint: `未找到支持路径能力 ${matchedByPath} 的上游，请先检查上游能力配置`,
       });
     }
-    if (error instanceof NoHealthyUpstreamError) {
-      log.warn(
-        { requestId, model, providerType: error.providerType },
-        "routeByModel no candidates"
-      );
+
+    const authorizedCapabilityCandidates = capabilityCandidates.filter((upstream) =>
+      allowedUpstreamIdSet.has(upstream.id)
+    );
+
+    if (authorizedCapabilityCandidates.length === 0) {
+      return createUnifiedErrorResponse("NO_AUTHORIZED_UPSTREAMS", {
+        reason: "NO_AUTHORIZED_UPSTREAMS",
+        did_send_upstream: false,
+        request_id: requestId,
+        user_hint: "当前密钥没有可用的路径能力授权，请在密钥配置中绑定对应上游",
+      });
+    }
+
+    finalCapabilityCandidates = authorizedCapabilityCandidates.filter((upstream) => {
+      const health = healthMap.get(upstream.id);
+      return health?.isHealthy ?? true;
+    });
+    excludedCapabilityCandidates = authorizedCapabilityCandidates
+      .filter((upstream) => {
+        const health = healthMap.get(upstream.id);
+        return !(health?.isHealthy ?? true);
+      })
+      .map((upstream) => ({ upstream, reason: "unhealthy" as const }));
+
+    if (finalCapabilityCandidates.length === 0) {
       return createUnifiedErrorResponse("ALL_UPSTREAMS_UNAVAILABLE", {
         reason: "NO_HEALTHY_CANDIDATES",
         did_send_upstream: false,
         request_id: requestId,
-        user_hint: "当前没有可用上游候选，请检查上游启用状态和熔断状态",
+        user_hint: "命中路径能力后没有可用上游，请检查上游健康状态和熔断状态",
       });
     }
-    throw error;
+
+    selectedUpstream = finalCapabilityCandidates[0];
+    candidateUpstreamIds = finalCapabilityCandidates.map((upstream) => upstream.id);
+    providerType = ROUTE_CAPABILITY_PROVIDER_HINT[matchedByPath];
+
+    log.debug(
+      {
+        requestId,
+        path,
+        matchedRouteCapability: matchedByPath,
+        candidateCount: capabilityCandidates.length,
+        authorizedCount: authorizedCapabilityCandidates.length,
+        healthyCount: finalCapabilityCandidates.length,
+      },
+      "path-based capability routing decision"
+    );
+  } else {
+    if (!model) {
+      return NextResponse.json({ error: "Missing required field: model" }, { status: 400 });
+    }
+
+    try {
+      // Model fallback routing
+      routerResult = await routeByModel(model);
+
+      if (!routerResult.upstream) {
+        return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED", {
+          reason: "NO_HEALTHY_CANDIDATES",
+          did_send_upstream: false,
+          request_id: requestId,
+          user_hint: "未找到可匹配该模型的上游，请先检查模型路由和上游配置",
+        });
+      }
+
+      log.debug(
+        {
+          requestId,
+          model,
+          providerType: routerResult.providerType,
+          resolvedModel: routerResult.resolvedModel,
+          candidateCount: routerResult.candidateUpstreams?.length ?? 0,
+          excludedCount: routerResult.excludedUpstreams?.length ?? 0,
+          excluded: routerResult.excludedUpstreams,
+          candidates: routerResult.candidateUpstreams,
+        },
+        "routeByModel fallback decision"
+      );
+
+      selectedUpstream = routerResult.upstream;
+      providerType = routerResult.providerType;
+      resolvedModel = routerResult.resolvedModel;
+      candidateUpstreamIds = allowedUpstreamIds;
+    } catch (error) {
+      if (error instanceof NoUpstreamGroupError) {
+        return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED", {
+          reason: "NO_HEALTHY_CANDIDATES",
+          did_send_upstream: false,
+          request_id: requestId,
+          user_hint: "未找到可匹配该模型的上游，请先检查模型路由和上游配置",
+        });
+      }
+      if (error instanceof NoHealthyUpstreamError) {
+        log.warn(
+          { requestId, model, providerType: error.providerType },
+          "routeByModel no candidates"
+        );
+        return createUnifiedErrorResponse("ALL_UPSTREAMS_UNAVAILABLE", {
+          reason: "NO_HEALTHY_CANDIDATES",
+          did_send_upstream: false,
+          request_id: requestId,
+          user_hint: "当前没有可用上游候选，请检查上游启用状态和熔断状态",
+        });
+      }
+      throw error;
+    }
+  }
+
+  // Extract session ID after routing context is known
+  if ((matchedRouteCapability || providerType) && bodyJson) {
+    sessionId = extractSessionId(
+      matchedRouteCapability ?? providerType!,
+      Object.fromEntries(request.headers.entries()),
+      bodyJson
+    );
+    if (sessionId) {
+      log.debug(
+        { requestId, matchedRouteCapability, providerType, sessionId },
+        "session affinity: extracted sessionId"
+      );
+    }
+  }
+
+  if (!candidateUpstreamIds.length) {
+    candidateUpstreamIds = allowedUpstreamIds;
+  }
+
+  if (!providerType && selectedUpstream) {
+    const normalizedProviderType = selectedUpstream.providerType.toLowerCase();
+    if (
+      normalizedProviderType === "openai" ||
+      normalizedProviderType === "anthropic" ||
+      normalizedProviderType === "google" ||
+      normalizedProviderType === "custom"
+    ) {
+      providerType = normalizedProviderType as ProviderType;
+    }
+  }
+
+  if (!providerType && !matchedRouteCapability) {
+    return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED", {
+      reason: "NO_HEALTHY_CANDIDATES",
+      did_send_upstream: false,
+      request_id: requestId,
+      user_hint: "无法确定上游类型，请检查路由配置",
+    });
   }
 
   // Track failover history outside try block for error logging
@@ -940,14 +1139,33 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
   // Build initial routing decision log (will be updated with final upstream after selection)
   const initialRoutingDecisionLog =
-    routerResult && routerResult.routingDecision
-      ? transformToRoutingDecisionLog(routerResult, selectedUpstream?.id ?? null, {
-          candidateUpstreamId: selectedUpstream?.id ?? null,
-          actualUpstreamId: null,
-          didSendUpstream: false,
-          failureStage: null,
-        })
-      : null;
+    routeMatchSource === "path" && matchedRouteCapability
+      ? transformPathRoutingDecisionLog(
+          {
+            matchedRouteCapability,
+            routeMatchSource,
+            providerType,
+            model,
+            capabilityCandidates,
+            finalCandidates: finalCapabilityCandidates,
+            excludedCandidates: excludedCapabilityCandidates,
+          },
+          selectedUpstream?.id ?? null,
+          {
+            candidateUpstreamId: selectedUpstream?.id ?? null,
+            actualUpstreamId: null,
+            didSendUpstream: false,
+            failureStage: null,
+          }
+        )
+      : routerResult && routerResult.routingDecision
+        ? transformToRoutingDecisionLog(routerResult, selectedUpstream?.id ?? null, {
+            candidateUpstreamId: selectedUpstream?.id ?? null,
+            actualUpstreamId: null,
+            didSendUpstream: false,
+            failureStage: null,
+          })
+        : null;
 
   // Create an in-progress log entry so the admin UI can show active requests.
   // Never fail the proxy request if logging fails.
@@ -999,9 +1217,10 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       } = await forwardWithFailover(
         request,
         providerType,
+        matchedRouteCapability,
         path,
         requestId,
-        allowedUpstreamIds,
+        candidateUpstreamIds,
         affinityContext
       );
       result = proxyResult;
@@ -1038,14 +1257,33 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
     // Build final routing decision log with actual selected upstream
     const finalRoutingDecisionLog =
-      routerResult && routerResult.routingDecision
-        ? transformToRoutingDecisionLog(routerResult, upstreamForLogging.id, {
-            candidateUpstreamId: upstreamForLogging.id,
-            actualUpstreamId: upstreamForLogging.id,
-            didSendUpstream: true,
-            failureStage: null,
-          })
-        : null;
+      routeMatchSource === "path" && matchedRouteCapability
+        ? transformPathRoutingDecisionLog(
+            {
+              matchedRouteCapability,
+              routeMatchSource,
+              providerType,
+              model,
+              capabilityCandidates,
+              finalCandidates: finalCapabilityCandidates,
+              excludedCandidates: excludedCapabilityCandidates,
+            },
+            upstreamForLogging.id,
+            {
+              candidateUpstreamId: upstreamForLogging.id,
+              actualUpstreamId: upstreamForLogging.id,
+              didSendUpstream: true,
+              failureStage: null,
+            }
+          )
+        : routerResult && routerResult.routingDecision
+          ? transformToRoutingDecisionLog(routerResult, upstreamForLogging.id, {
+              candidateUpstreamId: upstreamForLogging.id,
+              actualUpstreamId: upstreamForLogging.id,
+              didSendUpstream: true,
+              failureStage: null,
+            })
+          : null;
 
     // Update the in-progress log with the actual upstream
     if (requestLogId) {
@@ -1080,7 +1318,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             };
             affinityStore.updateCumulativeTokens(
               affinityContext.apiKeyId,
-              providerType,
+              matchedRouteCapability ?? providerType,
               affinityContext.sessionId,
               affinityUsage
             );
@@ -1228,7 +1466,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         };
         affinityStore.updateCumulativeTokens(
           affinityContext.apiKeyId,
-          providerType,
+          matchedRouteCapability ?? providerType,
           affinityContext.sessionId,
           affinityUsage
         );
@@ -1406,14 +1644,33 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     const downstreamErrorBody = createUnifiedErrorBody(errorCode, errorDetails);
 
     const failureRoutingDecisionLog =
-      routerResult && routerResult.routingDecision
-        ? transformToRoutingDecisionLog(routerResult, actualUpstreamId, {
-            candidateUpstreamId,
+      routeMatchSource === "path" && matchedRouteCapability
+        ? transformPathRoutingDecisionLog(
+            {
+              matchedRouteCapability,
+              routeMatchSource,
+              providerType,
+              model,
+              capabilityCandidates,
+              finalCandidates: finalCapabilityCandidates,
+              excludedCandidates: excludedCapabilityCandidates,
+            },
             actualUpstreamId,
-            didSendUpstream,
-            failureStage,
-          })
-        : initialRoutingDecisionLog;
+            {
+              candidateUpstreamId,
+              actualUpstreamId,
+              didSendUpstream,
+              failureStage,
+            }
+          )
+        : routerResult && routerResult.routingDecision
+          ? transformToRoutingDecisionLog(routerResult, actualUpstreamId, {
+              candidateUpstreamId,
+              actualUpstreamId,
+              didSendUpstream,
+              failureStage,
+            })
+          : initialRoutingDecisionLog;
 
     if (shouldRecordFailure && inboundBody) {
       const fallbackOutboundHeaders = filterHeaders(new Headers(request.headers));

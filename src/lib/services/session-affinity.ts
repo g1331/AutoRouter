@@ -7,6 +7,7 @@
 
 import { createHash } from "crypto";
 import type { ProviderType } from "@/types/api";
+import type { RouteCapability } from "@/lib/route-capabilities";
 
 // ============================================================================
 // Types
@@ -29,6 +30,8 @@ export interface AffinityMigrationConfig {
   metric: "tokens" | "length";
   threshold: number;
 }
+
+export type AffinityScope = ProviderType | RouteCapability;
 
 // ============================================================================
 // Configuration
@@ -56,18 +59,18 @@ export class SessionAffinityStore {
   }
 
   /**
-   * Generate cache key from API key ID, provider type, and session ID
+   * Generate cache key from API key ID, affinity scope, and session ID
    */
-  private generateKey(apiKeyId: string, providerType: ProviderType, sessionId: string): string {
-    const data = `${apiKeyId}:${providerType}:${sessionId}`;
+  private generateKey(apiKeyId: string, affinityScope: AffinityScope, sessionId: string): string {
+    const data = `${apiKeyId}:${affinityScope}:${sessionId}`;
     return createHash("sha256").update(data).digest("hex");
   }
 
   /**
    * Get affinity entry for a session
    */
-  get(apiKeyId: string, providerType: ProviderType, sessionId: string): AffinityEntry | null {
-    const key = this.generateKey(apiKeyId, providerType, sessionId);
+  get(apiKeyId: string, affinityScope: AffinityScope, sessionId: string): AffinityEntry | null {
+    const key = this.generateKey(apiKeyId, affinityScope, sessionId);
     const entry = this.cache.get(key);
 
     if (!entry) {
@@ -101,12 +104,12 @@ export class SessionAffinityStore {
    */
   set(
     apiKeyId: string,
-    providerType: ProviderType,
+    affinityScope: AffinityScope,
     sessionId: string,
     upstreamId: string,
     contentLength: number
   ): void {
-    const key = this.generateKey(apiKeyId, providerType, sessionId);
+    const key = this.generateKey(apiKeyId, affinityScope, sessionId);
     const now = Date.now();
 
     // Check if entry exists to preserve cumulative tokens
@@ -132,11 +135,11 @@ export class SessionAffinityStore {
    */
   updateCumulativeTokens(
     apiKeyId: string,
-    providerType: ProviderType,
+    affinityScope: AffinityScope,
     sessionId: string,
     usage: AffinityUsage
   ): void {
-    const key = this.generateKey(apiKeyId, providerType, sessionId);
+    const key = this.generateKey(apiKeyId, affinityScope, sessionId);
     const entry = this.cache.get(key);
 
     if (!entry) {
@@ -154,16 +157,16 @@ export class SessionAffinityStore {
   /**
    * Delete affinity entry
    */
-  delete(apiKeyId: string, providerType: ProviderType, sessionId: string): boolean {
-    const key = this.generateKey(apiKeyId, providerType, sessionId);
+  delete(apiKeyId: string, affinityScope: AffinityScope, sessionId: string): boolean {
+    const key = this.generateKey(apiKeyId, affinityScope, sessionId);
     return this.cache.delete(key);
   }
 
   /**
    * Check if affinity exists and is valid
    */
-  has(apiKeyId: string, providerType: ProviderType, sessionId: string): boolean {
-    return this.get(apiKeyId, providerType, sessionId) !== null;
+  has(apiKeyId: string, affinityScope: AffinityScope, sessionId: string): boolean {
+    return this.get(apiKeyId, affinityScope, sessionId) !== null;
   }
 
   /**
@@ -264,20 +267,24 @@ export class SessionAffinityStore {
 // ============================================================================
 
 /**
- * Extract session ID from request based on provider type
+ * Extract session ID from request based on route capability.
  *
  * Anthropic: Extracts UUID from body.metadata.user_id (format: "..._session_{uuid}")
- * OpenAI: Uses headers.session_id directly
+ * OpenAI compatible capabilities: Uses headers.session_id directly
  * Others: Returns null
  */
 export function extractSessionId(
-  providerType: ProviderType,
+  capabilityOrProvider: RouteCapability | ProviderType,
   headers: Record<string, string | string[] | undefined>,
   bodyJson: Record<string, unknown> | null
 ): string | null {
-  switch (providerType) {
+  switch (capabilityOrProvider) {
+    case "anthropic_messages":
     case "anthropic":
       return extractAnthropicSessionId(bodyJson);
+    case "codex_responses":
+    case "openai_chat_compatible":
+    case "openai_extended":
     case "openai":
       return extractOpenAISessionId(headers);
     default:

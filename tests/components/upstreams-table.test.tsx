@@ -61,6 +61,7 @@ describe("UpstreamsTable", () => {
     description: "Test description",
     weight: 1,
     priority: 0,
+    route_capabilities: ["openai_chat_compatible"],
     allowed_models: null,
     model_redirects: null,
     health_status: null,
@@ -149,7 +150,8 @@ describe("UpstreamsTable", () => {
       const desktop = getDesktopLayout();
 
       expect(desktop.getByText("name")).toBeInTheDocument();
-      expect(desktop.getByText("providerType")).toBeInTheDocument();
+      expect(desktop.getByText("routeCapabilities")).toBeInTheDocument();
+      expect(desktop.getByText("compatibilityProvider")).toBeInTheDocument();
       expect(desktop.getByText("tableWeight")).toBeInTheDocument();
       expect(desktop.getByText("tableHealth")).toBeInTheDocument();
       expect(desktop.getByText("tableCircuitBreaker")).toBeInTheDocument();

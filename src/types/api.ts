@@ -52,6 +52,14 @@ export interface APIKeyRevealResponse {
  * Provider type for routing and authentication
  */
 export type ProviderType = "anthropic" | "openai" | "google" | "custom";
+export type RouteCapability =
+  | "anthropic_messages"
+  | "codex_responses"
+  | "openai_chat_compatible"
+  | "openai_extended"
+  | "gemini_native_generate"
+  | "gemini_code_assist_internal";
+export type RouteMatchSource = "path" | "model_fallback";
 
 // ========== Upstream Health 相关类型 ==========
 
@@ -123,6 +131,7 @@ export interface UpstreamCreate {
   weight?: number; // Load balancing weight (default: 1)
   priority?: number; // Priority tier (default: 0, lower = higher priority)
   provider_type?: ProviderType; // Provider type for routing and auth (default: "openai")
+  route_capabilities?: RouteCapability[] | null; // Path routing capability set
   allowed_models?: string[] | null; // List of supported model names
   model_redirects?: Record<string, string> | null; // Model name mapping
   circuit_breaker_config?: CircuitBreakerConfig | null; // Circuit breaker configuration
@@ -140,6 +149,7 @@ export interface UpstreamUpdate {
   weight?: number; // Load balancing weight
   priority?: number; // Priority tier (lower = higher priority)
   provider_type?: ProviderType; // Provider type for routing and auth
+  route_capabilities?: RouteCapability[] | null; // Path routing capability set
   allowed_models?: string[] | null; // List of supported model names
   model_redirects?: Record<string, string> | null; // Model name mapping
   circuit_breaker_config?: CircuitBreakerConfig | null; // Circuit breaker configuration
@@ -160,6 +170,7 @@ export interface UpstreamResponse {
   health_status?: UpstreamHealthResponse | null; // Health status (populated when requested)
   circuit_breaker?: CircuitBreakerStatus | null; // Circuit breaker status
   provider_type: ProviderType; // Provider type for routing and auth
+  route_capabilities: RouteCapability[]; // Path routing capability set
   allowed_models: string[] | null; // List of supported model names
   model_redirects: Record<string, string> | null; // Model name mapping
   affinity_migration: AffinityMigrationConfig | null; // Session affinity migration configuration
@@ -232,7 +243,7 @@ export type RoutingCircuitState = "closed" | "open" | "half_open";
 /**
  * Routing decision type
  */
-export type RoutingDecisionType = "provider_type" | "group" | "none";
+export type RoutingDecisionType = "provider_type" | "path_capability" | "group" | "none";
 
 /**
  * Failure stage for request lifecycle diagnostics.
@@ -280,6 +291,9 @@ export interface RoutingDecisionLog {
   // Routing decision
   provider_type: string | null;
   routing_type: RoutingDecisionType;
+  matched_route_capability?: RouteCapability | null;
+  route_match_source?: RouteMatchSource | null;
+  capability_candidates_count?: number | null;
 
   // Candidate upstreams (simplified, only key info)
   candidates: RoutingCandidate[];

@@ -13,7 +13,7 @@ import type {
   PaginatedRequestLogs,
   FailoverAttempt,
 } from "@/lib/services/request-logger";
-import type { RoutingDecisionLog } from "@/types/api";
+import type { RouteCapability, RoutingDecisionLog } from "@/types/api";
 import type {
   StatsOverview,
   StatsTimeseries,
@@ -64,6 +64,7 @@ export interface UpstreamApiResponse {
   weight: number;
   priority: number;
   provider_type: string;
+  route_capabilities: RouteCapability[];
   allowed_models: string[] | null;
   model_redirects: Record<string, string> | null;
   affinity_migration: {
@@ -106,6 +107,7 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
     weight: upstream.weight,
     priority: upstream.priority,
     provider_type: upstream.providerType,
+    route_capabilities: upstream.routeCapabilities,
     allowed_models: upstream.allowedModels,
     model_redirects: upstream.modelRedirects,
     affinity_migration: upstream.affinityMigration,

@@ -53,6 +53,7 @@ export const upstreams = pgTable(
     weight: integer("weight").notNull().default(1),
     priority: integer("priority").notNull().default(0),
     providerType: varchar("provider_type", { length: 32 }).notNull().default("openai"), // "anthropic" | "openai" | "google" | "custom"
+    routeCapabilities: json("route_capabilities").$type<string[] | null>(), // Path routing capabilities
     allowedModels: json("allowed_models").$type<string[] | null>(), // JSON array of supported model names
     modelRedirects: json("model_redirects").$type<Record<string, string> | null>(), // JSON object mapping incoming model to target model
     affinityMigration: json("affinity_migration").$type<{

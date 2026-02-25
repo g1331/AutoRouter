@@ -22,6 +22,7 @@ import { useToggleUpstreamActive } from "@/hooks/use-upstreams";
 import { useForceCircuitBreaker } from "@/hooks/use-circuit-breaker";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
+import { RouteCapabilityBadges } from "@/components/admin/route-capability-badges";
 
 interface UpstreamsTableProps {
   upstreams: Upstream[];
@@ -367,11 +368,12 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[18%]">{tCommon("name")}</TableHead>
-                <TableHead className="w-[10%]">{t("providerType")}</TableHead>
+                <TableHead className="w-[18%]">{t("routeCapabilities")}</TableHead>
+                <TableHead className="w-[10%]">{t("compatibilityProvider")}</TableHead>
                 <TableHead className="w-[10%]">{t("tableWeight")}</TableHead>
                 <TableHead className="w-[11%]">{t("tableHealth")}</TableHead>
                 <TableHead className="w-[12%]">{t("tableCircuitBreaker")}</TableHead>
-                <TableHead className="w-[19%]">{t("tableBaseUrl")}</TableHead>
+                <TableHead className="w-[15%]">{t("tableBaseUrl")}</TableHead>
                 <TableHead className="hidden w-[8%] text-right 2xl:table-cell">
                   {tCommon("createdAt")}
                 </TableHead>
@@ -389,7 +391,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                       className="bg-surface-300 hover:bg-surface-300 cursor-pointer"
                       onClick={() => toggleTier(tier.priority)}
                     >
-                      <TableCell colSpan={8} className="py-2">
+                      <TableCell colSpan={9} className="py-2">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex min-w-0 items-center gap-3">
                             <Button
@@ -461,6 +463,9 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                                   {upstream.is_active ? t("active") : t("inactive")}
                                 </Badge>
                               </div>
+                            </TableCell>
+                            <TableCell>
+                              <RouteCapabilityBadges capabilities={upstream.route_capabilities} />
                             </TableCell>
                             <TableCell>{formatProvider(upstream.provider_type)}</TableCell>
                             <TableCell>
@@ -572,6 +577,11 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                         </div>
                         <div className="shrink-0">{formatProvider(upstream.provider_type)}</div>
                       </div>
+
+                      <RouteCapabilityBadges
+                        capabilities={upstream.route_capabilities}
+                        className="mt-1"
+                      />
 
                       {/* Card Body: Stats Grid - aligned label:value pairs */}
                       <div className="grid grid-cols-1 gap-x-6 gap-y-1 font-mono text-[11px] sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">

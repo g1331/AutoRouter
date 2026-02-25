@@ -129,6 +129,7 @@ export function RoutingDecisionTimeline({
     }
     const labels: Record<string, string> = {
       provider_type: t("routingProviderType"),
+      path_capability: t("routingPathCapability"),
       tiered: t("routingTiered"),
       none: t("routingNone"),
     };
@@ -278,6 +279,20 @@ export function RoutingDecisionTimeline({
                 {t("tooltipCandidates").toLowerCase()}
               </span>
             </div>
+            {routingDecision.matched_route_capability && (
+              <div className="mb-1 text-muted-foreground">
+                {t("matchedRouteCapability")}: {routingDecision.matched_route_capability}
+                {routingDecision.route_match_source && (
+                  <span className="ml-2">
+                    ({t("routeMatchSource")}:{" "}
+                    {routingDecision.route_match_source === "path"
+                      ? t("routeMatchSourcePath")
+                      : t("routeMatchSourceModelFallback")}
+                    )
+                  </span>
+                )}
+              </div>
+            )}
             {routingDecision.candidates.map((c) => {
               const selectedCandidateId =
                 didSendUpstream === false
