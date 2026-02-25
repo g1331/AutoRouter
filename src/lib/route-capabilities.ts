@@ -1,5 +1,3 @@
-import type { ProviderType } from "@/types/api";
-
 export const ROUTE_CAPABILITY_VALUES = [
   "anthropic_messages",
   "codex_responses",
@@ -11,7 +9,8 @@ export const ROUTE_CAPABILITY_VALUES = [
 
 export type RouteCapability = (typeof ROUTE_CAPABILITY_VALUES)[number];
 
-export type RouteMatchSource = "path" | "model_fallback";
+export type RouteMatchSource = "path";
+export type CapabilityProvider = "anthropic" | "openai" | "google";
 
 export interface RouteCapabilityDefinition {
   value: RouteCapability;
@@ -66,14 +65,7 @@ export const ROUTE_CAPABILITY_DEFINITIONS: readonly RouteCapabilityDefinition[] 
   },
 ] as const;
 
-export const DEFAULT_ROUTE_CAPABILITIES_BY_PROVIDER: Record<ProviderType, RouteCapability[]> = {
-  openai: ["codex_responses", "openai_chat_compatible", "openai_extended"],
-  anthropic: ["anthropic_messages"],
-  google: ["gemini_native_generate"],
-  custom: [],
-};
-
-export const ROUTE_CAPABILITY_PROVIDER_HINT: Record<RouteCapability, ProviderType> = {
+export const ROUTE_CAPABILITY_PROVIDER_MAP: Record<RouteCapability, CapabilityProvider> = {
   anthropic_messages: "anthropic",
   codex_responses: "openai",
   openai_chat_compatible: "openai",
@@ -107,38 +99,22 @@ export function normalizeRouteCapabilities(
   return ROUTE_CAPABILITY_VALUES.filter((value) => unique.has(value));
 }
 
-export function getDefaultRouteCapabilitiesForProvider(
-  providerType: string | null | undefined
+export function resolveRouteCapabilities(
+  routeCapabilities: readonly string[] | null | undefined
 ): RouteCapability[] {
-  if (!providerType) {
-    return [];
-  }
-
-  const normalized = providerType.trim().toLowerCase();
-  if (normalized === "openai") {
-    return [...DEFAULT_ROUTE_CAPABILITIES_BY_PROVIDER.openai];
-  }
-  if (normalized === "anthropic") {
-    return [...DEFAULT_ROUTE_CAPABILITIES_BY_PROVIDER.anthropic];
-  }
-  if (normalized === "google") {
-    return [...DEFAULT_ROUTE_CAPABILITIES_BY_PROVIDER.google];
-  }
-  if (normalized === "custom") {
-    return [...DEFAULT_ROUTE_CAPABILITIES_BY_PROVIDER.custom];
-  }
-
-  return [];
+  return normalizeRouteCapabilities(routeCapabilities);
 }
 
-export function resolveRouteCapabilities(
-  routeCapabilities: readonly string[] | null | undefined,
-  providerType: string | null | undefined
-): RouteCapability[] {
-  const normalized = normalizeRouteCapabilities(routeCapabilities);
-  if (normalized.length > 0) {
-    return normalized;
-  }
+export function getProviderByRouteCapability(capability: RouteCapability): CapabilityProvider {
+  return ROUTE_CAPABILITY_PROVIDER_MAP[capability];
+}
 
-  return getDefaultRouteCapabilitiesForProvider(providerType);
+export function getPrimaryProviderByCapabilities(
+  routeCapabilities: readonly string[] | null | undefined
+): CapabilityProvider | null {
+  const normalized = resolveRouteCapabilities(routeCapabilities);
+  if (normalized.length === 0) {
+    return null;
+  }
+  return getProviderByRouteCapability(normalized[0]);
 }

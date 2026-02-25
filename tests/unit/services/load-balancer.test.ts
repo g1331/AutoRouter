@@ -82,9 +82,24 @@ interface MockUpstreamOpts {
   } | null;
 }
 
+function getRouteCapabilitiesByProvider(providerType: string): string[] {
+  switch (providerType) {
+    case "anthropic":
+      return ["anthropic_messages"];
+    case "google":
+      return ["gemini_native_generate"];
+    case "custom":
+      return [];
+    case "openai":
+    default:
+      return ["openai_chat_compatible"];
+  }
+}
+
 function makeUpstream(opts: MockUpstreamOpts = {}) {
   idCounter += 1;
   const id = opts.id ?? `upstream-${idCounter}`;
+  const providerType = opts.providerType ?? "openai";
   return {
     id,
     name: opts.name ?? `upstream-${idCounter}`,
@@ -96,7 +111,8 @@ function makeUpstream(opts: MockUpstreamOpts = {}) {
     config: null,
     weight: opts.weight ?? 1,
     priority: opts.priority ?? 0,
-    providerType: opts.providerType ?? "openai",
+    providerType,
+    routeCapabilities: getRouteCapabilitiesByProvider(providerType),
     allowedModels: null,
     modelRedirects: null,
     affinityMigration: opts.affinityMigration ?? null,
@@ -541,8 +557,8 @@ describe("load-balancer", () => {
         const result = await selectFromProviderType("openai", undefined, undefined, {
           apiKeyId: "key1",
           sessionId: "session-abc",
-          contentLength: 2048,
           affinityScope: "openai_chat_compatible",
+          contentLength: 2048,
         });
 
         expect(result.upstream.id).toBe("u-tier0");
@@ -561,11 +577,12 @@ describe("load-balancer", () => {
         mockFindMany.mockResolvedValue([u1, u2]);
 
         // Pre-populate affinity cache
-        affinityStore.set("key1", "openai", "session-abc", "u1", 1024);
+        affinityStore.set("key1", "openai_chat_compatible", "session-abc", "u1", 1024);
 
         const result = await selectFromProviderType("openai", undefined, undefined, {
           apiKeyId: "key1",
           sessionId: "session-abc",
+          affinityScope: "openai_chat_compatible",
           contentLength: 2048,
         });
 
@@ -581,11 +598,12 @@ describe("load-balancer", () => {
         setCBOpen("u1");
 
         // Pre-populate affinity cache with u1
-        affinityStore.set("key1", "openai", "session-abc", "u1", 1024);
+        affinityStore.set("key1", "openai_chat_compatible", "session-abc", "u1", 1024);
 
         const result = await selectFromProviderType("openai", undefined, undefined, {
           apiKeyId: "key1",
           sessionId: "session-abc",
+          affinityScope: "openai_chat_compatible",
           contentLength: 2048,
         });
 
@@ -600,16 +618,17 @@ describe("load-balancer", () => {
         setCBOpen("u1");
 
         // Pre-populate affinity cache with u1
-        affinityStore.set("key1", "openai", "session-abc", "u1", 1024);
+        affinityStore.set("key1", "openai_chat_compatible", "session-abc", "u1", 1024);
 
         await selectFromProviderType("openai", undefined, undefined, {
           apiKeyId: "key1",
           sessionId: "session-abc",
+          affinityScope: "openai_chat_compatible",
           contentLength: 2048,
         });
 
         // Cache should be updated to u2
-        const entry = affinityStore.get("key1", "openai", "session-abc");
+        const entry = affinityStore.get("key1", "openai_chat_compatible", "session-abc");
         expect(entry?.upstreamId).toBe("u2");
       });
 
@@ -618,16 +637,17 @@ describe("load-balancer", () => {
         mockFindMany.mockResolvedValue([u1]);
 
         // No pre-populated cache
-        expect(affinityStore.has("key1", "openai", "session-abc")).toBe(false);
+        expect(affinityStore.has("key1", "openai_chat_compatible", "session-abc")).toBe(false);
 
         await selectFromProviderType("openai", undefined, undefined, {
           apiKeyId: "key1",
           sessionId: "session-abc",
+          affinityScope: "openai_chat_compatible",
           contentLength: 1024,
         });
 
         // Cache should be created
-        const entry = affinityStore.get("key1", "openai", "session-abc");
+        const entry = affinityStore.get("key1", "openai_chat_compatible", "session-abc");
         expect(entry).not.toBeNull();
         expect(entry?.upstreamId).toBe("u1");
       });
@@ -653,15 +673,16 @@ describe("load-balancer", () => {
         mockFindMany.mockResolvedValue([p0, p1]);
 
         // Session bound to lower priority upstream
-        affinityStore.set("key1", "openai", "session-abc", "p1", 1024);
+        affinityStore.set("key1", "openai_chat_compatible", "session-abc", "p1", 1024);
         // Set cumulative tokens below threshold
-        affinityStore.updateCumulativeTokens("key1", "openai", "session-abc", {
+        affinityStore.updateCumulativeTokens("key1", "openai_chat_compatible", "session-abc", {
           totalInputTokens: 1000,
         });
 
         const result = await selectFromProviderType("openai", undefined, undefined, {
           apiKeyId: "key1",
           sessionId: "session-abc",
+          affinityScope: "openai_chat_compatible",
           contentLength: 2048,
         });
 
@@ -680,15 +701,16 @@ describe("load-balancer", () => {
         mockFindMany.mockResolvedValue([p0, p1]);
 
         // Session bound to lower priority upstream
-        affinityStore.set("key1", "openai", "session-abc", "p1", 1024);
+        affinityStore.set("key1", "openai_chat_compatible", "session-abc", "p1", 1024);
         // Set cumulative tokens above threshold
-        affinityStore.updateCumulativeTokens("key1", "openai", "session-abc", {
+        affinityStore.updateCumulativeTokens("key1", "openai_chat_compatible", "session-abc", {
           totalInputTokens: 60000,
         });
 
         const result = await selectFromProviderType("openai", undefined, undefined, {
           apiKeyId: "key1",
           sessionId: "session-abc",
+          affinityScope: "openai_chat_compatible",
           contentLength: 2048,
         });
 
@@ -707,12 +729,13 @@ describe("load-balancer", () => {
         mockFindMany.mockResolvedValue([p0, p1]);
 
         // Session bound to lower priority upstream
-        affinityStore.set("key1", "openai", "session-abc", "p1", 1024);
+        affinityStore.set("key1", "openai_chat_compatible", "session-abc", "p1", 1024);
 
         // Content length below threshold
         const result = await selectFromProviderType("openai", undefined, undefined, {
           apiKeyId: "key1",
           sessionId: "session-abc",
+          affinityScope: "openai_chat_compatible",
           contentLength: 5000,
         });
 
@@ -730,11 +753,12 @@ describe("load-balancer", () => {
         mockFindMany.mockResolvedValue([p0, p1]);
 
         // Session bound to lower priority upstream
-        affinityStore.set("key1", "openai", "session-abc", "p1", 1024);
+        affinityStore.set("key1", "openai_chat_compatible", "session-abc", "p1", 1024);
 
         const result = await selectFromProviderType("openai", undefined, undefined, {
           apiKeyId: "key1",
           sessionId: "session-abc",
+          affinityScope: "openai_chat_compatible",
           contentLength: 2048,
         });
 
@@ -748,11 +772,12 @@ describe("load-balancer", () => {
         mockFindMany.mockResolvedValue([p0, p1]);
 
         // Session bound to lower priority upstream
-        affinityStore.set("key1", "openai", "session-abc", "p1", 1024);
+        affinityStore.set("key1", "openai_chat_compatible", "session-abc", "p1", 1024);
 
         const result = await selectFromProviderType("openai", undefined, undefined, {
           apiKeyId: "key1",
           sessionId: "session-abc",
+          affinityScope: "openai_chat_compatible",
           contentLength: 2048,
         });
 
@@ -770,16 +795,17 @@ describe("load-balancer", () => {
         mockFindMany.mockResolvedValue([p0, p1]);
 
         // Session bound to lower priority upstream
-        affinityStore.set("key1", "openai", "session-abc", "p1", 1024);
+        affinityStore.set("key1", "openai_chat_compatible", "session-abc", "p1", 1024);
 
         await selectFromProviderType("openai", undefined, undefined, {
           apiKeyId: "key1",
           sessionId: "session-abc",
+          affinityScope: "openai_chat_compatible",
           contentLength: 2048,
         });
 
         // Cache should be updated to p0
-        const entry = affinityStore.get("key1", "openai", "session-abc");
+        const entry = affinityStore.get("key1", "openai_chat_compatible", "session-abc");
         expect(entry?.upstreamId).toBe("p0");
       });
 
@@ -793,11 +819,12 @@ describe("load-balancer", () => {
         mockFindMany.mockResolvedValue([p0, p1]);
 
         // Session bound to lower priority upstream with 0 tokens
-        affinityStore.set("key1", "openai", "session-abc", "p1", 1024);
+        affinityStore.set("key1", "openai_chat_compatible", "session-abc", "p1", 1024);
 
         const result = await selectFromProviderType("openai", undefined, undefined, {
           apiKeyId: "key1",
           sessionId: "session-abc",
+          affinityScope: "openai_chat_compatible",
           contentLength: 2048,
         });
 
@@ -815,11 +842,12 @@ describe("load-balancer", () => {
         mockFindMany.mockResolvedValue([p0, p1]);
 
         // Session already bound to highest priority upstream
-        affinityStore.set("key1", "openai", "session-abc", "p0", 1024);
+        affinityStore.set("key1", "openai_chat_compatible", "session-abc", "p0", 1024);
 
         const result = await selectFromProviderType("openai", undefined, undefined, {
           apiKeyId: "key1",
           sessionId: "session-abc",
+          affinityScope: "openai_chat_compatible",
           contentLength: 2048,
         });
 

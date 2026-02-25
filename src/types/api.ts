@@ -59,7 +59,7 @@ export type RouteCapability =
   | "openai_extended"
   | "gemini_native_generate"
   | "gemini_code_assist_internal";
-export type RouteMatchSource = "path" | "model_fallback";
+export type RouteMatchSource = "path";
 
 // ========== Upstream Health 相关类型 ==========
 
@@ -130,7 +130,6 @@ export interface UpstreamCreate {
   timeout?: number;
   weight?: number; // Load balancing weight (default: 1)
   priority?: number; // Priority tier (default: 0, lower = higher priority)
-  provider_type?: ProviderType; // Provider type for routing and auth (default: "openai")
   route_capabilities?: RouteCapability[] | null; // Path routing capability set
   allowed_models?: string[] | null; // List of supported model names
   model_redirects?: Record<string, string> | null; // Model name mapping
@@ -148,7 +147,6 @@ export interface UpstreamUpdate {
   is_active?: boolean;
   weight?: number; // Load balancing weight
   priority?: number; // Priority tier (lower = higher priority)
-  provider_type?: ProviderType; // Provider type for routing and auth
   route_capabilities?: RouteCapability[] | null; // Path routing capability set
   allowed_models?: string[] | null; // List of supported model names
   model_redirects?: Record<string, string> | null; // Model name mapping
@@ -169,7 +167,6 @@ export interface UpstreamResponse {
   priority: number; // Priority tier (lower = higher priority)
   health_status?: UpstreamHealthResponse | null; // Health status (populated when requested)
   circuit_breaker?: CircuitBreakerStatus | null; // Circuit breaker status
-  provider_type: ProviderType; // Provider type for routing and auth
   route_capabilities: RouteCapability[]; // Path routing capability set
   allowed_models: string[] | null; // List of supported model names
   model_redirects: Record<string, string> | null; // Model name mapping
@@ -186,7 +183,7 @@ export type Upstream = UpstreamResponse;
  */
 export interface TestUpstreamRequest {
   name?: string; // Optional name for the upstream
-  provider_type: ProviderType;
+  route_capabilities: RouteCapability[];
   base_url: string;
   api_key: string;
   timeout?: number; // Optional timeout in seconds (defaults to 10)

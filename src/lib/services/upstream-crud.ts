@@ -44,7 +44,6 @@ export interface UpstreamCreateInput {
   config?: string | null;
   weight?: number;
   priority?: number;
-  providerType?: string;
   routeCapabilities?: RouteCapability[] | null;
   allowedModels?: string[] | null;
   modelRedirects?: Record<string, string> | null;
@@ -71,7 +70,6 @@ export interface UpstreamUpdateInput {
   config?: string | null;
   weight?: number;
   priority?: number;
-  providerType?: string;
   routeCapabilities?: RouteCapability[] | null;
   allowedModels?: string[] | null;
   modelRedirects?: Record<string, string> | null;
@@ -99,7 +97,6 @@ export interface UpstreamResponse {
   config: string | null;
   weight: number;
   priority: number;
-  providerType: string;
   routeCapabilities: RouteCapability[];
   allowedModels: string[] | null;
   modelRedirects: Record<string, string> | null;
@@ -147,14 +144,13 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     config,
     weight = 1,
     priority = 0,
-    providerType = "openai",
     routeCapabilities,
     allowedModels,
     modelRedirects,
     affinityMigration,
   } = input;
 
-  const normalizedRouteCapabilities = resolveRouteCapabilities(routeCapabilities, providerType);
+  const normalizedRouteCapabilities = resolveRouteCapabilities(routeCapabilities);
 
   // Check if name already exists
   const existing = await db.query.upstreams.findFirst({
@@ -183,7 +179,6 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
       config: config ?? null,
       weight,
       priority,
-      providerType,
       routeCapabilities: normalizedRouteCapabilities,
       allowedModels: allowedModels ?? null,
       modelRedirects: modelRedirects ?? null,
@@ -217,11 +212,7 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     config: newUpstream.config,
     weight: newUpstream.weight,
     priority: newUpstream.priority,
-    providerType: newUpstream.providerType,
-    routeCapabilities: resolveRouteCapabilities(
-      newUpstream.routeCapabilities,
-      newUpstream.providerType
-    ),
+    routeCapabilities: resolveRouteCapabilities(newUpstream.routeCapabilities),
     allowedModels: newUpstream.allowedModels,
     modelRedirects: newUpstream.modelRedirects,
     affinityMigration: newUpstream.affinityMigration,
@@ -269,7 +260,6 @@ export async function updateUpstream(
   if (input.config !== undefined) updateValues.config = input.config;
   if (input.weight !== undefined) updateValues.weight = input.weight;
   if (input.priority !== undefined) updateValues.priority = input.priority;
-  if (input.providerType !== undefined) updateValues.providerType = input.providerType;
   if (input.routeCapabilities !== undefined) {
     updateValues.routeCapabilities = normalizeRouteCapabilities(input.routeCapabilities);
   }
@@ -332,8 +322,7 @@ export async function updateUpstream(
     config: updated.config,
     weight: updated.weight,
     priority: updated.priority,
-    providerType: updated.providerType,
-    routeCapabilities: resolveRouteCapabilities(updated.routeCapabilities, updated.providerType),
+    routeCapabilities: resolveRouteCapabilities(updated.routeCapabilities),
     allowedModels: updated.allowedModels,
     modelRedirects: updated.modelRedirects,
     affinityMigration: updated.affinityMigration,
@@ -440,11 +429,7 @@ export async function listUpstreams(
       config: upstream.config,
       weight: upstream.weight,
       priority: upstream.priority,
-      providerType: upstream.providerType,
-      routeCapabilities: resolveRouteCapabilities(
-        upstream.routeCapabilities,
-        upstream.providerType
-      ),
+      routeCapabilities: resolveRouteCapabilities(upstream.routeCapabilities),
       allowedModels: upstream.allowedModels,
       modelRedirects: upstream.modelRedirects,
       affinityMigration: upstream.affinityMigration,
@@ -506,8 +491,7 @@ export async function getUpstreamById(upstreamId: string): Promise<UpstreamRespo
     config: upstream.config,
     weight: upstream.weight,
     priority: upstream.priority,
-    providerType: upstream.providerType,
-    routeCapabilities: resolveRouteCapabilities(upstream.routeCapabilities, upstream.providerType),
+    routeCapabilities: resolveRouteCapabilities(upstream.routeCapabilities),
     allowedModels: upstream.allowedModels,
     modelRedirects: upstream.modelRedirects,
     affinityMigration: upstream.affinityMigration,

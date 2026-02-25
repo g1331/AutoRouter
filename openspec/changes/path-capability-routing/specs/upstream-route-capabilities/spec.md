@@ -23,15 +23,15 @@
 - **THEN** 系统移除非法值并返回规范化后的能力集合或报错
 
 ### Requirement: 旧配置到新能力的默认迁移
-系统 SHALL 在升级后为已有上游生成默认能力集合，避免升级后立即失去可路由性。
+系统 SHALL 在升级后将历史能力配置规范化，并移除对 `provider_type` 默认映射的依赖。
 
-#### Scenario: OpenAI 类型上游自动映射
-- **WHEN** 迁移任务扫描到 `providerType=openai` 的历史上游
-- **THEN** 系统为该上游补齐 `codex_responses`、`openai_chat_compatible`、`openai_extended`
+#### Scenario: 历史能力集合规范化
+- **WHEN** 迁移任务扫描到历史上游能力数组包含空字符串、重复项或非法值
+- **THEN** 系统写回规范化后的能力集合，仅保留合法且去重后的能力项
 
-#### Scenario: Custom 类型上游待人工确认
-- **WHEN** 迁移任务扫描到 `providerType=custom` 的历史上游
-- **THEN** 系统保留空能力集合并在管理端提示需要人工配置
+#### Scenario: 历史 provider 字段清理
+- **WHEN** 系统完成能力路由迁移
+- **THEN** 后续数据模型与接口契约不再要求 `provider_type` 字段存在
 
 ### Requirement: 管理端图标化展示多能力状态
 系统 SHALL 在上游管理界面以“图标 + 文案”展示每个上游已启用的能力，并支持一个上游同时展示多个能力图标。

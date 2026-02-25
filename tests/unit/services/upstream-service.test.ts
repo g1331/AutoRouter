@@ -172,7 +172,7 @@ describe("upstream-service", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key-12345678",
         timeout: 10,
@@ -205,7 +205,7 @@ describe("upstream-service", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "anthropic",
+        routeCapabilities: ["anthropic_messages"],
         baseUrl: "https://api.anthropic.com",
         apiKey: "sk-ant-api03-test-key",
         timeout: 10,
@@ -239,7 +239,7 @@ describe("upstream-service", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key",
         timeout: 10,
@@ -258,7 +258,7 @@ describe("upstream-service", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-invalid-key",
         timeout: 10,
@@ -282,7 +282,7 @@ describe("upstream-service", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "anthropic",
+        routeCapabilities: ["anthropic_messages"],
         baseUrl: "https://api.anthropic.com",
         apiKey: "sk-ant-invalid",
         timeout: 10,
@@ -301,7 +301,7 @@ describe("upstream-service", () => {
       mockFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://invalid.example.com",
         apiKey: "sk-test-key",
         timeout: 10,
@@ -324,7 +324,7 @@ describe("upstream-service", () => {
       mockFetch.mockRejectedValueOnce(abortError);
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key",
         timeout: 5,
@@ -343,7 +343,7 @@ describe("upstream-service", () => {
       const { testUpstreamConnection } = await import("@/lib/services/upstream-service");
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "not-a-valid-url",
         apiKey: "sk-test-key",
         timeout: 10,
@@ -367,7 +367,7 @@ describe("upstream-service", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com/wrong",
         apiKey: "sk-test-key",
         timeout: 10,
@@ -391,7 +391,7 @@ describe("upstream-service", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key",
         timeout: 10,
@@ -414,7 +414,7 @@ describe("upstream-service", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "anthropic",
+        routeCapabilities: ["anthropic_messages"],
         baseUrl: "https://api.anthropic.com",
         apiKey: "sk-ant-test",
         timeout: 10,
@@ -430,18 +430,18 @@ describe("upstream-service", () => {
       const { testUpstreamConnection } = await import("@/lib/services/upstream-service");
 
       const result = await testUpstreamConnection({
-        providerType: "unsupported-provider",
+        routeCapabilities: [],
         baseUrl: "https://api.example.com",
         apiKey: "test-key",
         timeout: 10,
       });
 
       expect(result.success).toBe(false);
-      expect(result.message).toBe("Unsupported provider: unsupported-provider");
+      expect(result.message).toBe("Missing or invalid route capabilities");
       expect(result.statusCode).toBeNull();
       expect(result.latencyMs).toBeNull();
       expect(result.errorType).toBe("unknown");
-      expect(result.errorDetails).toContain("Provider must be");
+      expect(result.errorDetails).toContain("At least one valid route capability is required");
     });
 
     it("should handle unexpected status codes", async () => {
@@ -453,7 +453,7 @@ describe("upstream-service", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key",
         timeout: 10,
@@ -475,7 +475,7 @@ describe("upstream-service", () => {
       });
 
       await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com/",
         apiKey: "sk-test-key",
         timeout: 10,
@@ -495,7 +495,7 @@ describe("upstream-service", () => {
       mockFetch.mockRejectedValueOnce(abortError);
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key",
       });
@@ -513,7 +513,7 @@ describe("upstream-service", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-invalid-key",
         timeout: 10,
@@ -532,7 +532,7 @@ describe("upstream-service", () => {
       mockFetch.mockRejectedValueOnce("unexpected error string");
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key",
         timeout: 10,
@@ -562,7 +562,7 @@ describe("upstream-service", () => {
       );
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key",
         timeout: 10,

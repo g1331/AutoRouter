@@ -68,7 +68,7 @@ describe("upstream-connection-tester", () => {
       });
 
       const input: TestUpstreamInput = {
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key-12345678",
         timeout: 10,
@@ -103,7 +103,7 @@ describe("upstream-connection-tester", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-proj-test",
       });
@@ -119,7 +119,7 @@ describe("upstream-connection-tester", () => {
       });
 
       const input: TestUpstreamInput = {
-        providerType: "anthropic",
+        routeCapabilities: ["anthropic_messages"],
         baseUrl: "https://api.anthropic.com",
         apiKey: "sk-ant-api03-test",
         timeout: 15,
@@ -151,7 +151,7 @@ describe("upstream-connection-tester", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test",
       });
@@ -168,7 +168,7 @@ describe("upstream-connection-tester", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com/",
         apiKey: "sk-test",
       });
@@ -184,7 +184,7 @@ describe("upstream-connection-tester", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com/v2/some/path",
         apiKey: "sk-test",
       });
@@ -195,28 +195,28 @@ describe("upstream-connection-tester", () => {
     });
   });
 
-  describe("testUpstreamConnection - provider validation", () => {
-    it("should reject unsupported provider", async () => {
+  describe("testUpstreamConnection - route capability validation", () => {
+    it("should reject empty route capabilities", async () => {
       const result = await testUpstreamConnection({
-        providerType: "unknown-provider",
+        routeCapabilities: [],
         baseUrl: "https://api.example.com",
         apiKey: "test-key",
       });
 
       expect(result.success).toBe(false);
-      expect(result.message).toBe("Unsupported provider: unknown-provider");
+      expect(result.message).toBe("Missing or invalid route capabilities");
       expect(result.errorType).toBe("unknown");
-      expect(result.errorDetails).toContain(
-        'Provider must be "openai", "anthropic", "google", or "custom"'
-      );
+      expect(result.errorDetails).toContain("At least one valid route capability is required");
       expect(result.latencyMs).toBeNull();
       expect(result.statusCode).toBeNull();
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it("should reject empty provider", async () => {
+    it("should reject unknown route capabilities", async () => {
       const result = await testUpstreamConnection({
-        providerType: "",
+        routeCapabilities: [
+          "unknown_capability" as unknown as TestUpstreamInput["routeCapabilities"][number],
+        ],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test",
       });
@@ -230,7 +230,7 @@ describe("upstream-connection-tester", () => {
   describe("testUpstreamConnection - URL validation", () => {
     it("should reject invalid URL format", async () => {
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "not-a-valid-url",
         apiKey: "sk-test",
       });
@@ -246,7 +246,7 @@ describe("upstream-connection-tester", () => {
 
     it("should reject non-HTTP/HTTPS protocols", async () => {
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "ftp://api.example.com",
         apiKey: "sk-test",
       });
@@ -259,7 +259,7 @@ describe("upstream-connection-tester", () => {
 
     it("should reject file:// protocol", async () => {
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "file:///etc/passwd",
         apiKey: "sk-test",
       });
@@ -270,7 +270,7 @@ describe("upstream-connection-tester", () => {
 
     it("should reject localhost URL", async () => {
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "http://localhost:8080",
         apiKey: "sk-test",
       });
@@ -283,7 +283,7 @@ describe("upstream-connection-tester", () => {
 
     it("should reject loopback IP 127.0.0.1", async () => {
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "http://127.0.0.1:8080",
         apiKey: "sk-test",
       });
@@ -294,7 +294,7 @@ describe("upstream-connection-tester", () => {
 
     it("should reject loopback IP range 127.x.x.x", async () => {
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "http://127.1.2.3",
         apiKey: "sk-test",
       });
@@ -307,7 +307,7 @@ describe("upstream-connection-tester", () => {
       mockFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "http://[::1]:8080",
         apiKey: "sk-test",
       });
@@ -320,7 +320,7 @@ describe("upstream-connection-tester", () => {
 
     it("should reject private IP 192.168.x.x", async () => {
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "http://192.168.1.100",
         apiKey: "sk-test",
       });
@@ -331,7 +331,7 @@ describe("upstream-connection-tester", () => {
 
     it("should reject private IP 10.x.x.x", async () => {
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "http://10.0.0.1",
         apiKey: "sk-test",
       });
@@ -342,7 +342,7 @@ describe("upstream-connection-tester", () => {
 
     it("should reject private IP 172.16.x.x", async () => {
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "http://172.16.0.1",
         apiKey: "sk-test",
       });
@@ -353,7 +353,7 @@ describe("upstream-connection-tester", () => {
 
     it("should reject private IP 172.31.x.x (upper bound of 172.16-31 range)", async () => {
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "http://172.31.255.255",
         apiKey: "sk-test",
       });
@@ -369,7 +369,7 @@ describe("upstream-connection-tester", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "http://172.32.0.1",
         apiKey: "sk-test",
       });
@@ -381,7 +381,7 @@ describe("upstream-connection-tester", () => {
 
     it("should reject AWS metadata endpoint 169.254.169.254", async () => {
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "http://169.254.169.254",
         apiKey: "sk-test",
       });
@@ -392,7 +392,7 @@ describe("upstream-connection-tester", () => {
 
     it("should reject link-local IP 169.254.x.x", async () => {
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "http://169.254.1.1",
         apiKey: "sk-test",
       });
@@ -403,7 +403,7 @@ describe("upstream-connection-tester", () => {
 
     it("should reject invalid IP with octets > 255", async () => {
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "http://256.1.1.1",
         apiKey: "sk-test",
       });
@@ -418,7 +418,7 @@ describe("upstream-connection-tester", () => {
       mockFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "http://[fc00::1]",
         apiKey: "sk-test",
       });
@@ -433,7 +433,7 @@ describe("upstream-connection-tester", () => {
       mockFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "http://[fd00::1]",
         apiKey: "sk-test",
       });
@@ -448,7 +448,7 @@ describe("upstream-connection-tester", () => {
       mockFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "http://[fe80::1]",
         apiKey: "sk-test",
       });
@@ -463,7 +463,7 @@ describe("upstream-connection-tester", () => {
       mockFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "http://[ff00::1]",
         apiKey: "sk-test",
       });
@@ -478,7 +478,7 @@ describe("upstream-connection-tester", () => {
       mockFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "http://[::ffff:192.168.1.1]",
         apiKey: "sk-test",
       });
@@ -493,7 +493,7 @@ describe("upstream-connection-tester", () => {
       mockFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "http://[::192.168.1.1]",
         apiKey: "sk-test",
       });
@@ -508,7 +508,7 @@ describe("upstream-connection-tester", () => {
   describe("testUpstreamConnection - DNS rebinding protection", () => {
     it("should reject hostname that resolves to private IP 192.168.x.x", async () => {
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://internal.example.com",
         apiKey: "sk-test",
       });
@@ -521,7 +521,7 @@ describe("upstream-connection-tester", () => {
 
     it("should reject hostname that resolves to AWS metadata IP", async () => {
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://metadata.example.com",
         apiKey: "sk-test",
       });
@@ -533,7 +533,7 @@ describe("upstream-connection-tester", () => {
 
     it("should reject hostname that resolves to 10.x.x.x private IP", async () => {
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://private-local.test",
         apiKey: "sk-test",
       });
@@ -544,7 +544,7 @@ describe("upstream-connection-tester", () => {
 
     it("should reject hostname that resolves to 172.16.x.x private IP", async () => {
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://private-172.test",
         apiKey: "sk-test",
       });
@@ -555,7 +555,7 @@ describe("upstream-connection-tester", () => {
 
     it("should reject hostname that resolves to IPv6 private address", async () => {
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://ipv6-private.test",
         apiKey: "sk-test",
       });
@@ -566,7 +566,7 @@ describe("upstream-connection-tester", () => {
 
     it("should reject hostname that resolves to IPv6 link-local", async () => {
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://ipv6-linklocal.test",
         apiKey: "sk-test",
       });
@@ -577,7 +577,7 @@ describe("upstream-connection-tester", () => {
 
     it("should reject hostname that resolves to IPv6 multicast", async () => {
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://ipv6-multicast.test",
         apiKey: "sk-test",
       });
@@ -593,7 +593,7 @@ describe("upstream-connection-tester", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test",
       });
@@ -611,7 +611,7 @@ describe("upstream-connection-tester", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-invalid-key",
       });
@@ -631,7 +631,7 @@ describe("upstream-connection-tester", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "anthropic",
+        routeCapabilities: ["anthropic_messages"],
         baseUrl: "https://api.anthropic.com",
         apiKey: "sk-invalid",
       });
@@ -651,7 +651,7 @@ describe("upstream-connection-tester", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test",
       });
@@ -667,7 +667,7 @@ describe("upstream-connection-tester", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test",
       });
@@ -686,7 +686,7 @@ describe("upstream-connection-tester", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://wrong-api.example.com",
         apiKey: "sk-test",
       });
@@ -706,7 +706,7 @@ describe("upstream-connection-tester", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test",
       });
@@ -725,7 +725,7 @@ describe("upstream-connection-tester", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test",
       });
@@ -743,7 +743,7 @@ describe("upstream-connection-tester", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test",
       });
@@ -760,7 +760,7 @@ describe("upstream-connection-tester", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test",
       });
@@ -779,7 +779,7 @@ describe("upstream-connection-tester", () => {
       });
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test",
       });
@@ -797,7 +797,7 @@ describe("upstream-connection-tester", () => {
       );
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test",
         timeout: 5,
@@ -815,7 +815,7 @@ describe("upstream-connection-tester", () => {
       mockFetch.mockRejectedValueOnce(new TypeError("Network request failed"));
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://unreachable.example.com",
         apiKey: "sk-test",
       });
@@ -832,7 +832,7 @@ describe("upstream-connection-tester", () => {
       mockFetch.mockRejectedValueOnce(new TypeError("getaddrinfo ENOTFOUND"));
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://nonexistent.example.com",
         apiKey: "sk-test",
       });
@@ -846,7 +846,7 @@ describe("upstream-connection-tester", () => {
       mockFetch.mockRejectedValueOnce(new TypeError("connect ECONNREFUSED"));
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test",
       });
@@ -860,7 +860,7 @@ describe("upstream-connection-tester", () => {
       mockFetch.mockRejectedValueOnce(new TypeError("SSL certificate problem"));
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test",
       });
@@ -874,7 +874,7 @@ describe("upstream-connection-tester", () => {
       mockFetch.mockRejectedValueOnce(new Error("Some unexpected error"));
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test",
       });
@@ -891,7 +891,7 @@ describe("upstream-connection-tester", () => {
       mockFetch.mockRejectedValueOnce("String error");
 
       const result = await testUpstreamConnection({
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test",
       });

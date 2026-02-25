@@ -460,7 +460,7 @@ describe("health-checker", () => {
       expect(result.errorMessage).toBeNull();
       expect(result.healthStatus.isHealthy).toBe(true);
       expect(testUpstreamConnection).toHaveBeenCalledWith({
-        providerType: "openai",
+        routeCapabilities: [],
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key",
         timeout: 60,

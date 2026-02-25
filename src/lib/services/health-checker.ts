@@ -4,6 +4,7 @@ import { config } from "../utils/config";
 import { decrypt } from "../utils/encryption";
 import { createLogger } from "../utils/logger";
 import { testUpstreamConnection, type TestUpstreamResult } from "./upstream-connection-tester";
+import { normalizeRouteCapabilities } from "@/lib/route-capabilities";
 
 const log = createLogger("health-checker");
 import { UpstreamNotFoundError } from "./upstream-crud";
@@ -299,7 +300,7 @@ export async function checkUpstreamHealth(
 
   // Perform the health check
   const result: TestUpstreamResult = await testUpstreamConnection({
-    providerType: upstream.providerType,
+    routeCapabilities: normalizeRouteCapabilities(upstream.routeCapabilities),
     baseUrl: upstream.baseUrl,
     apiKey,
     timeout: effectiveTimeout,
@@ -563,7 +564,7 @@ export async function probeUpstream(upstreamId: string): Promise<boolean> {
 
     // Perform a lightweight health check
     const result: TestUpstreamResult = await testUpstreamConnection({
-      providerType: upstream.providerType,
+      routeCapabilities: normalizeRouteCapabilities(upstream.routeCapabilities),
       baseUrl: upstream.baseUrl,
       apiKey,
       timeout: 5, // Short timeout for probes

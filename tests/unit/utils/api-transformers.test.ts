@@ -60,7 +60,6 @@ describe("api-transformers", () => {
       expect(result).toEqual({
         id: "upstream-123",
         name: "openai-prod",
-        provider_type: "openai",
         base_url: "https://api.openai.com",
         api_key_masked: "sk-***key",
         is_default: true,
@@ -71,6 +70,7 @@ describe("api-transformers", () => {
         updated_at: "2024-01-15T12:00:00.000Z",
         priority: undefined,
         weight: undefined,
+        route_capabilities: undefined,
         allowed_models: undefined,
         model_redirects: undefined,
         affinity_migration: null,

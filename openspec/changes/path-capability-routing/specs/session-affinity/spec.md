@@ -4,7 +4,7 @@
 系统 SHALL 从入站请求中自动提取会话标识符，提取策略按路由能力类型区分：
 - `anthropic_messages`：从 `body.metadata.user_id` 中提取 `_session_{uuid}` 的 UUID 部分
 - `codex_responses`、`openai_chat_compatible`、`openai_extended`：从 `headers.session_id` 中直接获取值
-- 其他能力类型或无法提取时：返回 null
+- 其他能力类型或无法提取时：返回 null（系统不再接受 provider 类型兜底输入）
 
 #### Scenario: Anthropic 能力请求提取会话标识符
 - **WHEN** 请求命中能力类型 `anthropic_messages`，且 `body.metadata.user_id` 包含 `_session_{uuid}` 格式

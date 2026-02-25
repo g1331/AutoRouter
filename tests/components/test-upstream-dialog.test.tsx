@@ -12,7 +12,6 @@ describe("TestUpstreamDialog", () => {
   const mockUpstream: Upstream = {
     id: "test-upstream-id",
     name: "Test Upstream",
-    provider_type: "openai",
     base_url: "https://api.openai.com/v1",
     api_key_masked: "sk-***1234",
     is_default: false,
@@ -20,8 +19,11 @@ describe("TestUpstreamDialog", () => {
     is_active: true,
     weight: 1,
     priority: 0,
+    route_capabilities: ["openai_chat_compatible"],
     allowed_models: null,
     model_redirects: null,
+    health_status: null,
+    affinity_migration: null,
     description: "Test description",
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -92,7 +94,6 @@ describe("TestUpstreamDialog", () => {
       );
 
       expect(screen.getByText("Test Upstream")).toBeInTheDocument();
-      expect(screen.getByText("openai")).toBeInTheDocument();
       expect(screen.getByText("https://api.openai.com/v1")).toBeInTheDocument();
     });
 

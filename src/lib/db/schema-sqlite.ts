@@ -46,7 +46,6 @@ export const upstreams = sqliteTable(
     config: text("config"), // JSON stored as text
     weight: integer("weight").notNull().default(1),
     priority: integer("priority").notNull().default(0),
-    providerType: text("provider_type").notNull().default("openai"), // "anthropic" | "openai" | "google" | "custom"
     routeCapabilities: text("route_capabilities", { mode: "json" }).$type<string[] | null>(),
     allowedModels: text("allowed_models", { mode: "json" }).$type<string[] | null>(),
     modelRedirects: text("model_redirects", { mode: "json" }).$type<Record<
@@ -64,7 +63,7 @@ export const upstreams = sqliteTable(
   (table) => [
     index("upstreams_name_idx").on(table.name),
     index("upstreams_is_active_idx").on(table.isActive),
-    index("upstreams_provider_type_priority_idx").on(table.providerType, table.priority),
+    index("upstreams_priority_idx").on(table.priority),
   ]
 );
 

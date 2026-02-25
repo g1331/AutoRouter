@@ -10,6 +10,7 @@ import {
 import { db, upstreams } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { createLogger } from "@/lib/utils/logger";
+import { normalizeRouteCapabilities } from "@/lib/route-capabilities";
 
 const log = createLogger("admin-upstreams");
 
@@ -137,7 +138,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const decryptedApiKey = getDecryptedApiKey(upstream);
 
     const input: TestUpstreamInput = {
-      providerType: upstream.providerType,
+      routeCapabilities: normalizeRouteCapabilities(upstream.routeCapabilities),
       baseUrl: upstream.baseUrl,
       apiKey: decryptedApiKey,
       timeout: upstream.timeout,

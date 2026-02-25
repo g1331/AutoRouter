@@ -1,4 +1,9 @@
 import * as dns from "dns";
+import {
+  getPrimaryProviderByCapabilities,
+  normalizeRouteCapabilities,
+  type RouteCapability,
+} from "@/lib/route-capabilities";
 
 /**
  * Validates an IP address to prevent SSRF attacks.
@@ -148,8 +153,8 @@ async function resolveAndValidateHostname(
  * Can be used to test either a new configuration or an existing upstream.
  */
 export interface TestUpstreamInput {
-  /** Provider type (openai, anthropic, google, custom) */
-  providerType: string;
+  /** Path capabilities supported by the upstream */
+  routeCapabilities: RouteCapability[];
   /** Base URL of the upstream API */
   baseUrl: string;
   /** API key for authentication (plain text, will not be stored) */
@@ -287,23 +292,20 @@ export function formatTestUpstreamResponse(result: TestUpstreamResult) {
 export async function testUpstreamConnection(
   input: TestUpstreamInput
 ): Promise<TestUpstreamResult> {
-  const { providerType, baseUrl, apiKey, timeout = 10 } = input;
+  const { routeCapabilities, baseUrl, apiKey, timeout = 10 } = input;
   const testedAt = new Date();
+  const normalizedCapabilities = normalizeRouteCapabilities(routeCapabilities);
+  const providerType = getPrimaryProviderByCapabilities(normalizedCapabilities);
 
-  // Validate provider
-  if (
-    providerType !== "openai" &&
-    providerType !== "anthropic" &&
-    providerType !== "google" &&
-    providerType !== "custom"
-  ) {
+  if (!providerType) {
     return {
       success: false,
-      message: `Unsupported provider: ${providerType}`,
+      message: "Missing or invalid route capabilities",
       latencyMs: null,
       statusCode: null,
       errorType: "unknown",
-      errorDetails: `Provider must be "openai", "anthropic", "google", or "custom", got "${providerType}"`,
+      errorDetails:
+        "At least one valid route capability is required to determine test authentication mode",
       testedAt,
     };
   }

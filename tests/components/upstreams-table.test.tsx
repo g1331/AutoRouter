@@ -52,7 +52,6 @@ describe("UpstreamsTable", () => {
   const mockUpstream: Upstream = {
     id: "test-id-1",
     name: "Test Upstream",
-    provider_type: "openai",
     base_url: "https://api.openai.com/v1",
     api_key_masked: "sk-***1234",
     is_default: false,
@@ -151,7 +150,6 @@ describe("UpstreamsTable", () => {
 
       expect(desktop.getByText("name")).toBeInTheDocument();
       expect(desktop.getByText("routeCapabilities")).toBeInTheDocument();
-      expect(desktop.getByText("compatibilityProvider")).toBeInTheDocument();
       expect(desktop.getByText("tableWeight")).toBeInTheDocument();
       expect(desktop.getByText("tableHealth")).toBeInTheDocument();
       expect(desktop.getByText("tableCircuitBreaker")).toBeInTheDocument();
@@ -452,8 +450,8 @@ describe("UpstreamsTable", () => {
     });
   });
 
-  describe("Provider Badges", () => {
-    it("renders OpenAI badge with success variant", () => {
+  describe("Route Capability Badges", () => {
+    it("renders OpenAI-compatible capability badge", () => {
       render(
         <UpstreamsTable
           upstreams={[mockUpstream]}
@@ -464,12 +462,15 @@ describe("UpstreamsTable", () => {
       );
 
       const desktop = getDesktopLayout();
-      const badge = desktop.getByText("OpenAI");
+      const badge = desktop.getByText("capabilityOpenAIChatCompatible");
       expect(badge).toBeInTheDocument();
     });
 
-    it("renders Anthropic badge with secondary variant", () => {
-      const anthropicUpstream = { ...mockUpstream, provider_type: "anthropic" as const };
+    it("renders Anthropic capability badge", () => {
+      const anthropicUpstream = {
+        ...mockUpstream,
+        route_capabilities: ["anthropic_messages"],
+      };
       render(
         <UpstreamsTable
           upstreams={[anthropicUpstream]}
@@ -480,12 +481,15 @@ describe("UpstreamsTable", () => {
       );
 
       const desktop = getDesktopLayout();
-      const badge = desktop.getByText("Anthropic");
+      const badge = desktop.getByText("capabilityAnthropicMessages");
       expect(badge).toBeInTheDocument();
     });
 
-    it("renders Google badge with warning variant", () => {
-      const googleUpstream = { ...mockUpstream, provider_type: "google" as const };
+    it("renders Gemini capability badge", () => {
+      const googleUpstream = {
+        ...mockUpstream,
+        route_capabilities: ["gemini_native_generate"],
+      };
       render(
         <UpstreamsTable
           upstreams={[googleUpstream]}
@@ -496,55 +500,7 @@ describe("UpstreamsTable", () => {
       );
 
       const desktop = getDesktopLayout();
-      const badge = desktop.getByText("Google");
-      expect(badge).toBeInTheDocument();
-    });
-
-    it("renders Custom badge with outline variant", () => {
-      const customUpstream = { ...mockUpstream, provider_type: "custom" as const };
-      render(
-        <UpstreamsTable
-          upstreams={[customUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      const badge = desktop.getByText("Custom");
-      expect(badge).toBeInTheDocument();
-    });
-
-    it("renders unknown provider as-is", () => {
-      const unknownUpstream = { ...mockUpstream, provider_type: "custom-provider" as const };
-      render(
-        <UpstreamsTable
-          upstreams={[unknownUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      const badge = desktop.getByText("custom-provider");
-      expect(badge).toBeInTheDocument();
-    });
-
-    it("handles case-insensitive provider matching", () => {
-      const upperCaseProvider = { ...mockUpstream, provider_type: "OPENAI" as const };
-      render(
-        <UpstreamsTable
-          upstreams={[upperCaseProvider]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      const badge = desktop.getByText("OpenAI");
+      const badge = desktop.getByText("capabilityGeminiNativeGenerate");
       expect(badge).toBeInTheDocument();
     });
   });
@@ -659,7 +615,7 @@ describe("UpstreamsTable", () => {
           ...mockUpstream,
           id: "test-id-2",
           name: "Second Upstream",
-          provider_type: "anthropic" as const,
+          route_capabilities: ["anthropic_messages"],
           base_url: "https://api.anthropic.com/v1",
         },
       ];
@@ -675,8 +631,8 @@ describe("UpstreamsTable", () => {
       const desktop = getDesktopLayout();
       expect(desktop.getByText("Test Upstream")).toBeInTheDocument();
       expect(desktop.getByText("Second Upstream")).toBeInTheDocument();
-      expect(desktop.getByText("OpenAI")).toBeInTheDocument();
-      expect(desktop.getByText("Anthropic")).toBeInTheDocument();
+      expect(desktop.getByText("capabilityOpenAIChatCompatible")).toBeInTheDocument();
+      expect(desktop.getByText("capabilityAnthropicMessages")).toBeInTheDocument();
     });
   });
 

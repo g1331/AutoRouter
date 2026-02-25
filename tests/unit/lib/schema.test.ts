@@ -92,9 +92,9 @@ describe("lib/db/schema", () => {
       expect(upstreams.name.name).toBe("name");
     });
 
-    it("has providerType column", () => {
-      expect(upstreams.providerType).toBeDefined();
-      expect(upstreams.providerType.name).toBe("provider_type");
+    it("has routeCapabilities column", () => {
+      expect(upstreams.routeCapabilities).toBeDefined();
+      expect(upstreams.routeCapabilities.name).toBe("route_capabilities");
     });
 
     it("has baseUrl column", () => {
@@ -139,9 +139,9 @@ describe("lib/db/schema", () => {
       expect(indexNames).toContain("upstreams_is_active_idx");
     });
 
-    it("has providerType column for model-based routing", () => {
-      expect(upstreams.providerType).toBeDefined();
-      expect(upstreams.providerType.name).toBe("provider_type");
+    it("has routeCapabilities column for path-based routing", () => {
+      expect(upstreams.routeCapabilities).toBeDefined();
+      expect(upstreams.routeCapabilities.name).toBe("route_capabilities");
     });
 
     it("has allowedModels column for model filtering", () => {
@@ -154,10 +154,10 @@ describe("lib/db/schema", () => {
       expect(upstreams.modelRedirects.name).toBe("model_redirects");
     });
 
-    it("has provider_type + priority composite index", () => {
+    it("has priority index", () => {
       const tableConfig = getTableConfig(upstreams);
       const indexNames = tableConfig.indexes.map((i) => i.config.name);
-      expect(indexNames).toContain("upstreams_provider_type_priority_idx");
+      expect(indexNames).toContain("upstreams_priority_idx");
     });
   });
 

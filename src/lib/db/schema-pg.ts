@@ -52,7 +52,6 @@ export const upstreams = pgTable(
     config: text("config"), // JSON stored as text
     weight: integer("weight").notNull().default(1),
     priority: integer("priority").notNull().default(0),
-    providerType: varchar("provider_type", { length: 32 }).notNull().default("openai"), // "anthropic" | "openai" | "google" | "custom"
     routeCapabilities: json("route_capabilities").$type<string[] | null>(), // Path routing capabilities
     allowedModels: json("allowed_models").$type<string[] | null>(), // JSON array of supported model names
     modelRedirects: json("model_redirects").$type<Record<string, string> | null>(), // JSON object mapping incoming model to target model
@@ -67,7 +66,7 @@ export const upstreams = pgTable(
   (table) => [
     index("upstreams_name_idx").on(table.name),
     index("upstreams_is_active_idx").on(table.isActive),
-    index("upstreams_provider_type_priority_idx").on(table.providerType, table.priority),
+    index("upstreams_priority_idx").on(table.priority),
   ]
 );
 

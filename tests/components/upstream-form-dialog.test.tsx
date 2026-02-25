@@ -36,7 +36,6 @@ describe("UpstreamFormDialog", () => {
   const mockUpstream: Upstream = {
     id: "upstream-1",
     name: "OpenAI Production",
-    provider_type: "openai",
     base_url: "https://api.openai.com/v1",
     api_key_masked: "sk-***1234",
     description: "Production OpenAI API",
@@ -84,14 +83,13 @@ describe("UpstreamFormDialog", () => {
       expect(screen.getByPlaceholderText("upstreamDescriptionPlaceholder")).toBeInTheDocument();
     });
 
-    it("renders provider select with options", () => {
+    it("renders route capability selector", () => {
       render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
         wrapper: Wrapper,
       });
 
-      // Multiple comboboxes exist (provider and group), just verify they're rendered
-      const comboboxes = screen.getAllByRole("combobox");
-      expect(comboboxes.length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText("capabilityCodexResponses")).toBeInTheDocument();
+      expect(screen.getByText("capabilityOpenAIChatCompatible")).toBeInTheDocument();
     });
 
     it("renders cancel and create buttons", () => {
@@ -164,7 +162,6 @@ describe("UpstreamFormDialog", () => {
           description: null,
           priority: 0,
           weight: 1,
-          provider_type: "openai",
           route_capabilities: [],
           allowed_models: null,
           model_redirects: null,
@@ -314,7 +311,6 @@ describe("UpstreamFormDialog", () => {
             description: "Production OpenAI API",
             priority: 0,
             weight: 1,
-            provider_type: "openai",
             route_capabilities: [],
             allowed_models: null,
             model_redirects: null,
@@ -349,7 +345,6 @@ describe("UpstreamFormDialog", () => {
             description: "Production OpenAI API",
             priority: 0,
             weight: 1,
-            provider_type: "openai",
             route_capabilities: [],
             allowed_models: null,
             model_redirects: null,

@@ -1,7 +1,7 @@
 ## Context
 
-当前代理链路在 `handleProxy` 中先解析 `model`，再调用 `routeByModel(model)` 决定 `providerType` 和候选上游。请求路径主要用于拼接转发地址，而不是用于选路本身。  
-这对命令行客户端不够友好，因为很多客户端能力是“按路径区分”的，而不是“按模型区分”的。
+当前代理链路仍保留了 `model -> provider_type` 的兼容路径，导致系统在“路径能力路由”和“模型路由”之间并行决策。  
+这对命令行客户端不够友好，因为请求是否可路由本质由路径能力决定，而不是模型前缀。
 
 现状流程（简化）：
 
@@ -9,13 +9,10 @@
 Client Request
    |
    v
-Extract model from body
+Match route capability
    |
    v
-routeByModel(model)
-   |
-   v
-selectFromProviderType(...)
+selectFromCandidateUpstreams(...)
    |
    v
 forward to /api/proxy/v1/{path}
@@ -61,10 +58,10 @@ Forward request (same as today)
 
 ## Decisions
 
-### Decision 1: 引入固定能力类型字典，先于模型路由执行
+### Decision 1: 引入固定能力类型字典并只保留路径能力路由
 
-选择固定能力类型字典进行路径归类，并将其放在路由入口第一阶段执行。  
-若命中能力类型，则走能力路由；若未命中，再进入兼容路径（模型路由兜底）。
+选择固定能力类型字典进行路径归类，并将其作为唯一选路入口。  
+若未命中能力类型，直接返回标准化错误，不再进入模型路由兜底。
 
 能力类型首批清单：
 
@@ -78,22 +75,16 @@ Forward request (same as today)
 | `gemini_code_assist_internal` | `POST /v1internal:generateContent`、`POST /v1internal:streamGenerateContent` |
 
 备选方案：
-- 继续模型优先，仅补路径特判。缺点是会继续耦合 `model` 字段，无法覆盖无 `model` 或内部协议路径。
+- 继续保留模型兜底。缺点是会持续耦合 `model` 与兼容字段，路由原理不单一。
 - 全量用户自定义路径规则。缺点是首版维护成本和错误配置风险过高。
 
-### Decision 2: 上游新增多能力字段，保留旧字段用于兼容期
+### Decision 2: 上游仅保留能力配置，移除兼容提供商字段
 
 在 upstream 配置中新增 `routeCapabilities: string[]`，用于声明“该上游可接哪些路径能力”。  
-`providerType/allowedModels/modelRedirects` 在兼容期保留，作为未命中能力时的兜底逻辑与回滚手段。
+`provider_type/providerType` 从数据模型、接口契约和管理端配置中移除。  
+迁移阶段仅对历史能力集合做规范化（去重、去空、移除非法项），不再依据 provider 生成默认映射。
 
-迁移默认映射策略：
-
-- `providerType=openai` -> `codex_responses` + `openai_chat_compatible` + `openai_extended`
-- `providerType=anthropic` -> `anthropic_messages`
-- `providerType=google` -> `gemini_native_generate`
-- `providerType=custom` -> 空集合（需人工勾选）
-
-### Decision 3: 路由候选集构建改为“能力过滤 + 原有选择器复用”
+### Decision 3: 路由候选集构建改为“能力过滤 + 候选集选择器”
 
 候选集构建顺序：
 
@@ -103,7 +94,7 @@ Forward request (same as today)
 4. 按熔断状态过滤上游  
 5. 进入现有分层优先级 + 权重选择器
 
-这样可以最大化复用现有 `selectFromProviderType` 思路，减少重写面与回归风险。
+负载均衡入口改为“按候选上游 ID 集合”选择，不再以 provider 作为主键。
 
 ### Decision 4: 会话亲和性键加入能力类型维度
 
@@ -139,7 +130,7 @@ Forward request (same as today)
 │ [○ Gemini Native]    [○ Gemini Code Assist] │
 │                                             │
 │ 兼容字段（高级）                            │
-│ providerType [....] allowedModels [....]    │
+│ allowedModels [....] modelRedirects [....]  │
 ├─────────────────────────────────────────────┤
 │ 取消                               保存      │
 └─────────────────────────────────────────────┘
@@ -156,38 +147,37 @@ Forward request (same as today)
 1. 上游可用性状态（在线/熔断/禁用）  
 2. 支持能力图标徽章（可一眼判断是否可接特定客户端请求，且可看出多能力并存）  
 3. 优先级和权重信息  
-4. 兼容字段（折叠展示）
+4. 模型规则字段（折叠展示）
 
 ### Decision 6: 路由日志记录能力命中信息
 
 新增日志字段（或路由决策扩展字段）：
 
 - `matched_route_capability`
-- `route_match_source`（`path` 或 `model_fallback`）
+- `route_match_source`（固定为 `path`）
 - `capability_candidates_count`
 
 用于快速排查“为什么这次请求走到这个上游”。
 
 ## Risks / Trade-offs
 
-- [能力映射不全导致未命中] → 增加兼容兜底（模型路由）并在日志中标明 fallback 发生。
-- [迁移后默认映射不符合个别部署] → 提供批量编辑入口与升级提示，允许逐个上游修正能力集合。
+- [能力映射不全导致未命中] → 返回明确错误并记录请求路径，运营侧按日志补齐能力映射。
+- [移除 provider 字段导致历史接口不兼容] → 同步升级 API 契约与管理端，并在变更说明中声明破坏性升级。
 - [会话亲和性维度变化导致短期命中率波动] → 保留迁移窗口期观测指标，异常时可回退到旧键策略。
-- [前后端字段并存增加复杂度] → 设定明确淘汰阶段，后续单独变更移除旧字段。
 - [图标资产缺失或视觉不一致] → 提供统一图标映射表和兜底通用图标，避免出现空白占位。
 
 ## Migration Plan
 
-1. 数据层新增 `route_capabilities` 字段，发布迁移脚本。  
-2. 启动时执行一次旧字段到新字段的默认映射（可幂等重复执行）。  
-3. 后端上线“路径优先 + 模型兜底”双路径，默认开启。  
-4. 管理端上线能力多选 UI，并显示迁移提示。  
-5. 观测命中率与 fallback 比例，确认稳定后再规划移除旧路由主逻辑。  
+1. 数据层保证 `route_capabilities` 可用并清理历史非法值。  
+2. 后端移除模型兜底路径和 provider 主键选路逻辑。  
+3. Admin API 与前端移除 `provider_type` 字段输入输出。  
+4. 管理端保留能力多选 UI，并收敛兼容文案。  
+5. 完成回归测试后发布破坏性升级版本。  
 
 回滚策略：
 
-- 路由开关切回“模型优先”模式。
-- 保留旧字段不删库，回滚时无需数据恢复。
+- 恢复上一版本代码与数据库 schema（包含 provider 字段）。
+- 通过版本回滚恢复旧契约，不做运行时双逻辑开关。
 
 ## Open Questions
 

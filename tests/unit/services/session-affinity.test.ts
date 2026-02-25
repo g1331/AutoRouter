@@ -20,9 +20,9 @@ describe("SessionAffinityStore", () => {
 
   describe("basic operations", () => {
     it("should set and get affinity entry", () => {
-      store.set("key1", "anthropic", "session-abc", "upstream-1", 1024);
+      store.set("key1", "anthropic_messages", "session-abc", "upstream-1", 1024);
 
-      const entry = store.get("key1", "anthropic", "session-abc");
+      const entry = store.get("key1", "anthropic_messages", "session-abc");
 
       expect(entry).not.toBeNull();
       expect(entry?.upstreamId).toBe("upstream-1");
@@ -31,69 +31,69 @@ describe("SessionAffinityStore", () => {
     });
 
     it("should return null for non-existent entry", () => {
-      const entry = store.get("key1", "anthropic", "non-existent");
+      const entry = store.get("key1", "anthropic_messages", "non-existent");
       expect(entry).toBeNull();
     });
 
     it("should update existing entry preserving cumulative tokens", () => {
-      store.set("key1", "anthropic", "session-abc", "upstream-1", 1024);
-      store.updateCumulativeTokens("key1", "anthropic", "session-abc", {
+      store.set("key1", "anthropic_messages", "session-abc", "upstream-1", 1024);
+      store.updateCumulativeTokens("key1", "anthropic_messages", "session-abc", {
         totalInputTokens: 175,
       });
 
       // Update to new upstream
-      store.set("key1", "anthropic", "session-abc", "upstream-2", 2048);
+      store.set("key1", "anthropic_messages", "session-abc", "upstream-2", 2048);
 
-      const entry = store.get("key1", "anthropic", "session-abc");
+      const entry = store.get("key1", "anthropic_messages", "session-abc");
       expect(entry?.upstreamId).toBe("upstream-2");
       expect(entry?.cumulativeTokens).toBe(175); // Preserved
     });
 
     it("should delete entry", () => {
-      store.set("key1", "anthropic", "session-abc", "upstream-1", 1024);
+      store.set("key1", "anthropic_messages", "session-abc", "upstream-1", 1024);
 
-      const deleted = store.delete("key1", "anthropic", "session-abc");
+      const deleted = store.delete("key1", "anthropic_messages", "session-abc");
 
       expect(deleted).toBe(true);
-      expect(store.get("key1", "anthropic", "session-abc")).toBeNull();
+      expect(store.get("key1", "anthropic_messages", "session-abc")).toBeNull();
     });
 
     it("should check if entry exists", () => {
-      store.set("key1", "anthropic", "session-abc", "upstream-1", 1024);
+      store.set("key1", "anthropic_messages", "session-abc", "upstream-1", 1024);
 
-      expect(store.has("key1", "anthropic", "session-abc")).toBe(true);
-      expect(store.has("key1", "anthropic", "other-session")).toBe(false);
+      expect(store.has("key1", "anthropic_messages", "session-abc")).toBe(true);
+      expect(store.has("key1", "anthropic_messages", "other-session")).toBe(false);
     });
   });
 
   describe("TTL management", () => {
     it("should refresh lastAccessedAt on get (sliding window)", async () => {
-      store.set("key1", "anthropic", "session-abc", "upstream-1", 1024);
+      store.set("key1", "anthropic_messages", "session-abc", "upstream-1", 1024);
 
       // Wait a bit
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Get should refresh
-      const entry1 = store.get("key1", "anthropic", "session-abc");
+      const entry1 = store.get("key1", "anthropic_messages", "session-abc");
       expect(entry1).not.toBeNull();
 
       // Wait again, but less than TTL
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Should still exist due to sliding window
-      const entry2 = store.get("key1", "anthropic", "session-abc");
+      const entry2 = store.get("key1", "anthropic_messages", "session-abc");
       expect(entry2).not.toBeNull();
     });
 
     it("should expire entry after TTL", async () => {
       const shortStore = new SessionAffinityStore(100, 1000); // 100ms TTL
 
-      shortStore.set("key1", "anthropic", "session-abc", "upstream-1", 1024);
+      shortStore.set("key1", "anthropic_messages", "session-abc", "upstream-1", 1024);
 
       // Wait for TTL to expire
       await new Promise((resolve) => setTimeout(resolve, 150));
 
-      const entry = shortStore.get("key1", "anthropic", "session-abc");
+      const entry = shortStore.get("key1", "anthropic_messages", "session-abc");
       expect(entry).toBeNull();
 
       shortStore.dispose();
@@ -102,19 +102,19 @@ describe("SessionAffinityStore", () => {
     it("should expire entry after max TTL even with activity", async () => {
       const shortStore = new SessionAffinityStore(5000, 100); // 100ms max TTL
 
-      shortStore.set("key1", "anthropic", "session-abc", "upstream-1", 1024);
+      shortStore.set("key1", "anthropic_messages", "session-abc", "upstream-1", 1024);
 
       // Get multiple times to refresh sliding window
       await new Promise((resolve) => setTimeout(resolve, 30));
-      expect(shortStore.get("key1", "anthropic", "session-abc")).not.toBeNull();
+      expect(shortStore.get("key1", "anthropic_messages", "session-abc")).not.toBeNull();
 
       await new Promise((resolve) => setTimeout(resolve, 30));
-      expect(shortStore.get("key1", "anthropic", "session-abc")).not.toBeNull();
+      expect(shortStore.get("key1", "anthropic_messages", "session-abc")).not.toBeNull();
 
       // Wait for max TTL to expire (need >100ms since max TTL)
       await new Promise((resolve) => setTimeout(resolve, 60));
 
-      const entry = shortStore.get("key1", "anthropic", "session-abc");
+      const entry = shortStore.get("key1", "anthropic_messages", "session-abc");
       expect(entry).toBeNull();
 
       shortStore.dispose();
@@ -125,64 +125,64 @@ describe("SessionAffinityStore", () => {
     it("should cleanup expired entries", async () => {
       const shortStore = new SessionAffinityStore(50, 1000);
 
-      shortStore.set("key1", "anthropic", "session-1", "upstream-1", 1024);
-      shortStore.set("key1", "anthropic", "session-2", "upstream-2", 2048);
+      shortStore.set("key1", "anthropic_messages", "session-1", "upstream-1", 1024);
+      shortStore.set("key1", "anthropic_messages", "session-2", "upstream-2", 2048);
 
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Add a fresh entry
-      shortStore.set("key1", "anthropic", "session-3", "upstream-3", 512);
+      shortStore.set("key1", "anthropic_messages", "session-3", "upstream-3", 512);
 
       const cleaned = shortStore.cleanup();
 
       expect(cleaned).toBe(2);
       expect(shortStore.size()).toBe(1);
-      expect(shortStore.has("key1", "anthropic", "session-3")).toBe(true);
+      expect(shortStore.has("key1", "anthropic_messages", "session-3")).toBe(true);
 
       shortStore.dispose();
     });
 
     it("should clear all entries", () => {
-      store.set("key1", "anthropic", "session-1", "upstream-1", 1024);
-      store.set("key1", "anthropic", "session-2", "upstream-2", 2048);
+      store.set("key1", "anthropic_messages", "session-1", "upstream-1", 1024);
+      store.set("key1", "anthropic_messages", "session-2", "upstream-2", 2048);
 
       store.clear();
 
       expect(store.size()).toBe(0);
-      expect(store.get("key1", "anthropic", "session-1")).toBeNull();
+      expect(store.get("key1", "anthropic_messages", "session-1")).toBeNull();
     });
   });
 
   describe("updateCumulativeTokens", () => {
     it("should accumulate input tokens", () => {
-      store.set("key1", "anthropic", "session-abc", "upstream-1", 1024);
+      store.set("key1", "anthropic_messages", "session-abc", "upstream-1", 1024);
 
-      store.updateCumulativeTokens("key1", "anthropic", "session-abc", {
+      store.updateCumulativeTokens("key1", "anthropic_messages", "session-abc", {
         totalInputTokens: 175,
       });
 
-      const entry = store.get("key1", "anthropic", "session-abc");
+      const entry = store.get("key1", "anthropic_messages", "session-abc");
       expect(entry?.cumulativeTokens).toBe(175);
     });
 
     it("should accumulate multiple updates", () => {
-      store.set("key1", "anthropic", "session-abc", "upstream-1", 1024);
+      store.set("key1", "anthropic_messages", "session-abc", "upstream-1", 1024);
 
-      store.updateCumulativeTokens("key1", "anthropic", "session-abc", {
+      store.updateCumulativeTokens("key1", "anthropic_messages", "session-abc", {
         totalInputTokens: 100,
       });
 
-      store.updateCumulativeTokens("key1", "anthropic", "session-abc", {
+      store.updateCumulativeTokens("key1", "anthropic_messages", "session-abc", {
         totalInputTokens: 275,
       });
 
-      const entry = store.get("key1", "anthropic", "session-abc");
+      const entry = store.get("key1", "anthropic_messages", "session-abc");
       expect(entry?.cumulativeTokens).toBe(375);
     });
 
     it("should do nothing for non-existent entry", () => {
       // Should not throw
-      store.updateCumulativeTokens("key1", "anthropic", "non-existent", {
+      store.updateCumulativeTokens("key1", "anthropic_messages", "non-existent", {
         totalInputTokens: 175,
       });
 
@@ -210,11 +210,11 @@ describe("SessionAffinityStore", () => {
 
   describe("key isolation", () => {
     it("should isolate entries by api key", () => {
-      store.set("key1", "anthropic", "session-abc", "upstream-1", 1024);
-      store.set("key2", "anthropic", "session-abc", "upstream-2", 2048);
+      store.set("key1", "anthropic_messages", "session-abc", "upstream-1", 1024);
+      store.set("key2", "anthropic_messages", "session-abc", "upstream-2", 2048);
 
-      expect(store.get("key1", "anthropic", "session-abc")?.upstreamId).toBe("upstream-1");
-      expect(store.get("key2", "anthropic", "session-abc")?.upstreamId).toBe("upstream-2");
+      expect(store.get("key1", "anthropic_messages", "session-abc")?.upstreamId).toBe("upstream-1");
+      expect(store.get("key2", "anthropic_messages", "session-abc")?.upstreamId).toBe("upstream-2");
     });
 
     it("should isolate entries by route capability scope", () => {
@@ -228,11 +228,11 @@ describe("SessionAffinityStore", () => {
     });
 
     it("should isolate entries by session id", () => {
-      store.set("key1", "anthropic", "session-abc", "upstream-1", 1024);
-      store.set("key1", "anthropic", "session-def", "upstream-2", 2048);
+      store.set("key1", "anthropic_messages", "session-abc", "upstream-1", 1024);
+      store.set("key1", "anthropic_messages", "session-def", "upstream-2", 2048);
 
-      expect(store.get("key1", "anthropic", "session-abc")?.upstreamId).toBe("upstream-1");
-      expect(store.get("key1", "anthropic", "session-def")?.upstreamId).toBe("upstream-2");
+      expect(store.get("key1", "anthropic_messages", "session-abc")?.upstreamId).toBe("upstream-1");
+      expect(store.get("key1", "anthropic_messages", "session-def")?.upstreamId).toBe("upstream-2");
     });
   });
 });
@@ -275,7 +275,7 @@ describe("extractSessionId", () => {
         },
       };
 
-      const sessionId = extractSessionId("anthropic", {}, body);
+      const sessionId = extractSessionId("anthropic_messages", {}, body);
 
       expect(sessionId).toBe("550e8400-e29b-41d4-a716-446655440000");
     });
@@ -287,7 +287,7 @@ describe("extractSessionId", () => {
         },
       };
 
-      const sessionId = extractSessionId("anthropic", {}, body);
+      const sessionId = extractSessionId("anthropic_messages", {}, body);
 
       expect(sessionId).toBe("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
     });
@@ -299,7 +299,7 @@ describe("extractSessionId", () => {
         },
       };
 
-      const sessionId = extractSessionId("anthropic", {}, body);
+      const sessionId = extractSessionId("anthropic_messages", {}, body);
 
       expect(sessionId).toBeNull();
     });
@@ -307,7 +307,7 @@ describe("extractSessionId", () => {
     it("should return null when metadata is missing", () => {
       const body = {};
 
-      const sessionId = extractSessionId("anthropic", {}, body);
+      const sessionId = extractSessionId("anthropic_messages", {}, body);
 
       expect(sessionId).toBeNull();
     });
@@ -319,13 +319,13 @@ describe("extractSessionId", () => {
         },
       };
 
-      const sessionId = extractSessionId("anthropic", {}, body);
+      const sessionId = extractSessionId("anthropic_messages", {}, body);
 
       expect(sessionId).toBeNull();
     });
 
     it("should return null for null body", () => {
-      const sessionId = extractSessionId("anthropic", {}, null);
+      const sessionId = extractSessionId("anthropic_messages", {}, null);
 
       expect(sessionId).toBeNull();
     });
@@ -337,7 +337,7 @@ describe("extractSessionId", () => {
         },
       };
 
-      const sessionId = extractSessionId("anthropic", {}, body);
+      const sessionId = extractSessionId("anthropic_messages", {}, body);
 
       expect(sessionId).toBe("550e8400-e29b-41d4-a716-446655440000");
     });
@@ -349,7 +349,7 @@ describe("extractSessionId", () => {
         session_id: "sess_abc123def456",
       };
 
-      const sessionId = extractSessionId("openai", headers, {});
+      const sessionId = extractSessionId("openai_chat_compatible", headers, {});
 
       expect(sessionId).toBe("sess_abc123def456");
     });
@@ -359,7 +359,7 @@ describe("extractSessionId", () => {
         authorization: "Bearer token",
       };
 
-      const sessionId = extractSessionId("openai", headers, {});
+      const sessionId = extractSessionId("openai_chat_compatible", headers, {});
 
       expect(sessionId).toBeNull();
     });
@@ -369,7 +369,7 @@ describe("extractSessionId", () => {
         session_id: "",
       };
 
-      const sessionId = extractSessionId("openai", headers, {});
+      const sessionId = extractSessionId("openai_chat_compatible", headers, {});
 
       expect(sessionId).toBeNull();
     });
@@ -379,7 +379,7 @@ describe("extractSessionId", () => {
         session_id: ["sess_1", "sess_2"],
       };
 
-      const sessionId = extractSessionId("openai", headers, {});
+      const sessionId = extractSessionId("openai_chat_compatible", headers, {});
 
       expect(sessionId).toBeNull();
     });
@@ -387,12 +387,12 @@ describe("extractSessionId", () => {
 
   describe("other providers", () => {
     it("should return null for google provider", () => {
-      const sessionId = extractSessionId("google", {}, { some: "data" });
+      const sessionId = extractSessionId("gemini_native_generate", {}, { some: "data" });
       expect(sessionId).toBeNull();
     });
 
     it("should return null for custom provider", () => {
-      const sessionId = extractSessionId("custom", {}, { some: "data" });
+      const sessionId = extractSessionId("gemini_code_assist_internal", {}, { some: "data" });
       expect(sessionId).toBeNull();
     });
   });

@@ -214,7 +214,7 @@ describe("upstream-crud", () => {
       expect(result.weight).toBe(5);
     });
 
-    it("should create upstream with model-based routing fields", async () => {
+    it("should create upstream with routing fields", async () => {
       const { createUpstream } = await import("@/lib/services/upstream-crud");
       const { db } = await import("@/lib/db");
 
@@ -233,6 +233,7 @@ describe("upstream-crud", () => {
           priority: 0,
           weight: 1,
           providerType: "openai",
+          routeCapabilities: ["openai_chat_compatible"],
           allowedModels: ["gpt-4", "gpt-4-turbo"],
           modelRedirects: { "gpt-4-turbo": "gpt-4" },
           createdAt: new Date(),
@@ -248,14 +249,14 @@ describe("upstream-crud", () => {
 
       const result = await createUpstream({
         name: "test-upstream",
-        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key",
+        routeCapabilities: ["openai_chat_compatible"],
         allowedModels: ["gpt-4", "gpt-4-turbo"],
         modelRedirects: { "gpt-4-turbo": "gpt-4" },
       });
 
-      expect(result.providerType).toBe("openai");
+      expect(result.routeCapabilities).toEqual(["openai_chat_compatible"]);
       expect(result.allowedModels).toEqual(["gpt-4", "gpt-4-turbo"]);
       expect(result.modelRedirects).toEqual({ "gpt-4-turbo": "gpt-4" });
     });

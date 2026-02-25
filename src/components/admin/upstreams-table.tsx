@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge, type BadgeProps } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
 import { getDateLocale } from "@/lib/date-locale";
 import { StatusLed, AsciiProgress, TerminalHeader, type LedStatus } from "@/components/ui/terminal";
 import { cn } from "@/lib/utils";
@@ -94,22 +94,6 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
       }
       return next;
     });
-  };
-
-  const formatProvider = (providerType: string) => {
-    const providerMap: Record<string, { label: string; variant: BadgeProps["variant"] }> = {
-      openai: { label: "OpenAI", variant: "success" },
-      anthropic: { label: "Anthropic", variant: "secondary" },
-      google: { label: "Google", variant: "warning" },
-      custom: { label: "Custom", variant: "outline" },
-    };
-
-    const config = providerMap[providerType.toLowerCase()] || {
-      label: providerType,
-      variant: "neutral" as const,
-    };
-
-    return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
   const getHealthLedStatus = (upstream: Upstream): LedStatus => {
@@ -369,7 +353,6 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
               <TableRow>
                 <TableHead className="w-[18%]">{tCommon("name")}</TableHead>
                 <TableHead className="w-[18%]">{t("routeCapabilities")}</TableHead>
-                <TableHead className="w-[10%]">{t("compatibilityProvider")}</TableHead>
                 <TableHead className="w-[10%]">{t("tableWeight")}</TableHead>
                 <TableHead className="w-[11%]">{t("tableHealth")}</TableHead>
                 <TableHead className="w-[12%]">{t("tableCircuitBreaker")}</TableHead>
@@ -391,7 +374,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                       className="bg-surface-300 hover:bg-surface-300 cursor-pointer"
                       onClick={() => toggleTier(tier.priority)}
                     >
-                      <TableCell colSpan={9} className="py-2">
+                      <TableCell colSpan={8} className="py-2">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex min-w-0 items-center gap-3">
                             <Button
@@ -467,7 +450,6 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                             <TableCell>
                               <RouteCapabilityBadges capabilities={upstream.route_capabilities} />
                             </TableCell>
-                            <TableCell>{formatProvider(upstream.provider_type)}</TableCell>
                             <TableCell>
                               <AsciiProgress
                                 value={upstream.weight}
@@ -562,7 +544,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                       key={upstream.id}
                       className="mx-2 my-2 space-y-2 rounded-cf-sm border border-surface-400/45 bg-surface-200/35 px-2.5 py-2.5"
                     >
-                      {/* Card Header: Name + Badge + Provider */}
+                      {/* Card Header: Name + Badge */}
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex min-w-0 items-center gap-1.5">
                           <span className="font-mono text-xs text-foreground font-medium truncate">
@@ -575,7 +557,6 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                             {upstream.is_active ? t("active") : t("inactive")}
                           </Badge>
                         </div>
-                        <div className="shrink-0">{formatProvider(upstream.provider_type)}</div>
                       </div>
 
                       <RouteCapabilityBadges

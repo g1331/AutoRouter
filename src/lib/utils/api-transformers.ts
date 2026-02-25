@@ -63,7 +63,6 @@ export interface UpstreamApiResponse {
   config: string | null;
   weight: number;
   priority: number;
-  provider_type: string;
   route_capabilities: RouteCapability[];
   allowed_models: string[] | null;
   model_redirects: Record<string, string> | null;
@@ -106,7 +105,6 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
     config: upstream.config,
     weight: upstream.weight,
     priority: upstream.priority,
-    provider_type: upstream.providerType,
     route_capabilities: upstream.routeCapabilities,
     allowed_models: upstream.allowedModels,
     model_redirects: upstream.modelRedirects,

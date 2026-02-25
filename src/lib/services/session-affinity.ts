@@ -6,7 +6,6 @@
  */
 
 import { createHash } from "crypto";
-import type { ProviderType } from "@/types/api";
 import type { RouteCapability } from "@/lib/route-capabilities";
 
 // ============================================================================
@@ -31,7 +30,7 @@ export interface AffinityMigrationConfig {
   threshold: number;
 }
 
-export type AffinityScope = ProviderType | RouteCapability;
+export type AffinityScope = RouteCapability;
 
 // ============================================================================
 // Configuration
@@ -274,18 +273,16 @@ export class SessionAffinityStore {
  * Others: Returns null
  */
 export function extractSessionId(
-  capabilityOrProvider: RouteCapability | ProviderType,
+  capability: RouteCapability,
   headers: Record<string, string | string[] | undefined>,
   bodyJson: Record<string, unknown> | null
 ): string | null {
-  switch (capabilityOrProvider) {
+  switch (capability) {
     case "anthropic_messages":
-    case "anthropic":
       return extractAnthropicSessionId(bodyJson);
     case "codex_responses":
     case "openai_chat_compatible":
     case "openai_extended":
-    case "openai":
       return extractOpenAISessionId(headers);
     default:
       return null;

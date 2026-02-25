@@ -46,7 +46,6 @@ const createUpstreamSchema = z.object({
   config: z.string().nullable().optional(),
   weight: z.number().int().min(1).max(100).default(1),
   priority: z.number().int().min(0).default(0),
-  provider_type: z.enum(["anthropic", "openai", "google", "custom"]).default("openai"),
   route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)).nullable().optional(),
   allowed_models: z.array(z.string()).nullable().optional(),
   model_redirects: z.record(z.string(), z.string()).nullable().optional(),
@@ -96,7 +95,6 @@ export async function POST(request: NextRequest) {
       config: validated.config ?? null,
       weight: validated.weight,
       priority: validated.priority,
-      providerType: validated.provider_type,
       routeCapabilities:
         validated.route_capabilities !== undefined
           ? normalizeRouteCapabilities(validated.route_capabilities ?? [])

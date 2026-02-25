@@ -35,7 +35,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreateUpstream, useUpdateUpstream } from "@/hooks/use-upstreams";
-import type { RouteCapability, Upstream, ProviderType } from "@/types/api";
+import type { RouteCapability, Upstream } from "@/types/api";
 import { TagInput } from "@/components/ui/tag-input";
 import { KeyValueInput } from "@/components/ui/key-value-input";
 import { Switch } from "@/components/ui/switch";
@@ -76,7 +76,6 @@ const createUpstreamFormSchema = z.object({
   description: z.string().max(500),
   priority: z.number().int().min(0).max(100),
   weight: z.number().int().min(1).max(100),
-  provider_type: z.enum(["anthropic", "openai", "google", "custom"]),
   route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
   allowed_models: z.array(z.string()).nullable(),
   model_redirects: z.record(z.string(), z.string()).nullable(),
@@ -92,7 +91,6 @@ const editUpstreamFormSchema = z.object({
   description: z.string().max(500),
   priority: z.number().int().min(0).max(100),
   weight: z.number().int().min(1).max(100),
-  provider_type: z.enum(["anthropic", "openai", "google", "custom"]),
   route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
   allowed_models: z.array(z.string()).nullable(),
   model_redirects: z.record(z.string(), z.string()).nullable(),
@@ -126,7 +124,6 @@ export function UpstreamFormDialog({
       description: "",
       priority: 0,
       weight: 1,
-      provider_type: "openai",
       route_capabilities: [],
       allowed_models: null,
       model_redirects: null,
@@ -156,7 +153,6 @@ export function UpstreamFormDialog({
         description: upstream.description || "",
         priority: upstream.priority ?? 0,
         weight: upstream.weight ?? 1,
-        provider_type: upstream.provider_type || "openai",
         route_capabilities: upstream.route_capabilities || [],
         allowed_models: upstream.allowed_models || null,
         model_redirects: upstream.model_redirects || null,
@@ -178,7 +174,6 @@ export function UpstreamFormDialog({
         description: "",
         priority: 0,
         weight: 1,
-        provider_type: "openai",
         route_capabilities: [],
         allowed_models: null,
         model_redirects: null,
@@ -199,7 +194,6 @@ export function UpstreamFormDialog({
           description: string | null;
           priority?: number;
           weight?: number;
-          provider_type?: ProviderType;
           route_capabilities?: RouteCapability[] | null;
           allowed_models?: string[] | null;
           model_redirects?: Record<string, string> | null;
@@ -220,7 +214,6 @@ export function UpstreamFormDialog({
           description: data.description || null,
           priority: data.priority,
           weight: data.weight,
-          provider_type: data.provider_type,
           route_capabilities: data.route_capabilities,
           allowed_models: data.allowed_models,
           model_redirects: data.model_redirects,
@@ -243,7 +236,6 @@ export function UpstreamFormDialog({
           description: data.description || null,
           priority: data.priority,
           weight: data.weight,
-          provider_type: data.provider_type,
           route_capabilities: data.route_capabilities,
           allowed_models: data.allowed_models,
           model_redirects: data.model_redirects,
@@ -386,39 +378,6 @@ export function UpstreamFormDialog({
               </FormItem>
             )}
           />
-
-          {/* Compatibility Routing Section */}
-          <div className="border-t pt-6 mt-6">
-            <h3 className="text-sm font-medium text-muted-foreground mb-4">
-              {t("compatibilityRouting")}
-            </h3>
-            <p className="mb-4 text-xs text-muted-foreground">{t("compatibilityRoutingDesc")}</p>
-
-            <FormField
-              control={form.control}
-              name="provider_type"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("providerType")} *</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder={t("providerTypePlaceholder")} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="openai">OpenAI</SelectItem>
-                      <SelectItem value="anthropic">Anthropic</SelectItem>
-                      <SelectItem value="google">Google</SelectItem>
-                      <SelectItem value="custom">{t("custom")}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>{t("providerTypeDescription")}</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
 
           {/* Model-based Routing Section */}
           <div className="border-t pt-6 mt-6">

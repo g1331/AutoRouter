@@ -43,3 +43,15 @@
 - [x] 6.3 为上游多能力配置新增 CRUD 测试与参数校验测试
 - [x] 6.4 为会话亲和性新增回归测试，覆盖新键策略与跨能力隔离
 - [x] 6.5 完成 `pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run` 并修复阻断项
+
+## 7. 去兼容提供商字段（provider_type）与模型兜底
+
+- [x] 7.1 同步 proposal/design/specs：未命中路径能力不再走模型兜底，`provider_type` 从契约移除
+- [x] 7.2 移除 `model-router` 在代理主链路的依赖，`handleProxy` 改为纯路径能力路由
+- [x] 7.3 负载均衡入口从 `selectFromProviderType` 重构为按候选上游集合选择
+- [x] 7.4 会话提取与亲和性范围仅接受 `routeCapability`，移除 provider fallback 分支
+- [x] 7.5 上游 CRUD、Admin API、类型定义移除 `provider_type` 输入输出字段
+- [x] 7.6 管理端移除“兼容提供商”配置与展示列，保留能力多选与模型规则
+- [x] 7.7 更新数据库 schema（PG/SQLite）移除 `upstreams.provider_type` 并清理相关索引依赖
+- [x] 7.8 补齐并修复测试，覆盖纯路径路由、无路径能力错误、去 provider 字段后的 CRUD 与 UI
+- [x] 7.9 完成 `pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run` 并修复阻断项

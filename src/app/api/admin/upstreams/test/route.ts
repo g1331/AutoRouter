@@ -8,12 +8,13 @@ import {
 } from "@/lib/services/upstream-service";
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
+import { ROUTE_CAPABILITY_VALUES, normalizeRouteCapabilities } from "@/lib/route-capabilities";
 
 const log = createLogger("admin-upstreams");
 
 const testUpstreamSchema = z.object({
   name: z.string().min(1).max(64).optional(),
-  provider_type: z.enum(["openai", "anthropic", "google", "custom"]),
+  route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)).min(1),
   base_url: z.string().url("Base URL must be a valid URL"),
   api_key: z
     .string()
@@ -127,7 +128,7 @@ export async function POST(request: NextRequest) {
     const validated = testUpstreamSchema.parse(body);
 
     const input: TestUpstreamInput = {
-      providerType: validated.provider_type,
+      routeCapabilities: normalizeRouteCapabilities(validated.route_capabilities),
       baseUrl: validated.base_url,
       apiKey: validated.api_key,
       timeout: validated.timeout,

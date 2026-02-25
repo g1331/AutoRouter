@@ -1,9 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db, upstreams } from "@/lib/db";
-import {
-  getDefaultRouteCapabilitiesForProvider,
-  normalizeRouteCapabilities,
-} from "@/lib/route-capabilities";
+import { normalizeRouteCapabilities } from "@/lib/route-capabilities";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("route-capability-migration");
@@ -27,7 +24,6 @@ async function runMigrationInternal(): Promise<void> {
   let allUpstreams: Array<{
     id: string;
     name: string;
-    providerType: string;
     routeCapabilities: string[] | null;
     updatedAt: Date;
   }> = [];
@@ -37,7 +33,6 @@ async function runMigrationInternal(): Promise<void> {
       columns: {
         id: true,
         name: true,
-        providerType: true,
         routeCapabilities: true,
         updatedAt: true,
       },
@@ -55,10 +50,7 @@ async function runMigrationInternal(): Promise<void> {
 
   for (const upstream of allUpstreams) {
     const normalizedCapabilities = normalizeRouteCapabilities(upstream.routeCapabilities);
-    const expectedCapabilities =
-      normalizedCapabilities.length > 0
-        ? normalizedCapabilities
-        : getDefaultRouteCapabilitiesForProvider(upstream.providerType);
+    const expectedCapabilities = normalizedCapabilities;
 
     const shouldUpdate =
       upstream.routeCapabilities == null ||
@@ -80,7 +72,6 @@ async function runMigrationInternal(): Promise<void> {
       {
         upstreamId: upstream.id,
         upstreamName: upstream.name,
-        providerType: upstream.providerType,
         routeCapabilities: expectedCapabilities,
       },
       "initialized upstream route capabilities"

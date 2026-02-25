@@ -1,6 +1,7 @@
 import { and, gte, sql, count, sum, avg, inArray, isNotNull, ne } from "drizzle-orm";
 import { db, requestLogs, apiKeys, upstreams } from "../db";
 import { config } from "../utils/config";
+import { getPrimaryProviderByCapabilities } from "@/lib/route-capabilities";
 
 export type TimeRange = "today" | "7d" | "30d";
 
@@ -288,10 +289,13 @@ export async function getLeaderboardStats(
   if (upstreamIds.length > 0) {
     const upstreamDetails = await db.query.upstreams.findMany({
       where: inArray(upstreams.id, upstreamIds),
-      columns: { id: true, name: true, providerType: true },
+      columns: { id: true, name: true, routeCapabilities: true },
     });
     for (const u of upstreamDetails) {
-      upstreamMap.set(u.id, { name: u.name, providerType: u.providerType });
+      upstreamMap.set(u.id, {
+        name: u.name,
+        providerType: getPrimaryProviderByCapabilities(u.routeCapabilities) ?? "unknown",
+      });
     }
   }
 

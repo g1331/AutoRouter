@@ -51,7 +51,6 @@ const updateUpstreamSchema = z.object({
   config: z.string().nullable().optional(),
   weight: z.number().int().min(1).max(100).optional(),
   priority: z.number().int().min(0).optional(),
-  provider_type: z.enum(["anthropic", "openai", "google", "custom"]).optional(),
   route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)).nullable().optional(),
   allowed_models: z.array(z.string()).nullable().optional(),
   model_redirects: z.record(z.string(), z.string()).nullable().optional(),
@@ -107,7 +106,6 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     if (validated.config !== undefined) input.config = validated.config;
     if (validated.weight !== undefined) input.weight = validated.weight;
     if (validated.priority !== undefined) input.priority = validated.priority;
-    if (validated.provider_type !== undefined) input.providerType = validated.provider_type;
     if (validated.route_capabilities !== undefined) {
       input.routeCapabilities = normalizeRouteCapabilities(validated.route_capabilities ?? []);
     }
