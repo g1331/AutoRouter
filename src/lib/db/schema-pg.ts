@@ -183,6 +183,9 @@ export const requestLogs = pgTable(
     sessionId: text("session_id"),
     affinityHit: boolean("affinity_hit").notNull().default(false),
     affinityMigrated: boolean("affinity_migrated").notNull().default(false),
+    // Performance metrics fields
+    ttftMs: integer("ttft_ms"),
+    isStream: boolean("is_stream").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

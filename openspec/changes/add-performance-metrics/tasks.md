@@ -1,8 +1,8 @@
 ## 1. 数据库 Schema 扩展
 
-- [ ] 1.1 在 `src/lib/db/schema-pg.ts` 的 `request_logs` 表新增 `ttft_ms` (integer, nullable) 和 `is_stream` (boolean, default false) 字段
-- [ ] 1.2 在 `src/lib/db/schema-sqlite.ts` 的 `request_logs` 表新增 `ttft_ms` (integer, nullable) 和 `is_stream` (integer mode boolean, default false) 字段
-- [ ] 1.3 生成并应用数据库迁移（`pnpm db:generate && pnpm db:migrate`）
+- [x] 1.1 在 `src/lib/db/schema-pg.ts` 的 `request_logs` 表新增 `ttft_ms` (integer, nullable) 和 `is_stream` (boolean, default false) 字段
+- [x] 1.2 在 `src/lib/db/schema-sqlite.ts` 的 `request_logs` 表新增 `ttft_ms` (integer, nullable) 和 `is_stream` (integer mode boolean, default false) 字段
+- [x] 1.3 生成并应用数据库迁移（`pnpm db:generate && pnpm db:migrate`）
 
 ## 2. 代理层 TTFT 采集
 

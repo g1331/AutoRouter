@@ -37,6 +37,7 @@ export interface ProxyResult {
   isStream: boolean;
   usage?: TokenUsage;
   usagePromise?: Promise<TokenUsage | null>;
+  ttftMs?: number;
 }
 
 // Headers that should not be forwarded to upstream
@@ -292,12 +293,21 @@ export function extractUsage(data: Record<string, unknown>): TokenUsage | null {
 }
 
 /**
+ * Options for the SSE transformer.
+ */
+export interface SSETransformerCallbacks {
+  onUsage: (usage: TokenUsage) => void;
+  onFirstChunk?: () => void;
+}
+
+/**
  * Create a streaming SSE response transformer that extracts usage data.
  */
 export function createSSETransformer(
-  onUsage: (usage: TokenUsage) => void
+  callbacks: SSETransformerCallbacks
 ): TransformStream<Uint8Array, Uint8Array> {
   let buffer = "";
+  let firstChunkFired = false;
 
   return new TransformStream({
     transform(chunk, controller) {
@@ -320,11 +330,17 @@ export function createSSETransformer(
               continue;
             }
 
+            // Fire onFirstChunk on the first non-empty data event
+            if (!firstChunkFired && callbacks.onFirstChunk) {
+              firstChunkFired = true;
+              callbacks.onFirstChunk();
+            }
+
             try {
               const data = JSON.parse(dataStr);
               const usage = extractUsage(data);
               if (usage) {
-                onUsage(usage);
+                callbacks.onUsage(usage);
               }
             } catch {
               // Not JSON, skip
@@ -411,6 +427,8 @@ export async function forwardRequest(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), upstream.timeout * 1000);
 
+  const upstreamSendTime = Date.now();
+
   try {
     // Make upstream request
     const upstreamResponse = await fetch(url, {
@@ -445,14 +463,21 @@ export async function forwardRequest(
     if (contentType.includes("text/event-stream") && upstreamResponse.body) {
       // Streaming response - return stream directly for maximum performance
       let usage: TokenUsage | undefined;
+      let ttftMs: number | undefined;
 
       const transformedStream = upstreamResponse.body.pipeThrough(
-        createSSETransformer((u) => {
-          usage = u;
-          reqLog.debug(
-            { prompt: u.promptTokens, completion: u.completionTokens, total: u.totalTokens },
-            "token usage"
-          );
+        createSSETransformer({
+          onUsage: (u) => {
+            usage = u;
+            reqLog.debug(
+              { prompt: u.promptTokens, completion: u.completionTokens, total: u.totalTokens },
+              "token usage"
+            );
+          },
+          onFirstChunk: () => {
+            ttftMs = Date.now() - upstreamSendTime;
+            reqLog.debug({ ttftMs }, "time to first token");
+          },
         })
       );
 
@@ -474,6 +499,7 @@ export async function forwardRequest(
         isStream: true,
         usage,
         usagePromise,
+        ttftMs,
       };
     } else {
       // Regular response

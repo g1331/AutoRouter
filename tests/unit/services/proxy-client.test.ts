@@ -471,7 +471,7 @@ describe("proxy-client", () => {
   describe("createSSETransformer", () => {
     it("should pass through SSE events unchanged", async () => {
       const onUsage = vi.fn();
-      const transformer = createSSETransformer(onUsage);
+      const transformer = createSSETransformer({ onUsage });
 
       const input = 'data: {"id":"1"}\n\n';
       const encoder = new TextEncoder();
@@ -497,7 +497,7 @@ describe("proxy-client", () => {
 
     it("should extract usage from OpenAI SSE event", async () => {
       const onUsage = vi.fn();
-      const transformer = createSSETransformer(onUsage);
+      const transformer = createSSETransformer({ onUsage });
 
       const input =
         'data: {"usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}}\n\n';
@@ -527,7 +527,7 @@ describe("proxy-client", () => {
 
     it("should extract usage from Anthropic SSE event", async () => {
       const onUsage = vi.fn();
-      const transformer = createSSETransformer(onUsage);
+      const transformer = createSSETransformer({ onUsage });
 
       const input = 'data: {"type":"message","usage":{"input_tokens":15,"output_tokens":25}}\n\n';
       const encoder = new TextEncoder();
@@ -555,7 +555,7 @@ describe("proxy-client", () => {
 
     it("should extract usage from SSE data line without space after colon", async () => {
       const onUsage = vi.fn();
-      const transformer = createSSETransformer(onUsage);
+      const transformer = createSSETransformer({ onUsage });
 
       const input = 'data:{"type":"message","usage":{"input_tokens":15,"output_tokens":25}}\n\n';
       const encoder = new TextEncoder();
@@ -583,7 +583,7 @@ describe("proxy-client", () => {
 
     it("should extract usage from Anthropic message_start nested message.usage", async () => {
       const onUsage = vi.fn();
-      const transformer = createSSETransformer(onUsage);
+      const transformer = createSSETransformer({ onUsage });
 
       const input =
         'data:{"type":"message_start","message":{"usage":{"input_tokens":0,"output_tokens":1,"cache_creation_input_tokens":10,"cache_read_input_tokens":0}}}\n\n';
@@ -612,7 +612,7 @@ describe("proxy-client", () => {
 
     it("should extract usage from OpenAI Responses API SSE event", async () => {
       const onUsage = vi.fn();
-      const transformer = createSSETransformer(onUsage);
+      const transformer = createSSETransformer({ onUsage });
 
       // OpenAI Responses API format: input_tokens/output_tokens without type="message"
       const input =
@@ -642,7 +642,7 @@ describe("proxy-client", () => {
 
     it("should extract usage from OpenAI Responses API response.completed event", async () => {
       const onUsage = vi.fn();
-      const transformer = createSSETransformer(onUsage);
+      const transformer = createSSETransformer({ onUsage });
 
       // OpenAI Responses API streaming: usage is nested in response.completed event
       const input =
@@ -672,7 +672,7 @@ describe("proxy-client", () => {
 
     it("should handle [DONE] message", async () => {
       const onUsage = vi.fn();
-      const transformer = createSSETransformer(onUsage);
+      const transformer = createSSETransformer({ onUsage });
 
       const input = "data: [DONE]\n\n";
       const encoder = new TextEncoder();
@@ -692,7 +692,7 @@ describe("proxy-client", () => {
 
     it("should handle multiple events in chunks", async () => {
       const onUsage = vi.fn();
-      const transformer = createSSETransformer(onUsage);
+      const transformer = createSSETransformer({ onUsage });
 
       const event1 = 'data: {"id":"1"}\n\n';
       const event2 =
@@ -724,7 +724,7 @@ describe("proxy-client", () => {
 
     it("should handle chunked events across multiple reads", async () => {
       const onUsage = vi.fn();
-      const transformer = createSSETransformer(onUsage);
+      const transformer = createSSETransformer({ onUsage });
 
       const encoder = new TextEncoder();
       const reader = new ReadableStream({
@@ -755,7 +755,7 @@ describe("proxy-client", () => {
 
     it("should handle non-JSON data lines gracefully", async () => {
       const onUsage = vi.fn();
-      const transformer = createSSETransformer(onUsage);
+      const transformer = createSSETransformer({ onUsage });
 
       const input = "data: not-json-data\n\n";
       const encoder = new TextEncoder();
@@ -775,7 +775,7 @@ describe("proxy-client", () => {
 
     it("should flush remaining buffer on close", async () => {
       const onUsage = vi.fn();
-      const transformer = createSSETransformer(onUsage);
+      const transformer = createSSETransformer({ onUsage });
 
       // Data without double newline (incomplete event)
       const input = "data: partial";

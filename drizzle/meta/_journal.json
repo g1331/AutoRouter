@@ -85,6 +85,13 @@
       "when": 1772017271648,
       "tag": "0012_remove_provider_type",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1772035593610,
+      "tag": "0012_even_agent_brand",
+      "breakpoints": true
     }
   ]
 }
