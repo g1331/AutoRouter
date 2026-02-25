@@ -351,12 +351,12 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
           >
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[18%]">{tCommon("name")}</TableHead>
-                <TableHead className="w-[18%]">{t("routeCapabilities")}</TableHead>
-                <TableHead className="w-[10%]">{t("tableWeight")}</TableHead>
-                <TableHead className="w-[11%]">{t("tableHealth")}</TableHead>
-                <TableHead className="w-[12%]">{t("tableCircuitBreaker")}</TableHead>
-                <TableHead className="w-[15%]">{t("tableBaseUrl")}</TableHead>
+                <TableHead className="w-[16%]">{tCommon("name")}</TableHead>
+                <TableHead className="w-[24%]">{t("routeCapabilities")}</TableHead>
+                <TableHead className="w-[9%]">{t("tableWeight")}</TableHead>
+                <TableHead className="w-[10%]">{t("tableHealth")}</TableHead>
+                <TableHead className="w-[11%]">{t("tableCircuitBreaker")}</TableHead>
+                <TableHead className="w-[14%]">{t("tableBaseUrl")}</TableHead>
                 <TableHead className="hidden w-[8%] text-right 2xl:table-cell">
                   {tCommon("createdAt")}
                 </TableHead>
@@ -436,7 +436,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                         <Fragment key={upstream.id}>
                           {/* Data Row */}
                           <TableRow className="[&>td]:align-middle">
-                            <TableCell className="font-medium">
+                            <TableCell className="font-medium pl-6 xl:pl-7">
                               <div className="flex items-center justify-between gap-3 min-w-0">
                                 <span className="truncate">{upstream.name}</span>
                                 <Badge
@@ -447,8 +447,12 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                                 </Badge>
                               </div>
                             </TableCell>
-                            <TableCell>
-                              <RouteCapabilityBadges capabilities={upstream.route_capabilities} />
+                            <TableCell className="py-2.5">
+                              <RouteCapabilityBadges
+                                capabilities={upstream.route_capabilities}
+                                className="max-w-full items-start gap-1 py-0.5"
+                                badgeClassName="px-2 py-0.5 text-[11px] leading-4 xl:text-xs"
+                              />
                             </TableCell>
                             <TableCell>
                               <AsciiProgress
@@ -561,7 +565,8 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
 
                       <RouteCapabilityBadges
                         capabilities={upstream.route_capabilities}
-                        className="mt-1"
+                        className="mt-1.5 items-start gap-1.5"
+                        badgeClassName="px-2 py-0.5 text-[11px] leading-4 sm:text-xs"
                       />
 
                       {/* Card Body: Stats Grid - aligned label:value pairs */}
