@@ -155,6 +155,23 @@ vi.mock("@/lib/services/traffic-recorder", () => ({
   recordTrafficFixture: vi.fn(async () => "/tmp/mock-fixture.json"),
 }));
 
+vi.mock("@/lib/utils/logger", () => {
+  const mockLogger = {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    child: vi.fn(),
+  };
+  mockLogger.child.mockReturnValue(mockLogger);
+
+  return {
+    logger: mockLogger,
+    createLogger: vi.fn(() => mockLogger),
+    __mockLogger: mockLogger,
+  };
+});
+
 describe("proxy route upstream selection", () => {
   const DEFAULT_ACTIVE_UPSTREAMS = [
     "up-codex",
@@ -292,6 +309,11 @@ describe("proxy route upstream selection", () => {
     const { db } = await import("@/lib/db");
     const { routeByModel } = await import("@/lib/services/model-router");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const __mockLogger = (
+      (await import("@/lib/utils/logger")) as unknown as {
+        __mockLogger: { warn: ReturnType<typeof vi.fn> };
+      }
+    ).__mockLogger;
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
@@ -341,12 +363,25 @@ describe("proxy route upstream selection", () => {
     });
     expect(routeByModel).not.toHaveBeenCalled();
     expect(forwardRequest).not.toHaveBeenCalled();
+    expect(__mockLogger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "responses",
+        matchedRouteCapability: "codex_responses",
+        capabilityCandidatesCount: 0,
+      }),
+      "no upstream supports matched route capability"
+    );
   });
 
   it("should return no-upstream-configured error when path is not matched", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
     const { routeByModel } = await import("@/lib/services/model-router");
+    const __mockLogger = (
+      (await import("@/lib/utils/logger")) as unknown as {
+        __mockLogger: { warn: ReturnType<typeof vi.fn> };
+      }
+    ).__mockLogger;
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
     ]);
@@ -378,6 +413,13 @@ describe("proxy route upstream selection", () => {
     });
     expect(routeByModel).not.toHaveBeenCalled();
     expect(forwardRequest).not.toHaveBeenCalled();
+    expect(__mockLogger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "custom/not-matched",
+        matchedRouteCapability: null,
+      }),
+      "path capability not matched, skipping upstream routing"
+    );
   });
 
   it("should route messages requests to anthropic upstream when available", async () => {
@@ -1771,6 +1813,11 @@ describe("proxy route upstream selection", () => {
 
   it("should return 403 when no authorized upstream matches path capability", async () => {
     const { db } = await import("@/lib/db");
+    const __mockLogger = (
+      (await import("@/lib/utils/logger")) as unknown as {
+        __mockLogger: { warn: ReturnType<typeof vi.fn> };
+      }
+    ).__mockLogger;
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
@@ -1814,6 +1861,83 @@ describe("proxy route upstream selection", () => {
         did_send_upstream: false,
       }),
     });
+    expect(__mockLogger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "v1/messages",
+        matchedRouteCapability: "anthropic_messages",
+        authorizedCapabilityCandidatesCount: 0,
+      }),
+      "no authorized upstream for matched route capability"
+    );
+  });
+
+  it("should return 503 and warn when all authorized candidates are unhealthy", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const __mockLogger = (
+      (await import("@/lib/utils/logger")) as unknown as {
+        __mockLogger: { warn: ReturnType<typeof vi.fn> };
+      }
+    ).__mockLogger;
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-anthropic" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-anthropic",
+        name: "anthropic-one",
+        providerType: "anthropic",
+        routeCapabilities: ["anthropic_messages"],
+        baseUrl: "https://api.anthropic.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([
+      {
+        upstreamId: "up-anthropic",
+        isHealthy: false,
+      },
+    ]);
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
+    const data = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(data).toEqual({
+      error: expect.objectContaining({
+        code: "ALL_UPSTREAMS_UNAVAILABLE",
+        reason: "NO_HEALTHY_CANDIDATES",
+        did_send_upstream: false,
+      }),
+    });
+    expect(forwardRequest).not.toHaveBeenCalled();
+    expect(__mockLogger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "v1/messages",
+        matchedRouteCapability: "anthropic_messages",
+        healthyCapabilityCandidatesCount: 0,
+      }),
+      "all authorized upstreams are unhealthy for matched route capability"
+    );
   });
 
   it("should return service unavailable when no healthy candidate remains", async () => {
