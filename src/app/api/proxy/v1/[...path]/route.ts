@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractApiKey, getKeyPrefix, verifyApiKey } from "@/lib/utils/auth";
-import { db, apiKeys, apiKeyUpstreams, upstreams, upstreamHealth, type Upstream } from "@/lib/db";
-import { eq, and, inArray } from "drizzle-orm";
+import { db, apiKeys, apiKeyUpstreams, upstreams, type Upstream } from "@/lib/db";
+import { eq, and } from "drizzle-orm";
 import {
   forwardRequest,
   prepareUpstreamForProxy,
@@ -936,17 +936,6 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     where: eq(upstreams.isActive, true),
   });
 
-  const healthRows =
-    activeUpstreams.length > 0
-      ? await db.query.upstreamHealth.findMany({
-          where: inArray(
-            upstreamHealth.upstreamId,
-            activeUpstreams.map((item) => item.id)
-          ),
-        })
-      : [];
-  const healthMap = new Map(healthRows.map((item) => [item.upstreamId, item]));
-
   capabilityCandidates = activeUpstreams.filter((upstream) =>
     resolveRouteCapabilities(upstream.routeCapabilities).includes(matchedRouteCapability)
   );
@@ -994,36 +983,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     });
   }
 
-  finalCapabilityCandidates = authorizedCapabilityCandidates.filter((upstream) => {
-    const health = healthMap.get(upstream.id);
-    return health?.isHealthy ?? true;
-  });
-  excludedCapabilityCandidates = authorizedCapabilityCandidates
-    .filter((upstream) => {
-      const health = healthMap.get(upstream.id);
-      return !(health?.isHealthy ?? true);
-    })
-    .map((upstream) => ({ upstream, reason: "unhealthy" as const }));
-
-  if (finalCapabilityCandidates.length === 0) {
-    log.warn(
-      {
-        requestId,
-        path,
-        matchedRouteCapability,
-        capabilityCandidatesCount: capabilityCandidates.length,
-        authorizedCapabilityCandidatesCount: authorizedCapabilityCandidates.length,
-        healthyCapabilityCandidatesCount: finalCapabilityCandidates.length,
-      },
-      "all authorized upstreams are unhealthy for matched route capability"
-    );
-    return createUnifiedErrorResponse("ALL_UPSTREAMS_UNAVAILABLE", {
-      reason: "NO_HEALTHY_CANDIDATES",
-      did_send_upstream: false,
-      request_id: requestId,
-      user_hint: "命中路径能力后没有可用上游，请检查上游健康状态和熔断状态",
-    });
-  }
+  finalCapabilityCandidates = authorizedCapabilityCandidates;
+  excludedCapabilityCandidates = [];
 
   const selectedCandidate = finalCapabilityCandidates[0];
   candidateUpstreamIds = finalCapabilityCandidates.map((upstream) => upstream.id);
@@ -1035,7 +996,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       matchedRouteCapability,
       candidateCount: capabilityCandidates.length,
       authorizedCount: authorizedCapabilityCandidates.length,
-      healthyCount: finalCapabilityCandidates.length,
+      selectableCount: finalCapabilityCandidates.length,
     },
     "path-based capability routing decision"
   );

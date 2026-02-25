@@ -14,7 +14,7 @@
 - 会话亲和性和 token 累计完全基于 `routeCapability` 维度，移除 provider fallback 分支。
 - 管理端移除“兼容提供商”配置区，仅保留路径能力配置与兼容模型规则（`allowed_models` / `model_redirects`）的独立语义。
 - 路由日志中的 `route_match_source` 收敛为 `path`，不再记录 `model_fallback`。
-- 路由失败早返回补齐结构化告警日志，便于区分“未命中能力 / 无候选 / 未授权 / 不健康”四类问题。
+- 路由失败早返回补齐结构化告警日志，便于区分“未命中能力 / 无候选 / 未授权 / 候选不可用”四类问题。
 - 明确 `base_url` 与 `path` 采用直接拼接规则，若上游接口实际地址是 `/v1/...`，则 `base_url` 需要配置到 `/v1`。
 - 迁移阶段仅做能力集合规范化与历史 `provider_type` 数据清理，不再依赖 provider 默认映射。
 

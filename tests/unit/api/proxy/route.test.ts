@@ -1871,9 +1871,10 @@ describe("proxy route upstream selection", () => {
     );
   });
 
-  it("should return 503 and warn when all authorized candidates are unhealthy", async () => {
+  it("should continue routing even when health status is unhealthy", async () => {
     const { db } = await import("@/lib/db");
-    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
     const __mockLogger = (
       (await import("@/lib/utils/logger")) as unknown as {
         __mockLogger: { warn: ReturnType<typeof vi.fn> };
@@ -1906,6 +1907,27 @@ describe("proxy route upstream selection", () => {
         isHealthy: false,
       },
     ]);
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: {
+        id: "up-anthropic",
+        name: "anthropic-one",
+        providerType: "anthropic",
+        baseUrl: "https://api.anthropic.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+      },
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: null,
+    });
 
     const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
       method: "POST",
@@ -1919,22 +1941,18 @@ describe("proxy route upstream selection", () => {
     });
 
     const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
-    const data = await response.json();
 
-    expect(response.status).toBe(503);
-    expect(data).toEqual({
-      error: expect.objectContaining({
-        code: "ALL_UPSTREAMS_UNAVAILABLE",
-        reason: "NO_HEALTHY_CANDIDATES",
-        did_send_upstream: false,
-      }),
-    });
-    expect(forwardRequest).not.toHaveBeenCalled();
-    expect(__mockLogger.warn).toHaveBeenCalledWith(
+    expect(response.status).toBe(200);
+    expect(selectFromProviderType).toHaveBeenCalledWith(["up-anthropic"], undefined, undefined);
+    expect(forwardRequest).toHaveBeenCalledTimes(1);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
       expect.objectContaining({
-        path: "v1/messages",
+        id: "up-anthropic",
+      })
+    );
+    expect(__mockLogger.warn).not.toHaveBeenCalledWith(
+      expect.objectContaining({
         matchedRouteCapability: "anthropic_messages",
-        healthyCapabilityCandidatesCount: 0,
       }),
       "all authorized upstreams are unhealthy for matched route capability"
     );
