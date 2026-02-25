@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import {
   RouteCapabilityBadge,
+  RouteCapabilityBadges,
   RouteCapabilityMultiSelect,
 } from "@/components/admin/route-capability-badges";
 
@@ -22,6 +23,13 @@ describe("RouteCapabilityBadge", () => {
 
     expect(screen.getByText("unknown_capability")).toBeInTheDocument();
     expect(container.querySelector("svg")).toBeInTheDocument();
+  });
+});
+
+describe("RouteCapabilityBadges", () => {
+  it("should render nothing when capabilities are empty", () => {
+    const { container } = render(<RouteCapabilityBadges capabilities={[]} />);
+    expect(container.firstChild).toBeNull();
   });
 });
 

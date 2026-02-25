@@ -565,6 +565,66 @@ describe("stats-service", () => {
       expect(result.upstreams[0].providerType).toBe("unknown");
     });
 
+    it("should derive upstream provider type from route capabilities", async () => {
+      const { db } = await import("@/lib/db");
+      const { getLeaderboardStats } = await import("@/lib/services/stats-service");
+
+      vi.mocked(db.select)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              groupBy: vi.fn().mockReturnValue({
+                orderBy: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue([]),
+                }),
+              }),
+            }),
+          }),
+        } as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              groupBy: vi.fn().mockReturnValue({
+                orderBy: vi.fn().mockReturnValue({
+                  limit: vi
+                    .fn()
+                    .mockResolvedValue([
+                      { upstreamId: "upstream-openai", requestCount: 20, totalTokens: "2000" },
+                    ]),
+                }),
+              }),
+            }),
+          }),
+        } as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              groupBy: vi.fn().mockReturnValue({
+                orderBy: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue([]),
+                }),
+              }),
+            }),
+          }),
+        } as unknown as ReturnType<typeof db.select>);
+
+      vi.mocked(db.query.apiKeys.findMany).mockReset();
+      vi.mocked(db.query.upstreams.findMany).mockReset();
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValue([]);
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+        {
+          id: "upstream-openai",
+          name: "OpenAI Upstream",
+          routeCapabilities: ["openai_chat_compatible"],
+        },
+      ]);
+
+      const result = await getLeaderboardStats("7d", 5);
+
+      expect(result.upstreams).toHaveLength(1);
+      expect(result.upstreams[0].providerType).toBe("openai");
+    });
+
     it("should handle null totalTokens", async () => {
       const { db } = await import("@/lib/db");
       const { getLeaderboardStats } = await import("@/lib/services/stats-service");

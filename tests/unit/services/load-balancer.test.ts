@@ -52,7 +52,9 @@ vi.mock("@/lib/services/circuit-breaker", () => ({
 // Import after mocks are registered
 import {
   selectFromProviderType,
+  selectFromUpstreamCandidates,
   NoHealthyUpstreamsError,
+  NoAuthorizedUpstreamsError,
   resetConnectionCounts,
   recordConnection,
   releaseConnection,
@@ -434,6 +436,26 @@ describe("load-balancer", () => {
       });
     });
 
+    describe("candidate upstream selection", () => {
+      it("should throw NoAuthorizedUpstreamsError when candidate list is empty", async () => {
+        await expect(selectFromUpstreamCandidates([])).rejects.toThrow(NoAuthorizedUpstreamsError);
+      });
+
+      it("should select by candidate IDs and keep tier selection behavior", async () => {
+        const p0 = makeUpstream({ id: "p0", priority: 0 });
+        const p1 = makeUpstream({ id: "p1", priority: 1, isHealthy: false });
+        (p0 as Record<string, unknown>).health = null;
+        mockFindMany.mockResolvedValue([p1, p0]);
+
+        const result = await selectFromUpstreamCandidates(["p0", "p1"]);
+
+        expect(result.upstream.id).toBe("p0");
+        expect(result.selectedTier).toBe(0);
+        expect(mockGetCircuitBreakerState).toHaveBeenCalledWith("p0");
+        expect(mockGetCircuitBreakerState).toHaveBeenCalledWith("p1");
+      });
+    });
+
     // =========================================================================
     // Health status is display-only; circuit breaker drives routing
     // =========================================================================
@@ -661,6 +683,21 @@ describe("load-balancer", () => {
 
         expect(result.affinityHit).toBe(false);
         expect(["u1", "u2"]).toContain(result.upstream.id);
+      });
+
+      it("should bypass affinity when scope is missing in affinity context", async () => {
+        const u1 = makeUpstream({ id: "u1", priority: 0 });
+        mockFindMany.mockResolvedValue([u1]);
+
+        const result = await selectFromProviderType("openai", undefined, undefined, {
+          apiKeyId: "key-1",
+          sessionId: "session-1",
+          contentLength: 1024,
+        });
+
+        expect(result.upstream.id).toBe("u1");
+        expect(result.affinityHit).toBe(false);
+        expect(result.affinityMigrated).toBe(false);
       });
 
       it("should migrate to higher priority upstream when threshold allows", async () => {

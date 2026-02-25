@@ -373,6 +373,63 @@ describe("upstream-crud", () => {
       expect(result.weight).toBe(10);
     });
 
+    it("should normalize route capabilities when updating upstream", async () => {
+      const { updateUpstream } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValueOnce({
+        id: "test-id",
+        name: "test-upstream",
+        baseUrl: "https://api.openai.com",
+        apiKeyEncrypted: "encrypted:sk-test-key",
+      } as unknown as PartialUpstream);
+
+      const mockReturning = vi.fn().mockResolvedValue([
+        {
+          id: "test-id",
+          name: "test-upstream",
+          baseUrl: "https://api.openai.com",
+          apiKeyEncrypted: "encrypted:sk-test-key",
+          isDefault: false,
+          timeout: 60,
+          isActive: true,
+          config: null,
+          priority: 0,
+          weight: 1,
+          routeCapabilities: ["openai_chat_compatible"],
+          allowedModels: null,
+          modelRedirects: null,
+          affinityMigration: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+      const set = vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          returning: mockReturning,
+        }),
+      });
+      vi.mocked(db.update).mockReturnValue({
+        set,
+      } as unknown as MockUpdateChain);
+
+      const result = await updateUpstream("test-id", {
+        routeCapabilities: [
+          " openai_chat_compatible ",
+          "openai_chat_compatible",
+          "invalid_capability",
+          "",
+        ],
+      } as any);
+
+      expect(set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          routeCapabilities: ["openai_chat_compatible"],
+        })
+      );
+      expect(result.routeCapabilities).toEqual(["openai_chat_compatible"]);
+    });
+
     it("should throw UpstreamNotFoundError if upstream does not exist", async () => {
       const { updateUpstream } = await import("@/lib/services/upstream-crud");
       const { db } = await import("@/lib/db");
