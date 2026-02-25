@@ -54,19 +54,20 @@
 
 ### 核心功能
 
-- **API Key 管理** - 创建、分发和管理客户端密钥
-- **权限控制** - 按 Key 设置模型访问权限和过期时间
-- **多上游路由** - 支持 OpenAI、Anthropic、Azure 等
-- **请求日志** - 完整的请求记录用于审计和调试
+- **OpenAI 兼容代理** - 通过 `/api/proxy/v1/*` 转发请求，支持普通响应与 SSE 流式输出
+- **API Key 生命周期管理** - 创建、更新、停用、撤销密钥，并绑定可访问上游与过期时间
+- **智能多上游路由** - 按模型前缀自动分组，支持 `allowed_models`、`model_redirects`、权重与优先级
+- **可观测请求日志** - 记录路由决策、故障转移历史、会话亲和命中与 Token 统计
 
 </td>
 <td width="50%">
 
 ### 安全特性
 
-- **密钥哈希** - API Keys 使用 bcrypt 单向哈希存储
-- **加密存储** - 上游密钥使用 Fernet 对称加密
-- **Token 认证** - 管理后台使用独立 Admin Token
+- **密钥双层保护** - API Key 使用 bcrypt 哈希，上游密钥使用 Fernet 加密存储
+- **管理面鉴权隔离** - `/api/admin/*` 统一使用独立 `ADMIN_TOKEN` 鉴权
+- **SSRF 防护** - 上游地址校验阻断私网/回环/元数据地址，并校验 DNS 解析结果
+- **敏感操作开关** - `ALLOW_KEY_REVEAL` 默认关闭，避免误暴露完整密钥
 
 </td>
 </tr>
@@ -75,9 +76,10 @@
 
 ### 用户体验
 
-- **Cassette Futurism UI** - 复古未来主义设计风格
-- **响应式布局** - 适配桌面和移动设备
-- **主题切换** - 亮色 / 暗色 / 跟随系统
+- **全新管理台视觉体系** - 深浅主题一致语义，强调信息层级与可读性
+- **响应式导航** - 桌面侧边栏 + 移动端底部导航
+- **统计面板** - Overview / Timeseries / Leaderboard 三类看板
+- **健康与熔断控制** - 上游健康检查、熔断状态查看与强制开关
 
 </td>
 <td width="50%">
@@ -85,8 +87,8 @@
 ### 国际化
 
 - **多语言支持** - 中文 / English
-- **自动检测** - 根据浏览器语言自动切换
-- **URL 路由** - `/zh` 和 `/en` 独立路由
+- **语言切换器** - 设置页与侧边栏可直接切换语言
+- **URL 路由** - `/zh-CN` 和 `/en` 独立路由
 
 </td>
 </tr>
@@ -135,7 +137,8 @@
 | 依赖       | 版本 | 说明                                   |
 | ---------- | ---- | -------------------------------------- |
 | Node.js    | 22+  | 推荐使用 [pnpm](https://pnpm.io/) 管理 |
-| PostgreSQL | 16+  | 生产环境必需                           |
+| PostgreSQL | 16+  | 生产环境推荐（默认）                   |
+| SQLite     | 最新 | 本地开发可选（通过 `DB_TYPE=sqlite`）  |
 
 ### Docker 部署 (推荐)
 
@@ -151,7 +154,7 @@ cp .env.example .env
 # 3. 启动服务
 docker compose up -d
 
-# 4. 访问 http://localhost:3000
+# 4. 访问 http://localhost:${PORT:-3000}
 ```
 
 ### 生产环境 CI/CD 部署
@@ -220,7 +223,7 @@ pnpm db:push
 pnpm dev
 ```
 
-启动后访问 <http://localhost:3000，使用> `ADMIN_TOKEN` 登录。
+启动后访问 <http://localhost:3000>，使用 `ADMIN_TOKEN` 登录。
 
 ---
 
@@ -228,12 +231,26 @@ pnpm dev
 
 ### 环境变量 (`.env` 或 `.env.local`)
 
-| 变量                 | 必填 | 说明                                  |
-| -------------------- | :--: | ------------------------------------- |
-| `DATABASE_URL`       |  ✓   | PostgreSQL 连接串                     |
-| `ENCRYPTION_KEY`     |  ✓   | Fernet 加密密钥，用于加密上游 API Key |
-| `ADMIN_TOKEN`        |  ✓   | 管理后台登录令牌                      |
-| `LOG_RETENTION_DAYS` |      | 日志保留天数，默认 90 天              |
+| 变量                        | 必填 | 说明                                                              |
+| --------------------------- | :--: | ----------------------------------------------------------------- |
+| `DATABASE_URL`              |  ✓   | PostgreSQL 连接串（`DB_TYPE=postgres` 时使用）                    |
+| `DB_TYPE`                   |      | 数据库类型，`postgres`（默认）或 `sqlite`                         |
+| `SQLITE_DB_PATH`            |      | SQLite 文件路径（`DB_TYPE=sqlite` 时使用）                        |
+| `ENCRYPTION_KEY`            | ✓\*  | Fernet 加密密钥（与 `ENCRYPTION_KEY_FILE` 二选一）                |
+| `ENCRYPTION_KEY_FILE`       | ✓\*  | 从文件读取加密密钥（与 `ENCRYPTION_KEY` 二选一）                  |
+| `ADMIN_TOKEN`               |  ✓   | 管理后台登录令牌                                                  |
+| `ALLOW_KEY_REVEAL`          |      | 是否允许展示完整 API Key，默认 `false`                            |
+| `LOG_RETENTION_DAYS`        |      | 日志保留天数，默认 `90`                                           |
+| `LOG_LEVEL`                 |      | 日志级别：`fatal` / `error` / `warn` / `info` / `debug` / `trace` |
+| `DEBUG_LOG_HEADERS`         |      | 是否输出请求头调试日志，默认 `false`                              |
+| `HEALTH_CHECK_INTERVAL`     |      | 上游健康检查间隔（秒），默认 `30`                                 |
+| `HEALTH_CHECK_TIMEOUT`      |      | 上游健康检查超时（秒），默认 `10`                                 |
+| `CORS_ORIGINS`              |      | CORS 白名单，逗号分隔                                             |
+| `PORT`                      |      | 服务端口，默认 `3000`                                             |
+| `RECORDER_ENABLED`          |      | 开启流量录制（仅开发环境建议使用）                                |
+| `RECORDER_MODE`             |      | 录制模式：`all` / `success` / `failure`                           |
+| `RECORDER_FIXTURES_DIR`     |      | 录制文件目录，默认 `tests/fixtures`                               |
+| `RECORDER_REDACT_SENSITIVE` |      | 是否脱敏录制内容，默认 `true`                                     |
 
 ---
 
@@ -246,6 +263,7 @@ AutoRouter/
 │   │   ├── [locale]/        # 国际化页面路由
 │   │   └── api/             # API Routes
 │   │       ├── admin/       # 管理 API
+│   │       ├── mock/        # 录制回放 Mock API（开发环境）
 │   │       ├── proxy/       # 代理 API
 │   │       └── health/      # 健康检查
 │   ├── components/          # React 组件
@@ -284,6 +302,8 @@ pnpm exec tsc --noEmit     # Type check
 pnpm test                  # Watch 模式
 pnpm test:run              # 单次运行
 pnpm test:run --coverage   # 覆盖率报告
+pnpm e2e                   # Playwright E2E
+pnpm e2e:headed            # 有界面模式运行 E2E
 ```
 
 </details>
@@ -293,7 +313,9 @@ pnpm test:run --coverage   # 覆盖率报告
 
 ```bash
 pnpm db:generate           # 生成迁移文件
+pnpm db:migrate            # 执行迁移
 pnpm db:push               # 推送 Schema 到数据库
+pnpm db:seed               # 写入轻量示例数据
 pnpm db:studio             # 打开 Drizzle Studio
 ```
 

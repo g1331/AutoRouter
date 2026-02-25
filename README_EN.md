@@ -54,19 +54,20 @@
 
 ### Core Features
 
-- **API Key Management** - Create, distribute and manage client keys
-- **Access Control** - Set model permissions and expiration per key
-- **Multi-upstream Routing** - Support OpenAI, Anthropic, Azure, etc.
-- **Request Logging** - Complete request records for auditing and debugging
+- **OpenAI-Compatible Proxy** - Forward requests via `/api/proxy/v1/*` with regular responses and SSE streaming
+- **API Key Lifecycle Management** - Create, update, disable and revoke keys with upstream bindings and expiration control
+- **Intelligent Multi-Upstream Routing** - Route by model prefix with `allowed_models`, `model_redirects`, weight, and priority
+- **Observable Request Logs** - Persist routing decisions, failover history, session-affinity hit status, and token metrics
 
 </td>
 <td width="50%">
 
 ### Security Features
 
-- **Key Hashing** - API Keys stored with bcrypt one-way hash
-- **Encrypted Storage** - Upstream keys encrypted with Fernet
-- **Token Auth** - Admin console uses separate Admin Token
+- **Dual-Layer Secret Protection** - API keys are bcrypt-hashed, upstream secrets are Fernet-encrypted at rest
+- **Isolated Admin Authentication** - `/api/admin/*` is protected by dedicated `ADMIN_TOKEN`
+- **SSRF Protection** - Upstream URL validation blocks private/loopback/metadata targets and validates DNS resolution
+- **Sensitive Operation Guardrail** - `ALLOW_KEY_REVEAL` is off by default to prevent accidental secret exposure
 
 </td>
 </tr>
@@ -75,9 +76,10 @@
 
 ### User Experience
 
-- **Cassette Futurism UI** - Retro-futuristic design style
-- **Responsive Layout** - Adapts to desktop and mobile devices
-- **Theme Toggle** - Light / Dark / System
+- **Rebuilt Admin Visual System** - Unified light/dark semantics with stronger information hierarchy and readability
+- **Responsive Navigation** - Desktop sidebar plus mobile bottom navigation
+- **Statistics Workspace** - Overview / Timeseries / Leaderboard dashboards
+- **Health and Circuit Controls** - Upstream health visibility with circuit-breaker state and force-open/close operations
 
 </td>
 <td width="50%">
@@ -85,8 +87,8 @@
 ### Internationalization
 
 - **Multi-language Support** - Chinese / English
-- **Auto Detection** - Switch based on browser language
-- **URL Routing** - Independent `/zh` and `/en` routes
+- **Language Switcher** - Switch language directly from sidebar and settings
+- **URL Routing** - Independent `/zh-CN` and `/en` routes
 
 </td>
 </tr>
@@ -97,9 +99,21 @@
 ## Screenshots
 
 <details open>
+<summary><b>Login - Authentication</b></summary>
+<br>
+<img src="docs/images/login-dark.png" alt="Login" width="100%">
+</details>
+
+<details open>
 <summary><b>Dashboard - System Monitoring</b></summary>
 <br>
 <img src="docs/images/dashboard-dark.png" alt="Dashboard" width="100%">
+</details>
+
+<details open>
+<summary><b>Logs - Request Observability</b></summary>
+<br>
+<img src="docs/images/logs-dark.png" alt="Logs" width="100%">
 </details>
 
 <details>
@@ -114,22 +128,17 @@
 <img src="docs/images/upstreams-dark.png" alt="Upstreams" width="100%">
 </details>
 
-<details>
-<summary><b>Login - Login Page</b></summary>
-<br>
-<img src="docs/images/login-dark.png" alt="Login" width="100%">
-</details>
-
 ---
 
 ## Quick Start
 
 ### Requirements
 
-| Dependency | Version | Notes                                    |
-| ---------- | ------- | ---------------------------------------- |
-| Node.js    | 22+     | Recommend using [pnpm](https://pnpm.io/) |
-| PostgreSQL | 16+     | Required for production                  |
+| Dependency | Version | Notes                                               |
+| ---------- | ------- | --------------------------------------------------- |
+| Node.js    | 22+     | Recommend using [pnpm](https://pnpm.io/)            |
+| PostgreSQL | 16+     | Recommended for production (default)                |
+| SQLite     | Latest  | Optional for local development via `DB_TYPE=sqlite` |
 
 ### Docker Deployment (Recommended)
 
@@ -145,7 +154,7 @@ cp .env.example .env
 # 3. Start services
 docker compose up -d
 
-# 4. Visit http://localhost:3000
+# 4. Visit http://localhost:${PORT:-3000}
 ```
 
 ### Local Development
@@ -179,12 +188,26 @@ After starting, visit http://localhost:3000 and login with `ADMIN_TOKEN`.
 
 ### Environment Variables (`.env` or `.env.local`)
 
-| Variable             | Required | Description                             |
-| -------------------- | :------: | --------------------------------------- |
-| `DATABASE_URL`       |   Yes    | PostgreSQL connection string            |
-| `ENCRYPTION_KEY`     |   Yes    | Fernet encryption key for upstream keys |
-| `ADMIN_TOKEN`        |   Yes    | Admin console login token               |
-| `LOG_RETENTION_DAYS` |          | Log retention days, default 90          |
+| Variable                    | Required | Description                                                 |
+| --------------------------- | :------: | ----------------------------------------------------------- |
+| `DATABASE_URL`              |   Yes    | PostgreSQL URL (used when `DB_TYPE=postgres`)               |
+| `DB_TYPE`                   |          | Database backend: `postgres` (default) or `sqlite`          |
+| `SQLITE_DB_PATH`            |          | SQLite file path (used when `DB_TYPE=sqlite`)               |
+| `ENCRYPTION_KEY`            |  Yes\*   | Fernet key (either this or `ENCRYPTION_KEY_FILE`)           |
+| `ENCRYPTION_KEY_FILE`       |  Yes\*   | Load Fernet key from file (either this or `ENCRYPTION_KEY`) |
+| `ADMIN_TOKEN`               |   Yes    | Admin console login token                                   |
+| `ALLOW_KEY_REVEAL`          |          | Allow revealing full API keys, default `false`              |
+| `LOG_RETENTION_DAYS`        |          | Request log retention days, default `90`                    |
+| `LOG_LEVEL`                 |          | Log level: `fatal`/`error`/`warn`/`info`/`debug`/`trace`    |
+| `DEBUG_LOG_HEADERS`         |          | Debug header logging switch, default `false`                |
+| `HEALTH_CHECK_INTERVAL`     |          | Upstream health check interval in seconds, default `30`     |
+| `HEALTH_CHECK_TIMEOUT`      |          | Upstream health check timeout in seconds, default `10`      |
+| `CORS_ORIGINS`              |          | CORS allowlist, comma-separated                             |
+| `PORT`                      |          | Service port, default `3000`                                |
+| `RECORDER_ENABLED`          |          | Enable traffic recorder (recommended only in development)   |
+| `RECORDER_MODE`             |          | Recorder mode: `all` / `success` / `failure`                |
+| `RECORDER_FIXTURES_DIR`     |          | Fixture output directory, default `tests/fixtures`          |
+| `RECORDER_REDACT_SENSITIVE` |          | Redact sensitive fields in fixtures, default `true`         |
 
 ---
 
@@ -197,6 +220,7 @@ AutoRouter/
 │   │   ├── [locale]/        # Internationalized page routes
 │   │   └── api/             # API Routes
 │   │       ├── admin/       # Admin API
+│   │       ├── mock/        # Fixture replay mock API (development)
 │   │       ├── proxy/       # Proxy API
 │   │       └── health/      # Health check
 │   ├── components/          # React components
@@ -235,6 +259,8 @@ pnpm exec tsc --noEmit     # Type check
 pnpm test                  # Watch mode
 pnpm test:run              # Single run
 pnpm test:run --coverage   # Coverage report
+pnpm e2e                   # Playwright E2E
+pnpm e2e:headed            # Run E2E with visible browser
 ```
 
 </details>
@@ -244,7 +270,9 @@ pnpm test:run --coverage   # Coverage report
 
 ```bash
 pnpm db:generate           # Generate migration files
+pnpm db:migrate            # Apply migrations
 pnpm db:push               # Push schema to database
+pnpm db:seed               # Seed lightweight sample data
 pnpm db:studio             # Open Drizzle Studio
 ```
 
