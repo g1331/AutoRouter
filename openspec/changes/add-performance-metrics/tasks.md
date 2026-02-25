@@ -6,10 +6,10 @@
 
 ## 2. 代理层 TTFT 采集
 
-- [ ] 2.1 重构 `createSSETransformer` 签名为 options 对象形式，新增 `onFirstChunk` 回调，在第一个有效非空 `data:` 事件处理时触发
-- [ ] 2.2 在 `forwardRequest` 中记录 `upstreamSendTime`，通过 `onFirstChunk` 回调计算 TTFT，将 `ttftMs` 和 `isStream` 加入 `ProxyResult`
-- [ ] 2.3 为 `createSSETransformer` 的 `onFirstChunk` 行为编写单元测试（首 chunk 触发、多 chunk 只触发一次、空 data 不触发）
-- [ ] 2.4 为 `forwardRequest` 的 TTFT 计算编写单元测试（流式返回 ttftMs、非流式返回 undefined）
+- [x] 2.1 重构 `createSSETransformer` 签名为 options 对象形式，新增 `onFirstChunk` 回调，在第一个有效非空 `data:` 事件处理时触发
+- [x] 2.2 在 `forwardRequest` 中记录 `upstreamSendTime`，通过 `onFirstChunk` 回调计算 TTFT，将 `ttftMs` 和 `isStream` 加入 `ProxyResult`
+- [x] 2.3 为 `createSSETransformer` 的 `onFirstChunk` 行为编写单元测试（首 chunk 触发、多 chunk 只触发一次、空 data 不触发）
+- [x] 2.4 为 `forwardRequest` 的 TTFT 计算编写单元测试（流式返回 ttftMs、非流式返回 undefined）
 
 ## 3. 日志记录层扩展
 

@@ -799,6 +799,134 @@ describe("proxy-client", () => {
       const output = new TextDecoder().decode(chunks[0]);
       expect(output).toBe(input);
     });
+
+    describe("onFirstChunk callback", () => {
+      it("should fire onFirstChunk on the first non-empty data event", async () => {
+        const onUsage = vi.fn();
+        const onFirstChunk = vi.fn();
+        const transformer = createSSETransformer({ onUsage, onFirstChunk });
+
+        const input = 'data: {"id":"1","content":"hello"}\n\n';
+        const encoder = new TextEncoder();
+        const reader = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(input));
+            controller.close();
+          },
+        })
+          .pipeThrough(transformer)
+          .getReader();
+
+        while (!(await reader.read()).done) {}
+
+        expect(onFirstChunk).toHaveBeenCalledTimes(1);
+      });
+
+      it("should fire onFirstChunk only once across multiple data events", async () => {
+        const onUsage = vi.fn();
+        const onFirstChunk = vi.fn();
+        const transformer = createSSETransformer({ onUsage, onFirstChunk });
+
+        const input = 'data: {"id":"1"}\n\ndata: {"id":"2"}\n\ndata: {"id":"3"}\n\n';
+        const encoder = new TextEncoder();
+        const reader = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(input));
+            controller.close();
+          },
+        })
+          .pipeThrough(transformer)
+          .getReader();
+
+        while (!(await reader.read()).done) {}
+
+        expect(onFirstChunk).toHaveBeenCalledTimes(1);
+      });
+
+      it("should not fire onFirstChunk for [DONE] events", async () => {
+        const onUsage = vi.fn();
+        const onFirstChunk = vi.fn();
+        const transformer = createSSETransformer({ onUsage, onFirstChunk });
+
+        const input = "data: [DONE]\n\n";
+        const encoder = new TextEncoder();
+        const reader = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(input));
+            controller.close();
+          },
+        })
+          .pipeThrough(transformer)
+          .getReader();
+
+        while (!(await reader.read()).done) {}
+
+        expect(onFirstChunk).not.toHaveBeenCalled();
+      });
+
+      it("should not fire onFirstChunk for empty data lines", async () => {
+        const onUsage = vi.fn();
+        const onFirstChunk = vi.fn();
+        const transformer = createSSETransformer({ onUsage, onFirstChunk });
+
+        const input = "data: \n\n";
+        const encoder = new TextEncoder();
+        const reader = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(input));
+            controller.close();
+          },
+        })
+          .pipeThrough(transformer)
+          .getReader();
+
+        while (!(await reader.read()).done) {}
+
+        expect(onFirstChunk).not.toHaveBeenCalled();
+      });
+
+      it("should skip [DONE] and fire onFirstChunk on the first real data event", async () => {
+        const onUsage = vi.fn();
+        const onFirstChunk = vi.fn();
+        const transformer = createSSETransformer({ onUsage, onFirstChunk });
+
+        const input = 'data: [DONE]\n\ndata: {"id":"1"}\n\n';
+        const encoder = new TextEncoder();
+        const reader = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(input));
+            controller.close();
+          },
+        })
+          .pipeThrough(transformer)
+          .getReader();
+
+        while (!(await reader.read()).done) {}
+
+        expect(onFirstChunk).toHaveBeenCalledTimes(1);
+      });
+
+      it("should work without onFirstChunk callback", async () => {
+        const onUsage = vi.fn();
+        const transformer = createSSETransformer({ onUsage });
+
+        const input = 'data: {"id":"1"}\n\n';
+        const encoder = new TextEncoder();
+        const reader = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(input));
+            controller.close();
+          },
+        })
+          .pipeThrough(transformer)
+          .getReader();
+
+        while (!(await reader.read()).done) {}
+
+        // Should not throw - onFirstChunk is optional
+        expect(true).toBe(true);
+      });
+    });
   });
 
   describe("prepareUpstreamForProxy", () => {
