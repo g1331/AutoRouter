@@ -9,6 +9,7 @@
 - 新增路径能力映射层，将常见路径归类到能力类型（例如 `anthropic_messages`、`codex_responses`、`gemini_native_generate` 等）。
 - 路由选择流程改为：请求路径归类能力 → 过滤已授权且健康的上游 → 复用现有优先级、权重、故障转移机制进行选择。
 - Admin API 与管理界面同步支持上游多能力配置与校验。
+- 上游能力选择与展示从纯文本升级为“图标 + 文案”样式，并明确一个上游可同时展示多个能力图标。
 - 路由日志增强，记录“匹配到的路径能力类型”和“最终选择上游”的决策信息。
 - 提供兼容迁移策略：已有 `providerType`/`allowedModels` 配置可自动映射为初始能力集合，降低升级成本。
 
@@ -26,5 +27,5 @@
 - 受影响后端：`src/app/api/proxy/v1/[...path]/route.ts`、`src/lib/services/model-router.ts`、`src/lib/services/load-balancer.ts`、`src/lib/services/request-logger.ts`。
 - 受影响数据模型：`upstreams` 表与上游 CRUD 结构需新增多能力字段并提供迁移。
 - 受影响 API/类型：`src/types/api.ts` 与 admin upstream 接口请求/响应结构。
-- 受影响前端：上游管理页的创建/编辑表单与展示逻辑需支持多能力配置。
+- 受影响前端：上游管理页的创建/编辑表单与展示逻辑需支持多能力配置及图标化能力标签展示。
 - 测试影响：代理路由、故障转移、上游管理、日志决策相关单元与集成测试需扩展。
