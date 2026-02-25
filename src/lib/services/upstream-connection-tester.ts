@@ -1,6 +1,6 @@
 import * as dns from "dns";
 import {
-  getPrimaryProviderByCapabilities,
+  getProviderByRouteCapability,
   normalizeRouteCapabilities,
   type RouteCapability,
 } from "@/lib/route-capabilities";
@@ -295,9 +295,8 @@ export async function testUpstreamConnection(
   const { routeCapabilities, baseUrl, apiKey, timeout = 10 } = input;
   const testedAt = new Date();
   const normalizedCapabilities = normalizeRouteCapabilities(routeCapabilities);
-  const providerType = getPrimaryProviderByCapabilities(normalizedCapabilities);
 
-  if (!providerType) {
+  if (normalizedCapabilities.length === 0) {
     return {
       success: false,
       message: "Missing or invalid route capabilities",
@@ -309,6 +308,24 @@ export async function testUpstreamConnection(
       testedAt,
     };
   }
+
+  const providers = new Set(
+    normalizedCapabilities.map((capability) => getProviderByRouteCapability(capability))
+  );
+  if (providers.size > 1) {
+    return {
+      success: false,
+      message: "Mixed-provider route capabilities are not supported",
+      latencyMs: null,
+      statusCode: null,
+      errorType: "unknown",
+      errorDetails:
+        "Connection test requires route capabilities from the same provider to determine authentication headers",
+      testedAt,
+    };
+  }
+
+  const providerType = getProviderByRouteCapability(normalizedCapabilities[0]);
 
   // Validate baseUrl format
   let parsedUrl: URL;

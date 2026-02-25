@@ -20,7 +20,7 @@ function arraysEqual(a: readonly string[], b: readonly string[]): boolean {
   return true;
 }
 
-async function runMigrationInternal(): Promise<void> {
+async function runMigrationInternal(): Promise<boolean> {
   let allUpstreams: Array<{
     id: string;
     name: string;
@@ -39,44 +39,58 @@ async function runMigrationInternal(): Promise<void> {
     });
 
     if (!Array.isArray(result)) {
-      return;
+      return true;
     }
 
     allUpstreams = result as typeof allUpstreams;
   } catch (error) {
     log.warn({ err: error }, "skip route capability migration due to query failure");
-    return;
+    return false;
   }
 
   for (const upstream of allUpstreams) {
-    const normalizedCapabilities = normalizeRouteCapabilities(upstream.routeCapabilities);
-    const expectedCapabilities = normalizedCapabilities;
+    const persistedCapabilities = upstream.routeCapabilities ?? [];
+    const normalizedCapabilities = normalizeRouteCapabilities(persistedCapabilities);
 
     const shouldUpdate =
       upstream.routeCapabilities == null ||
-      !arraysEqual(normalizedCapabilities, expectedCapabilities);
+      !arraysEqual(persistedCapabilities, normalizedCapabilities);
 
     if (!shouldUpdate) {
       continue;
     }
 
-    await db
-      .update(upstreams)
-      .set({
-        routeCapabilities: expectedCapabilities,
-        updatedAt: new Date(),
-      })
-      .where(eq(upstreams.id, upstream.id));
+    try {
+      await db
+        .update(upstreams)
+        .set({
+          routeCapabilities: normalizedCapabilities,
+          updatedAt: new Date(),
+        })
+        .where(eq(upstreams.id, upstream.id));
+    } catch (error) {
+      log.warn(
+        {
+          err: error,
+          upstreamId: upstream.id,
+          upstreamName: upstream.name,
+        },
+        "skip route capability migration due to update failure"
+      );
+      return false;
+    }
 
     log.info(
       {
         upstreamId: upstream.id,
         upstreamName: upstream.name,
-        routeCapabilities: expectedCapabilities,
+        routeCapabilities: normalizedCapabilities,
       },
       "initialized upstream route capabilities"
     );
   }
+
+  return true;
 }
 
 export async function ensureRouteCapabilityMigration(): Promise<void> {
@@ -90,8 +104,10 @@ export async function ensureRouteCapabilityMigration(): Promise<void> {
   }
 
   migrationInFlight = runMigrationInternal()
-    .then(() => {
-      migrationCompleted = true;
+    .then((success) => {
+      if (success) {
+        migrationCompleted = true;
+      }
     })
     .finally(() => {
       migrationInFlight = null;

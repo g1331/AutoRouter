@@ -225,6 +225,20 @@ describe("upstream-connection-tester", () => {
       expect(result.errorType).toBe("unknown");
       expect(mockFetch).not.toHaveBeenCalled();
     });
+
+    it("should reject mixed-provider route capabilities for a single auth-mode test", async () => {
+      const result = await testUpstreamConnection({
+        routeCapabilities: ["anthropic_messages", "openai_chat_compatible"],
+        baseUrl: "https://api.openai.com",
+        apiKey: "sk-test",
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe("Mixed-provider route capabilities are not supported");
+      expect(result.errorType).toBe("unknown");
+      expect(result.errorDetails).toContain("same provider");
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
   });
 
   describe("testUpstreamConnection - URL validation", () => {
