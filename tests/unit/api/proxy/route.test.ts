@@ -20,11 +20,19 @@ vi.mock("@/lib/db", () => ({
         findFirst: vi.fn(),
         findMany: vi.fn(),
       },
+      upstreamHealth: {
+        findMany: vi.fn(),
+      },
     },
   },
   apiKeys: {},
   apiKeyUpstreams: {},
   upstreams: {},
+  upstreamHealth: {},
+}));
+
+vi.mock("@/lib/services/route-capability-migration", () => ({
+  ensureRouteCapabilityMigration: vi.fn(async () => {}),
 }));
 
 vi.mock("@/lib/services/proxy-client", () => ({
@@ -161,6 +169,233 @@ describe("proxy route upstream selection", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("should route path capability request without model when route is matched", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-codex" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-codex",
+        name: "codex-upstream",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["codex_responses"],
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+    const codexUpstream = {
+      id: "up-codex",
+      name: "codex-upstream",
+      providerType: "openai",
+      baseUrl: "https://api.openai.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 0,
+      weight: 1,
+    };
+
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: codexUpstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: null,
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/v1/responses", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        input: "hello",
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["v1", "responses"] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(selectFromProviderType).toHaveBeenCalledWith(
+      "openai",
+      undefined,
+      ["up-codex"],
+      undefined,
+      expect.objectContaining({
+        candidateUpstreamIds: ["up-codex"],
+        affinityScope: "codex_responses",
+      })
+    );
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(codexUpstream);
+  });
+
+  it("should return no-upstream-configured error when matched path has no capability candidates", async () => {
+    const { db } = await import("@/lib/db");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-other" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-other",
+        name: "other-upstream",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["openai_chat_compatible"],
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/v1/responses", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        input: "hello",
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["v1", "responses"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(data).toEqual({
+      error: expect.objectContaining({
+        code: "NO_UPSTREAMS_CONFIGURED",
+        reason: "NO_HEALTHY_CANDIDATES",
+        did_send_upstream: false,
+      }),
+    });
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(forwardRequest).not.toHaveBeenCalled();
+  });
+
+  it("should fallback to model routing when path is not matched but model exists", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-openai" },
+    ]);
+
+    const openaiUpstream = {
+      id: "up-openai",
+      name: "openai-main",
+      providerType: "openai",
+      baseUrl: "https://api.openai.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 0,
+      weight: 1,
+    };
+
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream: openaiUpstream,
+      providerType: "openai",
+      resolvedModel: "gpt-5.2",
+      candidateUpstreams: [],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "gpt-5.2",
+        resolvedModel: "gpt-5.2",
+        providerType: "openai",
+        upstreamName: "openai-main",
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 1,
+        finalCandidateCount: 1,
+      },
+    });
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: openaiUpstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: null,
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/custom/not-matched", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.2",
+        input: "hello",
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["custom", "not-matched"] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(routeByModel).toHaveBeenCalledWith("gpt-5.2");
+    expect(selectFromProviderType).toHaveBeenCalledWith(
+      "openai",
+      undefined,
+      ["up-openai"],
+      undefined
+    );
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(openaiUpstream);
   });
 
   it("should route messages requests to anthropic upstream when available", async () => {

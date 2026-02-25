@@ -188,6 +188,24 @@ describe("SessionAffinityStore", () => {
 
       expect(store.size()).toBe(0);
     });
+
+    it("should keep cumulative tokens isolated by route capability scope", () => {
+      store.set("key1", "codex_responses", "session-abc", "upstream-codex", 1024);
+      store.set("key1", "openai_chat_compatible", "session-abc", "upstream-openai-chat", 1024);
+
+      store.updateCumulativeTokens("key1", "codex_responses", "session-abc", {
+        totalInputTokens: 100,
+      });
+      store.updateCumulativeTokens("key1", "openai_chat_compatible", "session-abc", {
+        totalInputTokens: 250,
+      });
+
+      const codexEntry = store.get("key1", "codex_responses", "session-abc");
+      const chatEntry = store.get("key1", "openai_chat_compatible", "session-abc");
+
+      expect(codexEntry?.cumulativeTokens).toBe(100);
+      expect(chatEntry?.cumulativeTokens).toBe(250);
+    });
   });
 
   describe("key isolation", () => {
@@ -199,12 +217,14 @@ describe("SessionAffinityStore", () => {
       expect(store.get("key2", "anthropic", "session-abc")?.upstreamId).toBe("upstream-2");
     });
 
-    it("should isolate entries by provider type", () => {
-      store.set("key1", "anthropic", "session-abc", "upstream-1", 1024);
-      store.set("key1", "openai", "session-abc", "upstream-2", 2048);
+    it("should isolate entries by route capability scope", () => {
+      store.set("key1", "codex_responses", "session-abc", "upstream-1", 1024);
+      store.set("key1", "openai_chat_compatible", "session-abc", "upstream-2", 2048);
 
-      expect(store.get("key1", "anthropic", "session-abc")?.upstreamId).toBe("upstream-1");
-      expect(store.get("key1", "openai", "session-abc")?.upstreamId).toBe("upstream-2");
+      expect(store.get("key1", "codex_responses", "session-abc")?.upstreamId).toBe("upstream-1");
+      expect(store.get("key1", "openai_chat_compatible", "session-abc")?.upstreamId).toBe(
+        "upstream-2"
+      );
     });
 
     it("should isolate entries by session id", () => {
@@ -218,6 +238,35 @@ describe("SessionAffinityStore", () => {
 });
 
 describe("extractSessionId", () => {
+  describe("capability-based extraction", () => {
+    it("should extract anthropic session for anthropic_messages capability", () => {
+      const body = {
+        metadata: {
+          user_id: "claude-code_session_550e8400-e29b-41d4-a716-446655440000",
+        },
+      };
+
+      const sessionId = extractSessionId("anthropic_messages", {}, body);
+
+      expect(sessionId).toBe("550e8400-e29b-41d4-a716-446655440000");
+    });
+
+    it("should extract session_id for codex/openai capabilities", () => {
+      const headers = {
+        session_id: "sess_route_scope_001",
+      };
+
+      expect(extractSessionId("codex_responses", headers, {})).toBe("sess_route_scope_001");
+      expect(extractSessionId("openai_chat_compatible", headers, {})).toBe("sess_route_scope_001");
+      expect(extractSessionId("openai_extended", headers, {})).toBe("sess_route_scope_001");
+    });
+
+    it("should return null for capabilities without session strategy", () => {
+      expect(extractSessionId("gemini_native_generate", {}, { any: "payload" })).toBeNull();
+      expect(extractSessionId("gemini_code_assist_internal", {}, { any: "payload" })).toBeNull();
+    });
+  });
+
   describe("anthropic provider", () => {
     it("should extract session UUID from metadata.user_id", () => {
       const body = {

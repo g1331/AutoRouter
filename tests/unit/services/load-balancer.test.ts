@@ -531,6 +531,30 @@ describe("load-balancer", () => {
     // Session affinity
     // =========================================================================
     describe("session affinity", () => {
+      it("should isolate affinity bindings by route capability scope", async () => {
+        const tier0 = makeUpstream({ id: "u-tier0", priority: 0 });
+        const tier1 = makeUpstream({ id: "u-tier1", priority: 1 });
+        mockFindMany.mockResolvedValue([tier0, tier1]);
+
+        affinityStore.set("key1", "codex_responses", "session-abc", "u-tier1", 1024);
+
+        const result = await selectFromProviderType("openai", undefined, undefined, {
+          apiKeyId: "key1",
+          sessionId: "session-abc",
+          contentLength: 2048,
+          affinityScope: "openai_chat_compatible",
+        });
+
+        expect(result.upstream.id).toBe("u-tier0");
+        expect(result.affinityHit).toBe(false);
+        expect(affinityStore.get("key1", "codex_responses", "session-abc")?.upstreamId).toBe(
+          "u-tier1"
+        );
+        expect(affinityStore.get("key1", "openai_chat_compatible", "session-abc")?.upstreamId).toBe(
+          "u-tier0"
+        );
+      });
+
       it("should use affinity binding when session exists and upstream is available", async () => {
         const u1 = makeUpstream({ id: "u1", priority: 0 });
         const u2 = makeUpstream({ id: "u2", priority: 0 });
