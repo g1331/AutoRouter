@@ -65,7 +65,7 @@ describe("Admin Upstreams API with new fields", () => {
       POST = routeModule.POST;
     });
 
-    it("should create upstream with provider_type", async () => {
+    it("should create upstream with route_capabilities", async () => {
       mockCreateUpstream.mockResolvedValueOnce({
         id: "upstream-1",
         name: "openai-upstream",
@@ -77,7 +77,7 @@ describe("Admin Upstreams API with new fields", () => {
         config: null,
         weight: 1,
         priority: 0,
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         allowedModels: null,
         modelRedirects: null,
         createdAt: new Date(),
@@ -94,7 +94,7 @@ describe("Admin Upstreams API with new fields", () => {
           name: "openai-upstream",
           base_url: "https://api.openai.com",
           api_key: "sk-test-key-12345678",
-          provider_type: "openai",
+          route_capabilities: ["openai_chat_compatible"],
         }),
       });
 
@@ -102,10 +102,10 @@ describe("Admin Upstreams API with new fields", () => {
       const data = await response.json();
 
       expect(response.status).toBe(201);
-      expect(data.provider_type).toBe("openai");
+      expect(data.route_capabilities).toEqual(["openai_chat_compatible"]);
       expect(mockCreateUpstream).toHaveBeenCalledWith(
         expect.objectContaining({
-          providerType: "openai",
+          routeCapabilities: ["openai_chat_compatible"],
         })
       );
     });
@@ -169,6 +169,7 @@ describe("Admin Upstreams API with new fields", () => {
         weight: 1,
         priority: 0,
         providerType: "anthropic",
+        routeCapabilities: ["anthropic_messages"],
         allowedModels: null,
         modelRedirects: { "claude-3": "claude-3-opus-20240229" },
         createdAt: new Date(),
@@ -202,6 +203,53 @@ describe("Admin Upstreams API with new fields", () => {
       );
     });
 
+    it("should create upstream with normalized route_capabilities", async () => {
+      mockCreateUpstream.mockResolvedValueOnce({
+        id: "upstream-1",
+        name: "route-cap-upstream",
+        baseUrl: "https://api.openai.com",
+        apiKeyMasked: "sk-***1234",
+        isDefault: false,
+        timeout: 60,
+        isActive: true,
+        config: null,
+        weight: 1,
+        priority: 0,
+        providerType: "openai",
+        routeCapabilities: ["codex_responses", "openai_chat_compatible"],
+        allowedModels: null,
+        modelRedirects: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const request = new NextRequest("http://localhost:3000/api/admin/upstreams", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "route-cap-upstream",
+          base_url: "https://api.openai.com",
+          api_key: "sk-test-key-12345678",
+          provider_type: "openai",
+          route_capabilities: ["openai_chat_compatible", "codex_responses", "codex_responses"],
+        }),
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(201);
+      expect(data.route_capabilities).toEqual(["codex_responses", "openai_chat_compatible"]);
+      expect(mockCreateUpstream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          routeCapabilities: ["codex_responses", "openai_chat_compatible"],
+        })
+      );
+    });
+
     it("should create upstream with all new fields", async () => {
       mockCreateUpstream.mockResolvedValueOnce({
         id: "upstream-1",
@@ -214,7 +262,7 @@ describe("Admin Upstreams API with new fields", () => {
         config: null,
         weight: 1,
         priority: 0,
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         allowedModels: ["gpt-4", "gpt-3.5-turbo"],
         modelRedirects: { "gpt-4-turbo": "gpt-4" },
         createdAt: new Date(),
@@ -231,7 +279,7 @@ describe("Admin Upstreams API with new fields", () => {
           name: "multi-model-upstream",
           base_url: "https://api.openai.com",
           api_key: "sk-test-key-12345678",
-          provider_type: "openai",
+          route_capabilities: ["openai_chat_compatible"],
           allowed_models: ["gpt-4", "gpt-3.5-turbo"],
           model_redirects: { "gpt-4-turbo": "gpt-4" },
         }),
@@ -241,15 +289,15 @@ describe("Admin Upstreams API with new fields", () => {
       const data = await response.json();
 
       expect(response.status).toBe(201);
-      expect(data.provider_type).toBe("openai");
+      expect(data.route_capabilities).toEqual(["openai_chat_compatible"]);
       expect(data.allowed_models).toEqual(["gpt-4", "gpt-3.5-turbo"]);
       expect(data.model_redirects).toEqual({ "gpt-4-turbo": "gpt-4" });
     });
 
-    it("should accept all valid provider_type values", async () => {
-      const validProviderTypes = ["anthropic", "openai", "google", "custom"];
+    it("should ignore legacy provider_type values without validation errors", async () => {
+      const providerTypes = ["anthropic", "openai", "google", "custom"];
 
-      for (const providerType of validProviderTypes) {
+      for (const providerType of providerTypes) {
         vi.clearAllMocks();
         mockCreateUpstream.mockResolvedValueOnce({
           id: `upstream-${providerType}`,
@@ -262,7 +310,7 @@ describe("Admin Upstreams API with new fields", () => {
           config: null,
           weight: 1,
           priority: 0,
-          providerType,
+          routeCapabilities: [],
           allowedModels: null,
           modelRedirects: null,
           createdAt: new Date(),
@@ -286,11 +334,29 @@ describe("Admin Upstreams API with new fields", () => {
         const response = await POST(request);
         expect(response.status).toBe(201);
         const data = await response.json();
-        expect(data.provider_type).toBe(providerType);
+        expect(data.route_capabilities).toEqual([]);
       }
     });
 
-    it("should reject invalid provider_type", async () => {
+    it("should ignore invalid legacy provider_type field", async () => {
+      mockCreateUpstream.mockResolvedValueOnce({
+        id: "upstream-invalid-provider",
+        name: "invalid-upstream",
+        baseUrl: "https://api.openai.com",
+        apiKeyMasked: "sk-***1234",
+        isDefault: false,
+        timeout: 60,
+        isActive: true,
+        config: null,
+        weight: 1,
+        priority: 0,
+        routeCapabilities: [],
+        allowedModels: null,
+        modelRedirects: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
       const request = new NextRequest("http://localhost:3000/api/admin/upstreams", {
         method: "POST",
         headers: {
@@ -302,6 +368,28 @@ describe("Admin Upstreams API with new fields", () => {
           base_url: "https://api.openai.com",
           api_key: "sk-test-key-12345678",
           provider_type: "invalid-provider",
+        }),
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(201);
+      expect(data.route_capabilities).toEqual([]);
+    });
+
+    it("should reject invalid route_capabilities", async () => {
+      const request = new NextRequest("http://localhost:3000/api/admin/upstreams", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "invalid-route-capability",
+          base_url: "https://api.openai.com",
+          api_key: "sk-test-key-12345678",
+          route_capabilities: ["unknown_capability"],
         }),
       });
 
@@ -362,7 +450,7 @@ describe("Admin Upstreams API with new fields", () => {
       PUT = routeModule.PUT;
     });
 
-    it("should update upstream provider_type", async () => {
+    it("should update upstream route_capabilities", async () => {
       mockUpdateUpstream.mockResolvedValueOnce({
         id: "upstream-1",
         name: "updated-upstream",
@@ -374,7 +462,7 @@ describe("Admin Upstreams API with new fields", () => {
         config: null,
         weight: 1,
         priority: 0,
-        providerType: "anthropic",
+        routeCapabilities: ["anthropic_messages"],
         allowedModels: null,
         modelRedirects: null,
         createdAt: new Date(),
@@ -388,7 +476,7 @@ describe("Admin Upstreams API with new fields", () => {
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          provider_type: "anthropic",
+          route_capabilities: ["anthropic_messages"],
         }),
       });
 
@@ -396,11 +484,11 @@ describe("Admin Upstreams API with new fields", () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.provider_type).toBe("anthropic");
+      expect(data.route_capabilities).toEqual(["anthropic_messages"]);
       expect(mockUpdateUpstream).toHaveBeenCalledWith(
         "upstream-1",
         expect.objectContaining({
-          providerType: "anthropic",
+          routeCapabilities: ["anthropic_messages"],
         })
       );
     });
@@ -461,6 +549,7 @@ describe("Admin Upstreams API with new fields", () => {
         weight: 1,
         priority: 0,
         providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
         allowedModels: null,
         modelRedirects: { "gpt-4": "gpt-4-turbo" },
         createdAt: new Date(),
@@ -483,6 +572,50 @@ describe("Admin Upstreams API with new fields", () => {
 
       expect(response.status).toBe(200);
       expect(data.model_redirects).toEqual({ "gpt-4": "gpt-4-turbo" });
+    });
+
+    it("should update route_capabilities with normalized values", async () => {
+      mockUpdateUpstream.mockResolvedValueOnce({
+        id: "upstream-1",
+        name: "updated-upstream",
+        baseUrl: "https://api.openai.com",
+        apiKeyMasked: "sk-***1234",
+        isDefault: false,
+        timeout: 60,
+        isActive: true,
+        config: null,
+        weight: 1,
+        priority: 0,
+        providerType: "openai",
+        routeCapabilities: ["codex_responses", "openai_chat_compatible"],
+        allowedModels: null,
+        modelRedirects: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const request = new NextRequest("http://localhost:3000/api/admin/upstreams/upstream-1", {
+        method: "PUT",
+        headers: {
+          authorization: "Bearer test-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          route_capabilities: ["openai_chat_compatible", "codex_responses", "codex_responses"],
+        }),
+      });
+
+      const response = await PUT(request, { params: Promise.resolve({ id: "upstream-1" }) });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.route_capabilities).toEqual(["codex_responses", "openai_chat_compatible"]);
+      expect(mockUpdateUpstream).toHaveBeenCalledWith(
+        "upstream-1",
+        expect.objectContaining({
+          routeCapabilities: ["codex_responses", "openai_chat_compatible"],
+        })
+      );
     });
 
     it("should clear allowed_models by setting to null", async () => {
@@ -531,7 +664,7 @@ describe("Admin Upstreams API with new fields", () => {
         config: null,
         weight: 1,
         priority: 0,
-        providerType: "google",
+        routeCapabilities: ["gemini_native_generate"],
         allowedModels: ["gemini-pro", "gemini-ultra"],
         modelRedirects: { gemini: "gemini-pro" },
         createdAt: new Date(),
@@ -545,7 +678,7 @@ describe("Admin Upstreams API with new fields", () => {
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          provider_type: "google",
+          route_capabilities: ["gemini_native_generate"],
           allowed_models: ["gemini-pro", "gemini-ultra"],
           model_redirects: { gemini: "gemini-pro" },
         }),
@@ -555,7 +688,7 @@ describe("Admin Upstreams API with new fields", () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.provider_type).toBe("google");
+      expect(data.route_capabilities).toEqual(["gemini_native_generate"]);
       expect(data.allowed_models).toEqual(["gemini-pro", "gemini-ultra"]);
       expect(data.model_redirects).toEqual({ gemini: "gemini-pro" });
     });
@@ -583,7 +716,7 @@ describe("Admin Upstreams API with new fields", () => {
             config: null,
             weight: 1,
             priority: 0,
-            providerType: "openai",
+            routeCapabilities: ["openai_chat_compatible"],
             allowedModels: ["gpt-4", "gpt-3.5-turbo"],
             modelRedirects: { "gpt-4-turbo": "gpt-4" },
             createdAt: new Date(),
@@ -600,7 +733,7 @@ describe("Admin Upstreams API with new fields", () => {
             config: null,
             weight: 1,
             priority: 0,
-            providerType: "anthropic",
+            routeCapabilities: ["anthropic_messages"],
             allowedModels: null,
             modelRedirects: null,
             createdAt: new Date(),
@@ -625,10 +758,10 @@ describe("Admin Upstreams API with new fields", () => {
 
       expect(response.status).toBe(200);
       expect(data.items).toHaveLength(2);
-      expect(data.items[0].provider_type).toBe("openai");
+      expect(data.items[0].route_capabilities).toEqual(["openai_chat_compatible"]);
       expect(data.items[0].allowed_models).toEqual(["gpt-4", "gpt-3.5-turbo"]);
       expect(data.items[0].model_redirects).toEqual({ "gpt-4-turbo": "gpt-4" });
-      expect(data.items[1].provider_type).toBe("anthropic");
+      expect(data.items[1].route_capabilities).toEqual(["anthropic_messages"]);
     });
 
     it("should handle upstreams with null new fields", async () => {
@@ -645,7 +778,7 @@ describe("Admin Upstreams API with new fields", () => {
             config: null,
             weight: 1,
             priority: 0,
-            providerType: null,
+            routeCapabilities: [],
             allowedModels: null,
             modelRedirects: null,
             createdAt: new Date(),
@@ -669,7 +802,7 @@ describe("Admin Upstreams API with new fields", () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.items[0].provider_type).toBeNull();
+      expect(data.items[0].route_capabilities).toEqual([]);
       expect(data.items[0].allowed_models).toBeNull();
       expect(data.items[0].model_redirects).toBeNull();
     });
@@ -698,7 +831,7 @@ describe("Admin Upstreams API with new fields", () => {
         config: null,
         weight: 5,
         priority: 10,
-        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible", "openai_extended"],
         allowedModels: ["gpt-4", "gpt-4-turbo", "gpt-4-vision"],
         modelRedirects: { "gpt-4-preview": "gpt-4-turbo" },
         createdAt: new Date(),
@@ -716,7 +849,7 @@ describe("Admin Upstreams API with new fields", () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.provider_type).toBe("openai");
+      expect(data.route_capabilities).toEqual(["openai_chat_compatible", "openai_extended"]);
       expect(data.allowed_models).toEqual(["gpt-4", "gpt-4-turbo", "gpt-4-vision"]);
       expect(data.model_redirects).toEqual({ "gpt-4-preview": "gpt-4-turbo" });
     });

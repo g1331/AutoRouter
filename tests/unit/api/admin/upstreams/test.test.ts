@@ -77,7 +77,7 @@ describe("POST /api/admin/upstreams/test", () => {
         authorization: "Bearer test-admin-token",
       },
       body: JSON.stringify({
-        provider_type: "openai",
+        route_capabilities: ["openai_chat_compatible"],
         base_url: "https://api.openai.com",
         api_key: "sk-test-key-12345678",
         timeout: 10,
@@ -99,7 +99,7 @@ describe("POST /api/admin/upstreams/test", () => {
     });
 
     expect(testUpstreamConnection).toHaveBeenCalledWith({
-      providerType: "openai",
+      routeCapabilities: ["openai_chat_compatible"],
       baseUrl: "https://api.openai.com",
       apiKey: "sk-test-key-12345678",
       timeout: 10,
@@ -125,7 +125,7 @@ describe("POST /api/admin/upstreams/test", () => {
         authorization: "Bearer test-admin-token",
       },
       body: JSON.stringify({
-        provider_type: "anthropic",
+        route_capabilities: ["anthropic_messages"],
         base_url: "https://api.anthropic.com",
         api_key: "sk-ant-api03-test",
       }),
@@ -135,7 +135,7 @@ describe("POST /api/admin/upstreams/test", () => {
 
     expect(response.status).toBe(200);
     expect(testUpstreamConnection).toHaveBeenCalledWith({
-      providerType: "anthropic",
+      routeCapabilities: ["anthropic_messages"],
       baseUrl: "https://api.anthropic.com",
       apiKey: "sk-ant-api03-test",
       timeout: 10, // Default timeout from Zod schema
@@ -146,7 +146,7 @@ describe("POST /api/admin/upstreams/test", () => {
     const request = new NextRequest("http://localhost:3000/api/admin/upstreams/test", {
       method: "POST",
       body: JSON.stringify({
-        provider_type: "openai",
+        route_capabilities: ["openai_chat_compatible"],
         base_url: "https://api.openai.com",
         api_key: "sk-test-key",
       }),
@@ -166,7 +166,7 @@ describe("POST /api/admin/upstreams/test", () => {
         authorization: "Bearer invalid-token",
       },
       body: JSON.stringify({
-        provider_type: "openai",
+        route_capabilities: ["openai_chat_compatible"],
         base_url: "https://api.openai.com",
         api_key: "sk-test-key",
       }),
@@ -186,7 +186,7 @@ describe("POST /api/admin/upstreams/test", () => {
         authorization: "Bearer test-admin-token",
       },
       body: JSON.stringify({
-        provider_type: "invalid-provider",
+        route_capabilities: ["invalid-provider"],
         base_url: "https://api.example.com",
         api_key: "sk-test-key",
       }),
@@ -206,7 +206,7 @@ describe("POST /api/admin/upstreams/test", () => {
         authorization: "Bearer test-admin-token",
       },
       body: JSON.stringify({
-        provider_type: "openai",
+        route_capabilities: ["openai_chat_compatible"],
         base_url: "not-a-valid-url",
         api_key: "sk-test-key-12345678",
       }),
@@ -227,7 +227,7 @@ describe("POST /api/admin/upstreams/test", () => {
         authorization: "Bearer test-admin-token",
       },
       body: JSON.stringify({
-        provider_type: "openai",
+        route_capabilities: ["openai_chat_compatible"],
         base_url: "https://api.openai.com",
       }),
     });
@@ -246,7 +246,7 @@ describe("POST /api/admin/upstreams/test", () => {
         authorization: "Bearer test-admin-token",
       },
       body: JSON.stringify({
-        provider_type: "openai",
+        route_capabilities: ["openai_chat_compatible"],
         base_url: "https://api.openai.com",
         api_key: "short",
       }),
@@ -267,7 +267,7 @@ describe("POST /api/admin/upstreams/test", () => {
         authorization: "Bearer test-admin-token",
       },
       body: JSON.stringify({
-        provider_type: "openai",
+        route_capabilities: ["openai_chat_compatible"],
         base_url: "https://api.openai.com",
         api_key: "a".repeat(513),
       }),
@@ -288,7 +288,7 @@ describe("POST /api/admin/upstreams/test", () => {
         authorization: "Bearer test-admin-token",
       },
       body: JSON.stringify({
-        provider_type: "openai",
+        route_capabilities: ["openai_chat_compatible"],
         base_url: "https://api.openai.com",
         api_key: "sk-test-key-12345678",
         timeout: -5,
@@ -310,7 +310,7 @@ describe("POST /api/admin/upstreams/test", () => {
         authorization: "Bearer test-admin-token",
       },
       body: JSON.stringify({
-        provider_type: "openai",
+        route_capabilities: ["openai_chat_compatible"],
         base_url: "https://api.openai.com",
         api_key: "sk-test-key-12345678",
         timeout: 301,
@@ -332,7 +332,7 @@ describe("POST /api/admin/upstreams/test", () => {
         authorization: "Bearer test-admin-token",
       },
       body: JSON.stringify({
-        provider_type: "openai",
+        route_capabilities: ["openai_chat_compatible"],
         base_url: "https://api.openai.com",
         api_key: "sk-test-key-12345678",
         timeout: 10.5,
@@ -366,7 +366,7 @@ describe("POST /api/admin/upstreams/test", () => {
         authorization: "Bearer test-admin-token",
       },
       body: JSON.stringify({
-        provider_type: "openai",
+        route_capabilities: ["openai_chat_compatible"],
         base_url: "https://api.openai.com",
         api_key: "sk-invalid-key",
       }),
@@ -406,7 +406,7 @@ describe("POST /api/admin/upstreams/test", () => {
         authorization: "Bearer test-admin-token",
       },
       body: JSON.stringify({
-        provider_type: "openai",
+        route_capabilities: ["openai_chat_compatible"],
         base_url: "https://invalid.example.com",
         api_key: "sk-test-key-12345678",
       }),
@@ -465,7 +465,7 @@ describe("POST /api/admin/upstreams/[id]/test", () => {
     const mockUpstream = {
       id: "upstream-1",
       name: "test-upstream",
-      providerType: "openai",
+      routeCapabilities: ["openai_chat_compatible"],
       baseUrl: "https://api.openai.com",
       apiKeyEncrypted: "encrypted:sk-test-key",
       isDefault: false,
@@ -513,7 +513,7 @@ describe("POST /api/admin/upstreams/[id]/test", () => {
     expect(db.query.upstreams.findFirst).toHaveBeenCalled();
     expect(getDecryptedApiKey).toHaveBeenCalledWith(mockUpstream);
     expect(testUpstreamConnection).toHaveBeenCalledWith({
-      providerType: "openai",
+      routeCapabilities: ["openai_chat_compatible"],
       baseUrl: "https://api.openai.com",
       apiKey: "sk-test-key-12345678",
       timeout: 60,
@@ -578,7 +578,7 @@ describe("POST /api/admin/upstreams/[id]/test", () => {
     const mockUpstream = {
       id: "upstream-1",
       name: "test-upstream",
-      providerType: "anthropic",
+      routeCapabilities: ["anthropic_messages"],
       baseUrl: "https://api.anthropic.com",
       apiKeyEncrypted: "encrypted:sk-ant-invalid",
       isDefault: false,
@@ -632,7 +632,7 @@ describe("POST /api/admin/upstreams/[id]/test", () => {
     const mockUpstream = {
       id: "upstream-1",
       name: "slow-upstream",
-      providerType: "openai",
+      routeCapabilities: ["openai_chat_compatible"],
       baseUrl: "https://slow-api.example.com",
       apiKeyEncrypted: "encrypted:sk-test-key",
       isDefault: false,
@@ -680,7 +680,7 @@ describe("POST /api/admin/upstreams/[id]/test", () => {
     const mockUpstream = {
       id: "upstream-1",
       name: "test-upstream",
-      providerType: "openai",
+      routeCapabilities: ["openai_chat_compatible"],
       baseUrl: "https://api.openai.com",
       apiKeyEncrypted: "invalid-encrypted-data",
       isDefault: false,
@@ -719,7 +719,7 @@ describe("POST /api/admin/upstreams/[id]/test", () => {
     const mockUpstream = {
       id: "upstream-2",
       name: "anthropic-upstream",
-      providerType: "anthropic",
+      routeCapabilities: ["anthropic_messages"],
       baseUrl: "https://api.anthropic.com",
       apiKeyEncrypted: "encrypted:sk-ant-key",
       isDefault: true,
@@ -756,7 +756,7 @@ describe("POST /api/admin/upstreams/[id]/test", () => {
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
     expect(testUpstreamConnection).toHaveBeenCalledWith({
-      providerType: "anthropic",
+      routeCapabilities: ["anthropic_messages"],
       baseUrl: "https://api.anthropic.com",
       apiKey: "sk-ant-api03-test-key",
       timeout: 45,

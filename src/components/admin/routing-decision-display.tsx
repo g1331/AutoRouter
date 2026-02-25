@@ -75,6 +75,7 @@ export function RoutingDecisionDisplay({
 
     const labels: Record<string, string> = {
       provider_type: t("routingProviderType"),
+      path_capability: t("routingPathCapability"),
       tiered: t("routingTiered"),
       none: t("routingNone"),
     };
@@ -185,6 +186,19 @@ export function RoutingDecisionDisplay({
                 </span>
               )}
             </div>
+            {routingDecision.matched_route_capability && (
+              <div className="mt-1 font-mono text-xs text-amber-700">
+                {t("matchedRouteCapability")}: {routingDecision.matched_route_capability}
+              </div>
+            )}
+            {routingDecision.route_match_source && (
+              <div className="mt-1 font-mono text-xs text-amber-700">
+                {t("routeMatchSource")}:{" "}
+                {routingDecision.route_match_source === "path"
+                  ? t("routeMatchSourcePath")
+                  : t("routeMatchSourceModelFallback")}
+              </div>
+            )}
           </div>
         </div>
       )}

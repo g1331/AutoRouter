@@ -3,6 +3,12 @@ import { db, upstreams, circuitBreakerStates, type Upstream } from "../db";
 import { encrypt, decrypt } from "../utils/encryption";
 import { createLogger } from "../utils/logger";
 import { CircuitBreakerStateEnum } from "./circuit-breaker";
+import {
+  normalizeRouteCapabilities,
+  resolveRouteCapabilities,
+  type RouteCapability,
+} from "@/lib/route-capabilities";
+import { ensureRouteCapabilityMigration } from "./route-capability-migration";
 
 const log = createLogger("upstream-crud");
 
@@ -38,7 +44,7 @@ export interface UpstreamCreateInput {
   config?: string | null;
   weight?: number;
   priority?: number;
-  providerType?: string;
+  routeCapabilities?: RouteCapability[] | null;
   allowedModels?: string[] | null;
   modelRedirects?: Record<string, string> | null;
   circuitBreakerConfig?: {
@@ -64,7 +70,7 @@ export interface UpstreamUpdateInput {
   config?: string | null;
   weight?: number;
   priority?: number;
-  providerType?: string;
+  routeCapabilities?: RouteCapability[] | null;
   allowedModels?: string[] | null;
   modelRedirects?: Record<string, string> | null;
   circuitBreakerConfig?: {
@@ -91,7 +97,7 @@ export interface UpstreamResponse {
   config: string | null;
   weight: number;
   priority: number;
-  providerType: string;
+  routeCapabilities: RouteCapability[];
   allowedModels: string[] | null;
   modelRedirects: Record<string, string> | null;
   affinityMigration: {
@@ -138,11 +144,13 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     config,
     weight = 1,
     priority = 0,
-    providerType = "openai",
+    routeCapabilities,
     allowedModels,
     modelRedirects,
     affinityMigration,
   } = input;
+
+  const normalizedRouteCapabilities = resolveRouteCapabilities(routeCapabilities);
 
   // Check if name already exists
   const existing = await db.query.upstreams.findFirst({
@@ -171,7 +179,7 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
       config: config ?? null,
       weight,
       priority,
-      providerType,
+      routeCapabilities: normalizedRouteCapabilities,
       allowedModels: allowedModels ?? null,
       modelRedirects: modelRedirects ?? null,
       affinityMigration: affinityMigration ?? null,
@@ -204,7 +212,7 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     config: newUpstream.config,
     weight: newUpstream.weight,
     priority: newUpstream.priority,
-    providerType: newUpstream.providerType,
+    routeCapabilities: resolveRouteCapabilities(newUpstream.routeCapabilities),
     allowedModels: newUpstream.allowedModels,
     modelRedirects: newUpstream.modelRedirects,
     affinityMigration: newUpstream.affinityMigration,
@@ -252,7 +260,9 @@ export async function updateUpstream(
   if (input.config !== undefined) updateValues.config = input.config;
   if (input.weight !== undefined) updateValues.weight = input.weight;
   if (input.priority !== undefined) updateValues.priority = input.priority;
-  if (input.providerType !== undefined) updateValues.providerType = input.providerType;
+  if (input.routeCapabilities !== undefined) {
+    updateValues.routeCapabilities = normalizeRouteCapabilities(input.routeCapabilities);
+  }
   if (input.allowedModels !== undefined) updateValues.allowedModels = input.allowedModels;
   if (input.modelRedirects !== undefined) updateValues.modelRedirects = input.modelRedirects;
   if (input.affinityMigration !== undefined)
@@ -312,7 +322,7 @@ export async function updateUpstream(
     config: updated.config,
     weight: updated.weight,
     priority: updated.priority,
-    providerType: updated.providerType,
+    routeCapabilities: resolveRouteCapabilities(updated.routeCapabilities),
     allowedModels: updated.allowedModels,
     modelRedirects: updated.modelRedirects,
     affinityMigration: updated.affinityMigration,
@@ -343,6 +353,8 @@ export async function listUpstreams(
   page: number = 1,
   pageSize: number = 20
 ): Promise<PaginatedUpstreams> {
+  await ensureRouteCapabilityMigration();
+
   // Validate pagination params
   page = Math.max(1, page);
   pageSize = Math.min(100, Math.max(1, pageSize));
@@ -417,7 +429,7 @@ export async function listUpstreams(
       config: upstream.config,
       weight: upstream.weight,
       priority: upstream.priority,
-      providerType: upstream.providerType,
+      routeCapabilities: resolveRouteCapabilities(upstream.routeCapabilities),
       allowedModels: upstream.allowedModels,
       modelRedirects: upstream.modelRedirects,
       affinityMigration: upstream.affinityMigration,
@@ -450,6 +462,8 @@ export async function listUpstreams(
  * Get upstream by ID.
  */
 export async function getUpstreamById(upstreamId: string): Promise<UpstreamResponse | null> {
+  await ensureRouteCapabilityMigration();
+
   const upstream = await db.query.upstreams.findFirst({
     where: eq(upstreams.id, upstreamId),
   });
@@ -477,7 +491,7 @@ export async function getUpstreamById(upstreamId: string): Promise<UpstreamRespo
     config: upstream.config,
     weight: upstream.weight,
     priority: upstream.priority,
-    providerType: upstream.providerType,
+    routeCapabilities: resolveRouteCapabilities(upstream.routeCapabilities),
     allowedModels: upstream.allowedModels,
     modelRedirects: upstream.modelRedirects,
     affinityMigration: upstream.affinityMigration,
@@ -490,6 +504,8 @@ export async function getUpstreamById(upstreamId: string): Promise<UpstreamRespo
  * Load all active upstreams from database.
  */
 export async function loadActiveUpstreams(): Promise<Upstream[]> {
+  await ensureRouteCapabilityMigration();
+
   return db.query.upstreams.findMany({
     where: eq(upstreams.isActive, true),
   });

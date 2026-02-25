@@ -35,10 +35,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreateUpstream, useUpdateUpstream } from "@/hooks/use-upstreams";
-import type { Upstream, ProviderType } from "@/types/api";
+import type { RouteCapability, Upstream } from "@/types/api";
 import { TagInput } from "@/components/ui/tag-input";
 import { KeyValueInput } from "@/components/ui/key-value-input";
 import { Switch } from "@/components/ui/switch";
+import { ROUTE_CAPABILITY_VALUES, areSingleProviderCapabilities } from "@/lib/route-capabilities";
+import { RouteCapabilityMultiSelect } from "@/components/admin/route-capability-badges";
 
 interface UpstreamFormDialogProps {
   upstream?: Upstream | null;
@@ -67,34 +69,44 @@ const affinityMigrationConfigSchema = z
   .nullable();
 
 // Schema for create mode - api_key is required
-const createUpstreamFormSchema = z.object({
-  name: z.string().min(1).max(100),
-  base_url: z.string().url(),
-  api_key: z.string().min(1),
-  description: z.string().max(500),
-  priority: z.number().int().min(0).max(100),
-  weight: z.number().int().min(1).max(100),
-  provider_type: z.enum(["anthropic", "openai", "google", "custom"]),
-  allowed_models: z.array(z.string()).nullable(),
-  model_redirects: z.record(z.string(), z.string()).nullable(),
-  circuit_breaker_config: circuitBreakerConfigSchema,
-  affinity_migration: affinityMigrationConfigSchema,
-});
+const createUpstreamFormSchema = z
+  .object({
+    name: z.string().min(1).max(100),
+    base_url: z.string().url(),
+    api_key: z.string().min(1),
+    description: z.string().max(500),
+    priority: z.number().int().min(0).max(100),
+    weight: z.number().int().min(1).max(100),
+    route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
+    allowed_models: z.array(z.string()).nullable(),
+    model_redirects: z.record(z.string(), z.string()).nullable(),
+    circuit_breaker_config: circuitBreakerConfigSchema,
+    affinity_migration: affinityMigrationConfigSchema,
+  })
+  .refine((data) => areSingleProviderCapabilities(data.route_capabilities), {
+    message: "All route capabilities must belong to the same provider",
+    path: ["route_capabilities"],
+  });
 
 // Schema for edit mode - api_key is optional (leave empty to keep unchanged)
-const editUpstreamFormSchema = z.object({
-  name: z.string().min(1).max(100),
-  base_url: z.string().url(),
-  api_key: z.string(),
-  description: z.string().max(500),
-  priority: z.number().int().min(0).max(100),
-  weight: z.number().int().min(1).max(100),
-  provider_type: z.enum(["anthropic", "openai", "google", "custom"]),
-  allowed_models: z.array(z.string()).nullable(),
-  model_redirects: z.record(z.string(), z.string()).nullable(),
-  circuit_breaker_config: circuitBreakerConfigSchema,
-  affinity_migration: affinityMigrationConfigSchema,
-});
+const editUpstreamFormSchema = z
+  .object({
+    name: z.string().min(1).max(100),
+    base_url: z.string().url(),
+    api_key: z.string(),
+    description: z.string().max(500),
+    priority: z.number().int().min(0).max(100),
+    weight: z.number().int().min(1).max(100),
+    route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
+    allowed_models: z.array(z.string()).nullable(),
+    model_redirects: z.record(z.string(), z.string()).nullable(),
+    circuit_breaker_config: circuitBreakerConfigSchema,
+    affinity_migration: affinityMigrationConfigSchema,
+  })
+  .refine((data) => areSingleProviderCapabilities(data.route_capabilities), {
+    message: "All route capabilities must belong to the same provider",
+    path: ["route_capabilities"],
+  });
 
 type UpstreamFormData = z.infer<typeof createUpstreamFormSchema>;
 
@@ -122,7 +134,7 @@ export function UpstreamFormDialog({
       description: "",
       priority: 0,
       weight: 1,
-      provider_type: "openai",
+      route_capabilities: [],
       allowed_models: null,
       model_redirects: null,
       circuit_breaker_config: null,
@@ -151,7 +163,7 @@ export function UpstreamFormDialog({
         description: upstream.description || "",
         priority: upstream.priority ?? 0,
         weight: upstream.weight ?? 1,
-        provider_type: upstream.provider_type || "openai",
+        route_capabilities: upstream.route_capabilities || [],
         allowed_models: upstream.allowed_models || null,
         model_redirects: upstream.model_redirects || null,
         circuit_breaker_config: upstream.circuit_breaker?.config
@@ -172,7 +184,7 @@ export function UpstreamFormDialog({
         description: "",
         priority: 0,
         weight: 1,
-        provider_type: "openai",
+        route_capabilities: [],
         allowed_models: null,
         model_redirects: null,
         circuit_breaker_config: null,
@@ -192,7 +204,7 @@ export function UpstreamFormDialog({
           description: string | null;
           priority?: number;
           weight?: number;
-          provider_type?: ProviderType;
+          route_capabilities?: RouteCapability[] | null;
           allowed_models?: string[] | null;
           model_redirects?: Record<string, string> | null;
           circuit_breaker_config?: {
@@ -212,7 +224,7 @@ export function UpstreamFormDialog({
           description: data.description || null,
           priority: data.priority,
           weight: data.weight,
-          provider_type: data.provider_type,
+          route_capabilities: data.route_capabilities,
           allowed_models: data.allowed_models,
           model_redirects: data.model_redirects,
           circuit_breaker_config: data.circuit_breaker_config,
@@ -234,7 +246,7 @@ export function UpstreamFormDialog({
           description: data.description || null,
           priority: data.priority,
           weight: data.weight,
-          provider_type: data.provider_type,
+          route_capabilities: data.route_capabilities,
           allowed_models: data.allowed_models,
           model_redirects: data.model_redirects,
           circuit_breaker_config: data.circuit_breaker_config,
@@ -274,24 +286,17 @@ export function UpstreamFormDialog({
 
           <FormField
             control={form.control}
-            name="provider_type"
+            name="route_capabilities"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t("providerType")} *</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder={t("providerTypePlaceholder")} />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="openai">OpenAI</SelectItem>
-                    <SelectItem value="anthropic">Anthropic</SelectItem>
-                    <SelectItem value="google">Google</SelectItem>
-                    <SelectItem value="custom">{t("custom")}</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormDescription>{t("providerTypeDescription")}</FormDescription>
+                <FormLabel>{t("routeCapabilities")}</FormLabel>
+                <FormControl>
+                  <RouteCapabilityMultiSelect
+                    selected={field.value ?? []}
+                    onChange={(next) => field.onChange(next)}
+                  />
+                </FormControl>
+                <FormDescription>{t("routeCapabilitiesDescription")}</FormDescription>
                 <FormMessage />
               </FormItem>
             )}

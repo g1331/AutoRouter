@@ -28,7 +28,7 @@ async function main() {
     config: null,
     weight: 1,
     priority: 0,
-    providerType: "openai",
+    routeCapabilities: ["codex_responses", "openai_chat_compatible", "openai_extended"],
     allowedModels: null,
     modelRedirects: null,
     createdAt: now,

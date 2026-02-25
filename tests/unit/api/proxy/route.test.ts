@@ -20,11 +20,19 @@ vi.mock("@/lib/db", () => ({
         findFirst: vi.fn(),
         findMany: vi.fn(),
       },
+      upstreamHealth: {
+        findMany: vi.fn(),
+      },
     },
   },
   apiKeys: {},
   apiKeyUpstreams: {},
   upstreams: {},
+  upstreamHealth: {},
+}));
+
+vi.mock("@/lib/services/route-capability-migration", () => ({
+  ensureRouteCapabilityMigration: vi.fn(async () => {}),
 }));
 
 vi.mock("@/lib/services/proxy-client", () => ({
@@ -51,6 +59,8 @@ vi.mock("@/lib/services/request-logger", () => ({
 
 // Mock load-balancer module
 vi.mock("@/lib/services/load-balancer", () => {
+  const selectFromUpstreamCandidates = vi.fn();
+
   class NoHealthyUpstreamsError extends Error {
     constructor(message: string) {
       super(message);
@@ -66,7 +76,8 @@ vi.mock("@/lib/services/load-balancer", () => {
   }
 
   return {
-    selectFromProviderType: vi.fn(),
+    selectFromProviderType: selectFromUpstreamCandidates,
+    selectFromUpstreamCandidates,
     recordConnection: vi.fn(),
     releaseConnection: vi.fn(),
     NoHealthyUpstreamsError,
@@ -144,7 +155,58 @@ vi.mock("@/lib/services/traffic-recorder", () => ({
   recordTrafficFixture: vi.fn(async () => "/tmp/mock-fixture.json"),
 }));
 
+vi.mock("@/lib/utils/logger", () => {
+  const mockLogger = {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    child: vi.fn(),
+  };
+  mockLogger.child.mockReturnValue(mockLogger);
+
+  return {
+    logger: mockLogger,
+    createLogger: vi.fn(() => mockLogger),
+    __mockLogger: mockLogger,
+  };
+});
+
 describe("proxy route upstream selection", () => {
+  const DEFAULT_ACTIVE_UPSTREAMS = [
+    "up-codex",
+    "up-openai",
+    "up-anthropic",
+    "up-anthropic-1",
+    "up-anthropic-2",
+    "up-anthropic-3",
+    "up-route",
+    "up-attempt",
+    "up-1",
+    "up-authorized-other",
+    "up-first",
+    "up-second",
+    "up-stream-fail",
+    "up-fallback-ok",
+    "up-tier0",
+    "up-tier1",
+    "up-duck",
+    "up-privnode",
+    "up-rightcode",
+    "up-other",
+  ].map((id) => ({
+    id,
+    name: id,
+    providerType: "openai",
+    routeCapabilities: ["anthropic_messages", "openai_chat_compatible", "codex_responses"],
+    baseUrl: `https://${id}.example.com`,
+    isDefault: false,
+    isActive: true,
+    timeout: 60,
+    priority: 0,
+    weight: 1,
+  }));
+
   let POST: (
     request: NextRequest,
     context: { params: Promise<{ path: string[] }> }
@@ -156,11 +218,208 @@ describe("proxy route upstream selection", () => {
     delete process.env.RECORDER_ENABLED;
     delete process.env.RECORDER_MODE;
     const routeModule = await import("@/app/api/proxy/v1/[...path]/route");
+    const { db } = await import("@/lib/db");
     POST = routeModule.POST;
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValue(DEFAULT_ACTIVE_UPSTREAMS);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValue([]);
   }, 30_000);
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("should route path capability request without model when route is matched", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-codex" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-codex",
+        name: "codex-upstream",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["codex_responses"],
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+    const codexUpstream = {
+      id: "up-codex",
+      name: "codex-upstream",
+      providerType: "openai",
+      baseUrl: "https://api.openai.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 0,
+      weight: 1,
+    };
+
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: codexUpstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: null,
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/responses", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        input: "hello",
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["responses"] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(selectFromProviderType).toHaveBeenCalledWith(["up-codex"], undefined, undefined);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(codexUpstream);
+  });
+
+  it("should return no-upstream-configured error when matched path has no capability candidates", async () => {
+    const { db } = await import("@/lib/db");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const __mockLogger = (
+      (await import("@/lib/utils/logger")) as unknown as {
+        __mockLogger: { warn: ReturnType<typeof vi.fn> };
+      }
+    ).__mockLogger;
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-other" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-other",
+        name: "other-upstream",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["openai_chat_compatible"],
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/responses", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        input: "hello",
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["responses"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(data).toEqual({
+      error: expect.objectContaining({
+        code: "NO_UPSTREAMS_CONFIGURED",
+        reason: "NO_HEALTHY_CANDIDATES",
+        did_send_upstream: false,
+      }),
+    });
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(forwardRequest).not.toHaveBeenCalled();
+    expect(__mockLogger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "responses",
+        matchedRouteCapability: "codex_responses",
+        capabilityCandidatesCount: 0,
+      }),
+      "no upstream supports matched route capability"
+    );
+  });
+
+  it("should return no-upstream-configured error when path is not matched", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const __mockLogger = (
+      (await import("@/lib/utils/logger")) as unknown as {
+        __mockLogger: { warn: ReturnType<typeof vi.fn> };
+      }
+    ).__mockLogger;
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/custom/not-matched", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.2",
+        input: "hello",
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["custom", "not-matched"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(data).toEqual({
+      error: expect.objectContaining({
+        code: "NO_UPSTREAMS_CONFIGURED",
+        reason: "NO_HEALTHY_CANDIDATES",
+        did_send_upstream: false,
+      }),
+    });
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(forwardRequest).not.toHaveBeenCalled();
+    expect(__mockLogger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "custom/not-matched",
+        matchedRouteCapability: null,
+      }),
+      "path capability not matched, skipping upstream routing"
+    );
   });
 
   it("should route messages requests to anthropic upstream when available", async () => {
@@ -237,14 +496,14 @@ describe("proxy route upstream selection", () => {
       }),
     });
 
-    const response = await POST(request, { params: Promise.resolve({ path: ["messages"] }) });
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
 
     expect(response.status).toBe(200);
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(anthropicUpstream);
     expect(forwardRequest).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ providerType: "anthropic" }),
-      "messages",
+      "v1/messages",
       expect.any(String)
     );
   });
@@ -354,7 +613,7 @@ describe("proxy route upstream selection", () => {
       }),
     });
 
-    const response = await POST(request, { params: Promise.resolve({ path: ["messages"] }) });
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
 
     expect(response.status).toBe(200);
 
@@ -371,16 +630,14 @@ describe("proxy route upstream selection", () => {
     expect(selectFromProviderType).toHaveBeenCalledTimes(2);
     expect(selectFromProviderType).toHaveBeenNthCalledWith(
       1,
-      "anthropic",
-      undefined,
       ["up-anthropic-1", "up-anthropic-2"],
+      undefined,
       undefined
     );
     expect(selectFromProviderType).toHaveBeenNthCalledWith(
       2,
-      "anthropic",
-      ["up-anthropic-1"],
       ["up-anthropic-1", "up-anthropic-2"],
+      ["up-anthropic-1"],
       undefined
     );
 
@@ -459,7 +716,7 @@ describe("proxy route upstream selection", () => {
       }),
     });
 
-    const response = await POST(request, { params: Promise.resolve({ path: ["messages"] }) });
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
     const data = await response.json();
 
     expect(response.status).toBe(503);
@@ -570,7 +827,7 @@ describe("proxy route upstream selection", () => {
       }),
     });
 
-    const response = await POST(request, { params: Promise.resolve({ path: ["messages"] }) });
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
     expect(response.status).toBe(503);
 
     expect(buildFixture).toHaveBeenCalledTimes(1);
@@ -685,7 +942,7 @@ describe("proxy route upstream selection", () => {
     });
 
     const response = await POST(request, {
-      params: Promise.resolve({ path: ["chat", "completions"] }),
+      params: Promise.resolve({ path: ["v1", "chat", "completions"] }),
     });
     const data = await response.json();
 
@@ -783,7 +1040,7 @@ describe("proxy route upstream selection", () => {
     });
 
     const response = await POST(request, {
-      params: Promise.resolve({ path: ["chat", "completions"] }),
+      params: Promise.resolve({ path: ["v1", "chat", "completions"] }),
     });
     const data = await response.json();
 
@@ -876,7 +1133,7 @@ describe("proxy route upstream selection", () => {
     });
 
     const response = await POST(request, {
-      params: Promise.resolve({ path: ["chat", "completions"] }),
+      params: Promise.resolve({ path: ["v1", "chat", "completions"] }),
     });
     const data = await response.json();
 
@@ -989,7 +1246,7 @@ describe("proxy route upstream selection", () => {
       }),
     });
 
-    const response = await POST(request, { params: Promise.resolve({ path: ["messages"] }) });
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
     expect(response.status).toBe(503);
     expect(buildFixture).not.toHaveBeenCalled();
     expect(recordTrafficFixture).not.toHaveBeenCalled();
@@ -1068,7 +1325,7 @@ describe("proxy route upstream selection", () => {
     });
 
     const response = await POST(request, {
-      params: Promise.resolve({ path: ["chat", "completions"] }),
+      params: Promise.resolve({ path: ["v1", "chat", "completions"] }),
     });
     expect(response.status).toBe(200);
     expect(buildFixture).toHaveBeenCalledTimes(1);
@@ -1148,7 +1405,7 @@ describe("proxy route upstream selection", () => {
     });
 
     const response = await POST(request, {
-      params: Promise.resolve({ path: ["chat", "completions"] }),
+      params: Promise.resolve({ path: ["v1", "chat", "completions"] }),
     });
     expect(response.status).toBe(200);
     expect(buildFixture).not.toHaveBeenCalled();
@@ -1286,7 +1543,7 @@ describe("proxy route upstream selection", () => {
       }),
     });
 
-    const response = await POST(request, { params: Promise.resolve({ path: ["messages"] }) });
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
     const data = await response.json();
 
     // After exhausting all attempts, should return 503 with unified error format
@@ -1414,7 +1671,7 @@ describe("proxy route upstream selection", () => {
     });
 
     const response = await Promise.race([
-      POST(request, { params: Promise.resolve({ path: ["chat", "completions"] }) }),
+      POST(request, { params: Promise.resolve({ path: ["v1", "chat", "completions"] }) }),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("failover retry blocked by stream capture")), 2_000)
       ),
@@ -1534,7 +1791,7 @@ describe("proxy route upstream selection", () => {
       }),
     });
 
-    const response = await POST(request, { params: Promise.resolve({ path: ["messages"] }) });
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
 
     expect(response.status).toBe(200);
 
@@ -1554,12 +1811,33 @@ describe("proxy route upstream selection", () => {
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(tier1Upstream);
   });
 
-  it("should return 400 when model is missing", async () => {
+  it("should return 403 when no authorized upstream matches path capability", async () => {
     const { db } = await import("@/lib/db");
+    const __mockLogger = (
+      (await import("@/lib/utils/logger")) as unknown as {
+        __mockLogger: { warn: ReturnType<typeof vi.fn> };
+      }
+    ).__mockLogger;
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
     ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-anthropic",
+        name: "anthropic-one",
+        providerType: "anthropic",
+        routeCapabilities: ["anthropic_messages"],
+        baseUrl: "https://api.anthropic.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
 
     const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
       method: "POST",
@@ -1572,14 +1850,115 @@ describe("proxy route upstream selection", () => {
       }),
     });
 
-    const response = await POST(request, { params: Promise.resolve({ path: ["messages"] }) });
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
     const data = await response.json();
 
-    expect(response.status).toBe(400);
-    expect(data).toEqual({ error: "Missing required field: model" });
+    expect(response.status).toBe(403);
+    expect(data).toEqual({
+      error: expect.objectContaining({
+        code: "NO_AUTHORIZED_UPSTREAMS",
+        reason: "NO_AUTHORIZED_UPSTREAMS",
+        did_send_upstream: false,
+      }),
+    });
+    expect(__mockLogger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "v1/messages",
+        matchedRouteCapability: "anthropic_messages",
+        authorizedCapabilityCandidatesCount: 0,
+      }),
+      "no authorized upstream for matched route capability"
+    );
   });
 
-  it("should return 400 when no upstream group configured for model", async () => {
+  it("should continue routing even when health status is unhealthy", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const __mockLogger = (
+      (await import("@/lib/utils/logger")) as unknown as {
+        __mockLogger: { warn: ReturnType<typeof vi.fn> };
+      }
+    ).__mockLogger;
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-anthropic" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-anthropic",
+        name: "anthropic-one",
+        providerType: "anthropic",
+        routeCapabilities: ["anthropic_messages"],
+        baseUrl: "https://api.anthropic.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([
+      {
+        upstreamId: "up-anthropic",
+        isHealthy: false,
+      },
+    ]);
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: {
+        id: "up-anthropic",
+        name: "anthropic-one",
+        providerType: "anthropic",
+        baseUrl: "https://api.anthropic.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+      },
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: null,
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
+
+    expect(response.status).toBe(200);
+    expect(selectFromProviderType).toHaveBeenCalledWith(["up-anthropic"], undefined, undefined);
+    expect(forwardRequest).toHaveBeenCalledTimes(1);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "up-anthropic",
+      })
+    );
+    expect(__mockLogger.warn).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        matchedRouteCapability: "anthropic_messages",
+      }),
+      "all authorized upstreams are unhealthy for matched route capability"
+    );
+  });
+
+  it("should return service unavailable when no healthy candidate remains", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
     const { routeByModel } = await import("@/lib/services/model-router");
@@ -1622,7 +2001,7 @@ describe("proxy route upstream selection", () => {
       }),
     });
 
-    const response = await POST(request, { params: Promise.resolve({ path: ["messages"] }) });
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
     const data = await response.json();
 
     // Should return unified error format without exposing model name
@@ -1631,7 +2010,7 @@ describe("proxy route upstream selection", () => {
       error: expect.objectContaining({
         message: "\u670d\u52a1\u6682\u65f6\u4e0d\u53ef\u7528\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5",
         type: "service_unavailable",
-        code: "NO_UPSTREAMS_CONFIGURED",
+        code: "SERVICE_UNAVAILABLE",
         reason: "NO_HEALTHY_CANDIDATES",
         did_send_upstream: false,
       }),
@@ -1701,7 +2080,7 @@ describe("proxy route upstream selection", () => {
       }),
     });
 
-    const response = await POST(request, { params: Promise.resolve({ path: ["messages"] }) });
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
     const data = await response.json();
 
     // Should return unified error format without exposing upstream name
@@ -1849,7 +2228,7 @@ describe("proxy route upstream selection", () => {
       }),
     });
 
-    const response = await POST(request, { params: Promise.resolve({ path: ["messages"] }) });
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("text/event-stream");
@@ -1961,17 +2340,12 @@ describe("proxy route upstream selection", () => {
       });
 
       const response = await POST(request, {
-        params: Promise.resolve({ path: ["chat", "completions"] }),
+        params: Promise.resolve({ path: ["v1", "chat", "completions"] }),
       });
 
       expect(response.status).toBe(200);
       // Verify selectFromProviderType was called with allowedUpstreamIds
-      expect(selectFromProviderType).toHaveBeenCalledWith(
-        "openai",
-        undefined, // excludeIds
-        ["up-privnode"], // allowedUpstreamIds - only authorized upstreams
-        undefined // affinityContext
-      );
+      expect(selectFromProviderType).toHaveBeenCalledWith(["up-privnode"], undefined, undefined);
       // Verify the request was forwarded to privnode, not duck
       expect(prepareUpstreamForProxy).toHaveBeenCalledWith(privnodeUpstream);
       expect(markHealthy).toHaveBeenCalledWith("up-privnode", 100);
@@ -2042,7 +2416,7 @@ describe("proxy route upstream selection", () => {
       });
 
       const response = await POST(request, {
-        params: Promise.resolve({ path: ["chat", "completions"] }),
+        params: Promise.resolve({ path: ["v1", "chat", "completions"] }),
       });
       const data = await response.json();
 
@@ -2174,7 +2548,7 @@ describe("proxy route upstream selection", () => {
       });
 
       const response = await POST(request, {
-        params: Promise.resolve({ path: ["chat", "completions"] }),
+        params: Promise.resolve({ path: ["v1", "chat", "completions"] }),
       });
 
       expect(response.status).toBe(200);
@@ -2182,16 +2556,14 @@ describe("proxy route upstream selection", () => {
       expect(selectFromProviderType).toHaveBeenCalledTimes(2);
       expect(selectFromProviderType).toHaveBeenNthCalledWith(
         1,
-        "openai",
-        undefined,
         ["up-privnode", "up-rightcode"],
+        undefined,
         undefined
       );
       expect(selectFromProviderType).toHaveBeenNthCalledWith(
         2,
-        "openai",
+        ["up-privnode", "up-rightcode"],
         ["up-privnode"], // excludeIds - failed upstream
-        ["up-privnode", "up-rightcode"], // allowedUpstreamIds
         undefined // affinityContext
       );
       expect(markUnhealthy).toHaveBeenCalledWith("up-privnode", "HTTP 500 error");

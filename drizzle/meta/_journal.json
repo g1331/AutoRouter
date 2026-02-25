@@ -71,6 +71,20 @@
       "when": 1770736450650,
       "tag": "0010_mysterious_menace",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1772090000000,
+      "tag": "0011_path_route_capabilities",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1772017271648,
+      "tag": "0012_remove_provider_type",
+      "breakpoints": true
     }
   ]
 }

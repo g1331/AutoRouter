@@ -9,6 +9,12 @@ import {
   type UpstreamUpdateInput,
 } from "@/lib/services/upstream-service";
 import { transformUpstreamToApi } from "@/lib/utils/api-transformers";
+import {
+  ROUTE_CAPABILITY_VALUES,
+  normalizeRouteCapabilities,
+  areSingleProviderCapabilities,
+  type RouteCapability,
+} from "@/lib/route-capabilities";
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -40,22 +46,32 @@ function normalizeDurationToMs(
   return value > secondsUpperBound ? value : value * 1000;
 }
 
-const updateUpstreamSchema = z.object({
-  name: z.string().min(1).max(64).optional(),
-  base_url: z.string().url().optional(),
-  api_key: z.string().min(1).optional(),
-  is_default: z.boolean().optional(),
-  timeout: z.number().int().positive().optional(),
-  is_active: z.boolean().optional(),
-  config: z.string().nullable().optional(),
-  weight: z.number().int().min(1).max(100).optional(),
-  priority: z.number().int().min(0).optional(),
-  provider_type: z.enum(["anthropic", "openai", "google", "custom"]).optional(),
-  allowed_models: z.array(z.string()).nullable().optional(),
-  model_redirects: z.record(z.string(), z.string()).nullable().optional(),
-  circuit_breaker_config: circuitBreakerConfigSchema.nullable().optional(),
-  affinity_migration: affinityMigrationConfigSchema.nullable().optional(),
-});
+const updateUpstreamSchema = z
+  .object({
+    name: z.string().min(1).max(64).optional(),
+    base_url: z.string().url().optional(),
+    api_key: z.string().min(1).optional(),
+    is_default: z.boolean().optional(),
+    timeout: z.number().int().positive().optional(),
+    is_active: z.boolean().optional(),
+    config: z.string().nullable().optional(),
+    weight: z.number().int().min(1).max(100).optional(),
+    priority: z.number().int().min(0).optional(),
+    route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)).nullable().optional(),
+    allowed_models: z.array(z.string()).nullable().optional(),
+    model_redirects: z.record(z.string(), z.string()).nullable().optional(),
+    circuit_breaker_config: circuitBreakerConfigSchema.nullable().optional(),
+    affinity_migration: affinityMigrationConfigSchema.nullable().optional(),
+  })
+  .refine(
+    (data) =>
+      !data.route_capabilities ||
+      areSingleProviderCapabilities(data.route_capabilities as RouteCapability[]),
+    {
+      message: "All route capabilities must belong to the same provider",
+      path: ["route_capabilities"],
+    }
+  );
 
 /**
  * GET /api/admin/upstreams/[id] - Get upstream details
@@ -105,7 +121,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     if (validated.config !== undefined) input.config = validated.config;
     if (validated.weight !== undefined) input.weight = validated.weight;
     if (validated.priority !== undefined) input.priority = validated.priority;
-    if (validated.provider_type !== undefined) input.providerType = validated.provider_type;
+    if (validated.route_capabilities !== undefined) {
+      input.routeCapabilities = normalizeRouteCapabilities(validated.route_capabilities ?? []);
+    }
     if (validated.allowed_models !== undefined) input.allowedModels = validated.allowed_models;
     if (validated.model_redirects !== undefined) input.modelRedirects = validated.model_redirects;
     if (validated.circuit_breaker_config !== undefined) {

@@ -8,26 +8,37 @@ import {
 } from "@/lib/services/upstream-service";
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
+import {
+  ROUTE_CAPABILITY_VALUES,
+  normalizeRouteCapabilities,
+  areSingleProviderCapabilities,
+  type RouteCapability,
+} from "@/lib/route-capabilities";
 
 const log = createLogger("admin-upstreams");
 
-const testUpstreamSchema = z.object({
-  name: z.string().min(1).max(64).optional(),
-  provider_type: z.enum(["openai", "anthropic", "google", "custom"]),
-  base_url: z.string().url("Base URL must be a valid URL"),
-  api_key: z
-    .string()
-    .trim()
-    .min(10, "API key must be at least 10 characters")
-    .max(512, "API key must not exceed 512 characters"),
-  timeout: z
-    .number()
-    .int("Timeout must be an integer")
-    .positive("Timeout must be greater than 0")
-    .max(300, "Timeout must not exceed 300 seconds")
-    .default(10)
-    .optional(),
-});
+const testUpstreamSchema = z
+  .object({
+    name: z.string().min(1).max(64).optional(),
+    route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)).min(1),
+    base_url: z.string().url("Base URL must be a valid URL"),
+    api_key: z
+      .string()
+      .trim()
+      .min(10, "API key must be at least 10 characters")
+      .max(512, "API key must not exceed 512 characters"),
+    timeout: z
+      .number()
+      .int("Timeout must be an integer")
+      .positive("Timeout must be greater than 0")
+      .max(300, "Timeout must not exceed 300 seconds")
+      .default(10)
+      .optional(),
+  })
+  .refine((data) => areSingleProviderCapabilities(data.route_capabilities as RouteCapability[]), {
+    message: "All route capabilities must belong to the same provider",
+    path: ["route_capabilities"],
+  });
 
 /**
  * POST /api/admin/upstreams/test - Test upstream configuration before saving
@@ -127,7 +138,7 @@ export async function POST(request: NextRequest) {
     const validated = testUpstreamSchema.parse(body);
 
     const input: TestUpstreamInput = {
-      providerType: validated.provider_type,
+      routeCapabilities: normalizeRouteCapabilities(validated.route_capabilities),
       baseUrl: validated.base_url,
       apiKey: validated.api_key,
       timeout: validated.timeout,

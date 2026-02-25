@@ -73,14 +73,6 @@ export function DeleteUpstreamDialog({ upstream, open, onClose }: DeleteUpstream
               </div>
               <div className="flex justify-between">
                 <span className="type-label-large text-[rgb(var(--md-sys-color-on-error-container))]">
-                  {t("provider")}:
-                </span>
-                <span className="type-body-medium text-[rgb(var(--md-sys-color-on-error-container))]">
-                  {upstream.provider_type}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="type-label-large text-[rgb(var(--md-sys-color-on-error-container))]">
                   {t("baseUrl")}:
                 </span>
                 <code className="type-body-medium font-mono text-[rgb(var(--md-sys-color-on-error-container))] max-w-xs text-right truncate">

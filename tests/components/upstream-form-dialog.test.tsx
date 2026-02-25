@@ -36,7 +36,6 @@ describe("UpstreamFormDialog", () => {
   const mockUpstream: Upstream = {
     id: "upstream-1",
     name: "OpenAI Production",
-    provider_type: "openai",
     base_url: "https://api.openai.com/v1",
     api_key_masked: "sk-***1234",
     description: "Production OpenAI API",
@@ -45,6 +44,7 @@ describe("UpstreamFormDialog", () => {
     is_active: true,
     weight: 1,
     priority: 0,
+    route_capabilities: [],
     allowed_models: null,
     model_redirects: null,
     health_status: null,
@@ -83,14 +83,13 @@ describe("UpstreamFormDialog", () => {
       expect(screen.getByPlaceholderText("upstreamDescriptionPlaceholder")).toBeInTheDocument();
     });
 
-    it("renders provider select with options", () => {
+    it("renders route capability selector", () => {
       render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
         wrapper: Wrapper,
       });
 
-      // Multiple comboboxes exist (provider and group), just verify they're rendered
-      const comboboxes = screen.getAllByRole("combobox");
-      expect(comboboxes.length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText("capabilityCodexResponses")).toBeInTheDocument();
+      expect(screen.getByText("capabilityOpenAIChatCompatible")).toBeInTheDocument();
     });
 
     it("renders cancel and create buttons", () => {
@@ -163,12 +162,42 @@ describe("UpstreamFormDialog", () => {
           description: null,
           priority: 0,
           weight: 1,
-          provider_type: "openai",
+          route_capabilities: [],
           allowed_models: null,
           model_redirects: null,
           circuit_breaker_config: null,
           affinity_migration: null,
         });
+      });
+    });
+
+    it("submits selected route capabilities in create mode", async () => {
+      mockCreateMutateAsync.mockResolvedValueOnce({});
+
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("upstreamNamePlaceholder"), {
+        target: { value: "CLI Router Upstream" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("baseUrlPlaceholder"), {
+        target: { value: "https://api.example.com/v1" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("apiKeyPlaceholder"), {
+        target: { value: "sk-test-key" },
+      });
+
+      fireEvent.click(screen.getByText("capabilityCodexResponses"));
+      fireEvent.click(screen.getByText("capabilityOpenAIChatCompatible"));
+      fireEvent.click(screen.getByText("create"));
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            route_capabilities: ["codex_responses", "openai_chat_compatible"],
+          })
+        );
       });
     });
 
@@ -197,6 +226,26 @@ describe("UpstreamFormDialog", () => {
   });
 
   describe("Edit Mode", () => {
+    it("echoes selected route capabilities in edit mode", () => {
+      const capabilityUpstream: Upstream = {
+        ...mockUpstream,
+        route_capabilities: ["codex_responses", "openai_chat_compatible"],
+      };
+
+      render(
+        <UpstreamFormDialog
+          upstream={capabilityUpstream}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      expect(screen.getByText("capabilityCodexResponses")).toBeInTheDocument();
+      expect(screen.getByText("capabilityOpenAIChatCompatible")).toBeInTheDocument();
+      expect(screen.getAllByText("selected").length).toBeGreaterThanOrEqual(2);
+    });
+
     it("renders edit dialog title when upstream provided", () => {
       render(
         <UpstreamFormDialog upstream={mockUpstream} open={true} onOpenChange={mockOnOpenChange} />,
@@ -262,7 +311,7 @@ describe("UpstreamFormDialog", () => {
             description: "Production OpenAI API",
             priority: 0,
             weight: 1,
-            provider_type: "openai",
+            route_capabilities: [],
             allowed_models: null,
             model_redirects: null,
             circuit_breaker_config: null,
@@ -296,7 +345,7 @@ describe("UpstreamFormDialog", () => {
             description: "Production OpenAI API",
             priority: 0,
             weight: 1,
-            provider_type: "openai",
+            route_capabilities: [],
             allowed_models: null,
             model_redirects: null,
             circuit_breaker_config: null,

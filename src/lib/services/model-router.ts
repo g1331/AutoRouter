@@ -1,10 +1,11 @@
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db, upstreams, type Upstream } from "../db";
 import {
   getCircuitBreakerState,
   CircuitBreakerStateEnum,
   DEFAULT_CONFIG as CB_DEFAULT_CONFIG,
 } from "./circuit-breaker";
+import { getPrimaryProviderByCapabilities } from "@/lib/route-capabilities";
 
 /**
  * Valid provider types for model-based routing
@@ -268,12 +269,14 @@ export async function getUpstreamsByProviderType(providerType: ProviderType): Pr
   upstreams: Upstream[];
   routingType: "provider_type";
 }> {
-  const providerTypeUpstreams = await db.query.upstreams.findMany({
-    where: and(eq(upstreams.providerType, providerType), eq(upstreams.isActive, true)),
+  const activeUpstreams = await db.query.upstreams.findMany({
+    where: eq(upstreams.isActive, true),
   });
 
   return {
-    upstreams: providerTypeUpstreams,
+    upstreams: activeUpstreams.filter(
+      (upstream) => getPrimaryProviderByCapabilities(upstream.routeCapabilities) === providerType
+    ),
     routingType: "provider_type",
   };
 }

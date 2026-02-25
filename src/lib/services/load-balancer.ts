@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { db, upstreams, type Upstream, type CircuitBreakerState } from "../db";
 import {
   acquireCircuitBreakerPermit,
@@ -8,7 +8,13 @@ import {
   CircuitBreakerStateEnum,
 } from "./circuit-breaker";
 import { VALID_PROVIDER_TYPES, type ProviderType } from "./model-router";
-import { affinityStore, shouldMigrate, type AffinityMigrationConfig } from "./session-affinity";
+import {
+  affinityStore,
+  shouldMigrate,
+  type AffinityMigrationConfig,
+  type AffinityScope,
+} from "./session-affinity";
+import { getPrimaryProviderByCapabilities } from "@/lib/route-capabilities";
 
 // Re-export for convenience
 export { VALID_PROVIDER_TYPES };
@@ -28,8 +34,8 @@ export class NoHealthyUpstreamsError extends Error {
  * Error thrown when API key has no authorized upstreams for provider type.
  */
 export class NoAuthorizedUpstreamsError extends NoHealthyUpstreamsError {
-  constructor(providerType: ProviderType) {
-    super(`No authorized upstreams found for provider type: ${providerType}`);
+  constructor(message: string = "No authorized upstreams found for current route capability") {
+    super(message);
     this.name = "NoAuthorizedUpstreamsError";
   }
 }
@@ -57,14 +63,20 @@ export interface UpstreamWithCircuitBreaker {
 /**
  * Selection result with metadata for observability.
  */
-export interface ProviderTypeSelectionResult {
+export interface UpstreamSelectionResult {
   upstream: Upstream;
-  providerType: ProviderType;
   selectedTier: number;
   circuitBreakerFiltered: number;
   totalCandidates: number;
   affinityHit?: boolean; // Whether session affinity was used
   affinityMigrated?: boolean; // Whether session was migrated to higher priority upstream
+}
+
+export type ProviderTypeSelectionResult = UpstreamSelectionResult;
+
+export interface SelectFromProviderOptions {
+  candidateUpstreamIds?: string[];
+  affinityScope?: AffinityScope;
 }
 
 // In-memory state for load balancing (per-instance, not distributed)
@@ -253,27 +265,72 @@ function selectWeightedWithHealthScore(
 export async function getUpstreamsByProviderType(
   providerType: ProviderType
 ): Promise<UpstreamWithCircuitBreaker[]> {
-  const providerTypeUpstreams = await db.query.upstreams.findMany({
-    where: and(eq(upstreams.providerType, providerType), eq(upstreams.isActive, true)),
+  const activeUpstreams = await db.query.upstreams.findMany({
+    where: eq(upstreams.isActive, true),
     with: {
       health: true,
     },
   });
 
   return Promise.all(
-    providerTypeUpstreams.map(async (upstream) => {
-      const cbState = await getCircuitBreakerState(upstream.id);
-      const isHealthy = upstream.health?.isHealthy ?? true;
-      const circuitState = cbState?.state ?? null;
+    activeUpstreams
+      .filter(
+        (upstream) => getPrimaryProviderByCapabilities(upstream.routeCapabilities) === providerType
+      )
+      .map(async (upstream) => {
+        const cbState = await getCircuitBreakerState(upstream.id);
+        const isHealthy = upstream.health?.isHealthy ?? true;
+        const circuitState = cbState?.state ?? null;
 
-      return {
-        upstream,
-        isHealthy,
-        latencyMs: upstream.health?.latencyMs ?? null,
-        circuitState,
-        circuitBreaker: cbState,
-      };
-    })
+        return {
+          upstream,
+          isHealthy,
+          latencyMs: upstream.health?.latencyMs ?? null,
+          circuitState,
+          circuitBreaker: cbState,
+        };
+      })
+  );
+}
+
+/**
+ * Get active upstreams by explicit upstream IDs with circuit breaker status.
+ */
+async function getUpstreamsByIds(upstreamIds: string[]): Promise<UpstreamWithCircuitBreaker[]> {
+  if (upstreamIds.length === 0) {
+    return [];
+  }
+
+  const idSet = new Set(upstreamIds);
+  const matchedUpstreams = await db.query.upstreams.findMany({
+    where: and(eq(upstreams.isActive, true), inArray(upstreams.id, upstreamIds)),
+    with: {
+      health: true,
+    },
+  });
+
+  const sortedUpstreams = matchedUpstreams.sort((a, b) => {
+    const aIndex = upstreamIds.indexOf(a.id);
+    const bIndex = upstreamIds.indexOf(b.id);
+    return aIndex - bIndex;
+  });
+
+  return Promise.all(
+    sortedUpstreams
+      .filter((upstream) => idSet.has(upstream.id))
+      .map(async (upstream) => {
+        const cbState = await getCircuitBreakerState(upstream.id);
+        const isHealthy = upstream.health?.isHealthy ?? true;
+        const circuitState = cbState?.state ?? null;
+
+        return {
+          upstream,
+          isHealthy,
+          latencyMs: upstream.health?.latencyMs ?? null,
+          circuitState,
+          circuitBreaker: cbState,
+        };
+      })
   );
 }
 
@@ -327,14 +384,59 @@ export async function selectFromProviderType(
     apiKeyId: string;
     sessionId: string;
     contentLength: number;
-  }
+    affinityScope?: AffinityScope;
+  },
+  options?: SelectFromProviderOptions
 ): Promise<ProviderTypeSelectionResult> {
   if (!VALID_PROVIDER_TYPES.includes(providerType)) {
     throw new Error(`Invalid provider type: ${providerType}`);
   }
 
-  const allUpstreams = await getUpstreamsByProviderType(providerType);
+  const allUpstreams = options?.candidateUpstreamIds
+    ? await getUpstreamsByIds(options.candidateUpstreamIds)
+    : await getUpstreamsByProviderType(providerType);
 
+  return selectFromUpstreamPool(
+    allUpstreams,
+    excludeIds,
+    allowedUpstreamIds,
+    affinityContext,
+    options?.affinityScope
+  );
+}
+
+export async function selectFromUpstreamCandidates(
+  candidateUpstreamIds: string[],
+  excludeIds?: string[],
+  affinityContext?: {
+    apiKeyId: string;
+    sessionId: string;
+    contentLength: number;
+    affinityScope?: AffinityScope;
+  }
+): Promise<UpstreamSelectionResult> {
+  const allUpstreams = await getUpstreamsByIds(candidateUpstreamIds);
+  return selectFromUpstreamPool(
+    allUpstreams,
+    excludeIds,
+    undefined,
+    affinityContext,
+    affinityContext?.affinityScope
+  );
+}
+
+async function selectFromUpstreamPool(
+  allUpstreams: UpstreamWithCircuitBreaker[],
+  excludeIds?: string[],
+  allowedUpstreamIds?: string[],
+  affinityContext?: {
+    apiKeyId: string;
+    sessionId: string;
+    contentLength: number;
+    affinityScope?: AffinityScope;
+  },
+  affinityScopeHint?: AffinityScope
+): Promise<UpstreamSelectionResult> {
   // Filter by allowed upstream IDs (API key authorization)
   let filteredUpstreams = allUpstreams;
   if (allowedUpstreamIds && allowedUpstreamIds.length > 0) {
@@ -345,13 +447,23 @@ export async function selectFromProviderType(
   const totalCandidates = filteredUpstreams.length;
 
   if (totalCandidates === 0) {
-    throw new NoAuthorizedUpstreamsError(providerType);
+    throw new NoAuthorizedUpstreamsError();
   }
 
   // Check session affinity if context provided
   if (affinityContext) {
     const { apiKeyId, sessionId, contentLength } = affinityContext;
-    const affinityEntry = affinityStore.get(apiKeyId, providerType, sessionId);
+    const affinityScope = affinityContext.affinityScope ?? affinityScopeHint;
+    if (!affinityScope) {
+      const result = await performTieredSelection(filteredUpstreams, excludeIds, totalCandidates);
+      return {
+        ...result,
+        affinityHit: false,
+        affinityMigrated: false,
+      };
+    }
+
+    const affinityEntry = affinityStore.get(apiKeyId, affinityScope, sessionId);
 
     if (affinityEntry) {
       // Check if bound upstream is still available and not excluded
@@ -381,7 +493,7 @@ export async function selectFromProviderType(
             await acquireCircuitBreakerPermit(migrationTarget.upstream.id);
             affinityStore.set(
               apiKeyId,
-              providerType,
+              affinityScope,
               sessionId,
               migrationTarget.upstream.id,
               contentLength
@@ -389,7 +501,6 @@ export async function selectFromProviderType(
 
             return {
               upstream: migrationTarget.upstream,
-              providerType,
               selectedTier: migrationTarget.upstream.priority,
               circuitBreakerFiltered: 0,
               totalCandidates,
@@ -409,7 +520,6 @@ export async function selectFromProviderType(
           await acquireCircuitBreakerPermit(boundUpstream.upstream.id);
           return {
             upstream: boundUpstream.upstream,
-            providerType,
             selectedTier: boundUpstream.upstream.priority,
             circuitBreakerFiltered: 0,
             totalCandidates,
@@ -425,15 +535,10 @@ export async function selectFromProviderType(
       }
 
       // Bound upstream unavailable, need to reselect and update cache
-      const result = await performTieredSelection(
-        filteredUpstreams,
-        providerType,
-        excludeIds,
-        totalCandidates
-      );
+      const result = await performTieredSelection(filteredUpstreams, excludeIds, totalCandidates);
 
       // Update affinity cache with new selection
-      affinityStore.set(apiKeyId, providerType, sessionId, result.upstream.id, contentLength);
+      affinityStore.set(apiKeyId, affinityScope, sessionId, result.upstream.id, contentLength);
 
       return {
         ...result,
@@ -444,17 +549,15 @@ export async function selectFromProviderType(
   }
 
   // No affinity or cache miss - perform normal tiered selection
-  const result = await performTieredSelection(
-    filteredUpstreams,
-    providerType,
-    excludeIds,
-    totalCandidates
-  );
+  const result = await performTieredSelection(filteredUpstreams, excludeIds, totalCandidates);
 
   // Update affinity cache if context provided
   if (affinityContext) {
     const { apiKeyId, sessionId, contentLength } = affinityContext;
-    affinityStore.set(apiKeyId, providerType, sessionId, result.upstream.id, contentLength);
+    const affinityScope = affinityContext.affinityScope ?? affinityScopeHint;
+    if (affinityScope) {
+      affinityStore.set(apiKeyId, affinityScope, sessionId, result.upstream.id, contentLength);
+    }
   }
 
   return {
@@ -497,10 +600,9 @@ function evaluateMigration(
  */
 async function performTieredSelection(
   upstreams: UpstreamWithCircuitBreaker[],
-  providerType: ProviderType,
   excludeIds: string[] | undefined,
   totalCandidates: number
-): Promise<Omit<ProviderTypeSelectionResult, "affinityHit" | "affinityMigrated">> {
+): Promise<Omit<UpstreamSelectionResult, "affinityHit" | "affinityMigrated">> {
   // Group by priority (ascending)
   const tierMap = new Map<number, UpstreamWithCircuitBreaker[]>();
   for (const u of upstreams) {
@@ -538,7 +640,6 @@ async function performTieredSelection(
 
           return {
             upstream: selected.upstream,
-            providerType,
             selectedTier: tier,
             circuitBreakerFiltered: totalCircuitBreakerFiltered,
             totalCandidates,
@@ -562,8 +663,7 @@ async function performTieredSelection(
 
   // All tiers exhausted
   throw new NoHealthyUpstreamsError(
-    `No healthy upstreams available for provider type: ${providerType}` +
-      ` across all priority tiers` +
+    `No healthy upstreams available across all priority tiers` +
       (excludeIds?.length ? ` (excluded: ${excludeIds.length})` : "")
   );
 }

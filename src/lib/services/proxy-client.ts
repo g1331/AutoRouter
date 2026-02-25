@@ -1,6 +1,7 @@
 import type { Upstream } from "../db";
 import { decrypt } from "../utils/encryption";
 import { createLogger } from "../utils/logger";
+import { getPrimaryProviderByCapabilities } from "@/lib/route-capabilities";
 
 const log = createLogger("proxy-client");
 
@@ -529,7 +530,7 @@ export function prepareUpstreamForProxy(upstream: Upstream): UpstreamForProxy {
   return {
     id: upstream.id,
     name: upstream.name,
-    providerType: upstream.providerType,
+    providerType: getPrimaryProviderByCapabilities(upstream.routeCapabilities) ?? "unknown",
     baseUrl: upstream.baseUrl,
     apiKey: decrypt(upstream.apiKeyEncrypted),
     timeout: upstream.timeout,

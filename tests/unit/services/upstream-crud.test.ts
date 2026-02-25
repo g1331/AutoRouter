@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { maskApiKey, UpstreamNotFoundError } from "@/lib/services/upstream-crud";
+import {
+  maskApiKey,
+  UpstreamNotFoundError,
+  type UpstreamUpdateInput,
+} from "@/lib/services/upstream-crud";
 
 // Type helpers for mocking Drizzle ORM query builder
 type MockInsertChain = {
@@ -214,7 +218,7 @@ describe("upstream-crud", () => {
       expect(result.weight).toBe(5);
     });
 
-    it("should create upstream with model-based routing fields", async () => {
+    it("should create upstream with routing fields", async () => {
       const { createUpstream } = await import("@/lib/services/upstream-crud");
       const { db } = await import("@/lib/db");
 
@@ -233,6 +237,7 @@ describe("upstream-crud", () => {
           priority: 0,
           weight: 1,
           providerType: "openai",
+          routeCapabilities: ["openai_chat_compatible"],
           allowedModels: ["gpt-4", "gpt-4-turbo"],
           modelRedirects: { "gpt-4-turbo": "gpt-4" },
           createdAt: new Date(),
@@ -248,14 +253,14 @@ describe("upstream-crud", () => {
 
       const result = await createUpstream({
         name: "test-upstream",
-        providerType: "openai",
         baseUrl: "https://api.openai.com",
         apiKey: "sk-test-key",
+        routeCapabilities: ["openai_chat_compatible"],
         allowedModels: ["gpt-4", "gpt-4-turbo"],
         modelRedirects: { "gpt-4-turbo": "gpt-4" },
       });
 
-      expect(result.providerType).toBe("openai");
+      expect(result.routeCapabilities).toEqual(["openai_chat_compatible"]);
       expect(result.allowedModels).toEqual(["gpt-4", "gpt-4-turbo"]);
       expect(result.modelRedirects).toEqual({ "gpt-4-turbo": "gpt-4" });
     });
@@ -370,6 +375,63 @@ describe("upstream-crud", () => {
 
       expect(result.priority).toBe(5);
       expect(result.weight).toBe(10);
+    });
+
+    it("should normalize route capabilities when updating upstream", async () => {
+      const { updateUpstream } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValueOnce({
+        id: "test-id",
+        name: "test-upstream",
+        baseUrl: "https://api.openai.com",
+        apiKeyEncrypted: "encrypted:sk-test-key",
+      } as unknown as PartialUpstream);
+
+      const mockReturning = vi.fn().mockResolvedValue([
+        {
+          id: "test-id",
+          name: "test-upstream",
+          baseUrl: "https://api.openai.com",
+          apiKeyEncrypted: "encrypted:sk-test-key",
+          isDefault: false,
+          timeout: 60,
+          isActive: true,
+          config: null,
+          priority: 0,
+          weight: 1,
+          routeCapabilities: ["openai_chat_compatible"],
+          allowedModels: null,
+          modelRedirects: null,
+          affinityMigration: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+      const set = vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          returning: mockReturning,
+        }),
+      });
+      vi.mocked(db.update).mockReturnValue({
+        set,
+      } as unknown as MockUpdateChain);
+
+      const result = await updateUpstream("test-id", {
+        routeCapabilities: [
+          " openai_chat_compatible ",
+          "openai_chat_compatible",
+          "invalid_capability",
+          "",
+        ],
+      } as unknown as UpstreamUpdateInput);
+
+      expect(set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          routeCapabilities: ["openai_chat_compatible"],
+        })
+      );
+      expect(result.routeCapabilities).toEqual(["openai_chat_compatible"]);
     });
 
     it("should throw UpstreamNotFoundError if upstream does not exist", async () => {
