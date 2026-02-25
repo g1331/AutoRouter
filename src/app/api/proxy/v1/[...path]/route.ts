@@ -662,7 +662,24 @@ function wrapStreamWithConnectionTracking(
   abortSignal?: AbortSignal
 ): ReadableStream<Uint8Array> {
   let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  let streamCompleted = false;
+  let disconnectWarnLogged = false;
+  let connectionReleased = false;
   const encoder = new TextEncoder();
+
+  const releaseConnectionOnce = () => {
+    if (!connectionReleased) {
+      releaseConnection(upstreamId);
+      connectionReleased = true;
+    }
+  };
+
+  const warnDownstreamDisconnect = (message: string) => {
+    if (!disconnectWarnLogged) {
+      log.warn({ upstreamId }, message);
+      disconnectWarnLogged = true;
+    }
+  };
 
   return new ReadableStream({
     async start(controller) {
@@ -670,9 +687,14 @@ function wrapStreamWithConnectionTracking(
 
       // Set up abort listener if signal provided
       const abortHandler = () => {
-        log.warn({ upstreamId }, "client disconnected, cancelling upstream stream");
-        reader?.cancel("Client disconnected");
-        releaseConnection(upstreamId);
+        if (streamCompleted) {
+          return;
+        }
+        warnDownstreamDisconnect(
+          "client disconnected before stream completion, cancelling upstream stream"
+        );
+        void reader?.cancel("Client disconnected").catch(() => undefined);
+        releaseConnectionOnce();
         try {
           controller.close();
         } catch {
@@ -688,26 +710,33 @@ function wrapStreamWithConnectionTracking(
         while (true) {
           // Check if client disconnected
           if (abortSignal?.aborted) {
-            log.warn({ upstreamId }, "client already disconnected, stopping stream");
+            warnDownstreamDisconnect(
+              "client already disconnected before stream completion, stopping stream"
+            );
             break;
           }
 
           const { done, value } = await reader.read();
           if (done) {
+            streamCompleted = true;
             break;
           }
           controller.enqueue(value);
         }
         controller.close();
-        // Stream completed successfully - release connection, mark healthy, record circuit breaker success
-        releaseConnection(upstreamId);
-        void markHealthy(upstreamId, 100);
-        void recordSuccess(upstreamId);
+        releaseConnectionOnce();
+        if (streamCompleted) {
+          // Stream completed successfully - mark healthy and record circuit breaker success.
+          void markHealthy(upstreamId, 100);
+          void recordSuccess(upstreamId);
+        }
       } catch (error) {
         // Check if this is due to client disconnect
         if (abortSignal?.aborted) {
-          log.warn({ upstreamId }, "stream error due to client disconnect");
-          releaseConnection(upstreamId);
+          warnDownstreamDisconnect(
+            "stream read interrupted by client disconnect before completion"
+          );
+          releaseConnectionOnce();
           return;
         }
 
@@ -722,7 +751,7 @@ function wrapStreamWithConnectionTracking(
         }
 
         // Release connection, mark unhealthy, record circuit breaker failure
-        releaseConnection(upstreamId);
+        releaseConnectionOnce();
         void markUnhealthy(upstreamId, error instanceof Error ? error.message : "Stream error");
         void recordFailure(upstreamId, "stream_error");
       } finally {
@@ -736,7 +765,7 @@ function wrapStreamWithConnectionTracking(
     async cancel(reason) {
       // Propagate cancel to the upstream stream to avoid leaking work/connections.
       await reader?.cancel(reason);
-      releaseConnection(upstreamId);
+      releaseConnectionOnce();
     },
   });
 }
