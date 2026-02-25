@@ -100,10 +100,10 @@ describe("UsageChart", () => {
   };
 
   describe("Loading State", () => {
-    it("renders loading indicator when loading", () => {
+    it("renders chart skeleton when loading", () => {
       render(<UsageChart data={undefined} isLoading={true} timeRange="7d" />);
 
-      expect(screen.getByText("stats.loading")).toBeInTheDocument();
+      expect(screen.getByTestId("usage-chart-loading-skeleton")).toBeInTheDocument();
     });
 
     it("renders skeleton for total requests when loading", () => {
@@ -122,11 +122,12 @@ describe("UsageChart", () => {
       expect(screen.getByText("stats.usageDescription")).toBeInTheDocument();
     });
 
-    it("shows loading spinner animation", () => {
+    it("does not use spinner animation in loading state", () => {
       const { container } = render(<UsageChart data={undefined} isLoading={true} timeRange="7d" />);
 
       const spinner = container.querySelector(".animate-spin");
-      expect(spinner).toBeInTheDocument();
+      expect(spinner).not.toBeInTheDocument();
+      expect(screen.getByTestId("usage-chart-loading-skeleton")).toBeInTheDocument();
     });
   });
 

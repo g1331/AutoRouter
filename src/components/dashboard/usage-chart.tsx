@@ -201,10 +201,25 @@ export function UsageChart({ data, isLoading }: UsageChartProps) {
 
         <div className="h-[280px] sm:h-[320px]">
           {isLoading ? (
-            <div className="flex h-full w-full items-center justify-center">
-              <div className="text-center">
-                <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-2 border-amber-500/70 border-t-transparent" />
-                <p className="type-body-small text-muted-foreground">{t("stats.loading")}</p>
+            <div
+              data-testid="usage-chart-loading-skeleton"
+              className="flex h-full w-full flex-col gap-4 rounded-cf-sm border border-divider/75 bg-surface-300/35 p-3"
+            >
+              <div className="grid grid-cols-3 gap-2">
+                <div className="h-4 animate-pulse rounded-cf-sm bg-surface-400/70" />
+                <div className="h-4 animate-pulse rounded-cf-sm bg-surface-400/70" />
+                <div className="h-4 animate-pulse rounded-cf-sm bg-surface-400/70" />
+              </div>
+
+              <div className="grid flex-1 grid-cols-8 items-end gap-2">
+                <div className="h-[35%] animate-pulse rounded-cf-sm bg-surface-400/70" />
+                <div className="h-[52%] animate-pulse rounded-cf-sm bg-surface-400/70" />
+                <div className="h-[44%] animate-pulse rounded-cf-sm bg-surface-400/70" />
+                <div className="h-[68%] animate-pulse rounded-cf-sm bg-surface-400/70" />
+                <div className="h-[58%] animate-pulse rounded-cf-sm bg-surface-400/70" />
+                <div className="h-[76%] animate-pulse rounded-cf-sm bg-surface-400/70" />
+                <div className="h-[63%] animate-pulse rounded-cf-sm bg-surface-400/70" />
+                <div className="h-[81%] animate-pulse rounded-cf-sm bg-surface-400/70" />
               </div>
             </div>
           ) : chartData.length === 0 ? (

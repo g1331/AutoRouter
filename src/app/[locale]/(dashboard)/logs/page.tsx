@@ -11,6 +11,70 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useRequestLogs } from "@/hooks/use-request-logs";
 
+interface LogsLoadingSkeletonProps {
+  loadingLabel: string;
+}
+
+function LogsLoadingSkeleton({ loadingLabel }: LogsLoadingSkeletonProps) {
+  return (
+    <Card variant="outlined" className="border-divider bg-surface-200/70">
+      <CardContent className="p-0">
+        <div
+          role="status"
+          aria-label={loadingLabel}
+          className="overflow-hidden rounded-cf-md border border-divider/85 bg-surface-200/55"
+        >
+          <div className="border-b border-divider bg-surface-200 px-4 py-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="h-4 w-44 animate-pulse rounded-cf-sm bg-surface-400/70" />
+              <div className="flex items-center gap-2">
+                <div className="h-4 w-20 animate-pulse rounded-cf-sm bg-surface-400/60" />
+                <div className="h-4 w-16 animate-pulse rounded-cf-sm bg-surface-400/60" />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-b border-divider bg-surface-200 px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="h-8 w-28 animate-pulse rounded-cf-sm bg-surface-300/75" />
+              <div className="h-8 w-32 animate-pulse rounded-cf-sm bg-surface-300/75" />
+              <div className="h-8 w-24 animate-pulse rounded-cf-sm bg-surface-300/75" />
+            </div>
+          </div>
+
+          <div className="border-b border-divider bg-surface-300/70 px-4 py-2.5">
+            <div className="grid grid-cols-12 gap-3">
+              <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
+              <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
+              <div className="col-span-3 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
+              <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
+              <div className="col-span-1 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
+              <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
+            </div>
+          </div>
+
+          <div className="divide-y divide-divider/70">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <div
+                key={`logs-loading-row-${index}`}
+                className="grid grid-cols-12 items-center gap-3 px-4 py-3"
+              >
+                <div className="col-span-1 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
+                <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
+                <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
+                <div className="col-span-3 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
+                <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
+                <div className="col-span-1 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
+                <div className="col-span-1 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function LogsPage() {
   const [page, setPage] = useState(1);
   const [refetchInterval, setRefetchInterval] = useState<number | false>(false);
@@ -55,14 +119,7 @@ export default function LogsPage() {
         </Card>
 
         {isLoading ? (
-          <Card variant="outlined" className="border-divider bg-surface-200/70">
-            <CardContent className="flex items-center justify-center py-16">
-              <div className="flex flex-col items-center gap-3">
-                <div className="h-9 w-9 animate-spin rounded-full border-2 border-divider border-t-amber-500" />
-                <p className="type-body-small text-muted-foreground">{tCommon("loading")}</p>
-              </div>
-            </CardContent>
-          </Card>
+          <LogsLoadingSkeleton loadingLabel={tCommon("loading")} />
         ) : (
           <>
             <LogsTable logs={data?.items || []} isLive={refetchInterval !== false} />

@@ -14,6 +14,51 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useUpstreams, useTestUpstream, useUpstreamHealth } from "@/hooks/use-upstreams";
 import type { Upstream } from "@/types/api";
 
+interface UpstreamsLoadingSkeletonProps {
+  loadingLabel: string;
+}
+
+function UpstreamsLoadingSkeleton({ loadingLabel }: UpstreamsLoadingSkeletonProps) {
+  return (
+    <Card variant="outlined" className="border-divider bg-card/90">
+      <CardContent className="p-0">
+        <div
+          role="status"
+          aria-label={loadingLabel}
+          className="overflow-hidden rounded-cf-md border border-divider/85 bg-surface-200/50"
+        >
+          <div className="border-b border-divider bg-surface-300/70 px-4 py-2.5">
+            <div className="grid grid-cols-12 gap-3">
+              <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
+              <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
+              <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
+              <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
+              <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
+              <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
+            </div>
+          </div>
+
+          <div className="divide-y divide-divider/70">
+            {Array.from({ length: 7 }).map((_, index) => (
+              <div
+                key={`upstreams-loading-row-${index}`}
+                className="grid grid-cols-12 items-center gap-3 px-4 py-3"
+              >
+                <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
+                <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
+                <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
+                <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
+                <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
+                <div className="col-span-2 h-8 animate-pulse rounded-cf-sm bg-surface-300/80" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function UpstreamsPage() {
   const [upstreamPage, setUpstreamPage] = useState(1);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -93,14 +138,7 @@ export default function UpstreamsPage() {
         </Card>
 
         {isUpstreamsLoading ? (
-          <Card variant="outlined" className="border-divider bg-card/90">
-            <CardContent className="flex items-center justify-center py-16">
-              <div className="flex flex-col items-center gap-3">
-                <div className="h-9 w-9 animate-spin rounded-full border-2 border-divider border-t-amber-500" />
-                <p className="type-body-small text-muted-foreground">{tCommon("loading")}</p>
-              </div>
-            </CardContent>
-          </Card>
+          <UpstreamsLoadingSkeleton loadingLabel={tCommon("loading")} />
         ) : (
           <>
             <UpstreamsTable
