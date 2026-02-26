@@ -13,15 +13,15 @@
 
 ## 3. 日志记录层扩展
 
-- [ ] 3.1 在 `request-logger.ts` 的 `LogRequestInput`、`StartRequestLogInput`、`UpdateRequestLogInput`、`RequestLogResponse` 接口中新增 `ttftMs` 和 `isStream` 字段
-- [ ] 3.2 更新 `logRequest`、`logRequestStart`、`updateRequestLog`、`formatLogResponse` 函数以处理新字段
-- [ ] 3.3 在 `api-transformers.ts` 中更新日志转换逻辑，将 `ttftMs` 转为 `ttft_ms`，`isStream` 转为 `is_stream`
-- [ ] 3.4 在 `types/api.ts` 的 `RequestLogResponse` 接口中新增 `ttft_ms` 和 `is_stream` 字段
+- [x] 3.1 在 `request-logger.ts` 的 `LogRequestInput`、`StartRequestLogInput`、`UpdateRequestLogInput`、`RequestLogResponse` 接口中新增 `ttftMs` 和 `isStream` 字段
+- [x] 3.2 更新 `logRequest`、`logRequestStart`、`updateRequestLog`、`formatLogResponse` 函数以处理新字段
+- [x] 3.3 在 `api-transformers.ts` 中更新日志转换逻辑，将 `ttftMs` 转为 `ttft_ms`，`isStream` 转为 `is_stream`
+- [x] 3.4 在 `types/api.ts` 的 `RequestLogResponse` 接口中新增 `ttft_ms` 和 `is_stream` 字段
 
 ## 4. 代理路由层集成
 
-- [ ] 4.1 在 `src/app/api/proxy/v1/[...path]/route.ts` 中，将 `proxyResult.ttftMs` 和 `proxyResult.isStream` 传递到 `logRequest` 和 `updateRequestLog` 调用中
-- [ ] 4.2 验证流式和非流式请求路径都正确传递了新字段
+- [x] 4.1 在 `src/app/api/proxy/v1/[...path]/route.ts` 中，将 `proxyResult.ttftMs` 和 `proxyResult.isStream` 传递到 `logRequest` 和 `updateRequestLog` 调用中
+- [x] 4.2 验证流式和非流式请求路径都正确传递了新字段
 
 ## 5. 后端统计服务扩展
 

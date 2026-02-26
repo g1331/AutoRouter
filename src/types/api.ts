@@ -342,6 +342,9 @@ export interface RequestLogResponse {
   session_id: string | null;
   affinity_hit: boolean;
   affinity_migrated: boolean;
+  // Performance metrics fields
+  ttft_ms: number | null;
+  is_stream: boolean;
   created_at: string; // ISO 8601 date string
 }
 

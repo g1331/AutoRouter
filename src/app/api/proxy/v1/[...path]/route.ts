@@ -1195,6 +1195,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               routingDecision: finalRoutingDecisionLog,
               affinityHit: isAffinityHit,
               affinityMigrated: isAffinityMigrated,
+              ttftMs: result.ttftMs ?? null,
+              isStream: true,
             });
           }
 
@@ -1223,6 +1225,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             sessionId,
             affinityHit: isAffinityHit,
             affinityMigrated: isAffinityMigrated,
+            ttftMs: result.ttftMs ?? null,
+            isStream: true,
           });
         })
         .catch((e) => log.error({ err: e, requestId }, "failed to log request"));
@@ -1344,6 +1348,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           routingDecision: finalRoutingDecisionLog,
           affinityHit: isAffinityHit,
           affinityMigrated: isAffinityMigrated,
+          isStream: false,
         });
       } else {
         await logRequest({
@@ -1371,6 +1376,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           sessionId,
           affinityHit: isAffinityHit,
           affinityMigrated: isAffinityMigrated,
+          isStream: false,
         });
       }
 

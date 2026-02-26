@@ -279,6 +279,9 @@ export interface RequestLogApiResponse {
   session_id: string | null;
   affinity_hit: boolean;
   affinity_migrated: boolean;
+  // Performance metrics fields
+  ttft_ms: number | null;
+  is_stream: boolean;
   created_at: string;
 }
 
@@ -319,6 +322,8 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
     session_id: log.sessionId,
     affinity_hit: log.affinityHit,
     affinity_migrated: log.affinityMigrated,
+    ttft_ms: log.ttftMs,
+    is_stream: log.isStream,
     created_at: log.createdAt.toISOString(),
   };
 }
