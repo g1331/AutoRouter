@@ -10,13 +10,19 @@ export interface StatsOverview {
   avgResponseTimeMs: number;
   totalTokensToday: number;
   successRateToday: number;
+  avgTtftMs: number;
+  cacheHitRate: number;
 }
+
+export type TimeseriesMetric = "requests" | "ttft" | "tps";
 
 export interface TimeseriesDataPoint {
   timestamp: Date;
   requestCount: number;
   totalTokens: number;
   avgDurationMs: number;
+  avgTtftMs?: number;
+  avgTps?: number;
 }
 
 export interface UpstreamTimeseriesData {
@@ -45,6 +51,8 @@ export interface LeaderboardUpstreamItem {
   providerType: string;
   requestCount: number;
   totalTokens: number;
+  avgTtftMs: number;
+  avgTps: number;
 }
 
 export interface LeaderboardModelItem {
@@ -102,6 +110,9 @@ export async function getOverviewStats(): Promise<StatsOverview> {
       avgDuration: avg(requestLogs.durationMs),
       totalTokens: sum(requestLogs.totalTokens),
       successCount: count(sql`CASE WHEN ${requestLogs.statusCode} BETWEEN 200 AND 299 THEN 1 END`),
+      avgTtft: avg(requestLogs.ttftMs),
+      totalCacheReadTokens: sum(requestLogs.cacheReadTokens),
+      totalPromptTokens: sum(requestLogs.promptTokens),
     })
     .from(requestLogs)
     .where(gte(requestLogs.createdAt, startOfToday));
@@ -111,21 +122,30 @@ export async function getOverviewStats(): Promise<StatsOverview> {
   const avgDuration = row?.avgDuration ? Number(row.avgDuration) : 0;
   const totalTokens = row?.totalTokens ? Number(row.totalTokens) : 0;
   const successCount = row?.successCount || 0;
+  const avgTtft = row?.avgTtft ? Number(row.avgTtft) : 0;
+  const totalCacheRead = row?.totalCacheReadTokens ? Number(row.totalCacheReadTokens) : 0;
+  const totalPrompt = row?.totalPromptTokens ? Number(row.totalPromptTokens) : 0;
 
   const successRate = totalRequests > 0 ? (successCount / totalRequests) * 100 : 100;
+  const cacheHitRate = totalPrompt > 0 ? (totalCacheRead / totalPrompt) * 100 : 0;
 
   return {
     todayRequests: totalRequests,
     avgResponseTimeMs: Math.round(avgDuration * 10) / 10,
     totalTokensToday: totalTokens,
     successRateToday: Math.round(successRate * 10) / 10,
+    avgTtftMs: Math.round(avgTtft * 10) / 10,
+    cacheHitRate: Math.round(cacheHitRate * 10) / 10,
   };
 }
 
 /**
  * Get time series statistics grouped by upstream.
  */
-export async function getTimeseriesStats(rangeType: TimeRange = "7d"): Promise<StatsTimeseries> {
+export async function getTimeseriesStats(
+  rangeType: TimeRange = "7d",
+  metric: TimeseriesMetric = "requests"
+): Promise<StatsTimeseries> {
   const startTime = getTimeRangeStart(rangeType);
   const granularity = getGranularity(rangeType);
 
@@ -146,6 +166,15 @@ export async function getTimeseriesStats(rangeType: TimeRange = "7d"): Promise<S
       requestCount: count(requestLogs.id),
       totalTokens: sum(requestLogs.totalTokens),
       avgDuration: avg(requestLogs.durationMs),
+      ...(metric === "ttft" ? { avgTtft: avg(requestLogs.ttftMs) } : {}),
+      ...(metric === "tps"
+        ? {
+            totalCompletionTokens: sum(requestLogs.completionTokens),
+            totalDurationMs: sum(requestLogs.durationMs),
+            totalRoutingDurationMs: sum(requestLogs.routingDurationMs),
+            totalTtftMs: sum(requestLogs.ttftMs),
+          }
+        : {}),
     })
     .from(requestLogs)
     .where(gte(requestLogs.createdAt, startTime))
@@ -197,6 +226,25 @@ export async function getTimeseriesStats(rangeType: TimeRange = "7d"): Promise<S
       requestCount: row.requestCount,
       totalTokens: row.totalTokens ? Number(row.totalTokens) : 0,
       avgDurationMs: row.avgDuration ? Math.round(Number(row.avgDuration) * 10) / 10 : 0,
+      ...(metric === "ttft" && "avgTtft" in row
+        ? { avgTtftMs: row.avgTtft ? Math.round(Number(row.avgTtft) * 10) / 10 : 0 }
+        : {}),
+      ...(metric === "tps" &&
+      "totalCompletionTokens" in row &&
+      "totalDurationMs" in row &&
+      "totalRoutingDurationMs" in row &&
+      "totalTtftMs" in row
+        ? (() => {
+            const compTokens = row.totalCompletionTokens ? Number(row.totalCompletionTokens) : 0;
+            const dur = row.totalDurationMs ? Number(row.totalDurationMs) : 0;
+            const routing = row.totalRoutingDurationMs ? Number(row.totalRoutingDurationMs) : 0;
+            const ttft = row.totalTtftMs ? Number(row.totalTtftMs) : 0;
+            const genTime = dur - routing - ttft;
+            return {
+              avgTps: genTime > 0 ? Math.round((compTokens / genTime) * 1000 * 10) / 10 : 0,
+            };
+          })()
+        : {}),
     });
   }
 
@@ -275,6 +323,11 @@ export async function getLeaderboardStats(
       upstreamId: requestLogs.upstreamId,
       requestCount: count(requestLogs.id),
       totalTokens: sum(requestLogs.totalTokens),
+      avgTtft: avg(requestLogs.ttftMs),
+      totalCompletionTokens: sum(requestLogs.completionTokens),
+      totalDurationMs: sum(requestLogs.durationMs),
+      totalRoutingDurationMs: sum(requestLogs.routingDurationMs),
+      totalTtftMs: sum(requestLogs.ttftMs),
     })
     .from(requestLogs)
     .where(and(gte(requestLogs.createdAt, startTime), isNotNull(requestLogs.upstreamId)))
@@ -299,13 +352,23 @@ export async function getLeaderboardStats(
     }
   }
 
-  const upstreamsLeaderboard: LeaderboardUpstreamItem[] = upstreamsResult.map((row) => ({
-    id: row.upstreamId!,
-    name: upstreamMap.get(row.upstreamId!)?.name || "Unknown",
-    providerType: upstreamMap.get(row.upstreamId!)?.providerType || "unknown",
-    requestCount: row.requestCount,
-    totalTokens: row.totalTokens ? Number(row.totalTokens) : 0,
-  }));
+  const upstreamsLeaderboard: LeaderboardUpstreamItem[] = upstreamsResult.map((row) => {
+    const compTokens = row.totalCompletionTokens ? Number(row.totalCompletionTokens) : 0;
+    const dur = row.totalDurationMs ? Number(row.totalDurationMs) : 0;
+    const routing = row.totalRoutingDurationMs ? Number(row.totalRoutingDurationMs) : 0;
+    const ttft = row.totalTtftMs ? Number(row.totalTtftMs) : 0;
+    const genTime = dur - routing - ttft;
+
+    return {
+      id: row.upstreamId!,
+      name: upstreamMap.get(row.upstreamId!)?.name || "Unknown",
+      providerType: upstreamMap.get(row.upstreamId!)?.providerType || "unknown",
+      requestCount: row.requestCount,
+      totalTokens: row.totalTokens ? Number(row.totalTokens) : 0,
+      avgTtftMs: row.avgTtft ? Math.round(Number(row.avgTtft) * 10) / 10 : 0,
+      avgTps: genTime > 0 ? Math.round((compTokens / genTime) * 1000 * 10) / 10 : 0,
+    };
+  });
 
   // Models Leaderboard
   const modelsResult = await db

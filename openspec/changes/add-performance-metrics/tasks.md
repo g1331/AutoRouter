@@ -25,17 +25,17 @@
 
 ## 5. 后端统计服务扩展
 
-- [ ] 5.1 在 `stats-service.ts` 的 `StatsOverview` 接口新增 `avgTtftMs` 和 `cacheHitRate` 字段，更新 `getOverviewStats` 查询逻辑
-- [ ] 5.2 在 `stats-service.ts` 中为 `getTimeseriesStats` 新增 `metric` 参数支持（`requests` | `ttft` | `tps`），实现对应的聚合查询
-- [ ] 5.3 在 `stats-service.ts` 的 `LeaderboardUpstreamItem` 接口新增 `avgTtftMs` 和 `avgTps` 字段，更新 `getLeaderboardStats` 上游查询
-- [ ] 5.4 为新增的聚合查询逻辑编写单元测试（overview 新字段、timeseries metric 参数、leaderboard 上游新指标）
+- [x] 5.1 在 `stats-service.ts` 的 `StatsOverview` 接口新增 `avgTtftMs` 和 `cacheHitRate` 字段，更新 `getOverviewStats` 查询逻辑
+- [x] 5.2 在 `stats-service.ts` 中为 `getTimeseriesStats` 新增 `metric` 参数支持（`requests` | `ttft` | `tps`），实现对应的聚合查询
+- [x] 5.3 在 `stats-service.ts` 的 `LeaderboardUpstreamItem` 接口新增 `avgTtftMs` 和 `avgTps` 字段，更新 `getLeaderboardStats` 上游查询
+- [x] 5.4 为新增的聚合查询逻辑编写单元测试（overview 新字段、timeseries metric 参数、leaderboard 上游新指标）
 
 ## 6. Stats API 端点更新
 
-- [ ] 6.1 更新 `api-transformers.ts` 中的 `StatsOverviewApiResponse` 和 `transformStatsOverviewToApi`，新增 `avg_ttft_ms` 和 `cache_hit_rate`
-- [ ] 6.2 更新 timeseries API 端点，支持 `metric` query 参数并传递到 service 层
-- [ ] 6.3 更新 `api-transformers.ts` 中的 leaderboard 上游响应类型和转换逻辑，新增 `avg_ttft_ms` 和 `avg_tps`
-- [ ] 6.4 更新 `types/api.ts` 中的 `StatsOverviewResponse`、`TimeseriesDataPoint`、`LeaderboardUpstreamItem` 类型
+- [x] 6.1 更新 `api-transformers.ts` 中的 `StatsOverviewApiResponse` 和 `transformStatsOverviewToApi`，新增 `avg_ttft_ms` 和 `cache_hit_rate`
+- [x] 6.2 更新 timeseries API 端点，支持 `metric` query 参数并传递到 service 层
+- [x] 6.3 更新 `api-transformers.ts` 中的 leaderboard 上游响应类型和转换逻辑，新增 `avg_ttft_ms` 和 `avg_tps`
+- [x] 6.4 更新 `types/api.ts` 中的 `StatsOverviewResponse`、`TimeseriesDataPoint`、`LeaderboardUpstreamItem` 类型
 
 ## 7. 国际化
 
