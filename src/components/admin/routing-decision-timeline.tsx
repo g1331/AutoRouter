@@ -30,11 +30,7 @@ interface RoutingDecisionTimelineProps {
   failoverAttempts: number;
   failoverHistory?: FailoverAttempt[] | null;
   failoverDurationMs?: number | null;
-  routingDurationMs?: number | null;
-  durationMs?: number | null;
   statusCode?: number | null;
-  cachedTokens?: number;
-  cacheReadTokens?: number;
   sessionId?: string | null;
   affinityHit?: boolean;
   affinityMigrated?: boolean;
@@ -82,11 +78,7 @@ export function RoutingDecisionTimeline({
   failoverAttempts,
   failoverHistory,
   failoverDurationMs,
-  routingDurationMs,
-  durationMs,
   statusCode,
-  cachedTokens = 0,
-  cacheReadTokens = 0,
   sessionId,
   affinityHit,
   affinityMigrated,
@@ -211,7 +203,6 @@ export function RoutingDecisionTimeline({
     statusCode !== null && statusCode !== undefined && statusCode >= 200 && statusCode < 300;
   const isError =
     statusCode !== null && statusCode !== undefined && (statusCode < 200 || statusCode >= 300);
-
   return (
     <div className="space-y-0 font-mono text-xs">
       {/* Stage 1: Model Resolution */}
@@ -394,46 +385,6 @@ export function RoutingDecisionTimeline({
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground">{t("timelineFailureStage")}:</span>
               <span className="text-status-error">{failureStageLabel}</span>
-            </div>
-          )}
-          <div className="flex items-center gap-2">
-            <Timer className="w-3 h-3 text-muted-foreground" />
-            <span className="text-muted-foreground">{t("timelineTotalDuration")}:</span>
-            <span className="text-foreground">{formatMs(durationMs)}</span>
-          </div>
-          {routingDurationMs != null && durationMs != null && (
-            <>
-              {/** Split total duration into routing + gateway processing + upstream latency */}
-              <div className="flex items-center gap-2 pl-5">
-                <span className="text-muted-foreground">{t("timelineRoutingOverhead")}:</span>
-                <span className="text-orange-500">{formatMs(routingDurationMs)}</span>
-              </div>
-              {didSendUpstream === false && (
-                <div className="flex items-center gap-2 pl-5">
-                  <span className="text-muted-foreground">{t("timelineGatewayProcessing")}:</span>
-                  <span className="text-foreground">
-                    {formatMs(Math.max(0, durationMs - routingDurationMs))}
-                  </span>
-                </div>
-              )}
-              <div className="flex items-center gap-2 pl-5">
-                <span className="text-muted-foreground">{t("timelineUpstreamLatency")}:</span>
-                <span
-                  className={didSendUpstream === false ? "text-orange-500" : "text-status-success"}
-                >
-                  {didSendUpstream === false
-                    ? t("timelineNoUpstreamSent")
-                    : formatMs(Math.max(0, durationMs - routingDurationMs))}
-                </span>
-              </div>
-            </>
-          )}
-          {(cachedTokens > 0 || cacheReadTokens > 0) && (
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">{t("timelineCacheEffect")}:</span>
-              <span className="text-status-success">
-                {(cacheReadTokens || cachedTokens).toLocaleString()} tokens
-              </span>
             </div>
           )}
         </div>
