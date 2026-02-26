@@ -977,6 +977,202 @@ describe("proxy-client", () => {
         expect(onFirstChunk).not.toHaveBeenCalled();
       });
 
+      it("should fire onFirstChunk for OpenAI content array text part", async () => {
+        const onUsage = vi.fn();
+        const onFirstChunk = vi.fn();
+        const transformer = createSSETransformer({ onUsage, onFirstChunk });
+        const encoder = new TextEncoder();
+        const input =
+          'data: {"choices":[{"delta":{"content":[123,{"type":"output_text","text":"hello"}]}}]}\n\n';
+
+        const reader = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(input));
+            controller.close();
+          },
+        })
+          .pipeThrough(transformer)
+          .getReader();
+
+        while (!(await reader.read()).done) {}
+
+        expect(onFirstChunk).toHaveBeenCalledTimes(1);
+      });
+
+      it("should fire onFirstChunk for OpenAI refusal payloads", async () => {
+        const onUsage = vi.fn();
+        const onFirstChunk = vi.fn();
+        const transformer = createSSETransformer({ onUsage, onFirstChunk });
+        const encoder = new TextEncoder();
+        const input = [
+          'data: {"choices":[{"delta":{"refusal":"blocked"}}]}\n\n',
+          'data: {"choices":[{"message":{"refusal":"blocked-by-policy"}}]}\n\n',
+        ].join("");
+
+        const reader = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(input));
+            controller.close();
+          },
+        })
+          .pipeThrough(transformer)
+          .getReader();
+
+        while (!(await reader.read()).done) {}
+
+        expect(onFirstChunk).toHaveBeenCalledTimes(1);
+      });
+
+      it("should not fire onFirstChunk for OpenAI finish_reason-only chunk", async () => {
+        const onUsage = vi.fn();
+        const onFirstChunk = vi.fn();
+        const transformer = createSSETransformer({ onUsage, onFirstChunk });
+        const encoder = new TextEncoder();
+        const input = 'data: {"choices":[{"index":0,"finish_reason":"stop"}]}\n\n';
+
+        const reader = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(input));
+            controller.close();
+          },
+        })
+          .pipeThrough(transformer)
+          .getReader();
+
+        while (!(await reader.read()).done) {}
+
+        expect(onFirstChunk).not.toHaveBeenCalled();
+      });
+
+      it("should not fire onFirstChunk for OpenAI empty delta chunk", async () => {
+        const onUsage = vi.fn();
+        const onFirstChunk = vi.fn();
+        const transformer = createSSETransformer({ onUsage, onFirstChunk });
+        const encoder = new TextEncoder();
+        const input = 'data: {"choices":[{"index":0,"delta":{}}]}\n\n';
+
+        const reader = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(input));
+            controller.close();
+          },
+        })
+          .pipeThrough(transformer)
+          .getReader();
+
+        while (!(await reader.read()).done) {}
+
+        expect(onFirstChunk).not.toHaveBeenCalled();
+      });
+
+      it("should fire onFirstChunk for mixed OpenAI choices when any choice has text", async () => {
+        const onUsage = vi.fn();
+        const onFirstChunk = vi.fn();
+        const transformer = createSSETransformer({ onUsage, onFirstChunk });
+        const encoder = new TextEncoder();
+        const input =
+          'data: {"choices":[null,{"delta":{"role":"assistant"}},{"delta":{"content":"hello"}}]}\n\n';
+
+        const reader = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(input));
+            controller.close();
+          },
+        })
+          .pipeThrough(transformer)
+          .getReader();
+
+        while (!(await reader.read()).done) {}
+
+        expect(onFirstChunk).toHaveBeenCalledTimes(1);
+      });
+
+      it("should fire onFirstChunk for anthropic content_block_start text", async () => {
+        const onUsage = vi.fn();
+        const onFirstChunk = vi.fn();
+        const transformer = createSSETransformer({ onUsage, onFirstChunk });
+        const encoder = new TextEncoder();
+        const input =
+          'data: {"type":"content_block_start","content_block":{"type":"text","text":"hello"}}\n\n';
+
+        const reader = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(input));
+            controller.close();
+          },
+        })
+          .pipeThrough(transformer)
+          .getReader();
+
+        while (!(await reader.read()).done) {}
+
+        expect(onFirstChunk).toHaveBeenCalledTimes(1);
+      });
+
+      it("should fire onFirstChunk for OpenAI Responses part text payload", async () => {
+        const onUsage = vi.fn();
+        const onFirstChunk = vi.fn();
+        const transformer = createSSETransformer({ onUsage, onFirstChunk });
+        const encoder = new TextEncoder();
+        const input =
+          'data: {"type":"response.content_part.added","part":{"type":"output_text","text":"hello"}}\n\n';
+
+        const reader = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(input));
+            controller.close();
+          },
+        })
+          .pipeThrough(transformer)
+          .getReader();
+
+        while (!(await reader.read()).done) {}
+
+        expect(onFirstChunk).toHaveBeenCalledTimes(1);
+      });
+
+      it("should treat primitive JSON SSE payload as content-bearing", async () => {
+        const onUsage = vi.fn();
+        const onFirstChunk = vi.fn();
+        const transformer = createSSETransformer({ onUsage, onFirstChunk });
+        const encoder = new TextEncoder();
+        const input = "data: 42\n\n";
+
+        const reader = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(input));
+            controller.close();
+          },
+        })
+          .pipeThrough(transformer)
+          .getReader();
+
+        while (!(await reader.read()).done) {}
+
+        expect(onFirstChunk).toHaveBeenCalledTimes(1);
+      });
+
+      it("should treat non-JSON SSE payload as content-bearing when callback exists", async () => {
+        const onUsage = vi.fn();
+        const onFirstChunk = vi.fn();
+        const transformer = createSSETransformer({ onUsage, onFirstChunk });
+        const encoder = new TextEncoder();
+        const input = "data: partial\n\n";
+
+        const reader = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(input));
+            controller.close();
+          },
+        })
+          .pipeThrough(transformer)
+          .getReader();
+
+        while (!(await reader.read()).done) {}
+
+        expect(onFirstChunk).toHaveBeenCalledTimes(1);
+      });
+
       it("should skip [DONE] and fire onFirstChunk on the first real data event", async () => {
         const onUsage = vi.fn();
         const onFirstChunk = vi.fn();
@@ -1240,6 +1436,36 @@ describe("proxy-client", () => {
       expect(streamMetrics?.ttftMs).toBeGreaterThanOrEqual(0);
     });
 
+    it("should capture usage from streaming SSE events", async () => {
+      const sseData =
+        'data: {"usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}}\n\ndata: [DONE]\n\n';
+      const mockResponse = new Response(sseData, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      });
+
+      global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+      const request = new Request("http://localhost/api", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "gpt-4", stream: true }),
+      });
+
+      const result = await forwardRequest(request, mockUpstream, "chat/completions", "req-123");
+      const streamMetrics = await result.streamMetricsPromise;
+
+      expect(streamMetrics).toEqual(
+        expect.objectContaining({
+          usage: expect.objectContaining({
+            promptTokens: 10,
+            completionTokens: 20,
+            totalTokens: 30,
+          }),
+        })
+      );
+    });
+
     it("should handle timeout error", async () => {
       // Mock fetch to immediately trigger abort when signal is set
       global.fetch = vi.fn().mockImplementation((_url: string, options: RequestInit) => {
@@ -1399,6 +1625,28 @@ describe("proxy-client", () => {
       const result = await forwardRequest(request, mockUpstream, "chat/completions", "req-123");
 
       expect(result.statusCode).toBe(429);
+    });
+
+    it("should handle non-JSON request body without throwing", async () => {
+      const mockResponse = new Response(JSON.stringify({ id: "ok" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+      global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+      const request = new Request("http://localhost/api", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{not-json",
+      });
+
+      await expect(
+        forwardRequest(request, mockUpstream, "chat/completions", "req-123")
+      ).resolves.toEqual(
+        expect.objectContaining({
+          statusCode: 200,
+        })
+      );
     });
   });
 });
