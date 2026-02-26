@@ -283,7 +283,7 @@ export function extractSessionId(
     case "codex_responses":
     case "openai_chat_compatible":
     case "openai_extended":
-      return extractOpenAISessionId(headers);
+      return extractOpenAISessionId(headers, bodyJson);
     default:
       return null;
   }
@@ -321,21 +321,63 @@ const MAX_SESSION_ID_LENGTH = 128;
 
 /**
  * Extract session ID from OpenAI request
- * Uses session_id header directly
+ * Priority:
+ * 1) headers.session_id / headers.session-id
+ * 2) headers.x-session-id / headers.x-session_id
+ * 3) body.prompt_cache_key
+ * 4) body.metadata.session_id
+ * 5) body.previous_response_id
  */
 function extractOpenAISessionId(
-  headers: Record<string, string | string[] | undefined>
+  headers: Record<string, string | string[] | undefined>,
+  bodyJson: Record<string, unknown> | null
 ): string | null {
-  const raw = headers["session_id"] ?? headers["session-id"];
+  const headerCandidates: Array<string | string[] | undefined> = [
+    headers["session_id"],
+    headers["session-id"],
+    headers["x-session-id"],
+    headers["x-session_id"],
+    headers["x_session_id"],
+  ];
 
-  if (typeof raw === "string") {
-    const sessionId = raw.trim();
-    if (sessionId.length > 0 && sessionId.length <= MAX_SESSION_ID_LENGTH) {
+  for (const candidate of headerCandidates) {
+    const sessionId = normalizeSessionId(candidate);
+    if (sessionId) {
+      return sessionId;
+    }
+  }
+
+  const bodyCandidates: unknown[] = [];
+  if (bodyJson) {
+    bodyCandidates.push(bodyJson.prompt_cache_key);
+    const metadata = bodyJson.metadata;
+    if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
+      bodyCandidates.push((metadata as Record<string, unknown>).session_id);
+    }
+    bodyCandidates.push(bodyJson.previous_response_id);
+  }
+
+  for (const candidate of bodyCandidates) {
+    const sessionId = normalizeSessionId(candidate);
+    if (sessionId) {
       return sessionId;
     }
   }
 
   return null;
+}
+
+function normalizeSessionId(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const sessionId = value.trim();
+  if (sessionId.length === 0 || sessionId.length > MAX_SESSION_ID_LENGTH) {
+    return null;
+  }
+
+  return sessionId;
 }
 
 // ============================================================================

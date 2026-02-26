@@ -358,6 +358,75 @@ describe("extractSessionId", () => {
       expect(sessionId).toBe("sess_abc123def456");
     });
 
+    it("should extract session_id from x-session-id header fallback", () => {
+      const headers = {
+        "x-session-id": "sess_from_x_session_id",
+      };
+
+      const sessionId = extractSessionId("openai_chat_compatible", headers, {});
+
+      expect(sessionId).toBe("sess_from_x_session_id");
+    });
+
+    it("should extract session_id from x-session_id header fallback", () => {
+      const headers = {
+        x_session_id: "sess_from_x_session_id_underscore",
+      };
+
+      const sessionId = extractSessionId("openai_chat_compatible", headers, {});
+
+      expect(sessionId).toBe("sess_from_x_session_id_underscore");
+    });
+
+    it("should extract session_id from body.prompt_cache_key when headers are missing", () => {
+      const body = {
+        prompt_cache_key: "sess_from_prompt_cache_key",
+      };
+
+      const sessionId = extractSessionId("openai_chat_compatible", {}, body);
+
+      expect(sessionId).toBe("sess_from_prompt_cache_key");
+    });
+
+    it("should extract session_id from body.metadata.session_id fallback", () => {
+      const body = {
+        metadata: {
+          session_id: "sess_from_metadata",
+        },
+      };
+
+      const sessionId = extractSessionId("openai_chat_compatible", {}, body);
+
+      expect(sessionId).toBe("sess_from_metadata");
+    });
+
+    it("should extract session_id from body.previous_response_id as last fallback", () => {
+      const body = {
+        previous_response_id: "resp_abc123def456",
+      };
+
+      const sessionId = extractSessionId("openai_chat_compatible", {}, body);
+
+      expect(sessionId).toBe("resp_abc123def456");
+    });
+
+    it("should prioritize headers.session_id over body fallbacks", () => {
+      const headers = {
+        session_id: "sess_from_header",
+      };
+      const body = {
+        prompt_cache_key: "sess_from_prompt_cache_key",
+        metadata: {
+          session_id: "sess_from_metadata",
+        },
+        previous_response_id: "resp_abc123def456",
+      };
+
+      const sessionId = extractSessionId("openai_chat_compatible", headers, body);
+
+      expect(sessionId).toBe("sess_from_header");
+    });
+
     it("should return null when session_id header is missing", () => {
       const headers = {
         authorization: "Bearer token",
@@ -384,6 +453,24 @@ describe("extractSessionId", () => {
       };
 
       const sessionId = extractSessionId("openai_chat_compatible", headers, {});
+
+      expect(sessionId).toBeNull();
+    });
+
+    it("should return null when all header/body fallbacks are invalid", () => {
+      const headers: Record<string, string | string[] | undefined> = {
+        session_id: "",
+        "x-session-id": ["sess_1", "sess_2"],
+      };
+      const body = {
+        prompt_cache_key: "   ",
+        metadata: {
+          session_id: 12345,
+        },
+        previous_response_id: null,
+      };
+
+      const sessionId = extractSessionId("openai_chat_compatible", headers, body);
 
       expect(sessionId).toBeNull();
     });
