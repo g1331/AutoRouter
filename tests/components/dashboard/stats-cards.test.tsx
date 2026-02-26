@@ -146,7 +146,7 @@ describe("StatsCards", () => {
       expect(ttft.className).toContain("text-status-success");
     });
 
-    it("renders cache hit rate as 0% when value is zero", () => {
+    it("renders cache hit rate with two decimals when value is zero", () => {
       render(
         <StatsCards
           {...defaultProps}
@@ -157,7 +157,21 @@ describe("StatsCards", () => {
         />
       );
 
-      expect(screen.getByText("0%")).toBeInTheDocument();
+      expect(screen.getByText("0.00%")).toBeInTheDocument();
+    });
+
+    it("rounds cache hit rate to two decimals", () => {
+      render(
+        <StatsCards
+          {...defaultProps}
+          todayRequests={100}
+          avgResponseTimeMs={250}
+          totalTokensToday={5000}
+          cacheHitRate={12.345}
+        />
+      );
+
+      expect(screen.getByText("12.35%")).toBeInTheDocument();
     });
   });
 

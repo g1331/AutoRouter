@@ -230,7 +230,7 @@
     "tokenCacheHit": "Cache Hit",
     "tokenCacheHitShort": "Hit",
     "tokenCacheWriteShort": "Write",
-    "tokenCacheHitPercent": "Cached",
+    "tokenCacheHitPercent": "Cache Hit Rate",
     "tokenTotal": "Total",
     "refreshInterval": "Refresh",
     "refreshOff": "Off",

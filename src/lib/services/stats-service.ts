@@ -112,7 +112,15 @@ export async function getOverviewStats(): Promise<StatsOverview> {
       successCount: count(sql`CASE WHEN ${requestLogs.statusCode} BETWEEN 200 AND 299 THEN 1 END`),
       avgTtft: avg(requestLogs.ttftMs),
       totalCacheReadTokens: sum(requestLogs.cacheReadTokens),
-      totalPromptTokens: sum(requestLogs.promptTokens),
+      totalEffectivePromptTokens: sql<number>`
+        sum(
+          case
+            when ${requestLogs.promptTokens} >= ${requestLogs.cacheReadTokens}
+              then ${requestLogs.promptTokens}
+            else ${requestLogs.promptTokens} + ${requestLogs.cacheReadTokens}
+          end
+        )
+      `,
     })
     .from(requestLogs)
     .where(gte(requestLogs.createdAt, startOfToday));
@@ -124,10 +132,14 @@ export async function getOverviewStats(): Promise<StatsOverview> {
   const successCount = row?.successCount || 0;
   const avgTtft = row?.avgTtft ? Number(row.avgTtft) : 0;
   const totalCacheRead = row?.totalCacheReadTokens ? Number(row.totalCacheReadTokens) : 0;
-  const totalPrompt = row?.totalPromptTokens ? Number(row.totalPromptTokens) : 0;
+  const totalEffectivePrompt = row?.totalEffectivePromptTokens
+    ? Number(row.totalEffectivePromptTokens)
+    : 0;
 
   const successRate = totalRequests > 0 ? (successCount / totalRequests) * 100 : 100;
-  const cacheHitRate = totalPrompt > 0 ? (totalCacheRead / totalPrompt) * 100 : 0;
+  const rawCacheHitRate =
+    totalEffectivePrompt > 0 ? (totalCacheRead / totalEffectivePrompt) * 100 : 0;
+  const cacheHitRate = Math.min(Math.max(rawCacheHitRate, 0), 100);
 
   return {
     todayRequests: totalRequests,

@@ -64,3 +64,8 @@
 - [x] 11.1 在 `LogsTable` 组件中新增 TTFT 列（`hidden md:table-cell`），在耗时列下方内嵌 TPS 显示（仅流式请求，`text-xs text-muted-foreground`）
 - [x] 11.2 在展开行的 Token 详情中追加缓存命中百分比显示（如 "Cached: 800 (80%)"）
 - [x] 11.3 更新 `useRequestLogs` hook 的响应类型以包含 `ttft_ms` 和 `is_stream` 字段
+
+## 12. 发布后缺陷修复（cache hit rate 异常）
+
+- [x] 12.1 修复 `TokenDetailContent` 与 `TokenDisplay` 在 `cacheReadTokens > promptTokens` 场景下的命中率与新增输入计算，保证百分比不超过 100%
+- [x] 12.2 调整 `stats-service.ts` 概览缓存命中率聚合口径，使用容错分母避免跨 provider 混合数据出现 >100% 并补充单元测试

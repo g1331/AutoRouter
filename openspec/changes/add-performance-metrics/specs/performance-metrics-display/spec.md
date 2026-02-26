@@ -64,8 +64,8 @@
 系统 MUST 在日志表格的展开行 Token 详情中追加缓存命中百分比。
 
 #### Scenario: 有缓存数据时展示命中百分比
-- **WHEN** 用户展开某条日志记录且该请求的 promptTokens > 0
-- **THEN** Token 详情 SHALL 展示缓存命中百分比，格式为 "Cached: 800 (80%)"
+- **WHEN** 用户展开某条日志记录且该请求的 `promptTokens + cacheReadTokens > 0`
+- **THEN** Token 详情 SHALL 展示缓存命中百分比，格式为 "Cached: 800 (80%)"，且百分比 SHALL 不超过 100%
 
 #### Scenario: 无缓存数据时不展示百分比
 - **WHEN** 用户展开某条日志记录且该请求的 cacheReadTokens 为 0

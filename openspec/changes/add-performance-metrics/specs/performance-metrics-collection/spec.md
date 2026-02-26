@@ -53,16 +53,16 @@
 - **THEN** 系统 SHALL 不计算 TPS，避免除法异常导致的无意义极大值
 
 ### Requirement: Cache 命中率必须使用统一公式跨 provider 计算
-系统 MUST 使用 `cacheReadTokens / promptTokens` 作为缓存命中率的统一计算公式，适用于 OpenAI 和 Anthropic 等所有 provider。
+系统 MUST 使用可回退的统一公式计算缓存命中率，确保跨 provider 一致且命中率不会超过 100%。
 
 #### Scenario: 聚合计算缓存命中率
 - **WHEN** 系统聚合统计一段时间范围内的缓存命中率
-- **THEN** 系统 SHALL 使用 `SUM(cache_read_tokens) / NULLIF(SUM(prompt_tokens), 0) * 100` 计算百分比
+- **THEN** 系统 SHALL 使用 `SUM(cache_read_tokens) / NULLIF(SUM(CASE WHEN prompt_tokens >= cache_read_tokens THEN prompt_tokens ELSE prompt_tokens + cache_read_tokens END), 0) * 100` 计算百分比
 
 #### Scenario: 单请求缓存命中率
 - **WHEN** 单条请求的 promptTokens > 0
-- **THEN** 系统 SHALL 计算 `cacheReadTokens / promptTokens * 100` 作为该请求的缓存命中百分比
+- **THEN** 系统 SHALL 按以下规则计算缓存命中率：当 `promptTokens >= cacheReadTokens` 时使用 `cacheReadTokens / promptTokens * 100`，否则使用 `cacheReadTokens / (promptTokens + cacheReadTokens) * 100`
 
 #### Scenario: 无 prompt token 时命中率为空
-- **WHEN** 单条请求的 promptTokens 为 0
+- **WHEN** 单条请求的 `promptTokens + cacheReadTokens` 为 0
 - **THEN** 系统 SHALL 不计算缓存命中率，展示为空或不显示

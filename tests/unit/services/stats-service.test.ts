@@ -79,7 +79,7 @@ describe("stats-service", () => {
               successCount: 95,
               avgTtft: "120.3",
               totalCacheReadTokens: "400",
-              totalPromptTokens: "1000",
+              totalEffectivePromptTokens: "1000",
             },
           ]),
         }),
@@ -109,7 +109,7 @@ describe("stats-service", () => {
               successCount: 0,
               avgTtft: null,
               totalCacheReadTokens: null,
-              totalPromptTokens: null,
+              totalEffectivePromptTokens: null,
             },
           ]),
         }),
@@ -139,7 +139,7 @@ describe("stats-service", () => {
               successCount: 45,
               avgTtft: null,
               totalCacheReadTokens: "0",
-              totalPromptTokens: "0",
+              totalEffectivePromptTokens: "0",
             },
           ]),
         }),
@@ -169,7 +169,7 @@ describe("stats-service", () => {
               successCount: 2,
               avgTtft: "123.45",
               totalCacheReadTokens: "12",
-              totalPromptTokens: "34",
+              totalEffectivePromptTokens: "34",
             },
           ]),
         }),
@@ -197,7 +197,7 @@ describe("stats-service", () => {
               successCount: 10,
               avgTtft: "99.999",
               totalCacheReadTokens: "111",
-              totalPromptTokens: "333",
+              totalEffectivePromptTokens: "333",
             },
           ]),
         }),
@@ -208,6 +208,30 @@ describe("stats-service", () => {
       expect(result.avgResponseTimeMs).toBe(123.5);
       expect(result.avgTtftMs).toBe(100);
       expect(result.cacheHitRate).toBe(33.3);
+    });
+
+    it("should clamp cache hit rate to 100 when denominator is smaller than cache read", async () => {
+      const { db } = await import("@/lib/db");
+      const { getOverviewStats } = await import("@/lib/services/stats-service");
+
+      vi.mocked(db.select).mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([
+            {
+              totalRequests: 1,
+              avgDuration: "200",
+              totalTokens: "772",
+              successCount: 1,
+              avgTtft: "15085",
+              totalCacheReadTokens: "28750",
+              totalEffectivePromptTokens: "28764",
+            },
+          ]),
+        }),
+      } as unknown as ReturnType<typeof db.select>);
+
+      const result = await getOverviewStats();
+      expect(result.cacheHitRate).toBeLessThanOrEqual(100);
     });
   });
 

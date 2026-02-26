@@ -31,6 +31,11 @@ function getTtftPerformanceClass(ttftMs: number): string {
   return "text-status-success";
 }
 
+function formatCacheRate(rate: number): string {
+  const normalizedRate = Number.isFinite(rate) ? Math.min(Math.max(rate, 0), 100) : 0;
+  return `${normalizedRate.toFixed(2)}%`;
+}
+
 function AnimatedCounter({
   value,
   isLoading,
@@ -136,7 +141,7 @@ export function StatsCards({
       />
       <StatCard
         title={t("stats.cacheHitRate")}
-        value={`${cacheHitRate}%`}
+        value={formatCacheRate(cacheHitRate)}
         subtitle={t("stats.tokens")}
         icon={Database}
         isLoading={isLoading}

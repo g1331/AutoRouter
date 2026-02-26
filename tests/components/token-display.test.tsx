@@ -205,6 +205,28 @@ describe("TokenDisplay", () => {
       expect(cacheWriteBadge).not.toBeNull();
       expect(within(cacheWriteBadge as HTMLElement).getByText("100")).toBeInTheDocument();
     });
+
+    it("keeps new input tokens when cache read exceeds prompt tokens", () => {
+      render(
+        <TokenDisplay
+          promptTokens={14}
+          completionTokens={758}
+          totalTokens={772}
+          cachedTokens={0}
+          reasoningTokens={0}
+          cacheCreationTokens={20}
+          cacheReadTokens={28750}
+        />
+      );
+
+      expect(screen.getByText("14 / 758")).toBeInTheDocument();
+
+      const cacheHitBadge = screen.getByText("tokenCacheHitShort").closest("div");
+      expect(cacheHitBadge).not.toBeNull();
+      expect(
+        within(cacheHitBadge as HTMLElement).getByText(formatNumberRegex(28750))
+      ).toBeInTheDocument();
+    });
   });
 });
 
@@ -396,6 +418,46 @@ describe("TokenDetailContent", () => {
       const newInputRow = screen.getByText("tokenInputNew").closest("div");
       expect(newInputRow).not.toBeNull();
       expect(within(newInputRow as HTMLElement).getByText("200")).toBeInTheDocument();
+    });
+
+    it("caps cache hit percentage when cache read exceeds prompt tokens", () => {
+      render(
+        <TokenDetailContent
+          promptTokens={14}
+          completionTokens={758}
+          totalTokens={772}
+          cachedTokens={0}
+          reasoningTokens={0}
+          cacheCreationTokens={20}
+          cacheReadTokens={28750}
+        />
+      );
+
+      expect(screen.getByText("tokenCacheHitPercent:")).toBeInTheDocument();
+      const percentageText = screen.getByText(/\d+\.\d{2}%/).textContent ?? "";
+      const percentage = Number.parseFloat(percentageText.replace("%", ""));
+      expect(percentage).toBeLessThanOrEqual(100);
+
+      const newInputRow = screen.getByText("tokenInputNew").closest("div");
+      expect(newInputRow).not.toBeNull();
+      expect(within(newInputRow as HTMLElement).getByText("14")).toBeInTheDocument();
+    });
+
+    it("shows cache percentage with two decimals", () => {
+      render(
+        <TokenDetailContent
+          promptTokens={123}
+          completionTokens={200}
+          totalTokens={323}
+          cachedTokens={0}
+          reasoningTokens={0}
+          cacheCreationTokens={0}
+          cacheReadTokens={45}
+        />
+      );
+
+      expect(screen.getByText("tokenCacheHitPercent:")).toBeInTheDocument();
+      expect(screen.getByText("36.59%")).toBeInTheDocument();
     });
 
     it("does not show cache section when no cache tokens present", () => {

@@ -85,7 +85,16 @@ tps = completionTokens / (generationMs / 1000)
 
 ### Decision 3: Cache 命中率统一公式
 
-**选择**: `cacheReadTokens / promptTokens` 作为跨 provider 统一的命中率公式。
+**选择**: 使用“优先标准口径 + 异常回退口径”的统一公式，保证跨 provider 且命中率不超过 100%。
+
+**单请求公式**:
+```
+if promptTokens >= cacheReadTokens:
+  cacheHitRate = cacheReadTokens / promptTokens
+else:
+  // 兼容部分 provider 将 promptTokens 仅上报为非缓存输入的情况
+  cacheHitRate = cacheReadTokens / (promptTokens + cacheReadTokens)
+```
 
 **各 provider 对照验证**:
 
@@ -93,11 +102,20 @@ tps = completionTokens / (generationMs / 1000)
 |----------|-------------------|---------------------|-----------|
 | OpenAI Chat API | prompt_tokens | prompt_tokens_details.cached_tokens | cached/total，正确 |
 | OpenAI Responses API | input_tokens | input_tokens_details.cached_tokens | cached/total，正确 |
-| Anthropic | input_tokens (或 fallback 到 creation+read) | cache_read_input_tokens | read/total，正确 |
+| Anthropic | input_tokens（部分场景可能仅为非缓存输入） | cache_read_input_tokens | 回退口径可避免 >100%，正确 |
 
 **聚合公式** (SQL):
 ```sql
-SUM(cache_read_tokens)::float / NULLIF(SUM(prompt_tokens), 0) * 100
+SUM(cache_read_tokens)::float
+/ NULLIF(
+    SUM(
+      CASE
+        WHEN prompt_tokens >= cache_read_tokens THEN prompt_tokens
+        ELSE prompt_tokens + cache_read_tokens
+      END
+    ),
+    0
+  ) * 100
 ```
 
 不需要新增任何数据库字段。
