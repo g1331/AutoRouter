@@ -44,15 +44,15 @@
 
 ## 8. Dashboard 前端 - 概览卡片
 
-- [ ] 8.1 更新 `StatsCards` 组件的 props 和布局，从 3 列扩展为 5 列（`sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5`），新增 Avg TTFT 和 Cache Hit Rate 卡片
-- [ ] 8.2 更新 `useStatsOverview` hook 的响应类型以匹配新的 API 字段
-- [ ] 8.3 更新 Dashboard 页面组件将新字段传入 `StatsCards`
+- [x] 8.1 更新 `StatsCards` 组件的 props 和布局，从 3 列扩展为 5 列（`sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5`），新增 Avg TTFT 和 Cache Hit Rate 卡片
+- [x] 8.2 更新 `useStatsOverview` hook 的响应类型以匹配新的 API 字段
+- [x] 8.3 更新 Dashboard 页面组件将新字段传入 `StatsCards`
 
 ## 9. Dashboard 前端 - 时序图表 Tab 切换
 
-- [ ] 9.1 创建图表 Tab 容器组件，支持在请求量、Avg TTFT、Avg TPS 三个维度间切换
-- [ ] 9.2 更新 `useStatsTimeseries` hook，支持传递 `metric` 参数
-- [ ] 9.3 更新 `UsageChart` 组件以接收 metric 类型并调整 Y 轴标签和 tooltip 格式
+- [x] 9.1 创建图表 Tab 容器组件，支持在请求量、Avg TTFT、Avg TPS 三个维度间切换
+- [x] 9.2 更新 `useStatsTimeseries` hook，支持传递 `metric` 参数
+- [x] 9.3 更新 `UsageChart` 组件以接收 metric 类型并调整 Y 轴标签和 tooltip 格式
 
 ## 10. Dashboard 前端 - 排行榜扩展
 

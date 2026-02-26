@@ -19,15 +19,17 @@ import {
 } from "@/hooks/use-dashboard-stats";
 import { Link } from "@/i18n/navigation";
 import type { TimeRange } from "@/types/api";
+import type { TimeseriesMetric } from "@/hooks/use-dashboard-stats";
 
 export default function DashboardPage() {
   const t = useTranslations("dashboard");
   const tCommon = useTranslations("common");
 
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
+  const [metric, setMetric] = useState<TimeseriesMetric>("requests");
 
   const { data: overview, isLoading: overviewLoading } = useStatsOverview();
-  const { data: timeseries, isLoading: timeseriesLoading } = useStatsTimeseries(timeRange);
+  const { data: timeseries, isLoading: timeseriesLoading } = useStatsTimeseries(timeRange, metric);
   const { data: leaderboard, isLoading: leaderboardLoading } = useStatsLeaderboard(timeRange);
 
   return (
@@ -49,6 +51,8 @@ export default function DashboardPage() {
           todayRequests={overview?.today_requests ?? 0}
           avgResponseTimeMs={overview?.avg_response_time_ms ?? 0}
           totalTokensToday={overview?.total_tokens_today ?? 0}
+          avgTtftMs={overview?.avg_ttft_ms ?? 0}
+          cacheHitRate={overview?.cache_hit_rate ?? 0}
           isLoading={overviewLoading}
         />
 
@@ -61,7 +65,12 @@ export default function DashboardPage() {
             <TimeRangeSelector value={timeRange} onChange={setTimeRange} />
           </div>
 
-          <UsageChart data={timeseries} isLoading={timeseriesLoading} />
+          <UsageChart
+            data={timeseries}
+            isLoading={timeseriesLoading}
+            metric={metric}
+            onMetricChange={setMetric}
+          />
         </section>
 
         <LeaderboardSection data={leaderboard} isLoading={leaderboardLoading} />

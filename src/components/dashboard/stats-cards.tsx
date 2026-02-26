@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Activity, Clock, Zap } from "lucide-react";
+import { Activity, Clock, Zap, Timer, Database } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,6 +13,8 @@ interface StatsCardsProps {
   todayRequests: number;
   avgResponseTimeMs: number;
   totalTokensToday: number;
+  avgTtftMs: number;
+  cacheHitRate: number;
   isLoading: boolean;
 }
 
@@ -68,12 +70,14 @@ export function StatsCards({
   todayRequests,
   avgResponseTimeMs,
   totalTokensToday,
+  avgTtftMs,
+  cacheHitRate,
   isLoading,
 }: StatsCardsProps) {
   const t = useTranslations("dashboard");
 
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
       <StatCard
         title={t("stats.todayRequests")}
         value={formatNumber(todayRequests)}
@@ -97,6 +101,22 @@ export function StatsCards({
         icon={Zap}
         isLoading={isLoading}
         delay={160}
+      />
+      <StatCard
+        title={t("stats.avgTtft")}
+        value={avgTtftMs > 0 ? `${formatNumber(avgTtftMs)} ms` : "—"}
+        subtitle={t("stats.latency")}
+        icon={Timer}
+        isLoading={isLoading}
+        delay={240}
+      />
+      <StatCard
+        title={t("stats.cacheHitRate")}
+        value={cacheHitRate > 0 ? `${cacheHitRate}%` : "—"}
+        subtitle={t("stats.tokens")}
+        icon={Database}
+        isLoading={isLoading}
+        delay={320}
       />
     </div>
   );

@@ -38,19 +38,25 @@ export function useStatsOverview() {
   });
 }
 
+export type TimeseriesMetric = "requests" | "ttft" | "tps";
+
 /**
  * Fetch time series statistics for chart visualization.
  *
  * Returns aggregated data points grouped by upstream for the specified time range.
  *
  * @param range - Time range: "today", "7d", or "30d"
+ * @param metric - Metric type: "requests", "ttft", or "tps"
  */
-export function useStatsTimeseries(range: TimeRange = "7d") {
+export function useStatsTimeseries(range: TimeRange = "7d", metric: TimeseriesMetric = "requests") {
   const { apiClient } = useAuth();
 
   return useQuery({
-    queryKey: ["stats", "timeseries", range],
-    queryFn: () => apiClient.get<StatsTimeseriesResponse>(`/admin/stats/timeseries?range=${range}`),
+    queryKey: ["stats", "timeseries", range, metric],
+    queryFn: () =>
+      apiClient.get<StatsTimeseriesResponse>(
+        `/admin/stats/timeseries?range=${range}&metric=${metric}`
+      ),
     staleTime: 30_000, // 30 seconds
     refetchInterval: 60_000, // Auto-refresh every minute
   });
