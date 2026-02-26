@@ -136,7 +136,7 @@ export function StatsCards({
       />
       <StatCard
         title={t("stats.cacheHitRate")}
-        value={cacheHitRate > 0 ? `${cacheHitRate}%` : "—"}
+        value={`${cacheHitRate}%`}
         subtitle={t("stats.tokens")}
         icon={Database}
         isLoading={isLoading}
