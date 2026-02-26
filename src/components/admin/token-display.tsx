@@ -15,6 +15,11 @@ interface TokenDisplayProps {
   cacheReadTokens: number;
 }
 
+interface TokenDetailContentProps extends TokenDisplayProps {
+  showHeader?: boolean;
+  className?: string;
+}
+
 /**
  * Calculate effective cache read tokens.
  * - Anthropic: uses cacheReadTokens directly
@@ -55,7 +60,9 @@ export function TokenDetailContent({
   reasoningTokens,
   cacheCreationTokens,
   cacheReadTokens,
-}: TokenDisplayProps) {
+  showHeader = true,
+  className,
+}: TokenDetailContentProps) {
   const t = useTranslations("logs");
   const effectiveCacheRead = getEffectiveCacheRead(cacheReadTokens, cachedTokens);
   const newInputTokens = Math.max(promptTokens - effectiveCacheRead, 0);
@@ -120,11 +127,18 @@ export function TokenDetailContent({
   }
 
   return (
-    <div className="min-w-[180px] max-w-[460px] font-mono text-xs">
-      {/* Header */}
-      <div className="mb-2 border-b border-divider pb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-        {t("tokenDetails")}
-      </div>
+    <div
+      className={cn(
+        "font-mono text-xs",
+        showHeader ? "min-w-[180px] max-w-[460px]" : "w-full",
+        className
+      )}
+    >
+      {showHeader && (
+        <div className="mb-2 border-b border-divider pb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+          {t("tokenDetails")}
+        </div>
+      )}
 
       {/* Main token rows */}
       <div className="space-y-1">

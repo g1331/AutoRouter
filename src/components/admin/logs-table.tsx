@@ -55,6 +55,12 @@ interface LatencyBreakdown {
   segments: LatencyBreakdownSegment[];
 }
 
+const DETAIL_PANEL_CLASS =
+  "rounded-cf-sm border border-divider bg-surface-300/55 shadow-[var(--vr-shadow-xs)]";
+const DETAIL_PANEL_HEADER_CLASS =
+  "border-b border-divider/80 bg-surface-200/70 px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground";
+const DETAIL_PANEL_BODY_CLASS = "px-3 py-2.5";
+
 function getTtftPerformanceClass(ttftMs: number): string {
   if (ttftMs >= 1000) return "text-status-error";
   if (ttftMs >= 500) return "text-status-warning";
@@ -568,11 +574,6 @@ export function LogsTable({ logs }: LogsTableProps) {
                   }
                   const generationMs = getGenerationMs(log);
                   const requestTps = getRequestTps(log);
-                  const didSendUpstream = log.routing_decision?.did_send_upstream;
-                  const upstreamLatencyMs =
-                    log.duration_ms != null && log.routing_duration_ms != null
-                      ? Math.max(0, log.duration_ms - log.routing_duration_ms)
-                      : null;
                   const latencyBreakdown = buildLatencyBreakdown(
                     log.duration_ms,
                     log.routing_duration_ms,
@@ -715,178 +716,159 @@ export function LogsTable({ logs }: LogsTableProps) {
                         <TableRow className="bg-surface-300/30">
                           <TableCell colSpan={9} className="p-0">
                             <div className="px-4 py-3 border-t border-dashed border-divider space-y-4 font-mono text-xs">
-                              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(260px,320px)_minmax(300px,360px)] xl:items-start">
-                                <div className="min-w-0">
-                                  <RoutingDecisionTimeline
-                                    routingDecision={log.routing_decision}
-                                    upstreamName={upstreamDisplayName}
-                                    routingType={log.routing_type}
-                                    groupName={log.group_name}
-                                    failoverAttempts={log.failover_attempts}
-                                    failoverHistory={log.failover_history}
-                                    failoverDurationMs={failoverDurationMs}
-                                    statusCode={log.status_code}
-                                    sessionId={log.session_id}
-                                    affinityHit={log.affinity_hit}
-                                    affinityMigrated={log.affinity_migrated}
-                                    compact={false}
-                                  />
+                              <section className="overflow-hidden rounded-cf-sm border border-divider bg-surface-200/45 shadow-[var(--vr-shadow-xs)]">
+                                <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                                  {t("expandedDetails")}
                                 </div>
-
-                                <div className="w-full xl:min-w-0">
-                                  <div className="rounded-cf-sm border border-divider bg-surface-300/55 px-2.5 py-2">
-                                    <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-                                      {t("performanceStats")}
-                                    </div>
-                                    <div className="space-y-1">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-muted-foreground">
-                                          {t("timelineTotalDuration")}:
-                                        </span>
-                                        <span className="ml-auto tabular-nums text-foreground">
-                                          {formatDuration(log.duration_ms)}
-                                        </span>
+                                <div className="border-t border-divider/80 px-3 py-3">
+                                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(260px,320px)_minmax(300px,360px)] xl:items-start">
+                                    <section className={cn(DETAIL_PANEL_CLASS, "min-w-0")}>
+                                      <div className={DETAIL_PANEL_HEADER_CLASS}>
+                                        {t("routingDecisionDetails")}
                                       </div>
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-muted-foreground">
-                                          {t("timelineUpstreamLatency")}:
-                                        </span>
-                                        <span
-                                          className={cn(
-                                            "ml-auto tabular-nums",
-                                            didSendUpstream === false
-                                              ? "text-orange-500"
-                                              : "text-status-success"
-                                          )}
-                                        >
-                                          {didSendUpstream === false
-                                            ? t("timelineNoUpstreamSent")
-                                            : formatDuration(upstreamLatencyMs)}
-                                        </span>
+                                      <div className={DETAIL_PANEL_BODY_CLASS}>
+                                        <RoutingDecisionTimeline
+                                          routingDecision={log.routing_decision}
+                                          upstreamName={upstreamDisplayName}
+                                          routingType={log.routing_type}
+                                          groupName={log.group_name}
+                                          failoverAttempts={log.failover_attempts}
+                                          failoverHistory={log.failover_history}
+                                          failoverDurationMs={failoverDurationMs}
+                                          statusCode={log.status_code}
+                                          sessionId={log.session_id}
+                                          affinityHit={log.affinity_hit}
+                                          affinityMigrated={log.affinity_migrated}
+                                          showStageConnector={false}
+                                          compact={false}
+                                        />
                                       </div>
-                                      {didSendUpstream !== false && log.ttft_ms != null && (
-                                        <div className="flex items-center gap-2 pl-4">
-                                          <span className="text-muted-foreground">
-                                            {t("perfTtft")}:
-                                          </span>
-                                          <span
-                                            className={cn(
-                                              "ml-auto tabular-nums",
-                                              getTtftPerformanceClass(log.ttft_ms)
-                                            )}
-                                          >
-                                            {formatTtft(log.ttft_ms)}
-                                          </span>
-                                        </div>
-                                      )}
-                                      {didSendUpstream !== false && generationMs != null && (
-                                        <div className="flex items-center gap-2 pl-4">
-                                          <span className="text-muted-foreground">
-                                            {t("perfGen")}:
-                                          </span>
-                                          <span className="ml-auto tabular-nums text-status-success">
-                                            {formatDuration(generationMs)}
-                                          </span>
-                                        </div>
-                                      )}
-                                    </div>
+                                    </section>
 
-                                    {latencyBreakdown && (
-                                      <div className="mt-2 rounded-cf-sm border border-divider/80 bg-surface-200/50 px-2 py-2">
-                                        <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-                                          {t("timelineLatencyBreakdown")}
+                                    <section className="w-full xl:min-w-0">
+                                      <div className={DETAIL_PANEL_CLASS}>
+                                        <div className={DETAIL_PANEL_HEADER_CLASS}>
+                                          {t("performanceStats")}
                                         </div>
-                                        <div className="flex items-center gap-2.5">
-                                          <svg
-                                            viewBox="0 0 40 40"
-                                            role="img"
-                                            aria-label={t("timelineLatencyBreakdown")}
-                                            className="h-12 w-12 shrink-0 -rotate-90"
-                                          >
-                                            <circle
-                                              cx="20"
-                                              cy="20"
-                                              r={latencyBreakdown.ringRadius}
-                                              className="fill-none stroke-divider/70"
-                                              strokeWidth="5"
-                                            />
-                                            {latencyBreakdown.segments.map((segment) => (
-                                              <circle
-                                                key={segment.key}
-                                                cx="20"
-                                                cy="20"
-                                                r={latencyBreakdown.ringRadius}
-                                                className={cn("fill-none", segment.textClass)}
-                                                stroke="currentColor"
-                                                strokeWidth="5"
-                                                strokeLinecap="butt"
-                                                strokeDasharray={segment.dashArray}
-                                                strokeDashoffset={segment.dashOffset}
-                                              />
-                                            ))}
-                                          </svg>
-                                          <div className="min-w-0 space-y-0.5">
-                                            {latencyBreakdown.segments.map((segment) => (
-                                              <div
-                                                key={`${segment.key}-legend`}
-                                                className="flex items-center gap-2"
-                                              >
-                                                <span
-                                                  className={cn(
-                                                    "h-2 w-2 shrink-0 rounded-[2px]",
-                                                    segment.dotClass
-                                                  )}
-                                                />
-                                                <span className="text-muted-foreground">
-                                                  {segment.key === "routing" &&
-                                                    t("timelineRoutingOverhead")}
-                                                  {segment.key === "ttft" && t("perfTtft")}
-                                                  {segment.key === "generation" && t("perfGen")}
-                                                  {segment.key === "other" &&
-                                                    t("timelineOtherLatency")}
-                                                </span>
-                                                <span
-                                                  className={cn(
-                                                    "ml-auto tabular-nums",
-                                                    segment.textClass
-                                                  )}
-                                                >
-                                                  {segment.key === "ttft"
-                                                    ? formatTtft(segment.valueMs)
-                                                    : formatDuration(segment.valueMs)}
-                                                </span>
-                                              </div>
-                                            ))}
+                                        <div className={cn(DETAIL_PANEL_BODY_CLASS, "space-y-1")}>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-muted-foreground">
+                                              {t("timelineTotalDuration")}:
+                                            </span>
+                                            <span className="ml-auto tabular-nums text-foreground">
+                                              {formatDuration(log.duration_ms)}
+                                            </span>
                                           </div>
                                         </div>
-                                      </div>
-                                    )}
 
-                                    {requestTps != null && (
-                                      <div className="mt-2 flex items-center gap-2 border-t border-dashed border-divider pt-1">
-                                        <span className="text-muted-foreground">
-                                          {t("perfTps")}:
-                                        </span>
-                                        <span className="ml-auto tabular-nums text-foreground">
-                                          {requestTps} tok/s
-                                        </span>
+                                        {latencyBreakdown && (
+                                          <div className="mt-2 px-3 py-2">
+                                            <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                                              {t("timelineLatencyBreakdown")}
+                                            </div>
+                                            <div className="flex items-center gap-2.5">
+                                              <svg
+                                                viewBox="0 0 40 40"
+                                                role="img"
+                                                aria-label={t("timelineLatencyBreakdown")}
+                                                className="h-12 w-12 shrink-0 -rotate-90"
+                                              >
+                                                <circle
+                                                  cx="20"
+                                                  cy="20"
+                                                  r={latencyBreakdown.ringRadius}
+                                                  className="fill-none stroke-divider/70"
+                                                  strokeWidth="5"
+                                                />
+                                                {latencyBreakdown.segments.map((segment) => (
+                                                  <circle
+                                                    key={segment.key}
+                                                    cx="20"
+                                                    cy="20"
+                                                    r={latencyBreakdown.ringRadius}
+                                                    className={cn("fill-none", segment.textClass)}
+                                                    stroke="currentColor"
+                                                    strokeWidth="5"
+                                                    strokeLinecap="butt"
+                                                    strokeDasharray={segment.dashArray}
+                                                    strokeDashoffset={segment.dashOffset}
+                                                  />
+                                                ))}
+                                              </svg>
+                                              <div className="min-w-0 space-y-0.5">
+                                                {latencyBreakdown.segments.map((segment) => (
+                                                  <div
+                                                    key={`${segment.key}-legend`}
+                                                    className="flex items-center gap-2"
+                                                  >
+                                                    <span
+                                                      className={cn(
+                                                        "h-2 w-2 shrink-0 rounded-[2px]",
+                                                        segment.dotClass
+                                                      )}
+                                                    />
+                                                    <span className="text-muted-foreground">
+                                                      {segment.key === "routing" &&
+                                                        t("timelineRoutingOverhead")}
+                                                      {segment.key === "ttft" && t("perfTtft")}
+                                                      {segment.key === "generation" && t("perfGen")}
+                                                      {segment.key === "other" &&
+                                                        t("timelineOtherLatency")}
+                                                    </span>
+                                                    <span
+                                                      className={cn(
+                                                        "ml-auto tabular-nums",
+                                                        segment.textClass
+                                                      )}
+                                                    >
+                                                      {segment.key === "ttft"
+                                                        ? formatTtft(segment.valueMs)
+                                                        : formatDuration(segment.valueMs)}
+                                                    </span>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {requestTps != null && (
+                                          <div className="mt-2 border-t border-dashed border-divider px-3 pt-1">
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-muted-foreground">
+                                                {t("perfTps")}:
+                                              </span>
+                                              <span className="ml-auto tabular-nums text-foreground">
+                                                {requestTps} tok/s
+                                              </span>
+                                            </div>
+                                          </div>
+                                        )}
                                       </div>
-                                    )}
+                                    </section>
+
+                                    <section className="w-full xl:min-w-0">
+                                      <div className={DETAIL_PANEL_CLASS}>
+                                        <div className={DETAIL_PANEL_HEADER_CLASS}>
+                                          {t("tokenDetails")}
+                                        </div>
+                                        <div className={DETAIL_PANEL_BODY_CLASS}>
+                                          <TokenDetailContent
+                                            promptTokens={log.prompt_tokens}
+                                            completionTokens={log.completion_tokens}
+                                            totalTokens={log.total_tokens}
+                                            cachedTokens={log.cached_tokens}
+                                            reasoningTokens={log.reasoning_tokens}
+                                            cacheCreationTokens={log.cache_creation_tokens}
+                                            cacheReadTokens={log.cache_read_tokens}
+                                            showHeader={false}
+                                          />
+                                        </div>
+                                      </div>
+                                    </section>
                                   </div>
                                 </div>
-
-                                <div className="w-full xl:min-w-0">
-                                  <TokenDetailContent
-                                    promptTokens={log.prompt_tokens}
-                                    completionTokens={log.completion_tokens}
-                                    totalTokens={log.total_tokens}
-                                    cachedTokens={log.cached_tokens}
-                                    reasoningTokens={log.reasoning_tokens}
-                                    cacheCreationTokens={log.cache_creation_tokens}
-                                    cacheReadTokens={log.cache_read_tokens}
-                                  />
-                                </div>
-                              </div>
+                              </section>
 
                               {/* Error Details - Terminal Style */}
                               {isError && (

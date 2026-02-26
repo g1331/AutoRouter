@@ -35,6 +35,7 @@ interface RoutingDecisionTimelineProps {
   affinityHit?: boolean;
   affinityMigrated?: boolean;
   compact?: boolean;
+  showStageConnector?: boolean;
 }
 
 const MAX_RETRY_DISPLAY = 5;
@@ -83,6 +84,7 @@ export function RoutingDecisionTimeline({
   affinityHit,
   affinityMigrated,
   compact = true,
+  showStageConnector = true,
 }: RoutingDecisionTimelineProps) {
   const t = useTranslations("logs");
 
@@ -207,7 +209,11 @@ export function RoutingDecisionTimeline({
     <div className="space-y-0 font-mono text-xs">
       {/* Stage 1: Model Resolution */}
       {routingDecision && (
-        <TimelineStage number={1} label={t("timelineModelResolution")}>
+        <TimelineStage
+          number={1}
+          label={t("timelineModelResolution")}
+          showConnector={showStageConnector}
+        >
           <div className="text-foreground">
             <span>{routingDecision.original_model}</span>
             {routingDecision.model_redirect_applied ? (
@@ -224,7 +230,11 @@ export function RoutingDecisionTimeline({
       )}
 
       {/* Stage 2: Session Affinity */}
-      <TimelineStage number={2} label={t("timelineSessionAffinity")}>
+      <TimelineStage
+        number={2}
+        label={t("timelineSessionAffinity")}
+        showConnector={showStageConnector}
+      >
         {hasSession ? (
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-foreground">
@@ -260,7 +270,11 @@ export function RoutingDecisionTimeline({
 
       {/* Stage 3: Upstream Selection */}
       {routingDecision && (
-        <TimelineStage number={3} label={t("timelineUpstreamSelection")}>
+        <TimelineStage
+          number={3}
+          label={t("timelineUpstreamSelection")}
+          showConnector={showStageConnector}
+        >
           <div className="space-y-1">
             <div className="mb-1 text-muted-foreground">
               {t("tooltipStrategy")}: {routingDecision.selection_strategy} (
@@ -341,7 +355,11 @@ export function RoutingDecisionTimeline({
       )}
 
       {/* Stage 4: Execution & Retries */}
-      <TimelineStage number={4} label={t("timelineExecutionRetries")}>
+      <TimelineStage
+        number={4}
+        label={t("timelineExecutionRetries")}
+        showConnector={showStageConnector}
+      >
         {hasFailoverHistory ? (
           <RetryTimeline
             failoverHistory={failoverHistory!}
@@ -357,7 +375,12 @@ export function RoutingDecisionTimeline({
       </TimelineStage>
 
       {/* Stage 5: Final Result */}
-      <TimelineStage number={5} label={t("timelineFinalResult")} isLast>
+      <TimelineStage
+        number={5}
+        label={t("timelineFinalResult")}
+        isLast
+        showConnector={showStageConnector}
+      >
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Server className="w-3 h-3 text-muted-foreground" />
@@ -373,14 +396,6 @@ export function RoutingDecisionTimeline({
               {finalUpstreamLabel}
             </span>
           </div>
-          {didSendUpstream !== undefined && (
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">{t("timelineUpstreamSent")}:</span>
-              <span className={didSendUpstream ? "text-status-success" : "text-orange-500"}>
-                {didSendUpstream ? t("timelineSentYes") : t("timelineSentNo")}
-              </span>
-            </div>
-          )}
           {failureStageLabel && !isSuccess && (
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground">{t("timelineFailureStage")}:</span>
@@ -399,17 +414,19 @@ function TimelineStage({
   number,
   label,
   isLast = false,
+  showConnector = true,
   children,
 }: {
   number: number;
   label: string;
   isLast?: boolean;
+  showConnector?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn("relative pl-8", !isLast && "pb-3")}>
+    <div className={cn("relative", showConnector ? "pl-8" : "pl-6", !isLast && "pb-3")}>
       {/* Vertical connector line */}
-      {!isLast && (
+      {showConnector && !isLast && (
         <div className="absolute left-[11px] top-7 bottom-0 w-px border-l border-dashed border-surface-500" />
       )}
       {/* Stage header with CSS circle number */}
