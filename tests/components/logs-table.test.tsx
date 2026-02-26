@@ -388,6 +388,56 @@ describe("LogsTable", () => {
       expect(screen.getByText("/v1/high-ttft")).toBeInTheDocument();
       expect(screen.queryByText("/v1/normal-ttft")).not.toBeInTheDocument();
     });
+
+    it("filters to low TPS logs with quick filter preset", () => {
+      const lowTpsLog: RequestLog = {
+        ...mockLog,
+        id: "low-tps",
+        path: "/v1/low-tps",
+        is_stream: true,
+        duration_ms: 5000,
+        routing_duration_ms: 500,
+        ttft_ms: 1000,
+        completion_tokens: 20,
+      };
+      const highTpsLog: RequestLog = {
+        ...mockLog,
+        id: "high-tps",
+        path: "/v1/high-tps",
+        is_stream: true,
+        duration_ms: 1500,
+        routing_duration_ms: 200,
+        ttft_ms: 200,
+        completion_tokens: 200,
+      };
+
+      render(<LogsTable logs={[lowTpsLog, highTpsLog]} />);
+      fireEvent.click(screen.getByRole("button", { name: "presetLowTps" }));
+
+      expect(screen.getByText("/v1/low-tps")).toBeInTheDocument();
+      expect(screen.queryByText("/v1/high-tps")).not.toBeInTheDocument();
+    });
+
+    it("filters to slow duration logs with quick filter preset", () => {
+      const slowLog: RequestLog = {
+        ...mockLog,
+        id: "slow-duration",
+        path: "/v1/slow-duration",
+        duration_ms: 25000,
+      };
+      const fastLog: RequestLog = {
+        ...mockLog,
+        id: "fast-duration",
+        path: "/v1/fast-duration",
+        duration_ms: 5000,
+      };
+
+      render(<LogsTable logs={[slowLog, fastLog]} />);
+      fireEvent.click(screen.getByRole("button", { name: "presetSlowDuration" }));
+
+      expect(screen.getByText("/v1/slow-duration")).toBeInTheDocument();
+      expect(screen.queryByText("/v1/fast-duration")).not.toBeInTheDocument();
+    });
   });
 
   describe("Legacy Footer Removal", () => {
@@ -601,9 +651,11 @@ describe("LogsTable", () => {
       it("performs case-insensitive partial match", () => {
         render(<LogsTable logs={logsForFiltering} />);
 
-        // All logs visible by default (within time range)
-        const rows = screen.getAllByRole("row");
-        expect(rows.length).toBeGreaterThan(1);
+        const input = screen.getByPlaceholderText("filterModel");
+        fireEvent.change(input, { target: { value: "claude" } });
+
+        expect(screen.getByText("claude-3-opus")).toBeInTheDocument();
+        expect(screen.queryByText("gpt-4")).not.toBeInTheDocument();
       });
 
       it("filters logs by exact model name", () => {

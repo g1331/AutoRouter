@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import React from "react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { UsageChart } from "@/components/dashboard/usage-chart";
 import type { StatsTimeseriesResponse } from "@/types/api";
@@ -30,7 +31,15 @@ vi.mock("recharts", () => ({
   },
   CartesianGrid: () => <div data-testid="cartesian-grid" />,
   Tooltip: ({ content }: { content: React.ReactNode }) => (
-    <div data-testid="tooltip">{content}</div>
+    <div data-testid="tooltip">
+      {React.isValidElement(content)
+        ? React.cloneElement(content as React.ReactElement, {
+            active: true,
+            label: "mock-label",
+            payload: [{ name: "OpenAI", value: 1222, color: "#f59e0b" }],
+          })
+        : content}
+    </div>
   ),
   Legend: ({ content }: { content: React.ReactNode }) => <div data-testid="legend">{content}</div>,
 }));
@@ -345,6 +354,7 @@ describe("UsageChart", () => {
         tickFormatter?: (v: number) => string;
       };
       expect(yAxisProps.tickFormatter?.(1222)).toBe("1.222s");
+      expect(screen.getByText(/1.222s/)).toBeInTheDocument();
     });
 
     it("formats TTFT ticks as milliseconds when value is < 1000ms", () => {
@@ -363,6 +373,41 @@ describe("UsageChart", () => {
         tickFormatter?: (v: number) => string;
       };
       expect(yAxisProps.tickFormatter?.(650)).toBe("650ms");
+    });
+  });
+
+  describe("Metric Interaction", () => {
+    it("calls onMetricChange when clicking metric tabs", () => {
+      const onMetricChange = vi.fn();
+      render(
+        <UsageChart
+          data={mockTimeseriesData}
+          isLoading={false}
+          timeRange="7d"
+          metric="requests"
+          onMetricChange={onMetricChange}
+        />
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "stats.chartTabTtft" }));
+      fireEvent.click(screen.getByRole("button", { name: "stats.chartTabTps" }));
+
+      expect(onMetricChange).toHaveBeenNthCalledWith(1, "ttft");
+      expect(onMetricChange).toHaveBeenNthCalledWith(2, "tps");
+    });
+
+    it("formats tooltip values for TPS metric with tok/s suffix", () => {
+      render(
+        <UsageChart
+          data={mockTimeseriesData}
+          isLoading={false}
+          timeRange="7d"
+          metric="tps"
+          onMetricChange={vi.fn()}
+        />
+      );
+
+      expect(screen.getByText(/tok\/s/)).toBeInTheDocument();
     });
   });
 });
