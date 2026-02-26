@@ -914,8 +914,10 @@ describe("proxy-client", () => {
         const onFirstChunk = vi.fn();
         const transformer = createSSETransformer({ onUsage, onFirstChunk });
         const encoder = new TextEncoder();
-        const input =
-          'data: {"type":"message_start","message":{"id":"msg_1","model":"claude-3-5"}}\n\n';
+        const input = [
+          'data: {"type":"message_start","message":{"id":"msg_1","model":"claude-3-5"}}\n\n',
+          'data: {"type":"content_block_start","content_block":{"type":"text","text":""}}\n\n',
+        ].join("");
 
         const reader = new ReadableStream({
           start(controller) {

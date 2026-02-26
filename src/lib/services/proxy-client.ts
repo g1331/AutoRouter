@@ -304,6 +304,7 @@ const TTFT_METADATA_ONLY_EVENT_TYPES = new Set([
   "message_start",
   "message_delta",
   "message_stop",
+  "content_block_start",
   "content_block_stop",
   "ping",
   "response.created",
