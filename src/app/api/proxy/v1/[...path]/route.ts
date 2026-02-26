@@ -1146,10 +1146,12 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         recordingStream = recordStream;
         responseStream = clientStream;
       }
-      const usagePromise = result.usagePromise ?? Promise.resolve(result.usage ?? null);
+      const metricsPromise =
+        result.streamMetricsPromise ??
+        Promise.resolve({ usage: result.usage ?? null, ttftMs: result.ttftMs });
 
-      void usagePromise
-        .then((usage) => {
+      void metricsPromise
+        .then(({ usage, ttftMs }) => {
           // Update session affinity cumulative tokens if we have a session
           if (affinityContext?.sessionId && usage) {
             const affinityUsage: AffinityUsage = {
@@ -1195,7 +1197,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               routingDecision: finalRoutingDecisionLog,
               affinityHit: isAffinityHit,
               affinityMigrated: isAffinityMigrated,
-              ttftMs: result.ttftMs ?? null,
+              ttftMs: ttftMs ?? null,
               isStream: true,
             });
           }
@@ -1225,7 +1227,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             sessionId,
             affinityHit: isAffinityHit,
             affinityMigrated: isAffinityMigrated,
-            ttftMs: result.ttftMs ?? null,
+            ttftMs: ttftMs ?? null,
             isStream: true,
           });
         })

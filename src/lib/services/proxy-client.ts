@@ -28,6 +28,14 @@ export interface TokenUsage {
 }
 
 /**
+ * Streaming metrics resolved after stream is fully consumed.
+ */
+export interface StreamMetrics {
+  usage: TokenUsage | null;
+  ttftMs?: number;
+}
+
+/**
  * Result of a proxy request.
  */
 export interface ProxyResult {
@@ -36,7 +44,7 @@ export interface ProxyResult {
   body: ReadableStream<Uint8Array> | Uint8Array;
   isStream: boolean;
   usage?: TokenUsage;
-  usagePromise?: Promise<TokenUsage | null>;
+  streamMetricsPromise?: Promise<StreamMetrics>;
   ttftMs?: number;
 }
 
@@ -482,14 +490,14 @@ export async function forwardRequest(
       );
 
       const [clientStream, loggingStream] = transformedStream.tee();
-      const usagePromise = (async () => {
+      const streamMetricsPromise = (async (): Promise<StreamMetrics> => {
         try {
           await drainStream(loggingStream);
         } catch {
           // Ignore stream consumption errors
         }
 
-        return usage ?? null;
+        return { usage: usage ?? null, ttftMs };
       })();
 
       return {
@@ -498,8 +506,7 @@ export async function forwardRequest(
         body: clientStream,
         isStream: true,
         usage,
-        usagePromise,
-        ttftMs,
+        streamMetricsPromise,
       };
     } else {
       // Regular response

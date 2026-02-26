@@ -169,10 +169,10 @@ export async function getTimeseriesStats(
       ...(metric === "ttft" ? { avgTtft: avg(requestLogs.ttftMs) } : {}),
       ...(metric === "tps"
         ? {
-            totalCompletionTokens: sum(requestLogs.completionTokens),
-            totalDurationMs: sum(requestLogs.durationMs),
-            totalRoutingDurationMs: sum(requestLogs.routingDurationMs),
-            totalTtftMs: sum(requestLogs.ttftMs),
+            totalCompletionTokens: sql<number>`sum(case when ${requestLogs.isStream} then ${requestLogs.completionTokens} else 0 end)`,
+            totalDurationMs: sql<number>`sum(case when ${requestLogs.isStream} then ${requestLogs.durationMs} else 0 end)`,
+            totalRoutingDurationMs: sql<number>`sum(case when ${requestLogs.isStream} then ${requestLogs.routingDurationMs} else 0 end)`,
+            totalTtftMs: sql<number>`sum(case when ${requestLogs.isStream} then coalesce(${requestLogs.ttftMs}, 0) else 0 end)`,
           }
         : {}),
     })
@@ -324,10 +324,10 @@ export async function getLeaderboardStats(
       requestCount: count(requestLogs.id),
       totalTokens: sum(requestLogs.totalTokens),
       avgTtft: avg(requestLogs.ttftMs),
-      totalCompletionTokens: sum(requestLogs.completionTokens),
-      totalDurationMs: sum(requestLogs.durationMs),
-      totalRoutingDurationMs: sum(requestLogs.routingDurationMs),
-      totalTtftMs: sum(requestLogs.ttftMs),
+      totalCompletionTokens: sql<number>`sum(case when ${requestLogs.isStream} then ${requestLogs.completionTokens} else 0 end)`,
+      totalDurationMs: sql<number>`sum(case when ${requestLogs.isStream} then ${requestLogs.durationMs} else 0 end)`,
+      totalRoutingDurationMs: sql<number>`sum(case when ${requestLogs.isStream} then ${requestLogs.routingDurationMs} else 0 end)`,
+      totalTtftMs: sql<number>`sum(case when ${requestLogs.isStream} then coalesce(${requestLogs.ttftMs}, 0) else 0 end)`,
     })
     .from(requestLogs)
     .where(and(gte(requestLogs.createdAt, startTime), isNotNull(requestLogs.upstreamId)))

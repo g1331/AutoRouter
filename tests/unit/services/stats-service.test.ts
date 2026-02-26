@@ -32,6 +32,12 @@ vi.mock("@/lib/db", () => ({
     statusCode: "statusCode",
     durationMs: "durationMs",
     totalTokens: "totalTokens",
+    completionTokens: "completionTokens",
+    routingDurationMs: "routingDurationMs",
+    ttftMs: "ttftMs",
+    isStream: "isStream",
+    promptTokens: "promptTokens",
+    cacheReadTokens: "cacheReadTokens",
   },
   apiKeys: {
     id: "id",

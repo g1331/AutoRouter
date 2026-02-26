@@ -1138,7 +1138,14 @@ describe("proxy-client", () => {
       expect(result.isStream).toBe(true);
       expect(result.body).toBeInstanceOf(ReadableStream);
 
-      await expect(result.usagePromise).resolves.toBeNull();
+      const streamMetrics = await result.streamMetricsPromise;
+      expect(streamMetrics).toEqual(
+        expect.objectContaining({
+          usage: null,
+        })
+      );
+      expect(typeof streamMetrics?.ttftMs).toBe("number");
+      expect(streamMetrics?.ttftMs).toBeGreaterThanOrEqual(0);
     });
 
     it("should handle timeout error", async () => {

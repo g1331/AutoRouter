@@ -2107,6 +2107,122 @@ describe("proxy route upstream selection", () => {
     );
   });
 
+  it("should persist streaming ttft from streamMetricsPromise", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-openai" },
+    ]);
+
+    const openaiUpstream = {
+      id: "up-openai",
+      name: "openai",
+      providerType: "openai",
+      baseUrl: "https://api.openai.com/v1",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream: openaiUpstream,
+      providerType: "openai",
+      resolvedModel: "gpt-4o-mini",
+      candidateUpstreams: [openaiUpstream],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "gpt-4o-mini",
+        resolvedModel: "gpt-4o-mini",
+        providerType: "openai",
+        upstreamName: "openai",
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 1,
+        finalCandidateCount: 1,
+      },
+    });
+
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: openaiUpstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"id":"evt-1"}\n\n'));
+        controller.close();
+      },
+    });
+
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers({ "content-type": "text/event-stream" }),
+      body: stream,
+      isStream: true,
+      streamMetricsPromise: Promise.resolve({
+        usage: {
+          promptTokens: 10,
+          completionTokens: 20,
+          totalTokens: 30,
+          cachedTokens: 0,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
+        },
+        ttftMs: 321,
+      }),
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: "hello" }],
+        stream: true,
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["v1", "chat", "completions"] }),
+    });
+
+    expect(response.status).toBe(200);
+
+    const reader = response.body?.getReader();
+    if (reader) {
+      while (true) {
+        const { done } = await reader.read();
+        if (done) break;
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(updateRequestLog).toHaveBeenCalled();
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload?.isStream).toBe(true);
+    expect(updateLogPayload?.ttftMs).toBe(321);
+    expect(updateLogPayload?.promptTokens).toBe(10);
+    expect(updateLogPayload?.completionTokens).toBe(20);
+  });
+
   it.skip("should handle streaming response failover with circuit breaker", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
@@ -2204,14 +2320,17 @@ describe("proxy route upstream selection", () => {
         body: stream,
         isStream: true,
         usage: null,
-        usagePromise: Promise.resolve({
-          promptTokens: 10,
-          completionTokens: 20,
-          totalTokens: 30,
-          cachedTokens: 0,
-          reasoningTokens: 0,
-          cacheCreationTokens: 0,
-          cacheReadTokens: 0,
+        streamMetricsPromise: Promise.resolve({
+          usage: {
+            promptTokens: 10,
+            completionTokens: 20,
+            totalTokens: 30,
+            cachedTokens: 0,
+            reasoningTokens: 0,
+            cacheCreationTokens: 0,
+            cacheReadTokens: 0,
+          },
+          ttftMs: undefined,
         }),
       });
 
