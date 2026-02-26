@@ -39,8 +39,8 @@
 
 ## 7. 国际化
 
-- [ ] 7.1 修复 `src/messages/zh-CN.json` 中 dashboard 部分的未汉化文本（pageTitle、controlPanel、stats 卡片标签、排行榜标题、时间范围选择器等约 22 个 key）
-- [ ] 7.2 在 `src/messages/en.json` 和 `src/messages/zh-CN.json` 中新增 Dashboard 新指标卡片（Avg TTFT、Cache Hit Rate）、图表 Tab（请求量/TTFT/TPS）、日志表格（TTFT 列、TPS 标签）相关的翻译 key
+- [x] 7.1 修复 `src/messages/zh-CN.json` 中 dashboard 部分的未汉化文本（pageTitle、controlPanel、stats 卡片标签、排行榜标题、时间范围选择器等约 22 个 key）
+- [x] 7.2 在 `src/messages/en.json` 和 `src/messages/zh-CN.json` 中新增 Dashboard 新指标卡片（Avg TTFT、Cache Hit Rate）、图表 Tab（请求量/TTFT/TPS）、日志表格（TTFT 列、TPS 标签）相关的翻译 key
 
 ## 8. Dashboard 前端 - 概览卡片
 
