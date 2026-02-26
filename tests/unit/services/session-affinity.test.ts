@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   SessionAffinityStore,
   extractSessionId,
@@ -99,25 +99,29 @@ describe("SessionAffinityStore", () => {
       shortStore.dispose();
     });
 
-    it("should expire entry after max TTL even with activity", async () => {
+    it("should expire entry after max TTL even with activity", () => {
+      vi.useFakeTimers();
       const shortStore = new SessionAffinityStore(5000, 100); // 100ms max TTL
 
-      shortStore.set("key1", "anthropic_messages", "session-abc", "upstream-1", 1024);
+      try {
+        shortStore.set("key1", "anthropic_messages", "session-abc", "upstream-1", 1024);
 
-      // Get multiple times to refresh sliding window
-      await new Promise((resolve) => setTimeout(resolve, 30));
-      expect(shortStore.get("key1", "anthropic_messages", "session-abc")).not.toBeNull();
+        // Get multiple times to refresh sliding window
+        vi.advanceTimersByTime(30);
+        expect(shortStore.get("key1", "anthropic_messages", "session-abc")).not.toBeNull();
 
-      await new Promise((resolve) => setTimeout(resolve, 30));
-      expect(shortStore.get("key1", "anthropic_messages", "session-abc")).not.toBeNull();
+        vi.advanceTimersByTime(30);
+        expect(shortStore.get("key1", "anthropic_messages", "session-abc")).not.toBeNull();
 
-      // Wait for max TTL to expire (need >100ms since max TTL)
-      await new Promise((resolve) => setTimeout(resolve, 60));
+        // Move beyond max TTL (absolute lifetime from createdAt)
+        vi.advanceTimersByTime(41);
 
-      const entry = shortStore.get("key1", "anthropic_messages", "session-abc");
-      expect(entry).toBeNull();
-
-      shortStore.dispose();
+        const entry = shortStore.get("key1", "anthropic_messages", "session-abc");
+        expect(entry).toBeNull();
+      } finally {
+        shortStore.dispose();
+        vi.useRealTimers();
+      }
     });
   });
 
