@@ -18,12 +18,33 @@ interface StatsCardsProps {
   isLoading: boolean;
 }
 
-function AnimatedCounter({ value, isLoading }: { value: string; isLoading: boolean }) {
+function formatTtft(ttftMs: number): string {
+  if (ttftMs >= 1000) {
+    return `${(ttftMs / 1000).toFixed(3)}s`;
+  }
+  return `${Math.round(ttftMs)}ms`;
+}
+
+function getTtftPerformanceClass(ttftMs: number): string {
+  if (ttftMs >= 1000) return "text-status-error";
+  if (ttftMs >= 500) return "text-status-warning";
+  return "text-status-success";
+}
+
+function AnimatedCounter({
+  value,
+  isLoading,
+  valueClassName,
+}: {
+  value: string;
+  isLoading: boolean;
+  valueClassName?: string;
+}) {
   if (isLoading) {
     return <Skeleton variant="counter" placeholder="---" />;
   }
 
-  return <p className="type-display-medium text-foreground">{value}</p>;
+  return <p className={cn("type-display-medium", valueClassName ?? "text-foreground")}>{value}</p>;
 }
 
 function StatCard({
@@ -33,6 +54,7 @@ function StatCard({
   icon: Icon,
   isLoading,
   delay = 0,
+  valueClassName,
 }: {
   title: string;
   value: string;
@@ -40,6 +62,7 @@ function StatCard({
   icon: typeof Activity;
   isLoading: boolean;
   delay?: number;
+  valueClassName?: string;
 }) {
   return (
     <Card
@@ -53,7 +76,7 @@ function StatCard({
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 space-y-2">
             <p className="type-label-medium text-muted-foreground">{title}</p>
-            <AnimatedCounter value={value} isLoading={isLoading} />
+            <AnimatedCounter value={value} isLoading={isLoading} valueClassName={valueClassName} />
             <p className="type-body-small text-muted-foreground">{subtitle}</p>
           </div>
 
@@ -104,11 +127,12 @@ export function StatsCards({
       />
       <StatCard
         title={t("stats.avgTtft")}
-        value={avgTtftMs > 0 ? `${formatNumber(avgTtftMs)} ms` : "—"}
+        value={avgTtftMs > 0 ? formatTtft(avgTtftMs) : "—"}
         subtitle={t("stats.latency")}
         icon={Timer}
         isLoading={isLoading}
         delay={240}
+        valueClassName={avgTtftMs > 0 ? getTtftPerformanceClass(avgTtftMs) : "text-foreground"}
       />
       <StatCard
         title={t("stats.cacheHitRate")}

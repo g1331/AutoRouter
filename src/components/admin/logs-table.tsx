@@ -223,6 +223,19 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
     return `${(durationMs / 1000).toFixed(2)}s`;
   };
 
+  const formatTtft = (ttftMs: number) => {
+    if (ttftMs >= 1000) {
+      return `${(ttftMs / 1000).toFixed(3)}s`;
+    }
+    return `${Math.round(ttftMs)}ms`;
+  };
+
+  const getTtftPerformanceClass = (ttftMs: number) => {
+    if (ttftMs >= 1000) return "text-status-error";
+    if (ttftMs >= 500) return "text-status-warning";
+    return "text-status-success";
+  };
+
   const formatTokensCompact = (total: number | null) => {
     if (total === null || total === 0) return "-";
     if (total >= 1000) return `${(total / 1000).toFixed(1)}k`;
@@ -480,7 +493,11 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                         </TableCell>
                         <TableCell className="hidden md:table-cell font-mono text-xs">
                           {log.ttft_ms != null ? (
-                            `${log.ttft_ms}ms`
+                            <span
+                              className={cn("tabular-nums", getTtftPerformanceClass(log.ttft_ms))}
+                            >
+                              {formatTtft(log.ttft_ms)}
+                            </span>
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )}

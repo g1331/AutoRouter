@@ -26,8 +26,22 @@ describe("LeaderboardSection", () => {
       { name: "Test Key", key_prefix: "sk-test", request_count: 1000, total_tokens: 30000 },
     ],
     upstreams: [
-      { name: "OpenAI", provider_type: "openai", request_count: 12000, total_tokens: 400000 },
-      { name: "Anthropic", provider_type: "anthropic", request_count: 8000, total_tokens: 280000 },
+      {
+        name: "OpenAI",
+        provider_type: "openai",
+        request_count: 12000,
+        total_tokens: 400000,
+        avg_ttft_ms: 1222,
+        avg_tps: 45.3,
+      },
+      {
+        name: "Anthropic",
+        provider_type: "anthropic",
+        request_count: 8000,
+        total_tokens: 280000,
+        avg_ttft_ms: 650,
+        avg_tps: 52.1,
+      },
     ],
     models: [
       { model: "gpt-4", request_count: 10000, total_tokens: 350000 },
@@ -118,6 +132,19 @@ describe("LeaderboardSection", () => {
 
       expect(screen.getByText("openai")).toBeInTheDocument();
       expect(screen.getByText("anthropic")).toBeInTheDocument();
+    });
+
+    it("formats TTFT over 1000ms as seconds with three decimals", () => {
+      render(<LeaderboardSection data={mockData} isLoading={false} />);
+
+      expect(screen.getByText("1.222s")).toBeInTheDocument();
+    });
+
+    it("applies performance colors to TTFT values", () => {
+      render(<LeaderboardSection data={mockData} isLoading={false} />);
+
+      expect(screen.getByText("1.222s").className).toContain("text-status-error");
+      expect(screen.getByText("650ms").className).toContain("text-status-warning");
     });
   });
 

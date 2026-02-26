@@ -5,6 +5,7 @@ import { Cpu, Key, Server, Trophy } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import type { StatsLeaderboardResponse } from "@/types/api";
 
 import { formatNumber } from "./chart-theme";
@@ -21,6 +22,19 @@ const RANK_COLORS = [
   "text-muted-foreground",
   "text-muted-foreground",
 ];
+
+function formatTtft(ttftMs: number): string {
+  if (ttftMs >= 1000) {
+    return `${(ttftMs / 1000).toFixed(3)}s`;
+  }
+  return `${Math.round(ttftMs)}ms`;
+}
+
+function getTtftPerformanceClass(ttftMs: number): string {
+  if (ttftMs >= 1000) return "text-status-error";
+  if (ttftMs >= 500) return "text-status-warning";
+  return "text-status-success";
+}
 
 function RankBadge({ rank }: { rank: number }) {
   const colorClass = RANK_COLORS[Math.min(rank - 1, RANK_COLORS.length - 1)];
@@ -105,14 +119,24 @@ function LeaderboardTable({
                     {formatNumber(item.totalTokens)} {t("stats.tokensShort")}
                   </p>
                   {showPerformanceMetrics && (
-                    <p className="type-caption text-muted-foreground">
-                      {item.avgTtftMs != null && item.avgTtftMs > 0
-                        ? `${formatNumber(item.avgTtftMs)}ms`
-                        : "—"}
-                      {" / "}
-                      {item.avgTps != null && item.avgTps > 0
-                        ? `${formatNumber(item.avgTps)} tok/s`
-                        : "—"}
+                    <p className="type-caption">
+                      <span
+                        className={
+                          item.avgTtftMs != null && item.avgTtftMs > 0
+                            ? cn("tabular-nums", getTtftPerformanceClass(item.avgTtftMs))
+                            : "text-muted-foreground"
+                        }
+                      >
+                        {item.avgTtftMs != null && item.avgTtftMs > 0
+                          ? formatTtft(item.avgTtftMs)
+                          : "—"}
+                      </span>
+                      <span className="text-muted-foreground">{" / "}</span>
+                      <span className="text-muted-foreground">
+                        {item.avgTps != null && item.avgTps > 0
+                          ? `${formatNumber(item.avgTps)} tok/s`
+                          : "—"}
+                      </span>
                     </p>
                   )}
                 </div>

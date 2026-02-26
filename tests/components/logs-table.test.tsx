@@ -49,6 +49,8 @@ describe("LogsTable", () => {
     session_id: null,
     affinity_hit: false,
     affinity_migrated: false,
+    ttft_ms: null,
+    is_stream: false,
     created_at: new Date().toISOString(),
   };
 
@@ -222,6 +224,32 @@ describe("LogsTable", () => {
 
       const dashes = screen.getAllByText("-");
       expect(dashes.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("TTFT Formatting", () => {
+    it("renders seconds with three decimals for TTFT over 1000ms", () => {
+      render(<LogsTable logs={[{ ...mockLog, ttft_ms: 1222 }]} />);
+
+      const ttft = screen.getByText("1.222s");
+      expect(ttft).toBeInTheDocument();
+      expect(ttft.className).toContain("text-status-error");
+    });
+
+    it("renders milliseconds for TTFT under 1000ms", () => {
+      render(<LogsTable logs={[{ ...mockLog, ttft_ms: 650 }]} />);
+
+      const ttft = screen.getByText("650ms");
+      expect(ttft).toBeInTheDocument();
+      expect(ttft.className).toContain("text-status-warning");
+    });
+
+    it("uses success color for fast TTFT", () => {
+      render(<LogsTable logs={[{ ...mockLog, ttft_ms: 220 }]} />);
+
+      const ttft = screen.getByText("220ms");
+      expect(ttft).toBeInTheDocument();
+      expect(ttft.className).toContain("text-status-success");
     });
   });
 

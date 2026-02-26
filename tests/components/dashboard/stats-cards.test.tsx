@@ -113,6 +113,38 @@ describe("StatsCards", () => {
       expect(screen.getByText("50ms")).toBeInTheDocument();
       expect(screen.getByText("999")).toBeInTheDocument();
     });
+
+    it("formats TTFT over 1000ms as seconds with three decimals", () => {
+      render(
+        <StatsCards
+          {...defaultProps}
+          todayRequests={100}
+          avgResponseTimeMs={250}
+          totalTokensToday={5000}
+          avgTtftMs={1222}
+        />
+      );
+
+      const ttft = screen.getByText("1.222s");
+      expect(ttft).toBeInTheDocument();
+      expect(ttft.className).toContain("text-status-error");
+    });
+
+    it("applies success color for fast TTFT", () => {
+      render(
+        <StatsCards
+          {...defaultProps}
+          todayRequests={100}
+          avgResponseTimeMs={250}
+          totalTokensToday={5000}
+          avgTtftMs={220}
+        />
+      );
+
+      const ttft = screen.getByText("220ms");
+      expect(ttft).toBeInTheDocument();
+      expect(ttft.className).toContain("text-status-success");
+    });
   });
 
   describe("Icons", () => {
