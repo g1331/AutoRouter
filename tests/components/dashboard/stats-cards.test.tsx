@@ -145,6 +145,20 @@ describe("StatsCards", () => {
       expect(ttft).toBeInTheDocument();
       expect(ttft.className).toContain("text-status-success");
     });
+
+    it("renders cache hit rate as 0% when value is zero", () => {
+      render(
+        <StatsCards
+          {...defaultProps}
+          todayRequests={100}
+          avgResponseTimeMs={250}
+          totalTokensToday={5000}
+          cacheHitRate={0}
+        />
+      );
+
+      expect(screen.getByText("0%")).toBeInTheDocument();
+    });
   });
 
   describe("Icons", () => {

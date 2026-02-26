@@ -77,6 +77,9 @@ describe("stats-service", () => {
               avgDuration: "500.5",
               totalTokens: "50000",
               successCount: 95,
+              avgTtft: "120.3",
+              totalCacheReadTokens: "400",
+              totalPromptTokens: "1000",
             },
           ]),
         }),
@@ -88,6 +91,8 @@ describe("stats-service", () => {
       expect(result.avgResponseTimeMs).toBe(500.5);
       expect(result.totalTokensToday).toBe(50000);
       expect(result.successRateToday).toBe(95);
+      expect(result.avgTtftMs).toBe(120.3);
+      expect(result.cacheHitRate).toBe(40);
     });
 
     it("should return 100% success rate when no requests", async () => {
@@ -102,6 +107,9 @@ describe("stats-service", () => {
               avgDuration: null,
               totalTokens: null,
               successCount: 0,
+              avgTtft: null,
+              totalCacheReadTokens: null,
+              totalPromptTokens: null,
             },
           ]),
         }),
@@ -113,6 +121,8 @@ describe("stats-service", () => {
       expect(result.avgResponseTimeMs).toBe(0);
       expect(result.totalTokensToday).toBe(0);
       expect(result.successRateToday).toBe(100);
+      expect(result.avgTtftMs).toBe(0);
+      expect(result.cacheHitRate).toBe(0);
     });
 
     it("should handle null values gracefully", async () => {
@@ -127,6 +137,9 @@ describe("stats-service", () => {
               avgDuration: null,
               totalTokens: null,
               successCount: 45,
+              avgTtft: null,
+              totalCacheReadTokens: "0",
+              totalPromptTokens: "0",
             },
           ]),
         }),
@@ -138,6 +151,8 @@ describe("stats-service", () => {
       expect(result.avgResponseTimeMs).toBe(0);
       expect(result.totalTokensToday).toBe(0);
       expect(result.successRateToday).toBe(90);
+      expect(result.avgTtftMs).toBe(0);
+      expect(result.cacheHitRate).toBe(0);
     });
 
     it("should round success rate to one decimal place", async () => {
@@ -152,6 +167,9 @@ describe("stats-service", () => {
               avgDuration: "100",
               totalTokens: "1000",
               successCount: 2,
+              avgTtft: "123.45",
+              totalCacheReadTokens: "12",
+              totalPromptTokens: "34",
             },
           ]),
         }),
@@ -161,6 +179,8 @@ describe("stats-service", () => {
 
       // 2/3 = 66.666...% should round to 66.7
       expect(result.successRateToday).toBe(66.7);
+      expect(result.avgTtftMs).toBe(123.5);
+      expect(result.cacheHitRate).toBe(35.3);
     });
 
     it("should round avgResponseTimeMs to one decimal place", async () => {
@@ -175,6 +195,9 @@ describe("stats-service", () => {
               avgDuration: "123.456789",
               totalTokens: "1000",
               successCount: 10,
+              avgTtft: "99.999",
+              totalCacheReadTokens: "111",
+              totalPromptTokens: "333",
             },
           ]),
         }),
@@ -183,6 +206,8 @@ describe("stats-service", () => {
       const result = await getOverviewStats();
 
       expect(result.avgResponseTimeMs).toBe(123.5);
+      expect(result.avgTtftMs).toBe(100);
+      expect(result.cacheHitRate).toBe(33.3);
     });
   });
 
