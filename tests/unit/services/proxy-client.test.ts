@@ -933,6 +933,31 @@ describe("proxy-client", () => {
         expect(onFirstChunk).not.toHaveBeenCalled();
       });
 
+      it("should fire onFirstChunk for anthropic thinking delta", async () => {
+        const onUsage = vi.fn();
+        const onFirstChunk = vi.fn();
+        const transformer = createSSETransformer({ onUsage, onFirstChunk });
+        const encoder = new TextEncoder();
+        const input = [
+          'data: {"type":"message_start","message":{"id":"msg_1","model":"claude-3-5"}}\n\n',
+          'data: {"type":"content_block_start","content_block":{"type":"thinking","thinking":""}}\n\n',
+          'data: {"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"step-1"}}\n\n',
+        ].join("");
+
+        const reader = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(input));
+            controller.close();
+          },
+        })
+          .pipeThrough(transformer)
+          .getReader();
+
+        while (!(await reader.read()).done) {}
+
+        expect(onFirstChunk).toHaveBeenCalledTimes(1);
+      });
+
       it("should ignore OpenAI role-only chunk and fire on text delta", async () => {
         const onUsage = vi.fn();
         const onFirstChunk = vi.fn();
@@ -1118,6 +1143,56 @@ describe("proxy-client", () => {
         const encoder = new TextEncoder();
         const input =
           'data: {"type":"response.content_part.added","part":{"type":"output_text","text":"hello"}}\n\n';
+
+        const reader = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(input));
+            controller.close();
+          },
+        })
+          .pipeThrough(transformer)
+          .getReader();
+
+        while (!(await reader.read()).done) {}
+
+        expect(onFirstChunk).toHaveBeenCalledTimes(1);
+      });
+
+      it("should fire onFirstChunk for OpenAI reasoning and tool-call deltas", async () => {
+        const onUsage = vi.fn();
+        const onFirstChunk = vi.fn();
+        const transformer = createSSETransformer({ onUsage, onFirstChunk });
+        const encoder = new TextEncoder();
+        const input = [
+          'data: {"type":"response.created"}\n\n',
+          'data: {"type":"response.reasoning_summary_text.delta","delta":"plan"}\n\n',
+          'data: {"type":"response.custom_tool_call_input.delta","delta":"{\"q\":\"a\""}\n\n',
+          'data: {"type":"response.function_call_arguments.delta","delta":"{\"x\":1"}\n\n',
+        ].join("");
+
+        const reader = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(input));
+            controller.close();
+          },
+        })
+          .pipeThrough(transformer)
+          .getReader();
+
+        while (!(await reader.read()).done) {}
+
+        expect(onFirstChunk).toHaveBeenCalledTimes(1);
+      });
+
+      it("should use SSE event name when data.type is missing", async () => {
+        const onUsage = vi.fn();
+        const onFirstChunk = vi.fn();
+        const transformer = createSSETransformer({ onUsage, onFirstChunk });
+        const encoder = new TextEncoder();
+        const input = [
+          "event: response.created\ndata: {}\n\n",
+          'event: response.reasoning_summary_text.delta\ndata: {"delta":"plan"}\n\n',
+        ].join("");
 
         const reader = new ReadableStream({
           start(controller) {

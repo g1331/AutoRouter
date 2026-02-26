@@ -314,6 +314,8 @@ const TTFT_METADATA_ONLY_EVENT_TYPES = new Set([
   "response.output_item.done",
   "response.content_part.added",
   "response.content_part.done",
+  "response.reasoning_summary_part.added",
+  "response.reasoning_summary_part.done",
 ]);
 
 function isNonEmptyText(value: unknown): value is string {
@@ -438,7 +440,13 @@ function hasAnthropicTextPayload(data: Record<string, unknown>): boolean {
     const delta = data.delta;
     if (typeof delta === "object" && delta !== null) {
       const deltaRecord = delta as Record<string, unknown>;
-      return isNonEmptyText(deltaRecord.text);
+      if (deltaRecord.type === "thinking_delta" || deltaRecord.type === "signature_delta") {
+        return isNonEmptyText(deltaRecord.thinking);
+      }
+      if (deltaRecord.type === "text_delta" || deltaRecord.type === undefined) {
+        return isNonEmptyText(deltaRecord.text);
+      }
+      return false;
     }
     return false;
   }
@@ -447,7 +455,7 @@ function hasAnthropicTextPayload(data: Record<string, unknown>): boolean {
     const contentBlock = data.content_block;
     if (typeof contentBlock === "object" && contentBlock !== null) {
       const contentBlockRecord = contentBlock as Record<string, unknown>;
-      return isNonEmptyText(contentBlockRecord.text);
+      return isNonEmptyText(contentBlockRecord.text) || isNonEmptyText(contentBlockRecord.thinking);
     }
   }
 
@@ -461,6 +469,24 @@ function hasOpenAIResponsesTextPayload(data: Record<string, unknown>): boolean {
   if (data.type === "response.output_text.done" && isNonEmptyText(data.text)) {
     return true;
   }
+  if (data.type === "response.reasoning_summary_text.delta" && isNonEmptyText(data.delta)) {
+    return true;
+  }
+  if (data.type === "response.reasoning_summary_text.done" && isNonEmptyText(data.text)) {
+    return true;
+  }
+  if (data.type === "response.custom_tool_call_input.delta" && isNonEmptyText(data.delta)) {
+    return true;
+  }
+  if (data.type === "response.custom_tool_call_input.done" && isNonEmptyText(data.input)) {
+    return true;
+  }
+  if (data.type === "response.function_call_arguments.delta" && isNonEmptyText(data.delta)) {
+    return true;
+  }
+  if (data.type === "response.function_call_arguments.done" && isNonEmptyText(data.arguments)) {
+    return true;
+  }
 
   const part = data.part;
   if (typeof part === "object" && part !== null) {
@@ -471,7 +497,7 @@ function hasOpenAIResponsesTextPayload(data: Record<string, unknown>): boolean {
   return false;
 }
 
-function isContentBearingSSEEventData(dataStr: string): boolean {
+function isContentBearingSSEEventData(dataStr: string, sseEventName?: string): boolean {
   try {
     const parsed: unknown = JSON.parse(dataStr);
     if (typeof parsed !== "object" || parsed === null) {
@@ -495,7 +521,7 @@ function isContentBearingSSEEventData(dataStr: string): boolean {
       return false;
     }
 
-    const eventType = typeof data.type === "string" ? data.type : null;
+    const eventType = typeof data.type === "string" ? data.type : (sseEventName ?? null);
     if (eventType && TTFT_METADATA_ONLY_EVENT_TYPES.has(eventType)) {
       return false;
     }
@@ -534,9 +560,18 @@ export function createSSETransformer(
         const idx = buffer.indexOf("\n\n");
         const event = buffer.slice(0, idx);
         buffer = buffer.slice(idx + 2);
+        let sseEventName: string | undefined;
 
         // Parse SSE event for usage data
         for (const line of event.split("\n")) {
+          if (line.startsWith("event:")) {
+            const eventName = line.slice(6).trim();
+            if (eventName.length > 0) {
+              sseEventName = eventName;
+            }
+            continue;
+          }
+
           // Some upstreams use `data:{...}` without a space after colon.
           if (line.startsWith("data:")) {
             const dataStr = line.slice(5).trim();
@@ -549,7 +584,7 @@ export function createSSETransformer(
             if (
               !firstChunkFired &&
               callbacks.onFirstChunk &&
-              isContentBearingSSEEventData(dataStr)
+              isContentBearingSSEEventData(dataStr, sseEventName)
             ) {
               firstChunkFired = true;
               callbacks.onFirstChunk();
