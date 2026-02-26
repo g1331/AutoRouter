@@ -29,6 +29,9 @@ export interface LogRequestInput {
   sessionId?: string | null;
   affinityHit?: boolean;
   affinityMigrated?: boolean;
+  // Performance metrics fields
+  ttftMs?: number | null;
+  isStream?: boolean;
 }
 
 /**
@@ -79,6 +82,9 @@ export interface UpdateRequestLogInput {
   sessionId?: string | null;
   affinityHit?: boolean;
   affinityMigrated?: boolean;
+  // Performance metrics fields
+  ttftMs?: number | null;
+  isStream?: boolean;
 }
 
 /**
@@ -135,6 +141,9 @@ export interface RequestLogResponse {
   sessionId: string | null;
   affinityHit: boolean;
   affinityMigrated: boolean;
+  // Performance metrics fields
+  ttftMs: number | null;
+  isStream: boolean;
   createdAt: Date;
 }
 
@@ -242,6 +251,8 @@ export async function updateRequestLog(
   if (input.sessionId !== undefined) updateValues.sessionId = input.sessionId;
   if (input.affinityHit !== undefined) updateValues.affinityHit = input.affinityHit;
   if (input.affinityMigrated !== undefined) updateValues.affinityMigrated = input.affinityMigrated;
+  if (input.ttftMs !== undefined) updateValues.ttftMs = input.ttftMs;
+  if (input.isStream !== undefined) updateValues.isStream = input.isStream;
 
   if (Object.keys(updateValues).length === 0) {
     return null;
@@ -288,6 +299,8 @@ export async function logRequest(input: LogRequestInput): Promise<RequestLog> {
       sessionId: input.sessionId ?? null,
       affinityHit: input.affinityHit ?? false,
       affinityMigrated: input.affinityMigrated ?? false,
+      ttftMs: input.ttftMs ?? null,
+      isStream: input.isStream ?? false,
       createdAt: new Date(),
     })
     .returning();
@@ -551,6 +564,8 @@ export async function listRequestLogs(
     sessionId: log.sessionId ?? null,
     affinityHit: log.affinityHit,
     affinityMigrated: log.affinityMigrated,
+    ttftMs: log.ttftMs ?? null,
+    isStream: log.isStream,
     createdAt: log.createdAt,
   }));
 

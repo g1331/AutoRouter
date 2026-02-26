@@ -279,6 +279,9 @@ export interface RequestLogApiResponse {
   session_id: string | null;
   affinity_hit: boolean;
   affinity_migrated: boolean;
+  // Performance metrics fields
+  ttft_ms: number | null;
+  is_stream: boolean;
   created_at: string;
 }
 
@@ -319,6 +322,8 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
     session_id: log.sessionId,
     affinity_hit: log.affinityHit,
     affinity_migrated: log.affinityMigrated,
+    ttft_ms: log.ttftMs,
+    is_stream: log.isStream,
     created_at: log.createdAt.toISOString(),
   };
 }
@@ -348,6 +353,8 @@ export interface StatsOverviewApiResponse {
   avg_response_time_ms: number;
   total_tokens_today: number;
   success_rate_today: number;
+  avg_ttft_ms: number;
+  cache_hit_rate: number;
 }
 
 /**
@@ -358,6 +365,8 @@ export interface TimeseriesDataPointApiResponse {
   request_count: number;
   total_tokens: number;
   avg_duration_ms: number;
+  avg_ttft_ms?: number;
+  avg_tps?: number;
 }
 
 /**
@@ -398,6 +407,8 @@ export interface LeaderboardUpstreamApiResponse {
   provider_type: string;
   request_count: number;
   total_tokens: number;
+  avg_ttft_ms: number;
+  avg_tps: number;
 }
 
 /**
@@ -431,6 +442,8 @@ export function transformStatsOverviewToApi(stats: StatsOverview): StatsOverview
     avg_response_time_ms: stats.avgResponseTimeMs,
     total_tokens_today: stats.totalTokensToday,
     success_rate_today: stats.successRateToday,
+    avg_ttft_ms: stats.avgTtftMs,
+    cache_hit_rate: stats.cacheHitRate,
   };
 }
 
@@ -445,6 +458,8 @@ export function transformTimeseriesDataPointToApi(
     request_count: dataPoint.requestCount,
     total_tokens: dataPoint.totalTokens,
     avg_duration_ms: dataPoint.avgDurationMs,
+    ...(dataPoint.avgTtftMs !== undefined ? { avg_ttft_ms: dataPoint.avgTtftMs } : {}),
+    ...(dataPoint.avgTps !== undefined ? { avg_tps: dataPoint.avgTps } : {}),
   };
 }
 
@@ -500,6 +515,8 @@ export function transformLeaderboardUpstreamToApi(
     provider_type: item.providerType,
     request_count: item.requestCount,
     total_tokens: item.totalTokens,
+    avg_ttft_ms: item.avgTtftMs,
+    avg_tps: item.avgTps,
   };
 }
 

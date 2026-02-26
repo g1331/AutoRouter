@@ -500,6 +500,8 @@ describe("api-transformers", () => {
         avgResponseTimeMs: 250.5,
         totalTokensToday: 1500000,
         successRateToday: 99.5,
+        avgTtftMs: 120.4,
+        cacheHitRate: 45.2,
       };
 
       const result = transformStatsOverviewToApi(stats);
@@ -509,6 +511,8 @@ describe("api-transformers", () => {
         avg_response_time_ms: 250.5,
         total_tokens_today: 1500000,
         success_rate_today: 99.5,
+        avg_ttft_ms: 120.4,
+        cache_hit_rate: 45.2,
       });
     });
 
@@ -518,6 +522,8 @@ describe("api-transformers", () => {
         avgResponseTimeMs: 0,
         totalTokensToday: 0,
         successRateToday: 0,
+        avgTtftMs: 0,
+        cacheHitRate: 0,
       };
 
       const result = transformStatsOverviewToApi(stats);
@@ -526,6 +532,8 @@ describe("api-transformers", () => {
       expect(result.avg_response_time_ms).toBe(0);
       expect(result.total_tokens_today).toBe(0);
       expect(result.success_rate_today).toBe(0);
+      expect(result.avg_ttft_ms).toBe(0);
+      expect(result.cache_hit_rate).toBe(0);
     });
   });
 

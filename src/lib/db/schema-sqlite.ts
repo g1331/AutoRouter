@@ -188,6 +188,9 @@ export const requestLogs = sqliteTable(
     sessionId: text("session_id"),
     affinityHit: integer("affinity_hit", { mode: "boolean" }).notNull().default(false),
     affinityMigrated: integer("affinity_migrated", { mode: "boolean" }).notNull().default(false),
+    // Performance metrics fields
+    ttftMs: integer("ttft_ms"),
+    isStream: integer("is_stream", { mode: "boolean" }).notNull().default(false),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },
   (table) => [

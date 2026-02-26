@@ -28,6 +28,14 @@ export interface TokenUsage {
 }
 
 /**
+ * Streaming metrics resolved after stream is fully consumed.
+ */
+export interface StreamMetrics {
+  usage: TokenUsage | null;
+  ttftMs?: number;
+}
+
+/**
  * Result of a proxy request.
  */
 export interface ProxyResult {
@@ -36,7 +44,8 @@ export interface ProxyResult {
   body: ReadableStream<Uint8Array> | Uint8Array;
   isStream: boolean;
   usage?: TokenUsage;
-  usagePromise?: Promise<TokenUsage | null>;
+  streamMetricsPromise?: Promise<StreamMetrics>;
+  ttftMs?: number;
 }
 
 // Headers that should not be forwarded to upstream
@@ -291,13 +300,229 @@ export function extractUsage(data: Record<string, unknown>): TokenUsage | null {
   return null;
 }
 
+const TTFT_METADATA_ONLY_EVENT_TYPES = new Set([
+  "message_start",
+  "message_delta",
+  "message_stop",
+  "content_block_start",
+  "content_block_stop",
+  "ping",
+  "response.created",
+  "response.in_progress",
+  "response.completed",
+  "response.output_item.added",
+  "response.output_item.done",
+  "response.content_part.added",
+  "response.content_part.done",
+]);
+
+function isNonEmptyText(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function hasOpenAIChatTextPart(parts: unknown): boolean {
+  if (!Array.isArray(parts)) {
+    return false;
+  }
+
+  for (const part of parts) {
+    if (typeof part === "object" && part !== null) {
+      const partRecord = part as Record<string, unknown>;
+      if (isNonEmptyText(partRecord.text)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function hasOpenAIChatChoiceTextPayload(choiceRecord: Record<string, unknown>): boolean {
+  const delta = choiceRecord.delta;
+  if (typeof delta === "object" && delta !== null) {
+    const deltaRecord = delta as Record<string, unknown>;
+    if (isNonEmptyText(deltaRecord.content) || hasOpenAIChatTextPart(deltaRecord.content)) {
+      return true;
+    }
+    if (isNonEmptyText(deltaRecord.refusal)) {
+      return true;
+    }
+  }
+
+  const message = choiceRecord.message;
+  if (typeof message === "object" && message !== null) {
+    const messageRecord = message as Record<string, unknown>;
+    if (isNonEmptyText(messageRecord.content) || hasOpenAIChatTextPart(messageRecord.content)) {
+      return true;
+    }
+    if (isNonEmptyText(messageRecord.refusal)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function hasOpenAIChatTextPayload(data: Record<string, unknown>): boolean {
+  const choices = data.choices;
+  if (!Array.isArray(choices)) {
+    return false;
+  }
+
+  for (const choice of choices) {
+    if (typeof choice !== "object" || choice === null) {
+      continue;
+    }
+    if (hasOpenAIChatChoiceTextPayload(choice as Record<string, unknown>)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isOpenAIChatMetadataOnlyChoice(choiceRecord: Record<string, unknown>): boolean {
+  if (hasOpenAIChatChoiceTextPayload(choiceRecord)) {
+    return false;
+  }
+
+  const delta = choiceRecord.delta;
+  if (typeof delta === "object" && delta !== null) {
+    const deltaRecord = delta as Record<string, unknown>;
+    const deltaKeys = Object.keys(deltaRecord);
+    if (deltaKeys.length === 0) {
+      return true;
+    }
+
+    if (
+      deltaKeys.every((key) => key === "role") &&
+      (deltaRecord.role === undefined || typeof deltaRecord.role === "string")
+    ) {
+      return true;
+    }
+  }
+
+  if ("finish_reason" in choiceRecord) {
+    const finishReason = choiceRecord.finish_reason;
+    if (finishReason === null || typeof finishReason === "string") {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isOpenAIChatMetadataOnlyPayload(data: Record<string, unknown>): boolean {
+  const choices = data.choices;
+  if (!Array.isArray(choices)) {
+    return false;
+  }
+
+  let hasAnyChoice = false;
+  for (const choice of choices) {
+    if (typeof choice !== "object" || choice === null) {
+      continue;
+    }
+
+    hasAnyChoice = true;
+    if (!isOpenAIChatMetadataOnlyChoice(choice as Record<string, unknown>)) {
+      return false;
+    }
+  }
+
+  return hasAnyChoice;
+}
+
+function hasAnthropicTextPayload(data: Record<string, unknown>): boolean {
+  if (data.type === "content_block_delta") {
+    const delta = data.delta;
+    if (typeof delta === "object" && delta !== null) {
+      const deltaRecord = delta as Record<string, unknown>;
+      return isNonEmptyText(deltaRecord.text);
+    }
+    return false;
+  }
+
+  if (data.type === "content_block_start") {
+    const contentBlock = data.content_block;
+    if (typeof contentBlock === "object" && contentBlock !== null) {
+      const contentBlockRecord = contentBlock as Record<string, unknown>;
+      return isNonEmptyText(contentBlockRecord.text);
+    }
+  }
+
+  return false;
+}
+
+function hasOpenAIResponsesTextPayload(data: Record<string, unknown>): boolean {
+  if (data.type === "response.output_text.delta" && isNonEmptyText(data.delta)) {
+    return true;
+  }
+  if (data.type === "response.output_text.done" && isNonEmptyText(data.text)) {
+    return true;
+  }
+
+  const part = data.part;
+  if (typeof part === "object" && part !== null) {
+    const partRecord = part as Record<string, unknown>;
+    return isNonEmptyText(partRecord.text);
+  }
+
+  return false;
+}
+
+function isContentBearingSSEEventData(dataStr: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(dataStr);
+    if (typeof parsed !== "object" || parsed === null) {
+      return true;
+    }
+
+    const data = parsed as Record<string, unknown>;
+    if (
+      hasOpenAIChatTextPayload(data) ||
+      hasAnthropicTextPayload(data) ||
+      hasOpenAIResponsesTextPayload(data)
+    ) {
+      return true;
+    }
+
+    if (isNonEmptyText(data.content) || isNonEmptyText(data.text)) {
+      return true;
+    }
+
+    if (isOpenAIChatMetadataOnlyPayload(data)) {
+      return false;
+    }
+
+    const eventType = typeof data.type === "string" ? data.type : null;
+    if (eventType && TTFT_METADATA_ONLY_EVENT_TYPES.has(eventType)) {
+      return false;
+    }
+
+    return true;
+  } catch {
+    // Non-JSON payloads are treated as content-bearing events.
+    return true;
+  }
+}
+
+/**
+ * Options for the SSE transformer.
+ */
+export interface SSETransformerCallbacks {
+  onUsage: (usage: TokenUsage) => void;
+  onFirstChunk?: () => void;
+}
+
 /**
  * Create a streaming SSE response transformer that extracts usage data.
  */
 export function createSSETransformer(
-  onUsage: (usage: TokenUsage) => void
+  callbacks: SSETransformerCallbacks
 ): TransformStream<Uint8Array, Uint8Array> {
   let buffer = "";
+  let firstChunkFired = false;
 
   return new TransformStream({
     transform(chunk, controller) {
@@ -320,11 +545,21 @@ export function createSSETransformer(
               continue;
             }
 
+            // Fire onFirstChunk on the first content-bearing data event.
+            if (
+              !firstChunkFired &&
+              callbacks.onFirstChunk &&
+              isContentBearingSSEEventData(dataStr)
+            ) {
+              firstChunkFired = true;
+              callbacks.onFirstChunk();
+            }
+
             try {
               const data = JSON.parse(dataStr);
               const usage = extractUsage(data);
               if (usage) {
-                onUsage(usage);
+                callbacks.onUsage(usage);
               }
             } catch {
               // Not JSON, skip
@@ -411,6 +646,8 @@ export async function forwardRequest(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), upstream.timeout * 1000);
 
+  const upstreamSendTime = Date.now();
+
   try {
     // Make upstream request
     const upstreamResponse = await fetch(url, {
@@ -445,26 +682,33 @@ export async function forwardRequest(
     if (contentType.includes("text/event-stream") && upstreamResponse.body) {
       // Streaming response - return stream directly for maximum performance
       let usage: TokenUsage | undefined;
+      let ttftMs: number | undefined;
 
       const transformedStream = upstreamResponse.body.pipeThrough(
-        createSSETransformer((u) => {
-          usage = u;
-          reqLog.debug(
-            { prompt: u.promptTokens, completion: u.completionTokens, total: u.totalTokens },
-            "token usage"
-          );
+        createSSETransformer({
+          onUsage: (u) => {
+            usage = u;
+            reqLog.debug(
+              { prompt: u.promptTokens, completion: u.completionTokens, total: u.totalTokens },
+              "token usage"
+            );
+          },
+          onFirstChunk: () => {
+            ttftMs = Date.now() - upstreamSendTime;
+            reqLog.debug({ ttftMs }, "time to first token");
+          },
         })
       );
 
       const [clientStream, loggingStream] = transformedStream.tee();
-      const usagePromise = (async () => {
+      const streamMetricsPromise = (async (): Promise<StreamMetrics> => {
         try {
           await drainStream(loggingStream);
         } catch {
           // Ignore stream consumption errors
         }
 
-        return usage ?? null;
+        return { usage: usage ?? null, ttftMs };
       })();
 
       return {
@@ -473,7 +717,7 @@ export async function forwardRequest(
         body: clientStream,
         isStream: true,
         usage,
-        usagePromise,
+        streamMetricsPromise,
       };
     } else {
       // Regular response

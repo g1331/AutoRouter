@@ -25,7 +25,7 @@ describe("RoutingDecisionTimeline", () => {
     selection_strategy: "weighted",
   };
 
-  it("shows no-upstream-sent instead of numeric upstream latency when did_send_upstream is false", () => {
+  it("shows no-upstream-sent as final upstream when did_send_upstream is false", () => {
     render(
       <RoutingDecisionTimeline
         routingDecision={{
@@ -39,23 +39,16 @@ describe("RoutingDecisionTimeline", () => {
         routingType="provider_type"
         groupName={null}
         failoverAttempts={0}
-        routingDurationMs={120}
-        durationMs={300}
         statusCode={503}
         compact={false}
       />
     );
 
-    const latencyLabel = screen.getByText(/timelineUpstreamLatency/);
-    const latencyRow = latencyLabel.closest("div");
-    const gatewayLabel = screen.getByText(/timelineGatewayProcessing/);
-    const gatewayRow = gatewayLabel.closest("div");
-
-    expect(latencyRow).toHaveTextContent("timelineNoUpstreamSent");
-    expect(gatewayRow).toHaveTextContent("180ms");
+    expect(screen.getByText(/timelineNoUpstreamSent/)).toBeInTheDocument();
+    expect(screen.getByText(/failureStage.candidate_selection/)).toBeInTheDocument();
   });
 
-  it("shows numeric upstream latency when did_send_upstream is true", () => {
+  it("shows real upstream name when did_send_upstream is true", () => {
     render(
       <RoutingDecisionTimeline
         routingDecision={{
@@ -69,18 +62,38 @@ describe("RoutingDecisionTimeline", () => {
         routingType="provider_type"
         groupName={null}
         failoverAttempts={0}
-        routingDurationMs={120}
-        durationMs={300}
         statusCode={200}
         compact={false}
       />
     );
 
-    const latencyLabel = screen.getByText(/timelineUpstreamLatency/);
-    const latencyRow = latencyLabel.closest("div");
+    expect(screen.getByText("rc")).toBeInTheDocument();
+    expect(screen.queryByText(/timelineNoUpstreamSent/)).not.toBeInTheDocument();
+  });
 
-    expect(latencyRow).not.toHaveTextContent("timelineNoUpstreamSent");
-    expect(latencyRow?.textContent).toMatch(/180ms/);
-    expect(screen.queryByText(/timelineGatewayProcessing/)).not.toBeInTheDocument();
+  it("keeps timeline focused on routing decision without performance metrics", () => {
+    render(
+      <RoutingDecisionTimeline
+        routingDecision={{
+          ...baseRoutingDecision,
+          did_send_upstream: true,
+          candidate_upstream_id: "up-2",
+          actual_upstream_id: "up-2",
+          failure_stage: null,
+        }}
+        upstreamName="rc"
+        routingType="provider_type"
+        groupName={null}
+        failoverAttempts={0}
+        statusCode={200}
+        compact={false}
+      />
+    );
+
+    expect(screen.queryByText(/timelineTotalDuration/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/timelineUpstreamLatency/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/perfTtft/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/perfTps/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/perfGen/)).not.toBeInTheDocument();
   });
 });

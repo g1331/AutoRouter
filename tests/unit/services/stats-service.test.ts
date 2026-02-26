@@ -32,6 +32,12 @@ vi.mock("@/lib/db", () => ({
     statusCode: "statusCode",
     durationMs: "durationMs",
     totalTokens: "totalTokens",
+    completionTokens: "completionTokens",
+    routingDurationMs: "routingDurationMs",
+    ttftMs: "ttftMs",
+    isStream: "isStream",
+    promptTokens: "promptTokens",
+    cacheReadTokens: "cacheReadTokens",
   },
   apiKeys: {
     id: "id",
@@ -71,6 +77,9 @@ describe("stats-service", () => {
               avgDuration: "500.5",
               totalTokens: "50000",
               successCount: 95,
+              avgTtft: "120.3",
+              totalCacheReadTokens: "400",
+              totalEffectivePromptTokens: "1000",
             },
           ]),
         }),
@@ -82,6 +91,8 @@ describe("stats-service", () => {
       expect(result.avgResponseTimeMs).toBe(500.5);
       expect(result.totalTokensToday).toBe(50000);
       expect(result.successRateToday).toBe(95);
+      expect(result.avgTtftMs).toBe(120.3);
+      expect(result.cacheHitRate).toBe(40);
     });
 
     it("should return 100% success rate when no requests", async () => {
@@ -96,6 +107,9 @@ describe("stats-service", () => {
               avgDuration: null,
               totalTokens: null,
               successCount: 0,
+              avgTtft: null,
+              totalCacheReadTokens: null,
+              totalEffectivePromptTokens: null,
             },
           ]),
         }),
@@ -107,6 +121,8 @@ describe("stats-service", () => {
       expect(result.avgResponseTimeMs).toBe(0);
       expect(result.totalTokensToday).toBe(0);
       expect(result.successRateToday).toBe(100);
+      expect(result.avgTtftMs).toBe(0);
+      expect(result.cacheHitRate).toBe(0);
     });
 
     it("should handle null values gracefully", async () => {
@@ -121,6 +137,9 @@ describe("stats-service", () => {
               avgDuration: null,
               totalTokens: null,
               successCount: 45,
+              avgTtft: null,
+              totalCacheReadTokens: "0",
+              totalEffectivePromptTokens: "0",
             },
           ]),
         }),
@@ -132,6 +151,8 @@ describe("stats-service", () => {
       expect(result.avgResponseTimeMs).toBe(0);
       expect(result.totalTokensToday).toBe(0);
       expect(result.successRateToday).toBe(90);
+      expect(result.avgTtftMs).toBe(0);
+      expect(result.cacheHitRate).toBe(0);
     });
 
     it("should round success rate to one decimal place", async () => {
@@ -146,6 +167,9 @@ describe("stats-service", () => {
               avgDuration: "100",
               totalTokens: "1000",
               successCount: 2,
+              avgTtft: "123.45",
+              totalCacheReadTokens: "12",
+              totalEffectivePromptTokens: "34",
             },
           ]),
         }),
@@ -155,6 +179,8 @@ describe("stats-service", () => {
 
       // 2/3 = 66.666...% should round to 66.7
       expect(result.successRateToday).toBe(66.7);
+      expect(result.avgTtftMs).toBe(123.5);
+      expect(result.cacheHitRate).toBe(35.3);
     });
 
     it("should round avgResponseTimeMs to one decimal place", async () => {
@@ -169,6 +195,9 @@ describe("stats-service", () => {
               avgDuration: "123.456789",
               totalTokens: "1000",
               successCount: 10,
+              avgTtft: "99.999",
+              totalCacheReadTokens: "111",
+              totalEffectivePromptTokens: "333",
             },
           ]),
         }),
@@ -177,6 +206,32 @@ describe("stats-service", () => {
       const result = await getOverviewStats();
 
       expect(result.avgResponseTimeMs).toBe(123.5);
+      expect(result.avgTtftMs).toBe(100);
+      expect(result.cacheHitRate).toBe(33.3);
+    });
+
+    it("should clamp cache hit rate to 100 when denominator is smaller than cache read", async () => {
+      const { db } = await import("@/lib/db");
+      const { getOverviewStats } = await import("@/lib/services/stats-service");
+
+      vi.mocked(db.select).mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([
+            {
+              totalRequests: 1,
+              avgDuration: "200",
+              totalTokens: "772",
+              successCount: 1,
+              avgTtft: "15085",
+              totalCacheReadTokens: "28750",
+              totalEffectivePromptTokens: "28764",
+            },
+          ]),
+        }),
+      } as unknown as ReturnType<typeof db.select>);
+
+      const result = await getOverviewStats();
+      expect(result.cacheHitRate).toBeLessThanOrEqual(100);
     });
   });
 
@@ -389,6 +444,78 @@ describe("stats-service", () => {
 
       expect(result.series[0].data[0].totalTokens).toBe(0);
       expect(result.series[0].data[0].avgDurationMs).toBe(0);
+    });
+
+    it("should calculate avgTps from aggregated tps fields", async () => {
+      const { db } = await import("@/lib/db");
+      const { getTimeseriesStats } = await import("@/lib/services/stats-service");
+
+      vi.mocked(db.select).mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            groupBy: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockResolvedValue([
+                {
+                  upstreamId: "upstream-1",
+                  timeBucket: "2024-06-15 10:00:00",
+                  requestCount: 5,
+                  totalTokens: "1000",
+                  avgDuration: "1200",
+                  totalCompletionTokens: "600",
+                  totalDurationMs: "10000",
+                  totalRoutingDurationMs: "1000",
+                  totalTtftMs: "2000",
+                },
+              ]),
+            }),
+          }),
+        }),
+      } as unknown as ReturnType<typeof db.select>);
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        { id: "upstream-1", name: "OpenAI" },
+      ]);
+
+      const result = await getTimeseriesStats("today", "tps");
+
+      expect(result.series).toHaveLength(1);
+      expect(result.series[0].data[0].avgTps).toBe(85.7);
+    });
+
+    it("should return avgTps as 0 when no eligible stream samples exist", async () => {
+      const { db } = await import("@/lib/db");
+      const { getTimeseriesStats } = await import("@/lib/services/stats-service");
+
+      vi.mocked(db.select).mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            groupBy: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockResolvedValue([
+                {
+                  upstreamId: "upstream-1",
+                  timeBucket: "2024-06-15 10:00:00",
+                  requestCount: 5,
+                  totalTokens: "1000",
+                  avgDuration: "1200",
+                  totalCompletionTokens: "0",
+                  totalDurationMs: "0",
+                  totalRoutingDurationMs: "0",
+                  totalTtftMs: "0",
+                },
+              ]),
+            }),
+          }),
+        }),
+      } as unknown as ReturnType<typeof db.select>);
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        { id: "upstream-1", name: "OpenAI" },
+      ]);
+
+      const result = await getTimeseriesStats("today", "tps");
+
+      expect(result.series).toHaveLength(1);
+      expect(result.series[0].data[0].avgTps).toBe(0);
     });
   });
 
@@ -676,6 +803,72 @@ describe("stats-service", () => {
       const result = await getLeaderboardStats("7d", 5);
 
       expect(result.apiKeys[0].totalTokens).toBe(0);
+    });
+
+    it("should calculate upstream avgTps from aggregated stream fields", async () => {
+      const { db } = await import("@/lib/db");
+      const { getLeaderboardStats } = await import("@/lib/services/stats-service");
+
+      vi.mocked(db.select)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              groupBy: vi.fn().mockReturnValue({
+                orderBy: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue([]),
+                }),
+              }),
+            }),
+          }),
+        } as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              groupBy: vi.fn().mockReturnValue({
+                orderBy: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue([
+                    {
+                      upstreamId: "upstream-openai",
+                      requestCount: 10,
+                      totalTokens: "5000",
+                      avgTtft: "1200",
+                      totalCompletionTokens: "600",
+                      totalDurationMs: "10000",
+                      totalRoutingDurationMs: "1000",
+                      totalTtftMs: "2000",
+                    },
+                  ]),
+                }),
+              }),
+            }),
+          }),
+        } as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              groupBy: vi.fn().mockReturnValue({
+                orderBy: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue([]),
+                }),
+              }),
+            }),
+          }),
+        } as unknown as ReturnType<typeof db.select>);
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValue([]);
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+        {
+          id: "upstream-openai",
+          name: "OpenAI Upstream",
+          routeCapabilities: ["openai_chat_compatible"],
+        },
+      ]);
+
+      const result = await getLeaderboardStats("7d", 5);
+
+      expect(result.upstreams).toHaveLength(1);
+      expect(result.upstreams[0].avgTtftMs).toBe(1200);
+      expect(result.upstreams[0].avgTps).toBe(85.7);
     });
 
     it("should handle null model as Unknown", async () => {

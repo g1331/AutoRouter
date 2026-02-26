@@ -49,6 +49,8 @@ describe("LogsTable", () => {
     session_id: null,
     affinity_hit: false,
     affinity_migrated: false,
+    ttft_ms: null,
+    is_stream: false,
     created_at: new Date().toISOString(),
   };
 
@@ -69,23 +71,14 @@ describe("LogsTable", () => {
     });
   });
 
-  describe("Terminal Header", () => {
-    it("renders terminal header with system ID", () => {
-      render(<LogsTable logs={[mockLog]} />);
-
-      expect(screen.getByText("SYS.REQUEST_STREAM")).toBeInTheDocument();
-    });
-
-    it("displays time range in header", () => {
-      render(<LogsTable logs={[mockLog]} />);
-
-      expect(screen.getByText("[30D]")).toBeInTheDocument();
-    });
-
-    it("shows live indicator when isLive is true", () => {
+  describe("Legacy Header Removal", () => {
+    it("does not render SYS/REC/request-rate header strip", () => {
       render(<LogsTable logs={[mockLog]} isLive />);
 
-      expect(screen.getByText("REC")).toBeInTheDocument();
+      expect(screen.queryByText("SYS.REQUEST_STREAM")).not.toBeInTheDocument();
+      expect(screen.queryByText("[30D]")).not.toBeInTheDocument();
+      expect(screen.queryByText("REC")).not.toBeInTheDocument();
+      expect(screen.queryByText(/\[↓\s*0\.0\/s\]/)).not.toBeInTheDocument();
     });
   });
 
@@ -225,6 +218,90 @@ describe("LogsTable", () => {
     });
   });
 
+  describe("TTFT Formatting", () => {
+    it("renders seconds with three decimals for TTFT over 1000ms", () => {
+      render(<LogsTable logs={[{ ...mockLog, ttft_ms: 1222 }]} />);
+
+      const ttft = screen.getByText("1.222s");
+      expect(ttft).toBeInTheDocument();
+      expect(ttft.className).toContain("text-status-error");
+    });
+
+    it("renders milliseconds for TTFT under 1000ms", () => {
+      render(<LogsTable logs={[{ ...mockLog, ttft_ms: 650 }]} />);
+
+      const ttft = screen.getByText("650ms");
+      expect(ttft).toBeInTheDocument();
+      expect(ttft.className).toContain("text-status-warning");
+    });
+
+    it("uses success color for fast TTFT", () => {
+      render(<LogsTable logs={[{ ...mockLog, ttft_ms: 220 }]} />);
+
+      const ttft = screen.getByText("220ms");
+      expect(ttft).toBeInTheDocument();
+      expect(ttft.className).toContain("text-status-success");
+    });
+
+    it("does not render short-sample hint in row performance line", () => {
+      const shortSampleLog: RequestLog = {
+        ...mockLog,
+        is_stream: true,
+        duration_ms: 1650,
+        routing_duration_ms: 300,
+        ttft_ms: 900,
+        completion_tokens: 40,
+      };
+      render(<LogsTable logs={[shortSampleLog]} />);
+
+      expect(screen.queryByText("perfSampleShort")).not.toBeInTheDocument();
+    });
+
+    it("shows generation time in expanded details", () => {
+      const streamLog: RequestLog = {
+        ...mockLog,
+        is_stream: true,
+        duration_ms: 1650,
+        routing_duration_ms: 300,
+        ttft_ms: 900,
+        completion_tokens: 40,
+      };
+      render(<LogsTable logs={[streamLog]} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+      expect(screen.queryAllByText(/perfGen/).length).toBeGreaterThan(0);
+      expect(screen.queryAllByText("450ms").length).toBeGreaterThan(0);
+    });
+
+    it("does not show TPS when completion tokens are below threshold", () => {
+      const streamLog: RequestLog = {
+        ...mockLog,
+        is_stream: true,
+        duration_ms: 1650,
+        routing_duration_ms: 300,
+        ttft_ms: 900,
+        completion_tokens: 9,
+      };
+      render(<LogsTable logs={[streamLog]} />);
+
+      expect(screen.queryByText("perfTps")).not.toBeInTheDocument();
+    });
+
+    it("does not show TPS when generation time is too short", () => {
+      const streamLog: RequestLog = {
+        ...mockLog,
+        is_stream: true,
+        duration_ms: 1500,
+        routing_duration_ms: 1000,
+        ttft_ms: 400,
+        completion_tokens: 100,
+      };
+      render(<LogsTable logs={[streamLog]} />);
+
+      expect(screen.queryByText("perfTps")).not.toBeInTheDocument();
+    });
+  });
+
   describe("Error Row Styling", () => {
     it("applies subtle error accent for 4xx status", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 404 }]} />);
@@ -271,37 +348,103 @@ describe("LogsTable", () => {
     });
   });
 
-  describe("Stream Statistics Footer", () => {
-    it("displays stream statistics", () => {
+  describe("Performance Summary And Quick Filters", () => {
+    it("renders performance summary tiles", () => {
       render(<LogsTable logs={[mockLog]} />);
 
-      expect(screen.getByText(/STREAM STATS:/)).toBeInTheDocument();
-      expect(screen.getByText(/1 requests/)).toBeInTheDocument();
-      expect(screen.getByText(/100% success/)).toBeInTheDocument();
+      expect(screen.getByText("summaryP50Ttft")).toBeInTheDocument();
+      expect(screen.getByText("summaryP90Ttft")).toBeInTheDocument();
+      expect(screen.getByText("summaryP50Tps")).toBeInTheDocument();
+      expect(screen.getByText("summarySlowRatio")).toBeInTheDocument();
+      expect(screen.getByText("summaryStreamRatio")).toBeInTheDocument();
     });
 
-    it("calculates correct success rate", () => {
-      const logs = [
-        { ...mockLog, id: "1", status_code: 200 },
-        { ...mockLog, id: "2", status_code: 200 },
-        { ...mockLog, id: "3", status_code: 500 },
-      ];
-      render(<LogsTable logs={logs} />);
+    it("filters to high TTFT logs with quick filter preset", () => {
+      const highTtftLog: RequestLog = {
+        ...mockLog,
+        id: "high-ttft",
+        path: "/v1/high-ttft",
+        is_stream: true,
+        ttft_ms: 6000,
+        duration_ms: 12000,
+        routing_duration_ms: 300,
+        completion_tokens: 120,
+      };
+      const normalLog: RequestLog = {
+        ...mockLog,
+        id: "normal-ttft",
+        path: "/v1/normal-ttft",
+        is_stream: true,
+        ttft_ms: 400,
+        duration_ms: 3500,
+        routing_duration_ms: 250,
+        completion_tokens: 120,
+      };
 
-      // 2 out of 3 = 67%
-      expect(screen.getByText(/67% success/)).toBeInTheDocument();
+      render(<LogsTable logs={[highTtftLog, normalLog]} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "presetHighTtft" }));
+
+      expect(screen.getByText("/v1/high-ttft")).toBeInTheDocument();
+      expect(screen.queryByText("/v1/normal-ttft")).not.toBeInTheDocument();
+    });
+
+    it("filters to low TPS logs with quick filter preset", () => {
+      const lowTpsLog: RequestLog = {
+        ...mockLog,
+        id: "low-tps",
+        path: "/v1/low-tps",
+        is_stream: true,
+        duration_ms: 5000,
+        routing_duration_ms: 500,
+        ttft_ms: 1000,
+        completion_tokens: 20,
+      };
+      const highTpsLog: RequestLog = {
+        ...mockLog,
+        id: "high-tps",
+        path: "/v1/high-tps",
+        is_stream: true,
+        duration_ms: 1500,
+        routing_duration_ms: 200,
+        ttft_ms: 200,
+        completion_tokens: 200,
+      };
+
+      render(<LogsTable logs={[lowTpsLog, highTpsLog]} />);
+      fireEvent.click(screen.getByRole("button", { name: "presetLowTps" }));
+
+      expect(screen.getByText("/v1/low-tps")).toBeInTheDocument();
+      expect(screen.queryByText("/v1/high-tps")).not.toBeInTheDocument();
+    });
+
+    it("filters to slow duration logs with quick filter preset", () => {
+      const slowLog: RequestLog = {
+        ...mockLog,
+        id: "slow-duration",
+        path: "/v1/slow-duration",
+        duration_ms: 25000,
+      };
+      const fastLog: RequestLog = {
+        ...mockLog,
+        id: "fast-duration",
+        path: "/v1/fast-duration",
+        duration_ms: 5000,
+      };
+
+      render(<LogsTable logs={[slowLog, fastLog]} />);
+      fireEvent.click(screen.getByRole("button", { name: "presetSlowDuration" }));
+
+      expect(screen.getByText("/v1/slow-duration")).toBeInTheDocument();
+      expect(screen.queryByText("/v1/fast-duration")).not.toBeInTheDocument();
     });
   });
 
-  describe("Live Marker", () => {
-    it("shows live marker in live mode", () => {
+  describe("Legacy Footer Removal", () => {
+    it("does not render legacy live and stream stats footer text", () => {
       render(<LogsTable logs={[mockLog]} isLive />);
-      expect(screen.getByText("LIVE")).toBeInTheDocument();
-    });
-
-    it("does not show live marker when not in live mode", () => {
-      render(<LogsTable logs={[mockLog]} isLive={false} />);
       expect(screen.queryByText("LIVE")).not.toBeInTheDocument();
+      expect(screen.queryByText(/STREAM STATS:/)).not.toBeInTheDocument();
     });
   });
 
@@ -508,9 +651,11 @@ describe("LogsTable", () => {
       it("performs case-insensitive partial match", () => {
         render(<LogsTable logs={logsForFiltering} />);
 
-        // All logs visible by default (within time range)
-        const rows = screen.getAllByRole("row");
-        expect(rows.length).toBeGreaterThan(1);
+        const input = screen.getByPlaceholderText("filterModel");
+        fireEvent.change(input, { target: { value: "claude" } });
+
+        expect(screen.getByText("claude-3-opus")).toBeInTheDocument();
+        expect(screen.queryByText("gpt-4")).not.toBeInTheDocument();
       });
 
       it("filters logs by exact model name", () => {
@@ -799,7 +944,7 @@ describe("LogsTable", () => {
       expect(screen.getByText(/retryTotalDuration/)).toBeInTheDocument();
     });
 
-    it("displays two-column layout with timeline and token details", () => {
+    it("displays three-column layout with decision, performance, and token details", () => {
       const logWithRouting: RequestLog = {
         ...logWithFailoverBase,
         routing_decision: mockRoutingDecision,
@@ -811,9 +956,12 @@ describe("LogsTable", () => {
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
       fireEvent.click(expandButton);
 
-      // Check for flex layout with two columns
-      const flexContainer = container.querySelector("[class*='flex'][class*='items-start']");
-      expect(flexContainer).toBeInTheDocument();
+      expect(screen.getByText("timelineModelResolution")).toBeInTheDocument();
+      expect(screen.getByText("performanceStats")).toBeInTheDocument();
+      expect(screen.getByText("tokenDetails")).toBeInTheDocument();
+
+      const gridContainer = container.querySelector("[class*='xl:grid-cols-']");
+      expect(gridContainer).toBeInTheDocument();
     });
 
     it("shows error details in terminal style for error rows", () => {

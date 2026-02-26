@@ -48,6 +48,8 @@ describe("use-dashboard-stats hooks", () => {
         avg_response_time_ms: 250,
         total_tokens_today: 50000,
         success_rate_today: 98.5,
+        avg_ttft_ms: 120.5,
+        cache_hit_rate: 45.2,
       };
       mockGet.mockResolvedValueOnce(mockResponse);
 
@@ -96,7 +98,7 @@ describe("use-dashboard-stats hooks", () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(mockGet).toHaveBeenCalledWith("/admin/stats/timeseries?range=7d");
+      expect(mockGet).toHaveBeenCalledWith("/admin/stats/timeseries?range=7d&metric=requests");
       expect(result.current.data).toEqual(mockResponse);
     });
 
@@ -112,7 +114,7 @@ describe("use-dashboard-stats hooks", () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(mockGet).toHaveBeenCalledWith("/admin/stats/timeseries?range=today");
+      expect(mockGet).toHaveBeenCalledWith("/admin/stats/timeseries?range=today&metric=requests");
     });
 
     it("fetches timeseries with 30d range", async () => {
@@ -127,7 +129,7 @@ describe("use-dashboard-stats hooks", () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(mockGet).toHaveBeenCalledWith("/admin/stats/timeseries?range=30d");
+      expect(mockGet).toHaveBeenCalledWith("/admin/stats/timeseries?range=30d&metric=requests");
     });
 
     it("handles fetch error", async () => {

@@ -17,7 +17,9 @@ import {
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import type { StatsTimeseriesResponse } from "@/types/api";
+import type { TimeseriesMetric } from "@/hooks/use-dashboard-stats";
 
 import { formatNumber, getChartTheme, getUpstreamColor } from "./chart-theme";
 
@@ -25,6 +27,8 @@ interface UsageChartProps {
   data: StatsTimeseriesResponse | undefined;
   isLoading: boolean;
   timeRange?: string;
+  metric: TimeseriesMetric;
+  onMetricChange: (metric: TimeseriesMetric) => void;
 }
 
 interface ChartDataPoint {
@@ -33,16 +37,35 @@ interface ChartDataPoint {
   [key: string]: string | number;
 }
 
+function formatTtft(ttftMs: number): string {
+  if (ttftMs >= 1000) {
+    return `${(ttftMs / 1000).toFixed(3)}s`;
+  }
+  return `${Math.round(ttftMs)}ms`;
+}
+
+function formatMetricValue(value: number, metric: TimeseriesMetric): string {
+  if (metric === "ttft") {
+    return formatTtft(value);
+  }
+  if (metric === "tps") {
+    return `${formatNumber(value)} tok/s`;
+  }
+  return formatNumber(value);
+}
+
 function CustomTooltip({
   active,
   payload,
   label,
   mode,
+  metric,
 }: {
   active?: boolean;
   payload?: Array<{ name: string; value: number; color: string }>;
   label?: string;
   mode: "dark" | "light";
+  metric: TimeseriesMetric;
 }) {
   if (!active || !payload?.length) {
     return null;
@@ -65,7 +88,7 @@ function CustomTooltip({
         <div key={entry.name} className="mb-1.5 flex items-center gap-2 last:mb-0">
           <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
           <span className="type-body-small" style={{ color: theme.colors.textStrong }}>
-            {entry.name}: {formatNumber(entry.value)}
+            {entry.name}: {formatMetricValue(entry.value, metric)}
           </span>
         </div>
       ))}
@@ -100,11 +123,14 @@ function CustomLegend({
   );
 }
 
-export function UsageChart({ data, isLoading }: UsageChartProps) {
+export function UsageChart({ data, isLoading, metric, onMetricChange }: UsageChartProps) {
   const t = useTranslations("dashboard");
   const { resolvedTheme } = useTheme();
   const mode = resolvedTheme === "light" ? "light" : "dark";
   const theme = getChartTheme(mode);
+
+  const valueKey: string =
+    metric === "ttft" ? "avg_ttft_ms" : metric === "tps" ? "avg_tps" : "request_count";
 
   const { chartData, upstreamNames } = useMemo(() => {
     if (!data?.series?.length) {
@@ -135,7 +161,8 @@ export function UsageChart({ data, isLoading }: UsageChartProps) {
           return;
         }
 
-        row[series.upstream_name] = point.request_count;
+        row[series.upstream_name] =
+          ((point as unknown as Record<string, unknown>)[valueKey] as number) ?? 0;
       });
     });
 
@@ -144,7 +171,7 @@ export function UsageChart({ data, isLoading }: UsageChartProps) {
     );
 
     return { chartData: sorted, upstreamNames: names };
-  }, [data]);
+  }, [data, valueKey]);
 
   const totals = useMemo(() => {
     if (!data?.series?.length) {
@@ -197,6 +224,23 @@ export function UsageChart({ data, isLoading }: UsageChartProps) {
               )}
             </div>
           </div>
+        </div>
+
+        <div className="flex gap-1 rounded-cf-sm border border-divider bg-surface-200/50 p-0.5">
+          {(["requests", "ttft", "tps"] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => onMetricChange(m)}
+              className={cn(
+                "rounded-cf-sm px-3 py-1.5 type-label-medium transition-colors",
+                metric === m
+                  ? "bg-amber-500/15 text-amber-500"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {t(`stats.chartTab${m === "requests" ? "Requests" : m === "ttft" ? "Ttft" : "Tps"}`)}
+            </button>
+          ))}
         </div>
 
         <div className="h-[280px] sm:h-[320px]">
@@ -260,12 +304,18 @@ export function UsageChart({ data, isLoading }: UsageChartProps) {
                   tick={{ fill: theme.colors.text, fontSize: 10 }}
                   tickLine={{ stroke: theme.colors.grid }}
                   axisLine={{ stroke: theme.colors.grid }}
-                  tickFormatter={formatNumber}
+                  tickFormatter={(v: number) =>
+                    metric === "ttft"
+                      ? formatTtft(v)
+                      : metric === "tps"
+                        ? `${formatNumber(v)}`
+                        : formatNumber(v)
+                  }
                   style={{ fontFamily: theme.fonts.mono }}
                   width={theme.spacing.yAxisWidth}
                 />
 
-                <Tooltip content={<CustomTooltip mode={mode} />} />
+                <Tooltip content={<CustomTooltip mode={mode} metric={metric} />} />
                 <Legend content={<CustomLegend mode={mode} />} />
 
                 {upstreamNames.map((name, index) => {

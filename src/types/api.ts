@@ -342,6 +342,9 @@ export interface RequestLogResponse {
   session_id: string | null;
   affinity_hit: boolean;
   affinity_migrated: boolean;
+  // Performance metrics fields
+  ttft_ms: number | null;
+  is_stream: boolean;
   created_at: string; // ISO 8601 date string
 }
 
@@ -379,6 +382,8 @@ export interface StatsOverviewResponse {
   avg_response_time_ms: number;
   total_tokens_today: number;
   success_rate_today: number;
+  avg_ttft_ms: number;
+  cache_hit_rate: number;
 }
 
 export interface TimeseriesDataPoint {
@@ -386,6 +391,8 @@ export interface TimeseriesDataPoint {
   request_count: number;
   total_tokens: number;
   avg_duration_ms: number;
+  avg_ttft_ms?: number;
+  avg_tps?: number;
 }
 
 export interface UpstreamTimeseriesData {
@@ -414,6 +421,8 @@ export interface LeaderboardUpstreamItem {
   provider_type: string;
   request_count: number;
   total_tokens: number;
+  avg_ttft_ms: number;
+  avg_tps: number;
 }
 
 export interface LeaderboardModelItem {

@@ -15,6 +15,11 @@ interface TokenDisplayProps {
   cacheReadTokens: number;
 }
 
+interface TokenDetailContentProps extends TokenDisplayProps {
+  showHeader?: boolean;
+  className?: string;
+}
+
 /**
  * Calculate effective cache read tokens.
  * - Anthropic: uses cacheReadTokens directly
@@ -22,6 +27,57 @@ interface TokenDisplayProps {
  */
 function getEffectiveCacheRead(cacheReadTokens: number, cachedTokens: number): number {
   return cacheReadTokens > 0 ? cacheReadTokens : cachedTokens;
+}
+
+interface CacheUsageBreakdown {
+  effectiveCacheRead: number;
+  newInputTokens: number;
+  cacheHitRate: number | null;
+}
+
+function formatCacheRate(rate: number | null): string {
+  if (rate === null || !Number.isFinite(rate)) {
+    return "0.00";
+  }
+  return Math.min(Math.max(rate, 0), 100).toFixed(2);
+}
+
+/**
+ * Normalize cache breakdown across provider usage formats.
+ * Some providers report prompt tokens excluding cache-read tokens, which can otherwise
+ * produce impossible cache hit rates (>100%).
+ */
+function getCacheUsageBreakdown(
+  promptTokens: number,
+  cacheReadTokens: number,
+  cachedTokens: number
+): CacheUsageBreakdown {
+  const safePromptTokens = Math.max(promptTokens, 0);
+  const effectiveCacheRead = Math.max(getEffectiveCacheRead(cacheReadTokens, cachedTokens), 0);
+
+  if (effectiveCacheRead === 0) {
+    return {
+      effectiveCacheRead,
+      newInputTokens: safePromptTokens,
+      cacheHitRate: null,
+    };
+  }
+
+  if (safePromptTokens >= effectiveCacheRead) {
+    return {
+      effectiveCacheRead,
+      newInputTokens: Math.max(safePromptTokens - effectiveCacheRead, 0),
+      cacheHitRate: safePromptTokens > 0 ? (effectiveCacheRead / safePromptTokens) * 100 : null,
+    };
+  }
+
+  const effectiveInputTokens = safePromptTokens + effectiveCacheRead;
+  return {
+    effectiveCacheRead,
+    newInputTokens: safePromptTokens,
+    cacheHitRate:
+      effectiveInputTokens > 0 ? (effectiveCacheRead / effectiveInputTokens) * 100 : null,
+  };
 }
 
 /**
@@ -55,10 +111,15 @@ export function TokenDetailContent({
   reasoningTokens,
   cacheCreationTokens,
   cacheReadTokens,
-}: TokenDisplayProps) {
+  showHeader = true,
+  className,
+}: TokenDetailContentProps) {
   const t = useTranslations("logs");
-  const effectiveCacheRead = getEffectiveCacheRead(cacheReadTokens, cachedTokens);
-  const newInputTokens = Math.max(promptTokens - effectiveCacheRead, 0);
+  const { effectiveCacheRead, newInputTokens, cacheHitRate } = getCacheUsageBreakdown(
+    promptTokens,
+    cacheReadTokens,
+    cachedTokens
+  );
 
   // Build main token rows (input, output, reasoning breakdown)
   const mainRows: Array<{
@@ -116,11 +177,18 @@ export function TokenDetailContent({
   }
 
   return (
-    <div className="min-w-[180px] max-w-[460px] font-mono text-xs">
-      {/* Header */}
-      <div className="mb-2 border-b border-divider pb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-        {t("tokenDetails")}
-      </div>
+    <div
+      className={cn(
+        "font-mono text-xs",
+        showHeader ? "min-w-[180px] max-w-[460px]" : "w-full",
+        className
+      )}
+    >
+      {showHeader && (
+        <div className="mb-2 border-b border-divider pb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+          {t("tokenDetails")}
+        </div>
+      )}
 
       {/* Main token rows */}
       <div className="space-y-1">
@@ -154,6 +222,12 @@ export function TokenDetailContent({
             {totalTokens.toLocaleString()}
           </span>
         </div>
+        {effectiveCacheRead > 0 && cacheHitRate !== null && (
+          <div className="mt-1 flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
+            <span>{t("tokenCacheHitPercent")}:</span>
+            <span className="tabular-nums">{formatCacheRate(cacheHitRate)}%</span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -182,8 +256,11 @@ export function TokenDisplay({
     return <span className="text-muted-foreground">-</span>;
   }
 
-  const effectiveCacheRead = getEffectiveCacheRead(cacheReadTokens, cachedTokens);
-  const newInputTokens = Math.max(promptTokens - effectiveCacheRead, 0);
+  const { effectiveCacheRead, newInputTokens } = getCacheUsageBreakdown(
+    promptTokens,
+    cacheReadTokens,
+    cachedTokens
+  );
 
   return (
     <div className="flex flex-col text-xs font-mono">

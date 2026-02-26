@@ -26,14 +26,172 @@ import { getDateLocale } from "@/lib/date-locale";
 import { cn } from "@/lib/utils";
 import { TokenDisplay, TokenDetailContent } from "@/components/admin/token-display";
 import { RoutingDecisionTimeline } from "@/components/admin/routing-decision-timeline";
-import { StatusLed, TerminalHeader, type LedStatus } from "@/components/ui/terminal";
+import { StatusLed, type LedStatus } from "@/components/ui/terminal";
 
 interface LogsTableProps {
   logs: RequestLog[];
   isLive?: boolean;
 }
 
-export function LogsTable({ logs, isLive = false }: LogsTableProps) {
+type PerformancePreset = "all" | "high_ttft" | "low_tps" | "slow_duration";
+
+const HIGH_TTFT_THRESHOLD_MS = 5000;
+const LOW_TPS_THRESHOLD = 30;
+const SLOW_DURATION_THRESHOLD_MS = 20000;
+const MIN_TPS_COMPLETION_TOKENS = 10;
+const MIN_TPS_GENERATION_MS = 100;
+
+type LatencyBreakdownKey = "routing" | "ttft" | "generation" | "other";
+
+interface LatencyBreakdownSegment {
+  key: LatencyBreakdownKey;
+  valueMs: number;
+  textClass: string;
+  dotClass: string;
+  dashArray: string;
+  dashOffset: number;
+}
+
+interface LatencyBreakdown {
+  ringRadius: number;
+  segments: LatencyBreakdownSegment[];
+}
+
+const DETAIL_PANEL_CLASS =
+  "rounded-cf-sm border border-divider bg-surface-300/55 shadow-[var(--vr-shadow-xs)]";
+const DETAIL_PANEL_HEADER_CLASS =
+  "border-b border-divider/80 bg-surface-200/70 px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground";
+const DETAIL_PANEL_BODY_CLASS = "px-3 py-2.5";
+
+function getTtftPerformanceClass(ttftMs: number): string {
+  if (ttftMs >= 1000) return "text-status-error";
+  if (ttftMs >= 500) return "text-status-warning";
+  return "text-status-success";
+}
+
+function getTtftIndicatorBgClass(ttftMs: number): string {
+  if (ttftMs >= 1000) return "bg-status-error";
+  if (ttftMs >= 500) return "bg-status-warning";
+  return "bg-status-success";
+}
+
+function buildLatencyBreakdown(
+  durationMs: number | null,
+  routingDurationMs: number | null,
+  ttftMs: number | null,
+  generationMs: number | null
+): LatencyBreakdown | null {
+  if (durationMs == null || durationMs <= 0) {
+    return null;
+  }
+
+  const totalMs = Math.max(0, durationMs);
+  const routingMs =
+    routingDurationMs == null ? 0 : Math.max(0, Math.min(totalMs, Math.round(routingDurationMs)));
+  const ttftValueMs = ttftMs == null ? 0 : Math.max(0, Math.round(ttftMs));
+  const generationValueMs = generationMs == null ? 0 : Math.max(0, Math.round(generationMs));
+  const otherMs = Math.max(0, totalMs - routingMs - ttftValueMs - generationValueMs);
+
+  const baseSegments: Array<Omit<LatencyBreakdownSegment, "dashArray" | "dashOffset">> = [
+    {
+      key: "routing",
+      valueMs: routingMs,
+      textClass: "text-orange-500",
+      dotClass: "bg-orange-500",
+    },
+    ...(ttftValueMs > 0
+      ? [
+          {
+            key: "ttft" as const,
+            valueMs: ttftValueMs,
+            textClass: getTtftPerformanceClass(ttftValueMs),
+            dotClass: getTtftIndicatorBgClass(ttftValueMs),
+          },
+        ]
+      : []),
+    ...(generationValueMs > 0
+      ? [
+          {
+            key: "generation" as const,
+            valueMs: generationValueMs,
+            textClass: "text-status-success",
+            dotClass: "bg-status-success",
+          },
+        ]
+      : []),
+    ...(otherMs > 0
+      ? [
+          {
+            key: "other" as const,
+            valueMs: otherMs,
+            textClass: "text-muted-foreground",
+            dotClass: "bg-surface-500",
+          },
+        ]
+      : []),
+  ];
+
+  const segments = baseSegments.filter((segment) => segment.valueMs > 0);
+  if (segments.length === 0) {
+    return null;
+  }
+
+  const ringRadius = 16;
+  const ringCircumference = 2 * Math.PI * ringRadius;
+  let offsetCursor = 0;
+  const donutSegments = segments.map((segment) => {
+    const arcLength = (segment.valueMs / totalMs) * ringCircumference;
+    const segmentOffset = offsetCursor;
+    offsetCursor += arcLength;
+    return {
+      ...segment,
+      dashArray: `${arcLength} ${Math.max(ringCircumference - arcLength, 0)}`,
+      dashOffset: -segmentOffset,
+    };
+  });
+
+  return {
+    ringRadius,
+    segments: donutSegments,
+  };
+}
+
+function getGenerationMs(log: RequestLog): number | null {
+  if (
+    !log.is_stream ||
+    log.duration_ms == null ||
+    log.routing_duration_ms == null ||
+    log.ttft_ms == null
+  ) {
+    return null;
+  }
+
+  const generationMs = log.duration_ms - log.routing_duration_ms - log.ttft_ms;
+  return generationMs > 0 ? generationMs : null;
+}
+
+function getRequestTps(log: RequestLog): number | null {
+  const generationMs = getGenerationMs(log);
+  if (
+    generationMs == null ||
+    generationMs <= MIN_TPS_GENERATION_MS ||
+    log.completion_tokens < MIN_TPS_COMPLETION_TOKENS
+  ) {
+    return null;
+  }
+  return Math.round((log.completion_tokens / generationMs) * 1000 * 10) / 10;
+}
+
+function getPercentile(values: number[], percentile: number): number | null {
+  if (values.length === 0) {
+    return null;
+  }
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.ceil((percentile / 100) * sorted.length) - 1;
+  return sorted[Math.max(0, Math.min(index, sorted.length - 1))];
+}
+
+export function LogsTable({ logs }: LogsTableProps) {
   const t = useTranslations("logs");
   const locale = useLocale();
   const dateLocale = getDateLocale(locale);
@@ -42,6 +200,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
   const [statusCodeFilter, setStatusCodeFilter] = useState<string>("all");
   const [modelFilter, setModelFilter] = useState<string>("");
   const [timeRangeFilter, setTimeRangeFilter] = useState<TimeRange>("30d");
+  const [performancePreset, setPerformancePreset] = useState<PerformancePreset>("all");
 
   // Expanded rows state for failover details
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -50,10 +209,6 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
   const [newLogIds, setNewLogIds] = useState<Set<string>>(new Set());
   const prevLogIdsRef = useRef<Set<string> | null>(null); // null = initial load
   const isInitialLoadRef = useRef(true);
-
-  // Request rate calculation
-  const [requestRate, setRequestRate] = useState<number>(0);
-  const logTimestampsRef = useRef<number[]>([]);
 
   // Detect new logs and trigger animation (skip initial load)
   useEffect(() => {
@@ -86,15 +241,6 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
       // Use queueMicrotask to defer state updates
       queueMicrotask(() => {
         setNewLogIds(newIds);
-
-        // Update request rate (count each newly arrived log)
-        const now = Date.now();
-        for (let i = 0; i < newIds.size; i += 1) {
-          logTimestampsRef.current.push(now);
-        }
-        // Keep only timestamps from last 10 seconds
-        logTimestampsRef.current = logTimestampsRef.current.filter((ts) => now - ts < 10000);
-        setRequestRate(logTimestampsRef.current.length / 10);
       });
 
       // Clear animation after it completes
@@ -173,34 +319,43 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
         }
       }
 
+      if (performancePreset === "high_ttft") {
+        if (log.ttft_ms == null || log.ttft_ms <= HIGH_TTFT_THRESHOLD_MS) {
+          return false;
+        }
+      } else if (performancePreset === "low_tps") {
+        const tps = getRequestTps(log);
+        if (tps == null || tps >= LOW_TPS_THRESHOLD) {
+          return false;
+        }
+      } else if (performancePreset === "slow_duration") {
+        if (log.duration_ms == null || log.duration_ms <= SLOW_DURATION_THRESHOLD_MS) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [logs, statusCodeFilter, modelFilter, timeRangeFilter]);
+  }, [logs, statusCodeFilter, modelFilter, timeRangeFilter, performancePreset]);
 
-  // Calculate stream statistics
-  const streamStats = useMemo(() => {
-    if (filteredLogs.length === 0) {
-      return { total: 0, successRate: 0, avgDuration: 0, totalTokens: 0 };
-    }
-
-    const successCount = filteredLogs.filter(
-      (log) => log.status_code && log.status_code >= 200 && log.status_code < 300
+  const performanceSummary = useMemo(() => {
+    const streamLogs = filteredLogs.filter((log) => log.is_stream);
+    const ttftValues = streamLogs
+      .map((log) => log.ttft_ms)
+      .filter((value): value is number => value != null && value > 0);
+    const tpsValues = streamLogs
+      .map((log) => getRequestTps(log))
+      .filter((value): value is number => value != null && value > 0);
+    const slowCount = filteredLogs.filter(
+      (log) => log.duration_ms != null && log.duration_ms > SLOW_DURATION_THRESHOLD_MS
     ).length;
 
-    const durations = filteredLogs
-      .filter((log) => log.duration_ms !== null)
-      .map((log) => log.duration_ms!);
-
-    const avgDuration =
-      durations.length > 0 ? durations.reduce((a, b) => a + b, 0) / durations.length : 0;
-
-    const totalTokens = filteredLogs.reduce((sum, log) => sum + (log.total_tokens || 0), 0);
-
     return {
-      total: filteredLogs.length,
-      successRate: Math.round((successCount / filteredLogs.length) * 100),
-      avgDuration: avgDuration / 1000, // Convert to seconds
-      totalTokens,
+      p50TtftMs: getPercentile(ttftValues, 50),
+      p90TtftMs: getPercentile(ttftValues, 90),
+      p50Tps: getPercentile(tpsValues, 50),
+      slowRatio: filteredLogs.length > 0 ? (slowCount / filteredLogs.length) * 100 : 0,
+      streamRatio: filteredLogs.length > 0 ? (streamLogs.length / filteredLogs.length) * 100 : 0,
     };
   }, [filteredLogs]);
 
@@ -223,11 +378,25 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
     return `${(durationMs / 1000).toFixed(2)}s`;
   };
 
-  const formatTokensCompact = (total: number | null) => {
-    if (total === null || total === 0) return "-";
-    if (total >= 1000) return `${(total / 1000).toFixed(1)}k`;
-    return String(total);
+  const formatTtft = (ttftMs: number) => {
+    if (ttftMs >= 1000) {
+      return `${(ttftMs / 1000).toFixed(3)}s`;
+    }
+    return `${Math.round(ttftMs)}ms`;
   };
+
+  const formatSummaryTtft = (ttftMs: number | null) => {
+    if (ttftMs == null) return "-";
+    if (ttftMs >= 1000) return `${(ttftMs / 1000).toFixed(2)}s`;
+    return `${Math.round(ttftMs)}ms`;
+  };
+
+  const formatSummaryTps = (tps: number | null) => {
+    if (tps == null) return "-";
+    return `${tps.toFixed(1)} tok/s`;
+  };
+
+  const formatPercent = (value: number) => `${Math.round(value)}%`;
 
   // Check if row has error state
   const hasErrorState = (log: RequestLog): boolean => {
@@ -248,47 +417,101 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
 
   return (
     <div className="overflow-hidden rounded-cf-md border border-divider bg-surface-200/70">
-      {/* Terminal Header */}
-      <TerminalHeader
-        systemId="REQUEST_STREAM"
-        isLive={isLive}
-        requestRate={isLive ? requestRate : undefined}
-        timeRange={timeRangeFilter.toUpperCase()}
-        className="border-0 border-b border-divider bg-transparent"
-      />
-
       {/* Filter Controls */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-divider bg-surface-200 p-4">
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          <span className="type-caption text-muted-foreground">{t("filters")}</span>
+      <div className="border-b border-divider bg-surface-200 p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <span className="type-caption text-muted-foreground">{t("filters")}</span>
+          </div>
+
+          <div className="w-full sm:w-[180px]">
+            <Select value={statusCodeFilter} onValueChange={setStatusCodeFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder={t("filterStatus")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("filterStatusAll")}</SelectItem>
+                <SelectItem value="2xx">{t("filterStatus2xx")}</SelectItem>
+                <SelectItem value="4xx">{t("filterStatus4xx")}</SelectItem>
+                <SelectItem value="5xx">{t("filterStatus5xx")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="w-full sm:w-[220px]">
+            <Input
+              type="text"
+              placeholder={t("filterModel")}
+              value={modelFilter}
+              onChange={(e) => setModelFilter(e.target.value)}
+            />
+          </div>
+
+          <div className="w-full sm:ml-auto sm:w-auto">
+            <TimeRangeSelector value={timeRangeFilter} onChange={setTimeRangeFilter} />
+          </div>
         </div>
 
-        <div className="w-full sm:w-[180px]">
-          <Select value={statusCodeFilter} onValueChange={setStatusCodeFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder={t("filterStatus")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("filterStatusAll")}</SelectItem>
-              <SelectItem value="2xx">{t("filterStatus2xx")}</SelectItem>
-              <SelectItem value="4xx">{t("filterStatus4xx")}</SelectItem>
-              <SelectItem value="5xx">{t("filterStatus5xx")}</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="type-caption text-muted-foreground">{t("quickFilters")}</span>
+          {(
+            [
+              ["all", t("presetAll")],
+              ["high_ttft", t("presetHighTtft")],
+              ["low_tps", t("presetLowTps")],
+              ["slow_duration", t("presetSlowDuration")],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setPerformancePreset(value)}
+              className={cn(
+                "rounded-cf-sm border px-2 py-1 font-mono text-xs transition-colors",
+                performancePreset === value
+                  ? "border-amber-500/45 bg-amber-500/10 text-amber-500"
+                  : "border-divider bg-surface-300 text-muted-foreground hover:bg-surface-300/70"
+              )}
+            >
+              {label}
+            </button>
+          ))}
         </div>
+      </div>
 
-        <div className="w-full sm:w-[220px]">
-          <Input
-            type="text"
-            placeholder={t("filterModel")}
-            value={modelFilter}
-            onChange={(e) => setModelFilter(e.target.value)}
-          />
-        </div>
-
-        <div className="w-full sm:ml-auto sm:w-auto">
-          <TimeRangeSelector value={timeRangeFilter} onChange={setTimeRangeFilter} />
+      <div className="border-b border-divider bg-surface-200/70 px-4 py-3">
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
+          <div className="rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2">
+            <p className="type-caption text-muted-foreground">{t("summaryP50Ttft")}</p>
+            <p className="font-mono text-sm text-foreground">
+              {formatSummaryTtft(performanceSummary.p50TtftMs)}
+            </p>
+          </div>
+          <div className="rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2">
+            <p className="type-caption text-muted-foreground">{t("summaryP90Ttft")}</p>
+            <p className="font-mono text-sm text-foreground">
+              {formatSummaryTtft(performanceSummary.p90TtftMs)}
+            </p>
+          </div>
+          <div className="rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2">
+            <p className="type-caption text-muted-foreground">{t("summaryP50Tps")}</p>
+            <p className="font-mono text-sm text-foreground">
+              {formatSummaryTps(performanceSummary.p50Tps)}
+            </p>
+          </div>
+          <div className="rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2">
+            <p className="type-caption text-muted-foreground">{t("summarySlowRatio")}</p>
+            <p className="font-mono text-sm text-foreground">
+              {formatPercent(performanceSummary.slowRatio)}
+            </p>
+          </div>
+          <div className="rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2">
+            <p className="type-caption text-muted-foreground">{t("summaryStreamRatio")}</p>
+            <p className="font-mono text-sm text-foreground">
+              {formatPercent(performanceSummary.streamRatio)}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -354,6 +577,14 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                       failoverDurationMs = log.duration_ms;
                     }
                   }
+                  const generationMs = getGenerationMs(log);
+                  const requestTps = getRequestTps(log);
+                  const latencyBreakdown = buildLatencyBreakdown(
+                    log.duration_ms,
+                    log.routing_duration_ms,
+                    log.ttft_ms,
+                    generationMs
+                  );
 
                   return (
                     <Fragment key={log.id}>
@@ -455,8 +686,33 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                             </span>
                           </span>
                         </TableCell>
-                        <TableCell className="font-mono text-xs">
-                          {formatDuration(log.duration_ms)}
+                        <TableCell className="font-mono text-xs leading-tight">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="tabular-nums">{formatDuration(log.duration_ms)}</span>
+                            {(log.ttft_ms != null || requestTps != null) && (
+                              <span className="block text-[11px] text-muted-foreground">
+                                {log.ttft_ms != null && (
+                                  <>
+                                    {t("perfTtft")}{" "}
+                                    <span
+                                      className={cn(
+                                        "tabular-nums",
+                                        getTtftPerformanceClass(log.ttft_ms)
+                                      )}
+                                    >
+                                      {formatTtft(log.ttft_ms)}
+                                    </span>
+                                  </>
+                                )}
+                                {log.ttft_ms != null && requestTps != null && " · "}
+                                {requestTps != null && (
+                                  <>
+                                    {t("perfTps")} {requestTps} tok/s
+                                  </>
+                                )}
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
 
@@ -465,39 +721,151 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                         <TableRow className="bg-surface-300/30">
                           <TableCell colSpan={9} className="p-0">
                             <div className="px-4 py-3 border-t border-dashed border-divider space-y-4 font-mono text-xs">
-                              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:gap-6">
-                                <div className="min-w-0 xl:shrink-0">
-                                  <RoutingDecisionTimeline
-                                    routingDecision={log.routing_decision}
-                                    upstreamName={upstreamDisplayName}
-                                    routingType={log.routing_type}
-                                    groupName={log.group_name}
-                                    failoverAttempts={log.failover_attempts}
-                                    failoverHistory={log.failover_history}
-                                    failoverDurationMs={failoverDurationMs}
-                                    routingDurationMs={log.routing_duration_ms}
-                                    durationMs={log.duration_ms}
-                                    statusCode={log.status_code}
-                                    cachedTokens={log.cached_tokens}
-                                    cacheReadTokens={log.cache_read_tokens}
-                                    sessionId={log.session_id}
-                                    affinityHit={log.affinity_hit}
-                                    affinityMigrated={log.affinity_migrated}
-                                    compact={false}
-                                  />
-                                </div>
+                              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(260px,320px)_minmax(300px,360px)] xl:items-start">
+                                <section className={cn(DETAIL_PANEL_CLASS, "min-w-0")}>
+                                  <div className={DETAIL_PANEL_HEADER_CLASS}>
+                                    {t("routingDecisionDetails")}
+                                  </div>
+                                  <div className={DETAIL_PANEL_BODY_CLASS}>
+                                    <RoutingDecisionTimeline
+                                      routingDecision={log.routing_decision}
+                                      upstreamName={upstreamDisplayName}
+                                      routingType={log.routing_type}
+                                      groupName={log.group_name}
+                                      failoverAttempts={log.failover_attempts}
+                                      failoverHistory={log.failover_history}
+                                      failoverDurationMs={failoverDurationMs}
+                                      statusCode={log.status_code}
+                                      sessionId={log.session_id}
+                                      affinityHit={log.affinity_hit}
+                                      affinityMigrated={log.affinity_migrated}
+                                      showStageConnector={false}
+                                      compact={false}
+                                    />
+                                  </div>
+                                </section>
 
-                                <div className="w-full xl:w-[340px] xl:shrink-0">
-                                  <TokenDetailContent
-                                    promptTokens={log.prompt_tokens}
-                                    completionTokens={log.completion_tokens}
-                                    totalTokens={log.total_tokens}
-                                    cachedTokens={log.cached_tokens}
-                                    reasoningTokens={log.reasoning_tokens}
-                                    cacheCreationTokens={log.cache_creation_tokens}
-                                    cacheReadTokens={log.cache_read_tokens}
-                                  />
-                                </div>
+                                <section className="w-full xl:min-w-0">
+                                  <div className={DETAIL_PANEL_CLASS}>
+                                    <div className={DETAIL_PANEL_HEADER_CLASS}>
+                                      {t("performanceStats")}
+                                    </div>
+                                    <div className={cn(DETAIL_PANEL_BODY_CLASS, "space-y-1")}>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-muted-foreground">
+                                          {t("timelineTotalDuration")}:
+                                        </span>
+                                        <span className="ml-auto tabular-nums text-foreground">
+                                          {formatDuration(log.duration_ms)}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {latencyBreakdown && (
+                                      <div className="mt-2 px-3 py-2">
+                                        <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                                          {t("timelineLatencyBreakdown")}
+                                        </div>
+                                        <div className="flex items-center gap-2.5">
+                                          <svg
+                                            viewBox="0 0 40 40"
+                                            role="img"
+                                            aria-label={t("timelineLatencyBreakdown")}
+                                            className="h-12 w-12 shrink-0 -rotate-90"
+                                          >
+                                            <circle
+                                              cx="20"
+                                              cy="20"
+                                              r={latencyBreakdown.ringRadius}
+                                              className="fill-none stroke-divider/70"
+                                              strokeWidth="5"
+                                            />
+                                            {latencyBreakdown.segments.map((segment) => (
+                                              <circle
+                                                key={segment.key}
+                                                cx="20"
+                                                cy="20"
+                                                r={latencyBreakdown.ringRadius}
+                                                className={cn("fill-none", segment.textClass)}
+                                                stroke="currentColor"
+                                                strokeWidth="5"
+                                                strokeLinecap="butt"
+                                                strokeDasharray={segment.dashArray}
+                                                strokeDashoffset={segment.dashOffset}
+                                              />
+                                            ))}
+                                          </svg>
+                                          <div className="min-w-0 space-y-0.5">
+                                            {latencyBreakdown.segments.map((segment) => (
+                                              <div
+                                                key={`${segment.key}-legend`}
+                                                className="flex items-center gap-2"
+                                              >
+                                                <span
+                                                  className={cn(
+                                                    "h-2 w-2 shrink-0 rounded-[2px]",
+                                                    segment.dotClass
+                                                  )}
+                                                />
+                                                <span className="text-muted-foreground">
+                                                  {segment.key === "routing" &&
+                                                    t("timelineRoutingOverhead")}
+                                                  {segment.key === "ttft" && t("perfTtft")}
+                                                  {segment.key === "generation" && t("perfGen")}
+                                                  {segment.key === "other" &&
+                                                    t("timelineOtherLatency")}
+                                                </span>
+                                                <span
+                                                  className={cn(
+                                                    "ml-auto tabular-nums",
+                                                    segment.textClass
+                                                  )}
+                                                >
+                                                  {segment.key === "ttft"
+                                                    ? formatTtft(segment.valueMs)
+                                                    : formatDuration(segment.valueMs)}
+                                                </span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {requestTps != null && (
+                                      <div className="mt-2 border-t border-dashed border-divider px-3 pt-1">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-muted-foreground">
+                                            {t("perfTps")}:
+                                          </span>
+                                          <span className="ml-auto tabular-nums text-foreground">
+                                            {requestTps} tok/s
+                                          </span>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </section>
+
+                                <section className="w-full xl:min-w-0">
+                                  <div className={DETAIL_PANEL_CLASS}>
+                                    <div className={DETAIL_PANEL_HEADER_CLASS}>
+                                      {t("tokenDetails")}
+                                    </div>
+                                    <div className={DETAIL_PANEL_BODY_CLASS}>
+                                      <TokenDetailContent
+                                        promptTokens={log.prompt_tokens}
+                                        completionTokens={log.completion_tokens}
+                                        totalTokens={log.total_tokens}
+                                        cachedTokens={log.cached_tokens}
+                                        reasoningTokens={log.reasoning_tokens}
+                                        cacheCreationTokens={log.cache_creation_tokens}
+                                        cacheReadTokens={log.cache_read_tokens}
+                                        showHeader={false}
+                                      />
+                                    </div>
+                                  </div>
+                                </section>
                               </div>
 
                               {/* Error Details - Terminal Style */}
@@ -521,25 +889,6 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                 })}
               </TableBody>
             </Table>
-          </div>
-
-          {/* Blinking Cursor Indicator (Live Mode) */}
-          {isLive && (
-            <div className="border-t border-divider bg-surface-200 px-4 py-2">
-              <span className="inline-flex items-center gap-2 rounded-[6px] border border-status-success/35 bg-status-success-muted px-2 py-0.5 font-mono text-xs text-status-success">
-                <span
-                  className="h-1.5 w-1.5 animate-pulse rounded-full bg-current"
-                  aria-hidden="true"
-                />
-                LIVE
-              </span>
-            </div>
-          )}
-
-          <div className="border-t border-divider bg-surface-300 px-4 py-2 type-body-small text-muted-foreground">
-            STREAM STATS: {streamStats.total} requests | {streamStats.successRate}% success | avg{" "}
-            {streamStats.avgDuration.toFixed(2)}s | {formatTokensCompact(streamStats.totalTokens)}{" "}
-            tokens
           </div>
         </>
       )}
