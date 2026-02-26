@@ -69,3 +69,7 @@
 
 - [x] 12.1 修复 `TokenDetailContent` 与 `TokenDisplay` 在 `cacheReadTokens > promptTokens` 场景下的命中率与新增输入计算，保证百分比不超过 100%
 - [x] 12.2 调整 `stats-service.ts` 概览缓存命中率聚合口径，使用容错分母避免跨 provider 混合数据出现 >100% 并补充单元测试
+
+## 13. 发布后缺陷修复（TTFT 元数据误判）
+
+- [x] 13.1 修复 `proxy-client.ts` 在 OpenAI Chat `choices[].delta.role` 等纯元数据 chunk 上提前触发 `onFirstChunk` 的问题，并补充 role-only 场景单测

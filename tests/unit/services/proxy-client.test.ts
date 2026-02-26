@@ -931,6 +931,52 @@ describe("proxy-client", () => {
         expect(onFirstChunk).not.toHaveBeenCalled();
       });
 
+      it("should ignore OpenAI role-only chunk and fire on text delta", async () => {
+        const onUsage = vi.fn();
+        const onFirstChunk = vi.fn();
+        const transformer = createSSETransformer({ onUsage, onFirstChunk });
+        const encoder = new TextEncoder();
+        const input = [
+          'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}\n\n',
+          'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}\n\n',
+        ].join("");
+
+        const reader = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(input));
+            controller.close();
+          },
+        })
+          .pipeThrough(transformer)
+          .getReader();
+
+        while (!(await reader.read()).done) {}
+
+        expect(onFirstChunk).toHaveBeenCalledTimes(1);
+      });
+
+      it("should not fire onFirstChunk for OpenAI role-only metadata chunk", async () => {
+        const onUsage = vi.fn();
+        const onFirstChunk = vi.fn();
+        const transformer = createSSETransformer({ onUsage, onFirstChunk });
+        const encoder = new TextEncoder();
+        const input =
+          'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}\n\n';
+
+        const reader = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(input));
+            controller.close();
+          },
+        })
+          .pipeThrough(transformer)
+          .getReader();
+
+        while (!(await reader.read()).done) {}
+
+        expect(onFirstChunk).not.toHaveBeenCalled();
+      });
+
       it("should skip [DONE] and fire onFirstChunk on the first real data event", async () => {
         const onUsage = vi.fn();
         const onFirstChunk = vi.fn();

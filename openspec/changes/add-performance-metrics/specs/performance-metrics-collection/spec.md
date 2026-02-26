@@ -12,8 +12,8 @@
 - **THEN** 系统 SHALL 将 ttft_ms 记录为 NULL
 
 #### Scenario: TTFT 排除非内容事件
-- **WHEN** 上游在输出有效内容前先发送元数据事件（如 Anthropic 的 message_start 中不含实际文本内容的事件）
-- **THEN** 系统 SHALL 以第一个包含非空 data 载荷的 SSE event 为 TTFT 终点，而非以任意 SSE event 为准
+- **WHEN** 上游在输出有效内容前先发送元数据事件（如 Anthropic 的 `message_start`、OpenAI Chat 的 `choices[].delta.role`）
+- **THEN** 系统 SHALL 以第一个包含实际输出内容（如文本 delta）的 SSE event 为 TTFT 终点，而非以任意非空 SSE event 为准
 
 ### Requirement: 代理层必须记录请求的流式类型
 系统 MUST 在 request_logs 表中记录每个请求是否为流式响应（is_stream 字段），用于区分 TPS 计算的适用场景。

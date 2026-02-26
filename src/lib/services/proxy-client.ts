@@ -319,6 +319,49 @@ function isNonEmptyText(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function hasOpenAIChatTextPart(parts: unknown): boolean {
+  if (!Array.isArray(parts)) {
+    return false;
+  }
+
+  for (const part of parts) {
+    if (typeof part === "object" && part !== null) {
+      const partRecord = part as Record<string, unknown>;
+      if (isNonEmptyText(partRecord.text)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function hasOpenAIChatChoiceTextPayload(choiceRecord: Record<string, unknown>): boolean {
+  const delta = choiceRecord.delta;
+  if (typeof delta === "object" && delta !== null) {
+    const deltaRecord = delta as Record<string, unknown>;
+    if (isNonEmptyText(deltaRecord.content) || hasOpenAIChatTextPart(deltaRecord.content)) {
+      return true;
+    }
+    if (isNonEmptyText(deltaRecord.refusal)) {
+      return true;
+    }
+  }
+
+  const message = choiceRecord.message;
+  if (typeof message === "object" && message !== null) {
+    const messageRecord = message as Record<string, unknown>;
+    if (isNonEmptyText(messageRecord.content) || hasOpenAIChatTextPart(messageRecord.content)) {
+      return true;
+    }
+    if (isNonEmptyText(messageRecord.refusal)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function hasOpenAIChatTextPayload(data: Record<string, unknown>): boolean {
   const choices = data.choices;
   if (!Array.isArray(choices)) {
@@ -329,36 +372,64 @@ function hasOpenAIChatTextPayload(data: Record<string, unknown>): boolean {
     if (typeof choice !== "object" || choice === null) {
       continue;
     }
-    const choiceRecord = choice as Record<string, unknown>;
-
-    const delta = choiceRecord.delta;
-    if (typeof delta === "object" && delta !== null) {
-      const deltaRecord = delta as Record<string, unknown>;
-      if (isNonEmptyText(deltaRecord.content)) {
-        return true;
-      }
-      if (Array.isArray(deltaRecord.content)) {
-        for (const part of deltaRecord.content) {
-          if (typeof part === "object" && part !== null) {
-            const partRecord = part as Record<string, unknown>;
-            if (isNonEmptyText(partRecord.text)) {
-              return true;
-            }
-          }
-        }
-      }
-    }
-
-    const message = choiceRecord.message;
-    if (typeof message === "object" && message !== null) {
-      const messageRecord = message as Record<string, unknown>;
-      if (isNonEmptyText(messageRecord.content)) {
-        return true;
-      }
+    if (hasOpenAIChatChoiceTextPayload(choice as Record<string, unknown>)) {
+      return true;
     }
   }
 
   return false;
+}
+
+function isOpenAIChatMetadataOnlyChoice(choiceRecord: Record<string, unknown>): boolean {
+  if (hasOpenAIChatChoiceTextPayload(choiceRecord)) {
+    return false;
+  }
+
+  const delta = choiceRecord.delta;
+  if (typeof delta === "object" && delta !== null) {
+    const deltaRecord = delta as Record<string, unknown>;
+    const deltaKeys = Object.keys(deltaRecord);
+    if (deltaKeys.length === 0) {
+      return true;
+    }
+
+    if (
+      deltaKeys.every((key) => key === "role") &&
+      (deltaRecord.role === undefined || typeof deltaRecord.role === "string")
+    ) {
+      return true;
+    }
+  }
+
+  if ("finish_reason" in choiceRecord) {
+    const finishReason = choiceRecord.finish_reason;
+    if (finishReason === null || typeof finishReason === "string") {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isOpenAIChatMetadataOnlyPayload(data: Record<string, unknown>): boolean {
+  const choices = data.choices;
+  if (!Array.isArray(choices)) {
+    return false;
+  }
+
+  let hasAnyChoice = false;
+  for (const choice of choices) {
+    if (typeof choice !== "object" || choice === null) {
+      continue;
+    }
+
+    hasAnyChoice = true;
+    if (!isOpenAIChatMetadataOnlyChoice(choice as Record<string, unknown>)) {
+      return false;
+    }
+  }
+
+  return hasAnyChoice;
 }
 
 function hasAnthropicTextPayload(data: Record<string, unknown>): boolean {
@@ -417,6 +488,10 @@ function isContentBearingSSEEventData(dataStr: string): boolean {
 
     if (isNonEmptyText(data.content) || isNonEmptyText(data.text)) {
       return true;
+    }
+
+    if (isOpenAIChatMetadataOnlyPayload(data)) {
+      return false;
     }
 
     const eventType = typeof data.type === "string" ? data.type : null;
