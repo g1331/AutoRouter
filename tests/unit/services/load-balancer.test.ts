@@ -633,7 +633,7 @@ describe("load-balancer", () => {
         expect(result.affinityHit).toBe(true);
       });
 
-      it("should update affinity cache when reselecting due to unavailable upstream", async () => {
+      it("should keep existing affinity cache when reselecting due to unavailable upstream", async () => {
         const u1 = makeUpstream({ id: "u1", priority: 0 });
         const u2 = makeUpstream({ id: "u2", priority: 0 });
         mockFindMany.mockResolvedValue([u1, u2]);
@@ -649,9 +649,31 @@ describe("load-balancer", () => {
           contentLength: 2048,
         });
 
-        // Cache should be updated to u2
+        // Cache should stay on u1; this reselect is request-local fallback only
         const entry = affinityStore.get("key1", "openai_chat_compatible", "session-abc");
-        expect(entry?.upstreamId).toBe("u2");
+        expect(entry?.upstreamId).toBe("u1");
+      });
+
+      it("should keep existing affinity cache when bound upstream is excluded", async () => {
+        const u1 = makeUpstream({ id: "u1", priority: 0 });
+        const u2 = makeUpstream({ id: "u2", priority: 0 });
+        mockFindMany.mockResolvedValue([u1, u2]);
+
+        // Pre-populate affinity cache with u1
+        affinityStore.set("key1", "openai_chat_compatible", "session-abc", "u1", 1024);
+
+        const result = await selectFromProviderType("openai", ["u1"], undefined, {
+          apiKeyId: "key1",
+          sessionId: "session-abc",
+          affinityScope: "openai_chat_compatible",
+          contentLength: 2048,
+        });
+
+        expect(result.upstream.id).toBe("u2");
+        expect(result.affinityHit).toBe(true);
+
+        const entry = affinityStore.get("key1", "openai_chat_compatible", "session-abc");
+        expect(entry?.upstreamId).toBe("u1");
       });
 
       it("should create new affinity entry on first request", async () => {

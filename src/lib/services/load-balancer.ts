@@ -366,7 +366,7 @@ function isUpstreamAvailable(u: UpstreamWithCircuitBreaker): boolean {
  * Algorithm:
  * 1. Check session affinity cache (if sessionId provided)
  *    a. If hit and upstream available → check migration → return
- *    b. If hit but upstream unavailable → reselect and update cache
+ *    b. If hit but upstream unavailable → reselect without mutating affinity cache
  * 2. Fetch all active upstreams matching providerType (with circuit breaker state)
  * 3. Filter by allowedUpstreamIds (API key authorization)
  * 4. Group by priority (ascending — lower number = higher priority)
@@ -534,11 +534,10 @@ async function selectFromUpstreamPool(
         }
       }
 
-      // Bound upstream unavailable, need to reselect and update cache
+      // Bound upstream unavailable, reselect for this request only.
+      // Do not overwrite affinity cache here; keep the stable binding until
+      // a normal miss or explicit migration updates it.
       const result = await performTieredSelection(filteredUpstreams, excludeIds, totalCandidates);
-
-      // Update affinity cache with new selection
-      affinityStore.set(apiKeyId, affinityScope, sessionId, result.upstream.id, contentLength);
 
       return {
         ...result,
