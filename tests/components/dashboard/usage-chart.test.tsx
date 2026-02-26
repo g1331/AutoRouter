@@ -3,6 +3,8 @@ import { describe, it, expect, vi } from "vitest";
 import { UsageChart } from "@/components/dashboard/usage-chart";
 import type { StatsTimeseriesResponse } from "@/types/api";
 
+const yAxisPropsSpy = vi.fn();
+
 // Mock next-intl
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
@@ -22,7 +24,10 @@ vi.mock("recharts", () => ({
     <div data-testid={`area-${name}`} data-key={typeof dataKey} />
   ),
   XAxis: () => <div data-testid="x-axis" />,
-  YAxis: () => <div data-testid="y-axis" />,
+  YAxis: (props: unknown) => {
+    yAxisPropsSpy(props);
+    return <div data-testid="y-axis" />;
+  },
   CartesianGrid: () => <div data-testid="cartesian-grid" />,
   Tooltip: ({ content }: { content: React.ReactNode }) => (
     <div data-testid="tooltip">{content}</div>
@@ -320,6 +325,44 @@ describe("UsageChart", () => {
       render(<UsageChart data={mockTimeseriesData} isLoading={false} timeRange="7d" />);
 
       expect(screen.getByTestId("responsive-container")).toBeInTheDocument();
+    });
+  });
+
+  describe("TTFT Unit Formatting", () => {
+    it("formats TTFT ticks as seconds when value is >= 1000ms", () => {
+      yAxisPropsSpy.mockClear();
+      render(
+        <UsageChart
+          data={mockTimeseriesData}
+          isLoading={false}
+          timeRange="7d"
+          metric="ttft"
+          onMetricChange={vi.fn()}
+        />
+      );
+
+      const yAxisProps = yAxisPropsSpy.mock.calls.at(-1)?.[0] as {
+        tickFormatter?: (v: number) => string;
+      };
+      expect(yAxisProps.tickFormatter?.(1222)).toBe("1.222s");
+    });
+
+    it("formats TTFT ticks as milliseconds when value is < 1000ms", () => {
+      yAxisPropsSpy.mockClear();
+      render(
+        <UsageChart
+          data={mockTimeseriesData}
+          isLoading={false}
+          timeRange="7d"
+          metric="ttft"
+          onMetricChange={vi.fn()}
+        />
+      );
+
+      const yAxisProps = yAxisPropsSpy.mock.calls.at(-1)?.[0] as {
+        tickFormatter?: (v: number) => string;
+      };
+      expect(yAxisProps.tickFormatter?.(650)).toBe("650ms");
     });
   });
 });

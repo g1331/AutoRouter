@@ -885,6 +885,52 @@ describe("proxy-client", () => {
         expect(onFirstChunk).not.toHaveBeenCalled();
       });
 
+      it("should ignore metadata events and fire onFirstChunk when text payload arrives", async () => {
+        const onUsage = vi.fn();
+        const onFirstChunk = vi.fn();
+        const transformer = createSSETransformer({ onUsage, onFirstChunk });
+        const encoder = new TextEncoder();
+        const input = [
+          'data: {"type":"message_start","message":{"id":"msg_1","model":"claude-3-5"}}\n\n',
+          'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"hello"}}\n\n',
+        ].join("");
+
+        const reader = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(input));
+            controller.close();
+          },
+        })
+          .pipeThrough(transformer)
+          .getReader();
+
+        while (!(await reader.read()).done) {}
+
+        expect(onFirstChunk).toHaveBeenCalledTimes(1);
+      });
+
+      it("should not fire onFirstChunk for metadata-only events", async () => {
+        const onUsage = vi.fn();
+        const onFirstChunk = vi.fn();
+        const transformer = createSSETransformer({ onUsage, onFirstChunk });
+        const encoder = new TextEncoder();
+        const input =
+          'data: {"type":"message_start","message":{"id":"msg_1","model":"claude-3-5"}}\n\n';
+
+        const reader = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(input));
+            controller.close();
+          },
+        })
+          .pipeThrough(transformer)
+          .getReader();
+
+        while (!(await reader.read()).done) {}
+
+        expect(onFirstChunk).not.toHaveBeenCalled();
+      });
+
       it("should skip [DONE] and fire onFirstChunk on the first real data event", async () => {
         const onUsage = vi.fn();
         const onFirstChunk = vi.fn();

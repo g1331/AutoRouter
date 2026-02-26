@@ -445,6 +445,78 @@ describe("stats-service", () => {
       expect(result.series[0].data[0].totalTokens).toBe(0);
       expect(result.series[0].data[0].avgDurationMs).toBe(0);
     });
+
+    it("should calculate avgTps from aggregated tps fields", async () => {
+      const { db } = await import("@/lib/db");
+      const { getTimeseriesStats } = await import("@/lib/services/stats-service");
+
+      vi.mocked(db.select).mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            groupBy: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockResolvedValue([
+                {
+                  upstreamId: "upstream-1",
+                  timeBucket: "2024-06-15 10:00:00",
+                  requestCount: 5,
+                  totalTokens: "1000",
+                  avgDuration: "1200",
+                  totalCompletionTokens: "600",
+                  totalDurationMs: "10000",
+                  totalRoutingDurationMs: "1000",
+                  totalTtftMs: "2000",
+                },
+              ]),
+            }),
+          }),
+        }),
+      } as unknown as ReturnType<typeof db.select>);
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        { id: "upstream-1", name: "OpenAI" },
+      ]);
+
+      const result = await getTimeseriesStats("today", "tps");
+
+      expect(result.series).toHaveLength(1);
+      expect(result.series[0].data[0].avgTps).toBe(85.7);
+    });
+
+    it("should return avgTps as 0 when no eligible stream samples exist", async () => {
+      const { db } = await import("@/lib/db");
+      const { getTimeseriesStats } = await import("@/lib/services/stats-service");
+
+      vi.mocked(db.select).mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            groupBy: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockResolvedValue([
+                {
+                  upstreamId: "upstream-1",
+                  timeBucket: "2024-06-15 10:00:00",
+                  requestCount: 5,
+                  totalTokens: "1000",
+                  avgDuration: "1200",
+                  totalCompletionTokens: "0",
+                  totalDurationMs: "0",
+                  totalRoutingDurationMs: "0",
+                  totalTtftMs: "0",
+                },
+              ]),
+            }),
+          }),
+        }),
+      } as unknown as ReturnType<typeof db.select>);
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        { id: "upstream-1", name: "OpenAI" },
+      ]);
+
+      const result = await getTimeseriesStats("today", "tps");
+
+      expect(result.series).toHaveLength(1);
+      expect(result.series[0].data[0].avgTps).toBe(0);
+    });
   });
 
   describe("getLeaderboardStats", () => {
@@ -731,6 +803,72 @@ describe("stats-service", () => {
       const result = await getLeaderboardStats("7d", 5);
 
       expect(result.apiKeys[0].totalTokens).toBe(0);
+    });
+
+    it("should calculate upstream avgTps from aggregated stream fields", async () => {
+      const { db } = await import("@/lib/db");
+      const { getLeaderboardStats } = await import("@/lib/services/stats-service");
+
+      vi.mocked(db.select)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              groupBy: vi.fn().mockReturnValue({
+                orderBy: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue([]),
+                }),
+              }),
+            }),
+          }),
+        } as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              groupBy: vi.fn().mockReturnValue({
+                orderBy: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue([
+                    {
+                      upstreamId: "upstream-openai",
+                      requestCount: 10,
+                      totalTokens: "5000",
+                      avgTtft: "1200",
+                      totalCompletionTokens: "600",
+                      totalDurationMs: "10000",
+                      totalRoutingDurationMs: "1000",
+                      totalTtftMs: "2000",
+                    },
+                  ]),
+                }),
+              }),
+            }),
+          }),
+        } as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              groupBy: vi.fn().mockReturnValue({
+                orderBy: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue([]),
+                }),
+              }),
+            }),
+          }),
+        } as unknown as ReturnType<typeof db.select>);
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValue([]);
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+        {
+          id: "upstream-openai",
+          name: "OpenAI Upstream",
+          routeCapabilities: ["openai_chat_compatible"],
+        },
+      ]);
+
+      const result = await getLeaderboardStats("7d", 5);
+
+      expect(result.upstreams).toHaveLength(1);
+      expect(result.upstreams[0].avgTtftMs).toBe(1200);
+      expect(result.upstreams[0].avgTps).toBe(85.7);
     });
 
     it("should handle null model as Unknown", async () => {

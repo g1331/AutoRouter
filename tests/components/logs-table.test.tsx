@@ -272,6 +272,34 @@ describe("LogsTable", () => {
       expect(screen.queryAllByText(/perfGen/).length).toBeGreaterThan(0);
       expect(screen.queryAllByText("450ms").length).toBeGreaterThan(0);
     });
+
+    it("does not show TPS when completion tokens are below threshold", () => {
+      const streamLog: RequestLog = {
+        ...mockLog,
+        is_stream: true,
+        duration_ms: 1650,
+        routing_duration_ms: 300,
+        ttft_ms: 900,
+        completion_tokens: 9,
+      };
+      render(<LogsTable logs={[streamLog]} />);
+
+      expect(screen.queryByText("perfTps")).not.toBeInTheDocument();
+    });
+
+    it("does not show TPS when generation time is too short", () => {
+      const streamLog: RequestLog = {
+        ...mockLog,
+        is_stream: true,
+        duration_ms: 1500,
+        routing_duration_ms: 1000,
+        ttft_ms: 400,
+        completion_tokens: 100,
+      };
+      render(<LogsTable logs={[streamLog]} />);
+
+      expect(screen.queryByText("perfTps")).not.toBeInTheDocument();
+    });
   });
 
   describe("Error Row Styling", () => {

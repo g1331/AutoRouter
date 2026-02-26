@@ -37,16 +37,35 @@ interface ChartDataPoint {
   [key: string]: string | number;
 }
 
+function formatTtft(ttftMs: number): string {
+  if (ttftMs >= 1000) {
+    return `${(ttftMs / 1000).toFixed(3)}s`;
+  }
+  return `${Math.round(ttftMs)}ms`;
+}
+
+function formatMetricValue(value: number, metric: TimeseriesMetric): string {
+  if (metric === "ttft") {
+    return formatTtft(value);
+  }
+  if (metric === "tps") {
+    return `${formatNumber(value)} tok/s`;
+  }
+  return formatNumber(value);
+}
+
 function CustomTooltip({
   active,
   payload,
   label,
   mode,
+  metric,
 }: {
   active?: boolean;
   payload?: Array<{ name: string; value: number; color: string }>;
   label?: string;
   mode: "dark" | "light";
+  metric: TimeseriesMetric;
 }) {
   if (!active || !payload?.length) {
     return null;
@@ -69,7 +88,7 @@ function CustomTooltip({
         <div key={entry.name} className="mb-1.5 flex items-center gap-2 last:mb-0">
           <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
           <span className="type-body-small" style={{ color: theme.colors.textStrong }}>
-            {entry.name}: {formatNumber(entry.value)}
+            {entry.name}: {formatMetricValue(entry.value, metric)}
           </span>
         </div>
       ))}
@@ -287,7 +306,7 @@ export function UsageChart({ data, isLoading, metric, onMetricChange }: UsageCha
                   axisLine={{ stroke: theme.colors.grid }}
                   tickFormatter={(v: number) =>
                     metric === "ttft"
-                      ? `${formatNumber(v)}ms`
+                      ? formatTtft(v)
                       : metric === "tps"
                         ? `${formatNumber(v)}`
                         : formatNumber(v)
@@ -296,7 +315,7 @@ export function UsageChart({ data, isLoading, metric, onMetricChange }: UsageCha
                   width={theme.spacing.yAxisWidth}
                 />
 
-                <Tooltip content={<CustomTooltip mode={mode} />} />
+                <Tooltip content={<CustomTooltip mode={mode} metric={metric} />} />
                 <Legend content={<CustomLegend mode={mode} />} />
 
                 {upstreamNames.map((name, index) => {

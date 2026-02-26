@@ -68,6 +68,16 @@ export interface StatsLeaderboard {
   models: LeaderboardModelItem[];
 }
 
+const MIN_TPS_COMPLETION_TOKENS = 10;
+const MIN_TPS_GENERATION_MS = 100;
+
+const tpsEligibleCondition = sql`
+  ${requestLogs.isStream}
+  and ${requestLogs.ttftMs} is not null
+  and ${requestLogs.completionTokens} >= ${MIN_TPS_COMPLETION_TOKENS}
+  and (${requestLogs.durationMs} - ${requestLogs.routingDurationMs} - ${requestLogs.ttftMs}) > ${MIN_TPS_GENERATION_MS}
+`;
+
 /**
  * Calculate the start datetime for a given time range.
  */
@@ -181,10 +191,10 @@ export async function getTimeseriesStats(
       ...(metric === "ttft" ? { avgTtft: avg(requestLogs.ttftMs) } : {}),
       ...(metric === "tps"
         ? {
-            totalCompletionTokens: sql<number>`sum(case when ${requestLogs.isStream} then ${requestLogs.completionTokens} else 0 end)`,
-            totalDurationMs: sql<number>`sum(case when ${requestLogs.isStream} then ${requestLogs.durationMs} else 0 end)`,
-            totalRoutingDurationMs: sql<number>`sum(case when ${requestLogs.isStream} then ${requestLogs.routingDurationMs} else 0 end)`,
-            totalTtftMs: sql<number>`sum(case when ${requestLogs.isStream} then coalesce(${requestLogs.ttftMs}, 0) else 0 end)`,
+            totalCompletionTokens: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.completionTokens} else 0 end)`,
+            totalDurationMs: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.durationMs} else 0 end)`,
+            totalRoutingDurationMs: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.routingDurationMs} else 0 end)`,
+            totalTtftMs: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.ttftMs} else 0 end)`,
           }
         : {}),
     })
@@ -336,10 +346,10 @@ export async function getLeaderboardStats(
       requestCount: count(requestLogs.id),
       totalTokens: sum(requestLogs.totalTokens),
       avgTtft: avg(requestLogs.ttftMs),
-      totalCompletionTokens: sql<number>`sum(case when ${requestLogs.isStream} then ${requestLogs.completionTokens} else 0 end)`,
-      totalDurationMs: sql<number>`sum(case when ${requestLogs.isStream} then ${requestLogs.durationMs} else 0 end)`,
-      totalRoutingDurationMs: sql<number>`sum(case when ${requestLogs.isStream} then ${requestLogs.routingDurationMs} else 0 end)`,
-      totalTtftMs: sql<number>`sum(case when ${requestLogs.isStream} then coalesce(${requestLogs.ttftMs}, 0) else 0 end)`,
+      totalCompletionTokens: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.completionTokens} else 0 end)`,
+      totalDurationMs: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.durationMs} else 0 end)`,
+      totalRoutingDurationMs: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.routingDurationMs} else 0 end)`,
+      totalTtftMs: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.ttftMs} else 0 end)`,
     })
     .from(requestLogs)
     .where(and(gte(requestLogs.createdAt, startTime), isNotNull(requestLogs.upstreamId)))

@@ -300,6 +300,137 @@ export function extractUsage(data: Record<string, unknown>): TokenUsage | null {
   return null;
 }
 
+const TTFT_METADATA_ONLY_EVENT_TYPES = new Set([
+  "message_start",
+  "message_delta",
+  "message_stop",
+  "content_block_stop",
+  "ping",
+  "response.created",
+  "response.in_progress",
+  "response.completed",
+  "response.output_item.added",
+  "response.output_item.done",
+  "response.content_part.added",
+  "response.content_part.done",
+]);
+
+function isNonEmptyText(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function hasOpenAIChatTextPayload(data: Record<string, unknown>): boolean {
+  const choices = data.choices;
+  if (!Array.isArray(choices)) {
+    return false;
+  }
+
+  for (const choice of choices) {
+    if (typeof choice !== "object" || choice === null) {
+      continue;
+    }
+    const choiceRecord = choice as Record<string, unknown>;
+
+    const delta = choiceRecord.delta;
+    if (typeof delta === "object" && delta !== null) {
+      const deltaRecord = delta as Record<string, unknown>;
+      if (isNonEmptyText(deltaRecord.content)) {
+        return true;
+      }
+      if (Array.isArray(deltaRecord.content)) {
+        for (const part of deltaRecord.content) {
+          if (typeof part === "object" && part !== null) {
+            const partRecord = part as Record<string, unknown>;
+            if (isNonEmptyText(partRecord.text)) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+
+    const message = choiceRecord.message;
+    if (typeof message === "object" && message !== null) {
+      const messageRecord = message as Record<string, unknown>;
+      if (isNonEmptyText(messageRecord.content)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function hasAnthropicTextPayload(data: Record<string, unknown>): boolean {
+  if (data.type === "content_block_delta") {
+    const delta = data.delta;
+    if (typeof delta === "object" && delta !== null) {
+      const deltaRecord = delta as Record<string, unknown>;
+      return isNonEmptyText(deltaRecord.text);
+    }
+    return false;
+  }
+
+  if (data.type === "content_block_start") {
+    const contentBlock = data.content_block;
+    if (typeof contentBlock === "object" && contentBlock !== null) {
+      const contentBlockRecord = contentBlock as Record<string, unknown>;
+      return isNonEmptyText(contentBlockRecord.text);
+    }
+  }
+
+  return false;
+}
+
+function hasOpenAIResponsesTextPayload(data: Record<string, unknown>): boolean {
+  if (data.type === "response.output_text.delta" && isNonEmptyText(data.delta)) {
+    return true;
+  }
+  if (data.type === "response.output_text.done" && isNonEmptyText(data.text)) {
+    return true;
+  }
+
+  const part = data.part;
+  if (typeof part === "object" && part !== null) {
+    const partRecord = part as Record<string, unknown>;
+    return isNonEmptyText(partRecord.text);
+  }
+
+  return false;
+}
+
+function isContentBearingSSEEventData(dataStr: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(dataStr);
+    if (typeof parsed !== "object" || parsed === null) {
+      return true;
+    }
+
+    const data = parsed as Record<string, unknown>;
+    if (
+      hasOpenAIChatTextPayload(data) ||
+      hasAnthropicTextPayload(data) ||
+      hasOpenAIResponsesTextPayload(data)
+    ) {
+      return true;
+    }
+
+    if (isNonEmptyText(data.content) || isNonEmptyText(data.text)) {
+      return true;
+    }
+
+    const eventType = typeof data.type === "string" ? data.type : null;
+    if (eventType && TTFT_METADATA_ONLY_EVENT_TYPES.has(eventType)) {
+      return false;
+    }
+
+    return true;
+  } catch {
+    // Non-JSON payloads are treated as content-bearing events.
+    return true;
+  }
+}
+
 /**
  * Options for the SSE transformer.
  */
@@ -338,8 +469,12 @@ export function createSSETransformer(
               continue;
             }
 
-            // Fire onFirstChunk on the first non-empty data event
-            if (!firstChunkFired && callbacks.onFirstChunk) {
+            // Fire onFirstChunk on the first content-bearing data event.
+            if (
+              !firstChunkFired &&
+              callbacks.onFirstChunk &&
+              isContentBearingSSEEventData(dataStr)
+            ) {
               firstChunkFired = true;
               callbacks.onFirstChunk();
             }

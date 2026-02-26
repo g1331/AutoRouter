@@ -38,6 +38,8 @@ type PerformancePreset = "all" | "high_ttft" | "low_tps" | "slow_duration";
 const HIGH_TTFT_THRESHOLD_MS = 5000;
 const LOW_TPS_THRESHOLD = 30;
 const SLOW_DURATION_THRESHOLD_MS = 20000;
+const MIN_TPS_COMPLETION_TOKENS = 10;
+const MIN_TPS_GENERATION_MS = 100;
 
 type LatencyBreakdownKey = "routing" | "ttft" | "generation" | "other";
 
@@ -159,8 +161,7 @@ function getGenerationMs(log: RequestLog): number | null {
     !log.is_stream ||
     log.duration_ms == null ||
     log.routing_duration_ms == null ||
-    log.ttft_ms == null ||
-    log.completion_tokens <= 0
+    log.ttft_ms == null
   ) {
     return null;
   }
@@ -171,7 +172,11 @@ function getGenerationMs(log: RequestLog): number | null {
 
 function getRequestTps(log: RequestLog): number | null {
   const generationMs = getGenerationMs(log);
-  if (generationMs == null) {
+  if (
+    generationMs == null ||
+    generationMs <= MIN_TPS_GENERATION_MS ||
+    log.completion_tokens < MIN_TPS_COMPLETION_TOKENS
+  ) {
     return null;
   }
   return Math.round((log.completion_tokens / generationMs) * 1000 * 10) / 10;

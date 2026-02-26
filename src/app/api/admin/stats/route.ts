@@ -6,6 +6,7 @@ import {
   getTimeseriesStats,
   getLeaderboardStats,
   type TimeRange,
+  type TimeseriesMetric,
 } from "@/lib/services/stats-service";
 import {
   transformStatsOverviewToApi,
@@ -35,12 +36,13 @@ export async function GET(request: NextRequest) {
     const type = url.searchParams.get("type") || "overview";
     const range = (url.searchParams.get("range") || "7d") as TimeRange;
     const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get("limit") || "5", 10)));
+    const metric = (url.searchParams.get("metric") || "requests") as TimeseriesMetric;
 
     if (type === "overview") {
       const stats = await getOverviewStats();
       return NextResponse.json(transformStatsOverviewToApi(stats));
     } else if (type === "timeseries") {
-      const stats = await getTimeseriesStats(range);
+      const stats = await getTimeseriesStats(range, metric);
       return NextResponse.json(transformStatsTimeseriesToApi(stats));
     } else if (type === "leaderboard") {
       const stats = await getLeaderboardStats(range, limit);
