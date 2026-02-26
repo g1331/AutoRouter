@@ -41,12 +41,22 @@ interface LeaderboardTableProps {
     subtitle?: string;
     requestCount: number;
     totalTokens: number;
+    avgTtftMs?: number;
+    avgTps?: number;
   }>;
   isLoading: boolean;
   emptyMessage: string;
+  showPerformanceMetrics?: boolean;
 }
 
-function LeaderboardTable({ title, icon, items, isLoading, emptyMessage }: LeaderboardTableProps) {
+function LeaderboardTable({
+  title,
+  icon,
+  items,
+  isLoading,
+  emptyMessage,
+  showPerformanceMetrics = false,
+}: LeaderboardTableProps) {
   const t = useTranslations("dashboard");
 
   return (
@@ -94,6 +104,17 @@ function LeaderboardTable({ title, icon, items, isLoading, emptyMessage }: Leade
                   <p className="type-caption text-muted-foreground">
                     {formatNumber(item.totalTokens)} {t("stats.tokensShort")}
                   </p>
+                  {showPerformanceMetrics && (
+                    <p className="type-caption text-muted-foreground">
+                      {item.avgTtftMs != null && item.avgTtftMs > 0
+                        ? `${formatNumber(item.avgTtftMs)}ms`
+                        : "—"}
+                      {" / "}
+                      {item.avgTps != null && item.avgTps > 0
+                        ? `${formatNumber(item.avgTps)} tok/s`
+                        : "—"}
+                    </p>
+                  )}
                 </div>
               </div>
             ))}
@@ -123,6 +144,8 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
       subtitle: item.provider_type,
       requestCount: item.request_count,
       totalTokens: item.total_tokens,
+      avgTtftMs: item.avg_ttft_ms,
+      avgTps: item.avg_tps,
     })) ?? [];
 
   const modelItems =
@@ -154,6 +177,7 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
           items={upstreamItems}
           isLoading={isLoading}
           emptyMessage={t("stats.noUpstreams")}
+          showPerformanceMetrics
         />
         <LeaderboardTable
           title={t("stats.modelRanking")}

@@ -66,6 +66,7 @@ export function TokenDetailContent({
     value: number;
     highlight: boolean;
     indent?: boolean;
+    suffix?: string;
   }> = [
     { label: t("tokenInput"), value: promptTokens, highlight: true },
     { label: t("tokenOutput"), value: completionTokens, highlight: true },
@@ -73,11 +74,14 @@ export function TokenDetailContent({
 
   // Input breakdown: cache hit is a subset of input_tokens (not additive).
   if (effectiveCacheRead > 0) {
+    const cachePercent =
+      promptTokens > 0 ? Math.round((effectiveCacheRead / promptTokens) * 100) : 0;
     mainRows.splice(1, 0, {
       label: t("tokenCacheHit"),
       value: effectiveCacheRead,
       highlight: false,
       indent: true,
+      suffix: `(${cachePercent}%)`,
     });
     mainRows.splice(2, 0, {
       label: t("tokenInputNew"),
@@ -141,6 +145,7 @@ export function TokenDetailContent({
               )}
             >
               {row.value.toLocaleString()}
+              {row.suffix && <span className="ml-1 text-muted-foreground">{row.suffix}</span>}
             </span>
           </div>
         ))}

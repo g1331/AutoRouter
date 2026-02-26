@@ -315,6 +315,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                   <TableHead className="hidden md:table-cell">{t("tableTokens")}</TableHead>
                   <TableHead>{t("tableStatus")}</TableHead>
                   <TableHead>{t("tableDuration")}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t("tableTtft")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -456,7 +457,33 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                           </span>
                         </TableCell>
                         <TableCell className="font-mono text-xs">
-                          {formatDuration(log.duration_ms)}
+                          <div>
+                            {formatDuration(log.duration_ms)}
+                            {log.is_stream &&
+                              log.duration_ms != null &&
+                              log.completion_tokens > 0 &&
+                              log.routing_duration_ms != null &&
+                              log.ttft_ms != null &&
+                              (() => {
+                                const genTime =
+                                  log.duration_ms! - log.routing_duration_ms! - log.ttft_ms!;
+                                if (genTime <= 0) return null;
+                                const tps =
+                                  Math.round((log.completion_tokens / genTime) * 1000 * 10) / 10;
+                                return (
+                                  <span className="block text-xs text-muted-foreground">
+                                    {tps} tok/s
+                                  </span>
+                                );
+                              })()}
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell font-mono text-xs">
+                          {log.ttft_ms != null ? (
+                            `${log.ttft_ms}ms`
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                       </TableRow>
 

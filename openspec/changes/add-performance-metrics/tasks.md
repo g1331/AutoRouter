@@ -56,11 +56,11 @@
 
 ## 10. Dashboard 前端 - 排行榜扩展
 
-- [ ] 10.1 更新 `LeaderboardSection` 组件的上游排行表，新增 Avg TTFT 和 Avg TPS 列
-- [ ] 10.2 更新 `LeaderboardTable` 组件以支持可选的额外指标列
+- [x] 10.1 更新 `LeaderboardSection` 组件的上游排行表，新增 Avg TTFT 和 Avg TPS 列
+- [x] 10.2 更新 `LeaderboardTable` 组件以支持可选的额外指标列
 
 ## 11. 日志页面前端
 
-- [ ] 11.1 在 `LogsTable` 组件中新增 TTFT 列（`hidden md:table-cell`），在耗时列下方内嵌 TPS 显示（仅流式请求，`text-xs text-muted-foreground`）
-- [ ] 11.2 在展开行的 Token 详情中追加缓存命中百分比显示（如 "Cached: 800 (80%)"）
-- [ ] 11.3 更新 `useRequestLogs` hook 的响应类型以包含 `ttft_ms` 和 `is_stream` 字段
+- [x] 11.1 在 `LogsTable` 组件中新增 TTFT 列（`hidden md:table-cell`），在耗时列下方内嵌 TPS 显示（仅流式请求，`text-xs text-muted-foreground`）
+- [x] 11.2 在展开行的 Token 详情中追加缓存命中百分比显示（如 "Cached: 800 (80%)"）
+- [x] 11.3 更新 `useRequestLogs` hook 的响应类型以包含 `ttft_ms` 和 `is_stream` 字段
