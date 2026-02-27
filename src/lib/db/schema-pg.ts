@@ -186,6 +186,20 @@ export const requestLogs = pgTable(
     // Performance metrics fields
     ttftMs: integer("ttft_ms"),
     isStream: boolean("is_stream").notNull().default(false),
+    // Header compensation fields
+    sessionIdCompensated: boolean("session_id_compensated").notNull().default(false),
+    headerDiff: json("header_diff").$type<{
+      inbound_count: number;
+      outbound_count: number;
+      dropped: Array<{ header: string; value: string }>;
+      auth_replaced: {
+        header: string;
+        inbound_value: string | null;
+        outbound_value: string;
+      } | null;
+      compensated: Array<{ header: string; source: string; value: string }>;
+      unchanged: Array<{ header: string; value: string }>;
+    } | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -194,6 +208,26 @@ export const requestLogs = pgTable(
     index("request_logs_created_at_idx").on(table.createdAt),
     index("request_logs_routing_type_idx").on(table.routingType),
   ]
+);
+
+/**
+ * Outbound header compensation rules.
+ */
+export const compensationRules = pgTable(
+  "compensation_rules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 128 }).notNull().unique(),
+    isBuiltin: boolean("is_builtin").notNull().default(false),
+    enabled: boolean("enabled").notNull().default(true),
+    capabilities: json("capabilities").$type<string[]>().notNull(),
+    targetHeader: varchar("target_header", { length: 128 }).notNull(),
+    sources: json("sources").$type<string[]>().notNull(),
+    mode: varchar("mode", { length: 32 }).notNull().default("missing_only"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("compensation_rules_enabled_idx").on(table.enabled)]
 );
 
 // Relations

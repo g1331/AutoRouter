@@ -10,6 +10,7 @@ export const upstreamHealth = schema.upstreamHealth;
 export const apiKeyUpstreams = schema.apiKeyUpstreams;
 export const circuitBreakerStates = schema.circuitBreakerStates;
 export const requestLogs = schema.requestLogs;
+export const compensationRules = schema.compensationRules;
 
 export const apiKeysRelations = schema.apiKeysRelations;
 export const upstreamsRelations = schema.upstreamsRelations;

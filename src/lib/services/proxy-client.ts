@@ -36,6 +36,63 @@ export interface StreamMetrics {
 }
 
 /**
+ * A single outbound header to inject when the target header is absent.
+ */
+export interface CompensationHeader {
+  header: string;
+  value: string;
+  source: string;
+}
+
+/**
+ * Summary of header changes made during a proxy request.
+ */
+export interface HeaderDiff {
+  inbound_count: number;
+  outbound_count: number;
+  dropped: Array<{ header: string; value: string }>;
+  auth_replaced: {
+    header: string;
+    inbound_value: string | null;
+    outbound_value: string;
+  } | null;
+  compensated: Array<{ header: string; source: string; value: string }>;
+  unchanged: Array<{ header: string; value: string }>;
+}
+
+function maskSecretValue(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= 6) return "***";
+  return `${trimmed.slice(0, 3)}***${trimmed.slice(-3)}`;
+}
+
+function sanitizeAuthHeaderValue(value: string): string {
+  const trimmed = value.trim();
+  const firstSpaceIndex = trimmed.indexOf(" ");
+  if (firstSpaceIndex === -1) return maskSecretValue(trimmed);
+  const scheme = trimmed.slice(0, firstSpaceIndex).trim();
+  const token = trimmed.slice(firstSpaceIndex + 1).trim();
+  if (!token) return scheme;
+  return `${scheme} ${maskSecretValue(token)}`;
+}
+
+function sanitizeHeaderValueForLogging(headerNameLower: string, value: string): string {
+  if (!value) return "";
+  switch (headerNameLower) {
+    case "authorization":
+    case "proxy-authorization":
+      return sanitizeAuthHeaderValue(value);
+    case "x-api-key":
+      return maskSecretValue(value);
+    case "cookie":
+    case "set-cookie":
+      return "***";
+    default:
+      return value;
+  }
+}
+
+/**
  * Result of a proxy request.
  */
 export interface ProxyResult {
@@ -46,6 +103,29 @@ export interface ProxyResult {
   usage?: TokenUsage;
   streamMetricsPromise?: Promise<StreamMetrics>;
   ttftMs?: number;
+  headerDiff?: HeaderDiff;
+}
+
+export function applyCompensationHeaders(
+  headers: Record<string, string>,
+  compensationHeaders?: CompensationHeader[]
+): Array<{ header: string; source: string; value: string }> {
+  const applied: Array<{ header: string; source: string; value: string }> = [];
+  if (!compensationHeaders) {
+    return applied;
+  }
+
+  for (const comp of compensationHeaders) {
+    const lower = comp.header.toLowerCase();
+    const alreadyPresent = Object.keys(headers).some((k) => k.toLowerCase() === lower);
+    if (alreadyPresent) {
+      continue;
+    }
+    headers[comp.header] = comp.value;
+    applied.push({ header: comp.header, source: comp.source, value: comp.value });
+  }
+
+  return applied;
 }
 
 // Headers that should not be forwarded to upstream
@@ -72,6 +152,7 @@ const HOP_BY_HOP_HEADERS = new Set([
 const INFRASTRUCTURE_REQUEST_HEADERS = new Set([
   "cf-connecting-ip",
   "cf-connecting-ipv6",
+  "cf-ew-via",
   "cf-ipcountry",
   "cf-ray",
   "cf-visitor",
@@ -99,16 +180,23 @@ function isInfrastructureRequestHeader(headerName: string): boolean {
 
 /**
  * Filter out hop-by-hop headers and return safe headers for forwarding.
+ * Also returns the dropped header entries for HeaderDiff.
  */
-export function filterHeaders(headers: Headers): Record<string, string> {
+export function filterHeaders(headers: Headers): {
+  filtered: Record<string, string>;
+  dropped: Array<{ header: string; value: string }>;
+} {
   const filtered: Record<string, string> = {};
+  const dropped: Array<{ header: string; value: string }> = [];
   headers.forEach((value, key) => {
     const lower = key.toLowerCase();
     if (!HOP_BY_HOP_HEADERS.has(lower) && !isInfrastructureRequestHeader(lower)) {
       filtered[key] = value;
+    } else {
+      dropped.push({ header: lower, value: sanitizeHeaderValueForLogging(lower, value) });
     }
   });
-  return filtered;
+  return { filtered, dropped };
 }
 
 /**
@@ -636,12 +724,65 @@ export async function forwardRequest(
   request: Request,
   upstream: UpstreamForProxy,
   path: string,
-  requestId: string
+  requestId: string,
+  compensationHeaders?: CompensationHeader[]
 ): Promise<ProxyResult> {
   // Prepare headers
   const originalHeaders = new Headers(request.headers);
-  const filteredHeaders = filterHeaders(originalHeaders);
+  const inboundCount = [...originalHeaders.keys()].length;
+  const { filtered: filteredHeaders, dropped } = filterHeaders(originalHeaders);
+
+  // Inject compensation headers (missing_only mode: only when absent)
+  const compensated = applyCompensationHeaders(filteredHeaders, compensationHeaders).map(
+    ({ header, source, value }) => ({
+      header,
+      source,
+      value: sanitizeHeaderValueForLogging(header.toLowerCase(), value),
+    })
+  );
+
+  // Determine which auth header was replaced and capture before/after values
+  const hadAuthorization = Object.keys(filteredHeaders).find(
+    (k) => k.toLowerCase() === "authorization"
+  );
+  const hadApiKey = Object.keys(filteredHeaders).find((k) => k.toLowerCase() === "x-api-key");
+
+  let authReplaced: HeaderDiff["auth_replaced"] = null;
+  if (hadAuthorization) {
+    authReplaced = {
+      header: "authorization",
+      inbound_value: sanitizeHeaderValueForLogging(
+        "authorization",
+        filteredHeaders[hadAuthorization] ?? ""
+      ),
+      outbound_value: sanitizeHeaderValueForLogging("authorization", `Bearer ${upstream.apiKey}`),
+    };
+  } else if (hadApiKey) {
+    authReplaced = {
+      header: "x-api-key",
+      inbound_value: sanitizeHeaderValueForLogging("x-api-key", filteredHeaders[hadApiKey] ?? ""),
+      outbound_value: sanitizeHeaderValueForLogging("x-api-key", upstream.apiKey),
+    };
+  }
+
   const headers = injectAuthHeader(filteredHeaders, upstream);
+  const outboundCount = Object.keys(headers).length;
+
+  const compensatedHeaders = new Set(compensated.map((item) => item.header.toLowerCase()));
+  const unchanged: Array<{ header: string; value: string }> = [];
+  for (const [header, value] of Object.entries(headers)) {
+    const lower = header.toLowerCase();
+    if (authReplaced && lower === authReplaced.header) {
+      continue;
+    }
+    if (compensatedHeaders.has(lower)) {
+      continue;
+    }
+    const inboundValue = originalHeaders.get(header);
+    if (inboundValue !== null && inboundValue === value) {
+      unchanged.push({ header: lower, value: sanitizeHeaderValueForLogging(lower, value) });
+    }
+  }
 
   // Construct upstream URL
   const baseUrl = upstream.baseUrl.replace(/\/$/, "");
@@ -753,6 +894,14 @@ export async function forwardRequest(
         isStream: true,
         usage,
         streamMetricsPromise,
+        headerDiff: {
+          inbound_count: inboundCount,
+          outbound_count: outboundCount,
+          dropped,
+          auth_replaced: authReplaced,
+          compensated,
+          unchanged,
+        },
       };
     } else {
       // Regular response
@@ -787,6 +936,14 @@ export async function forwardRequest(
         body: bodyBytes,
         isStream: false,
         usage,
+        headerDiff: {
+          inbound_count: inboundCount,
+          outbound_count: outboundCount,
+          dropped,
+          auth_replaced: authReplaced,
+          compensated,
+          unchanged,
+        },
       };
     }
   } catch (error) {

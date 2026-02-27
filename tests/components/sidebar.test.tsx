@@ -46,6 +46,8 @@ vi.mock("lucide-react", () => ({
   Sun: () => <svg data-testid="icon-sun" />,
   Moon: () => <svg data-testid="icon-moon" />,
   Monitor: () => <svg data-testid="icon-monitor" />,
+  Wrench: () => <svg data-testid="icon-wrench" />,
+  ArrowLeftRight: () => <svg data-testid="icon-arrow-left-right" />,
 }));
 
 // Mock useAuth hook

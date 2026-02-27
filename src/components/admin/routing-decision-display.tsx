@@ -107,12 +107,16 @@ export function RoutingDecisionDisplay({
         </div>
 
         {/* Routing info with indicators */}
-        <div className="flex items-center gap-1 flex-wrap">
+        <div className="flex min-w-0 items-center gap-1 flex-wrap">
           {/* Routing type badge */}
           {routingTypeLabel && (
-            <Badge variant="success" className="text-[10px] px-1.5 py-0">
-              <Route className="w-3 h-3 mr-1" />
-              {routingTypeLabel}
+            <Badge
+              variant="success"
+              title={routingTypeLabel}
+              className="max-w-[7.25rem] min-w-0 text-[10px] px-1.5 py-0"
+            >
+              <Route className="w-3 h-3 mr-1 shrink-0" />
+              <span className="min-w-0 truncate">{routingTypeLabel}</span>
             </Badge>
           )}
 
@@ -127,7 +131,7 @@ export function RoutingDecisionDisplay({
           )}
 
           {/* Visual indicators */}
-          <div className="flex items-center gap-0.5 ml-1">
+          <div className="flex shrink-0 items-center gap-0.5 ml-1">
             {indicators.redirect && (
               <span title={t("indicatorRedirect")}>
                 <RefreshCw className="w-3 h-3 text-status-info" />

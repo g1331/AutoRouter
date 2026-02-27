@@ -265,27 +265,34 @@ export class SessionAffinityStore {
 // Session ID Extraction
 // ============================================================================
 
+export interface SessionIdResult {
+  sessionId: string | null;
+  source: "header" | "body" | null;
+}
+
 /**
  * Extract session ID from request based on route capability.
  *
  * Anthropic: Extracts UUID from body.metadata.user_id (format: "..._session_{uuid}")
- * OpenAI compatible capabilities: Uses headers.session_id directly
+ * OpenAI compatible capabilities: Uses headers.session_id directly, with body fallbacks
  * Others: Returns null
  */
 export function extractSessionId(
   capability: RouteCapability,
   headers: Record<string, string | string[] | undefined>,
   bodyJson: Record<string, unknown> | null
-): string | null {
+): SessionIdResult {
   switch (capability) {
-    case "anthropic_messages":
-      return extractAnthropicSessionId(bodyJson);
+    case "anthropic_messages": {
+      const sessionId = extractAnthropicSessionId(bodyJson);
+      return { sessionId, source: sessionId ? "body" : null };
+    }
     case "codex_responses":
     case "openai_chat_compatible":
     case "openai_extended":
       return extractOpenAISessionId(headers, bodyJson);
     default:
-      return null;
+      return { sessionId: null, source: null };
   }
 }
 
@@ -331,7 +338,7 @@ const MAX_SESSION_ID_LENGTH = 128;
 function extractOpenAISessionId(
   headers: Record<string, string | string[] | undefined>,
   bodyJson: Record<string, unknown> | null
-): string | null {
+): SessionIdResult {
   const headerCandidates: Array<string | string[] | undefined> = [
     headers["session_id"],
     headers["session-id"],
@@ -343,7 +350,7 @@ function extractOpenAISessionId(
   for (const candidate of headerCandidates) {
     const sessionId = normalizeSessionId(candidate);
     if (sessionId) {
-      return sessionId;
+      return { sessionId, source: "header" };
     }
   }
 
@@ -360,11 +367,11 @@ function extractOpenAISessionId(
   for (const candidate of bodyCandidates) {
     const sessionId = normalizeSessionId(candidate);
     if (sessionId) {
-      return sessionId;
+      return { sessionId, source: "body" };
     }
   }
 
-  return null;
+  return { sessionId: null, source: null };
 }
 
 function normalizeSessionId(value: unknown): string | null {

@@ -34,6 +34,7 @@ interface RoutingDecisionTimelineProps {
   sessionId?: string | null;
   affinityHit?: boolean;
   affinityMigrated?: boolean;
+  sessionIdCompensated?: boolean;
   compact?: boolean;
   showStageConnector?: boolean;
 }
@@ -83,6 +84,7 @@ export function RoutingDecisionTimeline({
   sessionId,
   affinityHit,
   affinityMigrated,
+  sessionIdCompensated,
   compact = true,
   showStageConnector = true,
 }: RoutingDecisionTimelineProps) {
@@ -145,11 +147,15 @@ export function RoutingDecisionTimeline({
           <Server className="w-3.5 h-3.5 text-muted-foreground" />
           <span className="font-mono text-xs">{finalUpstreamLabel}</span>
         </div>
-        <div className="flex items-center gap-1 flex-wrap">
+        <div className="flex min-w-0 items-center gap-1 flex-wrap">
           {routingTypeLabel && (
-            <Badge variant="success" className="text-[11px] px-1.5 py-0">
-              <Route className="w-3 h-3 mr-1" />
-              {routingTypeLabel}
+            <Badge
+              variant="success"
+              title={routingTypeLabel}
+              className="max-w-[7.25rem] min-w-0 text-[11px] px-1.5 py-0"
+            >
+              <Route className="w-3 h-3 mr-1 shrink-0" />
+              <span className="min-w-0 truncate">{routingTypeLabel}</span>
             </Badge>
           )}
           {groupName && (
@@ -160,7 +166,7 @@ export function RoutingDecisionTimeline({
               {routingDecision.final_candidate_count}/{routingDecision.candidate_count}
             </span>
           )}
-          <div className="flex items-center gap-0.5 ml-1">
+          <div className="flex shrink-0 items-center gap-0.5 ml-1">
             {indicators.redirect && (
               <span title={t("indicatorRedirect")}>
                 <RefreshCw className="w-3 h-3 text-status-info" />
@@ -242,6 +248,15 @@ export function RoutingDecisionTimeline({
               <span title={sessionId!} className="cursor-help">
                 {truncateId(sessionId)}
               </span>
+              {sessionIdCompensated && (
+                <span
+                  title={t("compensationBadgeTooltip")}
+                  className="inline-flex items-center gap-0.5 rounded border border-amber-500/40 bg-amber-500/10 px-1 py-0.5 text-[10px] text-amber-400 cursor-help"
+                >
+                  <Zap className="w-2.5 h-2.5" />
+                  {t("compensationBadge")}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2">
               {affinityHit && !affinityMigrated && (

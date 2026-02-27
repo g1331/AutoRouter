@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   filterHeaders,
   injectAuthHeader,
+  applyCompensationHeaders,
   extractUsage,
   createSSETransformer,
   forwardRequest,
@@ -24,7 +25,7 @@ describe("proxy-client", () => {
         Accept: "application/json",
       });
 
-      const filtered = filterHeaders(headers);
+      const { filtered } = filterHeaders(headers);
 
       // Headers API normalizes keys to lowercase
       expect(filtered["content-type"]).toBe("application/json");
@@ -48,6 +49,7 @@ describe("proxy-client", () => {
         "CF-IPCountry": "CN",
         "CF-Ray": "abcd-xyz",
         "CF-Visitor": '{"scheme":"https"}',
+        "CF-Ew-Via": "15",
         "CDN-Loop": "cloudflare",
         "X-Real-IP": "1.2.3.4",
         "Remote-Host": "172.71.1.1",
@@ -56,7 +58,7 @@ describe("proxy-client", () => {
         "X-Envoy-External-Address": "1.2.3.4",
       });
 
-      const filtered = filterHeaders(headers);
+      const { filtered, dropped } = filterHeaders(headers);
 
       expect(filtered["content-type"]).toBe("application/json");
       expect(filtered["connection"]).toBeUndefined();
@@ -72,12 +74,16 @@ describe("proxy-client", () => {
       expect(filtered["cf-ipcountry"]).toBeUndefined();
       expect(filtered["cf-ray"]).toBeUndefined();
       expect(filtered["cf-visitor"]).toBeUndefined();
+      expect(filtered["cf-ew-via"]).toBeUndefined();
       expect(filtered["cdn-loop"]).toBeUndefined();
       expect(filtered["x-real-ip"]).toBeUndefined();
       expect(filtered["remote-host"]).toBeUndefined();
       expect(filtered["forwarded"]).toBeUndefined();
       expect(filtered["via"]).toBeUndefined();
       expect(filtered["x-envoy-external-address"]).toBeUndefined();
+      expect(dropped).toEqual(
+        expect.arrayContaining([expect.objectContaining({ header: "cf-ew-via", value: "15" })])
+      );
     });
 
     it("should preserve application headers that are not infrastructure headers", () => {
@@ -92,7 +98,7 @@ describe("proxy-client", () => {
         "cf-aig-authorization": "Bearer aig-token",
       });
 
-      const filtered = filterHeaders(headers);
+      const { filtered } = filterHeaders(headers);
 
       expect(filtered["content-type"]).toBe("application/json");
       expect(filtered["accept"]).toBe("text/event-stream");
@@ -106,7 +112,7 @@ describe("proxy-client", () => {
 
     it("should handle empty headers", () => {
       const headers = new Headers();
-      const filtered = filterHeaders(headers);
+      const { filtered } = filterHeaders(headers);
       expect(Object.keys(filtered)).toHaveLength(0);
     });
   });
@@ -189,6 +195,26 @@ describe("proxy-client", () => {
       expect(result["x-api-key"]).toBe("sk-test-key");
       expect(result["authorization"]).toBeUndefined();
       expect(result["Authorization"]).toBeUndefined();
+    });
+  });
+
+  describe("applyCompensationHeaders", () => {
+    it("should inject when absent and not overwrite existing (case-insensitive)", () => {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "X-Existing": "keep",
+      };
+
+      const applied = applyCompensationHeaders(headers, [
+        { header: "x-compensated", value: "v1", source: "body.prompt_cache_key" },
+        { header: "X-Existing", value: "new", source: "headers.x-existing" },
+      ]);
+
+      expect(headers["x-compensated"]).toBe("v1");
+      expect(headers["X-Existing"]).toBe("keep");
+      expect(applied).toEqual([
+        { header: "x-compensated", value: "v1", source: "body.prompt_cache_key" },
+      ]);
     });
   });
 
@@ -1724,6 +1750,150 @@ describe("proxy-client", () => {
           statusCode: 200,
         })
       );
+    });
+
+    describe("compensation header injection", () => {
+      it("should inject compensation header when target header is absent", async () => {
+        const mockResponse = new Response(JSON.stringify({ id: "ok" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+        global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+        const request = new Request("http://localhost/api", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+
+        const compensationHeaders = [
+          { header: "session_id", value: "sess_abc123", source: "body.prompt_cache_key" },
+        ];
+
+        const result = await forwardRequest(
+          request,
+          mockUpstream,
+          "chat/completions",
+          "req-123",
+          compensationHeaders
+        );
+
+        const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+        expect(fetchCall[1].headers["session_id"]).toBe("sess_abc123");
+        expect(result.headerDiff.compensated).toHaveLength(1);
+        expect(result.headerDiff.compensated[0]).toEqual({
+          header: "session_id",
+          source: "body.prompt_cache_key",
+          value: "sess_abc123",
+        });
+      });
+
+      it("should not inject compensation header when target header already exists (missing_only)", async () => {
+        const mockResponse = new Response(JSON.stringify({ id: "ok" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+        global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+        const request = new Request("http://localhost/api", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            session_id: "original_session",
+          },
+          body: JSON.stringify({}),
+        });
+
+        const compensationHeaders = [
+          { header: "session_id", value: "recovered_session", source: "body.prompt_cache_key" },
+        ];
+
+        const result = await forwardRequest(
+          request,
+          mockUpstream,
+          "chat/completions",
+          "req-123",
+          compensationHeaders
+        );
+
+        const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+        expect(fetchCall[1].headers["session_id"]).toBe("original_session");
+        expect(result.headerDiff.compensated).toHaveLength(0);
+      });
+
+      it("should populate headerDiff with inbound/outbound counts and dropped headers", async () => {
+        const mockResponse = new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+        global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+        const request = new Request("http://localhost/api", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "CF-Ew-Via": "15",
+            "X-Forwarded-For": "1.2.3.4",
+          },
+          body: JSON.stringify({}),
+        });
+
+        const result = await forwardRequest(request, mockUpstream, "chat/completions", "req-123");
+
+        expect(result.headerDiff.inbound_count).toBe(3);
+        expect(result.headerDiff.dropped).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ header: "cf-ew-via", value: "15" }),
+            expect.objectContaining({ header: "x-forwarded-for", value: "1.2.3.4" }),
+          ])
+        );
+        expect(result.headerDiff.outbound_count).toBeLessThan(result.headerDiff.inbound_count);
+      });
+
+      it("should track auth_replaced in headerDiff when authorization is replaced", async () => {
+        const mockResponse = new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+        global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+        const request = new Request("http://localhost/api", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            authorization: "Bearer client-key",
+          },
+          body: JSON.stringify({}),
+        });
+
+        const result = await forwardRequest(request, mockUpstream, "chat/completions", "req-123");
+
+        expect(result.headerDiff.auth_replaced).toEqual({
+          header: "authorization",
+          inbound_value: "Bearer cli***key",
+          outbound_value: "Bearer sk-***key",
+        });
+      });
+
+      it("should return empty headerDiff when no compensations provided", async () => {
+        const mockResponse = new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+        global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+        const request = new Request("http://localhost/api", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+
+        const result = await forwardRequest(request, mockUpstream, "chat/completions", "req-123");
+
+        expect(result.headerDiff.compensated).toHaveLength(0);
+        expect(result.headerDiff.dropped).toBeInstanceOf(Array);
+        expect(result.headerDiff.unchanged).toBeInstanceOf(Array);
+      });
     });
   });
 });

@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "crypto";
 import { db, apiKeys, apiKeyUpstreams, upstreams } from "../src/lib/db";
+import { compensationRules } from "../src/lib/db/schema";
 import { encrypt } from "../src/lib/utils/encryption";
 import { generateApiKey } from "../src/lib/services/key-manager";
 import { hashApiKey } from "../src/lib/utils/auth";
@@ -61,6 +62,30 @@ async function main() {
 
   console.log("[seed-lite] Seed complete.");
   console.log(`[seed-lite] API Key: ${apiKeyValue}`);
+
+  // Seed built-in compensation rule (idempotent)
+  await db
+    .insert(compensationRules)
+    .values({
+      id: randomUUID(),
+      name: "Session ID Recovery",
+      isBuiltin: true,
+      enabled: true,
+      capabilities: ["codex_responses"],
+      targetHeader: "session_id",
+      sources: [
+        "headers.session_id",
+        "headers.session-id",
+        "headers.x-session-id",
+        "body.prompt_cache_key",
+        "body.metadata.session_id",
+        "body.previous_response_id",
+      ],
+      mode: "missing_only",
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoNothing();
 }
 
 main().catch((error) => {

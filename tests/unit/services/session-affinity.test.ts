@@ -252,7 +252,10 @@ describe("extractSessionId", () => {
 
       const sessionId = extractSessionId("anthropic_messages", {}, body);
 
-      expect(sessionId).toBe("550e8400-e29b-41d4-a716-446655440000");
+      expect(sessionId).toEqual({
+        sessionId: "550e8400-e29b-41d4-a716-446655440000",
+        source: "body",
+      });
     });
 
     it("should extract session_id for codex/openai capabilities", () => {
@@ -260,14 +263,29 @@ describe("extractSessionId", () => {
         session_id: "sess_route_scope_001",
       };
 
-      expect(extractSessionId("codex_responses", headers, {})).toBe("sess_route_scope_001");
-      expect(extractSessionId("openai_chat_compatible", headers, {})).toBe("sess_route_scope_001");
-      expect(extractSessionId("openai_extended", headers, {})).toBe("sess_route_scope_001");
+      expect(extractSessionId("codex_responses", headers, {})).toEqual({
+        sessionId: "sess_route_scope_001",
+        source: "header",
+      });
+      expect(extractSessionId("openai_chat_compatible", headers, {})).toEqual({
+        sessionId: "sess_route_scope_001",
+        source: "header",
+      });
+      expect(extractSessionId("openai_extended", headers, {})).toEqual({
+        sessionId: "sess_route_scope_001",
+        source: "header",
+      });
     });
 
     it("should return null for capabilities without session strategy", () => {
-      expect(extractSessionId("gemini_native_generate", {}, { any: "payload" })).toBeNull();
-      expect(extractSessionId("gemini_code_assist_internal", {}, { any: "payload" })).toBeNull();
+      expect(extractSessionId("gemini_native_generate", {}, { any: "payload" })).toEqual({
+        sessionId: null,
+        source: null,
+      });
+      expect(extractSessionId("gemini_code_assist_internal", {}, { any: "payload" })).toEqual({
+        sessionId: null,
+        source: null,
+      });
     });
   });
 
@@ -281,7 +299,10 @@ describe("extractSessionId", () => {
 
       const sessionId = extractSessionId("anthropic_messages", {}, body);
 
-      expect(sessionId).toBe("550e8400-e29b-41d4-a716-446655440000");
+      expect(sessionId).toEqual({
+        sessionId: "550e8400-e29b-41d4-a716-446655440000",
+        source: "body",
+      });
     });
 
     it("should handle different prefixes", () => {
@@ -293,7 +314,10 @@ describe("extractSessionId", () => {
 
       const sessionId = extractSessionId("anthropic_messages", {}, body);
 
-      expect(sessionId).toBe("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+      expect(sessionId).toEqual({
+        sessionId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        source: "body",
+      });
     });
 
     it("should return null when user_id has no session pattern", () => {
@@ -305,7 +329,7 @@ describe("extractSessionId", () => {
 
       const sessionId = extractSessionId("anthropic_messages", {}, body);
 
-      expect(sessionId).toBeNull();
+      expect(sessionId).toEqual({ sessionId: null, source: null });
     });
 
     it("should return null when metadata is missing", () => {
@@ -313,7 +337,7 @@ describe("extractSessionId", () => {
 
       const sessionId = extractSessionId("anthropic_messages", {}, body);
 
-      expect(sessionId).toBeNull();
+      expect(sessionId).toEqual({ sessionId: null, source: null });
     });
 
     it("should return null when user_id is not a string", () => {
@@ -325,13 +349,13 @@ describe("extractSessionId", () => {
 
       const sessionId = extractSessionId("anthropic_messages", {}, body);
 
-      expect(sessionId).toBeNull();
+      expect(sessionId).toEqual({ sessionId: null, source: null });
     });
 
     it("should return null for null body", () => {
       const sessionId = extractSessionId("anthropic_messages", {}, null);
 
-      expect(sessionId).toBeNull();
+      expect(sessionId).toEqual({ sessionId: null, source: null });
     });
 
     it("should handle uppercase UUID", () => {
@@ -343,7 +367,10 @@ describe("extractSessionId", () => {
 
       const sessionId = extractSessionId("anthropic_messages", {}, body);
 
-      expect(sessionId).toBe("550e8400-e29b-41d4-a716-446655440000");
+      expect(sessionId).toEqual({
+        sessionId: "550e8400-e29b-41d4-a716-446655440000",
+        source: "body",
+      });
     });
   });
 
@@ -355,7 +382,7 @@ describe("extractSessionId", () => {
 
       const sessionId = extractSessionId("openai_chat_compatible", headers, {});
 
-      expect(sessionId).toBe("sess_abc123def456");
+      expect(sessionId).toEqual({ sessionId: "sess_abc123def456", source: "header" });
     });
 
     it("should extract session_id from x-session-id header fallback", () => {
@@ -365,7 +392,7 @@ describe("extractSessionId", () => {
 
       const sessionId = extractSessionId("openai_chat_compatible", headers, {});
 
-      expect(sessionId).toBe("sess_from_x_session_id");
+      expect(sessionId).toEqual({ sessionId: "sess_from_x_session_id", source: "header" });
     });
 
     it("should extract session_id from x-session_id header fallback", () => {
@@ -375,7 +402,10 @@ describe("extractSessionId", () => {
 
       const sessionId = extractSessionId("openai_chat_compatible", headers, {});
 
-      expect(sessionId).toBe("sess_from_x_session_id_underscore");
+      expect(sessionId).toEqual({
+        sessionId: "sess_from_x_session_id_underscore",
+        source: "header",
+      });
     });
 
     it("should extract session_id from body.prompt_cache_key when headers are missing", () => {
@@ -385,7 +415,7 @@ describe("extractSessionId", () => {
 
       const sessionId = extractSessionId("openai_chat_compatible", {}, body);
 
-      expect(sessionId).toBe("sess_from_prompt_cache_key");
+      expect(sessionId).toEqual({ sessionId: "sess_from_prompt_cache_key", source: "body" });
     });
 
     it("should extract session_id from body.metadata.session_id fallback", () => {
@@ -397,7 +427,7 @@ describe("extractSessionId", () => {
 
       const sessionId = extractSessionId("openai_chat_compatible", {}, body);
 
-      expect(sessionId).toBe("sess_from_metadata");
+      expect(sessionId).toEqual({ sessionId: "sess_from_metadata", source: "body" });
     });
 
     it("should extract session_id from body.previous_response_id as last fallback", () => {
@@ -407,7 +437,7 @@ describe("extractSessionId", () => {
 
       const sessionId = extractSessionId("openai_chat_compatible", {}, body);
 
-      expect(sessionId).toBe("resp_abc123def456");
+      expect(sessionId).toEqual({ sessionId: "resp_abc123def456", source: "body" });
     });
 
     it("should prioritize headers.session_id over body fallbacks", () => {
@@ -424,7 +454,7 @@ describe("extractSessionId", () => {
 
       const sessionId = extractSessionId("openai_chat_compatible", headers, body);
 
-      expect(sessionId).toBe("sess_from_header");
+      expect(sessionId).toEqual({ sessionId: "sess_from_header", source: "header" });
     });
 
     it("should return null when session_id header is missing", () => {
@@ -434,7 +464,7 @@ describe("extractSessionId", () => {
 
       const sessionId = extractSessionId("openai_chat_compatible", headers, {});
 
-      expect(sessionId).toBeNull();
+      expect(sessionId).toEqual({ sessionId: null, source: null });
     });
 
     it("should return null when session_id is empty string", () => {
@@ -444,7 +474,7 @@ describe("extractSessionId", () => {
 
       const sessionId = extractSessionId("openai_chat_compatible", headers, {});
 
-      expect(sessionId).toBeNull();
+      expect(sessionId).toEqual({ sessionId: null, source: null });
     });
 
     it("should return null when session_id is array", () => {
@@ -454,7 +484,7 @@ describe("extractSessionId", () => {
 
       const sessionId = extractSessionId("openai_chat_compatible", headers, {});
 
-      expect(sessionId).toBeNull();
+      expect(sessionId).toEqual({ sessionId: null, source: null });
     });
 
     it("should return null when all header/body fallbacks are invalid", () => {
@@ -472,19 +502,42 @@ describe("extractSessionId", () => {
 
       const sessionId = extractSessionId("openai_chat_compatible", headers, body);
 
-      expect(sessionId).toBeNull();
+      expect(sessionId).toEqual({ sessionId: null, source: null });
+    });
+
+    it("should report source as header when session comes from header", () => {
+      const headers = { session_id: "sess_header_source" };
+      const result = extractSessionId("openai_chat_compatible", headers, {});
+      expect(result).toEqual({ sessionId: "sess_header_source", source: "header" });
+    });
+
+    it("should report source as body when session comes from body.prompt_cache_key", () => {
+      const body = { prompt_cache_key: "sess_body_pck" };
+      const result = extractSessionId("openai_chat_compatible", {}, body);
+      expect(result).toEqual({ sessionId: "sess_body_pck", source: "body" });
+    });
+
+    it("should report source as body when session comes from body.previous_response_id", () => {
+      const body = { previous_response_id: "resp_body_pri" };
+      const result = extractSessionId("openai_chat_compatible", {}, body);
+      expect(result).toEqual({ sessionId: "resp_body_pri", source: "body" });
+    });
+
+    it("should report source as null when nothing found", () => {
+      const result = extractSessionId("openai_chat_compatible", {}, {});
+      expect(result).toEqual({ sessionId: null, source: null });
     });
   });
 
   describe("other providers", () => {
     it("should return null for google provider", () => {
       const sessionId = extractSessionId("gemini_native_generate", {}, { some: "data" });
-      expect(sessionId).toBeNull();
+      expect(sessionId).toEqual({ sessionId: null, source: null });
     });
 
     it("should return null for custom provider", () => {
       const sessionId = extractSessionId("gemini_code_assist_internal", {}, { some: "data" });
-      expect(sessionId).toBeNull();
+      expect(sessionId).toEqual({ sessionId: null, source: null });
     });
   });
 });

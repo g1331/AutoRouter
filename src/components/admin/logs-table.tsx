@@ -26,6 +26,7 @@ import { getDateLocale } from "@/lib/date-locale";
 import { cn } from "@/lib/utils";
 import { TokenDisplay, TokenDetailContent } from "@/components/admin/token-display";
 import { RoutingDecisionTimeline } from "@/components/admin/routing-decision-timeline";
+import { HeaderDiffPanel } from "@/components/logs/header-diff-panel";
 import { StatusLed, type LedStatus } from "@/components/ui/terminal";
 
 interface LogsTableProps {
@@ -526,7 +527,7 @@ export function LogsTable({ logs }: LogsTableProps) {
       ) : (
         <>
           <div className="overflow-hidden">
-            <Table frame="none">
+            <Table frame="none" className="table-fixed">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-8"></TableHead>
@@ -739,6 +740,7 @@ export function LogsTable({ logs }: LogsTableProps) {
                                       sessionId={log.session_id}
                                       affinityHit={log.affinity_hit}
                                       affinityMigrated={log.affinity_migrated}
+                                      sessionIdCompensated={log.session_id_compensated}
                                       showStageConnector={false}
                                       compact={false}
                                     />
@@ -867,6 +869,17 @@ export function LogsTable({ logs }: LogsTableProps) {
                                   </div>
                                 </section>
                               </div>
+
+                              {log.header_diff && (
+                                <section className={DETAIL_PANEL_CLASS}>
+                                  <div className={DETAIL_PANEL_HEADER_CLASS}>
+                                    {t("headerDiffTitle")}
+                                  </div>
+                                  <div className={DETAIL_PANEL_BODY_CLASS}>
+                                    <HeaderDiffPanel headerDiff={log.header_diff} />
+                                  </div>
+                                </section>
+                              )}
 
                               {/* Error Details - Terminal Style */}
                               {isError && (

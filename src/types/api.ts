@@ -345,6 +345,20 @@ export interface RequestLogResponse {
   // Performance metrics fields
   ttft_ms: number | null;
   is_stream: boolean;
+  // Header compensation fields
+  session_id_compensated: boolean;
+  header_diff: {
+    inbound_count: number;
+    outbound_count: number;
+    dropped: Array<{ header: string; value: string }>;
+    auth_replaced: {
+      header: string;
+      inbound_value: string | null;
+      outbound_value: string;
+    } | null;
+    compensated: Array<{ header: string; source: string; value: string }>;
+    unchanged: Array<{ header: string; value: string }>;
+  } | null;
   created_at: string; // ISO 8601 date string
 }
 
@@ -364,6 +378,39 @@ export interface PaginatedResponse<T> {
 export type PaginatedAPIKeysResponse = PaginatedResponse<APIKeyResponse>;
 export type PaginatedUpstreamsResponse = PaginatedResponse<UpstreamResponse>;
 export type PaginatedRequestLogsResponse = PaginatedResponse<RequestLogResponse>;
+
+// ========== 补偿规则相关类型 ==========
+
+export interface CompensationRule {
+  id: string;
+  name: string;
+  is_builtin: boolean;
+  enabled: boolean;
+  capabilities: string[];
+  target_header: string;
+  sources: string[];
+  mode: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompensationRuleCreate {
+  name: string;
+  enabled?: boolean;
+  capabilities: string[];
+  target_header: string;
+  sources: string[];
+  mode?: string;
+}
+
+export interface CompensationRuleUpdate {
+  name?: string;
+  enabled?: boolean;
+  capabilities?: string[];
+  target_header?: string;
+  sources?: string[];
+  mode?: string;
+}
 
 // ========== 错误响应类型 ==========
 

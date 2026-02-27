@@ -191,6 +191,22 @@ export const requestLogs = sqliteTable(
     // Performance metrics fields
     ttftMs: integer("ttft_ms"),
     isStream: integer("is_stream", { mode: "boolean" }).notNull().default(false),
+    // Header compensation fields
+    sessionIdCompensated: integer("session_id_compensated", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    headerDiff: text("header_diff", { mode: "json" }).$type<{
+      inbound_count: number;
+      outbound_count: number;
+      dropped: Array<{ header: string; value: string }>;
+      auth_replaced: {
+        header: string;
+        inbound_value: string | null;
+        outbound_value: string;
+      } | null;
+      compensated: Array<{ header: string; source: string; value: string }>;
+      unchanged: Array<{ header: string; value: string }>;
+    } | null>(),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },
   (table) => [
@@ -199,6 +215,28 @@ export const requestLogs = sqliteTable(
     index("request_logs_created_at_idx").on(table.createdAt),
     index("request_logs_routing_type_idx").on(table.routingType),
   ]
+);
+
+/**
+ * Outbound header compensation rules.
+ */
+export const compensationRules = sqliteTable(
+  "compensation_rules",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    name: text("name").notNull().unique(),
+    isBuiltin: integer("is_builtin", { mode: "boolean" }).notNull().default(false),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    capabilities: text("capabilities", { mode: "json" }).$type<string[]>().notNull(),
+    targetHeader: text("target_header").notNull(),
+    sources: text("sources", { mode: "json" }).$type<string[]>().notNull(),
+    mode: text("mode").notNull().default("missing_only"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+  },
+  (table) => [index("compensation_rules_enabled_idx").on(table.enabled)]
 );
 
 // Relations
