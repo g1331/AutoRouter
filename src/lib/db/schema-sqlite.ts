@@ -195,7 +195,13 @@ export const requestLogs = sqliteTable(
     sessionIdCompensated: integer("session_id_compensated", { mode: "boolean" })
       .notNull()
       .default(false),
-    headerDiff: text("header_diff"), // JSON stored as text
+    headerDiff: text("header_diff", { mode: "json" }).$type<{
+      inbound_count: number;
+      outbound_count: number;
+      dropped: string[];
+      auth_replaced: string | null;
+      compensated: Array<{ header: string; source: string }>;
+    } | null>(),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },
   (table) => [
