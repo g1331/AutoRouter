@@ -282,6 +282,15 @@ export interface RequestLogApiResponse {
   // Performance metrics fields
   ttft_ms: number | null;
   is_stream: boolean;
+  // Header compensation fields
+  session_id_compensated: boolean;
+  header_diff: {
+    inbound_count: number;
+    outbound_count: number;
+    dropped: string[];
+    auth_replaced: string | null;
+    compensated: Array<{ header: string; source: string }>;
+  } | null;
   created_at: string;
 }
 
@@ -324,6 +333,8 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
     affinity_migrated: log.affinityMigrated,
     ttft_ms: log.ttftMs,
     is_stream: log.isStream,
+    session_id_compensated: log.sessionIdCompensated,
+    header_diff: log.headerDiff ?? null,
     created_at: log.createdAt.toISOString(),
   };
 }

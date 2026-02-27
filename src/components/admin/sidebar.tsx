@@ -16,6 +16,8 @@ import {
   Server,
   Settings,
   Sun,
+  Wrench,
+  ArrowLeftRight,
 } from "lucide-react";
 
 import { Link, usePathname, useRouter } from "@/i18n/navigation";
@@ -46,11 +48,21 @@ type NavigationItem = {
   labelKey: "dashboard" | "apiKeys" | "upstreams" | "logs" | "settings";
 };
 
+type SystemNavigationItem = {
+  href: string;
+  icon: typeof LayoutDashboard;
+  labelKey: "headerCompensation";
+};
+
 const navigation: NavigationItem[] = [
   { href: "/dashboard", icon: LayoutDashboard, labelKey: "dashboard" },
   { href: "/keys", icon: Key, labelKey: "apiKeys" },
   { href: "/upstreams", icon: Server, labelKey: "upstreams" },
   { href: "/logs", icon: ScrollText, labelKey: "logs" },
+];
+
+const systemNavigation: SystemNavigationItem[] = [
+  { href: "/system/header-compensation", icon: ArrowLeftRight, labelKey: "headerCompensation" },
 ];
 
 const mobileNavigation: NavigationItem[] = [
@@ -173,7 +185,6 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
   const tCommon = useTranslations("common");
   const { logout } = useAuth();
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
-
   const confirmLogout = () => {
     setShowLogoutDialog(false);
     logout();
@@ -258,6 +269,44 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
               </Link>
             );
           })}
+
+          {/* System group */}
+          <div className={cn("pt-2", !collapsed && "border-t border-divider/60 mt-2")}>
+            {!collapsed && (
+              <div className="flex items-center gap-1.5 px-3 pb-1.5 pt-1">
+                <Wrench className="h-3 w-3 text-muted-foreground/60" aria-hidden="true" />
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                  {tNav("system")}
+                </span>
+              </div>
+            )}
+            {systemNavigation.map((item) => {
+              const Icon = item.icon;
+              const active = isPathActive(pathname, item.href);
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "group relative flex items-center rounded-cf-sm border text-sm transition-all duration-cf-normal ease-cf-standard",
+                    collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
+                    active
+                      ? "border-amber-500/45 bg-surface-300 text-foreground shadow-cf-glow-subtle"
+                      : "border-transparent text-muted-foreground hover:border-border hover:bg-surface-300 hover:text-foreground"
+                  )}
+                  aria-current={active ? "page" : undefined}
+                  title={tNav(item.labelKey)}
+                >
+                  <Icon
+                    className={cn("h-4 w-4 flex-shrink-0", active && "text-amber-500")}
+                    aria-hidden="true"
+                  />
+                  {!collapsed && <span className="truncate">{tNav(item.labelKey)}</span>}
+                </Link>
+              );
+            })}
+          </div>
         </nav>
 
         <div

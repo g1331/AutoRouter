@@ -397,6 +397,16 @@ describe("api-transformers", () => {
           },
         ],
         created_at: "2024-01-15T10:30:00.000Z",
+        routing_decision: undefined,
+        routing_duration_ms: undefined,
+        ttft_ms: undefined,
+        session_id: undefined,
+        affinity_hit: undefined,
+        affinity_migrated: undefined,
+        is_stream: undefined,
+        priority_tier: undefined,
+        session_id_compensated: undefined,
+        header_diff: null,
       });
     });
 

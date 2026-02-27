@@ -48,31 +48,31 @@
 
 ## 8. 前端：Header Compensation 管理页面
 
-- [ ] 8.1 新建 `src/app/[locale]/(dashboard)/system/header-compensation/page.tsx`，实现规则列表展示
-- [ ] 8.2 实现内置规则的启用/禁用开关，隐藏删除按钮
-- [ ] 8.3 实现自定义规则的新增、编辑、删除功能（含确认对话框）
-- [ ] 8.4 实现规则编辑表单中来源列表的拖拽排序功能
-- [ ] 8.5 实现页面底部的能力矩阵表格视图
-- [ ] 8.6 新建对应的 TanStack Query hooks（`src/hooks/use-compensation-rules.ts`）
+- [x] 8.1 新建 `src/app/[locale]/(dashboard)/system/header-compensation/page.tsx`，实现规则列表展示
+- [x] 8.2 实现内置规则的启用/禁用开关，隐藏删除按钮
+- [x] 8.3 实现自定义规则的新增、编辑、删除功能（含确认对话框）
+- [x] 8.4 实现规则编辑表单中来源列表的拖拽排序功能
+- [x] 8.5 实现页面底部的能力矩阵表格视图
+- [x] 8.6 新建对应的 TanStack Query hooks（`src/hooks/use-compensation-rules.ts`）
 
 ## 9. 前端：侧边栏导航更新
 
-- [ ] 9.1 在侧边栏组件中新增 "System" 顶级导航分组，包含 "Header Compensation" 子项
+- [x] 9.1 在侧边栏组件中新增 "System" 顶级导航分组，包含 "Header Compensation" 子项
 
 ## 10. 前端：日志可观测性组件
 
-- [ ] 10.1 新建 `src/components/logs/header-diff-panel.tsx`，展示 `header_diff` 结构化数据（入站/出站数量、dropped、auth_replaced、compensated）
-- [ ] 10.2 在 `logs-table.tsx` 的展开行中挂载 `header-diff-panel.tsx`，`header_diff` 为 null 时隐藏
-- [ ] 10.3 修改 `routing-decision-timeline.tsx` Stage 2，当 `session_id_compensated=true` 时显示 `⚡ 补偿` 徽章及悬停 tooltip
+- [x] 10.1 新建 `src/components/logs/header-diff-panel.tsx`，展示 `header_diff` 结构化数据（入站/出站数量、dropped、auth_replaced、compensated）
+- [x] 10.2 在 `logs-table.tsx` 的展开行中挂载 `header-diff-panel.tsx`，`header_diff` 为 null 时隐藏
+- [x] 10.3 修改 `routing-decision-timeline.tsx` Stage 2，当 `session_id_compensated=true` 时显示 `⚡ 补偿` 徽章及悬停 tooltip
 
 ## 11. 国际化
 
-- [ ] 11.1 在 `src/messages/en.json` 中新增 Header Compensation 页面、头部差异面板、补偿徽章相关的所有翻译键
-- [ ] 11.2 在 `src/messages/zh.json` 中新增对应的简体中文翻译
+- [x] 11.1 在 `src/messages/en.json` 中新增 Header Compensation 页面、头部差异面板、补偿徽章相关的所有翻译键
+- [x] 11.2 在 `src/messages/zh.json` 中新增对应的简体中文翻译
 
 ## 12. 提交节点
 
 - [x] 12.1 完成任务 1-2 后提交：数据库迁移 + session-affinity 改造
-- [ ] 12.2 完成任务 3-6 后提交：补偿引擎核心（proxy-client、compensation-service、route.ts、request-logger）
+- [x] 12.2 完成任务 3-6 后提交：补偿引擎核心（proxy-client、compensation-service、route.ts、request-logger）
 - [x] 12.3 完成任务 7 后提交：补偿规则管理 API
-- [ ] 12.4 完成任务 8-11 后提交：前端页面、组件与国际化
+- [x] 12.4 完成任务 8-11 后提交：前端页面、组件与国际化

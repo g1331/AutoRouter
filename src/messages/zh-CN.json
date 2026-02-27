@@ -47,7 +47,9 @@
     "logs": "请求日志",
     "logout": "登出",
     "logoutConfirm": "确定要退出登录吗？",
-    "settings": "设置"
+    "settings": "设置",
+    "system": "系统",
+    "headerCompensation": "请求头补偿"
   },
   "auth": {
     "title": "AUTOROUTER",
@@ -329,7 +331,16 @@
     "retryFailoverTriggered": "触发故障转移",
     "retryTotalDuration": "故障转移耗时",
     "retryAttemptsSummary": "次尝试",
-    "retryHiddenAttempts": "...还有 {count} 次未展示"
+    "retryHiddenAttempts": "...还有 {count} 次未展示",
+    "headerDiffTitle": "请求头差异",
+    "headerDiffInbound": "入站",
+    "headerDiffOutbound": "出站",
+    "headerDiffDropped": "已过滤",
+    "headerDiffAuthReplaced": "认证头已替换",
+    "headerDiffCompensated": "已补偿",
+    "headerDiffNoChanges": "无请求头变更",
+    "compensationBadge": "已补偿",
+    "compensationBadgeTooltip": "session_id 从请求体中恢复（原始请求头缺失）"
   },
   "upstreams": {
     "title": "Upstreams",
@@ -514,5 +525,51 @@
     "light": "亮色模式",
     "dark": "暗色模式",
     "system": "跟随系统"
+  },
+  "system": {
+    "title": "系统",
+    "headerCompensation": "请求头补偿"
+  },
+  "compensation": {
+    "title": "请求头补偿",
+    "pageTitle": "请求头补偿",
+    "management": "请求头补偿规则",
+    "managementDesc": "配置出站请求头补偿规则",
+    "addRule": "添加规则",
+    "noRules": "暂无规则",
+    "noRulesDesc": "尚未配置任何补偿规则",
+    "builtin": "内置",
+    "custom": "自定义",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "enable": "启用",
+    "disable": "禁用",
+    "deleteRule": "删除规则",
+    "deleteRuleTitle": "确认删除",
+    "deleteRuleDesc": "确定要删除此规则吗？",
+    "deleteBuiltinForbidden": "内置规则不可删除",
+    "deleteSuccess": "规则已删除",
+    "deleteFailed": "删除规则失败",
+    "enableSuccess": "规则已启用",
+    "disableSuccess": "规则已禁用",
+    "updateFailed": "更新规则失败",
+    "createSuccess": "规则已创建",
+    "createFailed": "创建规则失败",
+    "ruleName": "名称",
+    "ruleNamePlaceholder": "例如：Session ID 恢复",
+    "ruleNameRequired": "名称不能为空",
+    "targetHeader": "目标请求头",
+    "targetHeaderPlaceholder": "例如：session_id",
+    "targetHeaderRequired": "目标请求头不能为空",
+    "capabilities": "适用范围",
+    "capabilitiesRequired": "至少选择一个能力类型",
+    "sources": "来源（按优先级排序）",
+    "sourcesPlaceholder": "例如：headers.session_id",
+    "sourcesRequired": "至少填写一个来源",
+    "mode": "模式",
+    "modeMissingOnly": "仅补缺失",
+    "creating": "创建中...",
+    "capabilityMatrix": "能力矩阵",
+    "capabilityMatrixDesc": "各规则适用的能力类型"
   }
 }
