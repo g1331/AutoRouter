@@ -50,6 +50,23 @@ vi.mock("@/lib/services/proxy-client", () => ({
     dropped: [],
   })),
   injectAuthHeader: vi.fn((headers: Record<string, string>) => headers),
+  applyCompensationHeaders: vi.fn(
+    (
+      headers: Record<string, string>,
+      compensationHeaders?: Array<{ header: string; value: string; source: string }>
+    ) => {
+      const applied: Array<{ header: string; source: string; value: string }> = [];
+      if (!compensationHeaders) return applied;
+      for (const comp of compensationHeaders) {
+        const lower = comp.header.toLowerCase();
+        const alreadyPresent = Object.keys(headers).some((k) => k.toLowerCase() === lower);
+        if (alreadyPresent) continue;
+        headers[comp.header] = comp.value;
+        applied.push({ header: comp.header, source: comp.source, value: comp.value });
+      }
+      return applied;
+    }
+  ),
 }));
 
 vi.mock("@/lib/services/compensation-service", () => ({
@@ -754,6 +771,7 @@ describe("proxy route upstream selection", () => {
 
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { buildCompensations } = await import("@/lib/services/compensation-service");
     const { routeByModel } = await import("@/lib/services/model-router");
     const { selectFromProviderType, NoHealthyUpstreamsError } =
       await import("@/lib/services/load-balancer");
@@ -836,6 +854,10 @@ describe("proxy route upstream selection", () => {
       }),
     });
 
+    vi.mocked(buildCompensations).mockResolvedValueOnce([
+      { header: "x-compensated", value: "v1", source: "body.prompt_cache_key" },
+    ]);
+
     const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
     expect(response.status).toBe(503);
 
@@ -848,6 +870,9 @@ describe("proxy route upstream selection", () => {
       expect.objectContaining({
         error: expect.objectContaining({ message: "upstream failed once" }),
       })
+    );
+    expect(fixtureParams.outboundHeaders).toEqual(
+      expect.objectContaining({ "x-compensated": "v1" })
     );
     expect(fixtureParams.downstreamResponse).toEqual(
       expect.objectContaining({
@@ -1267,6 +1292,8 @@ describe("proxy route upstream selection", () => {
 
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { buildCompensations } = await import("@/lib/services/compensation-service");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
     const { routeByModel } = await import("@/lib/services/model-router");
     const { selectFromProviderType } = await import("@/lib/services/load-balancer");
     const { buildFixture, recordTrafficFixture } = await import("@/lib/services/traffic-recorder");
@@ -1319,7 +1346,135 @@ describe("proxy route upstream selection", () => {
       body: new TextEncoder().encode(JSON.stringify({ id: "ok-1", object: "chat.completion" })),
       isStream: false,
       usage: null,
+      headerDiff: {
+        inbound_count: 0,
+        outbound_count: 0,
+        dropped: [],
+        auth_replaced: null,
+        compensated: [
+          { header: "Session_ID", source: "body.prompt_cache_key", value: "[REDACTED]" },
+        ],
+        unchanged: [],
+      },
     });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    vi.mocked(buildCompensations).mockResolvedValueOnce([
+      { header: "x-compensated", value: "v2", source: "headers.x-compensated" },
+    ]);
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["v1", "chat", "completions"] }),
+    });
+    expect(response.status).toBe(200);
+    expect(buildFixture).toHaveBeenCalledTimes(1);
+    expect(recordTrafficFixture).toHaveBeenCalledTimes(1);
+
+    const fixtureParams = vi.mocked(buildFixture).mock.calls[0][0];
+    expect(fixtureParams.outboundHeaders).toEqual(
+      expect.objectContaining({ "x-compensated": "v2" })
+    );
+
+    const lastUpdate = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1] as
+      | { sessionIdCompensated?: boolean }
+      | undefined;
+    expect(lastUpdate?.sessionIdCompensated).toBe(true);
+  });
+
+  it("should record stream success fixture and include compensation headers in outboundHeaders", async () => {
+    process.env.RECORDER_ENABLED = "true";
+    process.env.RECORDER_MODE = "success";
+
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { buildCompensations } = await import("@/lib/services/compensation-service");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { readStreamChunks, buildFixture, recordTrafficFixture } =
+      await import("@/lib/services/traffic-recorder");
+
+    const upstream = {
+      id: "up-openai",
+      name: "openai-main",
+      providerType: "openai",
+      baseUrl: "https://api.openai.com/v1",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: upstream.id },
+    ]);
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      resolvedModel: "gpt-4o-mini",
+      candidateUpstreams: [upstream],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "gpt-4o-mini",
+        resolvedModel: "gpt-4o-mini",
+        providerType: "openai",
+        upstreamName: upstream.name,
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 1,
+        finalCandidateCount: 1,
+      },
+    });
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+
+    vi.mocked(buildCompensations).mockResolvedValueOnce([
+      { header: "x-compensated", value: "v3", source: "headers.x-compensated" },
+    ]);
+
+    const streamBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("data: ok\n\n"));
+        controller.close();
+      },
+    });
+
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers({ "content-type": "text/event-stream" }),
+      body: streamBody,
+      isStream: true,
+      usage: null,
+      headerDiff: {
+        inbound_count: 0,
+        outbound_count: 0,
+        dropped: [],
+        auth_replaced: null,
+        compensated: [],
+        unchanged: [],
+      },
+    });
+
+    vi.mocked(readStreamChunks).mockResolvedValueOnce(["chunk1", "chunk2"]);
 
     const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
       method: "POST",
@@ -1337,8 +1492,18 @@ describe("proxy route upstream selection", () => {
       params: Promise.resolve({ path: ["v1", "chat", "completions"] }),
     });
     expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/event-stream");
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(readStreamChunks).toHaveBeenCalledTimes(1);
     expect(buildFixture).toHaveBeenCalledTimes(1);
     expect(recordTrafficFixture).toHaveBeenCalledTimes(1);
+    const fixtureParams = vi.mocked(buildFixture).mock.calls[0][0];
+    expect(fixtureParams.outboundHeaders).toEqual(
+      expect.objectContaining({ "x-compensated": "v3" })
+    );
   });
 
   it("should skip success fixture when RECORDER_MODE is failure", async () => {

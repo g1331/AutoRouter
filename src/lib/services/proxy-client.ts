@@ -106,6 +106,28 @@ export interface ProxyResult {
   headerDiff?: HeaderDiff;
 }
 
+export function applyCompensationHeaders(
+  headers: Record<string, string>,
+  compensationHeaders?: CompensationHeader[]
+): Array<{ header: string; source: string; value: string }> {
+  const applied: Array<{ header: string; source: string; value: string }> = [];
+  if (!compensationHeaders) {
+    return applied;
+  }
+
+  for (const comp of compensationHeaders) {
+    const lower = comp.header.toLowerCase();
+    const alreadyPresent = Object.keys(headers).some((k) => k.toLowerCase() === lower);
+    if (alreadyPresent) {
+      continue;
+    }
+    headers[comp.header] = comp.value;
+    applied.push({ header: comp.header, source: comp.source, value: comp.value });
+  }
+
+  return applied;
+}
+
 // Headers that should not be forwarded to upstream
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
@@ -711,21 +733,13 @@ export async function forwardRequest(
   const { filtered: filteredHeaders, dropped } = filterHeaders(originalHeaders);
 
   // Inject compensation headers (missing_only mode: only when absent)
-  const compensated: Array<{ header: string; source: string; value: string }> = [];
-  if (compensationHeaders) {
-    for (const comp of compensationHeaders) {
-      const lower = comp.header.toLowerCase();
-      const alreadyPresent = Object.keys(filteredHeaders).some((k) => k.toLowerCase() === lower);
-      if (!alreadyPresent) {
-        filteredHeaders[comp.header] = comp.value;
-        compensated.push({
-          header: comp.header,
-          source: comp.source,
-          value: sanitizeHeaderValueForLogging(lower, comp.value),
-        });
-      }
-    }
-  }
+  const compensated = applyCompensationHeaders(filteredHeaders, compensationHeaders).map(
+    ({ header, source, value }) => ({
+      header,
+      source,
+      value: sanitizeHeaderValueForLogging(header.toLowerCase(), value),
+    })
+  );
 
   // Determine which auth header was replaced and capture before/after values
   const hadAuthorization = Object.keys(filteredHeaders).find(

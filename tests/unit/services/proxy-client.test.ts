@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   filterHeaders,
   injectAuthHeader,
+  applyCompensationHeaders,
   extractUsage,
   createSSETransformer,
   forwardRequest,
@@ -194,6 +195,26 @@ describe("proxy-client", () => {
       expect(result["x-api-key"]).toBe("sk-test-key");
       expect(result["authorization"]).toBeUndefined();
       expect(result["Authorization"]).toBeUndefined();
+    });
+  });
+
+  describe("applyCompensationHeaders", () => {
+    it("should inject when absent and not overwrite existing (case-insensitive)", () => {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "X-Existing": "keep",
+      };
+
+      const applied = applyCompensationHeaders(headers, [
+        { header: "x-compensated", value: "v1", source: "body.prompt_cache_key" },
+        { header: "X-Existing", value: "new", source: "headers.x-existing" },
+      ]);
+
+      expect(headers["x-compensated"]).toBe("v1");
+      expect(headers["X-Existing"]).toBe("keep");
+      expect(applied).toEqual([
+        { header: "x-compensated", value: "v1", source: "body.prompt_cache_key" },
+      ]);
     });
   });
 

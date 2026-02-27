@@ -7,6 +7,7 @@ import {
   prepareUpstreamForProxy,
   filterHeaders,
   injectAuthHeader,
+  applyCompensationHeaders,
   type ProxyResult,
 } from "@/lib/services/proxy-client";
 import {
@@ -1072,6 +1073,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   }
 
   // Forward request to upstream
+  let compensationHeaders: import("@/lib/services/proxy-client").CompensationHeader[] = [];
   try {
     // Prepare affinity context if session ID is available
     const contentLength = parseInt(request.headers.get("content-length") ?? "", 10) || 0;
@@ -1088,7 +1090,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
     // Build outbound header compensations based on current capability and request
     const inboundHeaders = Object.fromEntries(request.headers.entries());
-    const compensationHeaders = await buildCompensations(
+    compensationHeaders = await buildCompensations(
       matchedRouteCapability,
       inboundHeaders,
       bodyJson
@@ -1123,7 +1125,9 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       compensated: [],
       unchanged: [],
     };
-    const sessionIdCompensated = headerDiff.compensated.some((c) => c.header === "session_id");
+    const sessionIdCompensated = headerDiff.compensated.some(
+      (c) => c.header.toLowerCase() === "session_id"
+    );
 
     // Build routing decision for logging
     const routingDecision: RoutingDecision = {
@@ -1273,10 +1277,9 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
       if (shouldRecordSuccess && inboundBody && recordingStream) {
         const upstreamForProxy = prepareUpstreamForProxy(upstreamForLogging);
-        const outboundHeaders = injectAuthHeader(
-          filterHeaders(new Headers(request.headers)).filtered,
-          upstreamForProxy
-        );
+        const outboundHeadersBase = filterHeaders(new Headers(request.headers)).filtered;
+        applyCompensationHeaders(outboundHeadersBase, compensationHeaders);
+        const outboundHeaders = injectAuthHeader(outboundHeadersBase, upstreamForProxy);
         void readStreamChunks(recordingStream)
           .then((chunks) => {
             const fixture = buildFixture({
@@ -1421,10 +1424,9 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
       if (shouldRecordSuccess && inboundBody) {
         const upstreamForProxy = prepareUpstreamForProxy(upstreamForLogging);
-        const outboundHeaders = injectAuthHeader(
-          filterHeaders(new Headers(request.headers)).filtered,
-          upstreamForProxy
-        );
+        const outboundHeadersBase = filterHeaders(new Headers(request.headers)).filtered;
+        applyCompensationHeaders(outboundHeadersBase, compensationHeaders);
+        const outboundHeaders = injectAuthHeader(outboundHeadersBase, upstreamForProxy);
         const responseText = bodyBytes.length > 0 ? new TextDecoder().decode(bodyBytes) : null;
         let responseJson: unknown | null = null;
         if (responseText) {
@@ -1546,6 +1548,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
     if (shouldRecordFailure && inboundBody) {
       const fallbackOutboundHeaders = filterHeaders(new Headers(request.headers)).filtered;
+      applyCompensationHeaders(fallbackOutboundHeaders, compensationHeaders);
       const fallbackProviderType =
         selectedCandidate != null
           ? resolveUpstreamProvider(selectedCandidate, matchedRouteCapability)

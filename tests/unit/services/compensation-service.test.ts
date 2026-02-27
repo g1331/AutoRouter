@@ -127,6 +127,34 @@ describe("compensation-service", () => {
       );
       expect(updateChain.set.mock.calls[0]?.[0]).not.toHaveProperty("enabled");
     });
+
+    it("should retry ensure after name conflict cool-down", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+
+      mockSelect.mockReturnValueOnce({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([{ id: "rule-custom", isBuiltin: false }]),
+        }),
+      });
+
+      await ensureBuiltinCompensationRulesExist();
+      await ensureBuiltinCompensationRulesExist();
+      expect(mockSelect).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(60_000);
+
+      mockSelect.mockReturnValueOnce({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([]),
+        }),
+      });
+
+      await ensureBuiltinCompensationRulesExist();
+      expect(mockSelect).toHaveBeenCalledTimes(2);
+
+      vi.useRealTimers();
+    });
   });
 
   describe("buildCompensations", () => {

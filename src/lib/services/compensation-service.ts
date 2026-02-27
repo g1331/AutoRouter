@@ -44,11 +44,17 @@ export interface CompensationRule {
 }
 
 let cache: CachedRules | null = null;
-let builtinRulesEnsured = false;
+type BuiltinEnsureState = "unknown" | "ok" | "blocked";
+let builtinEnsureState: BuiltinEnsureState = "unknown";
+let builtinEnsureRetryAt = 0;
+const BUILTIN_ENSURE_RETRY_MS = 60_000;
 
 export async function ensureBuiltinCompensationRulesExist(): Promise<void> {
-  if (builtinRulesEnsured) return;
+  if (builtinEnsureState === "ok") return;
+  const now = Date.now();
+  if (builtinEnsureState === "blocked" && now < builtinEnsureRetryAt) return;
   try {
+    let blocked = false;
     for (const rule of BUILTIN_RULES) {
       const existing = await db
         .select({
@@ -79,6 +85,7 @@ export async function ensureBuiltinCompensationRulesExist(): Promise<void> {
           { name: rule.name },
           "compensation-service: builtin rule name is used by a non-builtin rule, skipping ensure"
         );
+        blocked = true;
         continue;
       }
 
@@ -92,9 +99,16 @@ export async function ensureBuiltinCompensationRulesExist(): Promise<void> {
         })
         .where(eq(compensationRules.id, existing[0].id));
     }
-    builtinRulesEnsured = true;
+    if (blocked) {
+      builtinEnsureState = "blocked";
+      builtinEnsureRetryAt = Date.now() + BUILTIN_ENSURE_RETRY_MS;
+      return;
+    }
+    builtinEnsureState = "ok";
   } catch (err) {
     log.error({ err }, "compensation-service: failed to ensure builtin rules exist");
+    builtinEnsureState = "blocked";
+    builtinEnsureRetryAt = Date.now() + BUILTIN_ENSURE_RETRY_MS;
   }
 }
 
