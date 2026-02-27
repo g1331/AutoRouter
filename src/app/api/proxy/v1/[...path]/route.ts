@@ -73,6 +73,7 @@ import {
   affinityStore,
   type AffinityUsage,
 } from "@/lib/services/session-affinity";
+import { buildCompensations } from "@/lib/services/compensation-service";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("proxy-route");
@@ -409,6 +410,7 @@ async function forwardWithFailover(
     sessionId: string | null;
     contentLength: number;
   } | null,
+  compensationHeaders: import("@/lib/services/proxy-client").CompensationHeader[],
   config: FailoverConfig = DEFAULT_FAILOVER_CONFIG
 ): Promise<{
   result: ProxyResult;
@@ -524,7 +526,13 @@ async function forwardWithFailover(
       const upstreamForProxy = prepareUpstreamForProxy(selectedUpstream);
       attemptUpstreamBaseUrl = upstreamForProxy.baseUrl;
       didSendUpstream = true;
-      const result = await forwardRequest(proxyRequest, upstreamForProxy, path, requestId);
+      const result = await forwardRequest(
+        proxyRequest,
+        upstreamForProxy,
+        path,
+        requestId,
+        compensationHeaders
+      );
 
       // Check if response indicates we should failover
       if (shouldTriggerFailover(result.statusCode, config)) {
@@ -1078,6 +1086,14 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     // Capture routing decision time (before actual upstream request begins)
     routingDurationMs = Date.now() - startTime;
 
+    // Build outbound header compensations based on current capability and request
+    const inboundHeaders = Object.fromEntries(request.headers.entries());
+    const compensationHeaders = await buildCompensations(
+      matchedRouteCapability,
+      inboundHeaders,
+      bodyJson
+    );
+
     const {
       result: proxyResult,
       selectedUpstream: selected,
@@ -1090,7 +1106,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       path,
       requestId,
       candidateUpstreamIds,
-      affinityContext
+      affinityContext,
+      compensationHeaders
     );
     const result: ProxyResult = proxyResult;
     const upstreamForLogging: Upstream = selected;
@@ -1098,6 +1115,14 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     isAffinityHit = afHit;
     isAffinityMigrated = afMigrated;
     priorityTier = selected.priority;
+    const headerDiff = result.headerDiff ?? {
+      inbound_count: 0,
+      outbound_count: 0,
+      dropped: [],
+      auth_replaced: null,
+      compensated: [],
+    };
+    const sessionIdCompensated = headerDiff.compensated.some((c) => c.header === "session_id");
 
     // Build routing decision for logging
     const routingDecision: RoutingDecision = {
@@ -1202,6 +1227,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               affinityMigrated: isAffinityMigrated,
               ttftMs: ttftMs ?? null,
               isStream: true,
+              sessionIdCompensated,
+              headerDiff,
             });
           }
 
@@ -1232,6 +1259,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             affinityMigrated: isAffinityMigrated,
             ttftMs: ttftMs ?? null,
             isStream: true,
+            sessionIdCompensated,
+            headerDiff,
           });
         })
         .catch((e) => log.error({ err: e, requestId }, "failed to log request"));
@@ -1354,6 +1383,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           affinityHit: isAffinityHit,
           affinityMigrated: isAffinityMigrated,
           isStream: false,
+          sessionIdCompensated,
+          headerDiff,
         });
       } else {
         await logRequest({
@@ -1382,6 +1413,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           affinityHit: isAffinityHit,
           affinityMigrated: isAffinityMigrated,
           isStream: false,
+          sessionIdCompensated,
+          headerDiff,
         });
       }
 

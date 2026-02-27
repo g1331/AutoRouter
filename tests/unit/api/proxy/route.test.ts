@@ -45,8 +45,16 @@ vi.mock("@/lib/services/proxy-client", () => ({
     apiKey: "decrypted-key",
     timeout: upstream.timeout ?? 60,
   })),
-  filterHeaders: vi.fn((headers: Headers) => headers),
-  injectAuthHeader: vi.fn((headers: Headers) => headers),
+  filterHeaders: vi.fn((headers: Headers) => ({
+    filtered: Object.fromEntries(headers.entries()),
+    dropped: [],
+  })),
+  injectAuthHeader: vi.fn((headers: Record<string, string>) => headers),
+}));
+
+vi.mock("@/lib/services/compensation-service", () => ({
+  buildCompensations: vi.fn(async () => []),
+  invalidateCache: vi.fn(),
 }));
 
 vi.mock("@/lib/services/request-logger", () => ({
@@ -504,7 +512,8 @@ describe("proxy route upstream selection", () => {
       expect.anything(),
       expect.objectContaining({ providerType: "anthropic" }),
       "v1/messages",
-      expect.any(String)
+      expect.any(String),
+      expect.any(Array)
     );
   });
 

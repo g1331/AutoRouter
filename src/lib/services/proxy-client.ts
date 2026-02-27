@@ -66,7 +66,7 @@ export interface ProxyResult {
   usage?: TokenUsage;
   streamMetricsPromise?: Promise<StreamMetrics>;
   ttftMs?: number;
-  headerDiff: HeaderDiff;
+  headerDiff?: HeaderDiff;
 }
 
 // Headers that should not be forwarded to upstream

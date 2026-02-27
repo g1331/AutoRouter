@@ -1728,5 +1728,139 @@ describe("proxy-client", () => {
         })
       );
     });
+
+    describe("compensation header injection", () => {
+      it("should inject compensation header when target header is absent", async () => {
+        const mockResponse = new Response(JSON.stringify({ id: "ok" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+        global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+        const request = new Request("http://localhost/api", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+
+        const compensationHeaders = [
+          { header: "session_id", value: "sess_abc123", source: "body.prompt_cache_key" },
+        ];
+
+        const result = await forwardRequest(
+          request,
+          mockUpstream,
+          "chat/completions",
+          "req-123",
+          compensationHeaders
+        );
+
+        const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+        expect(fetchCall[1].headers["session_id"]).toBe("sess_abc123");
+        expect(result.headerDiff.compensated).toHaveLength(1);
+        expect(result.headerDiff.compensated[0]).toEqual({
+          header: "session_id",
+          source: "body.prompt_cache_key",
+        });
+      });
+
+      it("should not inject compensation header when target header already exists (missing_only)", async () => {
+        const mockResponse = new Response(JSON.stringify({ id: "ok" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+        global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+        const request = new Request("http://localhost/api", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            session_id: "original_session",
+          },
+          body: JSON.stringify({}),
+        });
+
+        const compensationHeaders = [
+          { header: "session_id", value: "recovered_session", source: "body.prompt_cache_key" },
+        ];
+
+        const result = await forwardRequest(
+          request,
+          mockUpstream,
+          "chat/completions",
+          "req-123",
+          compensationHeaders
+        );
+
+        const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+        expect(fetchCall[1].headers["session_id"]).toBe("original_session");
+        expect(result.headerDiff.compensated).toHaveLength(0);
+      });
+
+      it("should populate headerDiff with inbound/outbound counts and dropped headers", async () => {
+        const mockResponse = new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+        global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+        const request = new Request("http://localhost/api", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "CF-Ew-Via": "15",
+            "X-Forwarded-For": "1.2.3.4",
+          },
+          body: JSON.stringify({}),
+        });
+
+        const result = await forwardRequest(request, mockUpstream, "chat/completions", "req-123");
+
+        expect(result.headerDiff.inbound_count).toBe(3);
+        expect(result.headerDiff.dropped).toContain("cf-ew-via");
+        expect(result.headerDiff.dropped).toContain("x-forwarded-for");
+        expect(result.headerDiff.outbound_count).toBeLessThan(result.headerDiff.inbound_count);
+      });
+
+      it("should track auth_replaced in headerDiff when authorization is replaced", async () => {
+        const mockResponse = new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+        global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+        const request = new Request("http://localhost/api", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            authorization: "Bearer client-key",
+          },
+          body: JSON.stringify({}),
+        });
+
+        const result = await forwardRequest(request, mockUpstream, "chat/completions", "req-123");
+
+        expect(result.headerDiff.auth_replaced).toBe("authorization");
+      });
+
+      it("should return empty headerDiff when no compensations provided", async () => {
+        const mockResponse = new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+        global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+        const request = new Request("http://localhost/api", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+
+        const result = await forwardRequest(request, mockUpstream, "chat/completions", "req-123");
+
+        expect(result.headerDiff.compensated).toHaveLength(0);
+        expect(result.headerDiff.dropped).toBeInstanceOf(Array);
+      });
+    });
   });
 });

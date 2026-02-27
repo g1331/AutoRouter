@@ -1,6 +1,7 @@
 import { eq, desc, count, and, gte, lte } from "drizzle-orm";
 import { db, requestLogs, type RequestLog } from "../db";
 import type { RoutingDecisionLog } from "@/types/api";
+import type { HeaderDiff } from "./proxy-client";
 
 export interface LogRequestInput {
   apiKeyId: string | null;
@@ -32,6 +33,9 @@ export interface LogRequestInput {
   // Performance metrics fields
   ttftMs?: number | null;
   isStream?: boolean;
+  // Header compensation fields
+  sessionIdCompensated?: boolean;
+  headerDiff?: HeaderDiff | null;
 }
 
 /**
@@ -85,6 +89,9 @@ export interface UpdateRequestLogInput {
   // Performance metrics fields
   ttftMs?: number | null;
   isStream?: boolean;
+  // Header compensation fields
+  sessionIdCompensated?: boolean;
+  headerDiff?: HeaderDiff | null;
 }
 
 /**
@@ -144,6 +151,9 @@ export interface RequestLogResponse {
   // Performance metrics fields
   ttftMs: number | null;
   isStream: boolean;
+  // Header compensation fields
+  sessionIdCompensated: boolean;
+  headerDiff: HeaderDiff | null;
   createdAt: Date;
 }
 
@@ -253,6 +263,9 @@ export async function updateRequestLog(
   if (input.affinityMigrated !== undefined) updateValues.affinityMigrated = input.affinityMigrated;
   if (input.ttftMs !== undefined) updateValues.ttftMs = input.ttftMs;
   if (input.isStream !== undefined) updateValues.isStream = input.isStream;
+  if (input.sessionIdCompensated !== undefined)
+    updateValues.sessionIdCompensated = input.sessionIdCompensated;
+  if (input.headerDiff !== undefined) updateValues.headerDiff = input.headerDiff ?? null;
 
   if (Object.keys(updateValues).length === 0) {
     return null;
@@ -301,6 +314,8 @@ export async function logRequest(input: LogRequestInput): Promise<RequestLog> {
       affinityMigrated: input.affinityMigrated ?? false,
       ttftMs: input.ttftMs ?? null,
       isStream: input.isStream ?? false,
+      sessionIdCompensated: input.sessionIdCompensated ?? false,
+      headerDiff: input.headerDiff ?? null,
       createdAt: new Date(),
     })
     .returning();
@@ -566,6 +581,8 @@ export async function listRequestLogs(
     affinityMigrated: log.affinityMigrated,
     ttftMs: log.ttftMs ?? null,
     isStream: log.isStream,
+    sessionIdCompensated: log.sessionIdCompensated,
+    headerDiff: (log.headerDiff as HeaderDiff | null) ?? null,
     createdAt: log.createdAt,
   }));
 
