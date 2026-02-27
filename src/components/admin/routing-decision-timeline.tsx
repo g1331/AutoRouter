@@ -439,7 +439,7 @@ function TimelineStage({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn("relative", showConnector ? "pl-8" : "pl-6", !isLast && "pb-3")}>
+    <div className={cn("relative", showConnector ? "pl-8" : "pl-0", !isLast && "pb-3")}>
       {/* Vertical connector line */}
       {showConnector && !isLast && (
         <div className="absolute left-[11px] top-7 bottom-0 w-px border-l border-dashed border-surface-500" />

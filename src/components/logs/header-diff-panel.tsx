@@ -44,10 +44,12 @@ export function HeaderDiffPanel({ headerDiff, className }: HeaderDiffPanelProps)
     return value;
   };
 
-  const valueClass = showValues ? "whitespace-pre-wrap break-all" : "truncate";
+  const valueClass = showValues ? "whitespace-pre-wrap break-words" : "truncate";
   const sourceClass = showValues
-    ? "min-w-0 basis-full whitespace-pre-wrap break-all"
-    : "shrink-0 whitespace-nowrap";
+    ? "min-w-0 basis-full whitespace-pre-wrap break-words pl-5 sm:ml-2 sm:basis-auto sm:pl-0"
+    : "basis-full pl-5 text-[10px] text-muted-foreground/60 sm:ml-2 sm:basis-auto sm:pl-0 sm:shrink-0 sm:whitespace-nowrap";
+  const rowTailClass =
+    "basis-full pl-5 text-[10px] text-muted-foreground/60 sm:basis-auto sm:pl-0 sm:ml-2 sm:shrink-0";
 
   return (
     <div className={cn("w-full min-w-0 font-mono text-xs", className)}>
@@ -81,7 +83,7 @@ export function HeaderDiffPanel({ headerDiff, className }: HeaderDiffPanelProps)
         {headerDiff.dropped.map((item) => (
           <div
             key={`drop-${item.header}-${item.value}`}
-            className="flex min-w-0 items-baseline gap-2 border-b border-divider/40 bg-status-error/8 px-3 py-1 last:border-b-0"
+            className="flex min-w-0 flex-wrap items-baseline gap-2 border-b border-divider/40 bg-status-error/8 px-3 py-1 last:border-b-0"
           >
             <span className="w-3 shrink-0 select-none text-status-error">-</span>
             <code className="text-status-error">{item.header}</code>
@@ -101,17 +103,24 @@ export function HeaderDiffPanel({ headerDiff, className }: HeaderDiffPanelProps)
             <span className="shrink-0 text-divider">:</span>
             <code
               className={cn(
-                "min-w-0 flex-1 basis-[140px] text-status-warning line-through opacity-70",
+                "min-w-0 flex-1 basis-full text-status-warning line-through opacity-70 sm:basis-[140px]",
                 valueClass
               )}
             >
               {renderValue(headerDiff.auth_replaced.inbound_value)}
             </code>
-            <span className="shrink-0 text-divider">→</span>
-            <code className={cn("min-w-0 flex-1 text-status-warning", valueClass)}>
+            <span className="basis-full pl-5 text-divider sm:basis-auto sm:pl-0 sm:shrink-0">
+              →
+            </span>
+            <code
+              className={cn(
+                "min-w-0 flex-1 basis-full text-status-warning sm:basis-auto",
+                valueClass
+              )}
+            >
               {renderValue(headerDiff.auth_replaced.outbound_value)}
             </code>
-            <span className="ml-1 shrink-0 text-[10px] text-muted-foreground">
+            <span className={cn(rowTailClass, "text-muted-foreground")}>
               {t("headerDiffAuthReplaced")}
             </span>
           </div>
@@ -128,24 +137,20 @@ export function HeaderDiffPanel({ headerDiff, className }: HeaderDiffPanelProps)
             <code className={cn("flex-1 min-w-0 text-foreground", valueClass)}>
               {renderValue(item.value)}
             </code>
-            <span className={cn("ml-2 text-[10px] text-muted-foreground/60", sourceClass)}>
-              ← {item.source}
-            </span>
+            <span className={cn("text-muted-foreground/60", sourceClass)}>← {item.source}</span>
           </div>
         ))}
 
         {headerDiff.unchanged.map((item) => (
           <div
             key={`same-${item.header}-${item.value}`}
-            className="flex min-w-0 items-baseline gap-2 border-b border-divider/40 px-3 py-1 text-muted-foreground last:border-b-0"
+            className="flex min-w-0 flex-wrap items-baseline gap-2 border-b border-divider/40 px-3 py-1 text-muted-foreground last:border-b-0"
           >
             <span className="w-3 shrink-0 select-none">=</span>
             <code className="shrink-0">{item.header}</code>
             <span className="shrink-0 text-divider">:</span>
             <code className={cn("flex-1 min-w-0", valueClass)}>{renderValue(item.value)}</code>
-            <span className="ml-2 shrink-0 text-[10px] text-muted-foreground/60">
-              {t("headerDiffUnchanged")}
-            </span>
+            <span className={rowTailClass}>{t("headerDiffUnchanged")}</span>
           </div>
         ))}
 
