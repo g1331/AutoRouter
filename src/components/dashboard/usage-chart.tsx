@@ -138,10 +138,10 @@ export function UsageChart({ data, isLoading, metric, onMetricChange }: UsageCha
     }
 
     const timestampMap = new Map<string, ChartDataPoint>();
-    const names: string[] = [];
+    const namesSet = new Set<string>();
 
     data.series.forEach((series) => {
-      names.push(series.upstream_name);
+      namesSet.add(series.upstream_name);
 
       series.data.forEach((point) => {
         const key = point.timestamp;
@@ -165,6 +165,16 @@ export function UsageChart({ data, isLoading, metric, onMetricChange }: UsageCha
           ((point as unknown as Record<string, unknown>)[valueKey] as number) ?? 0;
       });
     });
+
+    const names = Array.from(namesSet);
+
+    for (const row of timestampMap.values()) {
+      for (const name of names) {
+        if (row[name] === undefined) {
+          row[name] = 0;
+        }
+      }
+    }
 
     const sorted = Array.from(timestampMap.values()).sort(
       (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
@@ -304,6 +314,7 @@ export function UsageChart({ data, isLoading, metric, onMetricChange }: UsageCha
                   tick={{ fill: theme.colors.text, fontSize: 10 }}
                   tickLine={{ stroke: theme.colors.grid }}
                   axisLine={{ stroke: theme.colors.grid }}
+                  domain={[0, "auto"]}
                   tickFormatter={(v: number) =>
                     metric === "ttft"
                       ? formatTtft(v)
