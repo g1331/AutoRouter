@@ -24,7 +24,7 @@ describe("proxy-client", () => {
         Accept: "application/json",
       });
 
-      const filtered = filterHeaders(headers);
+      const { filtered } = filterHeaders(headers);
 
       // Headers API normalizes keys to lowercase
       expect(filtered["content-type"]).toBe("application/json");
@@ -48,6 +48,7 @@ describe("proxy-client", () => {
         "CF-IPCountry": "CN",
         "CF-Ray": "abcd-xyz",
         "CF-Visitor": '{"scheme":"https"}',
+        "CF-Ew-Via": "15",
         "CDN-Loop": "cloudflare",
         "X-Real-IP": "1.2.3.4",
         "Remote-Host": "172.71.1.1",
@@ -56,7 +57,7 @@ describe("proxy-client", () => {
         "X-Envoy-External-Address": "1.2.3.4",
       });
 
-      const filtered = filterHeaders(headers);
+      const { filtered, dropped } = filterHeaders(headers);
 
       expect(filtered["content-type"]).toBe("application/json");
       expect(filtered["connection"]).toBeUndefined();
@@ -72,12 +73,14 @@ describe("proxy-client", () => {
       expect(filtered["cf-ipcountry"]).toBeUndefined();
       expect(filtered["cf-ray"]).toBeUndefined();
       expect(filtered["cf-visitor"]).toBeUndefined();
+      expect(filtered["cf-ew-via"]).toBeUndefined();
       expect(filtered["cdn-loop"]).toBeUndefined();
       expect(filtered["x-real-ip"]).toBeUndefined();
       expect(filtered["remote-host"]).toBeUndefined();
       expect(filtered["forwarded"]).toBeUndefined();
       expect(filtered["via"]).toBeUndefined();
       expect(filtered["x-envoy-external-address"]).toBeUndefined();
+      expect(dropped).toContain("cf-ew-via");
     });
 
     it("should preserve application headers that are not infrastructure headers", () => {
@@ -92,7 +95,7 @@ describe("proxy-client", () => {
         "cf-aig-authorization": "Bearer aig-token",
       });
 
-      const filtered = filterHeaders(headers);
+      const { filtered } = filterHeaders(headers);
 
       expect(filtered["content-type"]).toBe("application/json");
       expect(filtered["accept"]).toBe("text/event-stream");
@@ -106,7 +109,7 @@ describe("proxy-client", () => {
 
     it("should handle empty headers", () => {
       const headers = new Headers();
-      const filtered = filterHeaders(headers);
+      const { filtered } = filterHeaders(headers);
       expect(Object.keys(filtered)).toHaveLength(0);
     });
   });

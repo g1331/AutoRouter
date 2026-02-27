@@ -36,6 +36,26 @@ export interface StreamMetrics {
 }
 
 /**
+ * A single outbound header to inject when the target header is absent.
+ */
+export interface CompensationHeader {
+  header: string;
+  value: string;
+  source: string;
+}
+
+/**
+ * Summary of header changes made during a proxy request (names only, no values).
+ */
+export interface HeaderDiff {
+  inbound_count: number;
+  outbound_count: number;
+  dropped: string[];
+  auth_replaced: string | null;
+  compensated: Array<{ header: string; source: string }>;
+}
+
+/**
  * Result of a proxy request.
  */
 export interface ProxyResult {
@@ -46,6 +66,7 @@ export interface ProxyResult {
   usage?: TokenUsage;
   streamMetricsPromise?: Promise<StreamMetrics>;
   ttftMs?: number;
+  headerDiff: HeaderDiff;
 }
 
 // Headers that should not be forwarded to upstream
@@ -72,6 +93,7 @@ const HOP_BY_HOP_HEADERS = new Set([
 const INFRASTRUCTURE_REQUEST_HEADERS = new Set([
   "cf-connecting-ip",
   "cf-connecting-ipv6",
+  "cf-ew-via",
   "cf-ipcountry",
   "cf-ray",
   "cf-visitor",
@@ -99,16 +121,23 @@ function isInfrastructureRequestHeader(headerName: string): boolean {
 
 /**
  * Filter out hop-by-hop headers and return safe headers for forwarding.
+ * Also returns the list of dropped header names for HeaderDiff.
  */
-export function filterHeaders(headers: Headers): Record<string, string> {
+export function filterHeaders(headers: Headers): {
+  filtered: Record<string, string>;
+  dropped: string[];
+} {
   const filtered: Record<string, string> = {};
+  const dropped: string[] = [];
   headers.forEach((value, key) => {
     const lower = key.toLowerCase();
     if (!HOP_BY_HOP_HEADERS.has(lower) && !isInfrastructureRequestHeader(lower)) {
       filtered[key] = value;
+    } else {
+      dropped.push(lower);
     }
   });
-  return filtered;
+  return { filtered, dropped };
 }
 
 /**
@@ -636,12 +665,37 @@ export async function forwardRequest(
   request: Request,
   upstream: UpstreamForProxy,
   path: string,
-  requestId: string
+  requestId: string,
+  compensationHeaders?: CompensationHeader[]
 ): Promise<ProxyResult> {
   // Prepare headers
   const originalHeaders = new Headers(request.headers);
-  const filteredHeaders = filterHeaders(originalHeaders);
+  const inboundCount = [...originalHeaders.keys()].length;
+  const { filtered: filteredHeaders, dropped } = filterHeaders(originalHeaders);
+
+  // Inject compensation headers (missing_only mode: only when absent)
+  const compensated: Array<{ header: string; source: string }> = [];
+  if (compensationHeaders) {
+    for (const comp of compensationHeaders) {
+      const lower = comp.header.toLowerCase();
+      const alreadyPresent = Object.keys(filteredHeaders).some((k) => k.toLowerCase() === lower);
+      if (!alreadyPresent) {
+        filteredHeaders[comp.header] = comp.value;
+        compensated.push({ header: comp.header, source: comp.source });
+      }
+    }
+  }
+
   const headers = injectAuthHeader(filteredHeaders, upstream);
+
+  // Determine which auth header was replaced
+  const hadAuthorization = Object.keys(filteredHeaders).some(
+    (k) => k.toLowerCase() === "authorization"
+  );
+  const hadApiKey = Object.keys(filteredHeaders).some((k) => k.toLowerCase() === "x-api-key");
+  const authReplaced = hadAuthorization ? "authorization" : hadApiKey ? "x-api-key" : null;
+
+  const outboundCount = Object.keys(headers).length;
 
   // Construct upstream URL
   const baseUrl = upstream.baseUrl.replace(/\/$/, "");
@@ -753,6 +807,13 @@ export async function forwardRequest(
         isStream: true,
         usage,
         streamMetricsPromise,
+        headerDiff: {
+          inbound_count: inboundCount,
+          outbound_count: outboundCount,
+          dropped,
+          auth_replaced: authReplaced,
+          compensated,
+        },
       };
     } else {
       // Regular response
@@ -787,6 +848,13 @@ export async function forwardRequest(
         body: bodyBytes,
         isStream: false,
         usage,
+        headerDiff: {
+          inbound_count: inboundCount,
+          outbound_count: outboundCount,
+          dropped,
+          auth_replaced: authReplaced,
+          compensated,
+        },
       };
     }
   } catch (error) {

@@ -932,6 +932,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     reason: "unhealthy" | "circuit_open";
   }> = [];
   let sessionId: string | null = null;
+  let sessionIdSource: "header" | "body" | null = null;
   const activeUpstreams = await db.query.upstreams.findMany({
     where: eq(upstreams.isActive, true),
   });
@@ -1003,14 +1004,16 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
   // Extract session ID after routing context is known
   if (bodyJson) {
-    sessionId = extractSessionId(
+    const sessionIdResult = extractSessionId(
       matchedRouteCapability,
       Object.fromEntries(request.headers.entries()),
       bodyJson
     );
+    sessionId = sessionIdResult.sessionId;
+    sessionIdSource = sessionIdResult.source;
     if (sessionId) {
       log.debug(
-        { requestId, matchedRouteCapability, sessionId },
+        { requestId, matchedRouteCapability, sessionId, sessionIdSource },
         "session affinity: extracted sessionId"
       );
     }
@@ -1241,7 +1244,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       if (shouldRecordSuccess && inboundBody && recordingStream) {
         const upstreamForProxy = prepareUpstreamForProxy(upstreamForLogging);
         const outboundHeaders = injectAuthHeader(
-          filterHeaders(new Headers(request.headers)),
+          filterHeaders(new Headers(request.headers)).filtered,
           upstreamForProxy
         );
         void readStreamChunks(recordingStream)
@@ -1385,7 +1388,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       if (shouldRecordSuccess && inboundBody) {
         const upstreamForProxy = prepareUpstreamForProxy(upstreamForLogging);
         const outboundHeaders = injectAuthHeader(
-          filterHeaders(new Headers(request.headers)),
+          filterHeaders(new Headers(request.headers)).filtered,
           upstreamForProxy
         );
         const responseText = bodyBytes.length > 0 ? new TextDecoder().decode(bodyBytes) : null;
@@ -1508,7 +1511,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     );
 
     if (shouldRecordFailure && inboundBody) {
-      const fallbackOutboundHeaders = filterHeaders(new Headers(request.headers));
+      const fallbackOutboundHeaders = filterHeaders(new Headers(request.headers)).filtered;
       const fallbackProviderType =
         selectedCandidate != null
           ? resolveUpstreamProvider(selectedCandidate, matchedRouteCapability)
