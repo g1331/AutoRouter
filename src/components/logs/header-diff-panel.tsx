@@ -1,7 +1,6 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { ArrowDown, ArrowUp, ShieldOff, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface HeaderDiff {
@@ -9,7 +8,7 @@ interface HeaderDiff {
   outbound_count: number;
   dropped: string[];
   auth_replaced: string | null;
-  compensated: Array<{ header: string; source: string }>;
+  compensated: Array<{ header: string; source: string; value: string }>;
 }
 
 interface HeaderDiffPanelProps {
@@ -20,73 +19,72 @@ interface HeaderDiffPanelProps {
 export function HeaderDiffPanel({ headerDiff, className }: HeaderDiffPanelProps) {
   const t = useTranslations("logs");
 
-  const hasDropped = headerDiff.dropped.length > 0;
-  const hasCompensated = headerDiff.compensated.length > 0;
-  const hasAuthReplaced = !!headerDiff.auth_replaced;
+  const delta = headerDiff.outbound_count - headerDiff.inbound_count;
+  const deltaLabel = delta > 0 ? `+${delta}` : delta < 0 ? `${delta}` : "±0";
+  const deltaClass =
+    delta > 0 ? "text-status-success" : delta < 0 ? "text-status-error" : "text-muted-foreground";
 
   return (
-    <div className={cn("space-y-2 font-mono text-xs", className)}>
-      <div className="flex items-center gap-4 text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <ArrowDown className="w-3 h-3" />
+    <div className={cn("font-mono text-xs", className)}>
+      {/* Stat bar */}
+      <div className="mb-2 flex items-center gap-3 text-muted-foreground">
+        <span>
           {t("headerDiffInbound")}:{" "}
-          <span className="text-foreground ml-1">{headerDiff.inbound_count}</span>
+          <span className="text-foreground">{headerDiff.inbound_count}</span>
         </span>
         <span className="text-divider">→</span>
-        <span className="flex items-center gap-1">
-          <ArrowUp className="w-3 h-3" />
+        <span>
           {t("headerDiffOutbound")}:{" "}
-          <span className="text-foreground ml-1">{headerDiff.outbound_count}</span>
+          <span className="text-foreground">{headerDiff.outbound_count}</span>
         </span>
+        <span className={cn("ml-auto tabular-nums font-medium", deltaClass)}>{deltaLabel}</span>
       </div>
 
-      {hasAuthReplaced && (
-        <div className="flex items-center gap-1.5 text-status-warning">
-          <ShieldOff className="w-3 h-3 shrink-0" />
-          <span className="text-muted-foreground">{t("headerDiffAuthReplaced")}:</span>
-          <code className="text-status-warning">{headerDiff.auth_replaced}</code>
-        </div>
-      )}
+      {/* Diff block */}
+      <div className="overflow-hidden rounded border border-divider bg-surface-400/20">
+        {/* Dropped lines */}
+        {headerDiff.dropped.map((h) => (
+          <div
+            key={`drop-${h}`}
+            className="flex items-baseline gap-2 border-b border-divider/40 bg-status-error/8 px-3 py-1 last:border-b-0"
+          >
+            <span className="w-3 shrink-0 select-none text-status-error">-</span>
+            <code className="text-status-error line-through opacity-70">{h}</code>
+          </div>
+        ))}
 
-      {hasDropped && (
-        <div className="space-y-0.5">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            {t("headerDiffDropped")} ({headerDiff.dropped.length})
+        {/* Auth replaced */}
+        {headerDiff.auth_replaced && (
+          <div className="flex items-baseline gap-2 border-b border-divider/40 bg-status-warning/8 px-3 py-1 last:border-b-0">
+            <span className="w-3 shrink-0 select-none text-status-warning">~</span>
+            <code className="text-status-warning">{headerDiff.auth_replaced}</code>
+            <span className="ml-1 text-[10px] text-muted-foreground">
+              {t("headerDiffAuthReplaced")}
+            </span>
           </div>
-          <div className="flex flex-wrap gap-1">
-            {headerDiff.dropped.map((h) => (
-              <code
-                key={h}
-                className="rounded border border-divider bg-surface-300 px-1 py-0.5 text-[11px] text-muted-foreground line-through"
-              >
-                {h}
-              </code>
-            ))}
-          </div>
-        </div>
-      )}
+        )}
 
-      {hasCompensated && (
-        <div className="space-y-0.5">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            {t("headerDiffCompensated")} ({headerDiff.compensated.length})
+        {/* Compensated lines */}
+        {headerDiff.compensated.map((c) => (
+          <div
+            key={`comp-${c.header}`}
+            className="flex items-baseline gap-2 border-b border-divider/40 bg-status-success/8 px-3 py-1 last:border-b-0"
+          >
+            <span className="w-3 shrink-0 select-none text-status-success">+</span>
+            <code className="text-amber-400">{c.header}</code>
+            <span className="text-divider">:</span>
+            <code className="flex-1 truncate text-foreground">{c.value}</code>
+            <span className="ml-2 shrink-0 text-[10px] text-muted-foreground/60">← {c.source}</span>
           </div>
-          <div className="space-y-1">
-            {headerDiff.compensated.map((c) => (
-              <div key={c.header} className="flex items-center gap-2">
-                <Zap className="w-3 h-3 shrink-0 text-amber-500" />
-                <code className="text-amber-400">{c.header}</code>
-                <span className="text-muted-foreground">←</span>
-                <code className="text-muted-foreground text-[11px]">{c.source}</code>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+        ))}
 
-      {!hasDropped && !hasCompensated && !hasAuthReplaced && (
-        <div className="text-muted-foreground">{t("headerDiffNoChanges")}</div>
-      )}
+        {/* Empty state */}
+        {headerDiff.dropped.length === 0 &&
+          !headerDiff.auth_replaced &&
+          headerDiff.compensated.length === 0 && (
+            <div className="px-3 py-2 text-muted-foreground/60">{t("headerDiffNoChanges")}</div>
+          )}
+      </div>
     </div>
   );
 }

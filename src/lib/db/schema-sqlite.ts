@@ -200,7 +200,7 @@ export const requestLogs = sqliteTable(
       outbound_count: number;
       dropped: string[];
       auth_replaced: string | null;
-      compensated: Array<{ header: string; source: string }>;
+      compensated: Array<{ header: string; source: string; value: string }>;
     } | null>(),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },

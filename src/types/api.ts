@@ -352,7 +352,7 @@ export interface RequestLogResponse {
     outbound_count: number;
     dropped: string[];
     auth_replaced: string | null;
-    compensated: Array<{ header: string; source: string }>;
+    compensated: Array<{ header: string; source: string; value: string }>;
   } | null;
   created_at: string; // ISO 8601 date string
 }

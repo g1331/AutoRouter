@@ -45,14 +45,14 @@ export interface CompensationHeader {
 }
 
 /**
- * Summary of header changes made during a proxy request (names only, no values).
+ * Summary of header changes made during a proxy request.
  */
 export interface HeaderDiff {
   inbound_count: number;
   outbound_count: number;
   dropped: string[];
   auth_replaced: string | null;
-  compensated: Array<{ header: string; source: string }>;
+  compensated: Array<{ header: string; source: string; value: string }>;
 }
 
 /**
@@ -674,14 +674,14 @@ export async function forwardRequest(
   const { filtered: filteredHeaders, dropped } = filterHeaders(originalHeaders);
 
   // Inject compensation headers (missing_only mode: only when absent)
-  const compensated: Array<{ header: string; source: string }> = [];
+  const compensated: Array<{ header: string; source: string; value: string }> = [];
   if (compensationHeaders) {
     for (const comp of compensationHeaders) {
       const lower = comp.header.toLowerCase();
       const alreadyPresent = Object.keys(filteredHeaders).some((k) => k.toLowerCase() === lower);
       if (!alreadyPresent) {
         filteredHeaders[comp.header] = comp.value;
-        compensated.push({ header: comp.header, source: comp.source });
+        compensated.push({ header: comp.header, source: comp.source, value: comp.value });
       }
     }
   }

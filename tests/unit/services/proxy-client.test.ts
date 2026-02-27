@@ -1761,6 +1761,7 @@ describe("proxy-client", () => {
         expect(result.headerDiff.compensated[0]).toEqual({
           header: "session_id",
           source: "body.prompt_cache_key",
+          value: "sess_abc123",
         });
       });
 
