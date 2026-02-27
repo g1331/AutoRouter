@@ -42,9 +42,9 @@
 
 ## 7. 补偿规则管理 API
 
-- [ ] 7.1 新建 `src/app/api/admin/compensation-rules/route.ts`，实现 `GET`（列表）和 `POST`（创建）端点
-- [ ] 7.2 新建 `src/app/api/admin/compensation-rules/[id]/route.ts`，实现 `PUT`（更新）和 `DELETE`（删除，内置规则返回 403）端点
-- [ ] 7.3 为管理 API 编写单元测试（覆盖删除内置规则返回 403 的场景）
+- [x] 7.1 新建 `src/app/api/admin/compensation-rules/route.ts`，实现 `GET`（列表）和 `POST`（创建）端点
+- [x] 7.2 新建 `src/app/api/admin/compensation-rules/[id]/route.ts`，实现 `PUT`（更新）和 `DELETE`（删除，内置规则返回 403）端点
+- [x] 7.3 为管理 API 编写单元测试（覆盖删除内置规则返回 403 的场景）
 
 ## 8. 前端：Header Compensation 管理页面
 
@@ -74,5 +74,5 @@
 
 - [x] 12.1 完成任务 1-2 后提交：数据库迁移 + session-affinity 改造
 - [ ] 12.2 完成任务 3-6 后提交：补偿引擎核心（proxy-client、compensation-service、route.ts、request-logger）
-- [ ] 12.3 完成任务 7 后提交：补偿规则管理 API
+- [x] 12.3 完成任务 7 后提交：补偿规则管理 API
 - [ ] 12.4 完成任务 8-11 后提交：前端页面、组件与国际化
