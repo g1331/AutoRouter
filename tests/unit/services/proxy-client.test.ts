@@ -80,7 +80,9 @@ describe("proxy-client", () => {
       expect(filtered["forwarded"]).toBeUndefined();
       expect(filtered["via"]).toBeUndefined();
       expect(filtered["x-envoy-external-address"]).toBeUndefined();
-      expect(dropped).toContain("cf-ew-via");
+      expect(dropped).toEqual(
+        expect.arrayContaining([expect.objectContaining({ header: "cf-ew-via", value: "15" })])
+      );
     });
 
     it("should preserve application headers that are not infrastructure headers", () => {
@@ -1818,8 +1820,12 @@ describe("proxy-client", () => {
         const result = await forwardRequest(request, mockUpstream, "chat/completions", "req-123");
 
         expect(result.headerDiff.inbound_count).toBe(3);
-        expect(result.headerDiff.dropped).toContain("cf-ew-via");
-        expect(result.headerDiff.dropped).toContain("x-forwarded-for");
+        expect(result.headerDiff.dropped).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ header: "cf-ew-via", value: "15" }),
+            expect.objectContaining({ header: "x-forwarded-for", value: "1.2.3.4" }),
+          ])
+        );
         expect(result.headerDiff.outbound_count).toBeLessThan(result.headerDiff.inbound_count);
       });
 
@@ -1841,7 +1847,11 @@ describe("proxy-client", () => {
 
         const result = await forwardRequest(request, mockUpstream, "chat/completions", "req-123");
 
-        expect(result.headerDiff.auth_replaced).toBe("authorization");
+        expect(result.headerDiff.auth_replaced).toEqual({
+          header: "authorization",
+          inbound_value: "Bearer cli***key",
+          outbound_value: "Bearer sk-***key",
+        });
       });
 
       it("should return empty headerDiff when no compensations provided", async () => {
@@ -1861,6 +1871,7 @@ describe("proxy-client", () => {
 
         expect(result.headerDiff.compensated).toHaveLength(0);
         expect(result.headerDiff.dropped).toBeInstanceOf(Array);
+        expect(result.headerDiff.unchanged).toBeInstanceOf(Array);
       });
     });
   });

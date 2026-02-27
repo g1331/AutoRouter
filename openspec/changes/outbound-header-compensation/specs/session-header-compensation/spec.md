@@ -84,14 +84,15 @@
 系统 SHALL 在每次代理请求完成后计算并返回头部差异结构 `HeaderDiff`，包含以下字段：
 - `inbound_count`：入站头部总数
 - `outbound_count`：出站头部总数
-- `dropped`：被过滤的头部名称列表
-- `auth_replaced`：被替换的认证头部名称（如 `authorization`），无则为 `null`
-- `compensated`：已注入的补偿头部列表，每项包含 `header`（头部名称）和 `source`（来源路径）
+- `dropped`：被过滤的头部列表，每项包含 `header`（头部名称）与 `value`（头部值；敏感值脱敏）
+- `auth_replaced`：被替换的认证头部信息（如 `authorization` 或 `x-api-key`），包含 `header`、`inbound_value`、`outbound_value`（敏感值脱敏），无则为 `null`
+- `compensated`：已注入的补偿头部列表，每项包含 `header`（头部名称）、`source`（来源路径）与 `value`（头部值；敏感值脱敏）
+- `unchanged`：未变化的头部列表（出站值与入站值相同且未被补偿/替换），每项包含 `header` 与 `value`（敏感值脱敏）
 
 #### Scenario: 正常请求的头部差异
 - **WHEN** 一次代理请求完成，存在被过滤的基础设施头部和被替换的认证头部
-- **THEN** `HeaderDiff.dropped` 包含所有被过滤的头部名称，`HeaderDiff.auth_replaced` 包含被替换的认证头部名称
+- **THEN** `HeaderDiff.dropped` 包含所有被过滤的头部名称与值，`HeaderDiff.auth_replaced` 包含被替换认证头部的替换前后值（敏感值脱敏）
 
 #### Scenario: 执行了补偿的请求
 - **WHEN** 补偿引擎成功注入了一个或多个头部
-- **THEN** `HeaderDiff.compensated` 包含所有已注入头部的名称和来源路径
+- **THEN** `HeaderDiff.compensated` 包含所有已注入头部的名称、来源路径与值（敏感值脱敏）

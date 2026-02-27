@@ -338,6 +338,9 @@
     "headerDiffDropped": "已过滤",
     "headerDiffAuthReplaced": "认证头已替换",
     "headerDiffCompensated": "已补偿",
+    "headerDiffUnchanged": "未变化",
+    "headerDiffShowValues": "显示值",
+    "headerDiffHideValues": "隐藏值",
     "headerDiffNoChanges": "无请求头变更",
     "compensationBadge": "已补偿",
     "compensationBadgeTooltip": "session_id 从请求体中恢复（原始请求头缺失）"

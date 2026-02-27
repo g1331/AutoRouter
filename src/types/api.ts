@@ -350,9 +350,14 @@ export interface RequestLogResponse {
   header_diff: {
     inbound_count: number;
     outbound_count: number;
-    dropped: string[];
-    auth_replaced: string | null;
+    dropped: Array<{ header: string; value: string }>;
+    auth_replaced: {
+      header: string;
+      inbound_value: string | null;
+      outbound_value: string;
+    } | null;
     compensated: Array<{ header: string; source: string; value: string }>;
+    unchanged: Array<{ header: string; value: string }>;
   } | null;
   created_at: string; // ISO 8601 date string
 }

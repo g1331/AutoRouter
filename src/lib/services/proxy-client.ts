@@ -50,9 +50,46 @@ export interface CompensationHeader {
 export interface HeaderDiff {
   inbound_count: number;
   outbound_count: number;
-  dropped: string[];
-  auth_replaced: string | null;
+  dropped: Array<{ header: string; value: string }>;
+  auth_replaced: {
+    header: string;
+    inbound_value: string | null;
+    outbound_value: string;
+  } | null;
   compensated: Array<{ header: string; source: string; value: string }>;
+  unchanged: Array<{ header: string; value: string }>;
+}
+
+function maskSecretValue(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= 6) return "***";
+  return `${trimmed.slice(0, 3)}***${trimmed.slice(-3)}`;
+}
+
+function sanitizeAuthHeaderValue(value: string): string {
+  const trimmed = value.trim();
+  const firstSpaceIndex = trimmed.indexOf(" ");
+  if (firstSpaceIndex === -1) return maskSecretValue(trimmed);
+  const scheme = trimmed.slice(0, firstSpaceIndex).trim();
+  const token = trimmed.slice(firstSpaceIndex + 1).trim();
+  if (!token) return scheme;
+  return `${scheme} ${maskSecretValue(token)}`;
+}
+
+function sanitizeHeaderValueForLogging(headerNameLower: string, value: string): string {
+  if (!value) return "";
+  switch (headerNameLower) {
+    case "authorization":
+    case "proxy-authorization":
+      return sanitizeAuthHeaderValue(value);
+    case "x-api-key":
+      return maskSecretValue(value);
+    case "cookie":
+    case "set-cookie":
+      return "***";
+    default:
+      return value;
+  }
 }
 
 /**
@@ -121,20 +158,20 @@ function isInfrastructureRequestHeader(headerName: string): boolean {
 
 /**
  * Filter out hop-by-hop headers and return safe headers for forwarding.
- * Also returns the list of dropped header names for HeaderDiff.
+ * Also returns the dropped header entries for HeaderDiff.
  */
 export function filterHeaders(headers: Headers): {
   filtered: Record<string, string>;
-  dropped: string[];
+  dropped: Array<{ header: string; value: string }>;
 } {
   const filtered: Record<string, string> = {};
-  const dropped: string[] = [];
+  const dropped: Array<{ header: string; value: string }> = [];
   headers.forEach((value, key) => {
     const lower = key.toLowerCase();
     if (!HOP_BY_HOP_HEADERS.has(lower) && !isInfrastructureRequestHeader(lower)) {
       filtered[key] = value;
     } else {
-      dropped.push(lower);
+      dropped.push({ header: lower, value: sanitizeHeaderValueForLogging(lower, value) });
     }
   });
   return { filtered, dropped };
@@ -681,21 +718,57 @@ export async function forwardRequest(
       const alreadyPresent = Object.keys(filteredHeaders).some((k) => k.toLowerCase() === lower);
       if (!alreadyPresent) {
         filteredHeaders[comp.header] = comp.value;
-        compensated.push({ header: comp.header, source: comp.source, value: comp.value });
+        compensated.push({
+          header: comp.header,
+          source: comp.source,
+          value: sanitizeHeaderValueForLogging(lower, comp.value),
+        });
       }
     }
   }
 
-  const headers = injectAuthHeader(filteredHeaders, upstream);
-
-  // Determine which auth header was replaced
-  const hadAuthorization = Object.keys(filteredHeaders).some(
+  // Determine which auth header was replaced and capture before/after values
+  const hadAuthorization = Object.keys(filteredHeaders).find(
     (k) => k.toLowerCase() === "authorization"
   );
-  const hadApiKey = Object.keys(filteredHeaders).some((k) => k.toLowerCase() === "x-api-key");
-  const authReplaced = hadAuthorization ? "authorization" : hadApiKey ? "x-api-key" : null;
+  const hadApiKey = Object.keys(filteredHeaders).find((k) => k.toLowerCase() === "x-api-key");
 
+  let authReplaced: HeaderDiff["auth_replaced"] = null;
+  if (hadAuthorization) {
+    authReplaced = {
+      header: "authorization",
+      inbound_value: sanitizeHeaderValueForLogging(
+        "authorization",
+        filteredHeaders[hadAuthorization] ?? ""
+      ),
+      outbound_value: sanitizeHeaderValueForLogging("authorization", `Bearer ${upstream.apiKey}`),
+    };
+  } else if (hadApiKey) {
+    authReplaced = {
+      header: "x-api-key",
+      inbound_value: sanitizeHeaderValueForLogging("x-api-key", filteredHeaders[hadApiKey] ?? ""),
+      outbound_value: sanitizeHeaderValueForLogging("x-api-key", upstream.apiKey),
+    };
+  }
+
+  const headers = injectAuthHeader(filteredHeaders, upstream);
   const outboundCount = Object.keys(headers).length;
+
+  const compensatedHeaders = new Set(compensated.map((item) => item.header.toLowerCase()));
+  const unchanged: Array<{ header: string; value: string }> = [];
+  for (const [header, value] of Object.entries(headers)) {
+    const lower = header.toLowerCase();
+    if (authReplaced && lower === authReplaced.header) {
+      continue;
+    }
+    if (compensatedHeaders.has(lower)) {
+      continue;
+    }
+    const inboundValue = originalHeaders.get(header);
+    if (inboundValue !== null && inboundValue === value) {
+      unchanged.push({ header: lower, value: sanitizeHeaderValueForLogging(lower, value) });
+    }
+  }
 
   // Construct upstream URL
   const baseUrl = upstream.baseUrl.replace(/\/$/, "");
@@ -813,6 +886,7 @@ export async function forwardRequest(
           dropped,
           auth_replaced: authReplaced,
           compensated,
+          unchanged,
         },
       };
     } else {
@@ -854,6 +928,7 @@ export async function forwardRequest(
           dropped,
           auth_replaced: authReplaced,
           compensated,
+          unchanged,
         },
       };
     }

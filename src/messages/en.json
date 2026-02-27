@@ -338,6 +338,9 @@
     "headerDiffDropped": "Dropped",
     "headerDiffAuthReplaced": "Auth replaced",
     "headerDiffCompensated": "Compensated",
+    "headerDiffUnchanged": "Unchanged",
+    "headerDiffShowValues": "Show values",
+    "headerDiffHideValues": "Hide values",
     "headerDiffNoChanges": "No header changes",
     "compensationBadge": "Compensated",
     "compensationBadgeTooltip": "session_id recovered from request body (header was missing)"

@@ -287,11 +287,153 @@ export interface RequestLogApiResponse {
   header_diff: {
     inbound_count: number;
     outbound_count: number;
-    dropped: string[];
-    auth_replaced: string | null;
-    compensated: Array<{ header: string; source: string }>;
+    dropped: Array<{ header: string; value: string }>;
+    auth_replaced: {
+      header: string;
+      inbound_value: string | null;
+      outbound_value: string;
+    } | null;
+    compensated: Array<{ header: string; source: string; value: string }>;
+    unchanged: Array<{ header: string; value: string }>;
   } | null;
   created_at: string;
+}
+
+function maskSecretValue(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= 6) return "***";
+  return `${trimmed.slice(0, 3)}***${trimmed.slice(-3)}`;
+}
+
+function sanitizeAuthHeaderValue(value: string): string {
+  const trimmed = value.trim();
+  const firstSpaceIndex = trimmed.indexOf(" ");
+  if (firstSpaceIndex === -1) return maskSecretValue(trimmed);
+  const scheme = trimmed.slice(0, firstSpaceIndex).trim();
+  const token = trimmed.slice(firstSpaceIndex + 1).trim();
+  if (!token) return scheme;
+  return `${scheme} ${maskSecretValue(token)}`;
+}
+
+function sanitizeHeaderValueForApi(headerNameLower: string, value: string): string {
+  if (!value) return "";
+  if (value.includes("***")) return value;
+  switch (headerNameLower) {
+    case "authorization":
+    case "proxy-authorization":
+      return sanitizeAuthHeaderValue(value);
+    case "x-api-key":
+      return maskSecretValue(value);
+    case "cookie":
+    case "set-cookie":
+      return "***";
+    default:
+      return value;
+  }
+}
+
+function normalizeHeaderDiffForApi(
+  input: unknown
+): NonNullable<RequestLogApiResponse["header_diff"]> | null {
+  if (!input || typeof input !== "object") return null;
+  const data = input as Record<string, unknown>;
+
+  const inbound_count = typeof data.inbound_count === "number" ? data.inbound_count : 0;
+  const outbound_count = typeof data.outbound_count === "number" ? data.outbound_count : 0;
+
+  const droppedRaw = data.dropped;
+  const dropped: Array<{ header: string; value: string }> = Array.isArray(droppedRaw)
+    ? droppedRaw
+        .map((item) => {
+          if (typeof item === "string") return { header: item, value: "" };
+          if (!item || typeof item !== "object") return null;
+          const header = (item as { header?: unknown }).header;
+          const value = (item as { value?: unknown }).value;
+          if (typeof header !== "string") return null;
+          return { header, value: typeof value === "string" ? value : "" };
+        })
+        .filter((item): item is { header: string; value: string } => item !== null)
+    : [];
+
+  const compensatedRaw = data.compensated;
+  const compensated: Array<{ header: string; source: string; value: string }> = Array.isArray(
+    compensatedRaw
+  )
+    ? compensatedRaw
+        .map((item) => {
+          if (!item || typeof item !== "object") return null;
+          const header = (item as { header?: unknown }).header;
+          const source = (item as { source?: unknown }).source;
+          const value = (item as { value?: unknown }).value;
+          if (typeof header !== "string" || typeof source !== "string") return null;
+          return { header, source, value: typeof value === "string" ? value : "" };
+        })
+        .filter((item): item is { header: string; source: string; value: string } => item !== null)
+    : [];
+
+  const unchangedRaw = data.unchanged;
+  const unchanged: Array<{ header: string; value: string }> = Array.isArray(unchangedRaw)
+    ? unchangedRaw
+        .map((item) => {
+          if (!item || typeof item !== "object") return null;
+          const header = (item as { header?: unknown }).header;
+          const value = (item as { value?: unknown }).value;
+          if (typeof header !== "string") return null;
+          return { header, value: typeof value === "string" ? value : "" };
+        })
+        .filter((item): item is { header: string; value: string } => item !== null)
+    : [];
+
+  const authReplacedRaw = data.auth_replaced;
+  let auth_replaced: NonNullable<RequestLogApiResponse["header_diff"]>["auth_replaced"] = null;
+  if (typeof authReplacedRaw === "string") {
+    auth_replaced = { header: authReplacedRaw, inbound_value: null, outbound_value: "" };
+  } else if (authReplacedRaw && typeof authReplacedRaw === "object") {
+    const header = (authReplacedRaw as { header?: unknown }).header;
+    const inbound_value = (authReplacedRaw as { inbound_value?: unknown }).inbound_value;
+    const outbound_value = (authReplacedRaw as { outbound_value?: unknown }).outbound_value;
+    if (typeof header === "string" && typeof outbound_value === "string") {
+      auth_replaced = {
+        header,
+        inbound_value: typeof inbound_value === "string" ? inbound_value : null,
+        outbound_value,
+      };
+    }
+  }
+
+  const sanitizeEntry = <T extends { header: string; value: string }>(entry: T): T => ({
+    ...entry,
+    value: sanitizeHeaderValueForApi(entry.header.toLowerCase(), entry.value),
+  });
+
+  const sanitizedAuthReplaced = auth_replaced
+    ? {
+        header: auth_replaced.header,
+        inbound_value:
+          auth_replaced.inbound_value === null
+            ? null
+            : sanitizeHeaderValueForApi(
+                auth_replaced.header.toLowerCase(),
+                auth_replaced.inbound_value
+              ),
+        outbound_value: sanitizeHeaderValueForApi(
+          auth_replaced.header.toLowerCase(),
+          auth_replaced.outbound_value
+        ),
+      }
+    : null;
+
+  return {
+    inbound_count,
+    outbound_count,
+    dropped: dropped.map(sanitizeEntry),
+    auth_replaced: sanitizedAuthReplaced,
+    compensated: compensated.map((entry) => ({
+      ...entry,
+      value: sanitizeHeaderValueForApi(entry.header.toLowerCase(), entry.value),
+    })),
+    unchanged: unchanged.map(sanitizeEntry),
+  };
 }
 
 // ========== RequestLog Transformers ==========
@@ -334,7 +476,7 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
     ttft_ms: log.ttftMs,
     is_stream: log.isStream,
     session_id_compensated: log.sessionIdCompensated,
-    header_diff: log.headerDiff ?? null,
+    header_diff: normalizeHeaderDiffForApi(log.headerDiff),
     created_at: log.createdAt.toISOString(),
   };
 }

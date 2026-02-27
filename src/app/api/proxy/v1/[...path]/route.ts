@@ -1121,6 +1121,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       dropped: [],
       auth_replaced: null,
       compensated: [],
+      unchanged: [],
     };
     const sessionIdCompensated = headerDiff.compensated.some((c) => c.header === "session_id");
 

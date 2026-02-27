@@ -198,9 +198,14 @@ export const requestLogs = sqliteTable(
     headerDiff: text("header_diff", { mode: "json" }).$type<{
       inbound_count: number;
       outbound_count: number;
-      dropped: string[];
-      auth_replaced: string | null;
+      dropped: Array<{ header: string; value: string }>;
+      auth_replaced: {
+        header: string;
+        inbound_value: string | null;
+        outbound_value: string;
+      } | null;
       compensated: Array<{ header: string; source: string; value: string }>;
+      unchanged: Array<{ header: string; value: string }>;
     } | null>(),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },

@@ -527,7 +527,7 @@ export function LogsTable({ logs }: LogsTableProps) {
       ) : (
         <>
           <div className="overflow-hidden">
-            <Table frame="none">
+            <Table frame="none" className="table-fixed">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-8"></TableHead>
