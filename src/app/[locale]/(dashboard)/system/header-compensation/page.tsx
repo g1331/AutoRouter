@@ -6,6 +6,7 @@ import { ArrowLeftRight, GripVertical, Pencil, Plus, Trash2, X, Check } from "lu
 import { toast } from "sonner";
 
 import { Topbar } from "@/components/admin/topbar";
+import { ROUTE_CAPABILITY_ICON_META } from "@/components/admin/route-capability-badges";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -144,6 +145,8 @@ function CapabilityPicker({ selected, onChange }: CapabilityPickerProps) {
     <div className="flex flex-wrap gap-1.5">
       {ROUTE_CAPABILITY_DEFINITIONS.map((def) => {
         const active = selected.includes(def.value);
+        const iconMeta =
+          ROUTE_CAPABILITY_ICON_META[def.iconKey] ?? ROUTE_CAPABILITY_ICON_META.circle_help;
         return (
           <button
             key={def.value}
@@ -157,7 +160,15 @@ function CapabilityPicker({ selected, onChange }: CapabilityPickerProps) {
             )}
           >
             {active && <Check className="h-2.5 w-2.5" />}
-            {t(def.labelKey as Parameters<typeof t>[0])}
+            <span
+              className={cn(
+                "inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-cf-sm border",
+                iconMeta.iconContainerClass
+              )}
+            >
+              {iconMeta.render(cn("h-3 w-3", iconMeta.iconColorClass))}
+            </span>
+            <span className="whitespace-nowrap">{t(def.labelKey as Parameters<typeof t>[0])}</span>
           </button>
         );
       })}
@@ -355,12 +366,25 @@ function RuleCard({ rule, onEdit, onDelete }: RuleCardProps) {
         <div className="flex flex-wrap gap-1">
           {rule.capabilities.map((cap) => {
             const def = ROUTE_CAPABILITY_DEFINITIONS.find((d) => d.value === cap);
+            const iconMeta = def
+              ? (ROUTE_CAPABILITY_ICON_META[def.iconKey] ?? ROUTE_CAPABILITY_ICON_META.circle_help)
+              : ROUTE_CAPABILITY_ICON_META.circle_help;
             return (
               <span
                 key={cap}
-                className="rounded border border-divider bg-surface-400/30 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                className="inline-flex items-center gap-1 rounded border border-divider bg-surface-400/30 px-1.5 py-0.5 text-[10px] text-muted-foreground"
               >
-                {def ? tUp(def.labelKey as Parameters<typeof tUp>[0]) : cap}
+                <span
+                  className={cn(
+                    "inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-cf-sm border",
+                    iconMeta.iconContainerClass
+                  )}
+                >
+                  {iconMeta.render(cn("h-3 w-3", iconMeta.iconColorClass))}
+                </span>
+                <span className="whitespace-nowrap">
+                  {def ? tUp(def.labelKey as Parameters<typeof tUp>[0]) : cap}
+                </span>
               </span>
             );
           })}
@@ -440,14 +464,32 @@ function CapabilityMatrix({ rules }: { rules: CompensationRule[] }) {
               <th className="px-3 py-2 text-left font-normal text-muted-foreground">
                 {t("ruleName")}
               </th>
-              {ROUTE_CAPABILITY_DEFINITIONS.map((def) => (
-                <th
-                  key={def.value}
-                  className="px-2 py-2 text-center font-normal text-muted-foreground"
-                >
-                  {tUp(def.labelKey as Parameters<typeof tUp>[0])}
-                </th>
-              ))}
+              {ROUTE_CAPABILITY_DEFINITIONS.map((def) => {
+                const iconMeta =
+                  ROUTE_CAPABILITY_ICON_META[def.iconKey] ?? ROUTE_CAPABILITY_ICON_META.circle_help;
+                const label = tUp(def.labelKey as Parameters<typeof tUp>[0]);
+                return (
+                  <th
+                    key={def.value}
+                    className="px-2 py-2 text-center font-normal text-muted-foreground"
+                  >
+                    <div
+                      className="mx-auto inline-flex min-w-0 flex-col items-center justify-center gap-1"
+                      title={label}
+                    >
+                      <span
+                        className={cn(
+                          "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-cf-sm border",
+                          iconMeta.iconContainerClass
+                        )}
+                      >
+                        {iconMeta.render(cn("h-3.5 w-3.5", iconMeta.iconColorClass))}
+                      </span>
+                      <span className="max-w-[7.25rem] truncate">{label}</span>
+                    </div>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody className="divide-y divide-divider/40">
