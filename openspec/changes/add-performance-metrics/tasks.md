@@ -73,3 +73,8 @@
 ## 13. 发布后缺陷修复（TTFT 元数据误判）
 
 - [x] 13.1 修复 `proxy-client.ts` 在 OpenAI Chat `choices[].delta.role` 等纯元数据 chunk 上提前触发 `onFirstChunk` 的问题，并补充 role-only 场景单测
+
+## 14. 发布后指标口径修正（TPS 与上游对齐）
+
+- [x] 14.1 将日志页与统计聚合中的 TPS 公式统一为 `completion_tokens / duration_ms * 1000`（仅流式 + 最小样本阈值），移除对 `routing_duration_ms` 与 `ttft_ms` 作为 TPS 分母扣减项的依赖
+- [x] 14.2 同步更新 `proposal.md`、`design.md` 与 `specs/performance-metrics-collection/spec.md` 中 TPS 公式与边界条件描述，并更新相关测试断言

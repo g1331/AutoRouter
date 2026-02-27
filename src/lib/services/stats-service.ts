@@ -69,13 +69,13 @@ export interface StatsLeaderboard {
 }
 
 const MIN_TPS_COMPLETION_TOKENS = 10;
-const MIN_TPS_GENERATION_MS = 100;
+const MIN_TPS_DURATION_MS = 100;
 
 const tpsEligibleCondition = sql`
   ${requestLogs.isStream}
-  and ${requestLogs.ttftMs} is not null
   and ${requestLogs.completionTokens} >= ${MIN_TPS_COMPLETION_TOKENS}
-  and (${requestLogs.durationMs} - ${requestLogs.routingDurationMs} - ${requestLogs.ttftMs}) > ${MIN_TPS_GENERATION_MS}
+  and ${requestLogs.durationMs} is not null
+  and ${requestLogs.durationMs} > ${MIN_TPS_DURATION_MS}
 `;
 
 /**
@@ -193,8 +193,6 @@ export async function getTimeseriesStats(
         ? {
             totalCompletionTokens: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.completionTokens} else 0 end)`,
             totalDurationMs: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.durationMs} else 0 end)`,
-            totalRoutingDurationMs: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.routingDurationMs} else 0 end)`,
-            totalTtftMs: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.ttftMs} else 0 end)`,
           }
         : {}),
     })
@@ -251,19 +249,12 @@ export async function getTimeseriesStats(
       ...(metric === "ttft" && "avgTtft" in row
         ? { avgTtftMs: row.avgTtft ? Math.round(Number(row.avgTtft) * 10) / 10 : 0 }
         : {}),
-      ...(metric === "tps" &&
-      "totalCompletionTokens" in row &&
-      "totalDurationMs" in row &&
-      "totalRoutingDurationMs" in row &&
-      "totalTtftMs" in row
+      ...(metric === "tps" && "totalCompletionTokens" in row && "totalDurationMs" in row
         ? (() => {
             const compTokens = row.totalCompletionTokens ? Number(row.totalCompletionTokens) : 0;
             const dur = row.totalDurationMs ? Number(row.totalDurationMs) : 0;
-            const routing = row.totalRoutingDurationMs ? Number(row.totalRoutingDurationMs) : 0;
-            const ttft = row.totalTtftMs ? Number(row.totalTtftMs) : 0;
-            const genTime = dur - routing - ttft;
             return {
-              avgTps: genTime > 0 ? Math.round((compTokens / genTime) * 1000 * 10) / 10 : 0,
+              avgTps: dur > 0 ? Math.round((compTokens / dur) * 1000 * 10) / 10 : 0,
             };
           })()
         : {}),
@@ -348,8 +339,6 @@ export async function getLeaderboardStats(
       avgTtft: avg(requestLogs.ttftMs),
       totalCompletionTokens: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.completionTokens} else 0 end)`,
       totalDurationMs: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.durationMs} else 0 end)`,
-      totalRoutingDurationMs: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.routingDurationMs} else 0 end)`,
-      totalTtftMs: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.ttftMs} else 0 end)`,
     })
     .from(requestLogs)
     .where(and(gte(requestLogs.createdAt, startTime), isNotNull(requestLogs.upstreamId)))
@@ -377,9 +366,6 @@ export async function getLeaderboardStats(
   const upstreamsLeaderboard: LeaderboardUpstreamItem[] = upstreamsResult.map((row) => {
     const compTokens = row.totalCompletionTokens ? Number(row.totalCompletionTokens) : 0;
     const dur = row.totalDurationMs ? Number(row.totalDurationMs) : 0;
-    const routing = row.totalRoutingDurationMs ? Number(row.totalRoutingDurationMs) : 0;
-    const ttft = row.totalTtftMs ? Number(row.totalTtftMs) : 0;
-    const genTime = dur - routing - ttft;
 
     return {
       id: row.upstreamId!,
@@ -388,7 +374,7 @@ export async function getLeaderboardStats(
       requestCount: row.requestCount,
       totalTokens: row.totalTokens ? Number(row.totalTokens) : 0,
       avgTtftMs: row.avgTtft ? Math.round(Number(row.avgTtft) * 10) / 10 : 0,
-      avgTps: genTime > 0 ? Math.round((compTokens / genTime) * 1000 * 10) / 10 : 0,
+      avgTps: dur > 0 ? Math.round((compTokens / dur) * 1000 * 10) / 10 : 0,
     };
   });
 

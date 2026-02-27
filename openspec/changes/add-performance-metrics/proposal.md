@@ -6,7 +6,7 @@ AutoRouter 作为 AI API 网关，当前仅记录请求总耗时（durationMs）
 
 - 新增 **TTFT（Time To First Token）** 指标：在代理层采集上游从接收请求到返回第一个有效 SSE chunk 的耗时，持久化到 request_logs 表
 - 新增 **is_stream** 标记：记录请求是否为流式响应，用于区分 TPS 计算的适用场景
-- 新增 **TPS（Tokens Per Second）** 指标：基于 completionTokens / (durationMs - routingDurationMs - ttftMs) 实时计算，不存储派生值
+- 新增 **TPS（Tokens Per Second）** 指标：基于 outputTokens（统一映射为 completionTokens）/ durationMs 实时计算，不存储派生值
 - 新增 **Cache 命中率** 指标：基于已有的 cacheReadTokens / promptTokens 进行聚合计算，不需要新增存储字段
 - Dashboard 概览卡片从 3 张扩展为 5 张，新增 Avg TTFT 和 Cache Hit Rate
 - Dashboard 时序图表新增 Tab 切换，支持查看 TTFT 趋势和 TPS 趋势

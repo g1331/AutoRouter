@@ -72,12 +72,11 @@ createSSETransformer(callbacks: {
 
 **公式**:
 ```
-generationMs = durationMs - routingDurationMs - ttftMs
-tps = completionTokens / (generationMs / 1000)
+tps = completionTokens / (durationMs / 1000)
 ```
 
 **保护条件**:
-- `generationMs < 100` 时不计算（避免除法异常和无意义的极大值）
+- `durationMs < 100` 时不计算（避免除法异常和无意义的极大值）
 - `isStream = false` 时不计算（非流式请求的 TPS 没有实际意义）
 - `completionTokens = 0` 时不计算
 

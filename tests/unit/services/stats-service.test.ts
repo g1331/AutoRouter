@@ -463,8 +463,6 @@ describe("stats-service", () => {
                   avgDuration: "1200",
                   totalCompletionTokens: "600",
                   totalDurationMs: "10000",
-                  totalRoutingDurationMs: "1000",
-                  totalTtftMs: "2000",
                 },
               ]),
             }),
@@ -479,7 +477,7 @@ describe("stats-service", () => {
       const result = await getTimeseriesStats("today", "tps");
 
       expect(result.series).toHaveLength(1);
-      expect(result.series[0].data[0].avgTps).toBe(85.7);
+      expect(result.series[0].data[0].avgTps).toBe(60);
     });
 
     it("should return avgTps as 0 when no eligible stream samples exist", async () => {
@@ -499,8 +497,6 @@ describe("stats-service", () => {
                   avgDuration: "1200",
                   totalCompletionTokens: "0",
                   totalDurationMs: "0",
-                  totalRoutingDurationMs: "0",
-                  totalTtftMs: "0",
                 },
               ]),
             }),
@@ -834,8 +830,6 @@ describe("stats-service", () => {
                       avgTtft: "1200",
                       totalCompletionTokens: "600",
                       totalDurationMs: "10000",
-                      totalRoutingDurationMs: "1000",
-                      totalTtftMs: "2000",
                     },
                   ]),
                 }),
@@ -868,7 +862,7 @@ describe("stats-service", () => {
 
       expect(result.upstreams).toHaveLength(1);
       expect(result.upstreams[0].avgTtftMs).toBe(1200);
-      expect(result.upstreams[0].avgTps).toBe(85.7);
+      expect(result.upstreams[0].avgTps).toBe(60);
     });
 
     it("should handle null model as Unknown", async () => {

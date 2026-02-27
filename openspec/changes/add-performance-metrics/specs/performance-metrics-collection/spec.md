@@ -38,18 +38,18 @@
 - **THEN** request_logs 表 SHALL 新增 ttft_ms (integer, nullable) 和 is_stream (integer mode boolean, default false) 字段
 
 ### Requirement: TPS 必须基于精确公式实时计算
-系统 MUST 使用 `completionTokens / ((durationMs - routingDurationMs - ttftMs) / 1000)` 公式计算 TPS，且仅对流式请求计算。
+系统 MUST 使用 `completionTokens / (durationMs / 1000)` 公式计算 TPS，且仅对流式请求计算。
 
 #### Scenario: 流式请求计算 TPS
-- **WHEN** 请求为流式（is_stream=true）且 completionTokens >= 10 且生成时间 > 100ms
+- **WHEN** 请求为流式（is_stream=true）且 completionTokens >= 10 且 durationMs > 100ms
 - **THEN** 系统 SHALL 按公式计算 TPS 并在展示层显示
 
 #### Scenario: 非流式请求不计算 TPS
 - **WHEN** 请求为非流式（is_stream=false）
 - **THEN** 系统 SHALL 不计算 TPS，展示为空或不显示
 
-#### Scenario: 生成时间过短时不计算 TPS
-- **WHEN** 生成时间（durationMs - routingDurationMs - ttftMs）小于 100ms
+#### Scenario: 总耗时过短时不计算 TPS
+- **WHEN** 总耗时（durationMs）小于等于 100ms
 - **THEN** 系统 SHALL 不计算 TPS，避免除法异常导致的无意义极大值
 
 ### Requirement: Cache 命中率必须使用统一公式跨 provider 计算

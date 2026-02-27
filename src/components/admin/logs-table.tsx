@@ -39,7 +39,7 @@ const HIGH_TTFT_THRESHOLD_MS = 5000;
 const LOW_TPS_THRESHOLD = 30;
 const SLOW_DURATION_THRESHOLD_MS = 20000;
 const MIN_TPS_COMPLETION_TOKENS = 10;
-const MIN_TPS_GENERATION_MS = 100;
+const MIN_TPS_DURATION_MS = 100;
 
 type LatencyBreakdownKey = "routing" | "ttft" | "generation" | "other";
 
@@ -171,15 +171,15 @@ function getGenerationMs(log: RequestLog): number | null {
 }
 
 function getRequestTps(log: RequestLog): number | null {
-  const generationMs = getGenerationMs(log);
   if (
-    generationMs == null ||
-    generationMs <= MIN_TPS_GENERATION_MS ||
+    !log.is_stream ||
+    log.duration_ms == null ||
+    log.duration_ms <= MIN_TPS_DURATION_MS ||
     log.completion_tokens < MIN_TPS_COMPLETION_TOKENS
   ) {
     return null;
   }
-  return Math.round((log.completion_tokens / generationMs) * 1000 * 10) / 10;
+  return Math.round((log.completion_tokens / log.duration_ms) * 1000 * 10) / 10;
 }
 
 function getPercentile(values: number[], percentile: number): number | null {

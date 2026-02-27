@@ -287,11 +287,11 @@ describe("LogsTable", () => {
       expect(screen.queryByText("perfTps")).not.toBeInTheDocument();
     });
 
-    it("does not show TPS when generation time is too short", () => {
+    it("does not show TPS when duration is too short", () => {
       const streamLog: RequestLog = {
         ...mockLog,
         is_stream: true,
-        duration_ms: 1500,
+        duration_ms: 100,
         routing_duration_ms: 1000,
         ttft_ms: 400,
         completion_tokens: 100,
