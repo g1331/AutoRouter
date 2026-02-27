@@ -12,14 +12,14 @@ AutoRouter 作为 AI API 网关，负责将客户端请求路由至多个上游 
 
 - 将从请求头或请求体中提取的 `session_id` 重新注入到发往上游的出站请求头中
 - 提供可配置的补偿规则系统，支持内置规则与自定义规则
-- 在请求日志中记录头部变更差异（仅记录头部名称，不记录值）
+- 在请求日志中记录头部变更差异（记录值，但对敏感值脱敏）
 - 在管理界面提供补偿规则管理页面与日志头部差异可视化
 - 修复 `cf-ew-via` 头部泄漏问题
 
 **Non-Goals:**
 
 - 不支持对响应头部进行补偿
-- 不记录头部的具体值（安全考量）
+- 不记录敏感头部的原始值（安全考量，必须脱敏）
 - 不支持跨请求的头部状态传递
 - 不修改现有的会话亲和性路由逻辑
 
@@ -62,9 +62,10 @@ AutoRouter 作为 AI API 网关，负责将客户端请求路由至多个上游 
 {
   inbound_count: number,
   outbound_count: number,
-  dropped: string[],          // 被过滤的头部名称列表
-  auth_replaced: string|null, // 被替换的认证头部名称
-  compensated: [{ header: string, source: string }]
+  dropped: [{ header: string, value: string }], // 被过滤的头部列表（敏感值脱敏）
+  auth_replaced: { header: string, inbound_value: string|null, outbound_value: string } | null, // 认证头部替换前后值（敏感值脱敏）
+  compensated: [{ header: string, source: string, value: string }], // 已补偿注入的头部（敏感值脱敏）
+  unchanged: [{ header: string, value: string }] // 未变化头部（敏感值脱敏）
 }
 ```
 
@@ -146,9 +147,9 @@ route.ts (入口)
 ├─────────────────────────────────────────────────────────┤
 │ 补偿规则列表                              [+ 新增规则]  │
 │ ┌─────────────────────────────────────────────────────┐ │
-│ │ [内置] Session ID Recovery          [启用 ●] [编辑] │ │
+│ │ [内置] Session ID Recovery                 [启用 ●] │ │
 │ │ 目标头部: session_id                                │ │
-│ │ 适用能力: codex_responses, openai_chat_compatible.. │ │
+│ │ 适用能力: codex_responses                           │ │
 │ │ 来源优先级: headers.session_id > body.previous_... │ │
 │ └─────────────────────────────────────────────────────┘ │
 │ ┌─────────────────────────────────────────────────────┐ │
@@ -160,8 +161,8 @@ route.ts (入口)
 │ │ 能力                 │ 规则数       │ 状态         │  │
 │ ├──────────────────────┼──────────────┼──────────────┤  │
 │ │ codex_responses      │ 1            │ 活跃         │  │
-│ │ openai_chat_compat.. │ 1            │ 活跃         │  │
-│ │ openai_extended      │ 1            │ 活跃         │  │
+│ │ openai_chat_compat.. │ 0            │ —            │  │
+│ │ openai_extended      │ 0            │ —            │  │
 │ └──────────────────────┴──────────────┴──────────────┘  │
 └─────────────────────────────────────────────────────────┘
 ```

@@ -147,11 +147,15 @@ export function RoutingDecisionTimeline({
           <Server className="w-3.5 h-3.5 text-muted-foreground" />
           <span className="font-mono text-xs">{finalUpstreamLabel}</span>
         </div>
-        <div className="flex items-center gap-1 flex-wrap">
+        <div className="flex min-w-0 items-center gap-1 flex-wrap">
           {routingTypeLabel && (
-            <Badge variant="success" className="text-[11px] px-1.5 py-0">
-              <Route className="w-3 h-3 mr-1" />
-              {routingTypeLabel}
+            <Badge
+              variant="success"
+              title={routingTypeLabel}
+              className="max-w-[7.25rem] min-w-0 text-[11px] px-1.5 py-0"
+            >
+              <Route className="w-3 h-3 mr-1 shrink-0" />
+              <span className="min-w-0 truncate">{routingTypeLabel}</span>
             </Badge>
           )}
           {groupName && (
@@ -162,7 +166,7 @@ export function RoutingDecisionTimeline({
               {routingDecision.final_candidate_count}/{routingDecision.candidate_count}
             </span>
           )}
-          <div className="flex items-center gap-0.5 ml-1">
+          <div className="flex shrink-0 items-center gap-0.5 ml-1">
             {indicators.redirect && (
               <span title={t("indicatorRedirect")}>
                 <RefreshCw className="w-3 h-3 text-status-info" />

@@ -71,7 +71,7 @@ async function main() {
       name: "Session ID Recovery",
       isBuiltin: true,
       enabled: true,
-      capabilities: ["codex_responses", "openai_chat_compatible", "openai_extended"],
+      capabilities: ["codex_responses"],
       targetHeader: "session_id",
       sources: [
         "headers.session_id",

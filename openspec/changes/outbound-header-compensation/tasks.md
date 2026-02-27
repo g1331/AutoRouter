@@ -76,3 +76,11 @@
 - [x] 12.2 完成任务 3-6 后提交：补偿引擎核心（proxy-client、compensation-service、route.ts、request-logger）
 - [x] 12.3 完成任务 7 后提交：补偿规则管理 API
 - [x] 12.4 完成任务 8-11 后提交：前端页面、组件与国际化
+
+## 13. 可靠性与系统内置分区（补偿规则）
+
+- [x] 13.1 在 `src/lib/services/compensation-service.ts` 增加内置默认规则兜底：加载规则前幂等确保 `Session ID Recovery` 存在（缺失则插入）；失败时记录错误但不抛出
+- [x] 13.2 在 `GET /api/admin/compensation-rules` 中调用兜底确保内置规则存在，避免迁移 seed 缺失导致列表缺少系统规则
+- [x] 13.3 收紧 `PUT /api/admin/compensation-rules/{id}`：内置规则仅允许更新 enabled，其它字段返回 403，并补充单元测试
+- [x] 13.4 前端 `Header Compensation` 页面把内置规则单独固定分区展示（只显示开关，不允许编辑/删除），自定义规则独立分区
+- [x] 13.5 为兜底插入逻辑编写单元测试（覆盖“缺失内置规则会插入”与“已存在时不重复插入”的场景）

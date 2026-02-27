@@ -1,13 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { buildCompensations, invalidateCache } from "@/lib/services/compensation-service";
 
-const { mockSelect } = vi.hoisted(() => ({ mockSelect: vi.fn() }));
+const { mockSelect, mockInsert, mockUpdate } = vi.hoisted(() => ({
+  mockSelect: vi.fn(),
+  mockInsert: vi.fn(),
+  mockUpdate: vi.fn(),
+}));
 
 vi.mock("@/lib/db", () => ({
   db: {
     select: mockSelect,
+    insert: mockInsert,
+    update: mockUpdate,
   },
-  compensationRules: { enabled: "enabled" },
+  compensationRules: { enabled: "enabled", id: "id", isBuiltin: "isBuiltin", name: "name" },
 }));
 
 vi.mock("@/lib/utils/logger", () => ({
@@ -38,6 +43,12 @@ function makeRule(overrides: {
 }
 
 function setupDbWithRules(rules: ReturnType<typeof makeRule>[]) {
+  mockSelect.mockReturnValueOnce({
+    from: vi.fn().mockReturnValue({
+      where: vi.fn().mockResolvedValue([]),
+    }),
+  });
+
   mockSelect.mockReturnValue({
     from: vi.fn().mockReturnValue({
       where: vi.fn().mockResolvedValue(rules),
@@ -46,9 +57,76 @@ function setupDbWithRules(rules: ReturnType<typeof makeRule>[]) {
 }
 
 describe("compensation-service", () => {
-  beforeEach(() => {
+  let buildCompensations: typeof import("@/lib/services/compensation-service").buildCompensations;
+  let invalidateCache: typeof import("@/lib/services/compensation-service").invalidateCache;
+  let ensureBuiltinCompensationRulesExist: typeof import("@/lib/services/compensation-service").ensureBuiltinCompensationRulesExist;
+
+  const setupInsertNoop = () => {
+    const insertChain = {
+      values: vi.fn().mockReturnThis(),
+      onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+    };
+    mockInsert.mockReturnValue(insertChain);
+    return insertChain;
+  };
+
+  beforeEach(async () => {
+    mockSelect.mockReset();
+    mockInsert.mockReset();
+    mockUpdate.mockReset();
+    vi.resetModules();
+    ({ buildCompensations, invalidateCache, ensureBuiltinCompensationRulesExist } =
+      await import("@/lib/services/compensation-service"));
     invalidateCache();
-    vi.clearAllMocks();
+    setupInsertNoop();
+  });
+
+  describe("ensureBuiltinCompensationRulesExist", () => {
+    it("should insert builtin rule and only run once", async () => {
+      const insertChain = setupInsertNoop();
+
+      mockSelect.mockReturnValueOnce({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([]),
+        }),
+      });
+
+      await ensureBuiltinCompensationRulesExist();
+      await ensureBuiltinCompensationRulesExist();
+
+      expect(mockSelect).toHaveBeenCalledTimes(1);
+      expect(mockInsert).toHaveBeenCalledTimes(1);
+      expect(insertChain.values).toHaveBeenCalledWith(
+        expect.objectContaining({ name: "Session ID Recovery", isBuiltin: true })
+      );
+      expect(insertChain.onConflictDoNothing).toHaveBeenCalledTimes(1);
+    });
+
+    it("should update builtin rule config without changing enabled", async () => {
+      mockSelect.mockReturnValueOnce({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([{ id: "rule-builtin", isBuiltin: true }]),
+        }),
+      });
+
+      const updateChain = {
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue(undefined),
+      };
+      mockUpdate.mockReturnValue(updateChain);
+
+      await ensureBuiltinCompensationRulesExist();
+
+      expect(mockUpdate).toHaveBeenCalledTimes(1);
+      expect(updateChain.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          capabilities: ["codex_responses"],
+          mode: "missing_only",
+          targetHeader: "session_id",
+        })
+      );
+      expect(updateChain.set.mock.calls[0]?.[0]).not.toHaveProperty("enabled");
+    });
   });
 
   describe("buildCompensations", () => {
@@ -222,7 +300,8 @@ describe("compensation-service", () => {
       await buildCompensations("codex_responses", { session_id: "s2" }, null);
 
       // DB should only be queried once (the second call uses cache)
-      expect(mockSelect).toHaveBeenCalledTimes(1);
+      // One select for builtin ensure + one select for initial rule load
+      expect(mockSelect).toHaveBeenCalledTimes(2);
     });
 
     it("should reload rules after cache is invalidated", async () => {
@@ -232,7 +311,8 @@ describe("compensation-service", () => {
       invalidateCache();
       await buildCompensations("codex_responses", { session_id: "s2" }, null);
 
-      expect(mockSelect).toHaveBeenCalledTimes(2);
+      // Two selects for the first call (ensure + load) and one select for reload after invalidation
+      expect(mockSelect).toHaveBeenCalledTimes(3);
     });
 
     it("should ignore body source when body is null", async () => {

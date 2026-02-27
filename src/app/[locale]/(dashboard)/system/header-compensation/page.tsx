@@ -389,15 +389,17 @@ function RuleCard({ rule, onEdit, onDelete }: RuleCardProps) {
           {rule.enabled ? t("enable") : t("disable")}
         </span>
         <div className="ml-auto flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 text-muted-foreground hover:text-foreground"
-            onClick={() => onEdit(rule)}
-            title="Edit"
-          >
-            <Pencil className="h-3 w-3" />
-          </Button>
+          {!rule.is_builtin && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-muted-foreground hover:text-foreground"
+              onClick={() => onEdit(rule)}
+              title="Edit"
+            >
+              <Pencil className="h-3 w-3" />
+            </Button>
+          )}
           {!rule.is_builtin && (
             <Button
               variant="ghost"
@@ -485,6 +487,7 @@ function CapabilityMatrix({ rules }: { rules: CompensationRule[] }) {
 
 export default function HeaderCompensationPage() {
   const t = useTranslations("compensation");
+  const tCommon = useTranslations("common");
   const { data, isLoading } = useCompensationRules();
   const deleteMutation = useDeleteCompensationRule();
 
@@ -493,6 +496,8 @@ export default function HeaderCompensationPage() {
   const [deleteTarget, setDeleteTarget] = useState<CompensationRule | undefined>();
 
   const rules = data ?? [];
+  const builtinRules = rules.filter((rule) => rule.is_builtin);
+  const customRules = rules.filter((rule) => !rule.is_builtin);
 
   const openCreate = () => {
     setEditTarget(undefined);
@@ -544,17 +549,69 @@ export default function HeaderCompensationPage() {
             <p className="mt-1 text-xs text-muted-foreground/60">{t("noRulesDesc")}</p>
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {rules.map((rule: CompensationRule) => (
-              <RuleCard key={rule.id} rule={rule} onEdit={openEdit} onDelete={setDeleteTarget} />
-            ))}
+          <div className="space-y-5">
+            <section className="space-y-2">
+              <div className="flex items-baseline justify-between">
+                <div>
+                  <h3 className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                    {t("builtinRulesTitle")}
+                  </h3>
+                  <p className="mt-0.5 text-xs text-muted-foreground/70">{t("builtinRulesDesc")}</p>
+                </div>
+              </div>
+              {builtinRules.length === 0 ? (
+                <div className="rounded-cf-sm border border-dashed border-divider bg-surface-300/30 px-4 py-6 text-center text-xs text-muted-foreground">
+                  {t("builtinRulesMissing")}
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {builtinRules.map((rule) => (
+                    <RuleCard
+                      key={rule.id}
+                      rule={rule}
+                      onEdit={openEdit}
+                      onDelete={setDeleteTarget}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="space-y-2">
+              <div className="flex items-baseline justify-between">
+                <div>
+                  <h3 className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                    {t("customRulesTitle")}
+                  </h3>
+                  <p className="mt-0.5 text-xs text-muted-foreground/70">{t("customRulesDesc")}</p>
+                </div>
+              </div>
+              {customRules.length === 0 ? (
+                <div className="rounded-cf-sm border border-dashed border-divider bg-surface-300/30 px-4 py-6 text-center text-xs text-muted-foreground">
+                  {t("customRulesEmpty")}
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {customRules.map((rule) => (
+                    <RuleCard
+                      key={rule.id}
+                      rule={rule}
+                      onEdit={openEdit}
+                      onDelete={setDeleteTarget}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
           </div>
         )}
 
         {rules.length > 0 && <CapabilityMatrix rules={rules} />}
       </main>
 
-      <RuleFormDialog open={formOpen} onClose={() => setFormOpen(false)} initial={editTarget} />
+      {formOpen && (
+        <RuleFormDialog open={formOpen} onClose={() => setFormOpen(false)} initial={editTarget} />
+      )}
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(undefined)}>
         <AlertDialogContent>
@@ -563,7 +620,7 @@ export default function HeaderCompensationPage() {
             <AlertDialogDescription>{t("deleteRuleDesc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t("disabled")}</AlertDialogCancel>
+            <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => void confirmDelete()}
               className="bg-status-error text-white hover:bg-status-error/90"

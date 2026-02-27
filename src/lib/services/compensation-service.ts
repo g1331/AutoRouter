@@ -8,6 +8,25 @@ const log = createLogger("compensation-service");
 
 const CACHE_TTL_MS = 60_000;
 
+const BUILTIN_RULES = [
+  {
+    name: "Session ID Recovery",
+    isBuiltin: true,
+    enabled: true,
+    capabilities: ["codex_responses"],
+    targetHeader: "session_id",
+    sources: [
+      "headers.session_id",
+      "headers.session-id",
+      "headers.x-session-id",
+      "body.prompt_cache_key",
+      "body.metadata.session_id",
+      "body.previous_response_id",
+    ],
+    mode: "missing_only",
+  },
+] as const;
+
 interface CachedRules {
   rules: CompensationRule[];
   loadedAt: number;
@@ -25,12 +44,67 @@ export interface CompensationRule {
 }
 
 let cache: CachedRules | null = null;
+let builtinRulesEnsured = false;
+
+export async function ensureBuiltinCompensationRulesExist(): Promise<void> {
+  if (builtinRulesEnsured) return;
+  try {
+    for (const rule of BUILTIN_RULES) {
+      const existing = await db
+        .select({
+          id: compensationRules.id,
+          isBuiltin: compensationRules.isBuiltin,
+        })
+        .from(compensationRules)
+        .where(eq(compensationRules.name, rule.name));
+
+      if (existing.length === 0) {
+        await db
+          .insert(compensationRules)
+          .values({
+            name: rule.name,
+            isBuiltin: rule.isBuiltin,
+            enabled: rule.enabled,
+            capabilities: [...rule.capabilities],
+            targetHeader: rule.targetHeader,
+            sources: [...rule.sources],
+            mode: rule.mode,
+          })
+          .onConflictDoNothing();
+        continue;
+      }
+
+      if (!existing[0].isBuiltin) {
+        log.error(
+          { name: rule.name },
+          "compensation-service: builtin rule name is used by a non-builtin rule, skipping ensure"
+        );
+        continue;
+      }
+
+      await db
+        .update(compensationRules)
+        .set({
+          capabilities: [...rule.capabilities],
+          targetHeader: rule.targetHeader,
+          sources: [...rule.sources],
+          mode: rule.mode,
+        })
+        .where(eq(compensationRules.id, existing[0].id));
+    }
+    builtinRulesEnsured = true;
+  } catch (err) {
+    log.error({ err }, "compensation-service: failed to ensure builtin rules exist");
+  }
+}
 
 async function loadRules(): Promise<CompensationRule[]> {
   const now = Date.now();
   if (cache && now - cache.loadedAt < CACHE_TTL_MS) {
     return cache.rules;
   }
+
+  await ensureBuiltinCompensationRulesExist();
 
   const rows = await db.select().from(compensationRules).where(eq(compensationRules.enabled, true));
   const rules: CompensationRule[] = rows.map((r) => ({

@@ -30,7 +30,11 @@
 
 #### Scenario: 内置规则 seed
 - **WHEN** 数据库中不存在 `name="Session ID Recovery"` 的内置规则
-- **THEN** 系统在迁移时自动插入该内置规则，`is_builtin=true`，`enabled=true`，`target_header="session_id"`，`mode="missing_only"`，`capabilities` 包含 `codex_responses`、`openai_chat_compatible`、`openai_extended`，`sources` 按优先级为 `["headers.session_id", "headers.session-id", "headers.x-session-id", "body.prompt_cache_key", "body.metadata.session_id", "body.previous_response_id"]`
+- **THEN** 系统在迁移时自动插入该内置规则，`is_builtin=true`，`enabled=true`，`target_header="session_id"`，`mode="missing_only"`，`capabilities` 包含 `codex_responses`，`sources` 按优先级为 `["headers.session_id", "headers.session-id", "headers.x-session-id", "body.prompt_cache_key", "body.metadata.session_id", "body.previous_response_id"]`
+
+#### Scenario: 内置规则运行时兜底
+- **WHEN** 服务在加载补偿规则前发现缺失 `name="Session ID Recovery"` 的内置规则
+- **THEN** 系统 SHALL 幂等插入该内置规则；若插入失败，系统记录错误日志但不抛出异常（补偿视为跳过）
 
 ---
 

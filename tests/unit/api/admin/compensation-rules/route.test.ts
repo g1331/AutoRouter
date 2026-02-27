@@ -10,6 +10,7 @@ vi.mock("drizzle-orm", () => ({
 }));
 
 vi.mock("@/lib/services/compensation-service", () => ({
+  ensureBuiltinCompensationRulesExist: vi.fn(async () => undefined),
   invalidateCache: vi.fn(),
 }));
 
@@ -275,6 +276,61 @@ describe("DELETE /api/admin/compensation-rules/[id]", () => {
     });
     const res = await DELETE(req, { params: Promise.resolve({ id: "rule-1" }) });
     expect(res.status).toBe(401);
+  });
+});
+
+describe("PUT /api/admin/compensation-rules/[id]", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should allow toggling enabled for a built-in rule", async () => {
+    const { PUT } = await import("@/app/api/admin/compensation-rules/[id]/route");
+
+    const selectChain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockResolvedValue([BUILTIN_RULE]),
+    };
+    mockSelect.mockReturnValue(selectChain);
+
+    const updatedRule = { ...BUILTIN_RULE, enabled: false, updatedAt: new Date("2024-01-03") };
+    const updateChain = {
+      set: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      returning: vi.fn().mockResolvedValue([updatedRule]),
+    };
+    mockUpdate.mockReturnValue(updateChain);
+
+    const req = new NextRequest("http://localhost/api/admin/compensation-rules/rule-builtin", {
+      method: "PUT",
+      headers: { authorization: AUTH_HEADER, "content-type": "application/json" },
+      body: JSON.stringify({ enabled: false }),
+    });
+
+    const res = await PUT(req, { params: Promise.resolve({ id: "rule-builtin" }) });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { enabled: boolean; is_builtin: boolean } };
+    expect(body.data.is_builtin).toBe(true);
+    expect(body.data.enabled).toBe(false);
+  });
+
+  it("should return 403 when trying to modify fields other than enabled for a built-in rule", async () => {
+    const { PUT } = await import("@/app/api/admin/compensation-rules/[id]/route");
+
+    const selectChain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockResolvedValue([BUILTIN_RULE]),
+    };
+    mockSelect.mockReturnValue(selectChain);
+
+    const req = new NextRequest("http://localhost/api/admin/compensation-rules/rule-builtin", {
+      method: "PUT",
+      headers: { authorization: AUTH_HEADER, "content-type": "application/json" },
+      body: JSON.stringify({ capabilities: ["openai_chat_compatible"] }),
+    });
+
+    const res = await PUT(req, { params: Promise.resolve({ id: "rule-builtin" }) });
+    expect(res.status).toBe(403);
   });
 });
 

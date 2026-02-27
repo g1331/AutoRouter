@@ -22,7 +22,7 @@ VALUES (
   'Session ID Recovery',
   true,
   true,
-  '["codex_responses","openai_chat_compatible","openai_extended"]',
+  '["codex_responses"]',
   'session_id',
   '["headers.session_id","headers.session-id","headers.x-session-id","body.prompt_cache_key","body.metadata.session_id","body.previous_response_id"]',
   'missing_only',

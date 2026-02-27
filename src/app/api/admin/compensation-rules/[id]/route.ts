@@ -49,6 +49,17 @@ export async function PUT(request: NextRequest, context: RouteContext): Promise<
 
     const rule = existing[0];
 
+    if (
+      rule.isBuiltin &&
+      (body.name !== undefined ||
+        body.capabilities !== undefined ||
+        body.target_header !== undefined ||
+        body.sources !== undefined ||
+        body.mode !== undefined)
+    ) {
+      return errorResponse("Built-in rules can only be enabled or disabled", 403);
+    }
+
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
 
     if (body.name !== undefined) {
@@ -60,7 +71,12 @@ export async function PUT(request: NextRequest, context: RouteContext): Promise<
       }
       updateData.name = body.name.trim();
     }
-    if (body.enabled !== undefined) updateData.enabled = body.enabled;
+    if (body.enabled !== undefined) {
+      if (typeof body.enabled !== "boolean") {
+        return errorResponse("enabled must be a boolean", 400);
+      }
+      updateData.enabled = body.enabled;
+    }
     if (body.capabilities !== undefined) {
       if (!Array.isArray(body.capabilities) || body.capabilities.length === 0) {
         return errorResponse("capabilities must be a non-empty array", 400);

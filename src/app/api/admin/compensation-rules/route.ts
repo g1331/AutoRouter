@@ -3,7 +3,10 @@ import { eq } from "drizzle-orm";
 import { validateAdminAuth } from "@/lib/utils/auth";
 import { errorResponse } from "@/lib/utils/api-auth";
 import { db, compensationRules } from "@/lib/db";
-import { invalidateCache } from "@/lib/services/compensation-service";
+import {
+  ensureBuiltinCompensationRulesExist,
+  invalidateCache,
+} from "@/lib/services/compensation-service";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("admin-compensation-rules");
@@ -57,6 +60,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
 
   try {
+    await ensureBuiltinCompensationRulesExist();
     const rules = await db.select().from(compensationRules);
     return NextResponse.json({ data: rules.map(toResponse) });
   } catch (err) {
