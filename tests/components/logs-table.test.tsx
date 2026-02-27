@@ -121,41 +121,47 @@ describe("LogsTable", () => {
   });
 
   describe("Status Indicators", () => {
-    it("renders healthy status chip for 2xx status", () => {
+    it("renders success status badge for 2xx status", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 200 }]} />);
 
-      expect(screen.getAllByText("OK").length).toBeGreaterThan(0);
-      expect(screen.getByText("200")).toBeInTheDocument();
+      const badge = screen.getByText("200");
+      expect(badge).toBeInTheDocument();
+      expect(badge.className).toContain("bg-status-success-muted");
     });
 
-    it("renders degraded status chip for 4xx status", () => {
+    it("renders warning status badge for 4xx status", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 400 }]} />);
 
-      expect(screen.getAllByText("WARN").length).toBeGreaterThan(0);
-      expect(screen.getByText("400")).toBeInTheDocument();
+      const badge = screen.getByText("400");
+      expect(badge).toBeInTheDocument();
+      expect(badge.className).toContain("bg-status-warning-muted");
     });
 
-    it("renders offline status chip for 5xx status", () => {
+    it("renders error status badge for 5xx status", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 500 }]} />);
 
-      expect(screen.getAllByText("DOWN").length).toBeGreaterThan(0);
-      expect(screen.getByText("500")).toBeInTheDocument();
+      const badge = screen.getByText("500");
+      expect(badge).toBeInTheDocument();
+      expect(badge.className).toContain("bg-status-error-muted");
     });
 
     it("renders dash for null status code", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: null }]} />);
 
-      // Find the dash in status column
-      const dashes = screen.getAllByText("-");
-      expect(dashes.length).toBeGreaterThan(0);
+      const dashBadges = screen
+        .getAllByText("-")
+        .filter(
+          (el) => el.className.includes("bg-surface-200") && el.className.includes("font-mono")
+        );
+      expect(dashBadges.length).toBeGreaterThan(0);
     });
 
-    it("keeps status chip width fixed to align status code column", () => {
+    it("renders status badge with monospace alignment classes", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 500 }]} />);
 
-      const statusLed = screen.getByRole("status");
-      expect(statusLed.className).toContain("w-14");
-      expect(statusLed.className).toContain("justify-center");
+      const badge = screen.getByText("500");
+      expect(badge.className).toContain("font-mono");
+      expect(badge.className).toContain("tabular-nums");
     });
   });
 

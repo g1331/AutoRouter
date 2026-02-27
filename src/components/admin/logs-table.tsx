@@ -24,10 +24,10 @@ import {
 import { TimeRangeSelector } from "@/components/dashboard/time-range-selector";
 import { getDateLocale } from "@/lib/date-locale";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 import { TokenDisplay, TokenDetailContent } from "@/components/admin/token-display";
 import { RoutingDecisionTimeline } from "@/components/admin/routing-decision-timeline";
 import { HeaderDiffPanel } from "@/components/logs/header-diff-panel";
-import { StatusLed, type LedStatus } from "@/components/ui/terminal";
 
 interface LogsTableProps {
   logs: RequestLog[];
@@ -360,11 +360,12 @@ export function LogsTable({ logs }: LogsTableProps) {
     };
   }, [filteredLogs]);
 
-  const getStatusLedStatus = (statusCode: number | null): LedStatus => {
-    if (statusCode === null) return "degraded";
-    if (statusCode >= 200 && statusCode < 300) return "healthy";
-    if (statusCode >= 400 && statusCode < 500) return "degraded";
-    return "offline"; // 5xx
+  const getStatusBadgeVariant = (statusCode: number | null) => {
+    if (statusCode === null) return "neutral";
+    if (statusCode >= 200 && statusCode < 300) return "success";
+    if (statusCode >= 400 && statusCode < 500) return "warning";
+    if (statusCode >= 500) return "error";
+    return "neutral";
   };
 
   const formatDuration = (durationMs: number | null) => {
@@ -662,30 +663,15 @@ export function LogsTable({ logs }: LogsTableProps) {
                           />
                         </TableCell>
                         <TableCell>
-                          {/* LED Status Indicator */}
-                          <span className="inline-flex items-center gap-1.5 font-mono">
-                            <StatusLed
-                              status={getStatusLedStatus(log.status_code)}
-                              className="w-14 shrink-0 justify-center"
-                            />
-                            <span
-                              className={cn(
-                                "text-xs tabular-nums",
-                                log.status_code === null && "text-muted-foreground",
-                                log.status_code &&
-                                  log.status_code >= 200 &&
-                                  log.status_code < 300 &&
-                                  "text-status-success",
-                                log.status_code &&
-                                  log.status_code >= 400 &&
-                                  log.status_code < 500 &&
-                                  "text-status-warning",
-                                log.status_code && log.status_code >= 500 && "text-status-error"
-                              )}
-                            >
-                              {log.status_code ?? "-"}
-                            </span>
-                          </span>
+                          <Badge
+                            variant={getStatusBadgeVariant(log.status_code)}
+                            className={cn(
+                              "px-2 py-0.5 text-[11px] leading-none font-mono tabular-nums",
+                              log.status_code === null && "text-muted-foreground"
+                            )}
+                          >
+                            {log.status_code ?? "-"}
+                          </Badge>
                         </TableCell>
                         <TableCell className="font-mono text-xs leading-tight">
                           <div className="flex flex-col gap-0.5">

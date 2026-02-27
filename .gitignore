@@ -74,3 +74,6 @@ logs/security/
 # Playwright artifacts
 playwright-report/
 test-results/
+
+# Golutra
+.golutra/
