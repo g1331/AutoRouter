@@ -37,7 +37,6 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -117,18 +116,24 @@ function LanguageItem({ collapsed }: { collapsed: boolean }) {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-36">
-        {locales.map((nextLocale) => (
-          <DropdownMenuItem
-            key={nextLocale}
-            onClick={() => handleLocaleChange(nextLocale)}
-            className={cn(
-              "cursor-pointer",
-              nextLocale === locale && "bg-surface-300 text-foreground border border-amber-500/35"
-            )}
-          >
-            {localeNames[nextLocale]}
-          </DropdownMenuItem>
-        ))}
+        <DropdownMenuRadioGroup
+          value={locale}
+          onValueChange={(value) => handleLocaleChange(value as Locale)}
+        >
+          {locales.map((nextLocale) => (
+            <DropdownMenuRadioItem
+              key={nextLocale}
+              value={nextLocale}
+              className={cn(
+                "cursor-pointer justify-between border border-transparent",
+                "data-[state=checked]:border-amber-500/35 data-[state=checked]:bg-surface-300"
+              )}
+            >
+              <span>{localeNames[nextLocale]}</span>
+              {nextLocale === locale && <Check className="h-4 w-4 text-amber-500" aria-hidden />}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

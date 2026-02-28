@@ -4,11 +4,12 @@ import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { useSearchParams } from "next/navigation";
 import { locales, localeNames, type Locale } from "@/i18n/config";
-import { Globe } from "lucide-react";
+import { Check, Globe } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
@@ -51,19 +52,25 @@ export function LanguageSwitcher({ compact = false }: LanguageSwitcherProps = {}
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-36">
-        {locales.map((item) => (
-          <DropdownMenuItem
-            key={item}
-            onClick={() => handleLocaleChange(item)}
-            className={cn(
-              "gap-2 cursor-pointer font-mono text-xs",
-              item === locale && "bg-amber-500/10 text-amber-500"
-            )}
-          >
-            {localeNames[item]}
-          </DropdownMenuItem>
-        ))}
+      <DropdownMenuContent align="end" className="w-40">
+        <DropdownMenuRadioGroup
+          value={locale}
+          onValueChange={(value) => handleLocaleChange(value as Locale)}
+        >
+          {locales.map((item) => (
+            <DropdownMenuRadioItem
+              key={item}
+              value={item}
+              className={cn(
+                "cursor-pointer justify-between border border-transparent",
+                "data-[state=checked]:border-amber-500/35 data-[state=checked]:bg-surface-300"
+              )}
+            >
+              <span className="font-mono text-xs">{localeNames[item]}</span>
+              {item === locale && <Check className="h-4 w-4 text-amber-500" aria-hidden />}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

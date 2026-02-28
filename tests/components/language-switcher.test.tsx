@@ -32,6 +32,7 @@ vi.mock("@/i18n/config", () => ({
 
 // Mock lucide-react
 vi.mock("lucide-react", () => ({
+  Check: () => <svg data-testid="check-icon" />,
   Globe: () => <svg data-testid="globe-icon" />,
 }));
 
