@@ -31,6 +31,7 @@ function asUsdAmount(input: unknown): number {
 
 /**
  * Get current-period spending for a single upstream.
+ * Only counts snapshots with billing_status='billed' to exclude unbilled/failed records.
  */
 export async function getUpstreamSpending(
   upstreamId: string
