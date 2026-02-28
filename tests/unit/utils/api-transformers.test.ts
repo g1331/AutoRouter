@@ -414,6 +414,67 @@ describe("api-transformers", () => {
       });
     });
 
+    it("should include billing breakdown fields when provided", () => {
+      const log = {
+        id: "log-billing-1",
+        apiKeyId: "key-1",
+        upstreamId: "upstream-1",
+        upstreamName: "openai-primary",
+        method: "POST",
+        path: "/v1/chat/completions",
+        model: "gpt-4",
+        promptTokens: 100,
+        completionTokens: 50,
+        totalTokens: 150,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 10,
+        cacheReadTokens: 20,
+        statusCode: 200,
+        durationMs: 1000,
+        errorMessage: null,
+        routingType: null,
+        groupName: null,
+        lbStrategy: null,
+        failoverAttempts: 0,
+        failoverHistory: null,
+        billingStatus: "billed" as const,
+        unbillableReason: null,
+        priceSource: "litellm",
+        baseInputPricePerMillion: 3,
+        baseOutputPricePerMillion: 15,
+        baseCacheReadInputPricePerMillion: 0.3,
+        baseCacheWriteInputPricePerMillion: 3,
+        inputMultiplier: 1.2,
+        outputMultiplier: 1.1,
+        billedInputTokens: 100,
+        cacheReadCost: 0.0000072,
+        cacheWriteCost: 0.000036,
+        finalCost: 0.0012282,
+        currency: "USD",
+        billedAt: new Date("2024-01-15T10:29:59.000Z"),
+        createdAt: new Date("2024-01-15T10:30:00.000Z"),
+      };
+
+      const result = transformRequestLogToApi(log as never);
+
+      expect(result).toMatchObject({
+        billing_status: "billed",
+        price_source: "litellm",
+        base_input_price_per_million: 3,
+        base_output_price_per_million: 15,
+        base_cache_read_input_price_per_million: 0.3,
+        base_cache_write_input_price_per_million: 3,
+        input_multiplier: 1.2,
+        output_multiplier: 1.1,
+        billed_input_tokens: 100,
+        cache_read_cost: 0.0000072,
+        cache_write_cost: 0.000036,
+        final_cost: 0.0012282,
+        currency: "USD",
+      });
+    });
+
     it("should handle null values in request log", () => {
       const log = {
         id: "log-456",

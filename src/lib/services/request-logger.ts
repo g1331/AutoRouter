@@ -159,8 +159,13 @@ export interface RequestLogResponse {
   priceSource?: string | null;
   baseInputPricePerMillion?: number | null;
   baseOutputPricePerMillion?: number | null;
+  baseCacheReadInputPricePerMillion?: number | null;
+  baseCacheWriteInputPricePerMillion?: number | null;
   inputMultiplier?: number | null;
   outputMultiplier?: number | null;
+  billedInputTokens?: number | null;
+  cacheReadCost?: number | null;
+  cacheWriteCost?: number | null;
   finalCost?: number | null;
   currency?: string | null;
   billedAt?: Date | null;
@@ -617,8 +622,14 @@ export async function listRequestLogs(
           priceSource: normalizeBillingPriceSource(log.billingSnapshot.priceSource),
           baseInputPricePerMillion: log.billingSnapshot.baseInputPricePerMillion,
           baseOutputPricePerMillion: log.billingSnapshot.baseOutputPricePerMillion,
+          baseCacheReadInputPricePerMillion: log.billingSnapshot.baseCacheReadInputPricePerMillion,
+          baseCacheWriteInputPricePerMillion:
+            log.billingSnapshot.baseCacheWriteInputPricePerMillion,
           inputMultiplier: log.billingSnapshot.inputMultiplier,
           outputMultiplier: log.billingSnapshot.outputMultiplier,
+          billedInputTokens: log.billingSnapshot.promptTokens,
+          cacheReadCost: log.billingSnapshot.cacheReadCost,
+          cacheWriteCost: log.billingSnapshot.cacheWriteCost,
           finalCost: log.billingSnapshot.finalCost,
           currency: log.billingSnapshot.currency,
           billedAt: log.billingSnapshot.billedAt,

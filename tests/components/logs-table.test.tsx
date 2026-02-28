@@ -951,6 +951,41 @@ describe("LogsTable", () => {
       expect(screen.getByText("tokenTotal")).toBeInTheDocument();
     });
 
+    it("shows billing breakdown formula under token details when billed", () => {
+      const billedLog: RequestLog = {
+        ...logWithFailoverBase,
+        billing_status: "billed",
+        currency: "USD",
+        final_cost: 0.0012282,
+        billed_input_tokens: 100,
+        base_input_price_per_million: 3,
+        base_output_price_per_million: 15,
+        base_cache_read_input_price_per_million: 0.3,
+        base_cache_write_input_price_per_million: 3,
+        input_multiplier: 1.2,
+        output_multiplier: 1.1,
+        cache_read_tokens: 20,
+        cache_creation_tokens: 10,
+        cache_read_cost: 0.0000072,
+        cache_write_cost: 0.000036,
+        completion_tokens: 50,
+      };
+
+      render(<LogsTable logs={[billedLog]} />);
+
+      const expandButton = screen.getByRole("button", { name: "expandDetails" });
+      fireEvent.click(expandButton);
+
+      expect(screen.getByText("tokenDetails")).toBeInTheDocument();
+      expect(screen.getByText("billingDetails")).toBeInTheDocument();
+
+      expect(screen.getByText(/billingTotal/)).toBeInTheDocument();
+      expect(screen.getByText(/100 \* \$3\.00 \/ 1M \* 1\.2 =/)).toBeInTheDocument();
+      expect(screen.getByText(/50 \* \$15\.00 \/ 1M \* 1\.1 =/)).toBeInTheDocument();
+      expect(screen.getByText(/20 \* \$0\.30 \/ 1M \* 1\.2 =/)).toBeInTheDocument();
+      expect(screen.getByText(/10 \* \$3\.00 \/ 1M \* 1\.2 =/)).toBeInTheDocument();
+    });
+
     it("shows routing decision timeline in expanded view when available", () => {
       const logWithRouting: RequestLog = {
         ...logWithFailoverBase,

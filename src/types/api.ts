@@ -370,8 +370,13 @@ export interface RequestLogResponse {
   price_source?: "manual" | "openrouter" | "litellm" | null;
   base_input_price_per_million?: number | null;
   base_output_price_per_million?: number | null;
+  base_cache_read_input_price_per_million?: number | null;
+  base_cache_write_input_price_per_million?: number | null;
   input_multiplier?: number | null;
   output_multiplier?: number | null;
+  billed_input_tokens?: number | null;
+  cache_read_cost?: number | null;
+  cache_write_cost?: number | null;
   final_cost?: number | null;
   currency?: string | null;
   billed_at?: string | null;

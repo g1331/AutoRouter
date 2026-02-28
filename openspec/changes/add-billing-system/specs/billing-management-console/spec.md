@@ -64,3 +64,10 @@
 - **WHEN** 管理员查看 `/logs` 请求日志表格
 - **THEN** 表格 SHALL 展示每条请求的计费状态与最终成本
 - **AND** 未计费请求 SHALL 同时展示未计费原因
+
+#### Scenario: Show billing formula in expanded log details
+
+- **WHEN** 管理员在 `/logs` 展开某条请求日志的详情
+- **THEN** 展开详情 SHALL 在 token 明细下方展示计费明细
+- **AND** 计费明细 SHALL 展示总费用
+- **AND** 计费明细 SHALL 以可读的算术公式展示输入、输出与缓存读写的计费构成（包含单价与倍率）

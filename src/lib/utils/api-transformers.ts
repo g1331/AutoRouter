@@ -318,8 +318,13 @@ export interface RequestLogApiResponse {
   price_source?: string | null;
   base_input_price_per_million?: number | null;
   base_output_price_per_million?: number | null;
+  base_cache_read_input_price_per_million?: number | null;
+  base_cache_write_input_price_per_million?: number | null;
   input_multiplier?: number | null;
   output_multiplier?: number | null;
+  billed_input_tokens?: number | null;
+  cache_read_cost?: number | null;
+  cache_write_cost?: number | null;
   final_cost?: number | null;
   currency?: string | null;
   billed_at?: string | null;
@@ -476,8 +481,13 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
     log.priceSource !== undefined ||
     log.baseInputPricePerMillion !== undefined ||
     log.baseOutputPricePerMillion !== undefined ||
+    log.baseCacheReadInputPricePerMillion !== undefined ||
+    log.baseCacheWriteInputPricePerMillion !== undefined ||
     log.inputMultiplier !== undefined ||
     log.outputMultiplier !== undefined ||
+    log.billedInputTokens !== undefined ||
+    log.cacheReadCost !== undefined ||
+    log.cacheWriteCost !== undefined ||
     log.finalCost !== undefined ||
     log.currency !== undefined ||
     log.billedAt !== undefined;
@@ -523,8 +533,13 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
           price_source: log.priceSource,
           base_input_price_per_million: log.baseInputPricePerMillion,
           base_output_price_per_million: log.baseOutputPricePerMillion,
+          base_cache_read_input_price_per_million: log.baseCacheReadInputPricePerMillion,
+          base_cache_write_input_price_per_million: log.baseCacheWriteInputPricePerMillion,
           input_multiplier: log.inputMultiplier,
           output_multiplier: log.outputMultiplier,
+          billed_input_tokens: log.billedInputTokens,
+          cache_read_cost: log.cacheReadCost,
+          cache_write_cost: log.cacheWriteCost,
           final_cost: log.finalCost,
           currency: log.currency,
           billed_at: toISOStringOrNull(log.billedAt),

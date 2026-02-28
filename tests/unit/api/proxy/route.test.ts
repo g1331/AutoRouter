@@ -2954,6 +2954,8 @@ describe("proxy route upstream selection", () => {
             promptTokens: 120,
             completionTokens: 30,
             totalTokens: 150,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
           },
         })
       );
@@ -3043,6 +3045,8 @@ describe("proxy route upstream selection", () => {
             promptTokens: 0,
             completionTokens: 0,
             totalTokens: 0,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
           },
         })
       );

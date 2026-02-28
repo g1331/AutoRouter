@@ -65,3 +65,7 @@
 - [x] 10.2 调整 `src/app/api/admin/billing/prices/route.ts`、`src/types/api.ts`、`src/lib/utils/api-transformers.ts` 的 source 校验与类型定义，仅保留 `litellm`
 - [x] 10.3 更新 OpenSpec `proposal/design/specs` 对价格源策略描述，保持规格与实现一致
 - [x] 10.4 补齐并通过相关单测与类型检查，确保 source 变更不影响现有功能
+
+## 11. 体验补充：展开详情计费公式
+
+- [x] 11.1 在请求日志展开详情中，在 token 明细下展示计费明细与算术公式（含缓存读写）
