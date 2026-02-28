@@ -91,7 +91,6 @@ describe("LogsTable", () => {
       expect(screen.getByText("tablePath")).toBeInTheDocument();
       expect(screen.getByText("tableModel")).toBeInTheDocument();
       expect(screen.getByText("tableTokens")).toBeInTheDocument();
-      expect(screen.getByText("tableBillingStatus")).toBeInTheDocument();
       expect(screen.getByText("tableCost")).toBeInTheDocument();
       expect(screen.getByText("tableStatus")).toBeInTheDocument();
       expect(screen.getByText("tableDuration")).toBeInTheDocument();
@@ -119,7 +118,6 @@ describe("LogsTable", () => {
         />
       );
 
-      expect(screen.getByText("billingStatusBilled")).toBeInTheDocument();
       expect(screen.getByText(/\$1\.234/)).toBeInTheDocument();
     });
   });

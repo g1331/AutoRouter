@@ -977,7 +977,6 @@ export function LogsTable({ logs }: LogsTableProps) {
                     <TableHead className="hidden lg:table-cell">{t("tablePath")}</TableHead>
                     <TableHead className="hidden xl:table-cell">{t("tableModel")}</TableHead>
                     <TableHead className="hidden md:table-cell">{t("tableTokens")}</TableHead>
-                    <TableHead className="w-[120px] px-3">{t("tableBillingStatus")}</TableHead>
                     <TableHead className="w-[130px] px-3">{t("tableCost")}</TableHead>
                     <TableHead className="w-[84px] px-3">{t("tableStatus")}</TableHead>
                     <TableHead className="w-[180px] px-3">{t("tableDuration")}</TableHead>
@@ -1072,24 +1071,23 @@ export function LogsTable({ logs }: LogsTableProps) {
                             />
                           </TableCell>
                           <TableCell className="px-3">
-                            <Badge
-                              variant={getBillingBadgeVariant(log.billing_status)}
-                              className="px-2 py-0.5 text-[11px] leading-none font-mono"
-                            >
-                              {log.billing_status === "billed"
-                                ? t("billingStatusBilled")
-                                : log.billing_status === "unbilled"
-                                  ? t("billingStatusUnbilled")
-                                  : t("billingStatusPending")}
-                            </Badge>
-                            {log.billing_status === "unbilled" && log.unbillable_reason && (
-                              <p className="mt-1 text-[11px] text-status-warning">
-                                {resolveBillingReasonLabel(log.unbillable_reason)}
-                              </p>
-                            )}
-                          </TableCell>
-                          <TableCell className="px-3 font-mono text-xs tabular-nums">
-                            {formatBillingCost(log)}
+                            <div className="flex flex-col gap-0">
+                              <span className="font-mono text-xs tabular-nums">
+                                {formatBillingCost(log)}
+                              </span>
+                              {log.billing_status === "unbilled" && (
+                                <p className="mt-1 text-[11px] text-status-warning">
+                                  {log.unbillable_reason
+                                    ? resolveBillingReasonLabel(log.unbillable_reason)
+                                    : t("billingStatusUnbilled")}
+                                </p>
+                              )}
+                              {log.billing_status == null && (
+                                <p className="mt-1 text-[11px] text-muted-foreground">
+                                  {t("billingStatusPending")}
+                                </p>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="px-3">
                             <Badge
@@ -1135,7 +1133,7 @@ export function LogsTable({ logs }: LogsTableProps) {
 
                         {isExpanded && canExpand && (
                           <TableRow className="bg-surface-300/30">
-                            <TableCell colSpan={11} className="p-0">
+                            <TableCell colSpan={10} className="p-0">
                               {renderExpandedDetails({
                                 log,
                                 upstreamDisplayName,
