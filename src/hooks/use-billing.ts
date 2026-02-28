@@ -79,6 +79,7 @@ export function useCreateBillingManualOverride() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["billing", "manual-overrides"] });
       queryClient.invalidateQueries({ queryKey: ["billing", "unresolved-models"] });
+      queryClient.invalidateQueries({ queryKey: ["billing", "model-prices"] });
       toast.success("手动价格已保存");
     },
     onError: (error: Error) => {
@@ -97,6 +98,7 @@ export function useUpdateBillingManualOverride() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["billing", "manual-overrides"] });
       queryClient.invalidateQueries({ queryKey: ["billing", "unresolved-models"] });
+      queryClient.invalidateQueries({ queryKey: ["billing", "model-prices"] });
       toast.success("手动价格已更新");
     },
     onError: (error: Error) => {
@@ -114,6 +116,7 @@ export function useDeleteBillingManualOverride() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["billing", "manual-overrides"] });
       queryClient.invalidateQueries({ queryKey: ["billing", "unresolved-models"] });
+      queryClient.invalidateQueries({ queryKey: ["billing", "model-prices"] });
       toast.success("手动价格已删除");
     },
     onError: (error: Error) => {

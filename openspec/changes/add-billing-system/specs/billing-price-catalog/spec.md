@@ -30,6 +30,7 @@
 - **AND** 页面 SHALL 展示当前页码与总页数
 - **AND** 页面 SHOULD 支持选择每页条数以提升翻页体验
 - **AND** 页面 SHOULD 对搜索输入进行防抖，并在请求期间保持列表稳定，避免频繁刷新导致页面跳动
+- **AND** 页面 SHOULD 明确展示“手动覆盖优先生效”的结果，包含实际计费来源与被覆盖的同步价格对比
 
 ### Requirement: Manual Price Override
 

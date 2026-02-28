@@ -75,9 +75,11 @@ function getSyncBadgeVariant(status: string | null): "success" | "warning" | "er
 function UnresolvedRepairTable({
   rows,
   t,
+  onOverrideSaved,
 }: {
   rows: BillingUnresolvedModel[];
   t: BillingTranslate;
+  onOverrideSaved?: (model: string) => void;
 }) {
   const createOverride = useCreateBillingManualOverride();
   const deleteOverride = useDeleteBillingManualOverride();
@@ -163,6 +165,7 @@ function UnresolvedRepairTable({
       cache_write_input_price_per_million: cacheWritePrice,
       note: draft.note.trim() || null,
     });
+    onOverrideSaved?.(model);
     return true;
   };
 
@@ -300,7 +303,7 @@ function UnresolvedRepairTable({
                   {row.occurrences} hits · {row.last_upstream_name ?? "-"}
                 </p>
               </div>
-              {existingOverride && <Badge variant="success">{t("statusBilled")}</Badge>}
+              {existingOverride && <Badge variant="success">{t("overrideActive")}</Badge>}
             </div>
             <div className="grid gap-2 md:grid-cols-6">
               <Input
@@ -388,6 +391,7 @@ export default function BillingPage() {
 
   const overview = useBillingOverview();
   const unresolved = useBillingUnresolvedModels();
+  const manualOverrides = useBillingManualOverrides();
   const [modelPriceInput, setModelPriceInput] = useState("");
   const [modelPriceQuery, setModelPriceQuery] = useState("");
   const [modelPricePage, setModelPricePage] = useState(1);
@@ -395,6 +399,36 @@ export default function BillingPage() {
   const modelPrices = useBillingModelPrices(modelPricePage, modelPricePageSize, modelPriceQuery);
   const syncPrices = useSyncBillingPrices();
   const searchDebounceRef = useRef<number | null>(null);
+  const priceCatalogRef = useRef<HTMLDivElement | null>(null);
+
+  const manualOverrideMap = useMemo(() => {
+    const map = new Map<string, BillingManualOverride>();
+    for (const item of manualOverrides.data?.items ?? []) {
+      map.set(item.model, item);
+    }
+    return map;
+  }, [manualOverrides.data]);
+
+  const manualOverrideMatches = useMemo(() => {
+    const query = modelPriceQuery.trim().toLowerCase();
+    if (!query) {
+      return [];
+    }
+    return (manualOverrides.data?.items ?? []).filter((item) =>
+      item.model.toLowerCase().includes(query)
+    );
+  }, [manualOverrides.data, modelPriceQuery]);
+
+  const priceCatalogSyncedItems = useMemo(() => modelPrices.data?.items ?? [], [modelPrices.data]);
+  const priceCatalogExtraOverrides = useMemo(() => {
+    if (manualOverrideMatches.length === 0) {
+      return [];
+    }
+    const syncedModelSet = new Set(priceCatalogSyncedItems.map((item) => item.model));
+    return manualOverrideMatches.filter((override) => !syncedModelSet.has(override.model));
+  }, [manualOverrideMatches, priceCatalogSyncedItems]);
+  const priceCatalogHasRows =
+    priceCatalogSyncedItems.length > 0 || priceCatalogExtraOverrides.length > 0;
 
   const latestSync = overview.data?.latest_sync ?? null;
   const latestSyncText = latestSync
@@ -412,6 +446,18 @@ export default function BillingPage() {
       }
     };
   }, []);
+
+  const focusPriceCatalog = (model: string) => {
+    if (searchDebounceRef.current != null) {
+      window.clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = null;
+    }
+
+    setModelPriceInput(model);
+    setModelPriceQuery(model);
+    setModelPricePage(1);
+    priceCatalogRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   return (
     <>
@@ -486,17 +532,26 @@ export default function BillingPage() {
             ) : unresolved.isError ? (
               <p className="text-sm text-status-error">{String(unresolved.error)}</p>
             ) : (
-              <UnresolvedRepairTable rows={unresolved.data?.items ?? []} t={t} />
+              <UnresolvedRepairTable
+                rows={unresolved.data?.items ?? []}
+                t={t}
+                onOverrideSaved={focusPriceCatalog}
+              />
             )}
           </CardContent>
         </Card>
 
-        <Card variant="outlined" className="border-divider bg-surface-200/70">
+        <Card ref={priceCatalogRef} variant="outlined" className="border-divider bg-surface-200/70">
           <CardContent className="space-y-3 p-5 sm:p-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <h3 className="type-label-medium text-foreground">{t("priceCatalogTitle")}</h3>
-                <p className="text-sm text-muted-foreground">{t("priceCatalogDesc")}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("priceCatalogDesc")}{" "}
+                  <span className="text-muted-foreground/80">
+                    ({t("priceCatalogOverrideHint")})
+                  </span>
+                </p>
               </div>
               <div className="w-full sm:w-80">
                 <Input
@@ -522,7 +577,7 @@ export default function BillingPage() {
               <p className="text-sm text-muted-foreground">Loading...</p>
             ) : modelPrices.isError ? (
               <p className="text-sm text-status-error">{String(modelPrices.error)}</p>
-            ) : (modelPrices.data?.items.length ?? 0) === 0 ? (
+            ) : !priceCatalogHasRows ? (
               <p className="text-sm text-muted-foreground">{t("priceCatalogEmpty")}</p>
             ) : (
               <div className="space-y-2">
@@ -535,58 +590,155 @@ export default function BillingPage() {
                     to:
                       ((modelPrices.data?.page ?? 1) - 1) *
                         (modelPrices.data?.page_size ?? modelPricePageSize) +
-                      (modelPrices.data?.items.length ?? 0),
+                      (priceCatalogSyncedItems.length ?? 0),
                     total: modelPrices.data?.total ?? 0,
                   })}
                   {modelPrices.isFetching && (
                     <span className="ml-2 text-muted-foreground">({tCommon("loading")})</span>
                   )}
                 </p>
+                {priceCatalogExtraOverrides.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {t("priceCatalogManualOverridesHint", {
+                      count: priceCatalogExtraOverrides.length,
+                    })}
+                  </p>
+                )}
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[1200px] text-sm">
                     <thead>
                       <tr className="border-b border-divider text-left text-xs uppercase tracking-wide text-muted-foreground">
                         <th className="px-3 py-2">{t("priceCatalogModel")}</th>
                         <th className="px-3 py-2">{t("priceCatalogSource")}</th>
+                        <th className="px-3 py-2">{t("priceCatalogEffective")}</th>
                         <th className="px-3 py-2">{t("priceCatalogInputPrice")}</th>
                         <th className="px-3 py-2">{t("priceCatalogOutputPrice")}</th>
                         <th className="px-3 py-2">{t("priceCatalogCacheReadPrice")}</th>
                         <th className="px-3 py-2">{t("priceCatalogCacheWritePrice")}</th>
                         <th className="px-3 py-2">{t("priceCatalogSyncedAt")}</th>
-                        <th className="px-3 py-2">{t("priceCatalogStatus")}</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {modelPrices.data?.items.map((item: BillingModelPrice) => (
-                        <tr key={item.id} className="border-b border-divider/60">
-                          <td className="px-3 py-2 font-mono">{item.model}</td>
-                          <td className="px-3 py-2">{item.source}</td>
-                          <td className="px-3 py-2 tabular-nums">
-                            {item.input_price_per_million.toFixed(4)}
+                      {priceCatalogExtraOverrides.map((override) => (
+                        <tr
+                          key={override.id}
+                          className="border-b border-divider/60 align-top bg-surface-300/20"
+                        >
+                          <td className="px-3 py-2 font-mono">{override.model}</td>
+                          <td className="px-3 py-2">{t("priceCatalogSourceManual")}</td>
+                          <td className="px-3 py-2">
+                            <Badge variant="success">{t("priceCatalogEffectiveManual")}</Badge>
                           </td>
                           <td className="px-3 py-2 tabular-nums">
-                            {item.output_price_per_million.toFixed(4)}
+                            {override.input_price_per_million.toFixed(4)}
                           </td>
                           <td className="px-3 py-2 tabular-nums">
-                            {item.cache_read_input_price_per_million == null
+                            {override.output_price_per_million.toFixed(4)}
+                          </td>
+                          <td className="px-3 py-2 tabular-nums">
+                            {override.cache_read_input_price_per_million == null
                               ? "-"
-                              : item.cache_read_input_price_per_million.toFixed(4)}
+                              : override.cache_read_input_price_per_million.toFixed(4)}
                           </td>
                           <td className="px-3 py-2 tabular-nums">
-                            {item.cache_write_input_price_per_million == null
+                            {override.cache_write_input_price_per_million == null
                               ? "-"
-                              : item.cache_write_input_price_per_million.toFixed(4)}
+                              : override.cache_write_input_price_per_million.toFixed(4)}
                           </td>
                           <td className="px-3 py-2 text-xs text-muted-foreground">
-                            {new Date(item.synced_at).toLocaleString(locale)}
-                          </td>
-                          <td className="px-3 py-2">
-                            <Badge variant={item.is_active ? "success" : "neutral"}>
-                              {item.is_active ? t("statusActive") : t("statusInactive")}
-                            </Badge>
+                            {new Date(override.updated_at).toLocaleString(locale)}
                           </td>
                         </tr>
                       ))}
+
+                      {priceCatalogSyncedItems.map((item: BillingModelPrice) => {
+                        const override = manualOverrideMap.get(item.model);
+                        const effective = override
+                          ? {
+                              input: override.input_price_per_million,
+                              output: override.output_price_per_million,
+                              cacheRead: override.cache_read_input_price_per_million,
+                              cacheWrite: override.cache_write_input_price_per_million,
+                              source: "manual" as const,
+                            }
+                          : {
+                              input: item.input_price_per_million,
+                              output: item.output_price_per_million,
+                              cacheRead: item.cache_read_input_price_per_million,
+                              cacheWrite: item.cache_write_input_price_per_million,
+                              source: "litellm" as const,
+                            };
+
+                        const renderEffectiveNumber = (options: {
+                          effectiveValue: number | null;
+                          syncedValue: number | null;
+                        }) => {
+                          const { effectiveValue, syncedValue } = options;
+                          if (effectiveValue == null) {
+                            return <span className="text-muted-foreground">-</span>;
+                          }
+
+                          if (!override) {
+                            return (
+                              <span className="tabular-nums">{effectiveValue.toFixed(4)}</span>
+                            );
+                          }
+
+                          const syncedLabel =
+                            syncedValue == null ? "-" : (syncedValue as number).toFixed(4);
+                          return (
+                            <div className="space-y-0.5">
+                              <div className="tabular-nums font-medium text-foreground">
+                                {effectiveValue.toFixed(4)}
+                              </div>
+                              <div className="text-[11px] tabular-nums text-muted-foreground">
+                                litellm: {syncedLabel}
+                              </div>
+                            </div>
+                          );
+                        };
+
+                        return (
+                          <tr key={item.id} className="border-b border-divider/60 align-top">
+                            <td className="px-3 py-2 font-mono">{item.model}</td>
+                            <td className="px-3 py-2">{item.source}</td>
+                            <td className="px-3 py-2">
+                              <Badge variant={override ? "success" : "neutral"}>
+                                {override
+                                  ? t("priceCatalogEffectiveManual")
+                                  : t("priceCatalogEffectiveSynced")}
+                              </Badge>
+                            </td>
+                            <td className="px-3 py-2">
+                              {renderEffectiveNumber({
+                                effectiveValue: effective.input,
+                                syncedValue: item.input_price_per_million,
+                              })}
+                            </td>
+                            <td className="px-3 py-2">
+                              {renderEffectiveNumber({
+                                effectiveValue: effective.output,
+                                syncedValue: item.output_price_per_million,
+                              })}
+                            </td>
+                            <td className="px-3 py-2">
+                              {renderEffectiveNumber({
+                                effectiveValue: effective.cacheRead,
+                                syncedValue: item.cache_read_input_price_per_million,
+                              })}
+                            </td>
+                            <td className="px-3 py-2">
+                              {renderEffectiveNumber({
+                                effectiveValue: effective.cacheWrite,
+                                syncedValue: item.cache_write_input_price_per_million,
+                              })}
+                            </td>
+                            <td className="px-3 py-2 text-xs text-muted-foreground">
+                              {new Date(item.synced_at).toLocaleString(locale)}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
