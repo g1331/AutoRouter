@@ -389,7 +389,7 @@ jobs:
           echo "$REVIEW_OUTPUT" > /tmp/review-results/review_output.json
 
       - name: Upload review artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: code-argus-review-${{ steps.context.outputs.pr_number }}
           path: /tmp/review-results/
