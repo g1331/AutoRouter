@@ -1,6 +1,6 @@
 "use client";
 
-import { Globe, LogOut, Moon, SlidersHorizontal } from "lucide-react";
+import { ArrowLeftRight, ChevronRight, Globe, LogOut, Moon, SlidersHorizontal } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -8,6 +8,7 @@ import { Topbar } from "@/components/admin/topbar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Link } from "@/i18n/navigation";
 import { useAuth } from "@/providers/auth-provider";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +18,7 @@ export default function SettingsPage() {
   const tCommon = useTranslations("common");
   const tTheme = useTranslations("theme");
   const tLang = useTranslations("language");
+  const tCompensation = useTranslations("compensation");
 
   const settingsItems = [
     {
@@ -30,6 +32,15 @@ export default function SettingsPage() {
       title: tTheme("toggle"),
       description: tTheme("dark"),
       action: <ThemeToggle />,
+    },
+  ];
+
+  const systemLinks = [
+    {
+      href: "/system/header-compensation",
+      icon: ArrowLeftRight,
+      title: tCompensation("title"),
+      description: tCompensation("managementDesc"),
     },
   ];
 
@@ -72,6 +83,40 @@ export default function SettingsPage() {
                   </div>
                 </CardContent>
               </Card>
+            );
+          })}
+
+          {systemLinks.map((item) => {
+            const Icon = item.icon;
+            return (
+              <Link key={item.href} href={item.href} className="block">
+                <Card
+                  variant="outlined"
+                  className={cn(
+                    "group border-divider bg-surface-200/70 transition-colors",
+                    "hover:bg-surface-200/85"
+                  )}
+                >
+                  <CardContent className="p-4 sm:p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <div className="mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-cf-sm border border-divider bg-surface-300 text-amber-500">
+                          <Icon className="h-5 w-5" aria-hidden="true" />
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="type-body-medium text-foreground">{item.title}</h3>
+                          <p className="type-caption text-muted-foreground">{item.description}</p>
+                        </div>
+                      </div>
+
+                      <ChevronRight
+                        className="mt-2 h-4 w-4 flex-shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
+                        aria-hidden="true"
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
             );
           })}
 
