@@ -42,6 +42,7 @@ vi.mock("lucide-react", () => ({
   ChevronLeft: () => <svg data-testid="icon-chevron" />,
   LogOut: () => <svg data-testid="icon-logout" />,
   Settings: () => <svg data-testid="icon-settings" />,
+  Check: () => <svg data-testid="icon-check" />,
   Globe: () => <svg data-testid="icon-globe" />,
   Sun: () => <svg data-testid="icon-sun" />,
   Moon: () => <svg data-testid="icon-moon" />,

@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
+  Check,
   ChevronLeft,
   Globe,
   Key,
@@ -37,6 +38,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -134,6 +137,7 @@ function LanguageItem({ collapsed }: { collapsed: boolean }) {
 function ThemeItem({ collapsed }: { collapsed: boolean }) {
   const { resolvedTheme, theme, setTheme } = useTheme();
   const tTheme = useTranslations("theme");
+  const selectedTheme = theme ?? "system";
 
   return (
     <DropdownMenu>
@@ -148,27 +152,47 @@ function ThemeItem({ collapsed }: { collapsed: boolean }) {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[150px]">
-        <DropdownMenuItem
-          onClick={() => setTheme("light")}
-          className={cn("cursor-pointer gap-2", theme === "light" && "bg-surface-300")}
-        >
-          <Sun className="h-4 w-4" />
-          <span>{tTheme("light")}</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={() => setTheme("dark")}
-          className={cn("cursor-pointer gap-2", theme === "dark" && "bg-surface-300")}
-        >
-          <Moon className="h-4 w-4" />
-          <span>{tTheme("dark")}</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={() => setTheme("system")}
-          className={cn("cursor-pointer gap-2", theme === "system" && "bg-surface-300")}
-        >
-          <Monitor className="h-4 w-4" />
-          <span>{tTheme("system")}</span>
-        </DropdownMenuItem>
+        <DropdownMenuRadioGroup value={selectedTheme} onValueChange={setTheme}>
+          <DropdownMenuRadioItem
+            value="light"
+            className={cn(
+              "cursor-pointer justify-between border border-transparent",
+              "data-[state=checked]:border-amber-500/35 data-[state=checked]:bg-surface-300"
+            )}
+          >
+            <span className="flex items-center gap-2">
+              <Sun className="h-4 w-4 text-muted-foreground" />
+              <span>{tTheme("light")}</span>
+            </span>
+            {selectedTheme === "light" && <Check className="h-4 w-4 text-amber-500" aria-hidden />}
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem
+            value="dark"
+            className={cn(
+              "cursor-pointer justify-between border border-transparent",
+              "data-[state=checked]:border-amber-500/35 data-[state=checked]:bg-surface-300"
+            )}
+          >
+            <span className="flex items-center gap-2">
+              <Moon className="h-4 w-4 text-muted-foreground" />
+              <span>{tTheme("dark")}</span>
+            </span>
+            {selectedTheme === "dark" && <Check className="h-4 w-4 text-amber-500" aria-hidden />}
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem
+            value="system"
+            className={cn(
+              "cursor-pointer justify-between border border-transparent",
+              "data-[state=checked]:border-amber-500/35 data-[state=checked]:bg-surface-300"
+            )}
+          >
+            <span className="flex items-center gap-2">
+              <Monitor className="h-4 w-4 text-muted-foreground" />
+              <span>{tTheme("system")}</span>
+            </span>
+            {selectedTheme === "system" && <Check className="h-4 w-4 text-amber-500" aria-hidden />}
+          </DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
