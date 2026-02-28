@@ -519,6 +519,129 @@ describe("api-transformers", () => {
       expect(result.failover_attempts).toBe(0);
       expect(result.failover_history).toBeNull();
     });
+
+    it("should normalize header_diff and sanitize sensitive header values", () => {
+      const log = {
+        id: "log-hdiff-1",
+        apiKeyId: "key-1",
+        upstreamId: "upstream-1",
+        upstreamName: "openai-primary",
+        method: "POST",
+        path: "/v1/chat/completions",
+        model: "gpt-4",
+        promptTokens: 1,
+        completionTokens: 2,
+        totalTokens: 3,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+        statusCode: 200,
+        durationMs: 1,
+        errorMessage: null,
+        routingType: null,
+        groupName: null,
+        lbStrategy: null,
+        failoverAttempts: 0,
+        failoverHistory: null,
+        headerDiff: {
+          inbound_count: 2,
+          outbound_count: 3,
+          dropped: [
+            "x-api-key",
+            { header: "Authorization", value: "Bearer secretsecret" },
+            { header: 123, value: "bad" },
+          ],
+          compensated: [
+            { header: "Cookie", source: "headers.cookie", value: "a=b" },
+            { header: "X-Api-Key", source: "headers.x-api-key", value: "mysecretkey" },
+            {
+              header: "Authorization",
+              source: "headers.authorization",
+              value: "Bearer tokentoken",
+            },
+            { header: "X-Already-Masked", source: "headers.x", value: "sk-***cdef" },
+          ],
+          unchanged: [
+            { header: "Set-Cookie", value: "session=abc" },
+            { header: "X-Trace", value: "trace-id" },
+          ],
+          auth_replaced: {
+            header: "Authorization",
+            inbound_value: "Bearer inboundtoken",
+            outbound_value: "Bearer outboundtoken",
+          },
+        },
+        createdAt: new Date("2024-01-15T10:30:00.000Z"),
+      };
+
+      const result = transformRequestLogToApi(log as never);
+
+      expect(result.header_diff).not.toBeNull();
+      expect(result.header_diff?.inbound_count).toBe(2);
+      expect(result.header_diff?.outbound_count).toBe(3);
+
+      const droppedAuth = result.header_diff?.dropped.find((e) => e.header === "Authorization");
+      expect(droppedAuth?.value).toContain("***");
+      expect(droppedAuth?.value).toContain("Bearer");
+
+      const compensatedApiKey = result.header_diff?.compensated.find(
+        (e) => e.header === "X-Api-Key"
+      );
+      expect(compensatedApiKey?.value).toContain("***");
+
+      const compensatedCookie = result.header_diff?.compensated.find((e) => e.header === "Cookie");
+      expect(compensatedCookie?.value).toBe("***");
+
+      const unchangedSetCookie = result.header_diff?.unchanged.find(
+        (e) => e.header === "Set-Cookie"
+      );
+      expect(unchangedSetCookie?.value).toBe("***");
+
+      const alreadyMasked = result.header_diff?.compensated.find(
+        (e) => e.header === "X-Already-Masked"
+      );
+      expect(alreadyMasked?.value).toBe("sk-***cdef");
+
+      expect(result.header_diff?.auth_replaced?.inbound_value).toContain("***");
+      expect(result.header_diff?.auth_replaced?.outbound_value).toContain("***");
+    });
+
+    it("should support auth_replaced shorthand string", () => {
+      const log = {
+        id: "log-hdiff-2",
+        apiKeyId: "key-1",
+        upstreamId: "upstream-1",
+        upstreamName: "openai-primary",
+        method: "POST",
+        path: "/v1/chat/completions",
+        model: "gpt-4",
+        promptTokens: 1,
+        completionTokens: 2,
+        totalTokens: 3,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+        statusCode: 200,
+        durationMs: 1,
+        errorMessage: null,
+        routingType: null,
+        groupName: null,
+        lbStrategy: null,
+        failoverAttempts: 0,
+        failoverHistory: null,
+        headerDiff: {
+          auth_replaced: "Authorization",
+        },
+        createdAt: new Date("2024-01-15T10:30:00.000Z"),
+      };
+
+      const result = transformRequestLogToApi(log as never);
+      expect(result.header_diff?.auth_replaced?.header).toBe("Authorization");
+      expect(result.header_diff?.auth_replaced?.inbound_value).toBeNull();
+      expect(result.header_diff?.auth_replaced?.outbound_value).toBe("");
+    });
   });
 
   describe("transformPaginatedRequestLogs", () => {
