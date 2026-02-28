@@ -614,6 +614,7 @@
     "statusUnbilled": "Unbilled",
     "statusActive": "Active",
     "statusInactive": "Inactive",
+    "upstreamDisabled": "Disabled",
     "reasonModelMissing": "Model missing",
     "reasonUsageMissing": "Usage missing",
     "reasonPriceNotFound": "Price not found",

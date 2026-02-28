@@ -614,6 +614,7 @@
     "statusUnbilled": "未计费",
     "statusActive": "生效中",
     "statusInactive": "未生效",
+    "upstreamDisabled": "上游已停用",
     "reasonModelMissing": "缺少模型名",
     "reasonUsageMissing": "缺少 usage",
     "reasonPriceNotFound": "未找到价格",

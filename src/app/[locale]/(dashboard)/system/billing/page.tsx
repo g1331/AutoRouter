@@ -141,7 +141,7 @@ function UpstreamMultiplierTable({
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-foreground">{row.name}</span>
-                    {!row.is_active && <Badge variant="neutral">{t("statusInactive")}</Badge>}
+                    {!row.is_active && <Badge variant="neutral">{t("upstreamDisabled")}</Badge>}
                   </div>
                 </td>
                 <td className="px-3 py-2">
