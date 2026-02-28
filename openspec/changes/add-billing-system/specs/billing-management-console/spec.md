@@ -60,3 +60,13 @@
 - **WHEN** 某请求为未计费状态
 - **THEN** 表格 SHALL 以明显状态标识该请求
 - **AND** 提供未计费原因字段
+
+### Requirement: Request Logs Billing Visibility
+
+系统 MUST 在请求日志页面直接展示计费状态与成本，避免用户在日志排查时跨页查询。
+
+#### Scenario: Show billing summary in request logs table
+
+- **WHEN** 管理员查看 `/logs` 请求日志表格
+- **THEN** 表格 SHALL 展示每条请求的计费状态与最终成本
+- **AND** 未计费请求 SHALL 同时展示未计费原因

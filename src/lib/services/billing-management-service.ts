@@ -36,13 +36,19 @@ export interface RecentBillingDetailItem {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   priceSource: string | null;
   billingStatus: "billed" | "unbilled";
   unbillableReason: string | null;
   baseInputPricePerMillion: number | null;
   baseOutputPricePerMillion: number | null;
+  baseCacheReadInputPricePerMillion: number | null;
+  baseCacheWriteInputPricePerMillion: number | null;
   inputMultiplier: number | null;
   outputMultiplier: number | null;
+  cacheReadCost: number | null;
+  cacheWriteCost: number | null;
   finalCost: number | null;
   currency: string;
 }
@@ -183,13 +189,19 @@ function toRecentBillingDetailItem(
     promptTokens: row.promptTokens,
     completionTokens: row.completionTokens,
     totalTokens: row.totalTokens,
+    cacheReadTokens: row.cacheReadTokens,
+    cacheWriteTokens: row.cacheWriteTokens,
     priceSource: row.priceSource,
     billingStatus: row.billingStatus as "billed" | "unbilled",
     unbillableReason: row.unbillableReason,
     baseInputPricePerMillion: row.baseInputPricePerMillion,
     baseOutputPricePerMillion: row.baseOutputPricePerMillion,
+    baseCacheReadInputPricePerMillion: row.baseCacheReadInputPricePerMillion,
+    baseCacheWriteInputPricePerMillion: row.baseCacheWriteInputPricePerMillion,
     inputMultiplier: row.inputMultiplier,
     outputMultiplier: row.outputMultiplier,
+    cacheReadCost: row.cacheReadCost,
+    cacheWriteCost: row.cacheWriteCost,
     finalCost: row.finalCost,
     currency: row.currency,
   };

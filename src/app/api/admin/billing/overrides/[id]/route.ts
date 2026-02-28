@@ -13,11 +13,25 @@ const log = createLogger("admin-billing-override");
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-const updateOverrideSchema = z.object({
-  input_price_per_million: z.number().min(0).max(1000000).optional(),
-  output_price_per_million: z.number().min(0).max(1000000).optional(),
-  note: z.string().max(1000).nullable().optional(),
-});
+const updateOverrideSchema = z
+  .object({
+    input_price_per_million: z.number().min(0).max(1000000).optional(),
+    output_price_per_million: z.number().min(0).max(1000000).optional(),
+    cache_read_input_price_per_million: z.number().min(0).max(1000000).nullable().optional(),
+    cache_write_input_price_per_million: z.number().min(0).max(1000000).nullable().optional(),
+    note: z.string().max(1000).nullable().optional(),
+  })
+  .refine(
+    (data) =>
+      data.input_price_per_million !== undefined ||
+      data.output_price_per_million !== undefined ||
+      data.cache_read_input_price_per_million !== undefined ||
+      data.cache_write_input_price_per_million !== undefined ||
+      data.note !== undefined,
+    {
+      message: "At least one field must be provided",
+    }
+  );
 
 /**
  * PUT /api/admin/billing/overrides/[id] - Update manual override.
@@ -36,6 +50,8 @@ export async function PUT(request: NextRequest, context: RouteContext): Promise<
     const row = await updateBillingManualPriceOverride(id, {
       inputPricePerMillion: validated.input_price_per_million,
       outputPricePerMillion: validated.output_price_per_million,
+      cacheReadInputPricePerMillion: validated.cache_read_input_price_per_million,
+      cacheWriteInputPricePerMillion: validated.cache_write_input_price_per_million,
       note: validated.note,
     });
     if (!row) {

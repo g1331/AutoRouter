@@ -1,28 +1,27 @@
 ## ADDED Requirements
 
-### Requirement: Multi-Source Model Price Catalog
+### Requirement: LiteLLM Model Price Catalog
 
-系统 MUST 提供模型价格目录，并支持从主源与兜底源同步标准化价格数据。
+系统 MUST 提供模型价格目录，并支持从 LiteLLM 同步标准化价格数据。
 
-#### Scenario: Sync from primary source successfully
+#### Scenario: Sync from LiteLLM source successfully
 
-- **WHEN** 管理员触发价格同步且主源可用
+- **WHEN** 管理员触发价格同步且 LiteLLM 可用
 - **THEN** 系统 SHALL 拉取并解析模型单价数据
-- **AND** 将价格来源标记为 `openrouter`
+- **AND** 将价格来源标记为 `litellm`
 - **AND** 记录同步时间与模型有效状态
 
-#### Scenario: Fallback to secondary source when primary fails
+#### Scenario: Preserve last valid prices on sync failure
 
-- **WHEN** 管理员触发价格同步且主源请求失败或解析失败
-- **THEN** 系统 SHALL 自动尝试兜底源
-- **AND** 将成功数据来源标记为 `litellm`
-- **AND** 返回同步结果摘要（成功数量、失败数量、失败原因）
-
-#### Scenario: Preserve last valid prices on full sync failure
-
-- **WHEN** 主源与兜底源均不可用
+- **WHEN** LiteLLM 价格源不可用或解析失败
 - **THEN** 系统 SHALL 保留已有有效价格数据不覆盖为 null
 - **AND** 将本次同步状态记录为失败供 UI 展示
+
+#### Scenario: Persist cache price fields when source provides them
+
+- **WHEN** 上游价格源返回缓存读取或缓存写入单价字段
+- **THEN** 系统 SHALL 解析并保存缓存单价到价格目录
+- **AND** 价格目录接口与页面 SHALL 可查询并展示缓存读写单价
 
 ### Requirement: Manual Price Override
 
@@ -44,6 +43,12 @@
 
 - **WHEN** 模型同时存在手动覆盖与自动同步价格
 - **THEN** 系统 SHALL 在计费时优先使用手动覆盖价格
+
+#### Scenario: Create manual override without unresolved record
+
+- **WHEN** 管理员在手动录入区域直接提交任意模型价格（该模型不在未定价列表）
+- **THEN** 系统 SHALL 成功创建或更新该模型的手动覆盖记录
+- **AND** 后续请求 SHALL 按该覆盖价格参与计费
 
 ### Requirement: Unresolved Model Discovery
 

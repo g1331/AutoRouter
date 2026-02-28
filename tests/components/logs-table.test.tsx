@@ -91,6 +91,8 @@ describe("LogsTable", () => {
       expect(screen.getByText("tablePath")).toBeInTheDocument();
       expect(screen.getByText("tableModel")).toBeInTheDocument();
       expect(screen.getByText("tableTokens")).toBeInTheDocument();
+      expect(screen.getByText("tableBillingStatus")).toBeInTheDocument();
+      expect(screen.getByText("tableCost")).toBeInTheDocument();
       expect(screen.getByText("tableStatus")).toBeInTheDocument();
       expect(screen.getByText("tableDuration")).toBeInTheDocument();
     });
@@ -101,6 +103,24 @@ describe("LogsTable", () => {
       expect(screen.getByText("POST")).toBeInTheDocument();
       expect(screen.getByText("/v1/chat/completions")).toBeInTheDocument();
       expect(screen.getByText("gpt-4")).toBeInTheDocument();
+    });
+
+    it("renders billed cost directly in the table row", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              billing_status: "billed",
+              final_cost: 1.234,
+              currency: "USD",
+            },
+          ]}
+        />
+      );
+
+      expect(screen.getByText("billingStatusBilled")).toBeInTheDocument();
+      expect(screen.getByText(/\$1\.234/)).toBeInTheDocument();
     });
   });
 

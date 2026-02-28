@@ -5,6 +5,7 @@ import {
   type BillingPriceSource,
   type BillingResolvedPrice,
 } from "@/lib/services/billing-price-service";
+import { getProviderTypeForModel } from "@/lib/services/model-router";
 
 export type UnbillableReason =
   | "model_missing"
@@ -16,6 +17,8 @@ export interface BillingUsageInput {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
 }
 
 export interface PersistRequestBillingInput {
@@ -34,15 +37,25 @@ export interface PersistedRequestBillingResult {
   source: BillingPriceSource | null;
 }
 
-function normalizeUsage(usage: BillingUsageInput): BillingUsageInput {
+interface NormalizedBillingUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+}
+
+function normalizeUsage(usage: BillingUsageInput): NormalizedBillingUsage {
   const promptTokens = Math.max(0, Math.floor(usage.promptTokens || 0));
   const completionTokens = Math.max(0, Math.floor(usage.completionTokens || 0));
   const totalTokens =
     usage.totalTokens && usage.totalTokens > 0
       ? Math.floor(usage.totalTokens)
       : promptTokens + completionTokens;
+  const cacheReadTokens = Math.max(0, Math.floor(usage.cacheReadTokens || 0));
+  const cacheWriteTokens = Math.max(0, Math.floor(usage.cacheWriteTokens || 0));
 
-  return { promptTokens, completionTokens, totalTokens };
+  return { promptTokens, completionTokens, totalTokens, cacheReadTokens, cacheWriteTokens };
 }
 
 async function upsertUnbilledSnapshot(
@@ -64,11 +77,17 @@ async function upsertUnbilledSnapshot(
       priceSource: null,
       baseInputPricePerMillion: null,
       baseOutputPricePerMillion: null,
+      baseCacheReadInputPricePerMillion: null,
+      baseCacheWriteInputPricePerMillion: null,
       inputMultiplier: null,
       outputMultiplier: null,
       promptTokens: usage.promptTokens,
       completionTokens: usage.completionTokens,
       totalTokens: usage.totalTokens,
+      cacheReadTokens: usage.cacheReadTokens,
+      cacheWriteTokens: usage.cacheWriteTokens,
+      cacheReadCost: null,
+      cacheWriteCost: null,
       finalCost: null,
       currency: "USD",
       billedAt: now,
@@ -85,11 +104,17 @@ async function upsertUnbilledSnapshot(
         priceSource: null,
         baseInputPricePerMillion: null,
         baseOutputPricePerMillion: null,
+        baseCacheReadInputPricePerMillion: null,
+        baseCacheWriteInputPricePerMillion: null,
         inputMultiplier: null,
         outputMultiplier: null,
         promptTokens: usage.promptTokens,
         completionTokens: usage.completionTokens,
         totalTokens: usage.totalTokens,
+        cacheReadTokens: usage.cacheReadTokens,
+        cacheWriteTokens: usage.cacheWriteTokens,
+        cacheReadCost: null,
+        cacheWriteCost: null,
         finalCost: null,
         currency: "USD",
         billedAt: now,
@@ -104,17 +129,57 @@ async function upsertUnbilledSnapshot(
   };
 }
 
+function resolveBilledInputTokens(
+  usage: NormalizedBillingUsage,
+  upstreamProviderType: string | null
+): number {
+  if (upstreamProviderType === "anthropic") {
+    const totalCacheTokens = usage.cacheReadTokens + usage.cacheWriteTokens;
+    if (totalCacheTokens > 0 && usage.promptTokens === totalCacheTokens) {
+      return 0;
+    }
+    return usage.promptTokens;
+  }
+
+  return Math.max(usage.promptTokens - usage.cacheReadTokens - usage.cacheWriteTokens, 0);
+}
+
 function calculateCost(
   price: BillingResolvedPrice,
-  usage: BillingUsageInput,
+  usage: NormalizedBillingUsage,
+  upstreamProviderType: string | null,
   inputMultiplier: number,
   outputMultiplier: number
-): number {
-  const inputCost = (usage.promptTokens / 1_000_000) * price.inputPricePerMillion * inputMultiplier;
+): {
+  finalCost: number;
+  inputCost: number;
+  outputCost: number;
+  cacheReadCost: number;
+  cacheWriteCost: number;
+  billedInputTokens: number;
+} {
+  const billedInputTokens = resolveBilledInputTokens(usage, upstreamProviderType);
+  const cacheReadPricePerMillion =
+    price.cacheReadInputPricePerMillion ?? price.inputPricePerMillion;
+  const cacheWritePricePerMillion =
+    price.cacheWriteInputPricePerMillion ?? price.inputPricePerMillion;
+  const inputCost = (billedInputTokens / 1_000_000) * price.inputPricePerMillion * inputMultiplier;
   const outputCost =
     (usage.completionTokens / 1_000_000) * price.outputPricePerMillion * outputMultiplier;
+  const cacheReadCost =
+    (usage.cacheReadTokens / 1_000_000) * cacheReadPricePerMillion * inputMultiplier;
+  const cacheWriteCost =
+    (usage.cacheWriteTokens / 1_000_000) * cacheWritePricePerMillion * inputMultiplier;
+  const finalCost = Number((inputCost + outputCost + cacheReadCost + cacheWriteCost).toFixed(10));
 
-  return Number((inputCost + outputCost).toFixed(10));
+  return {
+    finalCost,
+    inputCost: Number(inputCost.toFixed(10)),
+    outputCost: Number(outputCost.toFixed(10)),
+    cacheReadCost: Number(cacheReadCost.toFixed(10)),
+    cacheWriteCost: Number(cacheWriteCost.toFixed(10)),
+    billedInputTokens,
+  };
 }
 
 /**
@@ -150,7 +215,8 @@ export async function calculateAndPersistRequestBillingSnapshot(
 
   const inputMultiplier = upstream?.billingInputMultiplier ?? 1;
   const outputMultiplier = upstream?.billingOutputMultiplier ?? 1;
-  const finalCost = calculateCost(resolvedPrice, usage, inputMultiplier, outputMultiplier);
+  const providerType = getProviderTypeForModel(model);
+  const cost = calculateCost(resolvedPrice, usage, providerType, inputMultiplier, outputMultiplier);
   const now = input.billedAt ?? new Date();
 
   await db
@@ -165,12 +231,18 @@ export async function calculateAndPersistRequestBillingSnapshot(
       priceSource: resolvedPrice.source,
       baseInputPricePerMillion: resolvedPrice.inputPricePerMillion,
       baseOutputPricePerMillion: resolvedPrice.outputPricePerMillion,
+      baseCacheReadInputPricePerMillion: resolvedPrice.cacheReadInputPricePerMillion,
+      baseCacheWriteInputPricePerMillion: resolvedPrice.cacheWriteInputPricePerMillion,
       inputMultiplier,
       outputMultiplier,
-      promptTokens: usage.promptTokens,
+      promptTokens: cost.billedInputTokens,
       completionTokens: usage.completionTokens,
       totalTokens: usage.totalTokens,
-      finalCost,
+      cacheReadTokens: usage.cacheReadTokens,
+      cacheWriteTokens: usage.cacheWriteTokens,
+      cacheReadCost: cost.cacheReadCost,
+      cacheWriteCost: cost.cacheWriteCost,
+      finalCost: cost.finalCost,
       currency: "USD",
       billedAt: now,
       createdAt: now,
@@ -186,12 +258,18 @@ export async function calculateAndPersistRequestBillingSnapshot(
         priceSource: resolvedPrice.source,
         baseInputPricePerMillion: resolvedPrice.inputPricePerMillion,
         baseOutputPricePerMillion: resolvedPrice.outputPricePerMillion,
+        baseCacheReadInputPricePerMillion: resolvedPrice.cacheReadInputPricePerMillion,
+        baseCacheWriteInputPricePerMillion: resolvedPrice.cacheWriteInputPricePerMillion,
         inputMultiplier,
         outputMultiplier,
-        promptTokens: usage.promptTokens,
+        promptTokens: cost.billedInputTokens,
         completionTokens: usage.completionTokens,
         totalTokens: usage.totalTokens,
-        finalCost,
+        cacheReadTokens: usage.cacheReadTokens,
+        cacheWriteTokens: usage.cacheWriteTokens,
+        cacheReadCost: cost.cacheReadCost,
+        cacheWriteCost: cost.cacheWriteCost,
+        finalCost: cost.finalCost,
         currency: "USD",
         billedAt: now,
       },
@@ -200,7 +278,7 @@ export async function calculateAndPersistRequestBillingSnapshot(
   return {
     status: "billed",
     unbillableReason: null,
-    finalCost,
+    finalCost: cost.finalCost,
     source: resolvedPrice.source,
   };
 }

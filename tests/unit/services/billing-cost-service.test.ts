@@ -130,9 +130,11 @@ describe("billing-cost-service", () => {
 
     vi.mocked(resolveBillingModelPrice).mockResolvedValueOnce({
       model: "gpt-4.1",
-      source: "openrouter",
+      source: "litellm",
       inputPricePerMillion: 2,
       outputPricePerMillion: 8,
+      cacheReadInputPricePerMillion: null,
+      cacheWriteInputPricePerMillion: null,
     });
     upstreamFindFirstMock.mockResolvedValueOnce({
       billingInputMultiplier: 1.2,
@@ -154,12 +156,12 @@ describe("billing-cost-service", () => {
     // (1000 / 1_000_000) * 2 * 1.2 + (500 / 1_000_000) * 8 * 0.8 = 0.0056
     expect(result.status).toBe("billed");
     expect(result.unbillableReason).toBeNull();
-    expect(result.source).toBe("openrouter");
+    expect(result.source).toBe("litellm");
     expect(result.finalCost).toBeCloseTo(0.0056, 8);
     expect(valuesMock).toHaveBeenCalledWith(
       expect.objectContaining({
         billingStatus: "billed",
-        priceSource: "openrouter",
+        priceSource: "litellm",
         inputMultiplier: 1.2,
         outputMultiplier: 0.8,
       })

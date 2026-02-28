@@ -23,6 +23,13 @@
 - **THEN** 系统 SHALL 将该请求标记为“未计费”
 - **AND** 保存未计费原因用于 UI 展示
 
+#### Scenario: Calculate cache-aware request cost
+
+- **WHEN** 请求 usage 中包含缓存读取或缓存写入 token
+- **THEN** 系统 SHALL 基于缓存单价分别计算缓存读写费用
+- **AND** 若缓存单价缺失，系统 SHALL 回退到输入单价继续计算
+- **AND** 最终费用 SHALL 为输入、输出、缓存读、缓存写费用之和
+
 ### Requirement: Immutable Billing Snapshot
 
 系统 MUST 将每次请求的计费细节持久化为不可回算漂移的快照。
@@ -31,6 +38,12 @@
 
 - **WHEN** 请求完成并计费成功
 - **THEN** 系统 SHALL 持久化以下字段：基础单价、倍率、token 明细、最终费用、价格来源、计费时间
+
+#### Scenario: Persist cache breakdown in immutable snapshot
+
+- **WHEN** 请求包含缓存 token 或缓存费用
+- **THEN** 快照 SHALL 持久化缓存读写 token、缓存读写基础单价与缓存读写费用
+- **AND** 管理端近期明细 SHALL 能展示缓存费用拆分
 
 #### Scenario: Keep historical cost stable after repricing
 

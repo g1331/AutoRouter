@@ -52,6 +52,25 @@ function parseMultiplierInput(raw: string): number | null {
   return value;
 }
 
+function parseRequiredPrice(raw: string): number | null {
+  const value = Number(raw);
+  if (!raw.trim() || Number.isNaN(value) || value < 0) {
+    return null;
+  }
+  return value;
+}
+
+function parseOptionalPrice(raw: string): number | null | "invalid" {
+  if (!raw.trim()) {
+    return null;
+  }
+  const value = Number(raw);
+  if (Number.isNaN(value) || value < 0) {
+    return "invalid";
+  }
+  return value;
+}
+
 function resolveReasonLabel(reason: string | null, t: BillingTranslate): string {
   if (!reason) {
     return "-";
@@ -178,8 +197,25 @@ function UnresolvedRepairTable({
   const createOverride = useCreateBillingManualOverride();
   const deleteOverride = useDeleteBillingManualOverride();
   const { data: manualOverrides } = useBillingManualOverrides();
+  const [manualDraft, setManualDraft] = useState({
+    model: "",
+    input: "",
+    output: "",
+    cacheRead: "",
+    cacheWrite: "",
+    note: "",
+  });
   const [drafts, setDrafts] = useState<
-    Record<string, { input: string; output: string; note: string }>
+    Record<
+      string,
+      {
+        input: string;
+        output: string;
+        cacheRead: string;
+        cacheWrite: string;
+        note: string;
+      }
+    >
   >({});
 
   const overrideMap = useMemo(() => {
@@ -190,44 +226,179 @@ function UnresolvedRepairTable({
     return map;
   }, [manualOverrides]);
 
-  const getDraft = (model: string) =>
-    drafts[model] ?? {
-      input: "",
-      output: "",
-      note: "",
-    };
+  const getDraft = (model: string) => {
+    const existing = overrideMap.get(model);
+    return (
+      drafts[model] ?? {
+        input: existing ? String(existing.input_price_per_million) : "",
+        output: existing ? String(existing.output_price_per_million) : "",
+        cacheRead:
+          existing?.cache_read_input_price_per_million == null
+            ? ""
+            : String(existing.cache_read_input_price_per_million),
+        cacheWrite:
+          existing?.cache_write_input_price_per_million == null
+            ? ""
+            : String(existing.cache_write_input_price_per_million),
+        note: existing?.note ?? "",
+      }
+    );
+  };
 
-  const handleSave = async (model: string) => {
-    const draft = getDraft(model);
-    const inputPrice = Number(draft.input);
-    const outputPrice = Number(draft.output);
+  const saveOverride = async (
+    modelRaw: string,
+    draft: {
+      input: string;
+      output: string;
+      cacheRead: string;
+      cacheWrite: string;
+      note: string;
+    }
+  ): Promise<boolean> => {
+    const model = modelRaw.trim();
+    const inputPrice = parseRequiredPrice(draft.input);
+    const outputPrice = parseRequiredPrice(draft.output);
+    const cacheReadPrice = parseOptionalPrice(draft.cacheRead);
+    const cacheWritePrice = parseOptionalPrice(draft.cacheWrite);
     if (
-      Number.isNaN(inputPrice) ||
-      Number.isNaN(outputPrice) ||
-      inputPrice < 0 ||
-      outputPrice < 0
+      !model ||
+      inputPrice === null ||
+      outputPrice === null ||
+      cacheReadPrice === "invalid" ||
+      cacheWritePrice === "invalid"
     ) {
-      return;
+      return false;
     }
 
     await createOverride.mutateAsync({
       model,
       input_price_per_million: inputPrice,
       output_price_per_million: outputPrice,
+      cache_read_input_price_per_million: cacheReadPrice,
+      cache_write_input_price_per_million: cacheWritePrice,
       note: draft.note.trim() || null,
+    });
+    return true;
+  };
+
+  const handleSave = async (model: string) => {
+    const draft = getDraft(model);
+    await saveOverride(model, draft);
+  };
+
+  const manualModel = manualDraft.model.trim();
+  const manualExistingOverride = manualModel ? overrideMap.get(manualModel) : undefined;
+  const handleManualSave = async () => {
+    const saved = await saveOverride(manualDraft.model, manualDraft);
+    if (!saved) {
+      return;
+    }
+    setManualDraft({
+      model: "",
+      input: "",
+      output: "",
+      cacheRead: "",
+      cacheWrite: "",
+      note: "",
     });
   };
 
-  if (rows.length === 0) {
-    return (
-      <div className="rounded-cf-sm border border-dashed border-divider bg-surface-300/30 px-4 py-6 text-sm text-muted-foreground">
-        {t("unresolvedEmpty")}
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-3">
+      <div className="rounded-cf-sm border border-divider bg-surface-300/45 p-3">
+        <div className="mb-3">
+          <p className="font-medium text-foreground">{t("manualEntryTitle")}</p>
+          <p className="text-xs text-muted-foreground">{t("manualEntryDesc")}</p>
+        </div>
+        <div className="grid gap-2 md:grid-cols-6">
+          <Input
+            placeholder={t("overrideModelInput")}
+            value={manualDraft.model}
+            onChange={(event) =>
+              setManualDraft((prev) => ({
+                ...prev,
+                model: event.target.value,
+              }))
+            }
+          />
+          <Input
+            placeholder={t("overrideInputPrice")}
+            value={manualDraft.input}
+            onChange={(event) =>
+              setManualDraft((prev) => ({
+                ...prev,
+                input: event.target.value,
+              }))
+            }
+          />
+          <Input
+            placeholder={t("overrideOutputPrice")}
+            value={manualDraft.output}
+            onChange={(event) =>
+              setManualDraft((prev) => ({
+                ...prev,
+                output: event.target.value,
+              }))
+            }
+          />
+          <Input
+            placeholder={t("overrideCacheReadPrice")}
+            value={manualDraft.cacheRead}
+            onChange={(event) =>
+              setManualDraft((prev) => ({
+                ...prev,
+                cacheRead: event.target.value,
+              }))
+            }
+          />
+          <Input
+            placeholder={t("overrideCacheWritePrice")}
+            value={manualDraft.cacheWrite}
+            onChange={(event) =>
+              setManualDraft((prev) => ({
+                ...prev,
+                cacheWrite: event.target.value,
+              }))
+            }
+          />
+          <Input
+            placeholder={t("overrideNote")}
+            value={manualDraft.note}
+            onChange={(event) =>
+              setManualDraft((prev) => ({
+                ...prev,
+                note: event.target.value,
+              }))
+            }
+          />
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <Button
+            size="sm"
+            onClick={() => void handleManualSave()}
+            disabled={createOverride.isPending}
+          >
+            {manualExistingOverride ? t("overrideUpdate") : t("overrideSave")}
+          </Button>
+          {manualExistingOverride && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void deleteOverride.mutateAsync(manualExistingOverride.id)}
+              disabled={deleteOverride.isPending}
+            >
+              {t("overrideDelete")}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {rows.length === 0 && (
+        <div className="rounded-cf-sm border border-dashed border-divider bg-surface-300/30 px-4 py-6 text-sm text-muted-foreground">
+          {t("unresolvedEmpty")}
+        </div>
+      )}
+
       {rows.map((row) => {
         const existingOverride = overrideMap.get(row.model);
         const draft = getDraft(row.model);
@@ -246,7 +417,7 @@ function UnresolvedRepairTable({
               </div>
               {existingOverride && <Badge variant="success">{t("statusBilled")}</Badge>}
             </div>
-            <div className="grid gap-2 md:grid-cols-4">
+            <div className="grid gap-2 md:grid-cols-6">
               <Input
                 placeholder={t("overrideInputPrice")}
                 value={draft.input}
@@ -264,6 +435,26 @@ function UnresolvedRepairTable({
                   setDrafts((prev) => ({
                     ...prev,
                     [row.model]: { ...getDraft(row.model), output: event.target.value },
+                  }))
+                }
+              />
+              <Input
+                placeholder={t("overrideCacheReadPrice")}
+                value={draft.cacheRead}
+                onChange={(event) =>
+                  setDrafts((prev) => ({
+                    ...prev,
+                    [row.model]: { ...getDraft(row.model), cacheRead: event.target.value },
+                  }))
+                }
+              />
+              <Input
+                placeholder={t("overrideCacheWritePrice")}
+                value={draft.cacheWrite}
+                onChange={(event) =>
+                  setDrafts((prev) => ({
+                    ...prev,
+                    [row.model]: { ...getDraft(row.model), cacheWrite: event.target.value },
                   }))
                 }
               />
@@ -482,13 +673,15 @@ export default function BillingPage() {
                   })}
                 </p>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[980px] text-sm">
+                  <table className="w-full min-w-[1200px] text-sm">
                     <thead>
                       <tr className="border-b border-divider text-left text-xs uppercase tracking-wide text-muted-foreground">
                         <th className="px-3 py-2">{t("priceCatalogModel")}</th>
                         <th className="px-3 py-2">{t("priceCatalogSource")}</th>
                         <th className="px-3 py-2">{t("priceCatalogInputPrice")}</th>
                         <th className="px-3 py-2">{t("priceCatalogOutputPrice")}</th>
+                        <th className="px-3 py-2">{t("priceCatalogCacheReadPrice")}</th>
+                        <th className="px-3 py-2">{t("priceCatalogCacheWritePrice")}</th>
                         <th className="px-3 py-2">{t("priceCatalogSyncedAt")}</th>
                         <th className="px-3 py-2">{t("priceCatalogStatus")}</th>
                       </tr>
@@ -503,6 +696,16 @@ export default function BillingPage() {
                           </td>
                           <td className="px-3 py-2 tabular-nums">
                             {item.output_price_per_million.toFixed(4)}
+                          </td>
+                          <td className="px-3 py-2 tabular-nums">
+                            {item.cache_read_input_price_per_million == null
+                              ? "-"
+                              : item.cache_read_input_price_per_million.toFixed(4)}
+                          </td>
+                          <td className="px-3 py-2 tabular-nums">
+                            {item.cache_write_input_price_per_million == null
+                              ? "-"
+                              : item.cache_write_input_price_per_million.toFixed(4)}
                           </td>
                           <td className="px-3 py-2 text-xs text-muted-foreground">
                             {new Date(item.synced_at).toLocaleString(locale)}
@@ -536,15 +739,17 @@ export default function BillingPage() {
               <p className="text-sm text-muted-foreground">{t("recentEmpty")}</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[980px] text-sm">
+                <table className="w-full min-w-[1200px] text-sm">
                   <thead>
                     <tr className="border-b border-divider text-left text-xs uppercase tracking-wide text-muted-foreground">
                       <th className="px-3 py-2">{t("recentTime")}</th>
                       <th className="px-3 py-2">{t("recentModel")}</th>
                       <th className="px-3 py-2">{t("recentUpstream")}</th>
                       <th className="px-3 py-2">{t("recentTokens")}</th>
+                      <th className="px-3 py-2">{t("recentCacheTokens")}</th>
                       <th className="px-3 py-2">{t("recentBasePrice")}</th>
                       <th className="px-3 py-2">{t("recentMultiplier")}</th>
+                      <th className="px-3 py-2">{t("recentCacheCost")}</th>
                       <th className="px-3 py-2">{t("recentFinalCost")}</th>
                       <th className="px-3 py-2">{t("recentSource")}</th>
                       <th className="px-3 py-2">{t("recentStatus")}</th>
@@ -560,15 +765,35 @@ export default function BillingPage() {
                         <td className="px-3 py-2">{item.upstream_name ?? "-"}</td>
                         <td className="px-3 py-2 tabular-nums">{item.total_tokens}</td>
                         <td className="px-3 py-2 tabular-nums">
+                          {item.cache_read_tokens} / {item.cache_write_tokens}
+                        </td>
+                        <td className="px-3 py-2 tabular-nums">
                           {item.base_input_price_per_million == null ||
                           item.base_output_price_per_million == null
                             ? "-"
                             : `${item.base_input_price_per_million.toFixed(4)} / ${item.base_output_price_per_million.toFixed(4)}`}
+                          {(item.base_cache_read_input_price_per_million != null ||
+                            item.base_cache_write_input_price_per_million != null) && (
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">
+                              {item.base_cache_read_input_price_per_million == null
+                                ? "-"
+                                : item.base_cache_read_input_price_per_million.toFixed(4)}{" "}
+                              /{" "}
+                              {item.base_cache_write_input_price_per_million == null
+                                ? "-"
+                                : item.base_cache_write_input_price_per_million.toFixed(4)}
+                            </p>
+                          )}
                         </td>
                         <td className="px-3 py-2 tabular-nums">
                           {item.input_multiplier == null || item.output_multiplier == null
                             ? "-"
                             : `${item.input_multiplier.toFixed(2)} / ${item.output_multiplier.toFixed(2)}`}
+                        </td>
+                        <td className="px-3 py-2 tabular-nums">
+                          {item.cache_read_cost == null && item.cache_write_cost == null
+                            ? "-"
+                            : `${item.cache_read_cost == null ? "-" : usd.format(item.cache_read_cost)} / ${item.cache_write_cost == null ? "-" : usd.format(item.cache_write_cost)}`}
                         </td>
                         <td className="px-3 py-2 tabular-nums">
                           {item.final_cost == null ? "-" : usd.format(item.final_cost)}

@@ -95,6 +95,8 @@ async function persistBillingSnapshotSafely(input: {
     promptTokens: number;
     completionTokens: number;
     totalTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
   };
   requestId: string;
 }): Promise<void> {
@@ -1237,6 +1239,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             promptTokens: usage?.promptTokens || 0,
             completionTokens: usage?.completionTokens || 0,
             totalTokens: usage?.totalTokens || 0,
+            cacheReadTokens: usage?.cacheReadTokens || 0,
+            cacheWriteTokens: usage?.cacheCreationTokens || 0,
           };
 
           let persistedLogId: string | null = requestLogId;
@@ -1412,6 +1416,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         promptTokens: usage?.promptTokens || 0,
         completionTokens: usage?.completionTokens || 0,
         totalTokens: usage?.totalTokens || 0,
+        cacheReadTokens: usage?.cacheReadTokens || 0,
+        cacheWriteTokens: usage?.cacheCreationTokens || 0,
       };
 
       // Log request
@@ -1775,6 +1781,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           promptTokens: 0,
           completionTokens: 0,
           totalTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
         },
         requestId,
       });

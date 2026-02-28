@@ -15,6 +15,8 @@ const createOverrideSchema = z.object({
   model: z.string().min(1).max(255),
   input_price_per_million: z.number().min(0).max(1000000),
   output_price_per_million: z.number().min(0).max(1000000),
+  cache_read_input_price_per_million: z.number().min(0).max(1000000).nullable().optional(),
+  cache_write_input_price_per_million: z.number().min(0).max(1000000).nullable().optional(),
   note: z.string().max(1000).nullable().optional(),
 });
 
@@ -55,6 +57,8 @@ export async function POST(request: NextRequest): Promise<Response> {
       model: validated.model,
       inputPricePerMillion: validated.input_price_per_million,
       outputPricePerMillion: validated.output_price_per_million,
+      cacheReadInputPricePerMillion: validated.cache_read_input_price_per_million ?? null,
+      cacheWriteInputPricePerMillion: validated.cache_write_input_price_per_million ?? null,
       note: validated.note ?? null,
     });
     return NextResponse.json(transformBillingManualOverrideToApi(row), { status: 201 });

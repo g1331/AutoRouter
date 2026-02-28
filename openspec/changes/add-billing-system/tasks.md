@@ -6,7 +6,7 @@
 
 ## 2. 价格目录与费用计算服务
 
-- [x] 2.1 新增价格同步服务（OpenRouter 主源、LiteLLM 兜底）并实现统一价格归一化
+- [x] 2.1 新增价格同步服务（LiteLLM 单源）并实现统一价格归一化
 - [x] 2.2 新增手动价格覆盖服务（创建、更新、查询、删除）并实现优先级解析（override > synced）
 - [x] 2.3 新增请求费用计算服务，输入 token 用量与 upstream 倍率，输出可持久化的费用快照
 - [x] 2.4 为价格解析与费用计算补充单元测试（含无价格、无模型、流式请求等边界）
@@ -50,3 +50,18 @@
 - [x] 8.1 新增 `GET /api/admin/billing/prices`，支持分页与模型名检索，返回现有价格目录
 - [x] 8.2 在 Billing 页面新增“模型价格目录”展示区，支持按模型名搜索与状态可视化
 - [x] 8.3 补齐类型、transformer、hooks 与文案，并通过 `tsc` / `lint` / 相关单测
+
+## 9. 体验修正：日志直显成本与缓存计费补齐
+
+- [x] 9.1 在 `src/components/admin/logs-table.tsx` 请求日志表格与移动端卡片中直接展示计费状态、最终成本与未计费原因
+- [x] 9.2 在价格目录与手动覆盖链路补齐缓存读写单价字段（schema/service/API/type/UI），并确保可见可编辑
+- [x] 9.3 在 `src/lib/services/billing-cost-service.ts`、`src/app/api/proxy/v1/[...path]/route.ts` 中补齐缓存 token 与缓存费用计算及快照持久化
+- [x] 9.4 在 Billing 页面提供“手动录入模型价格”入口，即使未定价列表为空也可新增或更新模型计费信息
+- [x] 9.5 补齐迁移与回归校验（`drizzle/0015_mute_smasher.sql`、`tsc`、计费相关单测、logs-table 组件测试）
+
+## 10. 价格源策略调整：LiteLLM 单源
+
+- [x] 10.1 将 `src/lib/services/billing-price-service.ts` 同步链路改为 LiteLLM 单源，移除 OpenRouter 主源/兜底逻辑
+- [x] 10.2 调整 `src/app/api/admin/billing/prices/route.ts`、`src/types/api.ts`、`src/lib/utils/api-transformers.ts` 的 source 校验与类型定义，仅保留 `litellm`
+- [x] 10.3 更新 OpenSpec `proposal/design/specs` 对价格源策略描述，保持规格与实现一致
+- [x] 10.4 补齐并通过相关单测与类型检查，确保 source 变更不影响现有功能

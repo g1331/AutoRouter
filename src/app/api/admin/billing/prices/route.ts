@@ -23,8 +23,8 @@ export async function GET(request: NextRequest): Promise<Response> {
     const sourceParam = searchParams.get("source");
     const activeOnlyParam = searchParams.get("active_only");
 
-    if (sourceParam && sourceParam !== "openrouter" && sourceParam !== "litellm") {
-      return errorResponse("Validation error: source must be openrouter or litellm", 400);
+    if (sourceParam && sourceParam !== "litellm") {
+      return errorResponse("Validation error: source must be litellm", 400);
     }
 
     let activeOnly: boolean | undefined;
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       page,
       pageSize,
       modelQuery,
-      source: (sourceParam as "openrouter" | "litellm" | null) ?? undefined,
+      source: (sourceParam as "litellm" | null) ?? undefined,
       activeOnly,
     });
 

@@ -183,6 +183,14 @@ function getRequestTps(log: RequestLog): number | null {
   return Math.round((log.completion_tokens / log.duration_ms) * 1000 * 10) / 10;
 }
 
+function getBillingBadgeVariant(
+  status: RequestLog["billing_status"]
+): "success" | "warning" | "neutral" {
+  if (status === "billed") return "success";
+  if (status === "unbilled") return "warning";
+  return "neutral";
+}
+
 function getPercentile(values: number[], percentile: number): number | null {
   if (values.length === 0) {
     return null;
@@ -196,6 +204,38 @@ export function LogsTable({ logs }: LogsTableProps) {
   const t = useTranslations("logs");
   const locale = useLocale();
   const dateLocale = getDateLocale(locale);
+  const usdFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat(locale, {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 6,
+      }),
+    [locale]
+  );
+
+  const resolveBillingReasonLabel = (reason: string | null | undefined): string => {
+    if (!reason) {
+      return "-";
+    }
+    if (reason === "model_missing") return t("billingReasonModelMissing");
+    if (reason === "usage_missing") return t("billingReasonUsageMissing");
+    if (reason === "price_not_found") return t("billingReasonPriceNotFound");
+    if (reason === "calculation_error") return t("billingReasonCalculationError");
+    return reason;
+  };
+
+  const formatBillingCost = (log: RequestLog): string => {
+    if (log.final_cost == null) {
+      return "-";
+    }
+    const currency = log.currency ?? "USD";
+    if (currency !== "USD") {
+      return `${log.final_cost.toFixed(6)} ${currency}`;
+    }
+    return usdFormatter.format(log.final_cost);
+  };
 
   // Filter state
   const [statusCodeFilter, setStatusCodeFilter] = useState<string>("all");
@@ -846,6 +886,26 @@ export function LogsTable({ logs }: LogsTableProps) {
                           {log.status_code ?? "-"}
                         </Badge>
                         <div className="mt-1 tabular-nums">{formatDuration(log.duration_ms)}</div>
+                        <div className="mt-1">
+                          <Badge
+                            variant={getBillingBadgeVariant(log.billing_status)}
+                            className="px-2 py-0.5 text-[11px] leading-none font-mono"
+                          >
+                            {log.billing_status === "billed"
+                              ? t("billingStatusBilled")
+                              : log.billing_status === "unbilled"
+                                ? t("billingStatusUnbilled")
+                                : t("billingStatusPending")}
+                          </Badge>
+                        </div>
+                        <div className="mt-1 tabular-nums text-foreground">
+                          {formatBillingCost(log)}
+                        </div>
+                        {log.billing_status === "unbilled" && log.unbillable_reason && (
+                          <div className="mt-0.5 max-w-[160px] text-[11px] text-status-warning">
+                            {resolveBillingReasonLabel(log.unbillable_reason)}
+                          </div>
+                        )}
                         {(log.ttft_ms != null || requestTps != null) && (
                           <div className="mt-0.5 flex flex-wrap justify-end gap-x-1.5 gap-y-0 text-[11px] text-muted-foreground">
                             {log.ttft_ms != null && (
@@ -915,6 +975,8 @@ export function LogsTable({ logs }: LogsTableProps) {
                     <TableHead className="hidden lg:table-cell">{t("tablePath")}</TableHead>
                     <TableHead className="hidden xl:table-cell">{t("tableModel")}</TableHead>
                     <TableHead className="hidden md:table-cell">{t("tableTokens")}</TableHead>
+                    <TableHead className="w-[120px] px-3">{t("tableBillingStatus")}</TableHead>
+                    <TableHead className="w-[130px] px-3">{t("tableCost")}</TableHead>
                     <TableHead className="w-[84px] px-3">{t("tableStatus")}</TableHead>
                     <TableHead className="w-[180px] px-3">{t("tableDuration")}</TableHead>
                   </TableRow>
@@ -1009,6 +1071,26 @@ export function LogsTable({ logs }: LogsTableProps) {
                           </TableCell>
                           <TableCell className="px-3">
                             <Badge
+                              variant={getBillingBadgeVariant(log.billing_status)}
+                              className="px-2 py-0.5 text-[11px] leading-none font-mono"
+                            >
+                              {log.billing_status === "billed"
+                                ? t("billingStatusBilled")
+                                : log.billing_status === "unbilled"
+                                  ? t("billingStatusUnbilled")
+                                  : t("billingStatusPending")}
+                            </Badge>
+                            {log.billing_status === "unbilled" && log.unbillable_reason && (
+                              <p className="mt-1 text-[11px] text-status-warning">
+                                {resolveBillingReasonLabel(log.unbillable_reason)}
+                              </p>
+                            )}
+                          </TableCell>
+                          <TableCell className="px-3 font-mono text-xs tabular-nums">
+                            {formatBillingCost(log)}
+                          </TableCell>
+                          <TableCell className="px-3">
+                            <Badge
                               variant={getStatusBadgeVariant(log.status_code)}
                               className={cn(
                                 "px-2 py-0.5 text-[11px] leading-none font-mono tabular-nums",
@@ -1051,7 +1133,7 @@ export function LogsTable({ logs }: LogsTableProps) {
 
                         {isExpanded && canExpand && (
                           <TableRow className="bg-surface-300/30">
-                            <TableCell colSpan={9} className="p-0">
+                            <TableCell colSpan={11} className="p-0">
                               {renderExpandedDetails({
                                 log,
                                 upstreamDisplayName,

@@ -10,13 +10,12 @@ import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("billing-price-service");
 
-const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
 const LITELLM_PRICE_MAP_URL =
   "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
 
 const FETCH_TIMEOUT_MS = 12_000;
 
-export type BillingPriceSource = "manual" | "openrouter" | "litellm";
+export type BillingPriceSource = "manual" | "litellm";
 export type BillingSyncStatus = "success" | "partial" | "failed";
 
 export interface BillingResolvedPrice {
@@ -24,11 +23,13 @@ export interface BillingResolvedPrice {
   source: BillingPriceSource;
   inputPricePerMillion: number;
   outputPricePerMillion: number;
+  cacheReadInputPricePerMillion: number | null;
+  cacheWriteInputPricePerMillion: number | null;
 }
 
 export interface BillingSyncSummary {
   status: BillingSyncStatus;
-  source: "openrouter" | "litellm" | null;
+  source: "litellm" | null;
   successCount: number;
   failureCount: number;
   failureReason: string | null;
@@ -40,6 +41,8 @@ export interface BillingManualPriceOverrideRecord {
   model: string;
   inputPricePerMillion: number;
   outputPricePerMillion: number;
+  cacheReadInputPricePerMillion: number | null;
+  cacheWriteInputPricePerMillion: number | null;
   note: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -59,7 +62,9 @@ export interface BillingModelPriceCatalogItem {
   model: string;
   inputPricePerMillion: number;
   outputPricePerMillion: number;
-  source: "openrouter" | "litellm";
+  cacheReadInputPricePerMillion: number | null;
+  cacheWriteInputPricePerMillion: number | null;
+  source: "litellm";
   isActive: boolean;
   syncedAt: Date;
   updatedAt: Date;
@@ -69,7 +74,7 @@ export interface ListBillingModelPricesInput {
   page?: number;
   pageSize?: number;
   modelQuery?: string;
-  source?: "openrouter" | "litellm";
+  source?: "litellm";
   activeOnly?: boolean;
 }
 
@@ -85,19 +90,25 @@ interface NormalizedSyncedPrice {
   model: string;
   inputPricePerMillion: number;
   outputPricePerMillion: number;
-  source: "openrouter" | "litellm";
+  cacheReadInputPricePerMillion: number | null;
+  cacheWriteInputPricePerMillion: number | null;
+  source: "litellm";
 }
 
 interface ManualOverrideInput {
   model: string;
   inputPricePerMillion: number;
   outputPricePerMillion: number;
+  cacheReadInputPricePerMillion?: number | null;
+  cacheWriteInputPricePerMillion?: number | null;
   note?: string | null;
 }
 
 interface UpdateManualOverrideInput {
   inputPricePerMillion?: number;
   outputPricePerMillion?: number;
+  cacheReadInputPricePerMillion?: number | null;
+  cacheWriteInputPricePerMillion?: number | null;
   note?: string | null;
 }
 
@@ -124,47 +135,6 @@ async function fetchJsonWithTimeout(url: string): Promise<unknown> {
   }
 }
 
-function parseOpenRouterPrices(payload: unknown): NormalizedSyncedPrice[] {
-  if (!payload || typeof payload !== "object") {
-    return [];
-  }
-
-  const rawData = (payload as { data?: unknown }).data;
-  if (!Array.isArray(rawData)) {
-    return [];
-  }
-
-  const results: NormalizedSyncedPrice[] = [];
-  for (const item of rawData) {
-    if (!item || typeof item !== "object") {
-      continue;
-    }
-
-    const model = (item as { id?: unknown }).id;
-    const pricing = (item as { pricing?: unknown }).pricing;
-    if (typeof model !== "string" || !model.trim() || !pricing || typeof pricing !== "object") {
-      continue;
-    }
-
-    const promptCostPerToken = toNonNegativeNumber((pricing as { prompt?: unknown }).prompt);
-    const completionCostPerToken = toNonNegativeNumber(
-      (pricing as { completion?: unknown }).completion
-    );
-    if (promptCostPerToken === null || completionCostPerToken === null) {
-      continue;
-    }
-
-    results.push({
-      model: model.trim(),
-      inputPricePerMillion: promptCostPerToken * 1_000_000,
-      outputPricePerMillion: completionCostPerToken * 1_000_000,
-      source: "openrouter",
-    });
-  }
-
-  return results;
-}
-
 function parseLiteLLMPrices(payload: unknown): NormalizedSyncedPrice[] {
   if (!payload || typeof payload !== "object") {
     return [];
@@ -187,11 +157,21 @@ function parseLiteLLMPrices(payload: unknown): NormalizedSyncedPrice[] {
     if (inputCostPerToken === null || outputCostPerToken === null) {
       continue;
     }
+    const cacheReadCostPerToken = toNonNegativeNumber(
+      (rawValue as { cache_read_input_token_cost?: unknown }).cache_read_input_token_cost
+    );
+    const cacheWriteCostPerToken = toNonNegativeNumber(
+      (rawValue as { cache_creation_input_token_cost?: unknown }).cache_creation_input_token_cost
+    );
 
     results.push({
       model: model.trim(),
       inputPricePerMillion: inputCostPerToken * 1_000_000,
       outputPricePerMillion: outputCostPerToken * 1_000_000,
+      cacheReadInputPricePerMillion:
+        cacheReadCostPerToken === null ? null : cacheReadCostPerToken * 1_000_000,
+      cacheWriteInputPricePerMillion:
+        cacheWriteCostPerToken === null ? null : cacheWriteCostPerToken * 1_000_000,
       source: "litellm",
     });
   }
@@ -199,10 +179,7 @@ function parseLiteLLMPrices(payload: unknown): NormalizedSyncedPrice[] {
   return results;
 }
 
-async function persistSyncedPrices(
-  source: "openrouter" | "litellm",
-  prices: NormalizedSyncedPrice[]
-): Promise<number> {
+async function persistSyncedPrices(prices: NormalizedSyncedPrice[]): Promise<number> {
   const now = new Date();
 
   await db.transaction(async (tx) => {
@@ -212,7 +189,7 @@ async function persistSyncedPrices(
         isActive: false,
         updatedAt: now,
       })
-      .where(eq(billingModelPrices.source, source));
+      .where(eq(billingModelPrices.isActive, true));
 
     for (const price of prices) {
       await tx
@@ -221,7 +198,9 @@ async function persistSyncedPrices(
           model: price.model,
           inputPricePerMillion: price.inputPricePerMillion,
           outputPricePerMillion: price.outputPricePerMillion,
-          source,
+          cacheReadInputPricePerMillion: price.cacheReadInputPricePerMillion,
+          cacheWriteInputPricePerMillion: price.cacheWriteInputPricePerMillion,
+          source: "litellm",
           isActive: true,
           syncedAt: now,
           createdAt: now,
@@ -232,6 +211,8 @@ async function persistSyncedPrices(
           set: {
             inputPricePerMillion: price.inputPricePerMillion,
             outputPricePerMillion: price.outputPricePerMillion,
+            cacheReadInputPricePerMillion: price.cacheReadInputPricePerMillion,
+            cacheWriteInputPricePerMillion: price.cacheWriteInputPricePerMillion,
             isActive: true,
             syncedAt: now,
             updatedAt: now,
@@ -245,7 +226,7 @@ async function persistSyncedPrices(
 
 async function saveSyncHistory(entry: {
   status: BillingSyncStatus;
-  source: "openrouter" | "litellm" | null;
+  source: "litellm" | null;
   successCount: number;
   failureCount: number;
   failureReason: string | null;
@@ -261,34 +242,10 @@ async function saveSyncHistory(entry: {
 }
 
 /**
- * Sync model prices from OpenRouter first, then LiteLLM as fallback.
+ * Sync model prices from LiteLLM price map.
  */
 export async function syncBillingModelPrices(): Promise<BillingSyncSummary> {
   const syncedAt = new Date();
-  let openRouterError: string | null = null;
-
-  try {
-    const payload = await fetchJsonWithTimeout(OPENROUTER_MODELS_URL);
-    const prices = parseOpenRouterPrices(payload);
-    if (prices.length === 0) {
-      throw new Error("OpenRouter returned no valid price rows");
-    }
-
-    const successCount = await persistSyncedPrices("openrouter", prices);
-    const result: BillingSyncSummary = {
-      status: "success",
-      source: "openrouter",
-      successCount,
-      failureCount: 0,
-      failureReason: null,
-      syncedAt,
-    };
-    await saveSyncHistory(result);
-    return result;
-  } catch (error) {
-    openRouterError = error instanceof Error ? error.message : String(error);
-    log.warn({ err: error }, "openrouter price sync failed, fallback to litellm");
-  }
 
   try {
     const payload = await fetchJsonWithTimeout(LITELLM_PRICE_MAP_URL);
@@ -297,26 +254,25 @@ export async function syncBillingModelPrices(): Promise<BillingSyncSummary> {
       throw new Error("LiteLLM returned no valid price rows");
     }
 
-    const successCount = await persistSyncedPrices("litellm", prices);
+    const successCount = await persistSyncedPrices(prices);
     const result: BillingSyncSummary = {
-      status: "partial",
+      status: "success",
       source: "litellm",
       successCount,
-      failureCount: openRouterError ? 1 : 0,
-      failureReason: openRouterError,
+      failureCount: 0,
+      failureReason: null,
       syncedAt,
     };
     await saveSyncHistory(result);
     return result;
-  } catch (litellmError) {
-    const fallbackError =
-      litellmError instanceof Error ? litellmError.message : String(litellmError);
-    const failureReason = `openrouter: ${openRouterError ?? "unknown"}; litellm: ${fallbackError}`;
+  } catch (error) {
+    const failureReason = error instanceof Error ? error.message : String(error);
+    log.warn({ err: error }, "litellm price sync failed");
     const result: BillingSyncSummary = {
       status: "failed",
       source: null,
       successCount: 0,
-      failureCount: 2,
+      failureCount: 1,
       failureReason,
       syncedAt,
     };
@@ -345,12 +301,15 @@ export async function resolveBillingModelPrice(
       source: "manual",
       inputPricePerMillion: manual.inputPricePerMillion,
       outputPricePerMillion: manual.outputPricePerMillion,
+      cacheReadInputPricePerMillion: manual.cacheReadInputPricePerMillion,
+      cacheWriteInputPricePerMillion: manual.cacheWriteInputPricePerMillion,
     };
   }
 
   const synced = await db.query.billingModelPrices.findFirst({
     where: and(
       eq(billingModelPrices.model, normalizedModel),
+      eq(billingModelPrices.source, "litellm"),
       eq(billingModelPrices.isActive, true)
     ),
     orderBy: [desc(billingModelPrices.syncedAt)],
@@ -361,9 +320,11 @@ export async function resolveBillingModelPrice(
 
   return {
     model: normalizedModel,
-    source: synced.source as "openrouter" | "litellm",
+    source: "litellm",
     inputPricePerMillion: synced.inputPricePerMillion,
     outputPricePerMillion: synced.outputPricePerMillion,
+    cacheReadInputPricePerMillion: synced.cacheReadInputPricePerMillion,
+    cacheWriteInputPricePerMillion: synced.cacheWriteInputPricePerMillion,
   };
 }
 
@@ -380,7 +341,7 @@ export async function getLatestBillingSyncStatus(): Promise<BillingSyncSummary |
 
   return {
     status: latest.status as BillingSyncStatus,
-    source: (latest.source as "openrouter" | "litellm" | null) ?? null,
+    source: latest.source === "litellm" ? "litellm" : null,
     successCount: latest.successCount,
     failureCount: latest.failureCount,
     failureReason: latest.failureReason,
@@ -399,6 +360,8 @@ export async function listBillingManualPriceOverrides(): Promise<
     model: row.model,
     inputPricePerMillion: row.inputPricePerMillion,
     outputPricePerMillion: row.outputPricePerMillion,
+    cacheReadInputPricePerMillion: row.cacheReadInputPricePerMillion,
+    cacheWriteInputPricePerMillion: row.cacheWriteInputPricePerMillion,
     note: row.note,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -415,6 +378,8 @@ export async function createBillingManualPriceOverride(
       model: input.model.trim(),
       inputPricePerMillion: input.inputPricePerMillion,
       outputPricePerMillion: input.outputPricePerMillion,
+      cacheReadInputPricePerMillion: input.cacheReadInputPricePerMillion ?? null,
+      cacheWriteInputPricePerMillion: input.cacheWriteInputPricePerMillion ?? null,
       note: input.note ?? null,
       createdAt: now,
       updatedAt: now,
@@ -424,6 +389,8 @@ export async function createBillingManualPriceOverride(
       set: {
         inputPricePerMillion: input.inputPricePerMillion,
         outputPricePerMillion: input.outputPricePerMillion,
+        cacheReadInputPricePerMillion: input.cacheReadInputPricePerMillion ?? null,
+        cacheWriteInputPricePerMillion: input.cacheWriteInputPricePerMillion ?? null,
         note: input.note ?? null,
         updatedAt: now,
       },
@@ -435,6 +402,8 @@ export async function createBillingManualPriceOverride(
     model: row.model,
     inputPricePerMillion: row.inputPricePerMillion,
     outputPricePerMillion: row.outputPricePerMillion,
+    cacheReadInputPricePerMillion: row.cacheReadInputPricePerMillion,
+    cacheWriteInputPricePerMillion: row.cacheWriteInputPricePerMillion,
     note: row.note,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -455,6 +424,12 @@ export async function updateBillingManualPriceOverride(
   if (input.outputPricePerMillion !== undefined) {
     updateValues.outputPricePerMillion = input.outputPricePerMillion;
   }
+  if (input.cacheReadInputPricePerMillion !== undefined) {
+    updateValues.cacheReadInputPricePerMillion = input.cacheReadInputPricePerMillion;
+  }
+  if (input.cacheWriteInputPricePerMillion !== undefined) {
+    updateValues.cacheWriteInputPricePerMillion = input.cacheWriteInputPricePerMillion;
+  }
   if (input.note !== undefined) {
     updateValues.note = input.note;
   }
@@ -474,6 +449,8 @@ export async function updateBillingManualPriceOverride(
     model: row.model,
     inputPricePerMillion: row.inputPricePerMillion,
     outputPricePerMillion: row.outputPricePerMillion,
+    cacheReadInputPricePerMillion: row.cacheReadInputPricePerMillion,
+    cacheWriteInputPricePerMillion: row.cacheWriteInputPricePerMillion,
     note: row.note,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -544,11 +521,9 @@ export async function listBillingModelPrices(
   const modelQuery = input.modelQuery?.trim();
 
   const conditions = [];
+  conditions.push(eq(billingModelPrices.source, "litellm"));
   if (modelQuery) {
     conditions.push(like(billingModelPrices.model, `%${modelQuery}%`));
-  }
-  if (input.source) {
-    conditions.push(eq(billingModelPrices.source, input.source));
   }
   if (input.activeOnly === true) {
     conditions.push(eq(billingModelPrices.isActive, true));
@@ -574,7 +549,9 @@ export async function listBillingModelPrices(
       model: row.model,
       inputPricePerMillion: row.inputPricePerMillion,
       outputPricePerMillion: row.outputPricePerMillion,
-      source: row.source as "openrouter" | "litellm",
+      cacheReadInputPricePerMillion: row.cacheReadInputPricePerMillion,
+      cacheWriteInputPricePerMillion: row.cacheWriteInputPricePerMillion,
+      source: "litellm",
       isActive: row.isActive,
       syncedAt: row.syncedAt,
       updatedAt: row.updatedAt,

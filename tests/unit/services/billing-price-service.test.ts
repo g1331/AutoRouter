@@ -100,6 +100,8 @@ describe("billing-price-service", () => {
       model: "gpt-4.1",
       inputPricePerMillion: 3,
       outputPricePerMillion: 9,
+      cacheReadInputPricePerMillion: null,
+      cacheWriteInputPricePerMillion: null,
     });
 
     const result = await resolveBillingModelPrice("gpt-4.1");
@@ -109,6 +111,8 @@ describe("billing-price-service", () => {
       source: "manual",
       inputPricePerMillion: 3,
       outputPricePerMillion: 9,
+      cacheReadInputPricePerMillion: null,
+      cacheWriteInputPricePerMillion: null,
     });
     expect(syncedFindFirstMock).not.toHaveBeenCalled();
   });
@@ -121,6 +125,8 @@ describe("billing-price-service", () => {
       source: "litellm",
       inputPricePerMillion: 2.5,
       outputPricePerMillion: 7.5,
+      cacheReadInputPricePerMillion: 0.8,
+      cacheWriteInputPricePerMillion: null,
     });
 
     const result = await resolveBillingModelPrice("gpt-4.1");
@@ -130,40 +136,39 @@ describe("billing-price-service", () => {
       source: "litellm",
       inputPricePerMillion: 2.5,
       outputPricePerMillion: 7.5,
+      cacheReadInputPricePerMillion: 0.8,
+      cacheWriteInputPricePerMillion: null,
     });
   });
 
-  it("falls back to LiteLLM when OpenRouter sync fails", async () => {
+  it("syncs prices from LiteLLM price map", async () => {
     const { syncBillingModelPrices } = await import("@/lib/services/billing-price-service");
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(new Response("upstream error", { status: 500 }))
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            "gpt-4.1": {
-              input_cost_per_token: 0.000003,
-              output_cost_per_token: 0.000009,
-            },
-          }),
-          { status: 200 }
-        )
-      );
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          "gpt-4.1": {
+            input_cost_per_token: 0.000003,
+            output_cost_per_token: 0.000009,
+          },
+        }),
+        { status: 200 }
+      )
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await syncBillingModelPrices();
 
-    expect(result.status).toBe("partial");
+    expect(result.status).toBe("success");
     expect(result.source).toBe("litellm");
     expect(result.successCount).toBe(1);
-    expect(result.failureCount).toBe(1);
-    expect(result.failureReason).toContain("openrouter");
+    expect(result.failureCount).toBe(0);
+    expect(result.failureReason).toBeNull();
     expect(dbTransactionMock).toHaveBeenCalledTimes(1);
     expect(txInsertValuesMock).toHaveBeenCalled();
     expect(dbInsertValuesMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        status: "partial",
+        status: "success",
         source: "litellm",
       })
     );

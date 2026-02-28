@@ -560,7 +560,7 @@ export interface BillingOverviewApiResponse {
 
 export interface BillingSyncApiResponse {
   status: "success" | "partial" | "failed";
-  source: "openrouter" | "litellm" | null;
+  source: "litellm" | null;
   success_count: number;
   failure_count: number;
   failure_reason: string | null;
@@ -572,6 +572,8 @@ export interface BillingManualOverrideApiResponse {
   model: string;
   input_price_per_million: number;
   output_price_per_million: number;
+  cache_read_input_price_per_million: number | null;
+  cache_write_input_price_per_million: number | null;
   note: string | null;
   created_at: string;
   updated_at: string;
@@ -603,13 +605,19 @@ export interface RecentBillingDetailApiResponse {
   prompt_tokens: number;
   completion_tokens: number;
   total_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
   price_source: string | null;
   billing_status: "billed" | "unbilled";
   unbillable_reason: string | null;
   base_input_price_per_million: number | null;
   base_output_price_per_million: number | null;
+  base_cache_read_input_price_per_million: number | null;
+  base_cache_write_input_price_per_million: number | null;
   input_multiplier: number | null;
   output_multiplier: number | null;
+  cache_read_cost: number | null;
+  cache_write_cost: number | null;
   final_cost: number | null;
   currency: string;
 }
@@ -619,7 +627,9 @@ export interface BillingModelPriceApiResponse {
   model: string;
   input_price_per_million: number;
   output_price_per_million: number;
-  source: "openrouter" | "litellm";
+  cache_read_input_price_per_million: number | null;
+  cache_write_input_price_per_million: number | null;
+  source: "litellm";
   is_active: boolean;
   synced_at: string;
   updated_at: string;
@@ -655,6 +665,8 @@ export function transformBillingManualOverrideToApi(
     model: override.model,
     input_price_per_million: override.inputPricePerMillion,
     output_price_per_million: override.outputPricePerMillion,
+    cache_read_input_price_per_million: override.cacheReadInputPricePerMillion,
+    cache_write_input_price_per_million: override.cacheWriteInputPricePerMillion,
     note: override.note,
     created_at: override.createdAt.toISOString(),
     updated_at: override.updatedAt.toISOString(),
@@ -698,13 +710,19 @@ export function transformRecentBillingDetailToApi(
     prompt_tokens: item.promptTokens,
     completion_tokens: item.completionTokens,
     total_tokens: item.totalTokens,
+    cache_read_tokens: item.cacheReadTokens,
+    cache_write_tokens: item.cacheWriteTokens,
     price_source: item.priceSource,
     billing_status: item.billingStatus,
     unbillable_reason: item.unbillableReason,
     base_input_price_per_million: item.baseInputPricePerMillion,
     base_output_price_per_million: item.baseOutputPricePerMillion,
+    base_cache_read_input_price_per_million: item.baseCacheReadInputPricePerMillion,
+    base_cache_write_input_price_per_million: item.baseCacheWriteInputPricePerMillion,
     input_multiplier: item.inputMultiplier,
     output_multiplier: item.outputMultiplier,
+    cache_read_cost: item.cacheReadCost,
+    cache_write_cost: item.cacheWriteCost,
     final_cost: item.finalCost,
     currency: item.currency,
   };
@@ -718,6 +736,8 @@ export function transformBillingModelPriceToApi(
     model: item.model,
     input_price_per_million: item.inputPricePerMillion,
     output_price_per_million: item.outputPricePerMillion,
+    cache_read_input_price_per_million: item.cacheReadInputPricePerMillion,
+    cache_write_input_price_per_million: item.cacheWriteInputPricePerMillion,
     source: item.source,
     is_active: item.isActive,
     synced_at: item.syncedAt.toISOString(),
