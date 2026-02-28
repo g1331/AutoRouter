@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { Link } from "@/i18n/navigation";
 import {
   useBillingOverview,
   useBillingUnresolvedModels,
@@ -18,16 +18,8 @@ import {
   useDeleteBillingManualOverride,
   useSyncBillingPrices,
   useBillingModelPrices,
-  useRecentBillingDetails,
-  useUpstreamBillingMultipliers,
-  useUpdateUpstreamBillingMultiplier,
 } from "@/hooks/use-billing";
-import type {
-  BillingModelPrice,
-  BillingManualOverride,
-  BillingUnresolvedModel,
-  UpstreamBillingMultiplier,
-} from "@/types/api";
+import type { BillingModelPrice, BillingManualOverride, BillingUnresolvedModel } from "@/types/api";
 
 type BillingTranslate = (key: string, values?: Record<string, string | number>) => string;
 
@@ -44,14 +36,6 @@ function useUsdFormatter(locale: string) {
       }),
     [locale]
   );
-}
-
-function parseMultiplierInput(raw: string): number | null {
-  const value = Number(raw);
-  if (Number.isNaN(value) || value < 0 || value > 100) {
-    return null;
-  }
-  return value;
 }
 
 function parseRequiredPrice(raw: string): number | null {
@@ -73,120 +57,12 @@ function parseOptionalPrice(raw: string): number | null | "invalid" {
   return value;
 }
 
-function resolveReasonLabel(reason: string | null, t: BillingTranslate): string {
-  if (!reason) {
-    return "-";
-  }
-  if (reason === "model_missing") return t("reasonModelMissing");
-  if (reason === "usage_missing") return t("reasonUsageMissing");
-  if (reason === "price_not_found") return t("reasonPriceNotFound");
-  if (reason === "calculation_error") return t("reasonCalculationError");
-  return reason;
-}
-
 function getSyncBadgeVariant(status: string | null): "success" | "warning" | "error" | "neutral" {
   if (!status) return "neutral";
   if (status === "success") return "success";
   if (status === "partial") return "warning";
   if (status === "failed") return "error";
   return "neutral";
-}
-
-function UpstreamMultiplierTable({
-  rows,
-  onSave,
-  pendingId,
-  t,
-}: {
-  rows: UpstreamBillingMultiplier[];
-  onSave: (row: UpstreamBillingMultiplier, inputRaw: string, outputRaw: string) => void;
-  pendingId: string | null;
-  t: BillingTranslate;
-}) {
-  const [drafts, setDrafts] = useState<Record<string, { input: string; output: string }>>({});
-
-  const getDraft = (row: UpstreamBillingMultiplier) => {
-    return (
-      drafts[row.id] ?? {
-        input: String(row.input_multiplier),
-        output: String(row.output_multiplier),
-      }
-    );
-  };
-
-  if (rows.length === 0) {
-    return <p className="text-sm text-muted-foreground">{t("unresolvedEmpty")}</p>;
-  }
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[720px] text-sm">
-        <thead>
-          <tr className="border-b border-divider text-left text-xs uppercase tracking-wide text-muted-foreground">
-            <th className="px-3 py-2">{t("overrideModel")}</th>
-            <th className="px-3 py-2">{t("multiplierInput")}</th>
-            <th className="px-3 py-2">{t("multiplierOutput")}</th>
-            <th className="px-3 py-2 text-right">{t("tableAction")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => {
-            const draft = getDraft(row);
-            const inputMultiplier = parseMultiplierInput(draft.input);
-            const outputMultiplier = parseMultiplierInput(draft.output);
-            const invalid = inputMultiplier === null || outputMultiplier === null;
-
-            return (
-              <tr key={row.id} className="border-b border-divider/60">
-                <td className="px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-foreground">{row.name}</span>
-                    {!row.is_active && <Badge variant="neutral">{t("upstreamDisabled")}</Badge>}
-                  </div>
-                </td>
-                <td className="px-3 py-2">
-                  <Input
-                    value={draft.input}
-                    onChange={(event) =>
-                      setDrafts((prev) => ({
-                        ...prev,
-                        [row.id]: { ...getDraft(row), input: event.target.value },
-                      }))
-                    }
-                    className={cn("h-9", inputMultiplier === null && "border-status-error")}
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <Input
-                    value={draft.output}
-                    onChange={(event) =>
-                      setDrafts((prev) => ({
-                        ...prev,
-                        [row.id]: { ...getDraft(row), output: event.target.value },
-                      }))
-                    }
-                    className={cn("h-9", outputMultiplier === null && "border-status-error")}
-                  />
-                </td>
-                <td className="px-3 py-2 text-right">
-                  <Button
-                    size="sm"
-                    onClick={() => onSave(row, draft.input, draft.output)}
-                    disabled={invalid || pendingId === row.id}
-                  >
-                    {pendingId === row.id ? t("saving") : t("save")}
-                  </Button>
-                  {invalid && (
-                    <p className="mt-1 text-xs text-status-error">{t("multiplierInvalid")}</p>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
 }
 
 function UnresolvedRepairTable({
@@ -504,13 +380,9 @@ export default function BillingPage() {
 
   const overview = useBillingOverview();
   const unresolved = useBillingUnresolvedModels();
-  const multipliers = useUpstreamBillingMultipliers();
   const [modelPriceQuery, setModelPriceQuery] = useState("");
   const modelPrices = useBillingModelPrices(1, 50, modelPriceQuery);
-  const recent = useRecentBillingDetails(1, 20);
   const syncPrices = useSyncBillingPrices();
-  const updateMultiplier = useUpdateUpstreamBillingMultiplier();
-  const [savingMultiplierId, setSavingMultiplierId] = useState<string | null>(null);
 
   const latestSync = overview.data?.latest_sync ?? null;
   const latestSyncText = latestSync
@@ -520,31 +392,6 @@ export default function BillingPage() {
         ? t("syncPartial", { source: latestSync.source ?? "-" })
         : t("syncFailed")
     : t("syncNever");
-
-  const handleSaveMultiplier = async (
-    row: UpstreamBillingMultiplier,
-    inputRaw: string,
-    outputRaw: string
-  ) => {
-    const input = parseMultiplierInput(inputRaw);
-    const output = parseMultiplierInput(outputRaw);
-    if (input === null || output === null) {
-      return;
-    }
-
-    setSavingMultiplierId(row.id);
-    try {
-      await updateMultiplier.mutateAsync({
-        id: row.id,
-        data: {
-          input_multiplier: input,
-          output_multiplier: output,
-        },
-      });
-    } finally {
-      setSavingMultiplierId(null);
-    }
-  };
 
   return (
     <>
@@ -607,27 +454,6 @@ export default function BillingPage() {
             </CardContent>
           </Card>
         </div>
-
-        <Card variant="outlined" className="border-divider bg-surface-200/70">
-          <CardContent className="space-y-3 p-5 sm:p-6">
-            <div>
-              <h3 className="type-label-medium text-foreground">{t("multiplierTitle")}</h3>
-              <p className="text-sm text-muted-foreground">{t("multiplierDesc")}</p>
-            </div>
-            {multipliers.isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading...</p>
-            ) : multipliers.isError ? (
-              <p className="text-sm text-status-error">{String(multipliers.error)}</p>
-            ) : (
-              <UpstreamMultiplierTable
-                rows={multipliers.data?.items ?? []}
-                onSave={handleSaveMultiplier}
-                pendingId={savingMultiplierId}
-                t={t}
-              />
-            )}
-          </CardContent>
-        </Card>
 
         <Card variant="outlined" className="border-divider bg-surface-200/70">
           <CardContent className="space-y-3 p-5 sm:p-6">
@@ -729,96 +555,15 @@ export default function BillingPage() {
 
         <Card variant="outlined" className="border-divider bg-surface-200/70">
           <CardContent className="space-y-3 p-5 sm:p-6">
-            <div>
-              <h3 className="type-label-medium text-foreground">{t("recentTitle")}</h3>
-              <p className="text-sm text-muted-foreground">{t("recentDesc")}</p>
-            </div>
-            {recent.isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading...</p>
-            ) : recent.isError ? (
-              <p className="text-sm text-status-error">{String(recent.error)}</p>
-            ) : (recent.data?.items.length ?? 0) === 0 ? (
-              <p className="text-sm text-muted-foreground">{t("recentEmpty")}</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[1200px] text-sm">
-                  <thead>
-                    <tr className="border-b border-divider text-left text-xs uppercase tracking-wide text-muted-foreground">
-                      <th className="px-3 py-2">{t("recentTime")}</th>
-                      <th className="px-3 py-2">{t("recentModel")}</th>
-                      <th className="px-3 py-2">{t("recentUpstream")}</th>
-                      <th className="px-3 py-2">{t("recentTokens")}</th>
-                      <th className="px-3 py-2">{t("recentCacheTokens")}</th>
-                      <th className="px-3 py-2">{t("recentBasePrice")}</th>
-                      <th className="px-3 py-2">{t("recentMultiplier")}</th>
-                      <th className="px-3 py-2">{t("recentCacheCost")}</th>
-                      <th className="px-3 py-2">{t("recentFinalCost")}</th>
-                      <th className="px-3 py-2">{t("recentSource")}</th>
-                      <th className="px-3 py-2">{t("recentStatus")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recent.data?.items.map((item) => (
-                      <tr key={item.request_log_id} className="border-b border-divider/60">
-                        <td className="px-3 py-2 text-xs text-muted-foreground">
-                          {new Date(item.created_at).toLocaleString(locale)}
-                        </td>
-                        <td className="px-3 py-2 font-mono">{item.model ?? "-"}</td>
-                        <td className="px-3 py-2">{item.upstream_name ?? "-"}</td>
-                        <td className="px-3 py-2 tabular-nums">{item.total_tokens}</td>
-                        <td className="px-3 py-2 tabular-nums">
-                          {item.cache_read_tokens} / {item.cache_write_tokens}
-                        </td>
-                        <td className="px-3 py-2 tabular-nums">
-                          {item.base_input_price_per_million == null ||
-                          item.base_output_price_per_million == null
-                            ? "-"
-                            : `${item.base_input_price_per_million.toFixed(4)} / ${item.base_output_price_per_million.toFixed(4)}`}
-                          {(item.base_cache_read_input_price_per_million != null ||
-                            item.base_cache_write_input_price_per_million != null) && (
-                            <p className="mt-0.5 text-[11px] text-muted-foreground">
-                              {item.base_cache_read_input_price_per_million == null
-                                ? "-"
-                                : item.base_cache_read_input_price_per_million.toFixed(4)}{" "}
-                              /{" "}
-                              {item.base_cache_write_input_price_per_million == null
-                                ? "-"
-                                : item.base_cache_write_input_price_per_million.toFixed(4)}
-                            </p>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 tabular-nums">
-                          {item.input_multiplier == null || item.output_multiplier == null
-                            ? "-"
-                            : `${item.input_multiplier.toFixed(2)} / ${item.output_multiplier.toFixed(2)}`}
-                        </td>
-                        <td className="px-3 py-2 tabular-nums">
-                          {item.cache_read_cost == null && item.cache_write_cost == null
-                            ? "-"
-                            : `${item.cache_read_cost == null ? "-" : usd.format(item.cache_read_cost)} / ${item.cache_write_cost == null ? "-" : usd.format(item.cache_write_cost)}`}
-                        </td>
-                        <td className="px-3 py-2 tabular-nums">
-                          {item.final_cost == null ? "-" : usd.format(item.final_cost)}
-                        </td>
-                        <td className="px-3 py-2">{item.price_source ?? "-"}</td>
-                        <td className="px-3 py-2">
-                          <Badge variant={item.billing_status === "billed" ? "success" : "warning"}>
-                            {item.billing_status === "billed"
-                              ? t("statusBilled")
-                              : t("statusUnbilled")}
-                          </Badge>
-                          {item.billing_status === "unbilled" && (
-                            <p className="mt-1 text-xs text-status-warning">
-                              {resolveReasonLabel(item.unbillable_reason, t)}
-                            </p>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="type-label-medium text-foreground">{t("logsTitle")}</h3>
+                <p className="text-sm text-muted-foreground">{t("logsDesc")}</p>
               </div>
-            )}
+              <Button asChild variant="secondary" className="w-full sm:w-auto">
+                <Link href="/logs">{t("logsAction")}</Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

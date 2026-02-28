@@ -277,10 +277,10 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
         </div>
         <div className="ml-auto flex items-center gap-1">
           <Button
-            variant="ghost"
-            size="icon"
+            variant="outline"
+            size="sm"
             type="button"
-            className="h-7 w-7 text-status-info hover:bg-status-info-muted"
+            className="h-7 gap-1.5 border-divider bg-surface-200 px-2.5 text-status-info hover:bg-status-info-muted"
             onClick={(e) => {
               e.stopPropagation();
               onTest(upstream);
@@ -288,12 +288,13 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
             aria-label={`${tCommon("test")}: ${upstream.name}`}
           >
             <Play className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="text-xs">{tCommon("test")}</span>
           </Button>
           <Button
-            variant="ghost"
-            size="icon"
+            variant="outline"
+            size="sm"
             type="button"
-            className="h-7 w-7 text-foreground hover:bg-surface-400"
+            className="h-7 gap-1.5 border-divider bg-surface-200 px-2.5 text-foreground hover:bg-surface-400"
             onClick={(e) => {
               e.stopPropagation();
               onEdit(upstream);
@@ -301,12 +302,13 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
             aria-label={`${tCommon("edit")}: ${upstream.name}`}
           >
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="text-xs">{tCommon("edit")}</span>
           </Button>
           <Button
-            variant="ghost"
-            size="icon"
+            variant="outline"
+            size="sm"
             type="button"
-            className="h-7 w-7 text-status-error hover:bg-status-error-muted"
+            className="h-7 gap-1.5 border-divider bg-surface-200 px-2.5 text-status-error hover:bg-status-error-muted"
             onClick={(e) => {
               e.stopPropagation();
               onDelete(upstream);
@@ -314,6 +316,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
             aria-label={`${tCommon("delete")}: ${upstream.name}`}
           >
             <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="text-xs">{tCommon("delete")}</span>
           </Button>
         </div>
       </div>
@@ -473,6 +476,13 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                               <code className="block max-w-full whitespace-nowrap overflow-x-auto rounded-cf-sm border border-divider bg-surface-300 px-2 py-1 font-mono text-xs leading-5 text-foreground">
                                 {upstream.base_url}
                               </code>
+                              <div className="mt-1 flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
+                                <span className="shrink-0">{t("billingMultipliers")}</span>
+                                <span className="ml-auto tabular-nums text-foreground">
+                                  {(upstream.billing_input_multiplier ?? 1).toFixed(2)} /{" "}
+                                  {(upstream.billing_output_multiplier ?? 1).toFixed(2)}
+                                </span>
+                              </div>
                             </TableCell>
                             <TableCell className="hidden whitespace-nowrap pr-2 text-right 2xl:table-cell">
                               {formatDistanceToNow(new Date(upstream.created_at), {
@@ -542,7 +552,19 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                       className="mx-2 my-2 space-y-2 rounded-cf-sm border border-surface-400/45 bg-surface-200/35 px-2.5 py-2.5"
                     >
                       {/* Card Header: Name + Badge */}
-                      <div className="flex items-start justify-between gap-2">
+                      <div
+                        className="flex items-start justify-between gap-2 cursor-pointer"
+                        onClick={() => onEdit(upstream)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onEdit(upstream);
+                          }
+                        }}
+                        aria-label={`${tCommon("edit")}: ${upstream.name}`}
+                      >
                         <div className="flex min-w-0 items-center gap-1.5">
                           <span className="font-mono text-xs text-foreground font-medium truncate">
                             {upstream.name}
@@ -590,6 +612,15 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                             width={8}
                             showValue
                           />
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="shrink-0 text-muted-foreground">
+                            {t("billingMultipliers")}
+                          </span>
+                          <span className="tabular-nums text-foreground">
+                            {(upstream.billing_input_multiplier ?? 1).toFixed(2)} /{" "}
+                            {(upstream.billing_output_multiplier ?? 1).toFixed(2)}
+                          </span>
                         </div>
                         <div className="flex items-center justify-between gap-2">
                           <span className="shrink-0 text-muted-foreground">

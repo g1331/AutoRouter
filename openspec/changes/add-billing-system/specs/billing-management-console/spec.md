@@ -17,11 +17,11 @@
 
 ### Requirement: Upstream Multiplier Management UI
 
-系统 MUST 提供 upstream 级倍率查看与编辑能力。
+系统 MUST 提供 upstream 级倍率查看与编辑能力，且该能力 SHOULD 位于 `/upstreams` 上游管理页面，避免在 Billing 页面引入与“渠道启停”相关的语义干扰。
 
 #### Scenario: Edit multiplier inline
 
-- **WHEN** 管理员在倍率表中修改某 upstream 的输入或输出倍率并保存
+- **WHEN** 管理员在 `/upstreams` 的上游编辑界面中修改某 upstream 的输入或输出倍率并保存
 - **THEN** 系统 SHALL 持久化该倍率
 - **AND** 页面 SHALL 反馈保存成功状态
 
@@ -46,20 +46,14 @@
 - **THEN** 系统 SHALL 触发一次价格同步任务
 - **AND** 在页面展示同步结果摘要
 
-### Requirement: Recent Billing Details Table
+### Requirement: Avoid Duplicate Recent Table
 
-系统 MUST 提供请求级费用明细表用于追溯计费来源。
+系统 SHOULD 避免在 Billing 页面重复展示“近期请求明细表”，以免与请求日志页面产生重复心智负担。
 
-#### Scenario: Show request billing breakdown
+#### Scenario: Guide users to request logs
 
-- **WHEN** 管理员查看近期明细
-- **THEN** 表格 SHALL 展示时间、模型、上游、token 用量、基础单价、倍率、最终费用、价格来源、计费状态
-
-#### Scenario: Highlight unbillable requests
-
-- **WHEN** 某请求为未计费状态
-- **THEN** 表格 SHALL 以明显状态标识该请求
-- **AND** 提供未计费原因字段
+- **WHEN** 管理员在 Billing 页面希望查看最近请求的费用明细
+- **THEN** 页面 SHALL 提供明确的入口引导用户前往 `/logs`
 
 ### Requirement: Request Logs Billing Visibility
 
