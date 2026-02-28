@@ -107,8 +107,8 @@ describe("UpstreamsTable", () => {
     });
   });
 
-  describe("Terminal Header", () => {
-    it("renders terminal header with system ID", () => {
+  describe("Deprecated Header", () => {
+    it("does not render deprecated terminal header", () => {
       render(
         <UpstreamsTable
           upstreams={[mockUpstream]}
@@ -118,20 +118,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      expect(screen.getByText("SYS.UPSTREAM_ARRAY")).toBeInTheDocument();
-    });
-
-    it("displays node count in header", () => {
-      render(
-        <UpstreamsTable
-          upstreams={[mockUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      expect(screen.getByText("[1 NODES]")).toBeInTheDocument();
+      expect(screen.queryByText("SYS.UPSTREAM_ARRAY")).not.toBeInTheDocument();
+      expect(screen.queryByText("[1 NODES]")).not.toBeInTheDocument();
     });
   });
 

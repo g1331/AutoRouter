@@ -153,10 +153,10 @@ describe("Sidebar", () => {
       expect(screen.getAllByTestId("icon-settings").length).toBeGreaterThan(0);
     });
 
-    it("renders system status", () => {
+    it("does not render deprecated system status label", () => {
       renderSidebar();
 
-      expect(screen.getByText("sysOk")).toBeInTheDocument();
+      expect(screen.queryByText("sysOk")).not.toBeInTheDocument();
     });
 
     it("renders logout button", () => {

@@ -2,11 +2,6 @@ import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Topbar } from "@/components/admin/topbar";
 
-// Mock next-intl
-vi.mock("next-intl", () => ({
-  useTranslations: () => (key: string) => key,
-}));
-
 describe("Topbar", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -25,11 +20,11 @@ describe("Topbar", () => {
       expect(screen.getByRole("banner")).toBeInTheDocument();
     });
 
-    it("renders status indicator", () => {
+    it("does not render deprecated status indicator", () => {
       render(<Topbar title="Test" />);
 
-      expect(screen.getByText("STATUS:")).toBeInTheDocument();
-      expect(screen.getByText("ONLINE")).toBeInTheDocument();
+      expect(screen.queryByText("STATUS:")).not.toBeInTheDocument();
+      expect(screen.queryByText("ONLINE")).not.toBeInTheDocument();
     });
 
     it("renders terminal prompt indicator", () => {

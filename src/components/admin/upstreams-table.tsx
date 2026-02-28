@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { getDateLocale } from "@/lib/date-locale";
-import { StatusLed, AsciiProgress, TerminalHeader, type LedStatus } from "@/components/ui/terminal";
+import { StatusLed, AsciiProgress, type LedStatus } from "@/components/ui/terminal";
 import { cn } from "@/lib/utils";
 import { useToggleUpstreamActive } from "@/hooks/use-upstreams";
 import { useForceCircuitBreaker } from "@/hooks/use-circuit-breaker";
@@ -156,7 +156,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
   };
 
   const renderDesktopActions = (upstream: Upstream) => (
-    <div className="ml-auto inline-flex min-w-[10rem] items-center justify-end gap-1.5">
+    <div className="ml-auto inline-flex min-w-[11.5rem] items-center justify-end gap-2">
       {upstream.circuit_breaker && upstream.circuit_breaker.state !== "closed" ? (
         <Button
           variant="ghost"
@@ -335,13 +335,6 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
   return (
     <div className="space-y-0">
       <div className="overflow-hidden rounded-cf-md border border-divider bg-card/92">
-        {/* Terminal Header */}
-        <TerminalHeader
-          systemId="UPSTREAM_ARRAY"
-          nodeCount={upstreams.length}
-          className="border-0 border-b border-divider bg-transparent"
-        />
-
         {/* Desktop: Table Layout */}
         <div className="hidden lg:block">
           <Table
@@ -351,16 +344,16 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
           >
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[16%]">{tCommon("name")}</TableHead>
-                <TableHead className="w-[24%]">{t("routeCapabilities")}</TableHead>
-                <TableHead className="w-[9%]">{t("tableWeight")}</TableHead>
-                <TableHead className="w-[10%]">{t("tableHealth")}</TableHead>
-                <TableHead className="w-[11%]">{t("tableCircuitBreaker")}</TableHead>
-                <TableHead className="w-[14%]">{t("tableBaseUrl")}</TableHead>
-                <TableHead className="hidden w-[8%] text-right 2xl:table-cell">
+                <TableHead className="w-[14%]">{tCommon("name")}</TableHead>
+                <TableHead className="w-[20%]">{t("routeCapabilities")}</TableHead>
+                <TableHead className="w-[110px] px-3">{t("tableWeight")}</TableHead>
+                <TableHead className="w-[104px] px-3">{t("tableHealth")}</TableHead>
+                <TableHead className="w-[112px] px-3">{t("tableCircuitBreaker")}</TableHead>
+                <TableHead className="w-[28%] px-3">{t("tableBaseUrl")}</TableHead>
+                <TableHead className="hidden w-[120px] text-right 2xl:table-cell">
                   {tCommon("createdAt")}
                 </TableHead>
-                <TableHead className="w-[170px] text-right">{tCommon("actions")}</TableHead>
+                <TableHead className="w-[220px] px-3 text-right">{tCommon("actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -454,7 +447,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                                 badgeClassName="px-2 py-0.5 text-[11px] leading-4 xl:text-xs"
                               />
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="px-3">
                               <AsciiProgress
                                 value={upstream.weight}
                                 max={tier.maxWeight}
@@ -462,22 +455,22 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                                 showValue
                               />
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="px-3">
                               <StatusLed
                                 status={getHealthLedStatus(upstream)}
                                 label={getHealthLabel(upstream)}
                                 showLabel
                               />
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="px-3">
                               <StatusLed
                                 status={getCircuitLedStatus(upstream)}
                                 label={getCircuitBreakerLabel(upstream)}
                                 showLabel
                               />
                             </TableCell>
-                            <TableCell>
-                              <code className="block max-w-full truncate rounded-cf-sm border border-divider bg-surface-300 px-2 py-1 font-mono text-xs text-foreground">
+                            <TableCell className="px-3">
+                              <code className="block max-w-full whitespace-nowrap overflow-x-auto rounded-cf-sm border border-divider bg-surface-300 px-2 py-1 font-mono text-xs leading-5 text-foreground">
                                 {upstream.base_url}
                               </code>
                             </TableCell>
@@ -487,7 +480,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                                 locale: dateLocale,
                               })}
                             </TableCell>
-                            <TableCell className="min-w-[170px] pl-2 pr-4 text-right">
+                            <TableCell className="min-w-[200px] px-3 text-right">
                               {renderDesktopActions(upstream)}
                             </TableCell>
                           </TableRow>

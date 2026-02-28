@@ -327,13 +327,6 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
             <LogOut className="h-4 w-4 flex-shrink-0" />
             {!collapsed && <span className="type-body-small truncate">{tNav("logout")}</span>}
           </button>
-
-          <div className={cn("pt-2", collapsed ? "text-center" : "px-1")}>
-            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-              <span className="h-1.5 w-1.5 rounded-full bg-status-success" aria-hidden="true" />
-              {!collapsed && tCommon("sysOk")}
-            </span>
-          </div>
         </div>
       </aside>
 
