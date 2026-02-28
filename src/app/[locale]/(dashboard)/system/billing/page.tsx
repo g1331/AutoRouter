@@ -105,7 +105,7 @@ function UpstreamMultiplierTable({
             <th className="px-3 py-2">{t("overrideModel")}</th>
             <th className="px-3 py-2">{t("multiplierInput")}</th>
             <th className="px-3 py-2">{t("multiplierOutput")}</th>
-            <th className="px-3 py-2 text-right">Action</th>
+            <th className="px-3 py-2 text-right">{t("tableAction")}</th>
           </tr>
         </thead>
         <tbody>
@@ -120,7 +120,7 @@ function UpstreamMultiplierTable({
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-foreground">{row.name}</span>
-                    {!row.is_active && <Badge variant="neutral">Inactive</Badge>}
+                    {!row.is_active && <Badge variant="neutral">{t("statusInactive")}</Badge>}
                   </div>
                 </td>
                 <td className="px-3 py-2">
@@ -153,7 +153,7 @@ function UpstreamMultiplierTable({
                     onClick={() => onSave(row, draft.input, draft.output)}
                     disabled={invalid || pendingId === row.id}
                   >
-                    {pendingId === row.id ? "Saving..." : "Save"}
+                    {pendingId === row.id ? t("saving") : t("save")}
                   </Button>
                   {invalid && (
                     <p className="mt-1 text-xs text-status-error">{t("multiplierInvalid")}</p>
