@@ -122,6 +122,46 @@ describe("LogsTable", () => {
     });
   });
 
+  describe("Mobile Layout Billing Display", () => {
+    it("does not render billed status label in mobile cards", async () => {
+      const originalMatchMedia = window.matchMedia;
+
+      window.matchMedia = ((query: string) => ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      })) as unknown as typeof window.matchMedia;
+
+      try {
+        render(
+          <LogsTable
+            logs={[
+              {
+                ...mockLog,
+                billing_status: "billed",
+                final_cost: 1.234,
+                currency: "USD",
+              },
+            ]}
+          />
+        );
+
+        // In mobile layout, we only show cost and unbillable/pending info. Billed label should be hidden.
+        await waitFor(() => {
+          expect(screen.getByText(/\$1\.234/)).toBeInTheDocument();
+        });
+        expect(screen.queryByText("billingStatusBilled")).not.toBeInTheDocument();
+      } finally {
+        window.matchMedia = originalMatchMedia;
+      }
+    });
+  });
+
   describe("Upstream Display", () => {
     it("shows upstreamUnknown when upstream_id exists but upstream_name is null", () => {
       render(<LogsTable logs={[{ ...mockLog, upstream_name: null }]} />);

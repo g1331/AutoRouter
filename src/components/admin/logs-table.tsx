@@ -183,14 +183,6 @@ function getRequestTps(log: RequestLog): number | null {
   return Math.round((log.completion_tokens / log.duration_ms) * 1000 * 10) / 10;
 }
 
-function getBillingBadgeVariant(
-  status: RequestLog["billing_status"]
-): "success" | "warning" | "neutral" {
-  if (status === "billed") return "success";
-  if (status === "unbilled") return "warning";
-  return "neutral";
-}
-
 function getPercentile(values: number[], percentile: number): number | null {
   if (values.length === 0) {
     return null;
@@ -888,24 +880,17 @@ export function LogsTable({ logs }: LogsTableProps) {
                           {log.status_code ?? "-"}
                         </Badge>
                         <div className="mt-1 tabular-nums">{formatDuration(log.duration_ms)}</div>
-                        <div className="mt-1">
-                          <Badge
-                            variant={getBillingBadgeVariant(log.billing_status)}
-                            className="px-2 py-0.5 text-[11px] leading-none font-mono"
-                          >
-                            {log.billing_status === "billed"
-                              ? t("billingStatusBilled")
-                              : log.billing_status === "unbilled"
-                                ? t("billingStatusUnbilled")
-                                : t("billingStatusPending")}
-                          </Badge>
-                        </div>
                         <div className="mt-1 tabular-nums text-foreground">
                           {formatBillingCost(log)}
                         </div>
                         {log.billing_status === "unbilled" && log.unbillable_reason && (
                           <div className="mt-0.5 max-w-[160px] text-[11px] text-status-warning">
                             {resolveBillingReasonLabel(log.unbillable_reason)}
+                          </div>
+                        )}
+                        {log.billing_status == null && (
+                          <div className="mt-0.5 text-[11px] text-muted-foreground">
+                            {t("billingStatusPending")}
                           </div>
                         )}
                         {(log.ttft_ms != null || requestTps != null) && (
