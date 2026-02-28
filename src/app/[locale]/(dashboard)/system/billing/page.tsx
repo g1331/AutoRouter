@@ -9,6 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Link } from "@/i18n/navigation";
 import {
   useBillingOverview,
@@ -383,7 +390,8 @@ export default function BillingPage() {
   const unresolved = useBillingUnresolvedModels();
   const [modelPriceQuery, setModelPriceQuery] = useState("");
   const [modelPricePage, setModelPricePage] = useState(1);
-  const modelPrices = useBillingModelPrices(modelPricePage, 50, modelPriceQuery);
+  const [modelPricePageSize, setModelPricePageSize] = useState(20);
+  const modelPrices = useBillingModelPrices(modelPricePage, modelPricePageSize, modelPriceQuery);
   const syncPrices = useSyncBillingPrices();
 
   const latestSync = overview.data?.latest_sync ?? null;
@@ -573,6 +581,35 @@ export default function BillingPage() {
                       </span>
                     </div>
                     <div className="flex gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">
+                          {t("priceCatalogPageSize")}
+                        </span>
+                        <Select
+                          value={String(modelPricePageSize)}
+                          onValueChange={(value) => {
+                            const next = Number(value);
+                            if (!Number.isFinite(next) || next <= 0) {
+                              return;
+                            }
+                            setModelPricePageSize(next);
+                            setModelPricePage(1);
+                          }}
+                        >
+                          <SelectTrigger
+                            className="h-9 w-[96px]"
+                            aria-label={t("priceCatalogPageSize")}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="10">10</SelectItem>
+                            <SelectItem value="20">20</SelectItem>
+                            <SelectItem value="50">50</SelectItem>
+                            <SelectItem value="100">100</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <Button
                         variant="secondary"
                         size="sm"

@@ -588,6 +588,7 @@
     "priceCatalogCacheWritePrice": "Cache Write Price / 1M",
     "priceCatalogSyncedAt": "Synced At",
     "priceCatalogStatus": "Status",
+    "priceCatalogPageSize": "Page size",
     "manualEntryTitle": "Manual Model Price Entry",
     "manualEntryDesc": "Add or update any model price directly, even if it has not appeared in unresolved list.",
     "overrideModelInput": "Model Name",

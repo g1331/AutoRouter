@@ -28,6 +28,7 @@
 - **WHEN** 管理员在 Billing 页面查看模型价格目录
 - **THEN** 页面 SHALL 提供分页浏览能力（上一页/下一页）
 - **AND** 页面 SHALL 展示当前页码与总页数
+- **AND** 页面 SHOULD 支持选择每页条数以提升翻页体验
 
 ### Requirement: Manual Price Override
 

@@ -588,6 +588,7 @@
     "priceCatalogCacheWritePrice": "缓存写入单价 / 百万",
     "priceCatalogSyncedAt": "同步时间",
     "priceCatalogStatus": "状态",
+    "priceCatalogPageSize": "每页条数",
     "manualEntryTitle": "手动录入模型价格",
     "manualEntryDesc": "即使模型暂未出现在未定价列表中，也可以在这里直接新增或更新价格。",
     "overrideModelInput": "模型名称",
