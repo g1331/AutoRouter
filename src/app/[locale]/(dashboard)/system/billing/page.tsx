@@ -1,0 +1,526 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
+import { Wallet } from "lucide-react";
+
+import { Topbar } from "@/components/admin/topbar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import {
+  useBillingOverview,
+  useBillingUnresolvedModels,
+  useBillingManualOverrides,
+  useCreateBillingManualOverride,
+  useDeleteBillingManualOverride,
+  useSyncBillingPrices,
+  useRecentBillingDetails,
+  useUpstreamBillingMultipliers,
+  useUpdateUpstreamBillingMultiplier,
+} from "@/hooks/use-billing";
+import type {
+  BillingManualOverride,
+  BillingUnresolvedModel,
+  UpstreamBillingMultiplier,
+} from "@/types/api";
+
+type BillingTranslate = (key: string, values?: Record<string, string | number>) => string;
+
+function useUsdFormatter(locale: string) {
+  return useMemo(
+    () =>
+      new Intl.NumberFormat(locale, {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 6,
+      }),
+    [locale]
+  );
+}
+
+function parseMultiplierInput(raw: string): number | null {
+  const value = Number(raw);
+  if (Number.isNaN(value) || value < 0 || value > 100) {
+    return null;
+  }
+  return value;
+}
+
+function resolveReasonLabel(reason: string | null, t: BillingTranslate): string {
+  if (!reason) {
+    return "-";
+  }
+  if (reason === "model_missing") return t("reasonModelMissing");
+  if (reason === "usage_missing") return t("reasonUsageMissing");
+  if (reason === "price_not_found") return t("reasonPriceNotFound");
+  if (reason === "calculation_error") return t("reasonCalculationError");
+  return reason;
+}
+
+function getSyncBadgeVariant(status: string | null): "success" | "warning" | "error" | "neutral" {
+  if (!status) return "neutral";
+  if (status === "success") return "success";
+  if (status === "partial") return "warning";
+  if (status === "failed") return "error";
+  return "neutral";
+}
+
+function UpstreamMultiplierTable({
+  rows,
+  onSave,
+  pendingId,
+  t,
+}: {
+  rows: UpstreamBillingMultiplier[];
+  onSave: (row: UpstreamBillingMultiplier, inputRaw: string, outputRaw: string) => void;
+  pendingId: string | null;
+  t: BillingTranslate;
+}) {
+  const [drafts, setDrafts] = useState<Record<string, { input: string; output: string }>>({});
+
+  const getDraft = (row: UpstreamBillingMultiplier) => {
+    return (
+      drafts[row.id] ?? {
+        input: String(row.input_multiplier),
+        output: String(row.output_multiplier),
+      }
+    );
+  };
+
+  if (rows.length === 0) {
+    return <p className="text-sm text-muted-foreground">{t("unresolvedEmpty")}</p>;
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[720px] text-sm">
+        <thead>
+          <tr className="border-b border-divider text-left text-xs uppercase tracking-wide text-muted-foreground">
+            <th className="px-3 py-2">{t("overrideModel")}</th>
+            <th className="px-3 py-2">{t("multiplierInput")}</th>
+            <th className="px-3 py-2">{t("multiplierOutput")}</th>
+            <th className="px-3 py-2 text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const draft = getDraft(row);
+            const inputMultiplier = parseMultiplierInput(draft.input);
+            const outputMultiplier = parseMultiplierInput(draft.output);
+            const invalid = inputMultiplier === null || outputMultiplier === null;
+
+            return (
+              <tr key={row.id} className="border-b border-divider/60">
+                <td className="px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-foreground">{row.name}</span>
+                    {!row.is_active && <Badge variant="neutral">Inactive</Badge>}
+                  </div>
+                </td>
+                <td className="px-3 py-2">
+                  <Input
+                    value={draft.input}
+                    onChange={(event) =>
+                      setDrafts((prev) => ({
+                        ...prev,
+                        [row.id]: { ...getDraft(row), input: event.target.value },
+                      }))
+                    }
+                    className={cn("h-9", inputMultiplier === null && "border-status-error")}
+                  />
+                </td>
+                <td className="px-3 py-2">
+                  <Input
+                    value={draft.output}
+                    onChange={(event) =>
+                      setDrafts((prev) => ({
+                        ...prev,
+                        [row.id]: { ...getDraft(row), output: event.target.value },
+                      }))
+                    }
+                    className={cn("h-9", outputMultiplier === null && "border-status-error")}
+                  />
+                </td>
+                <td className="px-3 py-2 text-right">
+                  <Button
+                    size="sm"
+                    onClick={() => onSave(row, draft.input, draft.output)}
+                    disabled={invalid || pendingId === row.id}
+                  >
+                    {pendingId === row.id ? "Saving..." : "Save"}
+                  </Button>
+                  {invalid && (
+                    <p className="mt-1 text-xs text-status-error">{t("multiplierInvalid")}</p>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function UnresolvedRepairTable({
+  rows,
+  t,
+}: {
+  rows: BillingUnresolvedModel[];
+  t: BillingTranslate;
+}) {
+  const createOverride = useCreateBillingManualOverride();
+  const deleteOverride = useDeleteBillingManualOverride();
+  const { data: manualOverrides } = useBillingManualOverrides();
+  const [drafts, setDrafts] = useState<
+    Record<string, { input: string; output: string; note: string }>
+  >({});
+
+  const overrideMap = useMemo(() => {
+    const map = new Map<string, BillingManualOverride>();
+    for (const item of manualOverrides?.items ?? []) {
+      map.set(item.model, item);
+    }
+    return map;
+  }, [manualOverrides]);
+
+  const getDraft = (model: string) =>
+    drafts[model] ?? {
+      input: "",
+      output: "",
+      note: "",
+    };
+
+  const handleSave = async (model: string) => {
+    const draft = getDraft(model);
+    const inputPrice = Number(draft.input);
+    const outputPrice = Number(draft.output);
+    if (
+      Number.isNaN(inputPrice) ||
+      Number.isNaN(outputPrice) ||
+      inputPrice < 0 ||
+      outputPrice < 0
+    ) {
+      return;
+    }
+
+    await createOverride.mutateAsync({
+      model,
+      input_price_per_million: inputPrice,
+      output_price_per_million: outputPrice,
+      note: draft.note.trim() || null,
+    });
+  };
+
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-cf-sm border border-dashed border-divider bg-surface-300/30 px-4 py-6 text-sm text-muted-foreground">
+        {t("unresolvedEmpty")}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {rows.map((row) => {
+        const existingOverride = overrideMap.get(row.model);
+        const draft = getDraft(row.model);
+
+        return (
+          <div
+            key={row.model}
+            className="rounded-cf-sm border border-divider bg-surface-300/45 p-3"
+          >
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div>
+                <p className="font-medium text-foreground">{row.model}</p>
+                <p className="text-xs text-muted-foreground">
+                  {row.occurrences} hits · {row.last_upstream_name ?? "-"}
+                </p>
+              </div>
+              {existingOverride && <Badge variant="success">{t("statusBilled")}</Badge>}
+            </div>
+            <div className="grid gap-2 md:grid-cols-4">
+              <Input
+                placeholder={t("overrideInputPrice")}
+                value={draft.input}
+                onChange={(event) =>
+                  setDrafts((prev) => ({
+                    ...prev,
+                    [row.model]: { ...getDraft(row.model), input: event.target.value },
+                  }))
+                }
+              />
+              <Input
+                placeholder={t("overrideOutputPrice")}
+                value={draft.output}
+                onChange={(event) =>
+                  setDrafts((prev) => ({
+                    ...prev,
+                    [row.model]: { ...getDraft(row.model), output: event.target.value },
+                  }))
+                }
+              />
+              <Input
+                placeholder={t("overrideNote")}
+                value={draft.note}
+                onChange={(event) =>
+                  setDrafts((prev) => ({
+                    ...prev,
+                    [row.model]: { ...getDraft(row.model), note: event.target.value },
+                  }))
+                }
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => void handleSave(row.model)}
+                  disabled={createOverride.isPending}
+                >
+                  {existingOverride ? t("overrideUpdate") : t("overrideSave")}
+                </Button>
+                {existingOverride && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void deleteOverride.mutateAsync(existingOverride.id)}
+                    disabled={deleteOverride.isPending}
+                  >
+                    {t("overrideDelete")}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function BillingPage() {
+  const t = useTranslations("billing");
+  const locale = useLocale();
+  const usd = useUsdFormatter(locale);
+
+  const overview = useBillingOverview();
+  const unresolved = useBillingUnresolvedModels();
+  const multipliers = useUpstreamBillingMultipliers();
+  const recent = useRecentBillingDetails(1, 20);
+  const syncPrices = useSyncBillingPrices();
+  const updateMultiplier = useUpdateUpstreamBillingMultiplier();
+  const [savingMultiplierId, setSavingMultiplierId] = useState<string | null>(null);
+
+  const latestSync = overview.data?.latest_sync ?? null;
+  const latestSyncText = latestSync
+    ? latestSync.status === "success"
+      ? t("syncSuccess", { source: latestSync.source ?? "-" })
+      : latestSync.status === "partial"
+        ? t("syncPartial", { source: latestSync.source ?? "-" })
+        : t("syncFailed")
+    : t("syncNever");
+
+  const handleSaveMultiplier = async (
+    row: UpstreamBillingMultiplier,
+    inputRaw: string,
+    outputRaw: string
+  ) => {
+    const input = parseMultiplierInput(inputRaw);
+    const output = parseMultiplierInput(outputRaw);
+    if (input === null || output === null) {
+      return;
+    }
+
+    setSavingMultiplierId(row.id);
+    try {
+      await updateMultiplier.mutateAsync({
+        id: row.id,
+        data: {
+          input_multiplier: input,
+          output_multiplier: output,
+        },
+      });
+    } finally {
+      setSavingMultiplierId(null);
+    }
+  };
+
+  return (
+    <>
+      <Topbar title={t("pageTitle")} />
+
+      <div className="mx-auto max-w-7xl space-y-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+        <Card variant="outlined" className="border-divider bg-surface-200/70">
+          <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 text-amber-500">
+                <Wallet className="h-4 w-4" aria-hidden="true" />
+                <span className="type-label-medium">{t("management")}</span>
+              </div>
+              <p className="type-body-medium text-muted-foreground">{t("managementDesc")}</p>
+            </div>
+            <Button onClick={() => syncPrices.mutate()} disabled={syncPrices.isPending}>
+              {syncPrices.isPending ? "Syncing..." : t("syncNow")}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <Card variant="filled" className="border border-divider">
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">{t("todayCost")}</p>
+              <p className="mt-1 text-xl font-semibold text-foreground">
+                {usd.format(overview.data?.today_cost_usd ?? 0)}
+              </p>
+            </CardContent>
+          </Card>
+          <Card variant="filled" className="border border-divider">
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">{t("monthCost")}</p>
+              <p className="mt-1 text-xl font-semibold text-foreground">
+                {usd.format(overview.data?.month_cost_usd ?? 0)}
+              </p>
+            </CardContent>
+          </Card>
+          <Card variant="filled" className="border border-divider">
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">{t("unresolvedModels")}</p>
+              <p className="mt-1 text-xl font-semibold text-foreground">
+                {overview.data?.unresolved_model_count ?? 0}
+              </p>
+            </CardContent>
+          </Card>
+          <Card variant="filled" className="border border-divider">
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">{t("latestSync")}</p>
+              <div className="mt-1 flex items-center gap-2">
+                <Badge variant={getSyncBadgeVariant(latestSync?.status ?? null)}>
+                  {latestSyncText}
+                </Badge>
+              </div>
+              {latestSync?.failure_reason && (
+                <p className="mt-2 text-xs text-status-warning">
+                  {t("syncFailureReason", { reason: latestSync.failure_reason })}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card variant="outlined" className="border-divider bg-surface-200/70">
+          <CardContent className="space-y-3 p-5 sm:p-6">
+            <div>
+              <h3 className="type-label-medium text-foreground">{t("multiplierTitle")}</h3>
+              <p className="text-sm text-muted-foreground">{t("multiplierDesc")}</p>
+            </div>
+            {multipliers.isLoading ? (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : multipliers.isError ? (
+              <p className="text-sm text-status-error">{String(multipliers.error)}</p>
+            ) : (
+              <UpstreamMultiplierTable
+                rows={multipliers.data?.items ?? []}
+                onSave={handleSaveMultiplier}
+                pendingId={savingMultiplierId}
+                t={t}
+              />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card variant="outlined" className="border-divider bg-surface-200/70">
+          <CardContent className="space-y-3 p-5 sm:p-6">
+            <div>
+              <h3 className="type-label-medium text-foreground">{t("unresolvedTitle")}</h3>
+              <p className="text-sm text-muted-foreground">{t("unresolvedDesc")}</p>
+            </div>
+            {unresolved.isLoading ? (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : unresolved.isError ? (
+              <p className="text-sm text-status-error">{String(unresolved.error)}</p>
+            ) : (
+              <UnresolvedRepairTable rows={unresolved.data?.items ?? []} t={t} />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card variant="outlined" className="border-divider bg-surface-200/70">
+          <CardContent className="space-y-3 p-5 sm:p-6">
+            <div>
+              <h3 className="type-label-medium text-foreground">{t("recentTitle")}</h3>
+              <p className="text-sm text-muted-foreground">{t("recentDesc")}</p>
+            </div>
+            {recent.isLoading ? (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : recent.isError ? (
+              <p className="text-sm text-status-error">{String(recent.error)}</p>
+            ) : (recent.data?.items.length ?? 0) === 0 ? (
+              <p className="text-sm text-muted-foreground">{t("recentEmpty")}</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[980px] text-sm">
+                  <thead>
+                    <tr className="border-b border-divider text-left text-xs uppercase tracking-wide text-muted-foreground">
+                      <th className="px-3 py-2">{t("recentTime")}</th>
+                      <th className="px-3 py-2">{t("recentModel")}</th>
+                      <th className="px-3 py-2">{t("recentUpstream")}</th>
+                      <th className="px-3 py-2">{t("recentTokens")}</th>
+                      <th className="px-3 py-2">{t("recentBasePrice")}</th>
+                      <th className="px-3 py-2">{t("recentMultiplier")}</th>
+                      <th className="px-3 py-2">{t("recentFinalCost")}</th>
+                      <th className="px-3 py-2">{t("recentSource")}</th>
+                      <th className="px-3 py-2">{t("recentStatus")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recent.data?.items.map((item) => (
+                      <tr key={item.request_log_id} className="border-b border-divider/60">
+                        <td className="px-3 py-2 text-xs text-muted-foreground">
+                          {new Date(item.created_at).toLocaleString(locale)}
+                        </td>
+                        <td className="px-3 py-2 font-mono">{item.model ?? "-"}</td>
+                        <td className="px-3 py-2">{item.upstream_name ?? "-"}</td>
+                        <td className="px-3 py-2 tabular-nums">{item.total_tokens}</td>
+                        <td className="px-3 py-2 tabular-nums">
+                          {item.base_input_price_per_million == null ||
+                          item.base_output_price_per_million == null
+                            ? "-"
+                            : `${item.base_input_price_per_million.toFixed(4)} / ${item.base_output_price_per_million.toFixed(4)}`}
+                        </td>
+                        <td className="px-3 py-2 tabular-nums">
+                          {item.input_multiplier == null || item.output_multiplier == null
+                            ? "-"
+                            : `${item.input_multiplier.toFixed(2)} / ${item.output_multiplier.toFixed(2)}`}
+                        </td>
+                        <td className="px-3 py-2 tabular-nums">
+                          {item.final_cost == null ? "-" : usd.format(item.final_cost)}
+                        </td>
+                        <td className="px-3 py-2">{item.price_source ?? "-"}</td>
+                        <td className="px-3 py-2">
+                          <Badge variant={item.billing_status === "billed" ? "success" : "warning"}>
+                            {item.billing_status === "billed"
+                              ? t("statusBilled")
+                              : t("statusUnbilled")}
+                          </Badge>
+                          {item.billing_status === "unbilled" && (
+                            <p className="mt-1 text-xs text-status-warning">
+                              {resolveReasonLabel(item.unbillable_reason, t)}
+                            </p>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </>
+  );
+}

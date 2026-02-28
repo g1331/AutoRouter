@@ -135,6 +135,8 @@ export interface UpstreamCreate {
   model_redirects?: Record<string, string> | null; // Model name mapping
   circuit_breaker_config?: CircuitBreakerConfig | null; // Circuit breaker configuration
   affinity_migration?: AffinityMigrationConfig | null; // Session affinity migration configuration
+  billing_input_multiplier?: number;
+  billing_output_multiplier?: number;
 }
 
 export interface UpstreamUpdate {
@@ -152,6 +154,8 @@ export interface UpstreamUpdate {
   model_redirects?: Record<string, string> | null; // Model name mapping
   circuit_breaker_config?: CircuitBreakerConfig | null; // Circuit breaker configuration
   affinity_migration?: AffinityMigrationConfig | null; // Session affinity migration configuration
+  billing_input_multiplier?: number;
+  billing_output_multiplier?: number;
 }
 
 export interface UpstreamResponse {
@@ -171,6 +175,8 @@ export interface UpstreamResponse {
   allowed_models: string[] | null; // List of supported model names
   model_redirects: Record<string, string> | null; // Model name mapping
   affinity_migration: AffinityMigrationConfig | null; // Session affinity migration configuration
+  billing_input_multiplier?: number;
+  billing_output_multiplier?: number;
   created_at: string; // ISO 8601 date string
   updated_at: string; // ISO 8601 date string
 }
@@ -359,6 +365,16 @@ export interface RequestLogResponse {
     compensated: Array<{ header: string; source: string; value: string }>;
     unchanged: Array<{ header: string; value: string }>;
   } | null;
+  billing_status?: "billed" | "unbilled" | null;
+  unbillable_reason?: string | null;
+  price_source?: "manual" | "openrouter" | "litellm" | null;
+  base_input_price_per_million?: number | null;
+  base_output_price_per_million?: number | null;
+  input_multiplier?: number | null;
+  output_multiplier?: number | null;
+  final_cost?: number | null;
+  currency?: string | null;
+  billed_at?: string | null;
   created_at: string; // ISO 8601 date string
 }
 
@@ -378,6 +394,106 @@ export interface PaginatedResponse<T> {
 export type PaginatedAPIKeysResponse = PaginatedResponse<APIKeyResponse>;
 export type PaginatedUpstreamsResponse = PaginatedResponse<UpstreamResponse>;
 export type PaginatedRequestLogsResponse = PaginatedResponse<RequestLogResponse>;
+
+// ========== Billing 相关类型 ==========
+
+export interface BillingSyncResponse {
+  status: "success" | "partial" | "failed";
+  source: "openrouter" | "litellm" | null;
+  success_count: number;
+  failure_count: number;
+  failure_reason: string | null;
+  synced_at: string;
+}
+
+export interface BillingOverviewResponse {
+  today_cost_usd: number;
+  month_cost_usd: number;
+  unresolved_model_count: number;
+  latest_sync: BillingSyncResponse | null;
+}
+
+export interface BillingManualOverride {
+  id: string;
+  model: string;
+  input_price_per_million: number;
+  output_price_per_million: number;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BillingCreateManualOverride {
+  model: string;
+  input_price_per_million: number;
+  output_price_per_million: number;
+  note?: string | null;
+}
+
+export interface BillingUpdateManualOverride {
+  input_price_per_million?: number;
+  output_price_per_million?: number;
+  note?: string | null;
+}
+
+export interface BillingUnresolvedModel {
+  model: string;
+  occurrences: number;
+  last_seen_at: string;
+  last_upstream_id: string | null;
+  last_upstream_name: string | null;
+  has_manual_override: boolean;
+}
+
+export interface BillingUnresolvedModelsResponse {
+  items: BillingUnresolvedModel[];
+  total: number;
+}
+
+export interface BillingManualOverridesResponse {
+  items: BillingManualOverride[];
+  total: number;
+}
+
+export interface UpstreamBillingMultiplier {
+  id: string;
+  name: string;
+  is_active: boolean;
+  input_multiplier: number;
+  output_multiplier: number;
+}
+
+export interface UpstreamBillingMultipliersResponse {
+  items: UpstreamBillingMultiplier[];
+  total: number;
+}
+
+export interface UpdateUpstreamBillingMultiplier {
+  input_multiplier?: number;
+  output_multiplier?: number;
+}
+
+export interface RecentBillingDetail {
+  request_log_id: string;
+  created_at: string;
+  model: string | null;
+  upstream_id: string | null;
+  upstream_name: string | null;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  price_source: string | null;
+  billing_status: "billed" | "unbilled";
+  unbillable_reason: string | null;
+  base_input_price_per_million: number | null;
+  base_output_price_per_million: number | null;
+  input_multiplier: number | null;
+  output_multiplier: number | null;
+  final_cost: number | null;
+  currency: string;
+}
+
+export type PaginatedRecentBillingDetailsResponse = PaginatedResponse<RecentBillingDetail>;
 
 // ========== 补偿规则相关类型 ==========
 

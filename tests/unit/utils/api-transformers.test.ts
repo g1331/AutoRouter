@@ -74,6 +74,8 @@ describe("api-transformers", () => {
         allowed_models: undefined,
         model_redirects: undefined,
         affinity_migration: null,
+        billing_input_multiplier: 1,
+        billing_output_multiplier: 1,
         circuit_breaker: null,
       });
     });
@@ -362,7 +364,7 @@ describe("api-transformers", () => {
         createdAt: new Date("2024-01-15T10:30:00.000Z"),
       };
 
-      const result = transformRequestLogToApi(log);
+      const result = transformRequestLogToApi(log as never);
 
       expect(result).toEqual({
         id: "log-123",
@@ -437,7 +439,7 @@ describe("api-transformers", () => {
         createdAt: new Date("2024-01-15T10:30:00.000Z"),
       };
 
-      const result = transformRequestLogToApi(log);
+      const result = transformRequestLogToApi(log as never);
 
       expect(result.api_key_id).toBeNull();
       expect(result.upstream_id).toBeNull();
@@ -492,7 +494,7 @@ describe("api-transformers", () => {
         totalPages: 20,
       };
 
-      const result = transformPaginatedRequestLogs(paginatedResult);
+      const result = transformPaginatedRequestLogs(paginatedResult as never);
 
       expect(result.items).toHaveLength(1);
       expect(result.total).toBe(1000);

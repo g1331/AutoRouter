@@ -1,5 +1,6 @@
 import {
   boolean,
+  doublePrecision,
   index,
   integer,
   json,
@@ -60,6 +61,8 @@ export const upstreams = pgTable(
       metric: "tokens" | "length";
       threshold: number;
     } | null>(), // Session affinity migration configuration
+    billingInputMultiplier: doublePrecision("billing_input_multiplier").notNull().default(1),
+    billingOutputMultiplier: doublePrecision("billing_output_multiplier").notNull().default(1),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -211,6 +214,100 @@ export const requestLogs = pgTable(
 );
 
 /**
+ * Synced model price catalog from external sources.
+ */
+export const billingModelPrices = pgTable(
+  "billing_model_prices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    model: varchar("model", { length: 255 }).notNull(),
+    inputPricePerMillion: doublePrecision("input_price_per_million").notNull(),
+    outputPricePerMillion: doublePrecision("output_price_per_million").notNull(),
+    source: varchar("source", { length: 32 }).notNull(), // openrouter | litellm
+    isActive: boolean("is_active").notNull().default(true),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("billing_model_prices_model_idx").on(table.model),
+    index("billing_model_prices_source_idx").on(table.source),
+    unique("uq_billing_model_prices_model_source").on(table.model, table.source),
+  ]
+);
+
+/**
+ * Manual model price overrides from admin.
+ */
+export const billingManualPriceOverrides = pgTable(
+  "billing_manual_price_overrides",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    model: varchar("model", { length: 255 }).notNull().unique(),
+    inputPricePerMillion: doublePrecision("input_price_per_million").notNull(),
+    outputPricePerMillion: doublePrecision("output_price_per_million").notNull(),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("billing_manual_price_overrides_model_idx").on(table.model)]
+);
+
+/**
+ * Price synchronization history for dashboard status.
+ */
+export const billingPriceSyncHistory = pgTable(
+  "billing_price_sync_history",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    status: varchar("status", { length: 16 }).notNull(), // success | partial | failed
+    source: varchar("source", { length: 32 }), // openrouter | litellm | none
+    successCount: integer("success_count").notNull().default(0),
+    failureCount: integer("failure_count").notNull().default(0),
+    failureReason: text("failure_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("billing_price_sync_history_created_at_idx").on(table.createdAt)]
+);
+
+/**
+ * Immutable billing snapshot for each request log row.
+ */
+export const requestBillingSnapshots = pgTable(
+  "request_billing_snapshots",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    requestLogId: uuid("request_log_id")
+      .notNull()
+      .unique()
+      .references(() => requestLogs.id, { onDelete: "cascade" }),
+    apiKeyId: uuid("api_key_id").references(() => apiKeys.id, { onDelete: "set null" }),
+    upstreamId: uuid("upstream_id").references(() => upstreams.id, { onDelete: "set null" }),
+    model: varchar("model", { length: 255 }),
+    billingStatus: varchar("billing_status", { length: 16 }).notNull(), // billed | unbilled
+    unbillableReason: varchar("unbillable_reason", { length: 64 }),
+    priceSource: varchar("price_source", { length: 32 }), // manual | openrouter | litellm
+    baseInputPricePerMillion: doublePrecision("base_input_price_per_million"),
+    baseOutputPricePerMillion: doublePrecision("base_output_price_per_million"),
+    inputMultiplier: doublePrecision("input_multiplier"),
+    outputMultiplier: doublePrecision("output_multiplier"),
+    promptTokens: integer("prompt_tokens").notNull().default(0),
+    completionTokens: integer("completion_tokens").notNull().default(0),
+    totalTokens: integer("total_tokens").notNull().default(0),
+    finalCost: doublePrecision("final_cost"),
+    currency: varchar("currency", { length: 8 }).notNull().default("USD"),
+    billedAt: timestamp("billed_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("request_billing_snapshots_request_log_id_idx").on(table.requestLogId),
+    index("request_billing_snapshots_billing_status_idx").on(table.billingStatus),
+    index("request_billing_snapshots_model_idx").on(table.model),
+    index("request_billing_snapshots_created_at_idx").on(table.createdAt),
+  ]
+);
+
+/**
  * Outbound header compensation rules.
  */
 export const compensationRules = pgTable(
@@ -247,6 +344,7 @@ export const upstreamsRelations = relations(upstreams, ({ one, many }) => ({
   }),
   apiKeys: many(apiKeyUpstreams),
   requestLogs: many(requestLogs),
+  requestBillingSnapshots: many(requestBillingSnapshots),
 }));
 
 export const upstreamHealthRelations = relations(upstreamHealth, ({ one }) => ({
@@ -283,6 +381,25 @@ export const requestLogsRelations = relations(requestLogs, ({ one }) => ({
     fields: [requestLogs.upstreamId],
     references: [upstreams.id],
   }),
+  billingSnapshot: one(requestBillingSnapshots, {
+    fields: [requestLogs.id],
+    references: [requestBillingSnapshots.requestLogId],
+  }),
+}));
+
+export const requestBillingSnapshotsRelations = relations(requestBillingSnapshots, ({ one }) => ({
+  requestLog: one(requestLogs, {
+    fields: [requestBillingSnapshots.requestLogId],
+    references: [requestLogs.id],
+  }),
+  apiKey: one(apiKeys, {
+    fields: [requestBillingSnapshots.apiKeyId],
+    references: [apiKeys.id],
+  }),
+  upstream: one(upstreams, {
+    fields: [requestBillingSnapshots.upstreamId],
+    references: [upstreams.id],
+  }),
 }));
 
 // Type exports
@@ -298,3 +415,11 @@ export type RequestLog = typeof requestLogs.$inferSelect;
 export type NewRequestLog = typeof requestLogs.$inferInsert;
 export type CircuitBreakerState = typeof circuitBreakerStates.$inferSelect;
 export type NewCircuitBreakerState = typeof circuitBreakerStates.$inferInsert;
+export type BillingModelPrice = typeof billingModelPrices.$inferSelect;
+export type NewBillingModelPrice = typeof billingModelPrices.$inferInsert;
+export type BillingManualPriceOverride = typeof billingManualPriceOverrides.$inferSelect;
+export type NewBillingManualPriceOverride = typeof billingManualPriceOverrides.$inferInsert;
+export type BillingPriceSyncHistory = typeof billingPriceSyncHistory.$inferSelect;
+export type NewBillingPriceSyncHistory = typeof billingPriceSyncHistory.$inferInsert;
+export type RequestBillingSnapshot = typeof requestBillingSnapshots.$inferSelect;
+export type NewRequestBillingSnapshot = typeof requestBillingSnapshots.$inferInsert;

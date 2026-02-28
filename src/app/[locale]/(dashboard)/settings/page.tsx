@@ -1,6 +1,14 @@
 "use client";
 
-import { ArrowLeftRight, ChevronRight, Globe, LogOut, Moon, SlidersHorizontal } from "lucide-react";
+import {
+  ArrowLeftRight,
+  ChevronRight,
+  Globe,
+  LogOut,
+  Moon,
+  SlidersHorizontal,
+  Wallet,
+} from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -19,6 +27,7 @@ export default function SettingsPage() {
   const tTheme = useTranslations("theme");
   const tLang = useTranslations("language");
   const tCompensation = useTranslations("compensation");
+  const tBilling = useTranslations("billing");
 
   const settingsItems = [
     {
@@ -36,6 +45,12 @@ export default function SettingsPage() {
   ];
 
   const systemLinks = [
+    {
+      href: "/system/billing",
+      icon: Wallet,
+      title: tBilling("title"),
+      description: tBilling("managementDesc"),
+    },
     {
       href: "/system/header-compensation",
       icon: ArrowLeftRight,

@@ -154,6 +154,16 @@ export interface RequestLogResponse {
   // Header compensation fields
   sessionIdCompensated: boolean;
   headerDiff: HeaderDiff | null;
+  billingStatus?: "billed" | "unbilled" | null;
+  unbillableReason?: string | null;
+  priceSource?: string | null;
+  baseInputPricePerMillion?: number | null;
+  baseOutputPricePerMillion?: number | null;
+  inputMultiplier?: number | null;
+  outputMultiplier?: number | null;
+  finalCost?: number | null;
+  currency?: string | null;
+  billedAt?: Date | null;
   createdAt: Date;
 }
 
@@ -171,6 +181,22 @@ export interface ListRequestLogsFilter {
   statusCode?: number;
   startTime?: Date;
   endTime?: Date;
+}
+
+function normalizeBillingStatus(value: string | null | undefined): "billed" | "unbilled" | null {
+  if (value === "billed" || value === "unbilled") {
+    return value;
+  }
+  return null;
+}
+
+function normalizeBillingPriceSource(
+  value: string | null | undefined
+): "manual" | "openrouter" | "litellm" | null {
+  if (value === "manual" || value === "openrouter" || value === "litellm") {
+    return value;
+  }
+  return null;
 }
 
 /**
@@ -546,6 +572,7 @@ export async function listRequestLogs(
     offset,
     with: {
       upstream: true,
+      billingSnapshot: true,
     },
   });
 
@@ -583,6 +610,20 @@ export async function listRequestLogs(
     isStream: log.isStream,
     sessionIdCompensated: log.sessionIdCompensated,
     headerDiff: (log.headerDiff as HeaderDiff | null) ?? null,
+    ...(log.billingSnapshot
+      ? {
+          billingStatus: normalizeBillingStatus(log.billingSnapshot.billingStatus),
+          unbillableReason: log.billingSnapshot.unbillableReason,
+          priceSource: normalizeBillingPriceSource(log.billingSnapshot.priceSource),
+          baseInputPricePerMillion: log.billingSnapshot.baseInputPricePerMillion,
+          baseOutputPricePerMillion: log.billingSnapshot.baseOutputPricePerMillion,
+          inputMultiplier: log.billingSnapshot.inputMultiplier,
+          outputMultiplier: log.billingSnapshot.outputMultiplier,
+          finalCost: log.billingSnapshot.finalCost,
+          currency: log.billingSnapshot.currency,
+          billedAt: log.billingSnapshot.billedAt,
+        }
+      : {}),
     createdAt: log.createdAt,
   }));
 

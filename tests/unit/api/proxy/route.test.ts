@@ -82,6 +82,15 @@ vi.mock("@/lib/services/request-logger", () => ({
   extractModelName: vi.fn(),
 }));
 
+vi.mock("@/lib/services/billing-cost-service", () => ({
+  calculateAndPersistRequestBillingSnapshot: vi.fn(async () => ({
+    status: "billed",
+    unbillableReason: null,
+    finalCost: 0.001,
+    source: "manual",
+  })),
+}));
+
 // Mock load-balancer module
 vi.mock("@/lib/services/load-balancer", () => {
   const selectFromUpstreamCandidates = vi.fn();
@@ -2861,6 +2870,182 @@ describe("proxy route upstream selection", () => {
       );
       expect(markUnhealthy).toHaveBeenCalledWith("up-privnode", "HTTP 500 error");
       expect(markHealthy).toHaveBeenCalledWith("up-rightcode", 100);
+    });
+  });
+
+  describe("billing snapshot integration", () => {
+    it("should persist billed snapshot after successful non-stream response", async () => {
+      const { db } = await import("@/lib/db");
+      const { forwardRequest } = await import("@/lib/services/proxy-client");
+      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+      const { calculateAndPersistRequestBillingSnapshot } =
+        await import("@/lib/services/billing-cost-service");
+
+      const openaiUpstream = {
+        id: "up-openai",
+        name: "openai-main",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+      };
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      ]);
+      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+        { upstreamId: "up-openai" },
+      ]);
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        {
+          ...openaiUpstream,
+          routeCapabilities: ["openai_chat_compatible"],
+        },
+      ]);
+      vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+      vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+        upstream: openaiUpstream,
+        providerType: "openai",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 1,
+      });
+
+      vi.mocked(forwardRequest).mockResolvedValueOnce({
+        statusCode: 200,
+        headers: new Headers(),
+        body: new Uint8Array(),
+        isStream: false,
+        usage: {
+          promptTokens: 120,
+          completionTokens: 30,
+          totalTokens: 150,
+        },
+      });
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-test",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4.1",
+          messages: [{ role: "user", content: "hello" }],
+        }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["chat", "completions"] }),
+      });
+
+      expect(response.status).toBe(200);
+      expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledTimes(1);
+      expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
+        expect.objectContaining({
+          apiKeyId: "key-1",
+          upstreamId: "up-openai",
+          model: "gpt-4.1",
+          usage: {
+            promptTokens: 120,
+            completionTokens: 30,
+            totalTokens: 150,
+          },
+        })
+      );
+    });
+
+    it("should still respond when billing snapshot persistence returns unbilled", async () => {
+      const { db } = await import("@/lib/db");
+      const { forwardRequest } = await import("@/lib/services/proxy-client");
+      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+      const { calculateAndPersistRequestBillingSnapshot } =
+        await import("@/lib/services/billing-cost-service");
+
+      vi.mocked(calculateAndPersistRequestBillingSnapshot).mockResolvedValueOnce({
+        status: "unbilled",
+        unbillableReason: "usage_missing",
+        finalCost: null,
+        source: null,
+      });
+
+      const openaiUpstream = {
+        id: "up-openai",
+        name: "openai-main",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+      };
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      ]);
+      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+        { upstreamId: "up-openai" },
+      ]);
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        {
+          ...openaiUpstream,
+          routeCapabilities: ["openai_chat_compatible"],
+        },
+      ]);
+      vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+      vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+        upstream: openaiUpstream,
+        providerType: "openai",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 1,
+      });
+
+      vi.mocked(forwardRequest).mockResolvedValueOnce({
+        statusCode: 200,
+        headers: new Headers(),
+        body: new Uint8Array(),
+        isStream: false,
+        usage: {
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+        },
+      });
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-test",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4.1",
+          messages: [{ role: "user", content: "hello" }],
+        }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["chat", "completions"] }),
+      });
+
+      expect(response.status).toBe(200);
+      expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledTimes(1);
+      expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
+        expect.objectContaining({
+          usage: {
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
+          },
+        })
+      );
     });
   });
 });

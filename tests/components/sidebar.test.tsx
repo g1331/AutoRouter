@@ -49,6 +49,7 @@ vi.mock("lucide-react", () => ({
   Monitor: () => <svg data-testid="icon-monitor" />,
   Wrench: () => <svg data-testid="icon-wrench" />,
   ArrowLeftRight: () => <svg data-testid="icon-arrow-left-right" />,
+  Wallet: () => <svg data-testid="icon-wallet" />,
 }));
 
 // Mock useAuth hook
@@ -142,6 +143,7 @@ describe("Sidebar", () => {
       expect(screen.getAllByText("apiKeys").length).toBeGreaterThan(0);
       expect(screen.getAllByText("upstreams").length).toBeGreaterThan(0);
       expect(screen.getAllByText("settings").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("billing").length).toBeGreaterThan(0);
     });
 
     it("renders all navigation icons", () => {
@@ -152,6 +154,7 @@ describe("Sidebar", () => {
       expect(screen.getAllByTestId("icon-key").length).toBeGreaterThan(0);
       expect(screen.getAllByTestId("icon-server").length).toBeGreaterThan(0);
       expect(screen.getAllByTestId("icon-settings").length).toBeGreaterThan(0);
+      expect(screen.getAllByTestId("icon-wallet").length).toBeGreaterThan(0);
     });
 
     it("does not render deprecated system status label", () => {
