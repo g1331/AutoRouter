@@ -59,6 +59,8 @@ export const upstreams = sqliteTable(
     } | null>(), // Session affinity migration configuration
     billingInputMultiplier: real("billing_input_multiplier").notNull().default(1),
     billingOutputMultiplier: real("billing_output_multiplier").notNull().default(1),
+    dailySpendingLimit: real("daily_spending_limit"), // USD, null = unlimited
+    monthlySpendingLimit: real("monthly_spending_limit"), // USD, null = unlimited
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },

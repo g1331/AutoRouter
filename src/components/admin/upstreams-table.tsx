@@ -483,6 +483,16 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                                   {(upstream.billing_output_multiplier ?? 1).toFixed(2)}
                                 </span>
                               </div>
+                              {(upstream.daily_spending_limit != null || upstream.monthly_spending_limit != null) && (
+                                <div className="mt-1 flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
+                                  <span className="shrink-0">{t("quotaStatus")}</span>
+                                  <span className="ml-auto tabular-nums text-foreground">
+                                    {upstream.daily_spending_limit != null && `$${upstream.daily_spending_limit.toFixed(2)}/d`}
+                                    {upstream.daily_spending_limit != null && upstream.monthly_spending_limit != null && " · "}
+                                    {upstream.monthly_spending_limit != null && `$${upstream.monthly_spending_limit.toFixed(2)}/mo`}
+                                  </span>
+                                </div>
+                              )}
                             </TableCell>
                             <TableCell className="hidden whitespace-nowrap pr-2 text-right 2xl:table-cell">
                               {formatDistanceToNow(new Date(upstream.created_at), {
@@ -622,6 +632,18 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                             {(upstream.billing_output_multiplier ?? 1).toFixed(2)}
                           </span>
                         </div>
+                        {(upstream.daily_spending_limit != null || upstream.monthly_spending_limit != null) && (
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="shrink-0 text-muted-foreground">
+                              {t("quotaStatus")}
+                            </span>
+                            <span className="tabular-nums text-foreground">
+                              {upstream.daily_spending_limit != null && `$${upstream.daily_spending_limit.toFixed(2)}/d`}
+                              {upstream.daily_spending_limit != null && upstream.monthly_spending_limit != null && " · "}
+                              {upstream.monthly_spending_limit != null && `$${upstream.monthly_spending_limit.toFixed(2)}/mo`}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex items-center justify-between gap-2">
                           <span className="shrink-0 text-muted-foreground">
                             {tCommon("createdAt")}

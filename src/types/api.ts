@@ -137,6 +137,8 @@ export interface UpstreamCreate {
   affinity_migration?: AffinityMigrationConfig | null; // Session affinity migration configuration
   billing_input_multiplier?: number;
   billing_output_multiplier?: number;
+  daily_spending_limit?: number | null;
+  monthly_spending_limit?: number | null;
 }
 
 export interface UpstreamUpdate {
@@ -156,6 +158,8 @@ export interface UpstreamUpdate {
   affinity_migration?: AffinityMigrationConfig | null; // Session affinity migration configuration
   billing_input_multiplier?: number;
   billing_output_multiplier?: number;
+  daily_spending_limit?: number | null;
+  monthly_spending_limit?: number | null;
 }
 
 export interface UpstreamResponse {
@@ -177,6 +181,8 @@ export interface UpstreamResponse {
   affinity_migration: AffinityMigrationConfig | null; // Session affinity migration configuration
   billing_input_multiplier?: number;
   billing_output_multiplier?: number;
+  daily_spending_limit?: number | null;
+  monthly_spending_limit?: number | null;
   created_at: string; // ISO 8601 date string
   updated_at: string; // ISO 8601 date string
 }

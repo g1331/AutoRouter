@@ -59,6 +59,8 @@ const createUpstreamSchema = z
     affinity_migration: affinityMigrationConfigSchema.nullable().optional(),
     billing_input_multiplier: z.number().min(0).max(100).default(1),
     billing_output_multiplier: z.number().min(0).max(100).default(1),
+    daily_spending_limit: z.number().positive().nullable().optional(),
+    monthly_spending_limit: z.number().positive().nullable().optional(),
   })
   .refine(
     (data) =>
@@ -135,6 +137,8 @@ export async function POST(request: NextRequest) {
       affinityMigration: validated.affinity_migration ?? null,
       billingInputMultiplier: validated.billing_input_multiplier,
       billingOutputMultiplier: validated.billing_output_multiplier,
+      dailySpendingLimit: validated.daily_spending_limit ?? null,
+      monthlySpendingLimit: validated.monthly_spending_limit ?? null,
     };
 
     const result = await createUpstream(input);

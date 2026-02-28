@@ -79,6 +79,8 @@ const createUpstreamFormSchema = z
     weight: z.number().int().min(1).max(100),
     billing_input_multiplier: z.number().min(0).max(100),
     billing_output_multiplier: z.number().min(0).max(100),
+    daily_spending_limit: z.number().positive().nullable(),
+    monthly_spending_limit: z.number().positive().nullable(),
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
     allowed_models: z.array(z.string()).nullable(),
     model_redirects: z.record(z.string(), z.string()).nullable(),
@@ -101,6 +103,8 @@ const editUpstreamFormSchema = z
     weight: z.number().int().min(1).max(100),
     billing_input_multiplier: z.number().min(0).max(100),
     billing_output_multiplier: z.number().min(0).max(100),
+    daily_spending_limit: z.number().positive().nullable(),
+    monthly_spending_limit: z.number().positive().nullable(),
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
     allowed_models: z.array(z.string()).nullable(),
     model_redirects: z.record(z.string(), z.string()).nullable(),
@@ -140,6 +144,8 @@ export function UpstreamFormDialog({
       weight: 1,
       billing_input_multiplier: 1,
       billing_output_multiplier: 1,
+      daily_spending_limit: null,
+      monthly_spending_limit: null,
       route_capabilities: [],
       allowed_models: null,
       model_redirects: null,
@@ -171,6 +177,8 @@ export function UpstreamFormDialog({
         weight: upstream.weight ?? 1,
         billing_input_multiplier: upstream.billing_input_multiplier ?? 1,
         billing_output_multiplier: upstream.billing_output_multiplier ?? 1,
+        daily_spending_limit: upstream.daily_spending_limit ?? null,
+        monthly_spending_limit: upstream.monthly_spending_limit ?? null,
         route_capabilities: upstream.route_capabilities || [],
         allowed_models: upstream.allowed_models || null,
         model_redirects: upstream.model_redirects || null,
@@ -194,6 +202,8 @@ export function UpstreamFormDialog({
         weight: 1,
         billing_input_multiplier: 1,
         billing_output_multiplier: 1,
+        daily_spending_limit: null,
+        monthly_spending_limit: null,
         route_capabilities: [],
         allowed_models: null,
         model_redirects: null,
@@ -216,6 +226,8 @@ export function UpstreamFormDialog({
           weight?: number;
           billing_input_multiplier?: number;
           billing_output_multiplier?: number;
+          daily_spending_limit?: number | null;
+          monthly_spending_limit?: number | null;
           route_capabilities?: RouteCapability[] | null;
           allowed_models?: string[] | null;
           model_redirects?: Record<string, string> | null;
@@ -238,6 +250,8 @@ export function UpstreamFormDialog({
           weight: data.weight,
           billing_input_multiplier: data.billing_input_multiplier,
           billing_output_multiplier: data.billing_output_multiplier,
+          daily_spending_limit: data.daily_spending_limit,
+          monthly_spending_limit: data.monthly_spending_limit,
           route_capabilities: data.route_capabilities,
           allowed_models: data.allowed_models,
           model_redirects: data.model_redirects,
@@ -262,6 +276,8 @@ export function UpstreamFormDialog({
           weight: data.weight,
           billing_input_multiplier: data.billing_input_multiplier,
           billing_output_multiplier: data.billing_output_multiplier,
+          daily_spending_limit: data.daily_spending_limit,
+          monthly_spending_limit: data.monthly_spending_limit,
           route_capabilities: data.route_capabilities,
           allowed_models: data.allowed_models,
           model_redirects: data.model_redirects,
@@ -438,6 +454,68 @@ export function UpstreamFormDialog({
                       />
                     </FormControl>
                     <FormDescription>{t("billingOutputMultiplierDesc")}</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </div>
+
+          {/* Spending Quota Section */}
+          <div className="border-t pt-6 mt-6">
+            <h3 className="text-sm font-medium text-muted-foreground mb-4">
+              {t("spendingQuota")}
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="daily_spending_limit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("dailySpendingLimit")}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        inputMode="decimal"
+                        placeholder="∞"
+                        value={field.value ?? ""}
+                        onChange={(e) =>
+                          field.onChange(
+                            e.target.value === "" ? null : Number(e.target.value) || null
+                          )
+                        }
+                      />
+                    </FormControl>
+                    <FormDescription>{t("dailySpendingLimitDesc")}</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="monthly_spending_limit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("monthlySpendingLimit")}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        inputMode="decimal"
+                        placeholder="∞"
+                        value={field.value ?? ""}
+                        onChange={(e) =>
+                          field.onChange(
+                            e.target.value === "" ? null : Number(e.target.value) || null
+                          )
+                        }
+                      />
+                    </FormControl>
+                    <FormDescription>{t("monthlySpendingLimitDesc")}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

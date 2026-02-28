@@ -60,6 +60,8 @@ export interface UpstreamCreateInput {
   } | null;
   billingInputMultiplier?: number;
   billingOutputMultiplier?: number;
+  dailySpendingLimit?: number | null;
+  monthlySpendingLimit?: number | null;
 }
 
 export interface UpstreamUpdateInput {
@@ -88,6 +90,8 @@ export interface UpstreamUpdateInput {
   } | null;
   billingInputMultiplier?: number;
   billingOutputMultiplier?: number;
+  dailySpendingLimit?: number | null;
+  monthlySpendingLimit?: number | null;
 }
 
 export interface UpstreamResponse {
@@ -111,6 +115,8 @@ export interface UpstreamResponse {
   } | null;
   billingInputMultiplier?: number;
   billingOutputMultiplier?: number;
+  dailySpendingLimit?: number | null;
+  monthlySpendingLimit?: number | null;
   createdAt: Date;
   updatedAt: Date;
   circuitBreaker?: UpstreamCircuitBreakerStatus | null;
@@ -156,6 +162,8 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     affinityMigration,
     billingInputMultiplier = 1,
     billingOutputMultiplier = 1,
+    dailySpendingLimit = null,
+    monthlySpendingLimit = null,
   } = input;
 
   const normalizedRouteCapabilities = resolveRouteCapabilities(routeCapabilities);
@@ -193,6 +201,8 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
       affinityMigration: affinityMigration ?? null,
       billingInputMultiplier,
       billingOutputMultiplier,
+      dailySpendingLimit,
+      monthlySpendingLimit,
       createdAt: now,
       updatedAt: now,
     })
@@ -228,6 +238,8 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     affinityMigration: newUpstream.affinityMigration,
     billingInputMultiplier: newUpstream.billingInputMultiplier,
     billingOutputMultiplier: newUpstream.billingOutputMultiplier,
+    dailySpendingLimit: newUpstream.dailySpendingLimit ?? null,
+    monthlySpendingLimit: newUpstream.monthlySpendingLimit ?? null,
     createdAt: newUpstream.createdAt,
     updatedAt: newUpstream.updatedAt,
   };
@@ -283,6 +295,10 @@ export async function updateUpstream(
     updateValues.billingInputMultiplier = input.billingInputMultiplier;
   if (input.billingOutputMultiplier !== undefined)
     updateValues.billingOutputMultiplier = input.billingOutputMultiplier;
+  if (input.dailySpendingLimit !== undefined)
+    updateValues.dailySpendingLimit = input.dailySpendingLimit;
+  if (input.monthlySpendingLimit !== undefined)
+    updateValues.monthlySpendingLimit = input.monthlySpendingLimit;
 
   const [updated] = await db
     .update(upstreams)
@@ -344,6 +360,8 @@ export async function updateUpstream(
     affinityMigration: updated.affinityMigration,
     billingInputMultiplier: updated.billingInputMultiplier,
     billingOutputMultiplier: updated.billingOutputMultiplier,
+    dailySpendingLimit: updated.dailySpendingLimit ?? null,
+    monthlySpendingLimit: updated.monthlySpendingLimit ?? null,
     createdAt: updated.createdAt,
     updatedAt: updated.updatedAt,
   };
@@ -453,6 +471,8 @@ export async function listUpstreams(
       affinityMigration: upstream.affinityMigration,
       billingInputMultiplier: upstream.billingInputMultiplier,
       billingOutputMultiplier: upstream.billingOutputMultiplier,
+      dailySpendingLimit: upstream.dailySpendingLimit ?? null,
+      monthlySpendingLimit: upstream.monthlySpendingLimit ?? null,
       createdAt: upstream.createdAt,
       updatedAt: upstream.updatedAt,
       circuitBreaker: cbState
@@ -517,6 +537,8 @@ export async function getUpstreamById(upstreamId: string): Promise<UpstreamRespo
     affinityMigration: upstream.affinityMigration,
     billingInputMultiplier: upstream.billingInputMultiplier,
     billingOutputMultiplier: upstream.billingOutputMultiplier,
+    dailySpendingLimit: upstream.dailySpendingLimit ?? null,
+    monthlySpendingLimit: upstream.monthlySpendingLimit ?? null,
     createdAt: upstream.createdAt,
     updatedAt: upstream.updatedAt,
   };

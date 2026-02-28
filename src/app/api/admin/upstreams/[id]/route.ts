@@ -64,6 +64,8 @@ const updateUpstreamSchema = z
     affinity_migration: affinityMigrationConfigSchema.nullable().optional(),
     billing_input_multiplier: z.number().min(0).max(100).optional(),
     billing_output_multiplier: z.number().min(0).max(100).optional(),
+    daily_spending_limit: z.number().positive().nullable().optional(),
+    monthly_spending_limit: z.number().positive().nullable().optional(),
   })
   .refine(
     (data) =>
@@ -152,6 +154,12 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
     if (validated.billing_output_multiplier !== undefined) {
       input.billingOutputMultiplier = validated.billing_output_multiplier;
+    }
+    if (validated.daily_spending_limit !== undefined) {
+      input.dailySpendingLimit = validated.daily_spending_limit ?? null;
+    }
+    if (validated.monthly_spending_limit !== undefined) {
+      input.monthlySpendingLimit = validated.monthly_spending_limit ?? null;
     }
 
     const result = await updateUpstream(id, input);

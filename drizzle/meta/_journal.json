@@ -113,6 +113,13 @@
       "when": 1772273006037,
       "tag": "0015_mute_smasher",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1772400000000,
+      "tag": "0016_upstream_spending_quota",
+      "breakpoints": true
     }
   ]
 }

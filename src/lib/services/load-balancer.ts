@@ -15,6 +15,7 @@ import {
   type AffinityScope,
 } from "./session-affinity";
 import { getPrimaryProviderByCapabilities } from "@/lib/route-capabilities";
+import { getQuotaExceededUpstreamIds } from "./upstream-quota-service";
 
 // Re-export for convenience
 export { VALID_PROVIDER_TYPES };
@@ -442,6 +443,19 @@ async function selectFromUpstreamPool(
   if (allowedUpstreamIds && allowedUpstreamIds.length > 0) {
     const allowedSet = new Set(allowedUpstreamIds);
     filteredUpstreams = allUpstreams.filter((u) => allowedSet.has(u.upstream.id));
+  }
+
+  // Filter out upstreams that have exceeded their spending quota (silent degradation)
+  const quotaExceededIds = await getQuotaExceededUpstreamIds(
+    filteredUpstreams.map((u) => ({
+      id: u.upstream.id,
+      dailySpendingLimit: u.upstream.dailySpendingLimit ?? null,
+      monthlySpendingLimit: u.upstream.monthlySpendingLimit ?? null,
+    }))
+  );
+  if (quotaExceededIds.length > 0) {
+    const quotaExceededSet = new Set(quotaExceededIds);
+    filteredUpstreams = filteredUpstreams.filter((u) => !quotaExceededSet.has(u.upstream.id));
   }
 
   const totalCandidates = filteredUpstreams.length;
