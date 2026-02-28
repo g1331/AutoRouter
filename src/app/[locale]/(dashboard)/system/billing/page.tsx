@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { ChevronLeft, ChevronRight, Wallet } from "lucide-react";
 
@@ -388,11 +388,13 @@ export default function BillingPage() {
 
   const overview = useBillingOverview();
   const unresolved = useBillingUnresolvedModels();
+  const [modelPriceInput, setModelPriceInput] = useState("");
   const [modelPriceQuery, setModelPriceQuery] = useState("");
   const [modelPricePage, setModelPricePage] = useState(1);
   const [modelPricePageSize, setModelPricePageSize] = useState(20);
   const modelPrices = useBillingModelPrices(modelPricePage, modelPricePageSize, modelPriceQuery);
   const syncPrices = useSyncBillingPrices();
+  const searchDebounceRef = useRef<number | null>(null);
 
   const latestSync = overview.data?.latest_sync ?? null;
   const latestSyncText = latestSync
@@ -402,6 +404,14 @@ export default function BillingPage() {
         ? t("syncPartial", { source: latestSync.source ?? "-" })
         : t("syncFailed")
     : t("syncNever");
+
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current != null) {
+        window.clearTimeout(searchDebounceRef.current);
+      }
+    };
+  }, []);
 
   return (
     <>
@@ -490,10 +500,19 @@ export default function BillingPage() {
               </div>
               <div className="w-full sm:w-80">
                 <Input
-                  value={modelPriceQuery}
+                  value={modelPriceInput}
                   onChange={(event) => {
-                    setModelPriceQuery(event.target.value);
-                    setModelPricePage(1);
+                    const nextValue = event.target.value;
+                    setModelPriceInput(nextValue);
+
+                    if (searchDebounceRef.current != null) {
+                      window.clearTimeout(searchDebounceRef.current);
+                    }
+
+                    searchDebounceRef.current = window.setTimeout(() => {
+                      setModelPriceQuery(nextValue.trim());
+                      setModelPricePage(1);
+                    }, 300);
                   }}
                   placeholder={t("priceCatalogSearchPlaceholder")}
                 />
@@ -510,12 +529,18 @@ export default function BillingPage() {
                 <p className="text-xs text-muted-foreground">
                   {t("priceCatalogShowing", {
                     from:
-                      ((modelPrices.data?.page ?? 1) - 1) * (modelPrices.data?.page_size ?? 50) + 1,
+                      ((modelPrices.data?.page ?? 1) - 1) *
+                        (modelPrices.data?.page_size ?? modelPricePageSize) +
+                      1,
                     to:
-                      ((modelPrices.data?.page ?? 1) - 1) * (modelPrices.data?.page_size ?? 50) +
+                      ((modelPrices.data?.page ?? 1) - 1) *
+                        (modelPrices.data?.page_size ?? modelPricePageSize) +
                       (modelPrices.data?.items.length ?? 0),
                     total: modelPrices.data?.total ?? 0,
                   })}
+                  {modelPrices.isFetching && (
+                    <span className="ml-2 text-muted-foreground">({tCommon("loading")})</span>
+                  )}
                 </p>
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[1200px] text-sm">

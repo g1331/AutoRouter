@@ -29,6 +29,7 @@
 - **THEN** 页面 SHALL 提供分页浏览能力（上一页/下一页）
 - **AND** 页面 SHALL 展示当前页码与总页数
 - **AND** 页面 SHOULD 支持选择每页条数以提升翻页体验
+- **AND** 页面 SHOULD 对搜索输入进行防抖，并在请求期间保持列表稳定，避免频繁刷新导致页面跳动
 
 ### Requirement: Manual Price Override
 

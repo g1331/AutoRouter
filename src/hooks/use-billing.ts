@@ -64,6 +64,8 @@ export function useBillingModelPrices(
       }
       return apiClient.get<PaginatedBillingModelPricesResponse>(`/admin/billing/prices?${params}`);
     },
+    // Keep previous data during search/pagination to avoid layout jumps.
+    placeholderData: (previous) => previous,
   });
 }
 
