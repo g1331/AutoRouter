@@ -554,6 +554,7 @@
     "unresolvedModels": "Unresolved Models",
     "latestSync": "Latest Sync",
     "syncNow": "Sync Prices",
+    "syncing": "Syncing...",
     "syncNever": "Never synced",
     "syncSuccess": "Synced from {source}",
     "syncPartial": "Fallback synced from {source}",

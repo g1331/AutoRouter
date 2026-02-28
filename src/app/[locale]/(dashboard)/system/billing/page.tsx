@@ -37,6 +37,8 @@ function useUsdFormatter(locale: string) {
       new Intl.NumberFormat(locale, {
         style: "currency",
         currency: "USD",
+        // Avoid "US$" prefix in some locales (e.g. zh-CN) to keep cost display compact.
+        currencyDisplay: "narrowSymbol",
         minimumFractionDigits: 2,
         maximumFractionDigits: 6,
       }),
@@ -559,7 +561,7 @@ export default function BillingPage() {
               <p className="type-body-medium text-muted-foreground">{t("managementDesc")}</p>
             </div>
             <Button onClick={() => syncPrices.mutate()} disabled={syncPrices.isPending}>
-              {syncPrices.isPending ? "Syncing..." : t("syncNow")}
+              {syncPrices.isPending ? t("syncing") : t("syncNow")}
             </Button>
           </CardContent>
         </Card>

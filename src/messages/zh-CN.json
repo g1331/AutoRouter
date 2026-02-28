@@ -554,6 +554,7 @@
     "unresolvedModels": "未定价模型",
     "latestSync": "最近同步",
     "syncNow": "立即同步价格",
+    "syncing": "同步中...",
     "syncNever": "从未同步",
     "syncSuccess": "已从 {source} 同步",
     "syncPartial": "主源失败，已从 {source} 兜底同步",

@@ -209,6 +209,8 @@ export function LogsTable({ logs }: LogsTableProps) {
       new Intl.NumberFormat(locale, {
         style: "currency",
         currency: "USD",
+        // Avoid "US$" prefix in some locales (e.g. zh-CN) to keep the cost column compact.
+        currencyDisplay: "narrowSymbol",
         minimumFractionDigits: 2,
         maximumFractionDigits: 6,
       }),

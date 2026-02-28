@@ -500,13 +500,34 @@ export async function listBillingUnresolvedModels(): Promise<BillingUnresolvedMo
 
   const models = [...grouped.keys()];
   if (models.length > 0) {
-    const overrides = await db.query.billingManualPriceOverrides.findMany({
-      where: inArray(billingManualPriceOverrides.model, models),
-    });
+    const [overrides, priced] = await Promise.all([
+      db.query.billingManualPriceOverrides.findMany({
+        where: inArray(billingManualPriceOverrides.model, models),
+      }),
+      db.query.billingModelPrices.findMany({
+        where: and(
+          inArray(billingModelPrices.model, models),
+          eq(billingModelPrices.source, "litellm"),
+          eq(billingModelPrices.isActive, true)
+        ),
+        columns: {
+          model: true,
+        },
+      }),
+    ]);
+
     const overrideModelSet = new Set(overrides.map((item) => item.model));
+    const pricedModelSet = new Set(priced.map((item) => item.model));
     for (const entry of grouped.values()) {
       entry.hasManualOverride = overrideModelSet.has(entry.model);
     }
+
+    // Hide resolved models from unresolved list:
+    // - has manual override, OR
+    // - now exists in synced price catalog
+    return [...grouped.values()].filter(
+      (entry) => !overrideModelSet.has(entry.model) && !pricedModelSet.has(entry.model)
+    );
   }
 
   return [...grouped.values()];
