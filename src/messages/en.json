@@ -579,7 +579,7 @@
     "priceCatalogDesc": "Query synced model prices currently used by billing",
     "priceCatalogSearchPlaceholder": "Search by model name, e.g. gpt-4.1",
     "priceCatalogEmpty": "No model prices found",
-    "priceCatalogShowing": "Showing {current} of {total} records",
+    "priceCatalogShowing": "Showing {from}-{to} of {total} records",
     "priceCatalogModel": "Model",
     "priceCatalogSource": "Source",
     "priceCatalogInputPrice": "Input Price / 1M",

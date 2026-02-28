@@ -23,6 +23,12 @@
 - **THEN** 系统 SHALL 解析并保存缓存单价到价格目录
 - **AND** 价格目录接口与页面 SHALL 可查询并展示缓存读写单价
 
+#### Scenario: Browse price catalog with pagination
+
+- **WHEN** 管理员在 Billing 页面查看模型价格目录
+- **THEN** 页面 SHALL 提供分页浏览能力（上一页/下一页）
+- **AND** 页面 SHALL 展示当前页码与总页数
+
 ### Requirement: Manual Price Override
 
 系统 MUST 支持管理员为指定模型手动录入单价，并在计费时优先生效。

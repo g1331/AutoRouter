@@ -579,7 +579,7 @@
     "priceCatalogDesc": "查询当前计费使用的已同步模型单价",
     "priceCatalogSearchPlaceholder": "按模型名搜索，例如 gpt-4.1",
     "priceCatalogEmpty": "未查询到模型价格",
-    "priceCatalogShowing": "当前显示 {current} 条，共 {total} 条",
+    "priceCatalogShowing": "当前显示 {from}-{to} 条，共 {total} 条",
     "priceCatalogModel": "模型",
     "priceCatalogSource": "来源",
     "priceCatalogInputPrice": "输入单价 / 百万",

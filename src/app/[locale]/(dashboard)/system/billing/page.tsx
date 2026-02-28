@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
-import { Wallet } from "lucide-react";
+import { ChevronLeft, ChevronRight, Wallet } from "lucide-react";
 
 import { Topbar } from "@/components/admin/topbar";
 import { Badge } from "@/components/ui/badge";
@@ -375,13 +375,15 @@ function UnresolvedRepairTable({
 
 export default function BillingPage() {
   const t = useTranslations("billing");
+  const tCommon = useTranslations("common");
   const locale = useLocale();
   const usd = useUsdFormatter(locale);
 
   const overview = useBillingOverview();
   const unresolved = useBillingUnresolvedModels();
   const [modelPriceQuery, setModelPriceQuery] = useState("");
-  const modelPrices = useBillingModelPrices(1, 50, modelPriceQuery);
+  const [modelPricePage, setModelPricePage] = useState(1);
+  const modelPrices = useBillingModelPrices(modelPricePage, 50, modelPriceQuery);
   const syncPrices = useSyncBillingPrices();
 
   const latestSync = overview.data?.latest_sync ?? null;
@@ -481,7 +483,10 @@ export default function BillingPage() {
               <div className="w-full sm:w-80">
                 <Input
                   value={modelPriceQuery}
-                  onChange={(event) => setModelPriceQuery(event.target.value)}
+                  onChange={(event) => {
+                    setModelPriceQuery(event.target.value);
+                    setModelPricePage(1);
+                  }}
                   placeholder={t("priceCatalogSearchPlaceholder")}
                 />
               </div>
@@ -496,7 +501,11 @@ export default function BillingPage() {
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground">
                   {t("priceCatalogShowing", {
-                    current: modelPrices.data?.items.length ?? 0,
+                    from:
+                      ((modelPrices.data?.page ?? 1) - 1) * (modelPrices.data?.page_size ?? 50) + 1,
+                    to:
+                      ((modelPrices.data?.page ?? 1) - 1) * (modelPrices.data?.page_size ?? 50) +
+                      (modelPrices.data?.items.length ?? 0),
                     total: modelPrices.data?.total ?? 0,
                   })}
                 </p>
@@ -548,6 +557,49 @@ export default function BillingPage() {
                     </tbody>
                   </table>
                 </div>
+
+                {modelPrices.data && modelPrices.data.total_pages > 1 && (
+                  <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="type-body-small text-muted-foreground">
+                      {tCommon("items")}{" "}
+                      <span className="font-semibold text-foreground">
+                        {modelPrices.data.total}
+                      </span>{" "}
+                      · {tCommon("page")}{" "}
+                      <span className="font-semibold text-foreground">{modelPrices.data.page}</span>{" "}
+                      {tCommon("of")}{" "}
+                      <span className="font-semibold text-foreground">
+                        {modelPrices.data.total_pages}
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setModelPricePage((prev) => Math.max(1, prev - 1))}
+                        disabled={modelPricePage === 1}
+                        className="gap-1"
+                      >
+                        <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                        {tCommon("previous")}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          setModelPricePage((prev) =>
+                            Math.min(modelPrices.data?.total_pages ?? prev, prev + 1)
+                          )
+                        }
+                        disabled={modelPricePage === modelPrices.data.total_pages}
+                        className="gap-1"
+                      >
+                        {tCommon("next")}
+                        <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
