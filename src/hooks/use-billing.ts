@@ -8,6 +8,7 @@ import type {
   BillingCreateManualOverride,
   BillingUpdateManualOverride,
   BillingManualOverridesResponse,
+  BillingResetManualOverridesResponse,
   PaginatedBillingModelPricesResponse,
   BillingUnresolvedModelsResponse,
   UpstreamBillingMultiplier,
@@ -121,6 +122,38 @@ export function useDeleteBillingManualOverride() {
     },
     onError: (error: Error) => {
       toast.error(`删除失败: ${error.message}`);
+    },
+  });
+}
+
+export function useResetBillingManualOverrides() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (models: string[]) =>
+      apiClient.post<BillingResetManualOverridesResponse>("/admin/billing/overrides/reset", {
+        models,
+      }),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["billing", "manual-overrides"] });
+      queryClient.invalidateQueries({ queryKey: ["billing", "unresolved-models"] });
+      queryClient.invalidateQueries({ queryKey: ["billing", "model-prices"] });
+
+      if (result.deleted_count > 0) {
+        toast.success(`已重置 ${result.deleted_count} 个手动覆盖`);
+      } else {
+        toast.message("没有需要重置的手动覆盖");
+      }
+
+      if (result.missing_official_models.length > 0) {
+        toast.warning(
+          `其中 ${result.missing_official_models.length} 个模型目前没有官方价格，删除手动定价后将无法计费`
+        );
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(`重置失败: ${error.message}`);
     },
   });
 }

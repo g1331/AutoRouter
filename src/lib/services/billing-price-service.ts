@@ -44,6 +44,11 @@ export interface BillingManualPriceOverrideRecord {
   cacheReadInputPricePerMillion: number | null;
   cacheWriteInputPricePerMillion: number | null;
   note: string | null;
+  /**
+   * Optional derived flag. Present when the record is returned from list endpoints that
+   * also check whether an active synced price exists for this model.
+   */
+  hasOfficialPrice?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -355,6 +360,21 @@ export async function listBillingManualPriceOverrides(): Promise<
   const rows = await db.query.billingManualPriceOverrides.findMany({
     orderBy: [desc(billingManualPriceOverrides.updatedAt)],
   });
+
+  const models = rows.map((row) => row.model);
+  const officialPriceRows =
+    models.length > 0
+      ? await db.query.billingModelPrices.findMany({
+          where: and(
+            inArray(billingModelPrices.model, models),
+            eq(billingModelPrices.source, "litellm"),
+            eq(billingModelPrices.isActive, true)
+          ),
+          columns: { model: true },
+        })
+      : [];
+  const officialModelSet = new Set(officialPriceRows.map((item) => item.model));
+
   return rows.map((row) => ({
     id: row.id,
     model: row.model,
@@ -363,9 +383,40 @@ export async function listBillingManualPriceOverrides(): Promise<
     cacheReadInputPricePerMillion: row.cacheReadInputPricePerMillion,
     cacheWriteInputPricePerMillion: row.cacheWriteInputPricePerMillion,
     note: row.note,
+    hasOfficialPrice: officialModelSet.has(row.model),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }));
+}
+
+export async function deleteBillingManualPriceOverridesByModels(
+  models: string[]
+): Promise<{ deletedCount: number; missingOfficialModels: string[] }> {
+  const normalized = [...new Set(models.map((m) => m.trim()).filter(Boolean))];
+  if (normalized.length === 0) {
+    return { deletedCount: 0, missingOfficialModels: [] };
+  }
+
+  const officialRows = await db.query.billingModelPrices.findMany({
+    where: and(
+      inArray(billingModelPrices.model, normalized),
+      eq(billingModelPrices.source, "litellm"),
+      eq(billingModelPrices.isActive, true)
+    ),
+    columns: { model: true },
+  });
+  const officialModelSet = new Set(officialRows.map((row) => row.model));
+  const missingOfficialModels = normalized.filter((model) => !officialModelSet.has(model));
+
+  const deletedRows = await db
+    .delete(billingManualPriceOverrides)
+    .where(inArray(billingManualPriceOverrides.model, normalized))
+    .returning({ model: billingManualPriceOverrides.model });
+
+  return {
+    deletedCount: deletedRows.length,
+    missingOfficialModels,
+  };
 }
 
 export async function createBillingManualPriceOverride(

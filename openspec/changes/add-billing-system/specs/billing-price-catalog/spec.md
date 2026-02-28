@@ -59,6 +59,30 @@
 - **THEN** 系统 SHALL 成功创建或更新该模型的手动覆盖记录
 - **AND** 后续请求 SHALL 按该覆盖价格参与计费
 
+### Requirement: Reset Manual Override To Official Price
+
+系统 SHOULD 提供将手动覆盖“一键重置为官方价格”的能力，用于在 LiteLLM 价格表已补全或管理员希望回到标准口径时快速回滚。
+
+#### Scenario: Reset single model override to official price
+
+- **GIVEN** 某模型同时存在手动覆盖与自动同步价格
+- **WHEN** 管理员在模型价格目录中对该模型执行“重置为官方价格”
+- **THEN** 系统 SHALL 删除该模型的手动覆盖记录
+- **AND** 后续请求 SHALL 回退为使用自动同步价格参与计费
+
+#### Scenario: Bulk reset manual overrides
+
+- **WHEN** 管理员在模型价格目录中筛选出被手动覆盖的模型并多选批量重置
+- **THEN** 系统 SHALL 批量删除所选模型的手动覆盖记录
+- **AND** 页面 SHALL 在操作后同步刷新目录展示与覆盖列表
+
+#### Scenario: Warn when resetting models without official price
+
+- **GIVEN** 某模型仅存在手动覆盖，自动同步价格目录中无该模型有效价格
+- **WHEN** 管理员执行“重置为官方价格/删除手动定价”
+- **THEN** 系统 SHALL 允许删除手动覆盖记录
+- **AND** 页面 SHOULD 明确提示删除后该模型将变为“无价格不可计费”，直至同步价格补全或管理员重新手动录入
+
 ### Requirement: Unresolved Model Discovery
 
 系统 MUST 对无法定价的模型提供可操作的“缺失价格列表”。

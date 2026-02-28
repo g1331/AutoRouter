@@ -590,6 +590,7 @@ export interface BillingManualOverrideApiResponse {
   cache_read_input_price_per_million: number | null;
   cache_write_input_price_per_million: number | null;
   note: string | null;
+  has_official_price?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -683,6 +684,7 @@ export function transformBillingManualOverrideToApi(
     cache_read_input_price_per_million: override.cacheReadInputPricePerMillion,
     cache_write_input_price_per_million: override.cacheWriteInputPricePerMillion,
     note: override.note,
+    has_official_price: override.hasOfficialPrice,
     created_at: override.createdAt.toISOString(),
     updated_at: override.updatedAt.toISOString(),
   };

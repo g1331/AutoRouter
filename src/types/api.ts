@@ -426,6 +426,7 @@ export interface BillingManualOverride {
   cache_read_input_price_per_million: number | null;
   cache_write_input_price_per_million: number | null;
   note: string | null;
+  has_official_price?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -464,6 +465,11 @@ export interface BillingUnresolvedModelsResponse {
 export interface BillingManualOverridesResponse {
   items: BillingManualOverride[];
   total: number;
+}
+
+export interface BillingResetManualOverridesResponse {
+  deleted_count: number;
+  missing_official_models: string[];
 }
 
 export interface BillingModelPrice {
