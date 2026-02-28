@@ -77,6 +77,8 @@ const createUpstreamFormSchema = z
     description: z.string().max(500),
     priority: z.number().int().min(0).max(100),
     weight: z.number().int().min(1).max(100),
+    billing_input_multiplier: z.number().min(0).max(100),
+    billing_output_multiplier: z.number().min(0).max(100),
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
     allowed_models: z.array(z.string()).nullable(),
     model_redirects: z.record(z.string(), z.string()).nullable(),
@@ -97,6 +99,8 @@ const editUpstreamFormSchema = z
     description: z.string().max(500),
     priority: z.number().int().min(0).max(100),
     weight: z.number().int().min(1).max(100),
+    billing_input_multiplier: z.number().min(0).max(100),
+    billing_output_multiplier: z.number().min(0).max(100),
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
     allowed_models: z.array(z.string()).nullable(),
     model_redirects: z.record(z.string(), z.string()).nullable(),
@@ -134,6 +138,8 @@ export function UpstreamFormDialog({
       description: "",
       priority: 0,
       weight: 1,
+      billing_input_multiplier: 1,
+      billing_output_multiplier: 1,
       route_capabilities: [],
       allowed_models: null,
       model_redirects: null,
@@ -163,6 +169,8 @@ export function UpstreamFormDialog({
         description: upstream.description || "",
         priority: upstream.priority ?? 0,
         weight: upstream.weight ?? 1,
+        billing_input_multiplier: upstream.billing_input_multiplier ?? 1,
+        billing_output_multiplier: upstream.billing_output_multiplier ?? 1,
         route_capabilities: upstream.route_capabilities || [],
         allowed_models: upstream.allowed_models || null,
         model_redirects: upstream.model_redirects || null,
@@ -184,6 +192,8 @@ export function UpstreamFormDialog({
         description: "",
         priority: 0,
         weight: 1,
+        billing_input_multiplier: 1,
+        billing_output_multiplier: 1,
         route_capabilities: [],
         allowed_models: null,
         model_redirects: null,
@@ -204,6 +214,8 @@ export function UpstreamFormDialog({
           description: string | null;
           priority?: number;
           weight?: number;
+          billing_input_multiplier?: number;
+          billing_output_multiplier?: number;
           route_capabilities?: RouteCapability[] | null;
           allowed_models?: string[] | null;
           model_redirects?: Record<string, string> | null;
@@ -224,6 +236,8 @@ export function UpstreamFormDialog({
           description: data.description || null,
           priority: data.priority,
           weight: data.weight,
+          billing_input_multiplier: data.billing_input_multiplier,
+          billing_output_multiplier: data.billing_output_multiplier,
           route_capabilities: data.route_capabilities,
           allowed_models: data.allowed_models,
           model_redirects: data.model_redirects,
@@ -246,6 +260,8 @@ export function UpstreamFormDialog({
           description: data.description || null,
           priority: data.priority,
           weight: data.weight,
+          billing_input_multiplier: data.billing_input_multiplier,
+          billing_output_multiplier: data.billing_output_multiplier,
           route_capabilities: data.route_capabilities,
           allowed_models: data.allowed_models,
           model_redirects: data.model_redirects,
@@ -374,6 +390,60 @@ export function UpstreamFormDialog({
               </FormItem>
             )}
           />
+
+          <div className="border-t pt-6 mt-6">
+            <h3 className="text-sm font-medium text-muted-foreground mb-4">
+              {t("billingMultipliers")}
+            </h3>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="billing_input_multiplier"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("billingInputMultiplier")}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.01}
+                        inputMode="decimal"
+                        {...field}
+                        onChange={(e) => field.onChange(Number(e.target.value) || 0)}
+                      />
+                    </FormControl>
+                    <FormDescription>{t("billingInputMultiplierDesc")}</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="billing_output_multiplier"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("billingOutputMultiplier")}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.01}
+                        inputMode="decimal"
+                        {...field}
+                        onChange={(e) => field.onChange(Number(e.target.value) || 0)}
+                      />
+                    </FormControl>
+                    <FormDescription>{t("billingOutputMultiplierDesc")}</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </div>
 
           <FormField
             control={form.control}

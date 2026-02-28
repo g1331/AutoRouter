@@ -19,6 +19,7 @@ import {
   Sun,
   Wrench,
   ArrowLeftRight,
+  Wallet,
 } from "lucide-react";
 
 import { Link, usePathname, useRouter } from "@/i18n/navigation";
@@ -53,7 +54,7 @@ type NavigationItem = {
 type SystemNavigationItem = {
   href: string;
   icon: typeof LayoutDashboard;
-  labelKey: "headerCompensation";
+  labelKey: "headerCompensation" | "billing";
 };
 
 const navigation: NavigationItem[] = [
@@ -64,6 +65,7 @@ const navigation: NavigationItem[] = [
 ];
 
 const systemNavigation: SystemNavigationItem[] = [
+  { href: "/system/billing", icon: Wallet, labelKey: "billing" },
   { href: "/system/header-compensation", icon: ArrowLeftRight, labelKey: "headerCompensation" },
 ];
 

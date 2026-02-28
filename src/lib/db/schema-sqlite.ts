@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { index, integer, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 
 /**
@@ -57,6 +57,8 @@ export const upstreams = sqliteTable(
       metric: "tokens" | "length";
       threshold: number;
     } | null>(), // Session affinity migration configuration
+    billingInputMultiplier: real("billing_input_multiplier").notNull().default(1),
+    billingOutputMultiplier: real("billing_output_multiplier").notNull().default(1),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },
@@ -218,6 +220,118 @@ export const requestLogs = sqliteTable(
 );
 
 /**
+ * Synced model price catalog from external sources.
+ */
+export const billingModelPrices = sqliteTable(
+  "billing_model_prices",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    model: text("model").notNull(),
+    inputPricePerMillion: real("input_price_per_million").notNull(),
+    outputPricePerMillion: real("output_price_per_million").notNull(),
+    cacheReadInputPricePerMillion: real("cache_read_input_price_per_million"),
+    cacheWriteInputPricePerMillion: real("cache_write_input_price_per_million"),
+    source: text("source").notNull(), // openrouter | litellm
+    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    syncedAt: integer("synced_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("billing_model_prices_model_idx").on(table.model),
+    index("billing_model_prices_source_idx").on(table.source),
+    unique("uq_billing_model_prices_model_source").on(table.model, table.source),
+  ]
+);
+
+/**
+ * Manual model price overrides from admin.
+ */
+export const billingManualPriceOverrides = sqliteTable(
+  "billing_manual_price_overrides",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    model: text("model").notNull().unique(),
+    inputPricePerMillion: real("input_price_per_million").notNull(),
+    outputPricePerMillion: real("output_price_per_million").notNull(),
+    cacheReadInputPricePerMillion: real("cache_read_input_price_per_million"),
+    cacheWriteInputPricePerMillion: real("cache_write_input_price_per_million"),
+    note: text("note"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+  },
+  (table) => [index("billing_manual_price_overrides_model_idx").on(table.model)]
+);
+
+/**
+ * Price synchronization history for dashboard status.
+ */
+export const billingPriceSyncHistory = sqliteTable(
+  "billing_price_sync_history",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    status: text("status").notNull(), // success | partial | failed
+    source: text("source"), // openrouter | litellm | none
+    successCount: integer("success_count").notNull().default(0),
+    failureCount: integer("failure_count").notNull().default(0),
+    failureReason: text("failure_reason"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+  },
+  (table) => [index("billing_price_sync_history_created_at_idx").on(table.createdAt)]
+);
+
+/**
+ * Immutable billing snapshot for each request log row.
+ */
+export const requestBillingSnapshots = sqliteTable(
+  "request_billing_snapshots",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    requestLogId: text("request_log_id")
+      .notNull()
+      .unique()
+      .references(() => requestLogs.id, { onDelete: "cascade" }),
+    apiKeyId: text("api_key_id").references(() => apiKeys.id, { onDelete: "set null" }),
+    upstreamId: text("upstream_id").references(() => upstreams.id, { onDelete: "set null" }),
+    model: text("model"),
+    billingStatus: text("billing_status").notNull(), // billed | unbilled
+    unbillableReason: text("unbillable_reason"),
+    priceSource: text("price_source"), // manual | openrouter | litellm
+    baseInputPricePerMillion: real("base_input_price_per_million"),
+    baseOutputPricePerMillion: real("base_output_price_per_million"),
+    baseCacheReadInputPricePerMillion: real("base_cache_read_input_price_per_million"),
+    baseCacheWriteInputPricePerMillion: real("base_cache_write_input_price_per_million"),
+    inputMultiplier: real("input_multiplier"),
+    outputMultiplier: real("output_multiplier"),
+    promptTokens: integer("prompt_tokens").notNull().default(0),
+    completionTokens: integer("completion_tokens").notNull().default(0),
+    totalTokens: integer("total_tokens").notNull().default(0),
+    cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
+    cacheWriteTokens: integer("cache_write_tokens").notNull().default(0),
+    cacheReadCost: real("cache_read_cost"),
+    cacheWriteCost: real("cache_write_cost"),
+    finalCost: real("final_cost"),
+    currency: text("currency").notNull().default("USD"),
+    billedAt: integer("billed_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("request_billing_snapshots_request_log_id_idx").on(table.requestLogId),
+    index("request_billing_snapshots_billing_status_idx").on(table.billingStatus),
+    index("request_billing_snapshots_model_idx").on(table.model),
+    index("request_billing_snapshots_created_at_idx").on(table.createdAt),
+  ]
+);
+
+/**
  * Outbound header compensation rules.
  */
 export const compensationRules = sqliteTable(
@@ -256,6 +370,7 @@ export const upstreamsRelations = relations(upstreams, ({ one, many }) => ({
   }),
   apiKeys: many(apiKeyUpstreams),
   requestLogs: many(requestLogs),
+  requestBillingSnapshots: many(requestBillingSnapshots),
 }));
 
 export const upstreamHealthRelations = relations(upstreamHealth, ({ one }) => ({
@@ -292,6 +407,25 @@ export const requestLogsRelations = relations(requestLogs, ({ one }) => ({
     fields: [requestLogs.upstreamId],
     references: [upstreams.id],
   }),
+  billingSnapshot: one(requestBillingSnapshots, {
+    fields: [requestLogs.id],
+    references: [requestBillingSnapshots.requestLogId],
+  }),
+}));
+
+export const requestBillingSnapshotsRelations = relations(requestBillingSnapshots, ({ one }) => ({
+  requestLog: one(requestLogs, {
+    fields: [requestBillingSnapshots.requestLogId],
+    references: [requestLogs.id],
+  }),
+  apiKey: one(apiKeys, {
+    fields: [requestBillingSnapshots.apiKeyId],
+    references: [apiKeys.id],
+  }),
+  upstream: one(upstreams, {
+    fields: [requestBillingSnapshots.upstreamId],
+    references: [upstreams.id],
+  }),
 }));
 
 // Type exports
@@ -307,3 +441,11 @@ export type RequestLog = typeof requestLogs.$inferSelect;
 export type NewRequestLog = typeof requestLogs.$inferInsert;
 export type CircuitBreakerState = typeof circuitBreakerStates.$inferSelect;
 export type NewCircuitBreakerState = typeof circuitBreakerStates.$inferInsert;
+export type BillingModelPrice = typeof billingModelPrices.$inferSelect;
+export type NewBillingModelPrice = typeof billingModelPrices.$inferInsert;
+export type BillingManualPriceOverride = typeof billingManualPriceOverrides.$inferSelect;
+export type NewBillingManualPriceOverride = typeof billingManualPriceOverrides.$inferInsert;
+export type BillingPriceSyncHistory = typeof billingPriceSyncHistory.$inferSelect;
+export type NewBillingPriceSyncHistory = typeof billingPriceSyncHistory.$inferInsert;
+export type RequestBillingSnapshot = typeof requestBillingSnapshots.$inferSelect;
+export type NewRequestBillingSnapshot = typeof requestBillingSnapshots.$inferInsert;

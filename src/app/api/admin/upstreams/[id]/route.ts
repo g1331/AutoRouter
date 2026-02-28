@@ -62,6 +62,8 @@ const updateUpstreamSchema = z
     model_redirects: z.record(z.string(), z.string()).nullable().optional(),
     circuit_breaker_config: circuitBreakerConfigSchema.nullable().optional(),
     affinity_migration: affinityMigrationConfigSchema.nullable().optional(),
+    billing_input_multiplier: z.number().min(0).max(100).optional(),
+    billing_output_multiplier: z.number().min(0).max(100).optional(),
   })
   .refine(
     (data) =>
@@ -144,6 +146,12 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
     if (validated.affinity_migration !== undefined) {
       input.affinityMigration = validated.affinity_migration ?? null;
+    }
+    if (validated.billing_input_multiplier !== undefined) {
+      input.billingInputMultiplier = validated.billing_input_multiplier;
+    }
+    if (validated.billing_output_multiplier !== undefined) {
+      input.billingOutputMultiplier = validated.billing_output_multiplier;
     }
 
     const result = await updateUpstream(id, input);

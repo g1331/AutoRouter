@@ -7,8 +7,10 @@ import {
   useCreateAPIKey,
   useRevealAPIKey,
   useRevokeAPIKey,
+  useToggleAPIKeyActive,
   useUpdateAPIKey,
 } from "@/hooks/use-api-keys";
+import type { APIKeyResponse, PaginatedAPIKeysResponse } from "@/types/api";
 
 // Mock next-intl
 vi.mock("next-intl", () => ({
@@ -75,6 +77,35 @@ describe("use-api-keys hooks", () => {
     });
     vi.clearAllMocks();
   });
+
+  function makeApiKey(overrides: Partial<APIKeyResponse> = {}): APIKeyResponse {
+    return {
+      id: "key-1",
+      key_prefix: "sk-auto-test",
+      name: "Test Key",
+      description: null,
+      upstream_ids: ["upstream-1"],
+      is_active: true,
+      expires_at: null,
+      created_at: "2024-01-01T00:00:00Z",
+      updated_at: "2024-01-01T00:00:00Z",
+      ...overrides,
+    };
+  }
+
+  function makePaginatedAPIKeys(
+    items: APIKeyResponse[],
+    overrides: Partial<PaginatedAPIKeysResponse> = {}
+  ): PaginatedAPIKeysResponse {
+    return {
+      items,
+      total: items.length,
+      page: 1,
+      page_size: 10,
+      total_pages: 1,
+      ...overrides,
+    };
+  }
 
   describe("useAPIKeys", () => {
     it("fetches API keys with default pagination", async () => {
@@ -219,6 +250,43 @@ describe("use-api-keys hooks", () => {
       expect(mockToastSuccess).toHaveBeenCalledWith("revokeSuccess");
     });
 
+    it("updates cached list after successful revoke", async () => {
+      mockDelete.mockResolvedValueOnce(undefined);
+
+      queryClient.setQueryData<PaginatedAPIKeysResponse>(
+        ["api-keys", 1, 10],
+        makePaginatedAPIKeys([
+          makeApiKey({ id: "key-a", name: "A" }),
+          makeApiKey({ id: "key-b", name: "B" }),
+        ])
+      );
+
+      const { result } = renderHook(() => useRevokeAPIKey(), { wrapper });
+
+      result.current.mutate("key-b");
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      const updated = queryClient.getQueryData<PaginatedAPIKeysResponse>(["api-keys", 1, 10]);
+      expect(updated?.items.map((k) => k.id)).toEqual(["key-a"]);
+      expect(updated?.total).toBe(1);
+    });
+
+    it("handles revoke when cached list is undefined", async () => {
+      mockDelete.mockResolvedValueOnce(undefined);
+
+      // Create a matching query entry with explicit undefined data to hit the `if (!old)` branch.
+      queryClient.setQueryData<PaginatedAPIKeysResponse>(["api-keys", 1, 10], undefined);
+
+      const { result } = renderHook(() => useRevokeAPIKey(), { wrapper });
+
+      result.current.mutate("key-x");
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      expect(queryClient.getQueryData(["api-keys", 1, 10])).toBeUndefined();
+    });
+
     it("shows error toast on revoke failure", async () => {
       mockDelete.mockRejectedValueOnce(new Error("Revoke failed"));
 
@@ -327,6 +395,68 @@ describe("use-api-keys hooks", () => {
       expect(mockPut).toHaveBeenCalledWith("/admin/keys/key-1", {
         upstream_ids: ["upstream-2", "upstream-3"],
       });
+    });
+  });
+
+  describe("useToggleAPIKeyActive", () => {
+    it("optimistically updates cache and shows enable success toast", async () => {
+      queryClient.setQueryData<PaginatedAPIKeysResponse>(
+        ["api-keys", 1, 10],
+        makePaginatedAPIKeys([makeApiKey({ id: "key-1", is_active: false })])
+      );
+      // Ensure the updater sees an explicit undefined old value as well.
+      queryClient.setQueryData<PaginatedAPIKeysResponse>(["api-keys", 2, 10], undefined);
+
+      const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+      mockPut.mockResolvedValueOnce(makeApiKey({ id: "key-1", is_active: true }));
+
+      const { result } = renderHook(() => useToggleAPIKeyActive(), { wrapper });
+
+      result.current.mutate({ id: "key-1", nextActive: true });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      const updated = queryClient.getQueryData<PaginatedAPIKeysResponse>(["api-keys", 1, 10]);
+      expect(updated?.items?.[0]?.is_active).toBe(true);
+      expect(mockToastSuccess).toHaveBeenCalledWith("enableSuccess");
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["api-keys"] });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["stats", "keys"] });
+    });
+
+    it("restores previous cache state on error and shows failure toast", async () => {
+      queryClient.setQueryData<PaginatedAPIKeysResponse>(
+        ["api-keys", 1, 10],
+        makePaginatedAPIKeys([makeApiKey({ id: "key-1", is_active: true })])
+      );
+
+      mockPut.mockRejectedValueOnce(new Error("Toggle failed"));
+
+      const { result } = renderHook(() => useToggleAPIKeyActive(), { wrapper });
+
+      result.current.mutate({ id: "key-1", nextActive: false });
+
+      await waitFor(() => expect(result.current.isError).toBe(true));
+
+      const restored = queryClient.getQueryData<PaginatedAPIKeysResponse>(["api-keys", 1, 10]);
+      expect(restored?.items?.[0]?.is_active).toBe(true);
+      expect(mockToastError).toHaveBeenCalledWith("updateFailed: Toggle failed");
+    });
+
+    it("shows disable success toast when disabling key", async () => {
+      queryClient.setQueryData<PaginatedAPIKeysResponse>(
+        ["api-keys", 1, 10],
+        makePaginatedAPIKeys([makeApiKey({ id: "key-1", is_active: true })])
+      );
+
+      mockPut.mockResolvedValueOnce(makeApiKey({ id: "key-1", is_active: false }));
+
+      const { result } = renderHook(() => useToggleAPIKeyActive(), { wrapper });
+
+      result.current.mutate({ id: "key-1", nextActive: false });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      expect(mockToastSuccess).toHaveBeenCalledWith("disableSuccess");
     });
   });
 });

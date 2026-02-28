@@ -22,6 +22,9 @@ vi.mock("sonner", () => ({
   },
 }));
 
+import { toast } from "sonner";
+const mockToastError = toast.error as ReturnType<typeof vi.fn>;
+
 // Mock the useRevealAPIKey hook
 const mockRevealKey = vi.fn();
 const mockToggleKeyActive = vi.fn();
@@ -208,6 +211,28 @@ describe("KeysTable", () => {
       expect(revealedCode?.className).not.toContain("break-all");
       expect(revealedCode?.className).not.toContain("truncate");
     });
+
+    it("hides revealed key when toggled again without re-fetching", async () => {
+      mockRevealKey.mockResolvedValueOnce({ key_value: "sk-auto-fullkey123" });
+      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
+
+      const revealButton = screen.getByLabelText("revealKey");
+      fireEvent.click(revealButton);
+
+      await waitFor(() => {
+        expect(screen.getByText("sk-auto-fullkey123")).toBeInTheDocument();
+      });
+      expect(mockRevealKey).toHaveBeenCalledTimes(1);
+
+      const hideButton = screen.getByLabelText("hideKey");
+      fireEvent.click(hideButton);
+
+      await waitFor(() => {
+        expect(screen.queryByText("sk-auto-fullkey123")).not.toBeInTheDocument();
+      });
+      expect(screen.getByText("sk-auto-***f456")).toBeInTheDocument();
+      expect(mockRevealKey).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("Copy Key", () => {
@@ -228,6 +253,30 @@ describe("KeysTable", () => {
       await waitFor(() => {
         expect(mockClipboard.writeText).toHaveBeenCalledWith("sk-auto-secret");
       });
+    });
+
+    it("shows error toast when clipboard writeText fails (without re-revealing)", async () => {
+      mockRevealKey.mockResolvedValueOnce({ key_value: "sk-auto-secret" });
+      mockClipboard.writeText.mockRejectedValueOnce(new Error("Clipboard denied"));
+
+      render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
+
+      fireEvent.click(screen.getByLabelText("revealKey"));
+
+      await waitFor(() => {
+        expect(screen.getByText("sk-auto-secret")).toBeInTheDocument();
+      });
+      expect(mockRevealKey).toHaveBeenCalledTimes(1);
+
+      fireEvent.click(screen.getByLabelText("copy"));
+
+      await waitFor(() => {
+        expect(mockToastError).toHaveBeenCalledWith("error");
+      });
+
+      // Copy should use cached revealed key value, not call revealKey again.
+      expect(mockRevealKey).toHaveBeenCalledTimes(1);
+      expect(mockClipboard.writeText).toHaveBeenCalledWith("sk-auto-secret");
     });
   });
 
@@ -474,6 +523,45 @@ describe("KeysTable", () => {
       await waitFor(() => {
         expect(mockToggleKeyActive).toHaveBeenCalledWith({ id: "test-id-1", nextActive: false });
       });
+    });
+  });
+
+  describe("Mobile Layout", () => {
+    it("renders mobile cards when matchMedia matches and cleans up listener", async () => {
+      const originalMatchMedia = window.matchMedia;
+
+      const addListener = vi.fn();
+      const removeListener = vi.fn();
+      Object.defineProperty(window, "matchMedia", {
+        writable: true,
+        value: () => ({
+          matches: true,
+          addEventListener: addListener,
+          removeEventListener: removeListener,
+        }),
+      });
+
+      mockToggleKeyActive.mockResolvedValueOnce(undefined);
+
+      const { unmount } = render(
+        <KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />
+      );
+
+      // Mobile layout should not render a table, and should include mobile-labeled actions.
+      expect(screen.queryByRole("table")).not.toBeInTheDocument();
+      expect(screen.getByLabelText("revealKey (mobile)")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByLabelText("quickDisable: Test API Key (mobile)"));
+
+      await waitFor(() => {
+        expect(mockToggleKeyActive).toHaveBeenCalledWith({ id: "test-id-1", nextActive: false });
+      });
+
+      unmount();
+      expect(addListener).toHaveBeenCalled();
+      expect(removeListener).toHaveBeenCalled();
+
+      Object.defineProperty(window, "matchMedia", { writable: true, value: originalMatchMedia });
     });
   });
 });

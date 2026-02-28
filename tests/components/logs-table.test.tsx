@@ -91,6 +91,7 @@ describe("LogsTable", () => {
       expect(screen.getByText("tablePath")).toBeInTheDocument();
       expect(screen.getByText("tableModel")).toBeInTheDocument();
       expect(screen.getByText("tableTokens")).toBeInTheDocument();
+      expect(screen.getByText("tableCost")).toBeInTheDocument();
       expect(screen.getByText("tableStatus")).toBeInTheDocument();
       expect(screen.getByText("tableDuration")).toBeInTheDocument();
     });
@@ -101,6 +102,63 @@ describe("LogsTable", () => {
       expect(screen.getByText("POST")).toBeInTheDocument();
       expect(screen.getByText("/v1/chat/completions")).toBeInTheDocument();
       expect(screen.getByText("gpt-4")).toBeInTheDocument();
+    });
+
+    it("renders billed cost directly in the table row", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              billing_status: "billed",
+              final_cost: 1.234,
+              currency: "USD",
+            },
+          ]}
+        />
+      );
+
+      expect(screen.getByText(/\$1\.234/)).toBeInTheDocument();
+    });
+  });
+
+  describe("Mobile Layout Billing Display", () => {
+    it("does not render billed status label in mobile cards", async () => {
+      const originalMatchMedia = window.matchMedia;
+
+      window.matchMedia = ((query: string) => ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      })) as unknown as typeof window.matchMedia;
+
+      try {
+        render(
+          <LogsTable
+            logs={[
+              {
+                ...mockLog,
+                billing_status: "billed",
+                final_cost: 1.234,
+                currency: "USD",
+              },
+            ]}
+          />
+        );
+
+        // In mobile layout, we only show cost and unbillable/pending info. Billed label should be hidden.
+        await waitFor(() => {
+          expect(screen.getByText(/\$1\.234/)).toBeInTheDocument();
+        });
+        expect(screen.queryByText("billingStatusBilled")).not.toBeInTheDocument();
+      } finally {
+        window.matchMedia = originalMatchMedia;
+      }
     });
   });
 
@@ -891,6 +949,41 @@ describe("LogsTable", () => {
       expect(screen.getByText("tokenInput")).toBeInTheDocument();
       expect(screen.getByText("tokenOutput")).toBeInTheDocument();
       expect(screen.getByText("tokenTotal")).toBeInTheDocument();
+    });
+
+    it("shows billing breakdown formula under token details when billed", () => {
+      const billedLog: RequestLog = {
+        ...logWithFailoverBase,
+        billing_status: "billed",
+        currency: "USD",
+        final_cost: 0.0012282,
+        billed_input_tokens: 100,
+        base_input_price_per_million: 3,
+        base_output_price_per_million: 15,
+        base_cache_read_input_price_per_million: 0.3,
+        base_cache_write_input_price_per_million: 3,
+        input_multiplier: 1.2,
+        output_multiplier: 1.1,
+        cache_read_tokens: 20,
+        cache_creation_tokens: 10,
+        cache_read_cost: 0.0000072,
+        cache_write_cost: 0.000036,
+        completion_tokens: 50,
+      };
+
+      render(<LogsTable logs={[billedLog]} />);
+
+      const expandButton = screen.getByRole("button", { name: "expandDetails" });
+      fireEvent.click(expandButton);
+
+      expect(screen.getByText("tokenDetails")).toBeInTheDocument();
+      expect(screen.getByText("billingDetails")).toBeInTheDocument();
+
+      expect(screen.getByText(/billingTotal/)).toBeInTheDocument();
+      expect(screen.getByText(/100 \* \$3\.00 \/ 1M \* 1\.2 =/)).toBeInTheDocument();
+      expect(screen.getByText(/50 \* \$15\.00 \/ 1M \* 1\.1 =/)).toBeInTheDocument();
+      expect(screen.getByText(/20 \* \$0\.30 \/ 1M \* 1\.2 =/)).toBeInTheDocument();
+      expect(screen.getByText(/10 \* \$3\.00 \/ 1M \* 1\.2 =/)).toBeInTheDocument();
     });
 
     it("shows routing decision timeline in expanded view when available", () => {

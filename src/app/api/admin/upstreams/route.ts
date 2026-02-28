@@ -57,6 +57,8 @@ const createUpstreamSchema = z
     model_redirects: z.record(z.string(), z.string()).nullable().optional(),
     circuit_breaker_config: circuitBreakerConfigSchema.nullable().optional(),
     affinity_migration: affinityMigrationConfigSchema.nullable().optional(),
+    billing_input_multiplier: z.number().min(0).max(100).default(1),
+    billing_output_multiplier: z.number().min(0).max(100).default(1),
   })
   .refine(
     (data) =>
@@ -131,6 +133,8 @@ export async function POST(request: NextRequest) {
           }
         : null,
       affinityMigration: validated.affinity_migration ?? null,
+      billingInputMultiplier: validated.billing_input_multiplier,
+      billingOutputMultiplier: validated.billing_output_multiplier,
     };
 
     const result = await createUpstream(input);

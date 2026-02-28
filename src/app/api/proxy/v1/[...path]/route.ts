@@ -17,6 +17,7 @@ import {
   extractTokenUsage,
   type FailoverAttempt,
 } from "@/lib/services/request-logger";
+import { calculateAndPersistRequestBillingSnapshot } from "@/lib/services/billing-cost-service";
 import {
   selectFromUpstreamCandidates,
   recordConnection,
@@ -84,6 +85,33 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ path: string[] }> };
+
+async function persistBillingSnapshotSafely(input: {
+  requestLogId: string;
+  apiKeyId: string | null;
+  upstreamId: string | null;
+  model: string | null;
+  usage: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+  };
+  requestId: string;
+}): Promise<void> {
+  try {
+    await calculateAndPersistRequestBillingSnapshot({
+      requestLogId: input.requestLogId,
+      apiKeyId: input.apiKeyId,
+      upstreamId: input.upstreamId,
+      model: input.model,
+      usage: input.usage,
+    });
+  } catch (error) {
+    log.error({ err: error, requestId: input.requestId }, "failed to persist billing snapshot");
+  }
+}
 
 /**
  * Transform ModelRouterResult to RoutingDecisionLog for storage.
@@ -1184,7 +1212,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         Promise.resolve({ usage: result.usage ?? null, ttftMs: result.ttftMs });
 
       void metricsPromise
-        .then(({ usage, ttftMs }) => {
+        .then(async ({ usage, ttftMs }) => {
           // Update session affinity cumulative tokens if we have a session
           if (affinityContext?.sessionId && usage) {
             const affinityUsage: AffinityUsage = {
@@ -1207,13 +1235,22 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             );
           }
 
+          const usageForBilling = {
+            promptTokens: usage?.promptTokens || 0,
+            completionTokens: usage?.completionTokens || 0,
+            totalTokens: usage?.totalTokens || 0,
+            cacheReadTokens: usage?.cacheReadTokens || 0,
+            cacheWriteTokens: usage?.cacheCreationTokens || 0,
+          };
+
+          let persistedLogId: string | null = requestLogId;
           if (requestLogId) {
-            return updateRequestLog(requestLogId, {
+            const updatedLog = await updateRequestLog(requestLogId, {
               upstreamId: upstreamForLogging.id,
               model: resolvedModel,
-              promptTokens: usage?.promptTokens || 0,
-              completionTokens: usage?.completionTokens || 0,
-              totalTokens: usage?.totalTokens || 0,
+              promptTokens: usageForBilling.promptTokens,
+              completionTokens: usageForBilling.completionTokens,
+              totalTokens: usageForBilling.totalTokens,
               cachedTokens: usage?.cachedTokens || 0,
               reasoningTokens: usage?.reasoningTokens || 0,
               cacheCreationTokens: usage?.cacheCreationTokens || 0,
@@ -1235,38 +1272,51 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               sessionIdCompensated,
               headerDiff,
             });
+            persistedLogId = updatedLog?.id ?? requestLogId;
+          } else {
+            const createdLog = await logRequest({
+              apiKeyId: validApiKey.id,
+              upstreamId: upstreamForLogging.id,
+              method: request.method,
+              path,
+              model: resolvedModel,
+              promptTokens: usageForBilling.promptTokens,
+              completionTokens: usageForBilling.completionTokens,
+              totalTokens: usageForBilling.totalTokens,
+              cachedTokens: usage?.cachedTokens || 0,
+              reasoningTokens: usage?.reasoningTokens || 0,
+              cacheCreationTokens: usage?.cacheCreationTokens || 0,
+              cacheReadTokens: usage?.cacheReadTokens || 0,
+              statusCode: result.statusCode,
+              durationMs: Date.now() - startTime,
+              routingDurationMs,
+              routingType: routingDecision.routingType,
+              priorityTier: routingDecision.priorityTier,
+              failoverAttempts: routingDecision.failoverAttempts,
+              failoverHistory:
+                routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
+              routingDecision: finalRoutingDecisionLog,
+              sessionId,
+              affinityHit: isAffinityHit,
+              affinityMigrated: isAffinityMigrated,
+              ttftMs: ttftMs ?? null,
+              isStream: true,
+              sessionIdCompensated,
+              headerDiff,
+            });
+            persistedLogId = createdLog.id;
           }
 
-          return logRequest({
-            apiKeyId: validApiKey.id,
-            upstreamId: upstreamForLogging.id,
-            method: request.method,
-            path,
-            model: resolvedModel,
-            promptTokens: usage?.promptTokens || 0,
-            completionTokens: usage?.completionTokens || 0,
-            totalTokens: usage?.totalTokens || 0,
-            cachedTokens: usage?.cachedTokens || 0,
-            reasoningTokens: usage?.reasoningTokens || 0,
-            cacheCreationTokens: usage?.cacheCreationTokens || 0,
-            cacheReadTokens: usage?.cacheReadTokens || 0,
-            statusCode: result.statusCode,
-            durationMs: Date.now() - startTime,
-            routingDurationMs,
-            routingType: routingDecision.routingType,
-            priorityTier: routingDecision.priorityTier,
-            failoverAttempts: routingDecision.failoverAttempts,
-            failoverHistory:
-              routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
-            routingDecision: finalRoutingDecisionLog,
-            sessionId,
-            affinityHit: isAffinityHit,
-            affinityMigrated: isAffinityMigrated,
-            ttftMs: ttftMs ?? null,
-            isStream: true,
-            sessionIdCompensated,
-            headerDiff,
-          });
+          if (persistedLogId) {
+            await persistBillingSnapshotSafely({
+              requestLogId: persistedLogId,
+              apiKeyId: validApiKey.id,
+              upstreamId: upstreamForLogging.id,
+              model: resolvedModel,
+              usage: usageForBilling,
+              requestId,
+            });
+          }
         })
         .catch((e) => log.error({ err: e, requestId }, "failed to log request"));
 
@@ -1362,14 +1412,23 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         );
       }
 
+      const usageForBilling = {
+        promptTokens: usage?.promptTokens || 0,
+        completionTokens: usage?.completionTokens || 0,
+        totalTokens: usage?.totalTokens || 0,
+        cacheReadTokens: usage?.cacheReadTokens || 0,
+        cacheWriteTokens: usage?.cacheCreationTokens || 0,
+      };
+
       // Log request
+      let persistedLogId: string | null = requestLogId;
       if (requestLogId) {
-        await updateRequestLog(requestLogId, {
+        const updatedLog = await updateRequestLog(requestLogId, {
           upstreamId: upstreamForLogging.id,
           model: resolvedModel,
-          promptTokens: usage?.promptTokens || 0,
-          completionTokens: usage?.completionTokens || 0,
-          totalTokens: usage?.totalTokens || 0,
+          promptTokens: usageForBilling.promptTokens,
+          completionTokens: usageForBilling.completionTokens,
+          totalTokens: usageForBilling.totalTokens,
           cachedTokens: usage?.cachedTokens || 0,
           reasoningTokens: usage?.reasoningTokens || 0,
           cacheCreationTokens: usage?.cacheCreationTokens || 0,
@@ -1390,16 +1449,17 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           sessionIdCompensated,
           headerDiff,
         });
+        persistedLogId = updatedLog?.id ?? requestLogId;
       } else {
-        await logRequest({
+        const createdLog = await logRequest({
           apiKeyId: validApiKey.id,
           upstreamId: upstreamForLogging.id,
           method: request.method,
           path,
           model: resolvedModel,
-          promptTokens: usage?.promptTokens || 0,
-          completionTokens: usage?.completionTokens || 0,
-          totalTokens: usage?.totalTokens || 0,
+          promptTokens: usageForBilling.promptTokens,
+          completionTokens: usageForBilling.completionTokens,
+          totalTokens: usageForBilling.totalTokens,
           cachedTokens: usage?.cachedTokens || 0,
           reasoningTokens: usage?.reasoningTokens || 0,
           cacheCreationTokens: usage?.cacheCreationTokens || 0,
@@ -1419,6 +1479,18 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           isStream: false,
           sessionIdCompensated,
           headerDiff,
+        });
+        persistedLogId = createdLog.id;
+      }
+
+      if (persistedLogId) {
+        await persistBillingSnapshotSafely({
+          requestLogId: persistedLogId,
+          apiKeyId: validApiKey.id,
+          upstreamId: upstreamForLogging.id,
+          model: resolvedModel,
+          usage: usageForBilling,
+          requestId,
         });
       }
 
@@ -1657,8 +1729,9 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     }
 
     // Log failed request (internal logging with full details)
+    let persistedLogId: string | null = requestLogId;
     if (requestLogId) {
-      await updateRequestLog(requestLogId, {
+      const updatedLog = await updateRequestLog(requestLogId, {
         upstreamId: actualUpstreamId,
         model: resolvedModel,
         promptTokens: 0,
@@ -1674,8 +1747,9 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
         routingDecision: failureRoutingDecisionLog,
       });
+      persistedLogId = updatedLog?.id ?? requestLogId;
     } else {
-      await logRequest({
+      const createdLog = await logRequest({
         apiKeyId: validApiKey.id,
         upstreamId: actualUpstreamId,
         method: request.method,
@@ -1693,6 +1767,24 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         failoverAttempts: failoverHistory.length,
         failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
         routingDecision: failureRoutingDecisionLog,
+      });
+      persistedLogId = createdLog.id;
+    }
+
+    if (persistedLogId) {
+      await persistBillingSnapshotSafely({
+        requestLogId: persistedLogId,
+        apiKeyId: validApiKey.id,
+        upstreamId: actualUpstreamId,
+        model: resolvedModel,
+        usage: {
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+        },
+        requestId,
       });
     }
 

@@ -25,6 +25,19 @@ import type {
   LeaderboardUpstreamItem,
   LeaderboardModelItem,
 } from "@/lib/services/stats-service";
+import type {
+  BillingOverviewStats,
+  UpstreamBillingMultiplierItem,
+  PaginatedRecentBillingDetails,
+  RecentBillingDetailItem,
+} from "@/lib/services/billing-management-service";
+import type {
+  BillingSyncSummary,
+  BillingManualPriceOverrideRecord,
+  BillingUnresolvedModel,
+  BillingModelPriceCatalogItem,
+  PaginatedBillingModelPrices,
+} from "@/lib/services/billing-price-service";
 
 // ========== Helper Utilities ==========
 
@@ -71,6 +84,8 @@ export interface UpstreamApiResponse {
     metric: "tokens" | "length";
     threshold: number;
   } | null;
+  billing_input_multiplier: number;
+  billing_output_multiplier: number;
   created_at: string;
   updated_at: string;
   circuit_breaker: UpstreamCircuitBreakerApiResponse | null;
@@ -109,6 +124,8 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
     allowed_models: upstream.allowedModels,
     model_redirects: upstream.modelRedirects,
     affinity_migration: upstream.affinityMigration,
+    billing_input_multiplier: upstream.billingInputMultiplier ?? 1,
+    billing_output_multiplier: upstream.billingOutputMultiplier ?? 1,
     created_at: upstream.createdAt.toISOString(),
     updated_at: upstream.updatedAt.toISOString(),
     circuit_breaker: upstream.circuitBreaker
@@ -296,6 +313,21 @@ export interface RequestLogApiResponse {
     compensated: Array<{ header: string; source: string; value: string }>;
     unchanged: Array<{ header: string; value: string }>;
   } | null;
+  billing_status?: "billed" | "unbilled" | null;
+  unbillable_reason?: string | null;
+  price_source?: string | null;
+  base_input_price_per_million?: number | null;
+  base_output_price_per_million?: number | null;
+  base_cache_read_input_price_per_million?: number | null;
+  base_cache_write_input_price_per_million?: number | null;
+  input_multiplier?: number | null;
+  output_multiplier?: number | null;
+  billed_input_tokens?: number | null;
+  cache_read_cost?: number | null;
+  cache_write_cost?: number | null;
+  final_cost?: number | null;
+  currency?: string | null;
+  billed_at?: string | null;
   created_at: string;
 }
 
@@ -443,6 +475,23 @@ function normalizeHeaderDiffForApi(
  * Converts camelCase properties to snake_case for API consistency.
  */
 export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApiResponse {
+  const hasBillingFields =
+    log.billingStatus !== undefined ||
+    log.unbillableReason !== undefined ||
+    log.priceSource !== undefined ||
+    log.baseInputPricePerMillion !== undefined ||
+    log.baseOutputPricePerMillion !== undefined ||
+    log.baseCacheReadInputPricePerMillion !== undefined ||
+    log.baseCacheWriteInputPricePerMillion !== undefined ||
+    log.inputMultiplier !== undefined ||
+    log.outputMultiplier !== undefined ||
+    log.billedInputTokens !== undefined ||
+    log.cacheReadCost !== undefined ||
+    log.cacheWriteCost !== undefined ||
+    log.finalCost !== undefined ||
+    log.currency !== undefined ||
+    log.billedAt !== undefined;
+
   return {
     id: log.id,
     api_key_id: log.apiKeyId,
@@ -477,6 +526,25 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
     is_stream: log.isStream,
     session_id_compensated: log.sessionIdCompensated,
     header_diff: normalizeHeaderDiffForApi(log.headerDiff),
+    ...(hasBillingFields
+      ? {
+          billing_status: log.billingStatus,
+          unbillable_reason: log.unbillableReason,
+          price_source: log.priceSource,
+          base_input_price_per_million: log.baseInputPricePerMillion,
+          base_output_price_per_million: log.baseOutputPricePerMillion,
+          base_cache_read_input_price_per_million: log.baseCacheReadInputPricePerMillion,
+          base_cache_write_input_price_per_million: log.baseCacheWriteInputPricePerMillion,
+          input_multiplier: log.inputMultiplier,
+          output_multiplier: log.outputMultiplier,
+          billed_input_tokens: log.billedInputTokens,
+          cache_read_cost: log.cacheReadCost,
+          cache_write_cost: log.cacheWriteCost,
+          final_cost: log.finalCost,
+          currency: log.currency,
+          billed_at: toISOStringOrNull(log.billedAt),
+        }
+      : {}),
     created_at: log.createdAt.toISOString(),
   };
 }
@@ -489,6 +557,228 @@ export function transformPaginatedRequestLogs(
 ): PaginatedApiResponse<RequestLogApiResponse> {
   return {
     items: result.items.map(transformRequestLogToApi),
+    total: result.total,
+    page: result.page,
+    page_size: result.pageSize,
+    total_pages: result.totalPages,
+  };
+}
+
+// ========== Billing API Response Types ==========
+
+export interface BillingOverviewApiResponse {
+  today_cost_usd: number;
+  month_cost_usd: number;
+  unresolved_model_count: number;
+  latest_sync: BillingSyncApiResponse | null;
+}
+
+export interface BillingSyncApiResponse {
+  status: "success" | "partial" | "failed";
+  source: "litellm" | null;
+  success_count: number;
+  failure_count: number;
+  failure_reason: string | null;
+  synced_at: string;
+}
+
+export interface BillingManualOverrideApiResponse {
+  id: string;
+  model: string;
+  input_price_per_million: number;
+  output_price_per_million: number;
+  cache_read_input_price_per_million: number | null;
+  cache_write_input_price_per_million: number | null;
+  note: string | null;
+  has_official_price?: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BillingUnresolvedModelApiResponse {
+  model: string;
+  occurrences: number;
+  last_seen_at: string;
+  last_upstream_id: string | null;
+  last_upstream_name: string | null;
+  has_manual_override: boolean;
+}
+
+export interface UpstreamBillingMultiplierApiResponse {
+  id: string;
+  name: string;
+  is_active: boolean;
+  input_multiplier: number;
+  output_multiplier: number;
+}
+
+export interface RecentBillingDetailApiResponse {
+  request_log_id: string;
+  created_at: string;
+  model: string | null;
+  upstream_id: string | null;
+  upstream_name: string | null;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  price_source: string | null;
+  billing_status: "billed" | "unbilled";
+  unbillable_reason: string | null;
+  base_input_price_per_million: number | null;
+  base_output_price_per_million: number | null;
+  base_cache_read_input_price_per_million: number | null;
+  base_cache_write_input_price_per_million: number | null;
+  input_multiplier: number | null;
+  output_multiplier: number | null;
+  cache_read_cost: number | null;
+  cache_write_cost: number | null;
+  final_cost: number | null;
+  currency: string;
+}
+
+export interface BillingModelPriceApiResponse {
+  id: string;
+  model: string;
+  input_price_per_million: number;
+  output_price_per_million: number;
+  cache_read_input_price_per_million: number | null;
+  cache_write_input_price_per_million: number | null;
+  source: "litellm";
+  is_active: boolean;
+  synced_at: string;
+  updated_at: string;
+}
+
+export function transformBillingSyncToApi(sync: BillingSyncSummary): BillingSyncApiResponse {
+  return {
+    status: sync.status,
+    source: sync.source,
+    success_count: sync.successCount,
+    failure_count: sync.failureCount,
+    failure_reason: sync.failureReason,
+    synced_at: sync.syncedAt.toISOString(),
+  };
+}
+
+export function transformBillingOverviewToApi(
+  stats: BillingOverviewStats
+): BillingOverviewApiResponse {
+  return {
+    today_cost_usd: stats.todayCostUsd,
+    month_cost_usd: stats.monthCostUsd,
+    unresolved_model_count: stats.unresolvedModelCount,
+    latest_sync: stats.latestSync ? transformBillingSyncToApi(stats.latestSync) : null,
+  };
+}
+
+export function transformBillingManualOverrideToApi(
+  override: BillingManualPriceOverrideRecord
+): BillingManualOverrideApiResponse {
+  return {
+    id: override.id,
+    model: override.model,
+    input_price_per_million: override.inputPricePerMillion,
+    output_price_per_million: override.outputPricePerMillion,
+    cache_read_input_price_per_million: override.cacheReadInputPricePerMillion,
+    cache_write_input_price_per_million: override.cacheWriteInputPricePerMillion,
+    note: override.note,
+    has_official_price: override.hasOfficialPrice,
+    created_at: override.createdAt.toISOString(),
+    updated_at: override.updatedAt.toISOString(),
+  };
+}
+
+export function transformBillingUnresolvedModelToApi(
+  model: BillingUnresolvedModel
+): BillingUnresolvedModelApiResponse {
+  return {
+    model: model.model,
+    occurrences: model.occurrences,
+    last_seen_at: model.lastSeenAt.toISOString(),
+    last_upstream_id: model.lastUpstreamId,
+    last_upstream_name: model.lastUpstreamName,
+    has_manual_override: model.hasManualOverride,
+  };
+}
+
+export function transformUpstreamBillingMultiplierToApi(
+  item: UpstreamBillingMultiplierItem
+): UpstreamBillingMultiplierApiResponse {
+  return {
+    id: item.id,
+    name: item.name,
+    is_active: item.isActive,
+    input_multiplier: item.inputMultiplier,
+    output_multiplier: item.outputMultiplier,
+  };
+}
+
+export function transformRecentBillingDetailToApi(
+  item: RecentBillingDetailItem
+): RecentBillingDetailApiResponse {
+  return {
+    request_log_id: item.requestLogId,
+    created_at: item.createdAt.toISOString(),
+    model: item.model,
+    upstream_id: item.upstreamId,
+    upstream_name: item.upstreamName,
+    prompt_tokens: item.promptTokens,
+    completion_tokens: item.completionTokens,
+    total_tokens: item.totalTokens,
+    cache_read_tokens: item.cacheReadTokens,
+    cache_write_tokens: item.cacheWriteTokens,
+    price_source: item.priceSource,
+    billing_status: item.billingStatus,
+    unbillable_reason: item.unbillableReason,
+    base_input_price_per_million: item.baseInputPricePerMillion,
+    base_output_price_per_million: item.baseOutputPricePerMillion,
+    base_cache_read_input_price_per_million: item.baseCacheReadInputPricePerMillion,
+    base_cache_write_input_price_per_million: item.baseCacheWriteInputPricePerMillion,
+    input_multiplier: item.inputMultiplier,
+    output_multiplier: item.outputMultiplier,
+    cache_read_cost: item.cacheReadCost,
+    cache_write_cost: item.cacheWriteCost,
+    final_cost: item.finalCost,
+    currency: item.currency,
+  };
+}
+
+export function transformBillingModelPriceToApi(
+  item: BillingModelPriceCatalogItem
+): BillingModelPriceApiResponse {
+  return {
+    id: item.id,
+    model: item.model,
+    input_price_per_million: item.inputPricePerMillion,
+    output_price_per_million: item.outputPricePerMillion,
+    cache_read_input_price_per_million: item.cacheReadInputPricePerMillion,
+    cache_write_input_price_per_million: item.cacheWriteInputPricePerMillion,
+    source: item.source,
+    is_active: item.isActive,
+    synced_at: item.syncedAt.toISOString(),
+    updated_at: item.updatedAt.toISOString(),
+  };
+}
+
+export function transformPaginatedBillingModelPrices(
+  result: PaginatedBillingModelPrices
+): PaginatedApiResponse<BillingModelPriceApiResponse> {
+  return {
+    items: result.items.map(transformBillingModelPriceToApi),
+    total: result.total,
+    page: result.page,
+    page_size: result.pageSize,
+    total_pages: result.totalPages,
+  };
+}
+
+export function transformPaginatedRecentBillingDetails(
+  result: PaginatedRecentBillingDetails
+): PaginatedApiResponse<RecentBillingDetailApiResponse> {
+  return {
+    items: result.items.map(transformRecentBillingDetailToApi),
     total: result.total,
     page: result.page,
     page_size: result.pageSize,

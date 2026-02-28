@@ -196,6 +196,55 @@ export function LogsTable({ logs }: LogsTableProps) {
   const t = useTranslations("logs");
   const locale = useLocale();
   const dateLocale = getDateLocale(locale);
+  const usdFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat(locale, {
+        style: "currency",
+        currency: "USD",
+        // Avoid "US$" prefix in some locales (e.g. zh-CN) to keep the cost column compact.
+        currencyDisplay: "narrowSymbol",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 6,
+      }),
+    [locale]
+  );
+  const tokenFormatter = useMemo(() => new Intl.NumberFormat(locale), [locale]);
+
+  const resolveBillingReasonLabel = (reason: string | null | undefined): string => {
+    if (!reason) {
+      return "-";
+    }
+    if (reason === "model_missing") return t("billingReasonModelMissing");
+    if (reason === "usage_missing") return t("billingReasonUsageMissing");
+    if (reason === "price_not_found") return t("billingReasonPriceNotFound");
+    if (reason === "calculation_error") return t("billingReasonCalculationError");
+    return reason;
+  };
+
+  const formatBillingCost = (log: RequestLog): string => {
+    if (log.final_cost == null) {
+      return "-";
+    }
+    const currency = log.currency ?? "USD";
+    if (currency !== "USD") {
+      return `${log.final_cost.toFixed(6)} ${currency}`;
+    }
+    return usdFormatter.format(log.final_cost);
+  };
+
+  const formatMoneyValue = (
+    value: number | null | undefined,
+    currency: string | null | undefined
+  ): string => {
+    if (value == null) {
+      return "-";
+    }
+    const resolvedCurrency = currency ?? "USD";
+    if (resolvedCurrency !== "USD") {
+      return `${value.toFixed(6)} ${resolvedCurrency}`;
+    }
+    return usdFormatter.format(value);
+  };
 
   // Filter state
   const [statusCodeFilter, setStatusCodeFilter] = useState<string>("all");
@@ -547,19 +596,181 @@ export function LogsTable({ logs }: LogsTableProps) {
           </section>
 
           <section className="w-full xl:min-w-0">
-            <div className={DETAIL_PANEL_CLASS}>
-              <div className={DETAIL_PANEL_HEADER_CLASS}>{t("tokenDetails")}</div>
-              <div className={DETAIL_PANEL_BODY_CLASS}>
-                <TokenDetailContent
-                  promptTokens={log.prompt_tokens}
-                  completionTokens={log.completion_tokens}
-                  totalTokens={log.total_tokens}
-                  cachedTokens={log.cached_tokens}
-                  reasoningTokens={log.reasoning_tokens}
-                  cacheCreationTokens={log.cache_creation_tokens}
-                  cacheReadTokens={log.cache_read_tokens}
-                  showHeader={false}
-                />
+            <div className="space-y-4">
+              <div className={DETAIL_PANEL_CLASS}>
+                <div className={DETAIL_PANEL_HEADER_CLASS}>{t("tokenDetails")}</div>
+                <div className={DETAIL_PANEL_BODY_CLASS}>
+                  <TokenDetailContent
+                    promptTokens={log.prompt_tokens}
+                    completionTokens={log.completion_tokens}
+                    totalTokens={log.total_tokens}
+                    cachedTokens={log.cached_tokens}
+                    reasoningTokens={log.reasoning_tokens}
+                    cacheCreationTokens={log.cache_creation_tokens}
+                    cacheReadTokens={log.cache_read_tokens}
+                    showHeader={false}
+                  />
+                </div>
+              </div>
+
+              <div className={DETAIL_PANEL_CLASS}>
+                <div className={DETAIL_PANEL_HEADER_CLASS}>{t("billingDetails")}</div>
+                <div className={cn(DETAIL_PANEL_BODY_CLASS, "space-y-1")}>
+                  {log.billing_status === "billed" ? (
+                    (() => {
+                      const currency = log.currency ?? "USD";
+
+                      const billedInputTokens = log.billed_input_tokens ?? log.prompt_tokens;
+                      const completionTokens = log.completion_tokens;
+                      const cacheReadTokens = log.cache_read_tokens;
+                      const cacheWriteTokens = log.cache_creation_tokens;
+
+                      const inputPricePerMillion = log.base_input_price_per_million ?? null;
+                      const outputPricePerMillion = log.base_output_price_per_million ?? null;
+                      const cacheReadPricePerMillion =
+                        log.base_cache_read_input_price_per_million ?? inputPricePerMillion;
+                      const cacheWritePricePerMillion =
+                        log.base_cache_write_input_price_per_million ?? inputPricePerMillion;
+
+                      const inputMultiplier = log.input_multiplier ?? 1;
+                      const outputMultiplier = log.output_multiplier ?? 1;
+
+                      const inputCost =
+                        inputPricePerMillion == null
+                          ? null
+                          : (billedInputTokens / 1_000_000) *
+                            inputPricePerMillion *
+                            inputMultiplier;
+                      const outputCost =
+                        outputPricePerMillion == null
+                          ? null
+                          : (completionTokens / 1_000_000) *
+                            outputPricePerMillion *
+                            outputMultiplier;
+
+                      const computedCacheReadCost =
+                        cacheReadTokens > 0 && cacheReadPricePerMillion != null
+                          ? (cacheReadTokens / 1_000_000) *
+                            cacheReadPricePerMillion *
+                            inputMultiplier
+                          : null;
+                      const computedCacheWriteCost =
+                        cacheWriteTokens > 0 && cacheWritePricePerMillion != null
+                          ? (cacheWriteTokens / 1_000_000) *
+                            cacheWritePricePerMillion *
+                            inputMultiplier
+                          : null;
+
+                      const cacheReadCost = log.cache_read_cost ?? computedCacheReadCost;
+                      const cacheWriteCost = log.cache_write_cost ?? computedCacheWriteCost;
+
+                      const formatFormulaLine = (options: {
+                        tokens: number;
+                        pricePerMillion: number | null;
+                        multiplier: number;
+                        cost: number | null;
+                      }) => {
+                        const { tokens, pricePerMillion, multiplier, cost } = options;
+                        if (pricePerMillion == null) {
+                          return "-";
+                        }
+                        const tokensLabel = tokenFormatter.format(tokens);
+                        const priceLabel = formatMoneyValue(pricePerMillion, currency);
+                        const multiplierLabel = Number.isFinite(multiplier)
+                          ? multiplier.toFixed(4).replace(/\.?0+$/, "")
+                          : "1";
+                        const costLabel = formatMoneyValue(cost, currency);
+                        return `${tokensLabel} * ${priceLabel} / 1M * ${multiplierLabel} = ${costLabel}`;
+                      };
+
+                      return (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground">{t("billingTotal")}:</span>
+                            <span className="ml-auto tabular-nums text-foreground">
+                              {formatBillingCost(log)}
+                            </span>
+                          </div>
+
+                          <div className="mt-2 space-y-1">
+                            <div className="flex items-start gap-2">
+                              <span className="text-muted-foreground">{t("tokenInput")}:</span>
+                              <span className="ml-auto text-right tabular-nums text-foreground break-all">
+                                {formatFormulaLine({
+                                  tokens: billedInputTokens,
+                                  pricePerMillion: inputPricePerMillion,
+                                  multiplier: inputMultiplier,
+                                  cost: inputCost,
+                                })}
+                              </span>
+                            </div>
+
+                            <div className="flex items-start gap-2">
+                              <span className="text-muted-foreground">{t("tokenOutput")}:</span>
+                              <span className="ml-auto text-right tabular-nums text-foreground break-all">
+                                {formatFormulaLine({
+                                  tokens: completionTokens,
+                                  pricePerMillion: outputPricePerMillion,
+                                  multiplier: outputMultiplier,
+                                  cost: outputCost,
+                                })}
+                              </span>
+                            </div>
+
+                            {cacheReadTokens > 0 && (
+                              <div className="flex items-start gap-2">
+                                <span className="text-muted-foreground">
+                                  {t("tokenCacheRead")}:
+                                </span>
+                                <span className="ml-auto text-right tabular-nums text-foreground break-all">
+                                  {formatFormulaLine({
+                                    tokens: cacheReadTokens,
+                                    pricePerMillion: cacheReadPricePerMillion,
+                                    multiplier: inputMultiplier,
+                                    cost: cacheReadCost,
+                                  })}
+                                </span>
+                              </div>
+                            )}
+
+                            {cacheWriteTokens > 0 && (
+                              <div className="flex items-start gap-2">
+                                <span className="text-muted-foreground">
+                                  {t("tokenCacheWrite")}:
+                                </span>
+                                <span className="ml-auto text-right tabular-nums text-foreground break-all">
+                                  {formatFormulaLine({
+                                    tokens: cacheWriteTokens,
+                                    pricePerMillion: cacheWritePricePerMillion,
+                                    multiplier: inputMultiplier,
+                                    cost: cacheWriteCost,
+                                  })}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      );
+                    })()
+                  ) : log.billing_status === "unbilled" ? (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">{t("billingStatusLabel")}:</span>
+                        <span className="ml-auto tabular-nums text-status-warning">
+                          {t("billingStatusUnbilled")}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">{t("unbillableReason")}:</span>
+                        <span className="ml-auto text-status-warning">
+                          {resolveBillingReasonLabel(log.unbillable_reason)}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-muted-foreground">{t("billingStatusPending")}</div>
+                  )}
+                </div>
               </div>
             </div>
           </section>
@@ -846,6 +1057,19 @@ export function LogsTable({ logs }: LogsTableProps) {
                           {log.status_code ?? "-"}
                         </Badge>
                         <div className="mt-1 tabular-nums">{formatDuration(log.duration_ms)}</div>
+                        <div className="mt-1 tabular-nums text-foreground">
+                          {formatBillingCost(log)}
+                        </div>
+                        {log.billing_status === "unbilled" && log.unbillable_reason && (
+                          <div className="mt-0.5 max-w-[160px] text-[11px] text-status-warning">
+                            {resolveBillingReasonLabel(log.unbillable_reason)}
+                          </div>
+                        )}
+                        {log.billing_status == null && (
+                          <div className="mt-0.5 text-[11px] text-muted-foreground">
+                            {t("billingStatusPending")}
+                          </div>
+                        )}
                         {(log.ttft_ms != null || requestTps != null) && (
                           <div className="mt-0.5 flex flex-wrap justify-end gap-x-1.5 gap-y-0 text-[11px] text-muted-foreground">
                             {log.ttft_ms != null && (
@@ -915,6 +1139,7 @@ export function LogsTable({ logs }: LogsTableProps) {
                     <TableHead className="hidden lg:table-cell">{t("tablePath")}</TableHead>
                     <TableHead className="hidden xl:table-cell">{t("tableModel")}</TableHead>
                     <TableHead className="hidden md:table-cell">{t("tableTokens")}</TableHead>
+                    <TableHead className="w-[130px] px-3">{t("tableCost")}</TableHead>
                     <TableHead className="w-[84px] px-3">{t("tableStatus")}</TableHead>
                     <TableHead className="w-[180px] px-3">{t("tableDuration")}</TableHead>
                   </TableRow>
@@ -1008,6 +1233,25 @@ export function LogsTable({ logs }: LogsTableProps) {
                             />
                           </TableCell>
                           <TableCell className="px-3">
+                            <div className="flex flex-col gap-0">
+                              <span className="font-mono text-xs tabular-nums">
+                                {formatBillingCost(log)}
+                              </span>
+                              {log.billing_status === "unbilled" && (
+                                <p className="mt-1 text-[11px] text-status-warning">
+                                  {log.unbillable_reason
+                                    ? resolveBillingReasonLabel(log.unbillable_reason)
+                                    : t("billingStatusUnbilled")}
+                                </p>
+                              )}
+                              {log.billing_status == null && (
+                                <p className="mt-1 text-[11px] text-muted-foreground">
+                                  {t("billingStatusPending")}
+                                </p>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="px-3">
                             <Badge
                               variant={getStatusBadgeVariant(log.status_code)}
                               className={cn(
@@ -1051,7 +1295,7 @@ export function LogsTable({ logs }: LogsTableProps) {
 
                         {isExpanded && canExpand && (
                           <TableRow className="bg-surface-300/30">
-                            <TableCell colSpan={9} className="p-0">
+                            <TableCell colSpan={10} className="p-0">
                               {renderExpandedDetails({
                                 log,
                                 upstreamDisplayName,

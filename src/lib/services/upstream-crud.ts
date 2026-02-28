@@ -58,6 +58,8 @@ export interface UpstreamCreateInput {
     metric: "tokens" | "length";
     threshold: number;
   } | null;
+  billingInputMultiplier?: number;
+  billingOutputMultiplier?: number;
 }
 
 export interface UpstreamUpdateInput {
@@ -84,6 +86,8 @@ export interface UpstreamUpdateInput {
     metric: "tokens" | "length";
     threshold: number;
   } | null;
+  billingInputMultiplier?: number;
+  billingOutputMultiplier?: number;
 }
 
 export interface UpstreamResponse {
@@ -105,6 +109,8 @@ export interface UpstreamResponse {
     metric: "tokens" | "length";
     threshold: number;
   } | null;
+  billingInputMultiplier?: number;
+  billingOutputMultiplier?: number;
   createdAt: Date;
   updatedAt: Date;
   circuitBreaker?: UpstreamCircuitBreakerStatus | null;
@@ -148,6 +154,8 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     allowedModels,
     modelRedirects,
     affinityMigration,
+    billingInputMultiplier = 1,
+    billingOutputMultiplier = 1,
   } = input;
 
   const normalizedRouteCapabilities = resolveRouteCapabilities(routeCapabilities);
@@ -183,6 +191,8 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
       allowedModels: allowedModels ?? null,
       modelRedirects: modelRedirects ?? null,
       affinityMigration: affinityMigration ?? null,
+      billingInputMultiplier,
+      billingOutputMultiplier,
       createdAt: now,
       updatedAt: now,
     })
@@ -216,6 +226,8 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     allowedModels: newUpstream.allowedModels,
     modelRedirects: newUpstream.modelRedirects,
     affinityMigration: newUpstream.affinityMigration,
+    billingInputMultiplier: newUpstream.billingInputMultiplier,
+    billingOutputMultiplier: newUpstream.billingOutputMultiplier,
     createdAt: newUpstream.createdAt,
     updatedAt: newUpstream.updatedAt,
   };
@@ -267,6 +279,10 @@ export async function updateUpstream(
   if (input.modelRedirects !== undefined) updateValues.modelRedirects = input.modelRedirects;
   if (input.affinityMigration !== undefined)
     updateValues.affinityMigration = input.affinityMigration;
+  if (input.billingInputMultiplier !== undefined)
+    updateValues.billingInputMultiplier = input.billingInputMultiplier;
+  if (input.billingOutputMultiplier !== undefined)
+    updateValues.billingOutputMultiplier = input.billingOutputMultiplier;
 
   const [updated] = await db
     .update(upstreams)
@@ -326,6 +342,8 @@ export async function updateUpstream(
     allowedModels: updated.allowedModels,
     modelRedirects: updated.modelRedirects,
     affinityMigration: updated.affinityMigration,
+    billingInputMultiplier: updated.billingInputMultiplier,
+    billingOutputMultiplier: updated.billingOutputMultiplier,
     createdAt: updated.createdAt,
     updatedAt: updated.updatedAt,
   };
@@ -433,6 +451,8 @@ export async function listUpstreams(
       allowedModels: upstream.allowedModels,
       modelRedirects: upstream.modelRedirects,
       affinityMigration: upstream.affinityMigration,
+      billingInputMultiplier: upstream.billingInputMultiplier,
+      billingOutputMultiplier: upstream.billingOutputMultiplier,
       createdAt: upstream.createdAt,
       updatedAt: upstream.updatedAt,
       circuitBreaker: cbState
@@ -495,6 +515,8 @@ export async function getUpstreamById(upstreamId: string): Promise<UpstreamRespo
     allowedModels: upstream.allowedModels,
     modelRedirects: upstream.modelRedirects,
     affinityMigration: upstream.affinityMigration,
+    billingInputMultiplier: upstream.billingInputMultiplier,
+    billingOutputMultiplier: upstream.billingOutputMultiplier,
     createdAt: upstream.createdAt,
     updatedAt: upstream.updatedAt,
   };

@@ -32,6 +32,10 @@ vi.mock("sonner", () => ({
   },
 }));
 
+import { toast } from "sonner";
+const mockToastSuccess = toast.success as ReturnType<typeof vi.fn>;
+const mockToastError = toast.error as ReturnType<typeof vi.fn>;
+
 /**
  * Create test wrapper with QueryClientProvider
  */
@@ -489,5 +493,142 @@ describe("useUpdateUpstream", () => {
     await waitFor(() => {
       expect(result.current.isError).toBe(true);
     });
+  });
+});
+
+describe("useToggleUpstreamActive", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("optimistically updates caches and shows enable toast", async () => {
+    const { useToggleUpstreamActive } = await import("@/hooks/use-upstreams");
+    const { queryClient, wrapper } = createWrapper();
+
+    queryClient.setQueryData(["upstreams", 1, 10], {
+      items: [{ ...sampleUpstream, is_active: false }],
+      total: 1,
+      page: 1,
+      page_size: 10,
+      total_pages: 1,
+    } as PaginatedUpstreamsResponse);
+    queryClient.setQueryData(["upstreams", 2, 10], undefined);
+    queryClient.setQueryData(["upstreams", "all"], [{ ...sampleUpstream, is_active: false }]);
+
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    mockPut.mockResolvedValueOnce({ ...sampleUpstream, is_active: true });
+
+    const { result } = renderHook(() => useToggleUpstreamActive(), { wrapper });
+
+    result.current.mutate({ id: "upstream-1", nextActive: true });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const updatedPaginated = queryClient.getQueryData<PaginatedUpstreamsResponse>([
+      "upstreams",
+      1,
+      10,
+    ]);
+    expect(updatedPaginated?.items?.[0]?.is_active).toBe(true);
+
+    const updatedAll = queryClient.getQueryData<Upstream[]>(["upstreams", "all"]);
+    expect(updatedAll?.[0]?.is_active).toBe(true);
+
+    expect(mockToastSuccess).toHaveBeenCalledWith("Upstream 已启用");
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["upstreams"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["upstreams", "health"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["stats", "upstreams"] });
+  });
+
+  it("restores previous caches on error and shows failure toast", async () => {
+    const { useToggleUpstreamActive } = await import("@/hooks/use-upstreams");
+    const { queryClient, wrapper } = createWrapper();
+
+    const initialPaginated: PaginatedUpstreamsResponse = {
+      items: [{ ...sampleUpstream, is_active: true }],
+      total: 1,
+      page: 1,
+      page_size: 10,
+      total_pages: 1,
+    };
+    const initialAll: Upstream[] = [{ ...sampleUpstream, is_active: true }];
+
+    queryClient.setQueryData(["upstreams", 1, 10], initialPaginated);
+    queryClient.setQueryData(["upstreams", "all"], initialAll);
+
+    mockPut.mockRejectedValueOnce(new Error("Toggle failed"));
+
+    const { result } = renderHook(() => useToggleUpstreamActive(), { wrapper });
+
+    result.current.mutate({ id: "upstream-1", nextActive: false });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    const restoredPaginated = queryClient.getQueryData<PaginatedUpstreamsResponse>([
+      "upstreams",
+      1,
+      10,
+    ]);
+    expect(restoredPaginated).toEqual(initialPaginated);
+
+    const restoredAll = queryClient.getQueryData<Upstream[]>(["upstreams", "all"]);
+    expect(restoredAll).toEqual(initialAll);
+
+    expect(mockToastError).toHaveBeenCalledWith("更新失败: Toggle failed");
+  });
+
+  it("shows disable toast when disabling upstream", async () => {
+    const { useToggleUpstreamActive } = await import("@/hooks/use-upstreams");
+    const { queryClient, wrapper } = createWrapper();
+
+    queryClient.setQueryData(["upstreams", 1, 10], {
+      items: [{ ...sampleUpstream, is_active: true }],
+      total: 1,
+      page: 1,
+      page_size: 10,
+      total_pages: 1,
+    } as PaginatedUpstreamsResponse);
+
+    mockPut.mockResolvedValueOnce({ ...sampleUpstream, is_active: false });
+
+    const { result } = renderHook(() => useToggleUpstreamActive(), { wrapper });
+
+    result.current.mutate({ id: "upstream-1", nextActive: false });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(mockToastSuccess).toHaveBeenCalledWith("Upstream 已停用");
+  });
+});
+
+describe("useUpstreamHealth", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("fetches health list without query string by default", async () => {
+    mockGet.mockResolvedValueOnce({ items: [] });
+
+    const { useUpstreamHealth } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useUpstreamHealth(), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(mockGet).toHaveBeenCalledWith("/admin/upstreams/health");
+  });
+
+  it("fetches health list with active_only=false when activeOnly is false", async () => {
+    mockGet.mockResolvedValueOnce({ items: [] });
+
+    const { useUpstreamHealth } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useUpstreamHealth(false), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(mockGet).toHaveBeenCalledWith("/admin/upstreams/health?active_only=false");
   });
 });

@@ -9,6 +9,8 @@ import {
   transformPaginatedApiKeys,
   transformRequestLogToApi,
   transformPaginatedRequestLogs,
+  transformBillingModelPriceToApi,
+  transformPaginatedBillingModelPrices,
   transformStatsOverviewToApi,
   transformTimeseriesDataPointToApi,
   transformUpstreamTimeseriesToApi,
@@ -74,6 +76,8 @@ describe("api-transformers", () => {
         allowed_models: undefined,
         model_redirects: undefined,
         affinity_migration: null,
+        billing_input_multiplier: 1,
+        billing_output_multiplier: 1,
         circuit_breaker: null,
       });
     });
@@ -362,7 +366,7 @@ describe("api-transformers", () => {
         createdAt: new Date("2024-01-15T10:30:00.000Z"),
       };
 
-      const result = transformRequestLogToApi(log);
+      const result = transformRequestLogToApi(log as never);
 
       expect(result).toEqual({
         id: "log-123",
@@ -410,6 +414,67 @@ describe("api-transformers", () => {
       });
     });
 
+    it("should include billing breakdown fields when provided", () => {
+      const log = {
+        id: "log-billing-1",
+        apiKeyId: "key-1",
+        upstreamId: "upstream-1",
+        upstreamName: "openai-primary",
+        method: "POST",
+        path: "/v1/chat/completions",
+        model: "gpt-4",
+        promptTokens: 100,
+        completionTokens: 50,
+        totalTokens: 150,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 10,
+        cacheReadTokens: 20,
+        statusCode: 200,
+        durationMs: 1000,
+        errorMessage: null,
+        routingType: null,
+        groupName: null,
+        lbStrategy: null,
+        failoverAttempts: 0,
+        failoverHistory: null,
+        billingStatus: "billed" as const,
+        unbillableReason: null,
+        priceSource: "litellm",
+        baseInputPricePerMillion: 3,
+        baseOutputPricePerMillion: 15,
+        baseCacheReadInputPricePerMillion: 0.3,
+        baseCacheWriteInputPricePerMillion: 3,
+        inputMultiplier: 1.2,
+        outputMultiplier: 1.1,
+        billedInputTokens: 100,
+        cacheReadCost: 0.0000072,
+        cacheWriteCost: 0.000036,
+        finalCost: 0.0012282,
+        currency: "USD",
+        billedAt: new Date("2024-01-15T10:29:59.000Z"),
+        createdAt: new Date("2024-01-15T10:30:00.000Z"),
+      };
+
+      const result = transformRequestLogToApi(log as never);
+
+      expect(result).toMatchObject({
+        billing_status: "billed",
+        price_source: "litellm",
+        base_input_price_per_million: 3,
+        base_output_price_per_million: 15,
+        base_cache_read_input_price_per_million: 0.3,
+        base_cache_write_input_price_per_million: 3,
+        input_multiplier: 1.2,
+        output_multiplier: 1.1,
+        billed_input_tokens: 100,
+        cache_read_cost: 0.0000072,
+        cache_write_cost: 0.000036,
+        final_cost: 0.0012282,
+        currency: "USD",
+      });
+    });
+
     it("should handle null values in request log", () => {
       const log = {
         id: "log-456",
@@ -437,7 +502,7 @@ describe("api-transformers", () => {
         createdAt: new Date("2024-01-15T10:30:00.000Z"),
       };
 
-      const result = transformRequestLogToApi(log);
+      const result = transformRequestLogToApi(log as never);
 
       expect(result.api_key_id).toBeNull();
       expect(result.upstream_id).toBeNull();
@@ -453,6 +518,129 @@ describe("api-transformers", () => {
       expect(result.lb_strategy).toBeNull();
       expect(result.failover_attempts).toBe(0);
       expect(result.failover_history).toBeNull();
+    });
+
+    it("should normalize header_diff and sanitize sensitive header values", () => {
+      const log = {
+        id: "log-hdiff-1",
+        apiKeyId: "key-1",
+        upstreamId: "upstream-1",
+        upstreamName: "openai-primary",
+        method: "POST",
+        path: "/v1/chat/completions",
+        model: "gpt-4",
+        promptTokens: 1,
+        completionTokens: 2,
+        totalTokens: 3,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+        statusCode: 200,
+        durationMs: 1,
+        errorMessage: null,
+        routingType: null,
+        groupName: null,
+        lbStrategy: null,
+        failoverAttempts: 0,
+        failoverHistory: null,
+        headerDiff: {
+          inbound_count: 2,
+          outbound_count: 3,
+          dropped: [
+            "x-api-key",
+            { header: "Authorization", value: "Bearer secretsecret" },
+            { header: 123, value: "bad" },
+          ],
+          compensated: [
+            { header: "Cookie", source: "headers.cookie", value: "a=b" },
+            { header: "X-Api-Key", source: "headers.x-api-key", value: "mysecretkey" },
+            {
+              header: "Authorization",
+              source: "headers.authorization",
+              value: "Bearer tokentoken",
+            },
+            { header: "X-Already-Masked", source: "headers.x", value: "sk-***cdef" },
+          ],
+          unchanged: [
+            { header: "Set-Cookie", value: "session=abc" },
+            { header: "X-Trace", value: "trace-id" },
+          ],
+          auth_replaced: {
+            header: "Authorization",
+            inbound_value: "Bearer inboundtoken",
+            outbound_value: "Bearer outboundtoken",
+          },
+        },
+        createdAt: new Date("2024-01-15T10:30:00.000Z"),
+      };
+
+      const result = transformRequestLogToApi(log as never);
+
+      expect(result.header_diff).not.toBeNull();
+      expect(result.header_diff?.inbound_count).toBe(2);
+      expect(result.header_diff?.outbound_count).toBe(3);
+
+      const droppedAuth = result.header_diff?.dropped.find((e) => e.header === "Authorization");
+      expect(droppedAuth?.value).toContain("***");
+      expect(droppedAuth?.value).toContain("Bearer");
+
+      const compensatedApiKey = result.header_diff?.compensated.find(
+        (e) => e.header === "X-Api-Key"
+      );
+      expect(compensatedApiKey?.value).toContain("***");
+
+      const compensatedCookie = result.header_diff?.compensated.find((e) => e.header === "Cookie");
+      expect(compensatedCookie?.value).toBe("***");
+
+      const unchangedSetCookie = result.header_diff?.unchanged.find(
+        (e) => e.header === "Set-Cookie"
+      );
+      expect(unchangedSetCookie?.value).toBe("***");
+
+      const alreadyMasked = result.header_diff?.compensated.find(
+        (e) => e.header === "X-Already-Masked"
+      );
+      expect(alreadyMasked?.value).toBe("sk-***cdef");
+
+      expect(result.header_diff?.auth_replaced?.inbound_value).toContain("***");
+      expect(result.header_diff?.auth_replaced?.outbound_value).toContain("***");
+    });
+
+    it("should support auth_replaced shorthand string", () => {
+      const log = {
+        id: "log-hdiff-2",
+        apiKeyId: "key-1",
+        upstreamId: "upstream-1",
+        upstreamName: "openai-primary",
+        method: "POST",
+        path: "/v1/chat/completions",
+        model: "gpt-4",
+        promptTokens: 1,
+        completionTokens: 2,
+        totalTokens: 3,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+        statusCode: 200,
+        durationMs: 1,
+        errorMessage: null,
+        routingType: null,
+        groupName: null,
+        lbStrategy: null,
+        failoverAttempts: 0,
+        failoverHistory: null,
+        headerDiff: {
+          auth_replaced: "Authorization",
+        },
+        createdAt: new Date("2024-01-15T10:30:00.000Z"),
+      };
+
+      const result = transformRequestLogToApi(log as never);
+      expect(result.header_diff?.auth_replaced?.header).toBe("Authorization");
+      expect(result.header_diff?.auth_replaced?.inbound_value).toBeNull();
+      expect(result.header_diff?.auth_replaced?.outbound_value).toBe("");
     });
   });
 
@@ -492,7 +680,7 @@ describe("api-transformers", () => {
         totalPages: 20,
       };
 
-      const result = transformPaginatedRequestLogs(paginatedResult);
+      const result = transformPaginatedRequestLogs(paginatedResult as never);
 
       expect(result.items).toHaveLength(1);
       expect(result.total).toBe(1000);
@@ -500,6 +688,65 @@ describe("api-transformers", () => {
       expect(result.page_size).toBe(50);
       expect(result.total_pages).toBe(20);
       expect(result.items[0].prompt_tokens).toBe(50);
+    });
+  });
+
+  describe("billing price catalog transformers", () => {
+    it("should transform billing model price item to API response format", () => {
+      const result = transformBillingModelPriceToApi({
+        id: "price-1",
+        model: "gpt-4.1",
+        inputPricePerMillion: 2.5,
+        outputPricePerMillion: 9.8,
+        cacheReadInputPricePerMillion: 0.8,
+        cacheWriteInputPricePerMillion: 3.2,
+        source: "litellm",
+        isActive: true,
+        syncedAt: new Date("2026-02-28T08:00:00.000Z"),
+        updatedAt: new Date("2026-02-28T08:05:00.000Z"),
+      });
+
+      expect(result).toEqual({
+        id: "price-1",
+        model: "gpt-4.1",
+        input_price_per_million: 2.5,
+        output_price_per_million: 9.8,
+        cache_read_input_price_per_million: 0.8,
+        cache_write_input_price_per_million: 3.2,
+        source: "litellm",
+        is_active: true,
+        synced_at: "2026-02-28T08:00:00.000Z",
+        updated_at: "2026-02-28T08:05:00.000Z",
+      });
+    });
+
+    it("should transform paginated billing model prices to API response format", () => {
+      const result = transformPaginatedBillingModelPrices({
+        items: [
+          {
+            id: "price-1",
+            model: "gpt-4.1",
+            inputPricePerMillion: 2.5,
+            outputPricePerMillion: 9.8,
+            cacheReadInputPricePerMillion: null,
+            cacheWriteInputPricePerMillion: null,
+            source: "litellm",
+            isActive: true,
+            syncedAt: new Date("2026-02-28T08:00:00.000Z"),
+            updatedAt: new Date("2026-02-28T08:05:00.000Z"),
+          },
+        ],
+        total: 1,
+        page: 1,
+        pageSize: 50,
+        totalPages: 1,
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.page).toBe(1);
+      expect(result.page_size).toBe(50);
+      expect(result.total_pages).toBe(1);
+      expect(result.items[0].model).toBe("gpt-4.1");
     });
   });
 
