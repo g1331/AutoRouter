@@ -10,6 +10,7 @@ import {
   useToggleAPIKeyActive,
   useUpdateAPIKey,
 } from "@/hooks/use-api-keys";
+import type { APIKeyResponse, PaginatedAPIKeysResponse } from "@/types/api";
 
 // Mock next-intl
 vi.mock("next-intl", () => ({
@@ -76,6 +77,35 @@ describe("use-api-keys hooks", () => {
     });
     vi.clearAllMocks();
   });
+
+  function makeApiKey(overrides: Partial<APIKeyResponse> = {}): APIKeyResponse {
+    return {
+      id: "key-1",
+      key_prefix: "sk-auto-test",
+      name: "Test Key",
+      description: null,
+      upstream_ids: ["upstream-1"],
+      is_active: true,
+      expires_at: null,
+      created_at: "2024-01-01T00:00:00Z",
+      updated_at: "2024-01-01T00:00:00Z",
+      ...overrides,
+    };
+  }
+
+  function makePaginatedAPIKeys(
+    items: APIKeyResponse[],
+    overrides: Partial<PaginatedAPIKeysResponse> = {}
+  ): PaginatedAPIKeysResponse {
+    return {
+      items,
+      total: items.length,
+      page: 1,
+      page_size: 10,
+      total_pages: 1,
+      ...overrides,
+    };
+  }
 
   describe("useAPIKeys", () => {
     it("fetches API keys with default pagination", async () => {
@@ -223,16 +253,13 @@ describe("use-api-keys hooks", () => {
     it("updates cached list after successful revoke", async () => {
       mockDelete.mockResolvedValueOnce(undefined);
 
-      queryClient.setQueryData(["api-keys", 1, 10], {
-        items: [
-          { id: "key-a", name: "A", is_active: true },
-          { id: "key-b", name: "B", is_active: true },
-        ],
-        total: 2,
-        page: 1,
-        page_size: 10,
-        total_pages: 1,
-      } as any);
+      queryClient.setQueryData<PaginatedAPIKeysResponse>(
+        ["api-keys", 1, 10],
+        makePaginatedAPIKeys([
+          makeApiKey({ id: "key-a", name: "A" }),
+          makeApiKey({ id: "key-b", name: "B" }),
+        ])
+      );
 
       const { result } = renderHook(() => useRevokeAPIKey(), { wrapper });
 
@@ -240,8 +267,8 @@ describe("use-api-keys hooks", () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      const updated = queryClient.getQueryData<any>(["api-keys", 1, 10]);
-      expect(updated?.items?.map((k: any) => k.id)).toEqual(["key-a"]);
+      const updated = queryClient.getQueryData<PaginatedAPIKeysResponse>(["api-keys", 1, 10]);
+      expect(updated?.items.map((k) => k.id)).toEqual(["key-a"]);
       expect(updated?.total).toBe(1);
     });
 
@@ -249,7 +276,7 @@ describe("use-api-keys hooks", () => {
       mockDelete.mockResolvedValueOnce(undefined);
 
       // Create a matching query entry with explicit undefined data to hit the `if (!old)` branch.
-      queryClient.setQueryData(["api-keys", 1, 10], undefined);
+      queryClient.setQueryData<PaginatedAPIKeysResponse>(["api-keys", 1, 10], undefined);
 
       const { result } = renderHook(() => useRevokeAPIKey(), { wrapper });
 
@@ -373,19 +400,15 @@ describe("use-api-keys hooks", () => {
 
   describe("useToggleAPIKeyActive", () => {
     it("optimistically updates cache and shows enable success toast", async () => {
-      const initial = {
-        items: [{ id: "key-1", name: "Test Key", is_active: false }],
-        total: 1,
-        page: 1,
-        page_size: 10,
-        total_pages: 1,
-      } as any;
-      queryClient.setQueryData(["api-keys", 1, 10], initial);
+      queryClient.setQueryData<PaginatedAPIKeysResponse>(
+        ["api-keys", 1, 10],
+        makePaginatedAPIKeys([makeApiKey({ id: "key-1", is_active: false })])
+      );
       // Ensure the updater sees an explicit undefined old value as well.
-      queryClient.setQueryData(["api-keys", 2, 10], undefined);
+      queryClient.setQueryData<PaginatedAPIKeysResponse>(["api-keys", 2, 10], undefined);
 
       const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
-      mockPut.mockResolvedValueOnce({ id: "key-1", is_active: true } as any);
+      mockPut.mockResolvedValueOnce(makeApiKey({ id: "key-1", is_active: true }));
 
       const { result } = renderHook(() => useToggleAPIKeyActive(), { wrapper });
 
@@ -393,7 +416,7 @@ describe("use-api-keys hooks", () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      const updated = queryClient.getQueryData<any>(["api-keys", 1, 10]);
+      const updated = queryClient.getQueryData<PaginatedAPIKeysResponse>(["api-keys", 1, 10]);
       expect(updated?.items?.[0]?.is_active).toBe(true);
       expect(mockToastSuccess).toHaveBeenCalledWith("enableSuccess");
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["api-keys"] });
@@ -401,14 +424,10 @@ describe("use-api-keys hooks", () => {
     });
 
     it("restores previous cache state on error and shows failure toast", async () => {
-      const initial = {
-        items: [{ id: "key-1", name: "Test Key", is_active: true }],
-        total: 1,
-        page: 1,
-        page_size: 10,
-        total_pages: 1,
-      } as any;
-      queryClient.setQueryData(["api-keys", 1, 10], initial);
+      queryClient.setQueryData<PaginatedAPIKeysResponse>(
+        ["api-keys", 1, 10],
+        makePaginatedAPIKeys([makeApiKey({ id: "key-1", is_active: true })])
+      );
 
       mockPut.mockRejectedValueOnce(new Error("Toggle failed"));
 
@@ -418,21 +437,18 @@ describe("use-api-keys hooks", () => {
 
       await waitFor(() => expect(result.current.isError).toBe(true));
 
-      const restored = queryClient.getQueryData<any>(["api-keys", 1, 10]);
+      const restored = queryClient.getQueryData<PaginatedAPIKeysResponse>(["api-keys", 1, 10]);
       expect(restored?.items?.[0]?.is_active).toBe(true);
       expect(mockToastError).toHaveBeenCalledWith("updateFailed: Toggle failed");
     });
 
     it("shows disable success toast when disabling key", async () => {
-      queryClient.setQueryData(["api-keys", 1, 10], {
-        items: [{ id: "key-1", name: "Test Key", is_active: true }],
-        total: 1,
-        page: 1,
-        page_size: 10,
-        total_pages: 1,
-      } as any);
+      queryClient.setQueryData<PaginatedAPIKeysResponse>(
+        ["api-keys", 1, 10],
+        makePaginatedAPIKeys([makeApiKey({ id: "key-1", is_active: true })])
+      );
 
-      mockPut.mockResolvedValueOnce({ id: "key-1", is_active: false } as any);
+      mockPut.mockResolvedValueOnce(makeApiKey({ id: "key-1", is_active: false }));
 
       const { result } = renderHook(() => useToggleAPIKeyActive(), { wrapper });
 
