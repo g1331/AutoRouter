@@ -35,6 +35,8 @@ import type {
   BillingSyncSummary,
   BillingManualPriceOverrideRecord,
   BillingUnresolvedModel,
+  BillingModelPriceCatalogItem,
+  PaginatedBillingModelPrices,
 } from "@/lib/services/billing-price-service";
 
 // ========== Helper Utilities ==========
@@ -612,6 +614,17 @@ export interface RecentBillingDetailApiResponse {
   currency: string;
 }
 
+export interface BillingModelPriceApiResponse {
+  id: string;
+  model: string;
+  input_price_per_million: number;
+  output_price_per_million: number;
+  source: "openrouter" | "litellm";
+  is_active: boolean;
+  synced_at: string;
+  updated_at: string;
+}
+
 export function transformBillingSyncToApi(sync: BillingSyncSummary): BillingSyncApiResponse {
   return {
     status: sync.status,
@@ -694,6 +707,33 @@ export function transformRecentBillingDetailToApi(
     output_multiplier: item.outputMultiplier,
     final_cost: item.finalCost,
     currency: item.currency,
+  };
+}
+
+export function transformBillingModelPriceToApi(
+  item: BillingModelPriceCatalogItem
+): BillingModelPriceApiResponse {
+  return {
+    id: item.id,
+    model: item.model,
+    input_price_per_million: item.inputPricePerMillion,
+    output_price_per_million: item.outputPricePerMillion,
+    source: item.source,
+    is_active: item.isActive,
+    synced_at: item.syncedAt.toISOString(),
+    updated_at: item.updatedAt.toISOString(),
+  };
+}
+
+export function transformPaginatedBillingModelPrices(
+  result: PaginatedBillingModelPrices
+): PaginatedApiResponse<BillingModelPriceApiResponse> {
+  return {
+    items: result.items.map(transformBillingModelPriceToApi),
+    total: result.total,
+    page: result.page,
+    page_size: result.pageSize,
+    total_pages: result.totalPages,
   };
 }
 

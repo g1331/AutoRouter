@@ -455,6 +455,19 @@ export interface BillingManualOverridesResponse {
   total: number;
 }
 
+export interface BillingModelPrice {
+  id: string;
+  model: string;
+  input_price_per_million: number;
+  output_price_per_million: number;
+  source: "openrouter" | "litellm";
+  is_active: boolean;
+  synced_at: string;
+  updated_at: string;
+}
+
+export type PaginatedBillingModelPricesResponse = PaginatedResponse<BillingModelPrice>;
+
 export interface UpstreamBillingMultiplier {
   id: string;
   name: string;

@@ -8,6 +8,7 @@ import type {
   BillingCreateManualOverride,
   BillingUpdateManualOverride,
   BillingManualOverridesResponse,
+  PaginatedBillingModelPricesResponse,
   BillingUnresolvedModelsResponse,
   UpstreamBillingMultiplier,
   UpstreamBillingMultipliersResponse,
@@ -40,6 +41,29 @@ export function useBillingManualOverrides() {
   return useQuery({
     queryKey: ["billing", "manual-overrides"],
     queryFn: () => apiClient.get<BillingManualOverridesResponse>("/admin/billing/overrides"),
+  });
+}
+
+export function useBillingModelPrices(
+  page: number = 1,
+  pageSize: number = 50,
+  modelQuery?: string
+) {
+  const { apiClient } = useAuth();
+  const normalizedQuery = modelQuery?.trim() ?? "";
+
+  return useQuery({
+    queryKey: ["billing", "model-prices", page, pageSize, normalizedQuery],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        page: String(page),
+        page_size: String(pageSize),
+      });
+      if (normalizedQuery) {
+        params.set("model", normalizedQuery);
+      }
+      return apiClient.get<PaginatedBillingModelPricesResponse>(`/admin/billing/prices?${params}`);
+    },
   });
 }
 
@@ -105,6 +129,7 @@ export function useSyncBillingPrices() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["billing", "overview"] });
       queryClient.invalidateQueries({ queryKey: ["billing", "unresolved-models"] });
+      queryClient.invalidateQueries({ queryKey: ["billing", "model-prices"] });
       toast.success("价格同步已完成");
     },
     onError: (error: Error) => {

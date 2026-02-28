@@ -9,6 +9,8 @@ import {
   transformPaginatedApiKeys,
   transformRequestLogToApi,
   transformPaginatedRequestLogs,
+  transformBillingModelPriceToApi,
+  transformPaginatedBillingModelPrices,
   transformStatsOverviewToApi,
   transformTimeseriesDataPointToApi,
   transformUpstreamTimeseriesToApi,
@@ -502,6 +504,59 @@ describe("api-transformers", () => {
       expect(result.page_size).toBe(50);
       expect(result.total_pages).toBe(20);
       expect(result.items[0].prompt_tokens).toBe(50);
+    });
+  });
+
+  describe("billing price catalog transformers", () => {
+    it("should transform billing model price item to API response format", () => {
+      const result = transformBillingModelPriceToApi({
+        id: "price-1",
+        model: "gpt-4.1",
+        inputPricePerMillion: 2.5,
+        outputPricePerMillion: 9.8,
+        source: "openrouter",
+        isActive: true,
+        syncedAt: new Date("2026-02-28T08:00:00.000Z"),
+        updatedAt: new Date("2026-02-28T08:05:00.000Z"),
+      });
+
+      expect(result).toEqual({
+        id: "price-1",
+        model: "gpt-4.1",
+        input_price_per_million: 2.5,
+        output_price_per_million: 9.8,
+        source: "openrouter",
+        is_active: true,
+        synced_at: "2026-02-28T08:00:00.000Z",
+        updated_at: "2026-02-28T08:05:00.000Z",
+      });
+    });
+
+    it("should transform paginated billing model prices to API response format", () => {
+      const result = transformPaginatedBillingModelPrices({
+        items: [
+          {
+            id: "price-1",
+            model: "gpt-4.1",
+            inputPricePerMillion: 2.5,
+            outputPricePerMillion: 9.8,
+            source: "openrouter",
+            isActive: true,
+            syncedAt: new Date("2026-02-28T08:00:00.000Z"),
+            updatedAt: new Date("2026-02-28T08:05:00.000Z"),
+          },
+        ],
+        total: 1,
+        page: 1,
+        pageSize: 50,
+        totalPages: 1,
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.page).toBe(1);
+      expect(result.page_size).toBe(50);
+      expect(result.total_pages).toBe(1);
+      expect(result.items[0].model).toBe("gpt-4.1");
     });
   });
 

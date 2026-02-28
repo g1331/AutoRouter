@@ -44,3 +44,9 @@
 - [x] 7.1 完成第 1-2 组后执行 `pnpm exec tsc --noEmit` 与相关单测，通过后做第一个提交
 - [x] 7.2 完成第 3-4 组后执行后端回归测试与 API 自检，通过后做第二个提交
 - [x] 7.3 完成第 5-6 组后执行 `pnpm lint`、`pnpm test:run`、`pnpm build`，全部通过后做最终提交
+
+## 8. 体验补充：模型价格目录可查询
+
+- [x] 8.1 新增 `GET /api/admin/billing/prices`，支持分页与模型名检索，返回现有价格目录
+- [x] 8.2 在 Billing 页面新增“模型价格目录”展示区，支持按模型名搜索与状态可视化
+- [x] 8.3 补齐类型、transformer、hooks 与文案，并通过 `tsc` / `lint` / 相关单测

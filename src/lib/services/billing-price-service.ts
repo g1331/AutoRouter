@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, like } from "drizzle-orm";
 import {
   billingManualPriceOverrides,
   billingModelPrices,
@@ -52,6 +52,33 @@ export interface BillingUnresolvedModel {
   lastUpstreamId: string | null;
   lastUpstreamName: string | null;
   hasManualOverride: boolean;
+}
+
+export interface BillingModelPriceCatalogItem {
+  id: string;
+  model: string;
+  inputPricePerMillion: number;
+  outputPricePerMillion: number;
+  source: "openrouter" | "litellm";
+  isActive: boolean;
+  syncedAt: Date;
+  updatedAt: Date;
+}
+
+export interface ListBillingModelPricesInput {
+  page?: number;
+  pageSize?: number;
+  modelQuery?: string;
+  source?: "openrouter" | "litellm";
+  activeOnly?: boolean;
+}
+
+export interface PaginatedBillingModelPrices {
+  items: BillingModelPriceCatalogItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 interface NormalizedSyncedPrice {
@@ -506,4 +533,55 @@ export async function listBillingUnresolvedModels(): Promise<BillingUnresolvedMo
   }
 
   return [...grouped.values()];
+}
+
+export async function listBillingModelPrices(
+  input: ListBillingModelPricesInput = {}
+): Promise<PaginatedBillingModelPrices> {
+  const page = Math.max(1, input.page ?? 1);
+  const pageSize = Math.min(100, Math.max(1, input.pageSize ?? 20));
+  const offset = (page - 1) * pageSize;
+  const modelQuery = input.modelQuery?.trim();
+
+  const conditions = [];
+  if (modelQuery) {
+    conditions.push(like(billingModelPrices.model, `%${modelQuery}%`));
+  }
+  if (input.source) {
+    conditions.push(eq(billingModelPrices.source, input.source));
+  }
+  if (input.activeOnly === true) {
+    conditions.push(eq(billingModelPrices.isActive, true));
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const [totalRows, rows] = await Promise.all([
+    db.select({ value: count() }).from(billingModelPrices).where(whereClause),
+    db.query.billingModelPrices.findMany({
+      where: whereClause,
+      orderBy: [desc(billingModelPrices.syncedAt), desc(billingModelPrices.updatedAt)],
+      limit: pageSize,
+      offset,
+    }),
+  ]);
+
+  const total = totalRows[0]?.value ?? 0;
+  const totalPages = total > 0 ? Math.ceil(total / pageSize) : 1;
+
+  return {
+    items: rows.map((row) => ({
+      id: row.id,
+      model: row.model,
+      inputPricePerMillion: row.inputPricePerMillion,
+      outputPricePerMillion: row.outputPricePerMillion,
+      source: row.source as "openrouter" | "litellm",
+      isActive: row.isActive,
+      syncedAt: row.syncedAt,
+      updatedAt: row.updatedAt,
+    })),
+    total,
+    page,
+    pageSize,
+    totalPages,
+  };
 }

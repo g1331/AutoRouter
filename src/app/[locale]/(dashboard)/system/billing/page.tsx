@@ -17,11 +17,13 @@ import {
   useCreateBillingManualOverride,
   useDeleteBillingManualOverride,
   useSyncBillingPrices,
+  useBillingModelPrices,
   useRecentBillingDetails,
   useUpstreamBillingMultipliers,
   useUpdateUpstreamBillingMultiplier,
 } from "@/hooks/use-billing";
 import type {
+  BillingModelPrice,
   BillingManualOverride,
   BillingUnresolvedModel,
   UpstreamBillingMultiplier,
@@ -310,6 +312,8 @@ export default function BillingPage() {
   const overview = useBillingOverview();
   const unresolved = useBillingUnresolvedModels();
   const multipliers = useUpstreamBillingMultipliers();
+  const [modelPriceQuery, setModelPriceQuery] = useState("");
+  const modelPrices = useBillingModelPrices(1, 50, modelPriceQuery);
   const recent = useRecentBillingDetails(1, 20);
   const syncPrices = useSyncBillingPrices();
   const updateMultiplier = useUpdateUpstreamBillingMultiplier();
@@ -444,6 +448,76 @@ export default function BillingPage() {
               <p className="text-sm text-status-error">{String(unresolved.error)}</p>
             ) : (
               <UnresolvedRepairTable rows={unresolved.data?.items ?? []} t={t} />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card variant="outlined" className="border-divider bg-surface-200/70">
+          <CardContent className="space-y-3 p-5 sm:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h3 className="type-label-medium text-foreground">{t("priceCatalogTitle")}</h3>
+                <p className="text-sm text-muted-foreground">{t("priceCatalogDesc")}</p>
+              </div>
+              <div className="w-full sm:w-80">
+                <Input
+                  value={modelPriceQuery}
+                  onChange={(event) => setModelPriceQuery(event.target.value)}
+                  placeholder={t("priceCatalogSearchPlaceholder")}
+                />
+              </div>
+            </div>
+            {modelPrices.isLoading ? (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : modelPrices.isError ? (
+              <p className="text-sm text-status-error">{String(modelPrices.error)}</p>
+            ) : (modelPrices.data?.items.length ?? 0) === 0 ? (
+              <p className="text-sm text-muted-foreground">{t("priceCatalogEmpty")}</p>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  {t("priceCatalogShowing", {
+                    current: modelPrices.data?.items.length ?? 0,
+                    total: modelPrices.data?.total ?? 0,
+                  })}
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[980px] text-sm">
+                    <thead>
+                      <tr className="border-b border-divider text-left text-xs uppercase tracking-wide text-muted-foreground">
+                        <th className="px-3 py-2">{t("priceCatalogModel")}</th>
+                        <th className="px-3 py-2">{t("priceCatalogSource")}</th>
+                        <th className="px-3 py-2">{t("priceCatalogInputPrice")}</th>
+                        <th className="px-3 py-2">{t("priceCatalogOutputPrice")}</th>
+                        <th className="px-3 py-2">{t("priceCatalogSyncedAt")}</th>
+                        <th className="px-3 py-2">{t("priceCatalogStatus")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {modelPrices.data?.items.map((item: BillingModelPrice) => (
+                        <tr key={item.id} className="border-b border-divider/60">
+                          <td className="px-3 py-2 font-mono">{item.model}</td>
+                          <td className="px-3 py-2">{item.source}</td>
+                          <td className="px-3 py-2 tabular-nums">
+                            {item.input_price_per_million.toFixed(4)}
+                          </td>
+                          <td className="px-3 py-2 tabular-nums">
+                            {item.output_price_per_million.toFixed(4)}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-muted-foreground">
+                            {new Date(item.synced_at).toLocaleString(locale)}
+                          </td>
+                          <td className="px-3 py-2">
+                            <Badge variant={item.is_active ? "success" : "neutral"}>
+                              {item.is_active ? t("statusActive") : t("statusInactive")}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>
