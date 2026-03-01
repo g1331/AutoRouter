@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { getDateLocale } from "@/lib/date-locale";
 import { StatusLed, AsciiProgress, type LedStatus } from "@/components/ui/terminal";
 import { cn } from "@/lib/utils";
-import { useToggleUpstreamActive } from "@/hooks/use-upstreams";
+import { useToggleUpstreamActive, useUpstreamQuota } from "@/hooks/use-upstreams";
 import { useForceCircuitBreaker } from "@/hooks/use-circuit-breaker";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
@@ -47,6 +47,26 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
 
   const toggleActiveMutation = useToggleUpstreamActive();
   const forceCircuitBreakerMutation = useForceCircuitBreaker();
+  const { data: quotaData } = useUpstreamQuota();
+
+  // Build a map for quick quota lookup by upstream_id
+  const quotaMap = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        percent_used: number;
+        is_exceeded: boolean;
+        current_spending: number;
+        spending_limit: number;
+      }
+    >();
+    if (quotaData?.items) {
+      for (const q of quotaData.items) {
+        map.set(q.upstream_id, q);
+      }
+    }
+    return map;
+  }, [quotaData]);
 
   // Track collapsed state for each tier
   const [collapsedTiers, setCollapsedTiers] = useState<Set<number>>(new Set());
@@ -483,6 +503,30 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                                   {(upstream.billing_output_multiplier ?? 1).toFixed(2)}
                                 </span>
                               </div>
+                              {quotaMap.has(upstream.id) &&
+                                (() => {
+                                  const q = quotaMap.get(upstream.id)!;
+                                  return (
+                                    <div className="mt-1 flex items-center gap-2 font-mono text-[11px]">
+                                      <span className="shrink-0 text-muted-foreground">
+                                        {t("spendingQuota")}
+                                      </span>
+                                      <span
+                                        className={cn(
+                                          "ml-auto tabular-nums",
+                                          q.is_exceeded
+                                            ? "text-destructive"
+                                            : q.percent_used >= 80
+                                              ? "text-warning"
+                                              : "text-foreground"
+                                        )}
+                                      >
+                                        ${q.current_spending.toFixed(2)} / $
+                                        {q.spending_limit.toFixed(2)} ({q.percent_used.toFixed(0)}%)
+                                      </span>
+                                    </div>
+                                  );
+                                })()}
                             </TableCell>
                             <TableCell className="hidden whitespace-nowrap pr-2 text-right 2xl:table-cell">
                               {formatDistanceToNow(new Date(upstream.created_at), {
@@ -622,6 +666,30 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                             {(upstream.billing_output_multiplier ?? 1).toFixed(2)}
                           </span>
                         </div>
+                        {quotaMap.has(upstream.id) &&
+                          (() => {
+                            const q = quotaMap.get(upstream.id)!;
+                            return (
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="shrink-0 text-muted-foreground">
+                                  {t("spendingQuota")}
+                                </span>
+                                <span
+                                  className={cn(
+                                    "tabular-nums",
+                                    q.is_exceeded
+                                      ? "text-destructive"
+                                      : q.percent_used >= 80
+                                        ? "text-warning"
+                                        : "text-foreground"
+                                  )}
+                                >
+                                  ${q.current_spending.toFixed(2)} / ${q.spending_limit.toFixed(2)}{" "}
+                                  ({q.percent_used.toFixed(0)}%)
+                                </span>
+                              </div>
+                            );
+                          })()}
                         <div className="flex items-center justify-between gap-2">
                           <span className="shrink-0 text-muted-foreground">
                             {tCommon("createdAt")}

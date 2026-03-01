@@ -29,6 +29,10 @@ vi.mock("@/hooks/use-upstreams", () => ({
     isPending: false,
     variables: undefined,
   }),
+  useUpstreamQuota: () => ({
+    data: undefined,
+    isLoading: false,
+  }),
 }));
 
 const mockForceCircuitBreaker = vi.fn();

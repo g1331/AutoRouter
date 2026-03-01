@@ -79,6 +79,9 @@ const createUpstreamFormSchema = z
     weight: z.number().int().min(1).max(100),
     billing_input_multiplier: z.number().min(0).max(100),
     billing_output_multiplier: z.number().min(0).max(100),
+    spending_limit: z.number().positive().nullable(),
+    spending_period_type: z.enum(["daily", "monthly", "rolling"]).nullable(),
+    spending_period_hours: z.number().int().min(1).max(8760).nullable(),
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
     allowed_models: z.array(z.string()).nullable(),
     model_redirects: z.record(z.string(), z.string()).nullable(),
@@ -101,6 +104,9 @@ const editUpstreamFormSchema = z
     weight: z.number().int().min(1).max(100),
     billing_input_multiplier: z.number().min(0).max(100),
     billing_output_multiplier: z.number().min(0).max(100),
+    spending_limit: z.number().positive().nullable(),
+    spending_period_type: z.enum(["daily", "monthly", "rolling"]).nullable(),
+    spending_period_hours: z.number().int().min(1).max(8760).nullable(),
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
     allowed_models: z.array(z.string()).nullable(),
     model_redirects: z.record(z.string(), z.string()).nullable(),
@@ -140,6 +146,9 @@ export function UpstreamFormDialog({
       weight: 1,
       billing_input_multiplier: 1,
       billing_output_multiplier: 1,
+      spending_limit: null,
+      spending_period_type: null,
+      spending_period_hours: null,
       route_capabilities: [],
       allowed_models: null,
       model_redirects: null,
@@ -160,6 +169,16 @@ export function UpstreamFormDialog({
     name: "affinity_migration",
   });
 
+  // Watch spending quota fields
+  const spendingLimit = useWatch({
+    control: form.control,
+    name: "spending_limit",
+  });
+  const spendingPeriodType = useWatch({
+    control: form.control,
+    name: "spending_period_type",
+  });
+
   useEffect(() => {
     if (upstream && open) {
       form.reset({
@@ -171,6 +190,10 @@ export function UpstreamFormDialog({
         weight: upstream.weight ?? 1,
         billing_input_multiplier: upstream.billing_input_multiplier ?? 1,
         billing_output_multiplier: upstream.billing_output_multiplier ?? 1,
+        spending_limit: upstream.spending_limit ?? null,
+        spending_period_type:
+          (upstream.spending_period_type as "daily" | "monthly" | "rolling") ?? null,
+        spending_period_hours: upstream.spending_period_hours ?? null,
         route_capabilities: upstream.route_capabilities || [],
         allowed_models: upstream.allowed_models || null,
         model_redirects: upstream.model_redirects || null,
@@ -194,6 +217,9 @@ export function UpstreamFormDialog({
         weight: 1,
         billing_input_multiplier: 1,
         billing_output_multiplier: 1,
+        spending_limit: null,
+        spending_period_type: null,
+        spending_period_hours: null,
         route_capabilities: [],
         allowed_models: null,
         model_redirects: null,
@@ -216,6 +242,9 @@ export function UpstreamFormDialog({
           weight?: number;
           billing_input_multiplier?: number;
           billing_output_multiplier?: number;
+          spending_limit?: number | null;
+          spending_period_type?: "daily" | "monthly" | "rolling" | null;
+          spending_period_hours?: number | null;
           route_capabilities?: RouteCapability[] | null;
           allowed_models?: string[] | null;
           model_redirects?: Record<string, string> | null;
@@ -238,6 +267,9 @@ export function UpstreamFormDialog({
           weight: data.weight,
           billing_input_multiplier: data.billing_input_multiplier,
           billing_output_multiplier: data.billing_output_multiplier,
+          spending_limit: data.spending_limit,
+          spending_period_type: data.spending_period_type,
+          spending_period_hours: data.spending_period_hours,
           route_capabilities: data.route_capabilities,
           allowed_models: data.allowed_models,
           model_redirects: data.model_redirects,
@@ -262,6 +294,9 @@ export function UpstreamFormDialog({
           weight: data.weight,
           billing_input_multiplier: data.billing_input_multiplier,
           billing_output_multiplier: data.billing_output_multiplier,
+          spending_limit: data.spending_limit,
+          spending_period_type: data.spending_period_type,
+          spending_period_hours: data.spending_period_hours,
           route_capabilities: data.route_capabilities,
           allowed_models: data.allowed_models,
           model_redirects: data.model_redirects,
@@ -443,6 +478,104 @@ export function UpstreamFormDialog({
                 )}
               />
             </div>
+          </div>
+
+          {/* Spending Quota Section */}
+          <div className="border-t pt-6 mt-6">
+            <h3 className="text-sm font-medium text-muted-foreground mb-4">{t("spendingQuota")}</h3>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="spending_limit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("spendingLimit")}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        inputMode="decimal"
+                        placeholder={t("spendingLimitPlaceholder")}
+                        value={field.value ?? ""}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          field.onChange(v === "" ? null : Number(v));
+                        }}
+                      />
+                    </FormControl>
+                    <FormDescription>{t("spendingLimitDesc")}</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="spending_period_type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("spendingPeriodType")}</FormLabel>
+                    <Select
+                      value={field.value ?? "none"}
+                      onValueChange={(v) => {
+                        field.onChange(v === "none" ? null : v);
+                        if (v !== "rolling") {
+                          form.setValue("spending_period_hours", null);
+                        }
+                      }}
+                      disabled={!spendingLimit}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">{t("spendingPeriodNone")}</SelectItem>
+                        <SelectItem value="daily">{t("spendingPeriodDaily")}</SelectItem>
+                        <SelectItem value="monthly">{t("spendingPeriodMonthly")}</SelectItem>
+                        <SelectItem value="rolling">{t("spendingPeriodRolling")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>{t("spendingPeriodTypeDesc")}</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {spendingPeriodType === "rolling" && (
+              <div className="mt-4">
+                <FormField
+                  control={form.control}
+                  name="spending_period_hours"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("spendingPeriodHours")}</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={8760}
+                          step={1}
+                          inputMode="numeric"
+                          placeholder="24"
+                          value={field.value ?? ""}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            field.onChange(v === "" ? null : Number(v));
+                          }}
+                        />
+                      </FormControl>
+                      <FormDescription>{t("spendingPeriodHoursDesc")}</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
           </div>
 
           <FormField
