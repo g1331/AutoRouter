@@ -444,6 +444,8 @@
     "spendingPeriodHours": "滚动窗口时长",
     "spendingPeriodHoursDesc": "滚动窗口的时长，单位为小时（1-8760）。",
     "quotaExceeded": "已超限额",
+    "quotaResets": "重置",
+    "quotaRecovery": "恢复",
     "modelBasedRouting": "基于模型的路由",
     "providerType": "提供商",
     "compatibilityProvider": "兼容提供商",

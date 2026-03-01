@@ -71,6 +71,15 @@ const createUpstreamSchema = z
       message: "All route capabilities must belong to the same provider",
       path: ["route_capabilities"],
     }
+  )
+  .refine(
+    (data) =>
+      data.spending_period_type !== "rolling" ||
+      (data.spending_period_hours != null && data.spending_period_hours >= 1),
+    {
+      message: "spending_period_hours is required when spending_period_type is 'rolling'",
+      path: ["spending_period_hours"],
+    }
   );
 
 /**

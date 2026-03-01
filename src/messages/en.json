@@ -444,6 +444,8 @@
     "spendingPeriodHours": "Rolling Window Hours",
     "spendingPeriodHoursDesc": "Duration of rolling window in hours (1-8760).",
     "quotaExceeded": "Quota Exceeded",
+    "quotaResets": "Resets",
+    "quotaRecovery": "Recovery",
     "modelBasedRouting": "Model-Based Routing",
     "providerType": "Provider",
     "compatibilityProvider": "Compat Provider",

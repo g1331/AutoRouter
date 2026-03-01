@@ -15,19 +15,28 @@ export async function GET(request: NextRequest) {
   await quotaTracker.initialize();
   const statuses = quotaTracker.getAllQuotaStatuses();
 
-  return NextResponse.json({
-    items: statuses.map((s) => ({
-      upstream_id: s.upstreamId,
-      upstream_name: s.upstreamName,
-      current_spending: s.currentSpending,
-      spending_limit: s.spendingLimit,
-      spending_period_type: s.spendingPeriodType,
-      spending_period_hours: s.spendingPeriodHours,
-      percent_used: s.percentUsed,
-      is_exceeded: s.isExceeded,
-      resets_at: s.resetsAt?.toISOString() ?? null,
-    })),
-  });
+  const items = await Promise.all(
+    statuses.map(async (s) => {
+      const estimatedRecoveryAt =
+        s.isExceeded && s.spendingPeriodType === "rolling"
+          ? await quotaTracker.estimateRecoveryTime(s.upstreamId)
+          : null;
+      return {
+        upstream_id: s.upstreamId,
+        upstream_name: s.upstreamName,
+        current_spending: s.currentSpending,
+        spending_limit: s.spendingLimit,
+        spending_period_type: s.spendingPeriodType,
+        spending_period_hours: s.spendingPeriodHours,
+        percent_used: s.percentUsed,
+        is_exceeded: s.isExceeded,
+        resets_at: s.resetsAt?.toISOString() ?? null,
+        estimated_recovery_at: estimatedRecoveryAt?.toISOString() ?? null,
+      };
+    })
+  );
+
+  return NextResponse.json({ items });
 }
 
 /**

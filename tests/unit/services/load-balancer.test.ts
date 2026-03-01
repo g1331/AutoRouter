@@ -49,10 +49,19 @@ vi.mock("@/lib/services/circuit-breaker", () => ({
   },
 }));
 
+const mockIsWithinQuota = vi.fn().mockReturnValue(true);
+vi.mock("@/lib/services/upstream-quota-tracker", () => ({
+  quotaTracker: {
+    isWithinQuota: (...args: unknown[]) => mockIsWithinQuota(...args),
+    ensureInitialized: () => true,
+  },
+}));
+
 // Import after mocks are registered
 import {
   selectFromProviderType,
   selectFromUpstreamCandidates,
+  filterBySpendingQuota,
   NoHealthyUpstreamsError,
   NoAuthorizedUpstreamsError,
   resetConnectionCounts,
@@ -964,6 +973,71 @@ describe("load-balancer", () => {
 
       expect(getConnectionCount("u1")).toBe(2);
       expect(getConnectionCount("u2")).toBe(1);
+    });
+  });
+
+  describe("spending quota filtering", () => {
+    function makeUCB(id: string) {
+      return {
+        upstream: { ...makeUpstream({ id }), id },
+        isHealthy: true,
+        latencyMs: 100,
+        circuitState: "closed" as const,
+        circuitBreaker: null,
+      };
+    }
+
+    beforeEach(() => {
+      mockIsWithinQuota.mockReturnValue(true);
+    });
+
+    it("allows all upstreams when none exceed quota", () => {
+      const list = [makeUCB("a"), makeUCB("b")];
+      const result = filterBySpendingQuota(list);
+      expect(result.allowed).toHaveLength(2);
+      expect(result.excludedCount).toBe(0);
+    });
+
+    it("excludes upstreams that exceed quota", () => {
+      mockIsWithinQuota.mockImplementation((id: string) => id !== "b");
+      const list = [makeUCB("a"), makeUCB("b"), makeUCB("c")];
+      const result = filterBySpendingQuota(list);
+      expect(result.allowed).toHaveLength(2);
+      expect(result.excludedCount).toBe(1);
+      expect(result.allowed.map((u) => u.upstream.id)).toEqual(["a", "c"]);
+    });
+
+    it("excludes all upstreams when all exceed quota", () => {
+      mockIsWithinQuota.mockReturnValue(false);
+      const list = [makeUCB("a"), makeUCB("b")];
+      const result = filterBySpendingQuota(list);
+      expect(result.allowed).toHaveLength(0);
+      expect(result.excludedCount).toBe(2);
+    });
+
+    it("does not affect upstreams without quota config (returns true)", () => {
+      // Default: isWithinQuota returns true for all (no config)
+      const list = [makeUCB("a")];
+      const result = filterBySpendingQuota(list);
+      expect(result.allowed).toHaveLength(1);
+      expect(result.excludedCount).toBe(0);
+    });
+
+    it("integrates with tier selection - quota exceeded upstreams fall to next tier", async () => {
+      const p0a = makeUpstream({ id: "p0a", priority: 0 });
+      const p0b = makeUpstream({ id: "p0b", priority: 0 });
+      const p1a = makeUpstream({ id: "p1a", priority: 1 });
+
+      mockFindMany.mockResolvedValue([p0a, p0b, p1a]);
+      setCBOpen(); // all CB closed
+
+      // All P0 upstreams exceed quota
+      mockIsWithinQuota.mockImplementation((id: string) => id === "p1a");
+
+      const result = await selectFromUpstreamCandidates(["p0a", "p0b", "p1a"]);
+      expect(result.upstream.id).toBe("p1a");
+      expect(result.selectedTier).toBe(1);
+      expect(result.quotaFiltered).toBe(2);
     });
   });
 });

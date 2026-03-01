@@ -205,6 +205,7 @@ export interface UpstreamQuotaStatus {
   percent_used: number;
   is_exceeded: boolean;
   resets_at: string | null;
+  estimated_recovery_at: string | null;
 }
 
 export interface UpstreamQuotaStatusResponse {

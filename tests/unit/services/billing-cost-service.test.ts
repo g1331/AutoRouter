@@ -34,6 +34,13 @@ vi.mock("@/lib/services/billing-price-service", () => ({
   resolveBillingModelPrice: vi.fn(),
 }));
 
+const mockRecordSpending = vi.fn();
+vi.mock("@/lib/services/upstream-quota-tracker", () => ({
+  quotaTracker: {
+    recordSpending: (...args: unknown[]) => mockRecordSpending(...args),
+  },
+}));
+
 describe("billing-cost-service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -166,5 +173,50 @@ describe("billing-cost-service", () => {
         outputMultiplier: 0.8,
       })
     );
+  });
+
+  it("calls quotaTracker.recordSpending after successful billed upsert", async () => {
+    const { resolveBillingModelPrice } = await import("@/lib/services/billing-price-service");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+
+    vi.mocked(resolveBillingModelPrice).mockResolvedValueOnce({
+      model: "gpt-4.1",
+      source: "litellm",
+      inputPricePerMillion: 10,
+      outputPricePerMillion: 30,
+      cacheReadInputPricePerMillion: null,
+      cacheWriteInputPricePerMillion: null,
+    });
+    upstreamFindFirstMock.mockResolvedValueOnce({
+      billingInputMultiplier: 1,
+      billingOutputMultiplier: 1,
+    });
+
+    await calculateAndPersistRequestBillingSnapshot({
+      requestLogId: "log-quota",
+      apiKeyId: "key-1",
+      upstreamId: "up-1",
+      model: "gpt-4.1",
+      usage: { promptTokens: 1000, completionTokens: 500, totalTokens: 1500 },
+    });
+
+    // (1000/1e6)*10 + (500/1e6)*30 = 0.01 + 0.015 = 0.025
+    expect(mockRecordSpending).toHaveBeenCalledWith("up-1", expect.closeTo(0.025, 6));
+  });
+
+  it("does not call quotaTracker.recordSpending for unbilled requests", async () => {
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+
+    await calculateAndPersistRequestBillingSnapshot({
+      requestLogId: "log-unbilled",
+      apiKeyId: "key-1",
+      upstreamId: "up-1",
+      model: null,
+      usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+    });
+
+    expect(mockRecordSpending).not.toHaveBeenCalled();
   });
 });
