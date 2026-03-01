@@ -2,46 +2,51 @@
 
 ### Requirement: 上游消费限额配置
 
-系统 SHALL 允许管理员为每个上游配置消费限额，包括限额金额（USD）和周期类型（每天、每月、滚动 N 小时）。未配置限额的上游不受任何消费约束。
+系统 SHALL 允许管理员为每个上游配置零条或多条消费限额规则，每条规则包含限额金额（USD）和周期类型（每天、每月、滚动 N 小时）。多条规则之间为 AND 语义：任一规则超额即视为该上游超额。未配置任何规则的上游不受消费约束。
 
-#### Scenario: 创建上游时配置每日限额
+#### Scenario: 创建上游时配置单条每日限额规则
 
-- **WHEN** 管理员创建上游并设置 `spending_limit = 50`、`spending_period_type = "daily"`
+- **WHEN** 管理员创建上游并设置 `spending_rules = [{ period_type: "daily", limit: 50 }]`
 - **THEN** 系统持久化限额配置，该上游每日消费到达 $50 后被路由排除
 
-#### Scenario: 创建上游时配置每月限额
+#### Scenario: 创建上游时配置多条叠加限额规则
 
-- **WHEN** 管理员创建上游并设置 `spending_limit = 500`、`spending_period_type = "monthly"`
+- **WHEN** 管理员创建上游并设置 `spending_rules = [{ period_type: "daily", limit: 100 }, { period_type: "rolling", limit: 30, period_hours: 5 }]`
+- **THEN** 系统持久化全部规则，该上游在每日消费到达 $100 或连续 5 小时消费到达 $30 中的任一条件满足后被路由排除
+
+#### Scenario: 创建上游时配置每月限额规则
+
+- **WHEN** 管理员创建上游并设置 `spending_rules = [{ period_type: "monthly", limit: 500 }]`
 - **THEN** 系统持久化限额配置，该上游每月消费到达 $500 后被路由排除
 
-#### Scenario: 创建上游时配置滚动窗口限额
+#### Scenario: 创建上游时配置滚动窗口限额规则
 
-- **WHEN** 管理员创建上游并设置 `spending_limit = 100`、`spending_period_type = "rolling"`、`spending_period_hours = 24`
+- **WHEN** 管理员创建上游并设置 `spending_rules = [{ period_type: "rolling", limit: 100, period_hours: 24 }]`
 - **THEN** 系统持久化限额配置，该上游在任意连续 24 小时内消费到达 $100 后被路由排除
 
 #### Scenario: 不配置限额的上游
 
-- **WHEN** 管理员创建或编辑上游时不设置 `spending_limit`（留空或 null）
+- **WHEN** 管理员创建或编辑上游时不设置任何 `spending_rules`（空数组或 null）
 - **THEN** 该上游不受消费限额约束，行为与限额功能不存在时完全一致
 
-#### Scenario: 编辑上游修改限额
+#### Scenario: 编辑上游修改限额规则
 
-- **WHEN** 管理员编辑已有上游并修改 `spending_limit` 或 `spending_period_type`
+- **WHEN** 管理员编辑已有上游并修改 `spending_rules`（增删规则或调整参数）
 - **THEN** 系统更新限额配置并立即生效，内存中的 QuotaTracker 状态在下次校准时刷新
 
-#### Scenario: 编辑上游移除限额
+#### Scenario: 编辑上游移除全部限额规则
 
-- **WHEN** 管理员编辑上游并将 `spending_limit` 设为 null
+- **WHEN** 管理员编辑上游并将 `spending_rules` 设为 null 或空数组
 - **THEN** 该上游的消费限额约束被立即移除
 
 #### Scenario: 限额配置输入校验
 
-- **WHEN** 管理员提交 `spending_period_type = "rolling"` 但未提供 `spending_period_hours`
+- **WHEN** 管理员提交的某条规则 `period_type = "rolling"` 但未提供 `period_hours`
 - **THEN** 系统返回参数校验错误
 
 #### Scenario: 限额金额校验
 
-- **WHEN** 管理员提交 `spending_limit` 为负数或零
+- **WHEN** 管理员提交的某条规则 `limit` 为负数或零
 - **THEN** 系统返回参数校验错误
 
 ### Requirement: 路由选择时限额过滤
@@ -70,12 +75,12 @@
 
 ### Requirement: 消费实时追踪
 
-系统 SHALL 维护内存级的消费追踪器（QuotaTracker），通过增量累加和定期 DB 校准两条路径确保消费数据的准确性。
+系统 SHALL 维护内存级的消费追踪器（QuotaTracker），通过增量累加和定期 DB 校准两条路径确保消费数据的准确性。每个上游的每条规则独立追踪消费。
 
 #### Scenario: 请求计费后即时累加
 
 - **WHEN** 一次代理请求完成计费并生成 billing snapshot（`finalCost` 已确定）
-- **THEN** QuotaTracker 立即将 `finalCost` 累加到对应上游的当前周期消费中
+- **THEN** QuotaTracker 立即将 `finalCost` 累加到对应上游的所有规则的当前周期消费中
 
 #### Scenario: 定期从 DB 校准消费
 
@@ -131,8 +136,8 @@
 
 #### Scenario: 查询所有上游的限额状态
 
-- **WHEN** 管理员调用 `GET /api/admin/upstreams/quota-status`
-- **THEN** 系统返回每个有限额配置的上游的 `currentSpending`、`spendingLimit`、`percentUsed`、`isExceeded`、`resetsAt` 等信息
+- **WHEN** 管理员调用 `GET /api/admin/upstreams/quota`
+- **THEN** 系统返回每个有限额配置的上游的状态，包括 `is_exceeded`（任一规则超额即为 true）及每条规则的 `current_spending`、`spending_limit`、`percent_used`、`is_exceeded`、`resets_at` 信息
 
 #### Scenario: 固定窗口返回重置时间
 
@@ -146,12 +151,17 @@
 
 ### Requirement: Dashboard 限额展示
 
-系统 SHALL 在上游管理界面展示每个上游的消费限额进度、超额状态和重置倒计时信息。
+系统 SHALL 在上游管理界面展示每个上游的每条限额规则的消费进度条（AsciiProgress）、金额信息、超额状态和重置倒计时。多规则上游显示多行进度信息。
 
 #### Scenario: 上游列表展示限额进度
 
 - **WHEN** 管理员打开上游管理页面
-- **THEN** 每个配置了限额的上游行内显示消费进度条（百分比）、已消费金额/限额金额、周期类型标识
+- **THEN** 每个配置了限额规则的上游，在其行内为每条规则显示：周期类型标识、AsciiProgress 进度条（百分比）、已消费金额/限额金额
+
+#### Scenario: 多规则上游展示多行进度
+
+- **WHEN** 某上游配置了多条限额规则（如 daily $100 + rolling 5h $30）
+- **THEN** 该上游在行内为每条规则各显示一行进度信息，每行包含独立的进度条和金额数据
 
 #### Scenario: 超额上游高亮标识
 
@@ -170,19 +180,24 @@
 
 ### Requirement: 上游表单限额配置区域
 
-系统 SHALL 在上游创建/编辑表单中提供限额配置输入区域。
+系统 SHALL 在上游创建/编辑表单中提供动态限额规则列表，管理员可以添加或删除多条规则。
 
-#### Scenario: 表单展示限额配置项
+#### Scenario: 表单展示限额规则列表
 
 - **WHEN** 管理员打开上游创建或编辑对话框
-- **THEN** 表单包含限额金额输入框、周期类型选择器、滚动窗口小时数输入框
+- **THEN** 表单包含限额规则列表区域，支持动态添加/删除规则，每条规则包含周期类型选择器、限额金额输入框、滚动窗口小时数输入框（仅 rolling 类型显示）
+
+#### Scenario: 添加和删除规则
+
+- **WHEN** 管理员点击 "添加规则" 按钮
+- **THEN** 表单追加一条新的规则输入行；点击删除按钮可移除已有规则
 
 #### Scenario: 周期类型联动
 
-- **WHEN** 管理员选择 `spending_period_type` 为 `rolling`
-- **THEN** 表单显示 `spending_period_hours` 输入框；选择其他类型时该输入框隐藏
+- **WHEN** 管理员在某条规则中选择 `period_type` 为 `rolling`
+- **THEN** 该条规则显示 `period_hours` 输入框；选择其他类型时该输入框隐藏
 
-#### Scenario: 编辑回显已有限额配置
+#### Scenario: 编辑回显已有限额规则
 
-- **WHEN** 管理员编辑已配置限额的上游
-- **THEN** 表单正确回显 `spending_limit`、`spending_period_type`、`spending_period_hours` 的当前值
+- **WHEN** 管理员编辑已配置多条限额规则的上游
+- **THEN** 表单正确回显所有已有规则的 `period_type`、`limit`、`period_hours` 值

@@ -16,7 +16,12 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { getDateLocale } from "@/lib/date-locale";
-import { StatusLed, AsciiProgress, type LedStatus } from "@/components/ui/terminal";
+import {
+  StatusLed,
+  AsciiProgress,
+  type LedStatus,
+  type ProgressVariant,
+} from "@/components/ui/terminal";
 import { cn } from "@/lib/utils";
 import { useToggleUpstreamActive, useUpstreamQuota } from "@/hooks/use-upstreams";
 import { useForceCircuitBreaker } from "@/hooks/use-circuit-breaker";
@@ -519,6 +524,11 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                                         : rule.period_type === "daily"
                                           ? t("spendingPeriodDaily")
                                           : t("spendingPeriodMonthly");
+                                    const progressVariant: ProgressVariant = rule.is_exceeded
+                                      ? "error"
+                                      : rule.percent_used >= 80
+                                        ? "warning"
+                                        : "default";
                                     return (
                                       <div
                                         key={rIdx}
@@ -527,6 +537,13 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                                         <span className="shrink-0 text-muted-foreground">
                                           {periodLabel}
                                         </span>
+                                        <AsciiProgress
+                                          value={rule.current_spending}
+                                          max={rule.spending_limit}
+                                          width={8}
+                                          showPercentage
+                                          variant={progressVariant}
+                                        />
                                         <span
                                           className={cn(
                                             "ml-auto tabular-nums",
@@ -538,8 +555,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                                           )}
                                         >
                                           ${rule.current_spending.toFixed(2)} / $
-                                          {rule.spending_limit.toFixed(2)} (
-                                          {rule.percent_used.toFixed(0)}%)
+                                          {rule.spending_limit.toFixed(2)}
                                         </span>
                                       </div>
                                     );
@@ -694,11 +710,23 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                                   : rule.period_type === "daily"
                                     ? t("spendingPeriodDaily")
                                     : t("spendingPeriodMonthly");
+                              const progressVariant: ProgressVariant = rule.is_exceeded
+                                ? "error"
+                                : rule.percent_used >= 80
+                                  ? "warning"
+                                  : "default";
                               return (
                                 <div key={rIdx} className="flex items-center justify-between gap-2">
                                   <span className="shrink-0 text-muted-foreground">
                                     {periodLabel}
                                   </span>
+                                  <AsciiProgress
+                                    value={rule.current_spending}
+                                    max={rule.spending_limit}
+                                    width={8}
+                                    showPercentage
+                                    variant={progressVariant}
+                                  />
                                   <span
                                     className={cn(
                                       "tabular-nums",
@@ -710,8 +738,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                                     )}
                                   >
                                     ${rule.current_spending.toFixed(2)} / $
-                                    {rule.spending_limit.toFixed(2)} ({rule.percent_used.toFixed(0)}
-                                    %)
+                                    {rule.spending_limit.toFixed(2)}
                                   </span>
                                 </div>
                               );

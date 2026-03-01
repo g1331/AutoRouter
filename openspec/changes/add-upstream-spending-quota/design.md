@@ -30,21 +30,20 @@ AutoRouter 作为 AI API 网关，管理多个上游 AI 服务提供商。不同
 
 ## Decisions
 
-### 决策 1: 限额配置存储在 upstreams 表内
+### 决策 1: 限额配置以 JSON 数组存储在 upstreams 表内
 
-**选择**: 在 `upstreams` 表新增三个字段，而非创建独立的 quota 配置表。
+**选择**: 在 `upstreams` 表新增一个 JSON 字段 `spending_rules` 存储规则数组，而非创建独立的 quota 配置表或多个平铺字段。
 
-**理由**: 消费限额是上游的固有属性，与 `priority`、`weight`、`billingInputMultiplier` 同级。一个上游一条配置，schema 层语义清晰，查询无需 JOIN，CRUD 复用已有的上游管理流程。
+**理由**: 消费限额是上游的固有属性。使用 JSON 数组支持同一个上游配置多条不同周期的限额规则（如每天 $100 + 滚动 5 小时 $30），多条规则之间为 AND 语义——任一规则超额即视为上游超额。schema 层语义清晰，查询无需 JOIN，CRUD 复用已有的上游管理流程。
 
-**替代方案**: 独立 `upstream_quotas` 表 —— 支持更灵活的多维度限额（如按 API Key + 上游），但对当前需求过度设计。
+**替代方案**: 独立 `upstream_quotas` 表 —— 支持更灵活的多维度限额，但对当前需求过度设计；平铺三个字段 —— 仅支持单条规则，无法满足叠加限额（如同时限制短期和长期消费）的需求。
 
 新增字段:
 
 ```
 upstreams 表
-├── spending_limit          DOUBLE PRECISION  (null = 无限额)
-├── spending_period_type    VARCHAR(16)       ('daily' | 'monthly' | 'rolling')
-└── spending_period_hours   INTEGER           (仅 rolling 类型生效，如 24, 72)
+└── spending_rules   JSON  (null = 无限额)
+    → [{ period_type: "daily"|"monthly"|"rolling", limit: number, period_hours?: number }, ...]
 ```
 
 ### 决策 2: 增量累加 + 定期 DB 校准的混合精度模型
@@ -90,48 +89,52 @@ performTieredSelection() 内的过滤顺序:
 
 ### 决策 5: Dashboard 限额展示方案
 
-**选择**: 在上游列表的每行中嵌入限额进度信息，而非独立的 quota 页面。
+**选择**: 在上游列表的每行中嵌入限额进度信息（每条规则一行），而非独立的 quota 页面。
 
 **上游表格行内展示**:
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│ Name            Priority  Weight  Capabilities   Quota        Status   │
-├─────────────────────────────────────────────────────────────────────────┤
-│ Claude-Premium  0         3       [chat][comp]   ▓▓▓▓▓░ 72%  Active   │
-│                                                  $36/$50 月             │
-│                                                  30天后重置              │
-├─────────────────────────────────────────────────────────────────────────┤
-│ GPT4-Main       0         5       [chat]         ▓▓▓▓▓▓▓▓▓▓ 100%     │
-│                                                  $100/$100 日  超额!   │
-│                                                  8小时后重置             │
-├─────────────────────────────────────────────────────────────────────────┤
-│ OpenAI-Backup   1         2       [chat]         无限额       Active   │
-└─────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│ Name            Priority  Weight  Capabilities   Quota                  Status   │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│ Claude-Premium  0         3       [chat][comp]   日  ▓▓▓▓▓░ 72%         Active   │
+│                                                  $36/$50                          │
+│                                                  滚动5h ▓▓▓▓▓▓▓▓░ 90%            │
+│                                                  $27/$30                          │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│ GPT4-Main       0         5       [chat]         日  ▓▓▓▓▓▓▓▓▓▓ 100%   超额!    │
+│                                                  $100/$100                        │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│ OpenAI-Backup   1         2       [chat]         （无限额规则）          Active   │
+└──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**理由**: 限额信息是上游运行状态的一部分，管理员在查看上游列表时最需要这个信息的可见性。独立页面增加跳转成本。
+**理由**: 限额信息是上游运行状态的一部分，管理员在查看上游列表时最需要这个信息的可见性。独立页面增加跳转成本。多条规则各自渲染一行 AsciiProgress 进度条 + 金额文本，一目了然。
 
 ### 决策 6: Quota Status API 设计
 
-**选择**: 新增 `GET /api/admin/upstreams/quota-status` 返回所有有限额配置的上游的当前消费状况。
+**选择**: 新增 `GET /api/admin/upstreams/quota` 返回所有有限额配置的上游的当前消费状况，每个上游包含所有规则的独立状态。
 
 ```typescript
+interface UpstreamQuotaRuleStatus {
+  period_type: 'daily' | 'monthly' | 'rolling';
+  period_hours: number | null;
+  current_spending: number;
+  spending_limit: number;
+  percent_used: number;
+  is_exceeded: boolean;
+  resets_at: string | null;
+}
+
 interface UpstreamQuotaStatus {
-  upstreamId: string;
-  upstreamName: string;
-  spendingLimit: number;
-  spendingPeriodType: 'daily' | 'monthly' | 'rolling';
-  spendingPeriodHours: number | null;
-  currentSpending: number;
-  percentUsed: number;
-  isExceeded: boolean;
-  resetsAt: Date | null;       // 固定窗口: 下次重置时间
-  estimatedRecoveryAt: Date | null; // 滚动窗口: 预计恢复到限额内的时间
+  upstream_id: string;
+  upstream_name: string;
+  is_exceeded: boolean; // 任一规则超额即为 true
+  rules: UpstreamQuotaRuleStatus[];
 }
 ```
 
-**理由**: 与现有的 `GET /api/admin/upstreams/health` 模式一致，返回运行时状态而非配置。前端可以轮询此接口更新进度条。
+**理由**: 与现有的 `GET /api/admin/upstreams/health` 模式一致，返回运行时状态而非配置。多规则结构让前端可以为每条规则独立渲染进度条。
 
 ### 决策 7: 滚动窗口的「预计恢复时间」计算
 
@@ -158,8 +161,8 @@ interface UpstreamQuotaStatus {
 
 ## Migration Plan
 
-1. 生成 Drizzle 数据库迁移，为 `upstreams` 表新增三个 nullable 字段
-2. 无需数据回填——现有上游默认无限额（`spending_limit = null`）
+1. 生成 Drizzle 数据库迁移，为 `upstreams` 表新增 `spending_rules` JSON 字段（nullable）；如果从旧的三平铺字段迁移，同时将已有数据转换为 JSON 数组格式并删除旧字段
+2. 无需数据回填——新上游默认无限额（`spending_rules = null`）
 3. 功能为纯增量，不影响现有行为；未配置限额的上游完全不受影响
 4. 回滚策略：撤销迁移删除字段，QuotaTracker 不加载即可
 
