@@ -23,6 +23,7 @@ vi.mock("sonner", () => ({
 }));
 
 const mockToggleUpstreamActive = vi.fn();
+let mockUpstreamQuotaData: unknown = undefined;
 vi.mock("@/hooks/use-upstreams", () => ({
   useToggleUpstreamActive: () => ({
     mutateAsync: mockToggleUpstreamActive,
@@ -30,7 +31,7 @@ vi.mock("@/hooks/use-upstreams", () => ({
     variables: undefined,
   }),
   useUpstreamQuota: () => ({
-    data: undefined,
+    data: mockUpstreamQuotaData,
     isLoading: false,
   }),
 }));
@@ -79,6 +80,7 @@ describe("UpstreamsTable", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUpstreamQuotaData = undefined;
   });
 
   describe("Empty State", () => {
@@ -178,6 +180,55 @@ describe("UpstreamsTable", () => {
 
       const desktop = getDesktopLayout();
       expect(desktop.getAllByText("active").length).toBeGreaterThan(0);
+    });
+
+    it("renders quota exceeded badge and timing hints when quota data is available", () => {
+      mockUpstreamQuotaData = {
+        items: [
+          {
+            upstream_id: "test-id-1",
+            upstream_name: "Test Upstream",
+            is_exceeded: true,
+            rules: [
+              {
+                period_type: "daily",
+                period_hours: null,
+                current_spending: 10,
+                spending_limit: 10,
+                percent_used: 100,
+                is_exceeded: true,
+                resets_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+                estimated_recovery_at: null,
+              },
+              {
+                period_type: "rolling",
+                period_hours: 24,
+                current_spending: 20,
+                spending_limit: 10,
+                percent_used: 200,
+                is_exceeded: true,
+                resets_at: null,
+                estimated_recovery_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+              },
+            ],
+          },
+        ],
+      };
+
+      render(
+        <UpstreamsTable
+          upstreams={[mockUpstream]}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onTest={mockOnTest}
+        />
+      );
+
+      const desktop = getDesktopLayout();
+
+      expect(desktop.getByText("quotaExceeded")).toBeInTheDocument();
+      expect(desktop.getByText(/quotaResets:/)).toBeInTheDocument();
+      expect(desktop.getByText(/quotaRecovery:/)).toBeInTheDocument();
     });
   });
 

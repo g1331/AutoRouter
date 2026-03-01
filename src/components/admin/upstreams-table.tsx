@@ -68,6 +68,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
           percent_used: number;
           is_exceeded: boolean;
           resets_at: string | null;
+          estimated_recovery_at: string | null;
         }[];
       }
     >();
@@ -517,50 +518,85 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                               {quotaMap.has(upstream.id) &&
                                 (() => {
                                   const q = quotaMap.get(upstream.id)!;
-                                  return q.rules.map((rule, rIdx) => {
-                                    const periodLabel =
-                                      rule.period_type === "rolling"
-                                        ? `${t("spendingPeriodRolling")} ${rule.period_hours}h`
-                                        : rule.period_type === "daily"
-                                          ? t("spendingPeriodDaily")
-                                          : t("spendingPeriodMonthly");
-                                    const progressVariant: ProgressVariant = rule.is_exceeded
-                                      ? "error"
-                                      : rule.percent_used >= 80
-                                        ? "warning"
-                                        : "default";
-                                    return (
-                                      <div
-                                        key={rIdx}
-                                        className="mt-1 flex items-center gap-2 font-mono text-[11px]"
-                                      >
-                                        <span className="shrink-0 text-muted-foreground">
-                                          {periodLabel}
-                                        </span>
-                                        <AsciiProgress
-                                          value={rule.current_spending}
-                                          max={rule.spending_limit}
-                                          width={8}
-                                          showPercentage
-                                          variant={progressVariant}
-                                          style="meter"
-                                        />
-                                        <span
-                                          className={cn(
-                                            "ml-auto tabular-nums",
-                                            rule.is_exceeded
-                                              ? "text-destructive"
-                                              : rule.percent_used >= 80
-                                                ? "text-warning"
-                                                : "text-foreground"
-                                          )}
-                                        >
-                                          ${rule.current_spending.toFixed(2)} / $
-                                          {rule.spending_limit.toFixed(2)}
-                                        </span>
-                                      </div>
-                                    );
-                                  });
+                                  return (
+                                    <>
+                                      {q.is_exceeded && (
+                                        <div className="mt-1 flex items-center gap-2 font-mono text-[11px]">
+                                          <Badge
+                                            variant="outline"
+                                            className="border-destructive/40 text-destructive"
+                                          >
+                                            {t("quotaExceeded")}
+                                          </Badge>
+                                        </div>
+                                      )}
+                                      {q.rules.map((rule, rIdx) => {
+                                        const periodLabel =
+                                          rule.period_type === "rolling"
+                                            ? `${t("spendingPeriodRolling")} ${rule.period_hours}h`
+                                            : rule.period_type === "daily"
+                                              ? t("spendingPeriodDaily")
+                                              : t("spendingPeriodMonthly");
+                                        const progressVariant: ProgressVariant = rule.is_exceeded
+                                          ? "error"
+                                          : rule.percent_used >= 80
+                                            ? "warning"
+                                            : "default";
+                                        const timingText =
+                                          rule.period_type === "rolling"
+                                            ? rule.estimated_recovery_at
+                                              ? `${t("quotaRecovery")}: ${formatDistanceToNow(
+                                                  new Date(rule.estimated_recovery_at),
+                                                  { addSuffix: true, locale: dateLocale }
+                                                )}`
+                                              : null
+                                            : rule.resets_at
+                                              ? `${t("quotaResets")}: ${formatDistanceToNow(
+                                                  new Date(rule.resets_at),
+                                                  { addSuffix: true, locale: dateLocale }
+                                                )}`
+                                              : null;
+
+                                        return (
+                                          <div key={rIdx} className="mt-1 font-mono text-[11px]">
+                                            <div className="flex items-center gap-2">
+                                              <span className="shrink-0 text-muted-foreground">
+                                                {periodLabel}
+                                              </span>
+                                              <AsciiProgress
+                                                value={rule.current_spending}
+                                                max={rule.spending_limit}
+                                                width={8}
+                                                showPercentage
+                                                variant={progressVariant}
+                                                style="meter"
+                                              />
+                                              <span
+                                                className={cn(
+                                                  "ml-auto tabular-nums",
+                                                  rule.is_exceeded
+                                                    ? "text-destructive"
+                                                    : rule.percent_used >= 80
+                                                      ? "text-warning"
+                                                      : "text-foreground"
+                                                )}
+                                              >
+                                                ${rule.current_spending.toFixed(2)} / $
+                                                {rule.spending_limit.toFixed(2)}
+                                              </span>
+                                            </div>
+                                            {timingText && (
+                                              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                                                <span className="ml-auto tabular-nums">
+                                                  {timingText}
+                                                </span>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </>
+                                  );
                                 })()}
                             </TableCell>
                             <TableCell className="hidden whitespace-nowrap pr-2 text-right 2xl:table-cell">
@@ -704,47 +740,83 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                         {quotaMap.has(upstream.id) &&
                           (() => {
                             const q = quotaMap.get(upstream.id)!;
-                            return q.rules.map((rule, rIdx) => {
-                              const periodLabel =
-                                rule.period_type === "rolling"
-                                  ? `${t("spendingPeriodRolling")} ${rule.period_hours}h`
-                                  : rule.period_type === "daily"
-                                    ? t("spendingPeriodDaily")
-                                    : t("spendingPeriodMonthly");
-                              const progressVariant: ProgressVariant = rule.is_exceeded
-                                ? "error"
-                                : rule.percent_used >= 80
-                                  ? "warning"
-                                  : "default";
-                              return (
-                                <div key={rIdx} className="flex items-center justify-between gap-2">
-                                  <span className="shrink-0 text-muted-foreground">
-                                    {periodLabel}
-                                  </span>
-                                  <AsciiProgress
-                                    value={rule.current_spending}
-                                    max={rule.spending_limit}
-                                    width={8}
-                                    showPercentage
-                                    variant={progressVariant}
-                                    style="meter"
-                                  />
-                                  <span
-                                    className={cn(
-                                      "tabular-nums",
-                                      rule.is_exceeded
-                                        ? "text-destructive"
-                                        : rule.percent_used >= 80
-                                          ? "text-warning"
-                                          : "text-foreground"
-                                    )}
-                                  >
-                                    ${rule.current_spending.toFixed(2)} / $
-                                    {rule.spending_limit.toFixed(2)}
-                                  </span>
-                                </div>
-                              );
-                            });
+                            return (
+                              <>
+                                {q.is_exceeded && (
+                                  <div className="mt-2 flex items-center gap-2 font-mono text-[11px]">
+                                    <Badge
+                                      variant="outline"
+                                      className="border-destructive/40 text-destructive"
+                                    >
+                                      {t("quotaExceeded")}
+                                    </Badge>
+                                  </div>
+                                )}
+                                {q.rules.map((rule, rIdx) => {
+                                  const periodLabel =
+                                    rule.period_type === "rolling"
+                                      ? `${t("spendingPeriodRolling")} ${rule.period_hours}h`
+                                      : rule.period_type === "daily"
+                                        ? t("spendingPeriodDaily")
+                                        : t("spendingPeriodMonthly");
+                                  const progressVariant: ProgressVariant = rule.is_exceeded
+                                    ? "error"
+                                    : rule.percent_used >= 80
+                                      ? "warning"
+                                      : "default";
+                                  const timingText =
+                                    rule.period_type === "rolling"
+                                      ? rule.estimated_recovery_at
+                                        ? `${t("quotaRecovery")}: ${formatDistanceToNow(
+                                            new Date(rule.estimated_recovery_at),
+                                            { addSuffix: true, locale: dateLocale }
+                                          )}`
+                                        : null
+                                      : rule.resets_at
+                                        ? `${t("quotaResets")}: ${formatDistanceToNow(
+                                            new Date(rule.resets_at),
+                                            { addSuffix: true, locale: dateLocale }
+                                          )}`
+                                        : null;
+
+                                  return (
+                                    <div key={rIdx} className="mt-2 font-mono text-[11px]">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="shrink-0 text-muted-foreground">
+                                          {periodLabel}
+                                        </span>
+                                        <AsciiProgress
+                                          value={rule.current_spending}
+                                          max={rule.spending_limit}
+                                          width={8}
+                                          showPercentage
+                                          variant={progressVariant}
+                                          style="meter"
+                                        />
+                                        <span
+                                          className={cn(
+                                            "tabular-nums",
+                                            rule.is_exceeded
+                                              ? "text-destructive"
+                                              : rule.percent_used >= 80
+                                                ? "text-warning"
+                                                : "text-foreground"
+                                          )}
+                                        >
+                                          ${rule.current_spending.toFixed(2)} / $
+                                          {rule.spending_limit.toFixed(2)}
+                                        </span>
+                                      </div>
+                                      {timingText && (
+                                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                                          <span className="ml-auto tabular-nums">{timingText}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </>
+                            );
                           })()}
                         <div className="flex items-center justify-between gap-2">
                           <span className="shrink-0 text-muted-foreground">

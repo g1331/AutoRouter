@@ -409,6 +409,30 @@ describe("upstream-quota-tracker", () => {
     });
   });
 
+  describe("estimateRecoveryTime", () => {
+    it("estimates recovery time for rolling rule when exceeded", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2025-06-15T14:30:00Z"));
+
+      quotaTracker.setRules("up-1", [{ period_type: "rolling", limit: 100, period_hours: 24 }]);
+      quotaTracker.recordSpending("up-1", 150); // excess = 50
+
+      whereMock.mockResolvedValueOnce([{ totalCost: "60" }]);
+      fromMock.mockReturnValue({ where: whereMock });
+      selectMock.mockReturnValue({ from: fromMock });
+
+      const recovery = await quotaTracker.estimateRecoveryTime("up-1", {
+        period_type: "rolling",
+        limit: 100,
+        period_hours: 24,
+      });
+
+      expect(recovery).toEqual(new Date("2025-06-15T15:30:00Z"));
+
+      vi.useRealTimers();
+    });
+  });
+
   describe("reset", () => {
     it("clears all internal state", () => {
       quotaTracker.setRules("up-1", [{ period_type: "daily", limit: 100 }]);
