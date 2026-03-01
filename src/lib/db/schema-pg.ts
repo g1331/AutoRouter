@@ -63,6 +63,9 @@ export const upstreams = pgTable(
     } | null>(), // Session affinity migration configuration
     billingInputMultiplier: doublePrecision("billing_input_multiplier").notNull().default(1),
     billingOutputMultiplier: doublePrecision("billing_output_multiplier").notNull().default(1),
+    spendingLimit: doublePrecision("spending_limit"),
+    spendingPeriodType: varchar("spending_period_type", { length: 16 }),
+    spendingPeriodHours: integer("spending_period_hours"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

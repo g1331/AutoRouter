@@ -1,9 +1,9 @@
 ## 1. 数据库 Schema 与迁移
 
-- [ ] 1.1 在 `schema-pg.ts` 和 `schema-sqlite.ts` 的 `upstreams` 表中新增 `spendingLimit`（double/real, nullable）、`spendingPeriodType`（varchar, nullable）、`spendingPeriodHours`（integer, nullable）三个字段
-- [ ] 1.2 在 `schema.ts` 中导出新增字段的类型（确认 `Upstream` / `NewUpstream` 类型自动继承）
-- [ ] 1.3 执行 `pnpm db:generate` 生成 Drizzle 迁移文件，验证迁移 SQL 正确性
-- [ ] 1.4 执行 `pnpm db:push` 将 schema 变更应用到开发数据库
+- [x] 1.1 在 `schema-pg.ts` 和 `schema-sqlite.ts` 的 `upstreams` 表中新增 `spendingLimit`（double/real, nullable）、`spendingPeriodType`（varchar, nullable）、`spendingPeriodHours`（integer, nullable）三个字段
+- [x] 1.2 在 `schema.ts` 中导出新增字段的类型（确认 `Upstream` / `NewUpstream` 类型自动继承）
+- [x] 1.3 执行 `pnpm db:generate` 生成 Drizzle 迁移文件，验证迁移 SQL 正确性
+- [x] 1.4 执行 `pnpm db:push` 将 schema 变更应用到开发数据库
 
 ## 2. QuotaTracker 核心服务
 
