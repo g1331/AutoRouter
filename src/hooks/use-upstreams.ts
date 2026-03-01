@@ -82,6 +82,7 @@ export function useCreateUpstream() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["upstreams"] });
       queryClient.invalidateQueries({ queryKey: ["stats", "upstreams"] });
+      queryClient.invalidateQueries({ queryKey: ["upstreams", "quota"] });
       toast.success("Upstream 已创建");
     },
     onError: (error: Error) => {
@@ -102,6 +103,7 @@ export function useUpdateUpstream() {
       apiClient.put<Upstream>(`/admin/upstreams/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["upstreams"] });
+      queryClient.invalidateQueries({ queryKey: ["upstreams", "quota"] });
       toast.success("Upstream 已更新");
     },
     onError: (error: Error) => {

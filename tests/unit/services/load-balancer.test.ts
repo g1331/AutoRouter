@@ -51,11 +51,15 @@ vi.mock("@/lib/services/circuit-breaker", () => ({
 
 const mockIsWithinQuota = vi.fn().mockReturnValue(true);
 const mockQuotaInitialize = vi.fn(async () => {});
+const mockQuotaSyncFromDb = vi.fn(async () => {});
+const mockQuotaSyncUpstreamFromDb = vi.fn(async () => {});
 vi.mock("@/lib/services/upstream-quota-tracker", () => ({
   quotaTracker: {
     isWithinQuota: (...args: unknown[]) => mockIsWithinQuota(...args),
     ensureInitialized: () => true,
     initialize: (...args: unknown[]) => mockQuotaInitialize(...args),
+    syncFromDb: (...args: unknown[]) => mockQuotaSyncFromDb(...args),
+    syncUpstreamFromDb: (...args: unknown[]) => mockQuotaSyncUpstreamFromDb(...args),
   },
 }));
 
@@ -201,6 +205,8 @@ describe("load-balancer", () => {
     mockAcquireCircuitBreakerPermit.mockResolvedValue(undefined);
     mockIsWithinQuota.mockReturnValue(true);
     mockQuotaInitialize.mockResolvedValue(undefined);
+    mockQuotaSyncFromDb.mockResolvedValue(undefined);
+    mockQuotaSyncUpstreamFromDb.mockResolvedValue(undefined);
   });
 
   // =========================================================================
@@ -713,6 +719,35 @@ describe("load-balancer", () => {
         expect(entry?.upstreamId).toBe("u1");
       });
 
+      it("should refresh quota and keep bound upstream when quota cache is stale", async () => {
+        const u1 = makeUpstream({ id: "u1", priority: 0 });
+        const u2 = makeUpstream({ id: "u2", priority: 0 });
+        mockFindMany.mockResolvedValue([u1, u2]);
+
+        let within = false;
+        mockIsWithinQuota.mockImplementation((id: string) => (id === "u1" ? within : true));
+        mockQuotaSyncUpstreamFromDb.mockImplementation(async () => {
+          within = true;
+        });
+
+        // Pre-populate affinity cache with u1
+        affinityStore.set("key1", "openai_chat_compatible", "session-abc", "u1", 1024);
+
+        const result = await selectFromProviderType("openai", undefined, undefined, {
+          apiKeyId: "key1",
+          sessionId: "session-abc",
+          affinityScope: "openai_chat_compatible",
+          contentLength: 2048,
+        });
+
+        expect(mockQuotaSyncUpstreamFromDb).toHaveBeenCalledTimes(1);
+        expect(result.upstream.id).toBe("u1");
+        expect(result.affinityHit).toBe(true);
+
+        const entry = affinityStore.get("key1", "openai_chat_compatible", "session-abc");
+        expect(entry?.upstreamId).toBe("u1");
+      });
+
       it("should create new affinity entry on first request", async () => {
         const u1 = makeUpstream({ id: "u1", priority: 0 });
         mockFindMany.mockResolvedValue([u1]);
@@ -1066,6 +1101,21 @@ describe("load-balancer", () => {
       expect(result.upstream.id).toBe("p1a");
       expect(result.selectedTier).toBe(1);
       expect(result.quotaFiltered).toBe(2);
+    });
+
+    it("resyncs quota from DB once when all candidates are excluded by quota", async () => {
+      const u1 = makeUpstream({ id: "u1", priority: 0 });
+      mockFindMany.mockResolvedValue([u1]);
+
+      mockIsWithinQuota.mockReturnValue(false);
+      mockQuotaSyncFromDb.mockImplementation(async () => {
+        mockIsWithinQuota.mockReturnValue(true);
+      });
+
+      const result = await selectFromUpstreamCandidates(["u1"]);
+
+      expect(mockQuotaSyncFromDb).toHaveBeenCalledTimes(1);
+      expect(result.upstream.id).toBe("u1");
     });
   });
 });

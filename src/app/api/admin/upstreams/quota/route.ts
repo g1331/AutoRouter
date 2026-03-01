@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
   }
 
   await quotaTracker.initialize();
+  await quotaTracker.syncFromDb();
   const statuses = quotaTracker.getAllQuotaStatuses();
 
   const items = statuses.map((s) => ({

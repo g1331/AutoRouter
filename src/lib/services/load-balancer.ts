@@ -498,7 +498,20 @@ async function selectFromUpstreamPool(
 
       // Respect excludeIds: if bound upstream is excluded, skip affinity and reselect
       const isExcluded = excludeIds?.includes(affinityEntry.upstreamId) ?? false;
-      const isWithinQuota = quotaTracker.isWithinQuota(affinityEntry.upstreamId);
+      let isWithinQuota = quotaTracker.isWithinQuota(affinityEntry.upstreamId);
+
+      if (!isWithinQuota && boundUpstream) {
+        try {
+          await quotaTracker.syncUpstreamFromDb(
+            boundUpstream.upstream.id,
+            boundUpstream.upstream.name,
+            boundUpstream.upstream.spendingRules ?? null
+          );
+          isWithinQuota = quotaTracker.isWithinQuota(affinityEntry.upstreamId);
+        } catch {
+          // Best-effort quota refresh only; fall back to cached decision.
+        }
+      }
 
       if (boundUpstream && isUpstreamAvailable(boundUpstream) && !isExcluded && isWithinQuota) {
         // Check if we should migrate to higher priority upstream
@@ -648,6 +661,7 @@ async function performTieredSelection(
 
   let totalCircuitBreakerFiltered = 0;
   let totalQuotaFiltered = 0;
+  let didResyncQuota = false;
 
   // Try each tier in priority order
   for (const [tier, tierUpstreams] of sortedTiers) {
@@ -656,7 +670,21 @@ async function performTieredSelection(
     totalCircuitBreakerFiltered += afterCircuitBreaker.excludedCount;
 
     // Filter by spending quota
-    const afterQuota = filterBySpendingQuota(afterCircuitBreaker.allowed);
+    let afterQuota = filterBySpendingQuota(afterCircuitBreaker.allowed);
+
+    if (
+      afterQuota.allowed.length === 0 &&
+      afterCircuitBreaker.allowed.length > 0 &&
+      didResyncQuota === false
+    ) {
+      didResyncQuota = true;
+      try {
+        await quotaTracker.syncFromDb();
+        afterQuota = filterBySpendingQuota(afterCircuitBreaker.allowed);
+      } catch {
+        // Best-effort resync only; fall back to cached decision.
+      }
+    }
     totalQuotaFiltered += afterQuota.excludedCount;
 
     // Filter by exclusion list (health status is display-only, not used for routing)
