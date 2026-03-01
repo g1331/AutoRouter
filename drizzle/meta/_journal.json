@@ -120,6 +120,13 @@
       "when": 1772531200000,
       "tag": "0016_upstream_spending_quota",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1772617600000,
+      "tag": "0017_spending_rules_json",
+      "breakpoints": true
     }
   ]
 }

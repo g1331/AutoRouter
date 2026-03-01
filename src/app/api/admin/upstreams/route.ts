@@ -59,9 +59,16 @@ const createUpstreamSchema = z
     affinity_migration: affinityMigrationConfigSchema.nullable().optional(),
     billing_input_multiplier: z.number().min(0).max(100).default(1),
     billing_output_multiplier: z.number().min(0).max(100).default(1),
-    spending_limit: z.number().positive().nullable().optional(),
-    spending_period_type: z.enum(["daily", "monthly", "rolling"]).nullable().optional(),
-    spending_period_hours: z.number().int().min(1).max(8760).nullable().optional(),
+    spending_rules: z
+      .array(
+        z.object({
+          period_type: z.enum(["daily", "monthly", "rolling"]),
+          limit: z.number().positive(),
+          period_hours: z.number().int().min(1).max(8760).optional(),
+        })
+      )
+      .nullable()
+      .optional(),
   })
   .refine(
     (data) =>
@@ -73,12 +80,15 @@ const createUpstreamSchema = z
     }
   )
   .refine(
-    (data) =>
-      data.spending_period_type !== "rolling" ||
-      (data.spending_period_hours != null && data.spending_period_hours >= 1),
+    (data) => {
+      if (!data.spending_rules) return true;
+      return data.spending_rules.every(
+        (r) => r.period_type !== "rolling" || (r.period_hours != null && r.period_hours >= 1)
+      );
+    },
     {
-      message: "spending_period_hours is required when spending_period_type is 'rolling'",
-      path: ["spending_period_hours"],
+      message: "period_hours is required when period_type is 'rolling'",
+      path: ["spending_rules"],
     }
   );
 
@@ -147,9 +157,7 @@ export async function POST(request: NextRequest) {
       affinityMigration: validated.affinity_migration ?? null,
       billingInputMultiplier: validated.billing_input_multiplier,
       billingOutputMultiplier: validated.billing_output_multiplier,
-      spendingLimit: validated.spending_limit ?? null,
-      spendingPeriodType: validated.spending_period_type ?? null,
-      spendingPeriodHours: validated.spending_period_hours ?? null,
+      spendingRules: validated.spending_rules ?? null,
     };
 
     const result = await createUpstream(input);

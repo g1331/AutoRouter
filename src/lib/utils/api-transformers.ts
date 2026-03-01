@@ -86,9 +86,9 @@ export interface UpstreamApiResponse {
   } | null;
   billing_input_multiplier: number;
   billing_output_multiplier: number;
-  spending_limit: number | null;
-  spending_period_type: string | null;
-  spending_period_hours: number | null;
+  spending_rules:
+    | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
+    | null;
   created_at: string;
   updated_at: string;
   circuit_breaker: UpstreamCircuitBreakerApiResponse | null;
@@ -129,9 +129,7 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
     affinity_migration: upstream.affinityMigration,
     billing_input_multiplier: upstream.billingInputMultiplier ?? 1,
     billing_output_multiplier: upstream.billingOutputMultiplier ?? 1,
-    spending_limit: upstream.spendingLimit,
-    spending_period_type: upstream.spendingPeriodType,
-    spending_period_hours: upstream.spendingPeriodHours,
+    spending_rules: upstream.spendingRules ?? null,
     created_at: upstream.createdAt.toISOString(),
     updated_at: upstream.updatedAt.toISOString(),
     circuit_breaker: upstream.circuitBreaker

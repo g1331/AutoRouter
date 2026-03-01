@@ -64,9 +64,16 @@ const updateUpstreamSchema = z
     affinity_migration: affinityMigrationConfigSchema.nullable().optional(),
     billing_input_multiplier: z.number().min(0).max(100).optional(),
     billing_output_multiplier: z.number().min(0).max(100).optional(),
-    spending_limit: z.number().positive().nullable().optional(),
-    spending_period_type: z.enum(["daily", "monthly", "rolling"]).nullable().optional(),
-    spending_period_hours: z.number().int().min(1).max(8760).nullable().optional(),
+    spending_rules: z
+      .array(
+        z.object({
+          period_type: z.enum(["daily", "monthly", "rolling"]),
+          limit: z.number().positive(),
+          period_hours: z.number().int().min(1).max(8760).optional(),
+        })
+      )
+      .nullable()
+      .optional(),
   })
   .refine(
     (data) =>
@@ -78,12 +85,15 @@ const updateUpstreamSchema = z
     }
   )
   .refine(
-    (data) =>
-      data.spending_period_type !== "rolling" ||
-      (data.spending_period_hours != null && data.spending_period_hours >= 1),
+    (data) => {
+      if (!data.spending_rules) return true;
+      return data.spending_rules.every(
+        (r) => r.period_type !== "rolling" || (r.period_hours != null && r.period_hours >= 1)
+      );
+    },
     {
-      message: "spending_period_hours is required when spending_period_type is 'rolling'",
-      path: ["spending_period_hours"],
+      message: "period_hours is required when period_type is 'rolling'",
+      path: ["spending_rules"],
     }
   );
 
@@ -165,14 +175,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     if (validated.billing_output_multiplier !== undefined) {
       input.billingOutputMultiplier = validated.billing_output_multiplier;
     }
-    if (validated.spending_limit !== undefined) {
-      input.spendingLimit = validated.spending_limit;
-    }
-    if (validated.spending_period_type !== undefined) {
-      input.spendingPeriodType = validated.spending_period_type;
-    }
-    if (validated.spending_period_hours !== undefined) {
-      input.spendingPeriodHours = validated.spending_period_hours;
+    if (validated.spending_rules !== undefined) {
+      input.spendingRules = validated.spending_rules;
     }
 
     const result = await updateUpstream(id, input);

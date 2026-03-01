@@ -54,12 +54,16 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
     const map = new Map<
       string,
       {
-        percent_used: number;
         is_exceeded: boolean;
-        current_spending: number;
-        spending_limit: number;
-        resets_at: string | null;
-        estimated_recovery_at: string | null;
+        rules: {
+          period_type: "daily" | "monthly" | "rolling";
+          period_hours: number | null;
+          current_spending: number;
+          spending_limit: number;
+          percent_used: number;
+          is_exceeded: boolean;
+          resets_at: string | null;
+        }[];
       }
     >();
     if (quotaData?.items) {
@@ -508,39 +512,38 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                               {quotaMap.has(upstream.id) &&
                                 (() => {
                                   const q = quotaMap.get(upstream.id)!;
-                                  const countdownDate = q.estimated_recovery_at ?? q.resets_at;
-                                  return (
-                                    <>
-                                      <div className="mt-1 flex items-center gap-2 font-mono text-[11px]">
+                                  return q.rules.map((rule, rIdx) => {
+                                    const periodLabel =
+                                      rule.period_type === "rolling"
+                                        ? `${t("spendingPeriodRolling")} ${rule.period_hours}h`
+                                        : rule.period_type === "daily"
+                                          ? t("spendingPeriodDaily")
+                                          : t("spendingPeriodMonthly");
+                                    return (
+                                      <div
+                                        key={rIdx}
+                                        className="mt-1 flex items-center gap-2 font-mono text-[11px]"
+                                      >
                                         <span className="shrink-0 text-muted-foreground">
-                                          {t("spendingQuota")}
+                                          {periodLabel}
                                         </span>
                                         <span
                                           className={cn(
                                             "ml-auto tabular-nums",
-                                            q.is_exceeded
+                                            rule.is_exceeded
                                               ? "text-destructive"
-                                              : q.percent_used >= 80
+                                              : rule.percent_used >= 80
                                                 ? "text-warning"
                                                 : "text-foreground"
                                           )}
                                         >
-                                          ${q.current_spending.toFixed(2)} / $
-                                          {q.spending_limit.toFixed(2)} ({q.percent_used.toFixed(0)}
-                                          %)
+                                          ${rule.current_spending.toFixed(2)} / $
+                                          {rule.spending_limit.toFixed(2)} (
+                                          {rule.percent_used.toFixed(0)}%)
                                         </span>
                                       </div>
-                                      {countdownDate && (
-                                        <div className="mt-0.5 text-right font-mono text-[10px] text-muted-foreground">
-                                          {q.is_exceeded ? t("quotaRecovery") : t("quotaResets")}{" "}
-                                          {formatDistanceToNow(new Date(countdownDate), {
-                                            addSuffix: true,
-                                            locale: dateLocale,
-                                          })}
-                                        </div>
-                                      )}
-                                    </>
-                                  );
+                                    );
+                                  });
                                 })()}
                             </TableCell>
                             <TableCell className="hidden whitespace-nowrap pr-2 text-right 2xl:table-cell">
@@ -684,42 +687,35 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                         {quotaMap.has(upstream.id) &&
                           (() => {
                             const q = quotaMap.get(upstream.id)!;
-                            const countdownDate = q.estimated_recovery_at ?? q.resets_at;
-                            return (
-                              <>
-                                <div className="flex items-center justify-between gap-2">
+                            return q.rules.map((rule, rIdx) => {
+                              const periodLabel =
+                                rule.period_type === "rolling"
+                                  ? `${t("spendingPeriodRolling")} ${rule.period_hours}h`
+                                  : rule.period_type === "daily"
+                                    ? t("spendingPeriodDaily")
+                                    : t("spendingPeriodMonthly");
+                              return (
+                                <div key={rIdx} className="flex items-center justify-between gap-2">
                                   <span className="shrink-0 text-muted-foreground">
-                                    {t("spendingQuota")}
+                                    {periodLabel}
                                   </span>
                                   <span
                                     className={cn(
                                       "tabular-nums",
-                                      q.is_exceeded
+                                      rule.is_exceeded
                                         ? "text-destructive"
-                                        : q.percent_used >= 80
+                                        : rule.percent_used >= 80
                                           ? "text-warning"
                                           : "text-foreground"
                                     )}
                                   >
-                                    ${q.current_spending.toFixed(2)} / $
-                                    {q.spending_limit.toFixed(2)} ({q.percent_used.toFixed(0)}%)
+                                    ${rule.current_spending.toFixed(2)} / $
+                                    {rule.spending_limit.toFixed(2)} ({rule.percent_used.toFixed(0)}
+                                    %)
                                   </span>
                                 </div>
-                                {countdownDate && (
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="shrink-0 text-muted-foreground">
-                                      {q.is_exceeded ? t("quotaRecovery") : t("quotaResets")}
-                                    </span>
-                                    <span className="text-muted-foreground">
-                                      {formatDistanceToNow(new Date(countdownDate), {
-                                        addSuffix: true,
-                                        locale: dateLocale,
-                                      })}
-                                    </span>
-                                  </div>
-                                )}
-                              </>
-                            );
+                              );
+                            });
                           })()}
                         <div className="flex items-center justify-between gap-2">
                           <span className="shrink-0 text-muted-foreground">

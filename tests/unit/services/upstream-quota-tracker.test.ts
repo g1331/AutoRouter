@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { QuotaConfig } from "@/lib/services/upstream-quota-tracker";
+import type { SpendingRule } from "@/lib/services/upstream-quota-tracker";
 
 const { findManyMock, selectMock, fromMock, whereMock } = vi.hoisted(() => ({
   findManyMock: vi.fn(async () => [] as unknown[]),
@@ -39,9 +39,7 @@ vi.mock("@/lib/db", () => ({
   upstreams: {
     id: "id",
     name: "name",
-    spendingLimit: "spending_limit",
-    spendingPeriodType: "spending_period_type",
-    spendingPeriodHours: "spending_period_hours",
+    spendingRules: "spending_rules",
   },
 }));
 
@@ -52,9 +50,9 @@ import {
   toStartOfTomorrowUtc,
   toStartOfNextMonthUtc,
   getRollingWindowStart,
-  getPeriodStart,
-  getResetsAt,
-  extractQuotaConfig,
+  getPeriodStartForRule,
+  getResetsAtForRule,
+  extractSpendingRules,
 } from "@/lib/services/upstream-quota-tracker";
 
 describe("upstream-quota-tracker", () => {
@@ -67,236 +65,198 @@ describe("upstream-quota-tracker", () => {
     const ref = new Date("2025-06-15T14:30:00Z");
 
     it("toStartOfTodayUtc", () => {
-      const result = toStartOfTodayUtc(ref);
-      expect(result).toEqual(new Date("2025-06-15T00:00:00Z"));
+      expect(toStartOfTodayUtc(ref)).toEqual(new Date("2025-06-15T00:00:00Z"));
     });
 
     it("toStartOfMonthUtc", () => {
-      const result = toStartOfMonthUtc(ref);
-      expect(result).toEqual(new Date("2025-06-01T00:00:00Z"));
+      expect(toStartOfMonthUtc(ref)).toEqual(new Date("2025-06-01T00:00:00Z"));
     });
 
     it("toStartOfTomorrowUtc", () => {
-      const result = toStartOfTomorrowUtc(ref);
-      expect(result).toEqual(new Date("2025-06-16T00:00:00Z"));
+      expect(toStartOfTomorrowUtc(ref)).toEqual(new Date("2025-06-16T00:00:00Z"));
     });
 
     it("toStartOfNextMonthUtc", () => {
-      const result = toStartOfNextMonthUtc(ref);
-      expect(result).toEqual(new Date("2025-07-01T00:00:00Z"));
+      expect(toStartOfNextMonthUtc(ref)).toEqual(new Date("2025-07-01T00:00:00Z"));
     });
 
     it("getRollingWindowStart with 24 hours", () => {
-      const result = getRollingWindowStart(24, ref);
-      expect(result).toEqual(new Date("2025-06-14T14:30:00Z"));
+      expect(getRollingWindowStart(24, ref)).toEqual(new Date("2025-06-14T14:30:00Z"));
     });
 
     it("getRollingWindowStart with 6 hours", () => {
-      const result = getRollingWindowStart(6, ref);
-      expect(result).toEqual(new Date("2025-06-15T08:30:00Z"));
+      expect(getRollingWindowStart(6, ref)).toEqual(new Date("2025-06-15T08:30:00Z"));
     });
   });
 
-  describe("getPeriodStart", () => {
+  describe("getPeriodStartForRule", () => {
     const ref = new Date("2025-06-15T14:30:00Z");
 
     it("daily", () => {
-      const c: QuotaConfig = {
-        spendingLimit: 10,
-        spendingPeriodType: "daily",
-        spendingPeriodHours: null,
-      };
-      expect(getPeriodStart(c, ref)).toEqual(new Date("2025-06-15T00:00:00Z"));
+      const r: SpendingRule = { period_type: "daily", limit: 10 };
+      expect(getPeriodStartForRule(r, ref)).toEqual(new Date("2025-06-15T00:00:00Z"));
     });
 
     it("monthly", () => {
-      const c: QuotaConfig = {
-        spendingLimit: 10,
-        spendingPeriodType: "monthly",
-        spendingPeriodHours: null,
-      };
-      expect(getPeriodStart(c, ref)).toEqual(new Date("2025-06-01T00:00:00Z"));
+      const r: SpendingRule = { period_type: "monthly", limit: 10 };
+      expect(getPeriodStartForRule(r, ref)).toEqual(new Date("2025-06-01T00:00:00Z"));
     });
 
     it("rolling", () => {
-      const c: QuotaConfig = {
-        spendingLimit: 10,
-        spendingPeriodType: "rolling",
-        spendingPeriodHours: 12,
-      };
-      expect(getPeriodStart(c, ref)).toEqual(new Date("2025-06-15T02:30:00Z"));
+      const r: SpendingRule = { period_type: "rolling", limit: 10, period_hours: 12 };
+      expect(getPeriodStartForRule(r, ref)).toEqual(new Date("2025-06-15T02:30:00Z"));
     });
 
-    it("rolling defaults to 24h when spendingPeriodHours is null", () => {
-      const c: QuotaConfig = {
-        spendingLimit: 10,
-        spendingPeriodType: "rolling",
-        spendingPeriodHours: null,
-      };
-      expect(getPeriodStart(c, ref)).toEqual(new Date("2025-06-14T14:30:00Z"));
+    it("rolling defaults to 24h when period_hours is undefined", () => {
+      const r: SpendingRule = { period_type: "rolling", limit: 10 };
+      expect(getPeriodStartForRule(r, ref)).toEqual(new Date("2025-06-14T14:30:00Z"));
     });
   });
 
-  describe("getResetsAt", () => {
+  describe("getResetsAtForRule", () => {
     const ref = new Date("2025-06-15T14:30:00Z");
 
     it("daily resets at start of next day", () => {
-      const c: QuotaConfig = {
-        spendingLimit: 10,
-        spendingPeriodType: "daily",
-        spendingPeriodHours: null,
-      };
-      expect(getResetsAt(c, ref)).toEqual(new Date("2025-06-16T00:00:00Z"));
+      const r: SpendingRule = { period_type: "daily", limit: 10 };
+      expect(getResetsAtForRule(r, ref)).toEqual(new Date("2025-06-16T00:00:00Z"));
     });
 
     it("monthly resets at start of next month", () => {
-      const c: QuotaConfig = {
-        spendingLimit: 10,
-        spendingPeriodType: "monthly",
-        spendingPeriodHours: null,
-      };
-      expect(getResetsAt(c, ref)).toEqual(new Date("2025-07-01T00:00:00Z"));
+      const r: SpendingRule = { period_type: "monthly", limit: 10 };
+      expect(getResetsAtForRule(r, ref)).toEqual(new Date("2025-07-01T00:00:00Z"));
     });
 
     it("rolling has no fixed reset time", () => {
-      const c: QuotaConfig = {
-        spendingLimit: 10,
-        spendingPeriodType: "rolling",
-        spendingPeriodHours: 12,
-      };
-      expect(getResetsAt(c, ref)).toBeNull();
+      const r: SpendingRule = { period_type: "rolling", limit: 10, period_hours: 12 };
+      expect(getResetsAtForRule(r, ref)).toBeNull();
     });
   });
 
-  describe("extractQuotaConfig", () => {
-    it("returns config for valid upstream", () => {
+  describe("extractSpendingRules", () => {
+    it("returns rules for valid upstream", () => {
       const upstream = {
-        spendingLimit: 50,
-        spendingPeriodType: "daily",
-        spendingPeriodHours: null,
+        spendingRules: [{ period_type: "daily", limit: 50 }],
       };
-      const result = extractQuotaConfig(upstream as never);
-      expect(result).toEqual({
-        spendingLimit: 50,
-        spendingPeriodType: "daily",
-        spendingPeriodHours: null,
-      });
+      const result = extractSpendingRules(upstream as never);
+      expect(result).toEqual([{ period_type: "daily", limit: 50 }]);
     });
 
-    it("returns null when spendingLimit is null", () => {
-      const upstream = {
-        spendingLimit: null,
-        spendingPeriodType: "daily",
-        spendingPeriodHours: null,
-      };
-      expect(extractQuotaConfig(upstream as never)).toBeNull();
+    it("returns empty array when spendingRules is null", () => {
+      const upstream = { spendingRules: null };
+      expect(extractSpendingRules(upstream as never)).toEqual([]);
     });
 
-    it("returns null when spendingPeriodType is null", () => {
-      const upstream = {
-        spendingLimit: 50,
-        spendingPeriodType: null,
-        spendingPeriodHours: null,
-      };
-      expect(extractQuotaConfig(upstream as never)).toBeNull();
+    it("returns empty array when spendingRules is empty", () => {
+      const upstream = { spendingRules: [] };
+      expect(extractSpendingRules(upstream as never)).toEqual([]);
     });
 
-    it("returns null for invalid period type", () => {
+    it("filters out invalid rules", () => {
       const upstream = {
-        spendingLimit: 50,
-        spendingPeriodType: "weekly",
-        spendingPeriodHours: null,
+        spendingRules: [
+          { period_type: "daily", limit: 50 },
+          { period_type: "weekly", limit: 100 },
+          { period_type: "monthly", limit: 0 },
+          { period_type: "rolling", limit: 30, period_hours: 5 },
+        ],
       };
-      expect(extractQuotaConfig(upstream as never)).toBeNull();
+      const result = extractSpendingRules(upstream as never);
+      expect(result).toEqual([
+        { period_type: "daily", limit: 50 },
+        { period_type: "rolling", limit: 30, period_hours: 5 },
+      ]);
     });
   });
 
   describe("isWithinQuota", () => {
-    it("returns true when no config is set", () => {
+    it("returns true when no rules are set", () => {
       expect(quotaTracker.isWithinQuota("nonexistent")).toBe(true);
     });
 
     it("returns true when no spending recorded", () => {
-      quotaTracker.setConfig("up-1", {
-        spendingLimit: 100,
-        spendingPeriodType: "daily",
-        spendingPeriodHours: null,
-      });
+      quotaTracker.setRules("up-1", [{ period_type: "daily", limit: 100 }]);
       expect(quotaTracker.isWithinQuota("up-1")).toBe(true);
     });
 
     it("returns true when spending is below limit", () => {
-      quotaTracker.setConfig("up-1", {
-        spendingLimit: 100,
-        spendingPeriodType: "daily",
-        spendingPeriodHours: null,
-      });
+      quotaTracker.setRules("up-1", [{ period_type: "daily", limit: 100 }]);
       quotaTracker.recordSpending("up-1", 50);
       expect(quotaTracker.isWithinQuota("up-1")).toBe(true);
     });
 
     it("returns false when spending reaches limit", () => {
-      quotaTracker.setConfig("up-1", {
-        spendingLimit: 100,
-        spendingPeriodType: "daily",
-        spendingPeriodHours: null,
-      });
+      quotaTracker.setRules("up-1", [{ period_type: "daily", limit: 100 }]);
       quotaTracker.recordSpending("up-1", 100);
       expect(quotaTracker.isWithinQuota("up-1")).toBe(false);
     });
 
-    it("returns false when spending exceeds limit", () => {
-      quotaTracker.setConfig("up-1", {
-        spendingLimit: 100,
-        spendingPeriodType: "daily",
-        spendingPeriodHours: null,
-      });
-      quotaTracker.recordSpending("up-1", 120);
+    it("returns false when ANY rule is exceeded (AND semantics)", () => {
+      quotaTracker.setRules("up-1", [
+        { period_type: "daily", limit: 100 },
+        { period_type: "rolling", limit: 30, period_hours: 5 },
+      ]);
+      quotaTracker.recordSpending("up-1", 35);
+      // Daily: 35 < 100 OK, Rolling 5h: 35 >= 30 EXCEEDED
       expect(quotaTracker.isWithinQuota("up-1")).toBe(false);
+    });
+
+    it("returns true when ALL rules are within limits", () => {
+      quotaTracker.setRules("up-1", [
+        { period_type: "daily", limit: 100 },
+        { period_type: "rolling", limit: 30, period_hours: 5 },
+      ]);
+      quotaTracker.recordSpending("up-1", 25);
+      expect(quotaTracker.isWithinQuota("up-1")).toBe(true);
     });
   });
 
   describe("recordSpending", () => {
-    it("accumulates spending incrementally", () => {
-      quotaTracker.setConfig("up-1", {
-        spendingLimit: 100,
-        spendingPeriodType: "daily",
-        spendingPeriodHours: null,
-      });
+    it("accumulates spending across all rules", () => {
+      quotaTracker.setRules("up-1", [
+        { period_type: "daily", limit: 100 },
+        { period_type: "monthly", limit: 500 },
+      ]);
       quotaTracker.recordSpending("up-1", 30);
       quotaTracker.recordSpending("up-1", 25);
-      quotaTracker.recordSpending("up-1", 15);
 
-      const entry = quotaTracker.getCacheEntry("up-1");
-      expect(entry?.currentSpending).toBe(70);
+      const entries = quotaTracker.getCacheEntries("up-1");
+      expect(entries).toHaveLength(2);
+      expect(entries![0].currentSpending).toBe(55);
+      expect(entries![1].currentSpending).toBe(55);
     });
 
     it("ignores zero cost", () => {
+      quotaTracker.setRules("up-1", [{ period_type: "daily", limit: 100 }]);
       quotaTracker.recordSpending("up-1", 0);
-      expect(quotaTracker.getCacheEntry("up-1")).toBeUndefined();
+      const entries = quotaTracker.getCacheEntries("up-1");
+      expect(entries![0].currentSpending).toBe(0);
     });
 
     it("ignores negative cost", () => {
+      quotaTracker.setRules("up-1", [{ period_type: "daily", limit: 100 }]);
       quotaTracker.recordSpending("up-1", -5);
-      expect(quotaTracker.getCacheEntry("up-1")).toBeUndefined();
+      const entries = quotaTracker.getCacheEntries("up-1");
+      expect(entries![0].currentSpending).toBe(0);
     });
 
-    it("creates entry for upstream without prior spending", () => {
+    it("does nothing for unknown upstream", () => {
       quotaTracker.recordSpending("up-new", 10);
-      const entry = quotaTracker.getCacheEntry("up-new");
-      expect(entry?.currentSpending).toBe(10);
+      expect(quotaTracker.getCacheEntries("up-new")).toBeUndefined();
     });
   });
 
   describe("getQuotaStatus", () => {
-    it("returns null for upstream without quota config", () => {
+    it("returns null for upstream without rules", () => {
       expect(quotaTracker.getQuotaStatus("nonexistent")).toBeNull();
     });
 
-    it("returns correct status for configured upstream", () => {
-      quotaTracker.setConfig(
+    it("returns correct multi-rule status", () => {
+      quotaTracker.setRules(
         "up-1",
-        { spendingLimit: 200, spendingPeriodType: "daily", spendingPeriodHours: null },
+        [
+          { period_type: "daily", limit: 200 },
+          { period_type: "rolling", limit: 50, period_hours: 6 },
+        ],
         "Test Upstream"
       );
       quotaTracker.recordSpending("up-1", 80);
@@ -304,53 +264,42 @@ describe("upstream-quota-tracker", () => {
       const status = quotaTracker.getQuotaStatus("up-1");
       expect(status).not.toBeNull();
       expect(status!.upstreamName).toBe("Test Upstream");
-      expect(status!.currentSpending).toBe(80);
-      expect(status!.spendingLimit).toBe(200);
-      expect(status!.percentUsed).toBe(40);
-      expect(status!.isExceeded).toBe(false);
+      expect(status!.rules).toHaveLength(2);
+
+      const daily = status!.rules[0];
+      expect(daily.periodType).toBe("daily");
+      expect(daily.currentSpending).toBe(80);
+      expect(daily.spendingLimit).toBe(200);
+      expect(daily.percentUsed).toBe(40);
+      expect(daily.isExceeded).toBe(false);
+
+      const rolling = status!.rules[1];
+      expect(rolling.periodType).toBe("rolling");
+      expect(rolling.periodHours).toBe(6);
+      expect(rolling.currentSpending).toBe(80);
+      expect(rolling.spendingLimit).toBe(50);
+      expect(rolling.isExceeded).toBe(true);
+
+      expect(status!.isExceeded).toBe(true);
     });
 
     it("caps percentUsed at 999", () => {
-      quotaTracker.setConfig("up-1", {
-        spendingLimit: 1,
-        spendingPeriodType: "daily",
-        spendingPeriodHours: null,
-      });
+      quotaTracker.setRules("up-1", [{ period_type: "daily", limit: 1 }]);
       quotaTracker.recordSpending("up-1", 50);
 
       const status = quotaTracker.getQuotaStatus("up-1");
-      expect(status!.percentUsed).toBe(999);
-    });
-
-    it("marks as exceeded when at limit", () => {
-      quotaTracker.setConfig("up-1", {
-        spendingLimit: 100,
-        spendingPeriodType: "daily",
-        spendingPeriodHours: null,
-      });
-      quotaTracker.recordSpending("up-1", 100);
-
-      const status = quotaTracker.getQuotaStatus("up-1");
-      expect(status!.isExceeded).toBe(true);
+      expect(status!.rules[0].percentUsed).toBe(999);
     });
   });
 
   describe("getAllQuotaStatuses", () => {
-    it("returns empty array when no configs exist", () => {
+    it("returns empty array when no rules exist", () => {
       expect(quotaTracker.getAllQuotaStatuses()).toEqual([]);
     });
 
     it("returns statuses for all configured upstreams", () => {
-      quotaTracker.setConfig("up-1", {
-        spendingLimit: 100,
-        spendingPeriodType: "daily",
-        spendingPeriodHours: null,
-      });
-      quotaTracker.setConfig("up-2", {
-        spendingLimit: 200,
-        spendingPeriodType: "monthly",
-        spendingPeriodHours: null,
-      });
+      quotaTracker.setRules("up-1", [{ period_type: "daily", limit: 100 }]);
+      quotaTracker.setRules("up-2", [{ period_type: "monthly", limit: 200 }]);
 
       const statuses = quotaTracker.getAllQuotaStatuses();
       expect(statuses).toHaveLength(2);
@@ -359,14 +308,15 @@ describe("upstream-quota-tracker", () => {
   });
 
   describe("syncFromDb", () => {
-    it("loads upstream configs and aggregates spending", async () => {
+    it("loads upstream rules and aggregates spending per rule", async () => {
       findManyMock.mockResolvedValue([
         {
           id: "up-1",
           name: "OpenAI Pro",
-          spendingLimit: 100,
-          spendingPeriodType: "daily",
-          spendingPeriodHours: null,
+          spendingRules: [
+            { period_type: "daily", limit: 100 },
+            { period_type: "rolling", limit: 30, period_hours: 5 },
+          ],
         },
       ]);
 
@@ -378,8 +328,11 @@ describe("upstream-quota-tracker", () => {
 
       const status = quotaTracker.getQuotaStatus("up-1");
       expect(status).not.toBeNull();
-      expect(status!.currentSpending).toBe(42.5);
       expect(status!.upstreamName).toBe("OpenAI Pro");
+      expect(status!.rules).toHaveLength(2);
+      // Both rules query DB independently, both get 42.50
+      expect(status!.rules[0].currentSpending).toBe(42.5);
+      expect(status!.rules[1].currentSpending).toBe(42.5);
     });
 
     it("handles null totalCost as zero", async () => {
@@ -387,9 +340,7 @@ describe("upstream-quota-tracker", () => {
         {
           id: "up-1",
           name: "Test",
-          spendingLimit: 100,
-          spendingPeriodType: "daily",
-          spendingPeriodHours: null,
+          spendingRules: [{ period_type: "daily", limit: 100 }],
         },
       ]);
 
@@ -399,19 +350,16 @@ describe("upstream-quota-tracker", () => {
 
       await quotaTracker.syncFromDb();
 
-      const entry = quotaTracker.getCacheEntry("up-1");
-      expect(entry!.currentSpending).toBe(0);
+      const entries = quotaTracker.getCacheEntries("up-1");
+      expect(entries![0].currentSpending).toBe(0);
     });
 
-    it("removes stale entries when upstream has quota removed", async () => {
-      // First sync: upstream has quota
+    it("removes stale entries when upstream has rules removed", async () => {
       findManyMock.mockResolvedValue([
         {
           id: "up-1",
           name: "Test",
-          spendingLimit: 100,
-          spendingPeriodType: "daily",
-          spendingPeriodHours: null,
+          spendingRules: [{ period_type: "daily", limit: 100 }],
         },
       ]);
       whereMock.mockResolvedValue([{ totalCost: "10" }]);
@@ -421,7 +369,6 @@ describe("upstream-quota-tracker", () => {
       await quotaTracker.syncFromDb();
       expect(quotaTracker.getQuotaStatus("up-1")).not.toBeNull();
 
-      // Second sync: upstream no longer has quota
       findManyMock.mockResolvedValue([]);
       await quotaTracker.syncFromDb();
       expect(quotaTracker.getQuotaStatus("up-1")).toBeNull();
@@ -430,18 +377,14 @@ describe("upstream-quota-tracker", () => {
 
   describe("reset", () => {
     it("clears all internal state", () => {
-      quotaTracker.setConfig("up-1", {
-        spendingLimit: 100,
-        spendingPeriodType: "daily",
-        spendingPeriodHours: null,
-      });
+      quotaTracker.setRules("up-1", [{ period_type: "daily", limit: 100 }]);
       quotaTracker.recordSpending("up-1", 50);
 
       quotaTracker.reset();
 
       expect(quotaTracker.isWithinQuota("up-1")).toBe(true);
       expect(quotaTracker.getQuotaStatus("up-1")).toBeNull();
-      expect(quotaTracker.getCacheEntry("up-1")).toBeUndefined();
+      expect(quotaTracker.getCacheEntries("up-1")).toBeUndefined();
     });
   });
 });
