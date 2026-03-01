@@ -137,6 +137,9 @@ export interface UpstreamCreate {
   affinity_migration?: AffinityMigrationConfig | null; // Session affinity migration configuration
   billing_input_multiplier?: number;
   billing_output_multiplier?: number;
+  spending_limit?: number | null;
+  spending_period_type?: "daily" | "monthly" | "rolling" | null;
+  spending_period_hours?: number | null;
 }
 
 export interface UpstreamUpdate {
@@ -156,6 +159,9 @@ export interface UpstreamUpdate {
   affinity_migration?: AffinityMigrationConfig | null; // Session affinity migration configuration
   billing_input_multiplier?: number;
   billing_output_multiplier?: number;
+  spending_limit?: number | null;
+  spending_period_type?: "daily" | "monthly" | "rolling" | null;
+  spending_period_hours?: number | null;
 }
 
 export interface UpstreamResponse {
@@ -177,12 +183,33 @@ export interface UpstreamResponse {
   affinity_migration: AffinityMigrationConfig | null; // Session affinity migration configuration
   billing_input_multiplier?: number;
   billing_output_multiplier?: number;
+  spending_limit?: number | null;
+  spending_period_type?: string | null;
+  spending_period_hours?: number | null;
   created_at: string; // ISO 8601 date string
   updated_at: string; // ISO 8601 date string
 }
 
 // Type alias for convenience
 export type Upstream = UpstreamResponse;
+
+// ========== Upstream Quota 相关类型 ==========
+
+export interface UpstreamQuotaStatus {
+  upstream_id: string;
+  upstream_name: string;
+  current_spending: number;
+  spending_limit: number;
+  spending_period_type: string;
+  spending_period_hours: number | null;
+  percent_used: number;
+  is_exceeded: boolean;
+  resets_at: string | null;
+}
+
+export interface UpstreamQuotaStatusResponse {
+  items: UpstreamQuotaStatus[];
+}
 
 /**
  * Request body for testing upstream connection before saving
