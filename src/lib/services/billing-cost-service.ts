@@ -6,6 +6,7 @@ import {
   type BillingResolvedPrice,
 } from "@/lib/services/billing-price-service";
 import { getProviderTypeForModel } from "@/lib/services/model-router";
+import { quotaTracker } from "@/lib/services/upstream-quota-tracker";
 
 export type UnbillableReason =
   | "model_missing"
@@ -274,6 +275,10 @@ export async function calculateAndPersistRequestBillingSnapshot(
         billedAt: now,
       },
     });
+
+  if (input.upstreamId && cost.finalCost > 0) {
+    quotaTracker.recordSpending(input.upstreamId, cost.finalCost);
+  }
 
   return {
     status: "billed",

@@ -15,6 +15,7 @@ import {
   type AffinityScope,
 } from "./session-affinity";
 import { getPrimaryProviderByCapabilities } from "@/lib/route-capabilities";
+import { quotaTracker } from "./upstream-quota-tracker";
 
 // Re-export for convenience
 export { VALID_PROVIDER_TYPES };
@@ -67,6 +68,7 @@ export interface UpstreamSelectionResult {
   upstream: Upstream;
   selectedTier: number;
   circuitBreakerFiltered: number;
+  quotaFiltered: number;
   totalCandidates: number;
   affinityHit?: boolean; // Whether session affinity was used
   affinityMigrated?: boolean; // Whether session was migrated to higher priority upstream
@@ -211,6 +213,27 @@ export function filterByExclusions(
 } {
   const allowed = upstreamList.filter((u) => !excludeIds || !excludeIds.includes(u.upstream.id));
   const excludedCount = upstreamList.length - allowed.length;
+
+  return { allowed, excludedCount };
+}
+
+/**
+ * Filter upstreams that have exceeded their spending quota.
+ */
+export function filterBySpendingQuota(upstreamList: UpstreamWithCircuitBreaker[]): {
+  allowed: UpstreamWithCircuitBreaker[];
+  excludedCount: number;
+} {
+  const allowed: UpstreamWithCircuitBreaker[] = [];
+  let excludedCount = 0;
+
+  for (const u of upstreamList) {
+    if (quotaTracker.isWithinQuota(u.upstream.id)) {
+      allowed.push(u);
+    } else {
+      excludedCount++;
+    }
+  }
 
   return { allowed, excludedCount };
 }
@@ -503,6 +526,7 @@ async function selectFromUpstreamPool(
               upstream: migrationTarget.upstream,
               selectedTier: migrationTarget.upstream.priority,
               circuitBreakerFiltered: 0,
+              quotaFiltered: 0,
               totalCandidates,
               affinityHit: true,
               affinityMigrated: true,
@@ -522,6 +546,7 @@ async function selectFromUpstreamPool(
             upstream: boundUpstream.upstream,
             selectedTier: boundUpstream.upstream.priority,
             circuitBreakerFiltered: 0,
+            quotaFiltered: 0,
             totalCandidates,
             affinityHit: true,
             affinityMigrated: false,
@@ -616,6 +641,7 @@ async function performTieredSelection(
   const sortedTiers = [...tierMap.entries()].sort((a, b) => a[0] - b[0]);
 
   let totalCircuitBreakerFiltered = 0;
+  let totalQuotaFiltered = 0;
 
   // Try each tier in priority order
   for (const [tier, tierUpstreams] of sortedTiers) {
@@ -623,8 +649,12 @@ async function performTieredSelection(
     const afterCircuitBreaker = filterByCircuitBreaker(tierUpstreams);
     totalCircuitBreakerFiltered += afterCircuitBreaker.excludedCount;
 
+    // Filter by spending quota
+    const afterQuota = filterBySpendingQuota(afterCircuitBreaker.allowed);
+    totalQuotaFiltered += afterQuota.excludedCount;
+
     // Filter by exclusion list (health status is display-only, not used for routing)
-    const afterExclusions = filterByExclusions(afterCircuitBreaker.allowed, excludeIds);
+    const afterExclusions = filterByExclusions(afterQuota.allowed, excludeIds);
 
     if (afterExclusions.allowed.length > 0) {
       const candidates = [...afterExclusions.allowed];
@@ -641,6 +671,7 @@ async function performTieredSelection(
             upstream: selected.upstream,
             selectedTier: tier,
             circuitBreakerFiltered: totalCircuitBreakerFiltered,
+            quotaFiltered: totalQuotaFiltered,
             totalCandidates,
           };
         } catch (error) {

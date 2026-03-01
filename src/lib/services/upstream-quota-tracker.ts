@@ -97,8 +97,24 @@ class UpstreamQuotaTracker {
   private nameCache = new Map<string, string>();
   private syncTimer: ReturnType<typeof setInterval> | null = null;
   private initialized = false;
+  private initPromise: Promise<void> | null = null;
+
+  /**
+   * Trigger lazy initialization. Non-blocking: kicks off init in background on first call.
+   * Returns true if already initialized.
+   */
+  ensureInitialized(): boolean {
+    if (this.initialized) return true;
+    if (!this.initPromise) {
+      this.initPromise = this.initialize().catch(() => {
+        this.initPromise = null; // Allow retry on next call
+      });
+    }
+    return false;
+  }
 
   isWithinQuota(upstreamId: string): boolean {
+    this.ensureInitialized();
     const config = this.configCache.get(upstreamId);
     if (!config) return true; // No quota configured → always allow
     const entry = this.cache.get(upstreamId);
@@ -319,6 +335,7 @@ class UpstreamQuotaTracker {
     this.configCache.clear();
     this.nameCache.clear();
     this.initialized = false;
+    this.initPromise = null;
   }
 
   // For testing: directly set config
