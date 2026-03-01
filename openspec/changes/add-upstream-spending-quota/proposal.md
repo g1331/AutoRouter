@@ -23,8 +23,8 @@
 
 ## Impact
 
-- **数据库**: `upstreams` 表新增 `spending_limit`、`spending_period_type`、`spending_period_hours` 字段，需要数据库迁移
+- **数据库**: `upstreams` 表新增 `spending_rules` 字段（JSON，可为空），需要数据库迁移
 - **后端服务**: 新增 `upstream-quota-tracker.ts` 服务；修改 `load-balancer.ts` 的 `performTieredSelection` 流程；修改 `billing-cost-service.ts` 在记账后通知 QuotaTracker
-- **API**: 新增 `/api/admin/upstreams/quota-status` 端点；上游 CRUD API 扩展限额字段
+- **API**: 新增 `/api/admin/upstreams/quota` 端点；上游 CRUD API 扩展 `spending_rules` 字段
 - **前端**: 修改 `upstream-form-dialog.tsx` 增加限额配置表单；修改 `upstreams-table.tsx` 展示限额信息；新增限额进度条组件
 - **国际化**: `en.json` / `zh.json` 新增限额相关翻译条目

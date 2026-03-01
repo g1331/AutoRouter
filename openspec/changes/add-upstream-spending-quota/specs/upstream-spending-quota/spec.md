@@ -70,7 +70,7 @@
 
 #### Scenario: 未配置限额的上游不受影响
 
-- **WHEN** 某上游未配置 `spending_limit`
+- **WHEN** 某上游未配置 `spending_rules`
 - **THEN** 该上游在路由选择中的限额检查始终通过
 
 ### Requirement: 消费实时追踪
@@ -175,7 +175,7 @@
 
 #### Scenario: 未配置限额的上游不显示限额信息
 
-- **WHEN** 某上游未配置 `spending_limit`
+- **WHEN** 某上游未配置 `spending_rules`
 - **THEN** 该上游行内不显示任何限额相关的 UI 元素
 
 ### Requirement: 上游表单限额配置区域
