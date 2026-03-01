@@ -384,7 +384,8 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                 <TableHead className="w-[110px] px-3">{t("tableWeight")}</TableHead>
                 <TableHead className="w-[104px] px-3">{t("tableHealth")}</TableHead>
                 <TableHead className="w-[112px] px-3">{t("tableCircuitBreaker")}</TableHead>
-                <TableHead className="w-[28%] px-3">{t("tableBaseUrl")}</TableHead>
+                <TableHead className="w-[22%] px-3">{t("tableBaseUrl")}</TableHead>
+                <TableHead className="w-[18%] px-3">{t("tableQuota")}</TableHead>
                 <TableHead className="hidden w-[120px] text-right 2xl:table-cell">
                   {tCommon("createdAt")}
                 </TableHead>
@@ -515,13 +516,17 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                                   {(upstream.billing_output_multiplier ?? 1).toFixed(2)}
                                 </span>
                               </div>
-                              {quotaMap.has(upstream.id) &&
+                            </TableCell>
+                            <TableCell className="px-3">
+                              {!quotaMap.has(upstream.id) ? (
+                                <span className="font-mono text-xs text-muted-foreground">-</span>
+                              ) : (
                                 (() => {
                                   const q = quotaMap.get(upstream.id)!;
                                   return (
-                                    <>
+                                    <div className="space-y-1">
                                       {q.is_exceeded && (
-                                        <div className="mt-1 flex items-center gap-2 font-mono text-[11px]">
+                                        <div className="flex items-center gap-2 font-mono text-[11px]">
                                           <Badge
                                             variant="outline"
                                             className="border-destructive/40 text-destructive"
@@ -558,7 +563,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                                               : null;
 
                                         return (
-                                          <div key={rIdx} className="mt-1 font-mono text-[11px]">
+                                          <div key={rIdx} className="font-mono text-[11px]">
                                             <div className="flex items-center gap-2">
                                               <span className="shrink-0 text-muted-foreground">
                                                 {periodLabel}
@@ -595,9 +600,10 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                                           </div>
                                         );
                                       })}
-                                    </>
+                                    </div>
                                   );
-                                })()}
+                                })()
+                              )}
                             </TableCell>
                             <TableCell className="hidden whitespace-nowrap pr-2 text-right 2xl:table-cell">
                               {formatDistanceToNow(new Date(upstream.created_at), {

@@ -410,6 +410,7 @@
     "noUpstreamsDesc": "Click the button above to add your first Upstream",
     "tableProvider": "PROVIDER",
     "tableBaseUrl": "BASE URL",
+    "tableQuota": "QUOTA",
     "tableWeight": "WEIGHT",
     "tableHealth": "HEALTH",
     "healthHealthy": "Healthy",
