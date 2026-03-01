@@ -375,6 +375,40 @@ describe("upstream-quota-tracker", () => {
     });
   });
 
+  describe("syncUpstreamFromDb", () => {
+    it("loads provided rules and aggregates spending per rule", async () => {
+      whereMock.mockResolvedValue([{ totalCost: "42.50" }]);
+      fromMock.mockReturnValue({ where: whereMock });
+      selectMock.mockReturnValue({ from: fromMock });
+
+      await quotaTracker.syncUpstreamFromDb("up-9", "Kimi", [
+        { period_type: "daily", limit: 100 },
+        { period_type: "rolling", limit: 30, period_hours: 5 },
+      ]);
+
+      expect(findManyMock).not.toHaveBeenCalled();
+      const status = quotaTracker.getQuotaStatus("up-9");
+      expect(status).not.toBeNull();
+      expect(status!.upstreamName).toBe("Kimi");
+      expect(status!.rules).toHaveLength(2);
+      expect(status!.rules[0].currentSpending).toBe(42.5);
+      expect(status!.rules[1].currentSpending).toBe(42.5);
+    });
+
+    it("removes cached upstream when rules are cleared", async () => {
+      whereMock.mockResolvedValue([{ totalCost: "10" }]);
+      fromMock.mockReturnValue({ where: whereMock });
+      selectMock.mockReturnValue({ from: fromMock });
+
+      await quotaTracker.syncUpstreamFromDb("up-1", "Test", [{ period_type: "daily", limit: 100 }]);
+      expect(quotaTracker.getQuotaStatus("up-1")).not.toBeNull();
+
+      await quotaTracker.syncUpstreamFromDb("up-1", "Test", null);
+      expect(quotaTracker.getQuotaStatus("up-1")).toBeNull();
+      expect(quotaTracker.getCacheEntries("up-1")).toBeUndefined();
+    });
+  });
+
   describe("reset", () => {
     it("clears all internal state", () => {
       quotaTracker.setRules("up-1", [{ period_type: "daily", limit: 100 }]);

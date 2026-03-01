@@ -15,6 +15,7 @@ import {
 } from "@/lib/route-capabilities";
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
+import { quotaTracker } from "@/lib/services/upstream-quota-tracker";
 
 const log = createLogger("admin-upstreams");
 
@@ -161,6 +162,21 @@ export async function POST(request: NextRequest) {
     };
 
     const result = await createUpstream(input);
+
+    if (validated.spending_rules !== undefined) {
+      try {
+        await quotaTracker.syncUpstreamFromDb(
+          result.id,
+          result.name,
+          validated.spending_rules ?? null
+        );
+      } catch (error) {
+        log.warn(
+          { err: error, upstreamId: result.id },
+          "failed to refresh quota cache after create"
+        );
+      }
+    }
 
     return NextResponse.json(transformUpstreamToApi(result), { status: 201 });
   } catch (error) {

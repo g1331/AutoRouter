@@ -50,10 +50,12 @@ vi.mock("@/lib/services/circuit-breaker", () => ({
 }));
 
 const mockIsWithinQuota = vi.fn().mockReturnValue(true);
+const mockQuotaInitialize = vi.fn(async () => {});
 vi.mock("@/lib/services/upstream-quota-tracker", () => ({
   quotaTracker: {
     isWithinQuota: (...args: unknown[]) => mockIsWithinQuota(...args),
     ensureInitialized: () => true,
+    initialize: (...args: unknown[]) => mockQuotaInitialize(...args),
   },
 }));
 
@@ -197,6 +199,8 @@ describe("load-balancer", () => {
     affinityStore.clear();
     setCBAllClosed();
     mockAcquireCircuitBreakerPermit.mockResolvedValue(undefined);
+    mockIsWithinQuota.mockReturnValue(true);
+    mockQuotaInitialize.mockResolvedValue(undefined);
   });
 
   // =========================================================================
@@ -672,6 +676,30 @@ describe("load-balancer", () => {
         affinityStore.set("key1", "openai_chat_compatible", "session-abc", "u1", 1024);
 
         const result = await selectFromProviderType("openai", ["u1"], undefined, {
+          apiKeyId: "key1",
+          sessionId: "session-abc",
+          affinityScope: "openai_chat_compatible",
+          contentLength: 2048,
+        });
+
+        expect(result.upstream.id).toBe("u2");
+        expect(result.affinityHit).toBe(true);
+
+        const entry = affinityStore.get("key1", "openai_chat_compatible", "session-abc");
+        expect(entry?.upstreamId).toBe("u1");
+      });
+
+      it("should reselect when bound upstream exceeds quota (and keep affinity cache)", async () => {
+        const u1 = makeUpstream({ id: "u1", priority: 0 });
+        const u2 = makeUpstream({ id: "u2", priority: 0 });
+        mockFindMany.mockResolvedValue([u1, u2]);
+
+        mockIsWithinQuota.mockImplementation((id: string) => id !== "u1");
+
+        // Pre-populate affinity cache with u1
+        affinityStore.set("key1", "openai_chat_compatible", "session-abc", "u1", 1024);
+
+        const result = await selectFromProviderType("openai", undefined, undefined, {
           apiKeyId: "key1",
           sessionId: "session-abc",
           affinityScope: "openai_chat_compatible",

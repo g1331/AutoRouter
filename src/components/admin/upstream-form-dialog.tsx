@@ -70,7 +70,7 @@ const affinityMigrationConfigSchema = z
 
 const spendingRuleSchema = z.object({
   period_type: z.enum(["daily", "monthly", "rolling"]),
-  limit: z.number().positive(),
+  limit: z.coerce.number().positive(),
   period_hours: z.number().int().min(1).max(8760).nullable(),
 });
 
@@ -120,7 +120,8 @@ const editUpstreamFormSchema = z
     path: ["route_capabilities"],
   });
 
-type UpstreamFormData = z.infer<typeof createUpstreamFormSchema>;
+type UpstreamFormValues = z.input<typeof editUpstreamFormSchema>;
+type UpstreamFormData = z.output<typeof editUpstreamFormSchema>;
 
 function spendingRulesToApi(
   rules: UpstreamFormData["spending_rules"]
@@ -143,13 +144,14 @@ export function UpstreamFormDialog({
   trigger,
 }: UpstreamFormDialogProps) {
   const isEdit = !!upstream;
+  const activeSchema = isEdit ? editUpstreamFormSchema : createUpstreamFormSchema;
   const createMutation = useCreateUpstream();
   const updateMutation = useUpdateUpstream();
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
 
-  const form = useForm<UpstreamFormData>({
-    resolver: zodResolver(isEdit ? editUpstreamFormSchema : createUpstreamFormSchema),
+  const form = useForm<UpstreamFormValues>({
+    resolver: zodResolver(activeSchema),
     defaultValues: {
       name: "",
       base_url: "",
@@ -239,8 +241,9 @@ export function UpstreamFormDialog({
     }
   }, [upstream, open, form]);
 
-  const onSubmit = async (data: UpstreamFormData) => {
+  const onSubmit = async (values: UpstreamFormValues) => {
     try {
+      const data = activeSchema.parse(values) as UpstreamFormData;
       if (isEdit) {
         // 只有填写了 api_key 才更新
         const updateData: {
@@ -565,10 +568,22 @@ export function UpstreamFormDialog({
                                 inputMode="decimal"
                                 className="h-8 text-xs"
                                 placeholder={t("spendingLimitPlaceholder")}
-                                value={field.value || ""}
-                                onChange={(e) => {
-                                  const v = e.target.value;
-                                  field.onChange(v === "" ? 0 : Number(v));
+                                {...field}
+                                value={
+                                  field.value === 0
+                                    ? ""
+                                    : typeof field.value === "number" ||
+                                        typeof field.value === "string"
+                                      ? field.value
+                                      : ""
+                                }
+                                onChange={(e) => field.onChange(e.target.value)}
+                                onBlur={(e) => {
+                                  field.onBlur();
+                                  const raw = e.target.value.trim();
+                                  if (raw.startsWith(".")) {
+                                    field.onChange(`0${raw}`);
+                                  }
                                 }}
                               />
                             </FormControl>

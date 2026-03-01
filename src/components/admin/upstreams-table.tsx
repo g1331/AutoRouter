@@ -543,6 +543,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                                           width={8}
                                           showPercentage
                                           variant={progressVariant}
+                                          style="meter"
                                         />
                                         <span
                                           className={cn(
@@ -726,6 +727,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                                     width={8}
                                     showPercentage
                                     variant={progressVariant}
+                                    style="meter"
                                   />
                                   <span
                                     className={cn(

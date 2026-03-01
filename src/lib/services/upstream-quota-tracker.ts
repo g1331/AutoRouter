@@ -249,6 +249,51 @@ class UpstreamQuotaTracker {
     }
   }
 
+  async syncUpstreamFromDb(
+    upstreamId: string,
+    upstreamName: string,
+    spendingRules: SpendingRule[] | null
+  ): Promise<void> {
+    const rules = extractSpendingRules({ spendingRules } as unknown as Upstream);
+    if (rules.length === 0) {
+      this.rulesCache.delete(upstreamId);
+      this.cache.delete(upstreamId);
+      this.nameCache.delete(upstreamId);
+      return;
+    }
+
+    this.rulesCache.set(upstreamId, rules);
+    this.nameCache.set(upstreamId, upstreamName);
+
+    const now = new Date();
+    const entries: RuleCacheEntry[] = [];
+    for (const rule of rules) {
+      const periodStart = getPeriodStartForRule(rule, now);
+
+      const [row] = await db
+        .select({ totalCost: sum(requestBillingSnapshots.finalCost) })
+        .from(requestBillingSnapshots)
+        .where(
+          and(
+            eq(requestBillingSnapshots.upstreamId, upstreamId),
+            eq(requestBillingSnapshots.billingStatus, "billed"),
+            gte(requestBillingSnapshots.billedAt, periodStart)
+          )
+        );
+
+      const totalCost = row?.totalCost ? Number(row.totalCost) : 0;
+      entries.push({
+        periodType: rule.period_type,
+        periodHours: rule.period_hours ?? null,
+        limit: rule.limit,
+        currentSpending: Number.isNaN(totalCost) ? 0 : totalCost,
+        lastSyncedAt: now,
+      });
+    }
+
+    this.cache.set(upstreamId, entries);
+  }
+
   async estimateRecoveryTime(upstreamId: string, rule: SpendingRule): Promise<Date | null> {
     if (rule.period_type !== "rolling") return null;
 

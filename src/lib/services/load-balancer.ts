@@ -460,6 +460,8 @@ async function selectFromUpstreamPool(
   },
   affinityScopeHint?: AffinityScope
 ): Promise<UpstreamSelectionResult> {
+  await quotaTracker.initialize();
+
   // Filter by allowed upstream IDs (API key authorization)
   let filteredUpstreams = allUpstreams;
   if (allowedUpstreamIds && allowedUpstreamIds.length > 0) {
@@ -496,12 +498,16 @@ async function selectFromUpstreamPool(
 
       // Respect excludeIds: if bound upstream is excluded, skip affinity and reselect
       const isExcluded = excludeIds?.includes(affinityEntry.upstreamId) ?? false;
+      const isWithinQuota = quotaTracker.isWithinQuota(affinityEntry.upstreamId);
 
-      if (boundUpstream && isUpstreamAvailable(boundUpstream) && !isExcluded) {
+      if (boundUpstream && isUpstreamAvailable(boundUpstream) && !isExcluded && isWithinQuota) {
         // Check if we should migrate to higher priority upstream
         // Filter out excluded upstreams from migration candidates
         const availableForMigration = filteredUpstreams.filter(
-          (u) => !excludeIds?.includes(u.upstream.id) && isUpstreamAvailable(u)
+          (u) =>
+            !excludeIds?.includes(u.upstream.id) &&
+            isUpstreamAvailable(u) &&
+            quotaTracker.isWithinQuota(u.upstream.id)
         );
         const migrationTarget = evaluateMigration(
           boundUpstream,
