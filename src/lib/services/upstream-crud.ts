@@ -60,6 +60,9 @@ export interface UpstreamCreateInput {
   } | null;
   billingInputMultiplier?: number;
   billingOutputMultiplier?: number;
+  spendingLimit?: number | null;
+  spendingPeriodType?: string | null;
+  spendingPeriodHours?: number | null;
 }
 
 export interface UpstreamUpdateInput {
@@ -88,6 +91,9 @@ export interface UpstreamUpdateInput {
   } | null;
   billingInputMultiplier?: number;
   billingOutputMultiplier?: number;
+  spendingLimit?: number | null;
+  spendingPeriodType?: string | null;
+  spendingPeriodHours?: number | null;
 }
 
 export interface UpstreamResponse {
@@ -111,6 +117,9 @@ export interface UpstreamResponse {
   } | null;
   billingInputMultiplier?: number;
   billingOutputMultiplier?: number;
+  spendingLimit: number | null;
+  spendingPeriodType: string | null;
+  spendingPeriodHours: number | null;
   createdAt: Date;
   updatedAt: Date;
   circuitBreaker?: UpstreamCircuitBreakerStatus | null;
@@ -157,6 +166,7 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     billingInputMultiplier = 1,
     billingOutputMultiplier = 1,
   } = input;
+  const { spendingLimit = null, spendingPeriodType = null, spendingPeriodHours = null } = input;
 
   const normalizedRouteCapabilities = resolveRouteCapabilities(routeCapabilities);
 
@@ -193,6 +203,9 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
       affinityMigration: affinityMigration ?? null,
       billingInputMultiplier,
       billingOutputMultiplier,
+      spendingLimit,
+      spendingPeriodType,
+      spendingPeriodHours,
       createdAt: now,
       updatedAt: now,
     })
@@ -228,6 +241,9 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     affinityMigration: newUpstream.affinityMigration,
     billingInputMultiplier: newUpstream.billingInputMultiplier,
     billingOutputMultiplier: newUpstream.billingOutputMultiplier,
+    spendingLimit: newUpstream.spendingLimit,
+    spendingPeriodType: newUpstream.spendingPeriodType,
+    spendingPeriodHours: newUpstream.spendingPeriodHours,
     createdAt: newUpstream.createdAt,
     updatedAt: newUpstream.updatedAt,
   };
@@ -283,6 +299,11 @@ export async function updateUpstream(
     updateValues.billingInputMultiplier = input.billingInputMultiplier;
   if (input.billingOutputMultiplier !== undefined)
     updateValues.billingOutputMultiplier = input.billingOutputMultiplier;
+  if (input.spendingLimit !== undefined) updateValues.spendingLimit = input.spendingLimit;
+  if (input.spendingPeriodType !== undefined)
+    updateValues.spendingPeriodType = input.spendingPeriodType;
+  if (input.spendingPeriodHours !== undefined)
+    updateValues.spendingPeriodHours = input.spendingPeriodHours;
 
   const [updated] = await db
     .update(upstreams)
@@ -344,6 +365,9 @@ export async function updateUpstream(
     affinityMigration: updated.affinityMigration,
     billingInputMultiplier: updated.billingInputMultiplier,
     billingOutputMultiplier: updated.billingOutputMultiplier,
+    spendingLimit: updated.spendingLimit,
+    spendingPeriodType: updated.spendingPeriodType,
+    spendingPeriodHours: updated.spendingPeriodHours,
     createdAt: updated.createdAt,
     updatedAt: updated.updatedAt,
   };
@@ -453,6 +477,9 @@ export async function listUpstreams(
       affinityMigration: upstream.affinityMigration,
       billingInputMultiplier: upstream.billingInputMultiplier,
       billingOutputMultiplier: upstream.billingOutputMultiplier,
+      spendingLimit: upstream.spendingLimit,
+      spendingPeriodType: upstream.spendingPeriodType,
+      spendingPeriodHours: upstream.spendingPeriodHours,
       createdAt: upstream.createdAt,
       updatedAt: upstream.updatedAt,
       circuitBreaker: cbState
@@ -517,6 +544,9 @@ export async function getUpstreamById(upstreamId: string): Promise<UpstreamRespo
     affinityMigration: upstream.affinityMigration,
     billingInputMultiplier: upstream.billingInputMultiplier,
     billingOutputMultiplier: upstream.billingOutputMultiplier,
+    spendingLimit: upstream.spendingLimit,
+    spendingPeriodType: upstream.spendingPeriodType,
+    spendingPeriodHours: upstream.spendingPeriodHours,
     createdAt: upstream.createdAt,
     updatedAt: upstream.updatedAt,
   };
