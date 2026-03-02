@@ -74,6 +74,13 @@ const spendingRuleSchema = z.object({
   period_hours: z.number().int().min(1).max(8760).nullable(),
 });
 
+function hasValidRollingPeriodHours(rules: z.input<typeof spendingRuleSchema>[]): boolean {
+  return rules.every(
+    (rule) =>
+      rule.period_type !== "rolling" || (rule.period_hours != null && rule.period_hours >= 1)
+  );
+}
+
 // Schema for create mode - api_key is required
 const createUpstreamFormSchema = z
   .object({
@@ -91,6 +98,10 @@ const createUpstreamFormSchema = z
     model_redirects: z.record(z.string(), z.string()).nullable(),
     circuit_breaker_config: circuitBreakerConfigSchema,
     affinity_migration: affinityMigrationConfigSchema,
+  })
+  .refine((data) => hasValidRollingPeriodHours(data.spending_rules), {
+    message: "period_hours is required when period_type is 'rolling'",
+    path: ["spending_rules"],
   })
   .refine((data) => areSingleProviderCapabilities(data.route_capabilities), {
     message: "All route capabilities must belong to the same provider",
@@ -114,6 +125,10 @@ const editUpstreamFormSchema = z
     model_redirects: z.record(z.string(), z.string()).nullable(),
     circuit_breaker_config: circuitBreakerConfigSchema,
     affinity_migration: affinityMigrationConfigSchema,
+  })
+  .refine((data) => hasValidRollingPeriodHours(data.spending_rules), {
+    message: "period_hours is required when period_type is 'rolling'",
+    path: ["spending_rules"],
   })
   .refine((data) => areSingleProviderCapabilities(data.route_capabilities), {
     message: "All route capabilities must belong to the same provider",

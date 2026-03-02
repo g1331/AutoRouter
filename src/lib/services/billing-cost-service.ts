@@ -57,10 +57,11 @@ function parseSnapshotCost(value: number | null): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
-function applyQuotaDeltaAfterBilledUpsert(
+function applyQuotaDeltaAfterSnapshotUpsert(
   previousSnapshot: ExistingBillingSnapshot | null,
+  nextBillingStatus: "billed" | "unbilled",
   nextUpstreamId: string | null,
-  nextFinalCost: number
+  nextFinalCost: number | null
 ): void {
   const deltaByUpstream = new Map<string, number>();
 
@@ -75,7 +76,7 @@ function applyQuotaDeltaAfterBilledUpsert(
   }
 
   const normalizedFinalCost = parseSnapshotCost(nextFinalCost);
-  if (nextUpstreamId && normalizedFinalCost > 0) {
+  if (nextBillingStatus === "billed" && nextUpstreamId && normalizedFinalCost > 0) {
     deltaByUpstream.set(
       nextUpstreamId,
       (deltaByUpstream.get(nextUpstreamId) ?? 0) + normalizedFinalCost
@@ -109,6 +110,14 @@ async function upsertUnbilledSnapshot(
 ): Promise<PersistedRequestBillingResult> {
   const usage = normalizeUsage(input.usage);
   const now = input.billedAt ?? new Date();
+  const previousSnapshot = await db.query.requestBillingSnapshots.findFirst({
+    where: eq(requestBillingSnapshots.requestLogId, input.requestLogId),
+    columns: {
+      upstreamId: true,
+      billingStatus: true,
+      finalCost: true,
+    },
+  });
 
   await db
     .insert(requestBillingSnapshots)
@@ -165,6 +174,8 @@ async function upsertUnbilledSnapshot(
         billedAt: now,
       },
     });
+
+  applyQuotaDeltaAfterSnapshotUpsert(previousSnapshot ?? null, "unbilled", input.upstreamId, null);
 
   return {
     status: "unbilled",
@@ -328,7 +339,12 @@ export async function calculateAndPersistRequestBillingSnapshot(
       },
     });
 
-  applyQuotaDeltaAfterBilledUpsert(previousSnapshot ?? null, input.upstreamId, cost.finalCost);
+  applyQuotaDeltaAfterSnapshotUpsert(
+    previousSnapshot ?? null,
+    "billed",
+    input.upstreamId,
+    cost.finalCost
+  );
 
   return {
     status: "billed",

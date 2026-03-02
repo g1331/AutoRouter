@@ -225,6 +225,27 @@ describe("billing-cost-service", () => {
     expect(mockAdjustSpending).not.toHaveBeenCalled();
   });
 
+  it("rolls back previous billed cost when snapshot is overwritten as unbilled", async () => {
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+
+    snapshotFindFirstMock.mockResolvedValueOnce({
+      upstreamId: "up-rollback",
+      billingStatus: "billed",
+      finalCost: 0.0123,
+    });
+
+    await calculateAndPersistRequestBillingSnapshot({
+      requestLogId: "log-unbilled-rollback",
+      apiKeyId: "key-1",
+      upstreamId: "up-rollback",
+      model: null,
+      usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+    });
+
+    expect(mockAdjustSpending).toHaveBeenCalledWith("up-rollback", expect.closeTo(-0.0123, 8));
+  });
+
   it("does not overcount quota on billed upsert retry", async () => {
     const { resolveBillingModelPrice } = await import("@/lib/services/billing-price-service");
     const { calculateAndPersistRequestBillingSnapshot } =
