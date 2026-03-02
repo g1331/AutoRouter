@@ -618,6 +618,33 @@ describe("UpstreamFormDialog", () => {
       expect(callArgs.spending_rules).toEqual([{ period_type: "daily", limit: 50 }]);
     });
 
+    it("shows localized error when spending limit is not greater than zero", async () => {
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      const nameInput = screen.getByPlaceholderText("upstreamNamePlaceholder");
+      const urlInput = screen.getByPlaceholderText("baseUrlPlaceholder");
+      const apiKeyInput = screen.getByPlaceholderText("apiKeyPlaceholder");
+
+      fireEvent.click(screen.getByText("addSpendingRule"));
+      const limitInput = screen.getByPlaceholderText("spendingLimitPlaceholder");
+
+      fireEvent.change(nameInput, { target: { value: "Invalid Quota Upstream" } });
+      fireEvent.change(urlInput, { target: { value: "https://api.example.com/v1" } });
+      fireEvent.change(apiKeyInput, { target: { value: "sk-test-key" } });
+      fireEvent.change(limitInput, { target: { value: "0" } });
+
+      fireEvent.click(screen.getByText("create"));
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+      });
+
+      expect(screen.getByText("spendingLimitMustBePositive")).toBeInTheDocument();
+      expect(mockToastError).toHaveBeenCalledWith("spendingLimitMustBePositive");
+    });
+
     it("auto-fills rolling period_hours with default value", async () => {
       mockCreateMutateAsync.mockResolvedValue({});
 

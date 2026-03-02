@@ -352,10 +352,45 @@ export function UpstreamFormDialog({
   };
 
   const onInvalidSubmit = () => {
-    const rules = form.getValues("spending_rules");
+    const values = form.getValues();
+    const rules = values.spending_rules;
     let hasRollingRuleWithMissingHours = false;
+    let hasSpendingLimitError = false;
+
+    const rawBaseUrl = values.base_url.trim();
+    if (!rawBaseUrl) {
+      form.setError("base_url", {
+        type: "manual",
+        message: t("baseUrlRequired"),
+      });
+    } else {
+      try {
+        new URL(rawBaseUrl);
+      } catch {
+        form.setError("base_url", {
+          type: "manual",
+          message: t("baseUrlInvalid"),
+        });
+      }
+    }
+
+    if (!isEdit && !values.api_key.trim()) {
+      form.setError("api_key", {
+        type: "manual",
+        message: t("apiKeyRequired"),
+      });
+    }
 
     rules.forEach((rule, index) => {
+      const limitValue = Number(rule.limit);
+      if (!Number.isFinite(limitValue) || limitValue <= 0) {
+        hasSpendingLimitError = true;
+        form.setError(`spending_rules.${index}.limit`, {
+          type: "manual",
+          message: t("spendingLimitMustBePositive"),
+        });
+      }
+
       if (rule.period_type === "rolling" && (rule.period_hours == null || rule.period_hours < 1)) {
         hasRollingRuleWithMissingHours = true;
         form.setError(`spending_rules.${index}.period_hours`, {
@@ -365,8 +400,19 @@ export function UpstreamFormDialog({
       }
     });
 
+    if (!areSingleProviderCapabilities(values.route_capabilities)) {
+      form.setError("route_capabilities", {
+        type: "manual",
+        message: t("routeCapabilitiesSingleProvider"),
+      });
+    }
+
     toast.error(
-      hasRollingRuleWithMissingHours ? t("spendingPeriodHoursRequired") : t("formValidationFailed")
+      hasRollingRuleWithMissingHours
+        ? t("spendingPeriodHoursRequired")
+        : hasSpendingLimitError
+          ? t("spendingLimitMustBePositive")
+          : t("formValidationFailed")
     );
   };
 
