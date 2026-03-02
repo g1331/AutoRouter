@@ -7,6 +7,7 @@ import { z } from "zod";
 import { Plus, CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -88,6 +89,10 @@ export function CreateKeyDialog() {
     }
   };
 
+  const onInvalidSubmit = () => {
+    toast.error(t("formValidationFailed"));
+  };
+
   return (
     <>
       <Dialog open={open} onOpenChange={setOpen}>
@@ -104,7 +109,7 @@ export function CreateKeyDialog() {
           </DialogHeader>
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit, onInvalidSubmit)} className="space-y-6">
               <FormField
                 control={form.control}
                 name="name"

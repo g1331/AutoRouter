@@ -4,6 +4,10 @@ import { EditKeyDialog } from "@/components/admin/edit-key-dialog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { APIKeyResponse } from "@/types/api";
 
+const { mockToastError } = vi.hoisted(() => ({
+  mockToastError: vi.fn(),
+}));
+
 // Mock next-intl
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
@@ -13,6 +17,13 @@ vi.mock("next-intl", () => ({
 // Mock date-locale
 vi.mock("@/lib/date-locale", () => ({
   getDateLocale: () => undefined,
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    error: mockToastError,
+    success: vi.fn(),
+  },
 }));
 
 // Mock hooks
@@ -181,6 +192,8 @@ describe("EditKeyDialog", () => {
       await waitFor(() => {
         expect(screen.getByText("keyNameRequired")).toBeInTheDocument();
       });
+
+      expect(mockToastError).toHaveBeenCalledWith("formValidationFailed");
     });
 
     it("shows validation error when all upstreams are deselected", async () => {

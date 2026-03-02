@@ -169,6 +169,7 @@ export function UpstreamFormDialog({
   const updateMutation = useUpdateUpstream();
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
+  const circuitBreakerUseDefaultPlaceholder = t("circuitBreakerUseDefaultPlaceholder");
 
   const form = useForm<UpstreamFormValues>({
     resolver: zodResolver(activeSchema),
@@ -777,7 +778,7 @@ export function UpstreamFormDialog({
                   type="number"
                   min={1}
                   max={100}
-                  placeholder="5"
+                  placeholder={circuitBreakerUseDefaultPlaceholder}
                   value={circuitBreakerConfig?.failure_threshold ?? ""}
                   onChange={(e) => {
                     const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
@@ -798,7 +799,7 @@ export function UpstreamFormDialog({
                   type="number"
                   min={1}
                   max={100}
-                  placeholder="2"
+                  placeholder={circuitBreakerUseDefaultPlaceholder}
                   value={circuitBreakerConfig?.success_threshold ?? ""}
                   onChange={(e) => {
                     const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
@@ -820,7 +821,7 @@ export function UpstreamFormDialog({
                   min={1}
                   max={300}
                   step={1}
-                  placeholder="300"
+                  placeholder={circuitBreakerUseDefaultPlaceholder}
                   value={circuitBreakerConfig?.open_duration ?? ""}
                   onChange={(e) => {
                     const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
@@ -842,7 +843,7 @@ export function UpstreamFormDialog({
                   min={1}
                   max={60}
                   step={1}
-                  placeholder="30"
+                  placeholder={circuitBreakerUseDefaultPlaceholder}
                   value={circuitBreakerConfig?.probe_interval ?? ""}
                   onChange={(e) => {
                     const val = e.target.value ? parseInt(e.target.value, 10) : undefined;

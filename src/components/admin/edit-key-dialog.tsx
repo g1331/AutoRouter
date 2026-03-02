@@ -7,6 +7,7 @@ import { z } from "zod";
 import { CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -105,6 +106,10 @@ export function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps
     }
   };
 
+  const onInvalidSubmit = () => {
+    toast.error(t("formValidationFailed"));
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
@@ -114,7 +119,7 @@ export function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit, onInvalidSubmit)} className="space-y-6">
             <FormField
               control={form.control}
               name="name"
