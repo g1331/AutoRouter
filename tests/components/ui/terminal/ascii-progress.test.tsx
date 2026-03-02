@@ -124,6 +124,20 @@ describe("AsciiProgress", () => {
     });
   });
 
+  describe("meter style", () => {
+    it("renders a high-contrast meter without ascii blocks", () => {
+      render(<AsciiProgress value={50} max={100} style="meter" showPercentage />);
+
+      const progressbar = screen.getByRole("progressbar");
+      expect(progressbar).toHaveTextContent("50%");
+      expect(progressbar).not.toHaveTextContent("█");
+      expect(progressbar).not.toHaveTextContent("░");
+
+      const marker = progressbar.querySelector(".bg-amber-500");
+      expect(marker).toBeInTheDocument();
+    });
+  });
+
   describe("accessibility", () => {
     it("has role=progressbar", () => {
       render(<AsciiProgress value={50} max={100} />);

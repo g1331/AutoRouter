@@ -719,4 +719,150 @@ describe("upstream-crud", () => {
       expect(result).toBe("sk-test-key");
     });
   });
+
+  describe("spending quota fields in CRUD", () => {
+    it("should include spending fields in createUpstream response", async () => {
+      const { createUpstream } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(null);
+
+      const mockReturning = vi.fn().mockResolvedValue([
+        {
+          id: "test-quota",
+          name: "quota-upstream",
+          baseUrl: "https://api.example.com",
+          apiKeyEncrypted: "encrypted:sk-key",
+          isDefault: false,
+          timeout: 60,
+          isActive: true,
+          config: null,
+          priority: 0,
+          weight: 1,
+          providerType: null,
+          allowedModels: null,
+          modelRedirects: null,
+          spendingRules: [{ period_type: "daily", limit: 50 }],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      vi.mocked(db.insert).mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: mockReturning,
+        }),
+      } as unknown as MockInsertChain);
+
+      const result = await createUpstream({
+        name: "quota-upstream",
+        baseUrl: "https://api.example.com",
+        apiKey: "sk-key",
+        spendingRules: [{ period_type: "daily", limit: 50 }],
+      });
+
+      expect(result.spendingRules).toEqual([{ period_type: "daily", limit: 50 }]);
+    });
+
+    it("should include spending fields in updateUpstream", async () => {
+      const { updateUpstream } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst)
+        .mockResolvedValueOnce({
+          id: "test-quota",
+          name: "quota-upstream",
+        } as unknown as PartialUpstream)
+        .mockResolvedValueOnce(null);
+
+      const mockReturning = vi.fn().mockResolvedValue([
+        {
+          id: "test-quota",
+          name: "quota-upstream",
+          baseUrl: "https://api.example.com",
+          apiKeyEncrypted: "encrypted:sk-key",
+          isDefault: false,
+          timeout: 60,
+          isActive: true,
+          config: null,
+          priority: 0,
+          weight: 1,
+          providerType: null,
+          allowedModels: null,
+          modelRedirects: null,
+          spendingRules: [{ period_type: "rolling", limit: 100, period_hours: 24 }],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      vi.mocked(db.update).mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: mockReturning,
+          }),
+        }),
+      } as unknown as MockUpdateChain);
+
+      const input: UpstreamUpdateInput = {
+        spendingRules: [{ period_type: "rolling", limit: 100, period_hours: 24 }],
+      };
+
+      const result = await updateUpstream("test-quota", input);
+
+      expect(result.spendingRules).toEqual([
+        { period_type: "rolling", limit: 100, period_hours: 24 },
+      ]);
+    });
+
+    it("should allow removing spending limit by setting null", async () => {
+      const { updateUpstream } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockReset();
+      vi.mocked(db.query.upstreams.findFirst)
+        .mockResolvedValueOnce({
+          id: "test-quota",
+          name: "quota-upstream",
+        } as unknown as PartialUpstream)
+        .mockResolvedValueOnce(null);
+
+      const mockReturning = vi.fn().mockResolvedValue([
+        {
+          id: "test-quota",
+          name: "quota-upstream",
+          baseUrl: "https://api.example.com",
+          apiKeyEncrypted: "encrypted:sk-key",
+          isDefault: false,
+          timeout: 60,
+          isActive: true,
+          config: null,
+          priority: 0,
+          weight: 1,
+          providerType: null,
+          allowedModels: null,
+          modelRedirects: null,
+          spendingRules: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      vi.mocked(db.update).mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: mockReturning,
+          }),
+        }),
+      } as unknown as MockUpdateChain);
+
+      const input: UpstreamUpdateInput = {
+        spendingRules: null,
+      };
+
+      const result = await updateUpstream("test-quota", input);
+
+      expect(result.spendingRules).toBeNull();
+    });
+  });
 });

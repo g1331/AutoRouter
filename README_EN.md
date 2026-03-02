@@ -128,6 +128,14 @@
 <img src="docs/images/upstreams-dark.png" alt="Upstreams" width="100%">
 </details>
 
+### Mobile Preview
+
+| Dashboard                                                                            | Upstreams                                                                            |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| <img src="docs/images/mobile-dashboard-dark.png" alt="Mobile Dashboard" width="260"> | <img src="docs/images/mobile-upstreams-dark.png" alt="Mobile Upstreams" width="260"> |
+| Logs                                                                                 | API Keys                                                                             |
+| <img src="docs/images/mobile-logs-dark.png" alt="Mobile Logs" width="260">           | <img src="docs/images/mobile-keys-dark.png" alt="Mobile API Keys" width="260">       |
+
 ---
 
 ## Quick Start

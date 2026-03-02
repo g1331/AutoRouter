@@ -17,6 +17,7 @@ import {
 } from "@/lib/route-capabilities";
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
+import { quotaTracker } from "@/lib/services/upstream-quota-tracker";
 
 const log = createLogger("admin-upstreams");
 
@@ -64,6 +65,16 @@ const updateUpstreamSchema = z
     affinity_migration: affinityMigrationConfigSchema.nullable().optional(),
     billing_input_multiplier: z.number().min(0).max(100).optional(),
     billing_output_multiplier: z.number().min(0).max(100).optional(),
+    spending_rules: z
+      .array(
+        z.object({
+          period_type: z.enum(["daily", "monthly", "rolling"]),
+          limit: z.number().positive(),
+          period_hours: z.number().int().min(1).max(8760).optional(),
+        })
+      )
+      .nullable()
+      .optional(),
   })
   .refine(
     (data) =>
@@ -72,6 +83,18 @@ const updateUpstreamSchema = z
     {
       message: "All route capabilities must belong to the same provider",
       path: ["route_capabilities"],
+    }
+  )
+  .refine(
+    (data) => {
+      if (!data.spending_rules) return true;
+      return data.spending_rules.every(
+        (r) => r.period_type !== "rolling" || (r.period_hours != null && r.period_hours >= 1)
+      );
+    },
+    {
+      message: "period_hours is required when period_type is 'rolling'",
+      path: ["spending_rules"],
     }
   );
 
@@ -153,8 +176,26 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     if (validated.billing_output_multiplier !== undefined) {
       input.billingOutputMultiplier = validated.billing_output_multiplier;
     }
+    if (validated.spending_rules !== undefined) {
+      input.spendingRules = validated.spending_rules;
+    }
 
     const result = await updateUpstream(id, input);
+
+    if (validated.spending_rules !== undefined) {
+      try {
+        await quotaTracker.syncUpstreamFromDb(
+          result.id,
+          result.name,
+          validated.spending_rules ?? null
+        );
+      } catch (error) {
+        log.warn(
+          { err: error, upstreamId: result.id },
+          "failed to refresh quota cache after update"
+        );
+      }
+    }
 
     return NextResponse.json(transformUpstreamToApi(result));
   } catch (error) {

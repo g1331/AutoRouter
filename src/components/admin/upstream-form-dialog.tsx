@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm, useWatch, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
@@ -68,6 +68,19 @@ const affinityMigrationConfigSchema = z
   })
   .nullable();
 
+const spendingRuleSchema = z.object({
+  period_type: z.enum(["daily", "monthly", "rolling"]),
+  limit: z.coerce.number().positive(),
+  period_hours: z.number().int().min(1).max(8760).nullable(),
+});
+
+function hasValidRollingPeriodHours(rules: z.input<typeof spendingRuleSchema>[]): boolean {
+  return rules.every(
+    (rule) =>
+      rule.period_type !== "rolling" || (rule.period_hours != null && rule.period_hours >= 1)
+  );
+}
+
 // Schema for create mode - api_key is required
 const createUpstreamFormSchema = z
   .object({
@@ -79,11 +92,16 @@ const createUpstreamFormSchema = z
     weight: z.number().int().min(1).max(100),
     billing_input_multiplier: z.number().min(0).max(100),
     billing_output_multiplier: z.number().min(0).max(100),
+    spending_rules: z.array(spendingRuleSchema),
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
     allowed_models: z.array(z.string()).nullable(),
     model_redirects: z.record(z.string(), z.string()).nullable(),
     circuit_breaker_config: circuitBreakerConfigSchema,
     affinity_migration: affinityMigrationConfigSchema,
+  })
+  .refine((data) => hasValidRollingPeriodHours(data.spending_rules), {
+    message: "period_hours is required when period_type is 'rolling'",
+    path: ["spending_rules"],
   })
   .refine((data) => areSingleProviderCapabilities(data.route_capabilities), {
     message: "All route capabilities must belong to the same provider",
@@ -101,18 +119,35 @@ const editUpstreamFormSchema = z
     weight: z.number().int().min(1).max(100),
     billing_input_multiplier: z.number().min(0).max(100),
     billing_output_multiplier: z.number().min(0).max(100),
+    spending_rules: z.array(spendingRuleSchema),
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
     allowed_models: z.array(z.string()).nullable(),
     model_redirects: z.record(z.string(), z.string()).nullable(),
     circuit_breaker_config: circuitBreakerConfigSchema,
     affinity_migration: affinityMigrationConfigSchema,
   })
+  .refine((data) => hasValidRollingPeriodHours(data.spending_rules), {
+    message: "period_hours is required when period_type is 'rolling'",
+    path: ["spending_rules"],
+  })
   .refine((data) => areSingleProviderCapabilities(data.route_capabilities), {
     message: "All route capabilities must belong to the same provider",
     path: ["route_capabilities"],
   });
 
-type UpstreamFormData = z.infer<typeof createUpstreamFormSchema>;
+type UpstreamFormValues = z.input<typeof editUpstreamFormSchema>;
+type UpstreamFormData = z.output<typeof editUpstreamFormSchema>;
+
+function spendingRulesToApi(
+  rules: UpstreamFormData["spending_rules"]
+): { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[] | null {
+  if (!rules || rules.length === 0) return null;
+  return rules.map((r) => ({
+    period_type: r.period_type,
+    limit: r.limit,
+    ...(r.period_type === "rolling" && r.period_hours ? { period_hours: r.period_hours } : {}),
+  }));
+}
 
 /**
  * M3 Upstream Form Dialog (Create/Edit)
@@ -124,13 +159,14 @@ export function UpstreamFormDialog({
   trigger,
 }: UpstreamFormDialogProps) {
   const isEdit = !!upstream;
+  const activeSchema = isEdit ? editUpstreamFormSchema : createUpstreamFormSchema;
   const createMutation = useCreateUpstream();
   const updateMutation = useUpdateUpstream();
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
 
-  const form = useForm<UpstreamFormData>({
-    resolver: zodResolver(isEdit ? editUpstreamFormSchema : createUpstreamFormSchema),
+  const form = useForm<UpstreamFormValues>({
+    resolver: zodResolver(activeSchema),
     defaultValues: {
       name: "",
       base_url: "",
@@ -140,6 +176,7 @@ export function UpstreamFormDialog({
       weight: 1,
       billing_input_multiplier: 1,
       billing_output_multiplier: 1,
+      spending_rules: [],
       route_capabilities: [],
       allowed_models: null,
       model_redirects: null,
@@ -160,6 +197,21 @@ export function UpstreamFormDialog({
     name: "affinity_migration",
   });
 
+  // Field array for spending rules
+  const {
+    fields: spendingRuleFields,
+    append: appendSpendingRule,
+    remove: removeSpendingRule,
+  } = useFieldArray({
+    control: form.control,
+    name: "spending_rules",
+  });
+
+  const spendingRules = useWatch({
+    control: form.control,
+    name: "spending_rules",
+  });
+
   useEffect(() => {
     if (upstream && open) {
       form.reset({
@@ -171,6 +223,11 @@ export function UpstreamFormDialog({
         weight: upstream.weight ?? 1,
         billing_input_multiplier: upstream.billing_input_multiplier ?? 1,
         billing_output_multiplier: upstream.billing_output_multiplier ?? 1,
+        spending_rules: (upstream.spending_rules ?? []).map((r) => ({
+          period_type: r.period_type as "daily" | "monthly" | "rolling",
+          limit: r.limit,
+          period_hours: r.period_hours ?? null,
+        })),
         route_capabilities: upstream.route_capabilities || [],
         allowed_models: upstream.allowed_models || null,
         model_redirects: upstream.model_redirects || null,
@@ -194,6 +251,7 @@ export function UpstreamFormDialog({
         weight: 1,
         billing_input_multiplier: 1,
         billing_output_multiplier: 1,
+        spending_rules: [],
         route_capabilities: [],
         allowed_models: null,
         model_redirects: null,
@@ -203,8 +261,9 @@ export function UpstreamFormDialog({
     }
   }, [upstream, open, form]);
 
-  const onSubmit = async (data: UpstreamFormData) => {
+  const onSubmit = async (values: UpstreamFormValues) => {
     try {
+      const data = activeSchema.parse(values) as UpstreamFormData;
       if (isEdit) {
         // 只有填写了 api_key 才更新
         const updateData: {
@@ -216,6 +275,13 @@ export function UpstreamFormDialog({
           weight?: number;
           billing_input_multiplier?: number;
           billing_output_multiplier?: number;
+          spending_rules?:
+            | {
+                period_type: "daily" | "monthly" | "rolling";
+                limit: number;
+                period_hours?: number;
+              }[]
+            | null;
           route_capabilities?: RouteCapability[] | null;
           allowed_models?: string[] | null;
           model_redirects?: Record<string, string> | null;
@@ -238,6 +304,7 @@ export function UpstreamFormDialog({
           weight: data.weight,
           billing_input_multiplier: data.billing_input_multiplier,
           billing_output_multiplier: data.billing_output_multiplier,
+          spending_rules: spendingRulesToApi(data.spending_rules),
           route_capabilities: data.route_capabilities,
           allowed_models: data.allowed_models,
           model_redirects: data.model_redirects,
@@ -252,7 +319,6 @@ export function UpstreamFormDialog({
           data: updateData,
         });
       } else {
-        // 创建模式: api_key 必填，schema 已验证非空
         await createMutation.mutateAsync({
           name: data.name,
           base_url: data.base_url,
@@ -262,6 +328,7 @@ export function UpstreamFormDialog({
           weight: data.weight,
           billing_input_multiplier: data.billing_input_multiplier,
           billing_output_multiplier: data.billing_output_multiplier,
+          spending_rules: spendingRulesToApi(data.spending_rules),
           route_capabilities: data.route_capabilities,
           allowed_models: data.allowed_models,
           model_redirects: data.model_redirects,
@@ -442,6 +509,150 @@ export function UpstreamFormDialog({
                   </FormItem>
                 )}
               />
+            </div>
+          </div>
+
+          {/* Spending Quota Section */}
+          <div className="border-t pt-6 mt-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-medium text-muted-foreground">{t("spendingQuota")}</h3>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1 text-xs"
+                onClick={() =>
+                  appendSpendingRule({ period_type: "daily", limit: 0, period_hours: null })
+                }
+              >
+                <Plus className="h-3 w-3" />
+                {t("addSpendingRule")}
+              </Button>
+            </div>
+
+            {spendingRuleFields.length === 0 && (
+              <p className="text-xs text-muted-foreground">{t("noSpendingRules")}</p>
+            )}
+
+            <div className="space-y-3">
+              {spendingRuleFields.map((ruleField, index) => {
+                const periodType = spendingRules?.[index]?.period_type ?? ruleField.period_type;
+                return (
+                  <div
+                    key={ruleField.id}
+                    className="grid grid-cols-[1fr_1fr_auto] items-start gap-2 rounded-cf-sm border border-divider bg-surface-300/30 p-3"
+                  >
+                    <FormField
+                      control={form.control}
+                      name={`spending_rules.${index}.period_type`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">{t("spendingPeriodType")}</FormLabel>
+                          <Select
+                            value={field.value}
+                            onValueChange={(v) => {
+                              field.onChange(v);
+                              if (v !== "rolling") {
+                                form.setValue(`spending_rules.${index}.period_hours`, null);
+                              }
+                            }}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="daily">{t("spendingPeriodDaily")}</SelectItem>
+                              <SelectItem value="monthly">{t("spendingPeriodMonthly")}</SelectItem>
+                              <SelectItem value="rolling">{t("spendingPeriodRolling")}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="space-y-2">
+                      <FormField
+                        control={form.control}
+                        name={`spending_rules.${index}.limit`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">{t("spendingLimit")}</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={0}
+                                step={0.01}
+                                inputMode="decimal"
+                                className="h-8 text-xs"
+                                placeholder={t("spendingLimitPlaceholder")}
+                                {...field}
+                                value={
+                                  field.value === 0
+                                    ? ""
+                                    : typeof field.value === "number" ||
+                                        typeof field.value === "string"
+                                      ? field.value
+                                      : ""
+                                }
+                                onChange={(e) => field.onChange(e.target.value)}
+                                onBlur={(e) => {
+                                  field.onBlur();
+                                  const raw = e.target.value.trim();
+                                  if (raw.startsWith(".")) {
+                                    field.onChange(`0${raw}`);
+                                  }
+                                }}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      {periodType === "rolling" && (
+                        <FormField
+                          control={form.control}
+                          name={`spending_rules.${index}.period_hours`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs">{t("spendingPeriodHours")}</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  max={8760}
+                                  step={1}
+                                  inputMode="numeric"
+                                  className="h-8 text-xs"
+                                  placeholder="24"
+                                  value={field.value ?? ""}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    field.onChange(v === "" ? null : Number(v));
+                                  }}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="mt-6 h-8 w-8 text-status-error hover:bg-status-error-muted"
+                      onClick={() => removeSpendingRule(index)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                );
+              })}
             </div>
           </div>
 

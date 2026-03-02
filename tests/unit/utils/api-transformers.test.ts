@@ -78,6 +78,7 @@ describe("api-transformers", () => {
         affinity_migration: null,
         billing_input_multiplier: 1,
         billing_output_multiplier: 1,
+        spending_rules: null,
         circuit_breaker: null,
       });
     });

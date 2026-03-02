@@ -63,6 +63,10 @@ export const upstreams = pgTable(
     } | null>(), // Session affinity migration configuration
     billingInputMultiplier: doublePrecision("billing_input_multiplier").notNull().default(1),
     billingOutputMultiplier: doublePrecision("billing_output_multiplier").notNull().default(1),
+    spendingRules: json("spending_rules").$type<
+      | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
+      | null
+    >(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

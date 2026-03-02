@@ -164,6 +164,7 @@ describe("UpstreamFormDialog", () => {
           weight: 1,
           billing_input_multiplier: 1,
           billing_output_multiplier: 1,
+          spending_rules: null,
           route_capabilities: [],
           allowed_models: null,
           model_redirects: null,
@@ -315,6 +316,7 @@ describe("UpstreamFormDialog", () => {
             weight: 1,
             billing_input_multiplier: 1,
             billing_output_multiplier: 1,
+            spending_rules: null,
             route_capabilities: [],
             allowed_models: null,
             model_redirects: null,
@@ -351,6 +353,7 @@ describe("UpstreamFormDialog", () => {
             weight: 1,
             billing_input_multiplier: 1,
             billing_output_multiplier: 1,
+            spending_rules: null,
             route_capabilities: [],
             allowed_models: null,
             model_redirects: null,
@@ -532,6 +535,103 @@ describe("UpstreamFormDialog", () => {
 
       // Dialog should NOT close on error
       expect(mockOnOpenChange).not.toHaveBeenCalledWith(false);
+    });
+  });
+
+  describe("Spending Quota Fields", () => {
+    it("renders spending limit field in create mode", () => {
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      fireEvent.click(screen.getByText("addSpendingRule"));
+      expect(screen.getByText("spendingLimit")).toBeInTheDocument();
+    });
+
+    it("renders spending period type selector", () => {
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      fireEvent.click(screen.getByText("addSpendingRule"));
+      expect(screen.getByText("spendingPeriodType")).toBeInTheDocument();
+    });
+
+    it("populates spending fields in edit mode", () => {
+      const upstreamWithQuota: Upstream = {
+        ...mockUpstream,
+        spending_rules: [{ period_type: "daily", limit: 100 }],
+      };
+
+      render(
+        <UpstreamFormDialog
+          open={true}
+          onOpenChange={mockOnOpenChange}
+          upstream={upstreamWithQuota}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      const limitInput = screen.getByPlaceholderText("spendingLimitPlaceholder");
+      expect(limitInput).toHaveValue(100);
+    });
+
+    it("submits spending quota fields on create", async () => {
+      mockCreateMutateAsync.mockResolvedValue({});
+
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      const nameInput = screen.getByPlaceholderText("upstreamNamePlaceholder");
+      const urlInput = screen.getByPlaceholderText("baseUrlPlaceholder");
+      const apiKeyInput = screen.getByPlaceholderText("apiKeyPlaceholder");
+
+      fireEvent.click(screen.getByText("addSpendingRule"));
+      const limitInput = screen.getByPlaceholderText("spendingLimitPlaceholder");
+
+      fireEvent.change(nameInput, { target: { value: "Quota Upstream" } });
+      fireEvent.change(urlInput, { target: { value: "https://api.example.com/v1" } });
+      fireEvent.change(apiKeyInput, { target: { value: "sk-test-key" } });
+      fireEvent.change(limitInput, { target: { value: "50" } });
+
+      const submitButton = screen.getByText("create");
+      fireEvent.click(submitButton);
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalled();
+      });
+
+      const callArgs = mockCreateMutateAsync.mock.calls[0][0];
+      expect(callArgs.spending_rules).toEqual([{ period_type: "daily", limit: 50 }]);
+    });
+
+    it("blocks submit when rolling rule has no period_hours", async () => {
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      const nameInput = screen.getByPlaceholderText("upstreamNamePlaceholder");
+      const urlInput = screen.getByPlaceholderText("baseUrlPlaceholder");
+      const apiKeyInput = screen.getByPlaceholderText("apiKeyPlaceholder");
+
+      fireEvent.click(screen.getByText("addSpendingRule"));
+      const limitInput = screen.getByPlaceholderText("spendingLimitPlaceholder");
+
+      fireEvent.change(nameInput, { target: { value: "Rolling Upstream" } });
+      fireEvent.change(urlInput, { target: { value: "https://api.example.com/v1" } });
+      fireEvent.change(apiKeyInput, { target: { value: "sk-test-key" } });
+      fireEvent.change(limitInput, { target: { value: "20" } });
+
+      fireEvent.click(screen.getAllByText("spendingPeriodDaily")[0]);
+      fireEvent.click(screen.getAllByText("spendingPeriodRolling").slice(-1)[0]);
+
+      const submitButton = screen.getByText("create");
+      fireEvent.click(submitButton);
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+      });
     });
   });
 });

@@ -8,6 +8,7 @@ import type {
   PaginatedUpstreamsResponse,
   TestUpstreamResponse,
   UpstreamHealthResponse,
+  UpstreamQuotaStatusResponse,
 } from "@/types/api";
 import { toast } from "sonner";
 
@@ -81,6 +82,7 @@ export function useCreateUpstream() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["upstreams"] });
       queryClient.invalidateQueries({ queryKey: ["stats", "upstreams"] });
+      queryClient.invalidateQueries({ queryKey: ["upstreams", "quota"] });
       toast.success("Upstream 已创建");
     },
     onError: (error: Error) => {
@@ -101,6 +103,7 @@ export function useUpdateUpstream() {
       apiClient.put<Upstream>(`/admin/upstreams/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["upstreams"] });
+      queryClient.invalidateQueries({ queryKey: ["upstreams", "quota"] });
       toast.success("Upstream 已更新");
     },
     onError: (error: Error) => {
@@ -263,5 +266,33 @@ export function useUpstreamHealth(activeOnly: boolean = true) {
     },
     // Refetch health status every 30 seconds
     refetchInterval: 30000,
+  });
+}
+
+/**
+ * Fetch upstream spending quota statuses
+ */
+export function useUpstreamQuota() {
+  const { apiClient } = useAuth();
+
+  return useQuery({
+    queryKey: ["upstreams", "quota"],
+    queryFn: () => apiClient.get<UpstreamQuotaStatusResponse>("/admin/upstreams/quota"),
+    refetchInterval: 60000,
+  });
+}
+
+/**
+ * Force sync quota data from database
+ */
+export function useSyncUpstreamQuota() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => apiClient.post<{ synced: boolean }>("/admin/upstreams/quota", {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["upstreams", "quota"] });
+    },
   });
 }

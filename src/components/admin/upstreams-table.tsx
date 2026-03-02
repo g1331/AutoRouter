@@ -2,7 +2,7 @@
 
 import { formatDistanceToNow } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
-import { useState, useMemo, Fragment, type SyntheticEvent } from "react";
+import { useEffect, useState, useMemo, Fragment, type SyntheticEvent } from "react";
 import { Pencil, Trash2, Server, Play, ChevronDown, ChevronRight, ShieldCheck } from "lucide-react";
 import type { Upstream } from "@/types/api";
 import { Button } from "@/components/ui/button";
@@ -16,9 +16,14 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { getDateLocale } from "@/lib/date-locale";
-import { StatusLed, AsciiProgress, type LedStatus } from "@/components/ui/terminal";
+import {
+  StatusLed,
+  AsciiProgress,
+  type LedStatus,
+  type ProgressVariant,
+} from "@/components/ui/terminal";
 import { cn } from "@/lib/utils";
-import { useToggleUpstreamActive } from "@/hooks/use-upstreams";
+import { useToggleUpstreamActive, useUpstreamQuota } from "@/hooks/use-upstreams";
 import { useForceCircuitBreaker } from "@/hooks/use-circuit-breaker";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
@@ -44,9 +49,45 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
   const tCommon = useTranslations("common");
   const locale = useLocale();
   const dateLocale = getDateLocale(locale);
+  const [is2xl, setIs2xl] = useState(false);
 
   const toggleActiveMutation = useToggleUpstreamActive();
   const forceCircuitBreakerMutation = useForceCircuitBreaker();
+  const { data: quotaData } = useUpstreamQuota();
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 1536px)");
+    const update = () => setIs2xl(mediaQuery.matches);
+    update();
+    mediaQuery.addEventListener("change", update);
+    return () => mediaQuery.removeEventListener("change", update);
+  }, []);
+
+  // Build a map for quick quota lookup by upstream_id
+  const quotaMap = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        is_exceeded: boolean;
+        rules: {
+          period_type: "daily" | "monthly" | "rolling";
+          period_hours: number | null;
+          current_spending: number;
+          spending_limit: number;
+          percent_used: number;
+          is_exceeded: boolean;
+          resets_at: string | null;
+          estimated_recovery_at: string | null;
+        }[];
+      }
+    >();
+    if (quotaData?.items) {
+      for (const q of quotaData.items) {
+        map.set(q.upstream_id, q);
+      }
+    }
+    return map;
+  }, [quotaData]);
 
   // Track collapsed state for each tier
   const [collapsedTiers, setCollapsedTiers] = useState<Set<number>>(new Set());
@@ -156,7 +197,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
   };
 
   const renderDesktopActions = (upstream: Upstream) => (
-    <div className="ml-auto inline-flex min-w-[11.5rem] items-center justify-end gap-2">
+    <div className="ml-auto inline-flex min-w-0 items-center justify-end gap-2">
       {upstream.circuit_breaker && upstream.circuit_breaker.state !== "closed" ? (
         <Button
           variant="ghost"
@@ -240,7 +281,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
             variant="outline"
             type="button"
             size="sm"
-            className="h-7 gap-1.5 border-status-error/50 bg-status-error-muted px-2.5 text-status-error hover:border-status-error"
+            className="h-7 shrink-0 gap-1.5 border-status-error/50 bg-status-error-muted px-2.5 text-status-error hover:border-status-error"
             onClick={(e) => {
               void handleRecoverCircuit(upstream, e);
             }}
@@ -253,7 +294,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
             <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
           </Button>
         )}
-        <div className="order-1 inline-flex items-center gap-2">
+        <div className="order-1 inline-flex shrink-0 items-center gap-2">
           <Switch
             checked={upstream.is_active}
             onClick={(e) => e.stopPropagation()}
@@ -266,16 +307,8 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
             className="h-5 w-10"
             aria-label={`${upstream.is_active ? t("quickDisable") : t("quickEnable")}: ${upstream.name}`}
           />
-          <span
-            className={cn(
-              "text-xs",
-              upstream.is_active ? "text-status-success" : "text-muted-foreground"
-            )}
-          >
-            {upstream.is_active ? t("active") : t("inactive")}
-          </span>
         </div>
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           <Button
             variant="outline"
             size="sm"
@@ -339,24 +372,24 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
     <div className="space-y-0">
       <div className="overflow-hidden rounded-cf-md border border-divider bg-card/92">
         {/* Desktop: Table Layout */}
-        <div className="hidden lg:block">
+        <div className="hidden xl:block">
           <Table
             frame="none"
-            containerClassName="rounded-none bg-transparent"
+            containerClassName="rounded-none bg-transparent overflow-x-hidden"
             className="w-full table-fixed"
           >
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[14%]">{tCommon("name")}</TableHead>
-                <TableHead className="w-[20%]">{t("routeCapabilities")}</TableHead>
-                <TableHead className="w-[110px] px-3">{t("tableWeight")}</TableHead>
-                <TableHead className="w-[104px] px-3">{t("tableHealth")}</TableHead>
-                <TableHead className="w-[112px] px-3">{t("tableCircuitBreaker")}</TableHead>
-                <TableHead className="w-[28%] px-3">{t("tableBaseUrl")}</TableHead>
+                <TableHead className="w-[9%] px-2">{tCommon("name")}</TableHead>
+                <TableHead className="w-[12%] px-2">{t("routeCapabilities")}</TableHead>
+                <TableHead className="w-[72px] px-2 text-right">{t("tableWeight")}</TableHead>
+                <TableHead className="w-[96px] px-2">{t("tableCircuitBreaker")}</TableHead>
+                <TableHead className="w-[35%] px-2">{t("tableBaseUrl")}</TableHead>
+                <TableHead className="w-[29%] px-2">{t("tableQuota")}</TableHead>
                 <TableHead className="hidden w-[120px] text-right 2xl:table-cell">
                   {tCommon("createdAt")}
                 </TableHead>
-                <TableHead className="w-[220px] px-3 text-right">{tCommon("actions")}</TableHead>
+                <TableHead className="w-[176px] px-2 text-right">{tCommon("actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -370,8 +403,8 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                       className="bg-surface-300 hover:bg-surface-300 cursor-pointer"
                       onClick={() => toggleTier(tier.priority)}
                     >
-                      <TableCell colSpan={8} className="py-2">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
+                      <TableCell colSpan={is2xl ? 8 : 7} className="py-2">
+                        <div className="flex items-center justify-between gap-2">
                           <div className="flex min-w-0 items-center gap-3">
                             <Button
                               variant="ghost"
@@ -386,32 +419,54 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                                 <ChevronDown className="h-4 w-4" />
                               )}
                             </Button>
-                            <span className="font-mono text-xs font-semibold tracking-wider text-foreground">
-                              TIER P{tier.priority}
+                            <span className="text-xs font-semibold tracking-wide text-foreground">
+                              {t("tier")} P{tier.priority}
                             </span>
-                            <span className="font-mono text-xs text-muted-foreground">
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">
                               ({tier.upstreams.length}{" "}
-                              {tier.upstreams.length === 1 ? "upstream" : "upstreams"})
+                              {tier.upstreams.length === 1
+                                ? t("tierUpstreamSingular")
+                                : t("tierUpstreamPlural")}
+                              )
                             </span>
                           </div>
 
-                          <div className="flex flex-wrap items-center justify-end gap-3 font-mono text-xs">
+                          <div className="flex items-center justify-end gap-3 text-xs">
                             {/* Health Summary */}
                             <div className="flex items-center gap-2 whitespace-nowrap">
-                              <StatusLed status={getTierHealthLedStatus(tier.healthySummary)} />
+                              {(() => {
+                                const tierStatus = getTierHealthLedStatus(tier.healthySummary);
+                                const tierStatusLabel =
+                                  tierStatus === "healthy"
+                                    ? t("tierLedHealthy")
+                                    : tierStatus === "offline"
+                                      ? t("tierLedOffline")
+                                      : t("tierLedDegraded");
+
+                                return (
+                                  <StatusLed
+                                    status={tierStatus}
+                                    showLabel
+                                    label={tierStatusLabel}
+                                    className="text-[10px]"
+                                  />
+                                );
+                              })()}
                               <span className="text-muted-foreground">
-                                {tier.healthySummary.healthy}/{tier.healthySummary.total} HEALTHY
+                                {tier.healthySummary.healthy}/{tier.healthySummary.total}{" "}
+                                {t("tierHealthy")}
                               </span>
                             </div>
 
                             {/* Circuit Summary */}
                             <div className="flex items-center gap-2 whitespace-nowrap">
-                              <span className="text-muted-foreground">CIRCUIT:</span>
+                              <span className="text-muted-foreground">{t("tierCircuit")}:</span>
                               <AsciiProgress
                                 value={tier.circuitSummary.closed}
                                 max={tier.circuitSummary.total}
-                                width={8}
+                                width={6}
                                 showPercentage
+                                style="meter"
                                 variant={
                                   tier.circuitSummary.closed === tier.circuitSummary.total
                                     ? "success"
@@ -431,49 +486,46 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                       tier.upstreams.map((upstream) => (
                         <Fragment key={upstream.id}>
                           {/* Data Row */}
-                          <TableRow className="[&>td]:align-middle">
-                            <TableCell className="font-medium pl-6 xl:pl-7">
-                              <div className="flex items-center justify-between gap-3 min-w-0">
-                                <span className="truncate">{upstream.name}</span>
-                                <Badge
-                                  variant={upstream.is_active ? "success" : "neutral"}
-                                  className="min-w-[52px] justify-center"
+                          <TableRow className="[&>td]:align-top">
+                            <TableCell className="font-medium pl-6 pr-2 xl:pl-7">
+                              <div className="min-w-0">
+                                <span
+                                  className={cn(
+                                    "block truncate",
+                                    !upstream.is_active && "text-muted-foreground"
+                                  )}
                                 >
-                                  {upstream.is_active ? t("active") : t("inactive")}
-                                </Badge>
+                                  {upstream.name}
+                                </span>
                               </div>
                             </TableCell>
-                            <TableCell className="py-2.5">
+                            <TableCell className="px-2 py-2.5">
                               <RouteCapabilityBadges
                                 capabilities={upstream.route_capabilities}
                                 className="max-w-full items-start gap-1 py-0.5"
                                 badgeClassName="px-2 py-0.5 text-[11px] leading-4 xl:text-xs"
                               />
                             </TableCell>
-                            <TableCell className="px-3">
-                              <AsciiProgress
-                                value={upstream.weight}
-                                max={tier.maxWeight}
-                                width={10}
-                                showValue
-                              />
+                            <TableCell className="px-2 text-right">
+                              <span
+                                className="font-mono text-xs tabular-nums text-foreground"
+                                title={`${upstream.weight}`}
+                              >
+                                {upstream.weight}
+                              </span>
                             </TableCell>
-                            <TableCell className="px-3">
-                              <StatusLed
-                                status={getHealthLedStatus(upstream)}
-                                label={getHealthLabel(upstream)}
-                                showLabel
-                              />
-                            </TableCell>
-                            <TableCell className="px-3">
+                            <TableCell className="px-2">
                               <StatusLed
                                 status={getCircuitLedStatus(upstream)}
                                 label={getCircuitBreakerLabel(upstream)}
                                 showLabel
                               />
                             </TableCell>
-                            <TableCell className="px-3">
-                              <code className="block max-w-full whitespace-nowrap overflow-x-auto rounded-cf-sm border border-divider bg-surface-300 px-2 py-1 font-mono text-xs leading-5 text-foreground">
+                            <TableCell className="px-2">
+                              <code
+                                className="block max-w-full break-all rounded-cf-sm border border-divider bg-surface-300 px-2 py-1 font-mono text-xs leading-5 text-foreground line-clamp-2"
+                                title={upstream.base_url}
+                              >
                                 {upstream.base_url}
                               </code>
                               <div className="mt-1 flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
@@ -484,13 +536,105 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                                 </span>
                               </div>
                             </TableCell>
+                            <TableCell className="px-2">
+                              {!quotaMap.has(upstream.id) ? (
+                                <span className="font-mono text-xs text-muted-foreground">-</span>
+                              ) : (
+                                (() => {
+                                  const q = quotaMap.get(upstream.id)!;
+                                  return (
+                                    <div className="space-y-1.5">
+                                      {q.rules.map((rule, rIdx) => {
+                                        const periodLabel =
+                                          rule.period_type === "rolling"
+                                            ? `${t("spendingPeriodRolling")} ${rule.period_hours}h`
+                                            : rule.period_type === "daily"
+                                              ? t("spendingPeriodDaily")
+                                              : t("spendingPeriodMonthly");
+                                        const progressVariant: ProgressVariant = rule.is_exceeded
+                                          ? "error"
+                                          : rule.percent_used >= 80
+                                            ? "warning"
+                                            : "default";
+                                        const timingText =
+                                          rule.period_type === "rolling"
+                                            ? rule.estimated_recovery_at
+                                              ? `${t("quotaRecovery")}: ${formatDistanceToNow(
+                                                  new Date(rule.estimated_recovery_at),
+                                                  { addSuffix: true, locale: dateLocale }
+                                                )}`
+                                              : null
+                                            : rule.resets_at
+                                              ? `${t("quotaResets")}: ${formatDistanceToNow(
+                                                  new Date(rule.resets_at),
+                                                  { addSuffix: true, locale: dateLocale }
+                                                )}`
+                                              : null;
+
+                                        return (
+                                          <div key={rIdx} className="text-[11px]">
+                                            <div className="grid min-w-0 grid-cols-[84px_56px_minmax(0,1fr)] items-center gap-2">
+                                              <span className="min-w-0 overflow-hidden text-clip whitespace-nowrap text-muted-foreground">
+                                                {periodLabel}
+                                              </span>
+                                              <AsciiProgress
+                                                value={rule.current_spending}
+                                                max={rule.spending_limit}
+                                                width={5}
+                                                variant={progressVariant}
+                                                style="meter"
+                                                className="shrink-0"
+                                              />
+                                              <div className="flex min-w-0 items-center justify-end gap-1.5">
+                                                {q.is_exceeded && rIdx === 0 && (
+                                                  <Badge
+                                                    variant="outline"
+                                                    className="shrink-0 border-destructive/40 px-1.5 py-0 text-[10px] leading-4 text-destructive"
+                                                  >
+                                                    {t("tableQuota")}
+                                                  </Badge>
+                                                )}
+                                                <span
+                                                  className={cn(
+                                                    "min-w-0 text-right leading-4 tabular-nums font-mono",
+                                                    rule.is_exceeded
+                                                      ? "text-destructive"
+                                                      : rule.percent_used >= 80
+                                                        ? "text-warning"
+                                                        : "text-foreground"
+                                                  )}
+                                                  title={`$${rule.current_spending.toFixed(2)} / $${rule.spending_limit.toFixed(
+                                                    2
+                                                  )} (${Math.round(rule.percent_used)}%)`}
+                                                >
+                                                  ${rule.current_spending.toFixed(2)} / $
+                                                  {rule.spending_limit.toFixed(2)} (
+                                                  {Math.round(rule.percent_used)}%)
+                                                </span>
+                                              </div>
+                                            </div>
+                                            {timingText && (
+                                              <div className="mt-0.5 flex items-center gap-2 text-[10px] text-muted-foreground">
+                                                <span className="ml-auto whitespace-nowrap tabular-nums">
+                                                  {timingText}
+                                                </span>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                })()
+                              )}
+                            </TableCell>
                             <TableCell className="hidden whitespace-nowrap pr-2 text-right 2xl:table-cell">
                               {formatDistanceToNow(new Date(upstream.created_at), {
                                 addSuffix: true,
                                 locale: dateLocale,
                               })}
                             </TableCell>
-                            <TableCell className="min-w-[200px] px-3 text-right">
+                            <TableCell className="px-2 text-right">
                               {renderDesktopActions(upstream)}
                             </TableCell>
                           </TableRow>
@@ -504,7 +648,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
         </div>
 
         {/* Mobile/Tablet: Card Layout */}
-        <div className="lg:hidden divide-y divide-dashed divide-divider">
+        <div className="xl:hidden divide-y divide-dashed divide-divider">
           {tieredData.map((tier) => {
             const isCollapsed = collapsedTiers.has(tier.priority);
 
@@ -529,17 +673,38 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                         <ChevronDown className="h-4 w-4" />
                       )}
                     </Button>
-                    <span className="font-mono text-xs font-semibold tracking-wider text-foreground">
-                      TIER P{tier.priority}
+                    <span className="text-xs font-semibold tracking-wide text-foreground">
+                      {t("tier")} P{tier.priority}
                     </span>
-                    <span className="font-mono text-xs text-muted-foreground">
-                      ({tier.upstreams.length})
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      ({tier.upstreams.length}{" "}
+                      {tier.upstreams.length === 1
+                        ? t("tierUpstreamSingular")
+                        : t("tierUpstreamPlural")}
+                      )
                     </span>
                   </div>
-                  <div className="flex items-center gap-3 font-mono text-xs">
-                    <StatusLed status={getTierHealthLedStatus(tier.healthySummary)} />
-                    <span className="text-muted-foreground">
-                      {tier.healthySummary.healthy}/{tier.healthySummary.total}
+                  <div className="flex items-center gap-2 text-xs">
+                    {(() => {
+                      const tierStatus = getTierHealthLedStatus(tier.healthySummary);
+                      const tierStatusLabel =
+                        tierStatus === "healthy"
+                          ? t("tierLedHealthy")
+                          : tierStatus === "offline"
+                            ? t("tierLedOffline")
+                            : t("tierLedDegraded");
+
+                      return (
+                        <StatusLed
+                          status={tierStatus}
+                          showLabel
+                          label={tierStatusLabel}
+                          className="text-[10px]"
+                        />
+                      );
+                    })()}
+                    <span className="text-muted-foreground whitespace-nowrap">
+                      {tier.healthySummary.healthy}/{tier.healthySummary.total} {t("tierHealthy")}
                     </span>
                   </div>
                 </div>
@@ -566,15 +731,14 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                         aria-label={`${tCommon("edit")}: ${upstream.name}`}
                       >
                         <div className="flex min-w-0 items-center gap-1.5">
-                          <span className="font-mono text-xs text-foreground font-medium truncate">
+                          <span
+                            className={cn(
+                              "font-mono text-xs font-medium truncate",
+                              upstream.is_active ? "text-foreground" : "text-muted-foreground"
+                            )}
+                          >
                             {upstream.name}
                           </span>
-                          <Badge
-                            variant={upstream.is_active ? "success" : "neutral"}
-                            className="min-w-[44px] justify-center shrink-0 text-[10px] px-1.5 py-0"
-                          >
-                            {upstream.is_active ? t("active") : t("inactive")}
-                          </Badge>
                         </div>
                       </div>
 
@@ -606,12 +770,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                         </div>
                         <div className="flex items-center justify-between gap-2">
                           <span className="shrink-0 text-muted-foreground">{t("tableWeight")}</span>
-                          <AsciiProgress
-                            value={upstream.weight}
-                            max={tier.maxWeight}
-                            width={8}
-                            showValue
-                          />
+                          <span className="tabular-nums text-foreground">{upstream.weight}</span>
                         </div>
                         <div className="flex items-center justify-between gap-2">
                           <span className="shrink-0 text-muted-foreground">
@@ -622,6 +781,93 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                             {(upstream.billing_output_multiplier ?? 1).toFixed(2)}
                           </span>
                         </div>
+                        {quotaMap.has(upstream.id) &&
+                          (() => {
+                            const q = quotaMap.get(upstream.id)!;
+                            return (
+                              <div className="mt-2 space-y-2 sm:col-span-2">
+                                {q.rules.map((rule, rIdx) => {
+                                  const periodLabel =
+                                    rule.period_type === "rolling"
+                                      ? `${t("spendingPeriodRolling")} ${rule.period_hours}h`
+                                      : rule.period_type === "daily"
+                                        ? t("spendingPeriodDaily")
+                                        : t("spendingPeriodMonthly");
+                                  const progressVariant: ProgressVariant = rule.is_exceeded
+                                    ? "error"
+                                    : rule.percent_used >= 80
+                                      ? "warning"
+                                      : "default";
+                                  const timingText =
+                                    rule.period_type === "rolling"
+                                      ? rule.estimated_recovery_at
+                                        ? `${t("quotaRecovery")}: ${formatDistanceToNow(
+                                            new Date(rule.estimated_recovery_at),
+                                            { addSuffix: true, locale: dateLocale }
+                                          )}`
+                                        : null
+                                      : rule.resets_at
+                                        ? `${t("quotaResets")}: ${formatDistanceToNow(
+                                            new Date(rule.resets_at),
+                                            { addSuffix: true, locale: dateLocale }
+                                          )}`
+                                        : null;
+
+                                  return (
+                                    <div key={rIdx} className="text-[11px]">
+                                      <div className="grid min-w-0 grid-cols-[96px_minmax(0,1fr)_156px] items-center gap-2">
+                                        <span className="min-w-0 overflow-hidden text-clip whitespace-nowrap text-muted-foreground">
+                                          {periodLabel}
+                                        </span>
+                                        <AsciiProgress
+                                          value={rule.current_spending}
+                                          max={rule.spending_limit}
+                                          width={6}
+                                          variant={progressVariant}
+                                          style="meter"
+                                          className="shrink-0"
+                                        />
+                                        <div className="flex min-w-0 items-center justify-end gap-1.5">
+                                          {q.is_exceeded && rIdx === 0 && (
+                                            <Badge
+                                              variant="outline"
+                                              className="shrink-0 border-destructive/40 px-1.5 py-0 text-[10px] leading-4 text-destructive"
+                                            >
+                                              {t("tableQuota")}
+                                            </Badge>
+                                          )}
+                                          <span
+                                            className={cn(
+                                              "min-w-0 text-right tabular-nums font-mono",
+                                              rule.is_exceeded
+                                                ? "text-destructive"
+                                                : rule.percent_used >= 80
+                                                  ? "text-warning"
+                                                  : "text-foreground"
+                                            )}
+                                            title={`$${rule.current_spending.toFixed(2)} / $${rule.spending_limit.toFixed(
+                                              2
+                                            )} (${Math.round(rule.percent_used)}%)`}
+                                          >
+                                            ${rule.current_spending.toFixed(2)} / $
+                                            {rule.spending_limit.toFixed(2)} (
+                                            {Math.round(rule.percent_used)}%)
+                                          </span>
+                                        </div>
+                                      </div>
+                                      {timingText && (
+                                        <div className="mt-0.5 flex items-center gap-2 text-[10px] text-muted-foreground">
+                                          <span className="ml-auto whitespace-nowrap tabular-nums">
+                                            {timingText}
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
                         <div className="flex items-center justify-between gap-2">
                           <span className="shrink-0 text-muted-foreground">
                             {tCommon("createdAt")}
@@ -636,7 +882,10 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                       </div>
 
                       {/* URL */}
-                      <code className="block break-all rounded-cf-sm border border-divider bg-surface-300 px-2 py-1 font-mono text-[11px] text-foreground">
+                      <code
+                        className="block max-w-full break-all rounded-cf-sm border border-divider bg-surface-300 px-2 py-1 font-mono text-[11px] text-foreground line-clamp-2"
+                        title={upstream.base_url}
+                      >
                         {upstream.base_url}
                       </code>
 

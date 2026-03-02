@@ -15,6 +15,7 @@ import {
   type AffinityScope,
 } from "./session-affinity";
 import { getPrimaryProviderByCapabilities } from "@/lib/route-capabilities";
+import { quotaTracker } from "./upstream-quota-tracker";
 
 // Re-export for convenience
 export { VALID_PROVIDER_TYPES };
@@ -67,6 +68,7 @@ export interface UpstreamSelectionResult {
   upstream: Upstream;
   selectedTier: number;
   circuitBreakerFiltered: number;
+  quotaFiltered: number;
   totalCandidates: number;
   affinityHit?: boolean; // Whether session affinity was used
   affinityMigrated?: boolean; // Whether session was migrated to higher priority upstream
@@ -211,6 +213,27 @@ export function filterByExclusions(
 } {
   const allowed = upstreamList.filter((u) => !excludeIds || !excludeIds.includes(u.upstream.id));
   const excludedCount = upstreamList.length - allowed.length;
+
+  return { allowed, excludedCount };
+}
+
+/**
+ * Filter upstreams that have exceeded their spending quota.
+ */
+export function filterBySpendingQuota(upstreamList: UpstreamWithCircuitBreaker[]): {
+  allowed: UpstreamWithCircuitBreaker[];
+  excludedCount: number;
+} {
+  const allowed: UpstreamWithCircuitBreaker[] = [];
+  let excludedCount = 0;
+
+  for (const u of upstreamList) {
+    if (quotaTracker.isWithinQuota(u.upstream.id)) {
+      allowed.push(u);
+    } else {
+      excludedCount++;
+    }
+  }
 
   return { allowed, excludedCount };
 }
@@ -437,6 +460,12 @@ async function selectFromUpstreamPool(
   },
   affinityScopeHint?: AffinityScope
 ): Promise<UpstreamSelectionResult> {
+  try {
+    await quotaTracker.initialize();
+  } catch {
+    // Best-effort initialization only; continue routing with cached/default quota state.
+  }
+
   // Filter by allowed upstream IDs (API key authorization)
   let filteredUpstreams = allUpstreams;
   if (allowedUpstreamIds && allowedUpstreamIds.length > 0) {
@@ -473,12 +502,29 @@ async function selectFromUpstreamPool(
 
       // Respect excludeIds: if bound upstream is excluded, skip affinity and reselect
       const isExcluded = excludeIds?.includes(affinityEntry.upstreamId) ?? false;
+      let isWithinQuota = quotaTracker.isWithinQuota(affinityEntry.upstreamId);
 
-      if (boundUpstream && isUpstreamAvailable(boundUpstream) && !isExcluded) {
+      if (!isWithinQuota && boundUpstream) {
+        try {
+          await quotaTracker.syncUpstreamFromDb(
+            boundUpstream.upstream.id,
+            boundUpstream.upstream.name,
+            boundUpstream.upstream.spendingRules ?? null
+          );
+          isWithinQuota = quotaTracker.isWithinQuota(affinityEntry.upstreamId);
+        } catch {
+          // Best-effort quota refresh only; fall back to cached decision.
+        }
+      }
+
+      if (boundUpstream && isUpstreamAvailable(boundUpstream) && !isExcluded && isWithinQuota) {
         // Check if we should migrate to higher priority upstream
         // Filter out excluded upstreams from migration candidates
         const availableForMigration = filteredUpstreams.filter(
-          (u) => !excludeIds?.includes(u.upstream.id) && isUpstreamAvailable(u)
+          (u) =>
+            !excludeIds?.includes(u.upstream.id) &&
+            isUpstreamAvailable(u) &&
+            quotaTracker.isWithinQuota(u.upstream.id)
         );
         const migrationTarget = evaluateMigration(
           boundUpstream,
@@ -503,6 +549,7 @@ async function selectFromUpstreamPool(
               upstream: migrationTarget.upstream,
               selectedTier: migrationTarget.upstream.priority,
               circuitBreakerFiltered: 0,
+              quotaFiltered: 0,
               totalCandidates,
               affinityHit: true,
               affinityMigrated: true,
@@ -522,6 +569,7 @@ async function selectFromUpstreamPool(
             upstream: boundUpstream.upstream,
             selectedTier: boundUpstream.upstream.priority,
             circuitBreakerFiltered: 0,
+            quotaFiltered: 0,
             totalCandidates,
             affinityHit: true,
             affinityMigrated: false,
@@ -616,6 +664,8 @@ async function performTieredSelection(
   const sortedTiers = [...tierMap.entries()].sort((a, b) => a[0] - b[0]);
 
   let totalCircuitBreakerFiltered = 0;
+  let totalQuotaFiltered = 0;
+  let didResyncQuota = false;
 
   // Try each tier in priority order
   for (const [tier, tierUpstreams] of sortedTiers) {
@@ -623,8 +673,26 @@ async function performTieredSelection(
     const afterCircuitBreaker = filterByCircuitBreaker(tierUpstreams);
     totalCircuitBreakerFiltered += afterCircuitBreaker.excludedCount;
 
+    // Filter by spending quota
+    let afterQuota = filterBySpendingQuota(afterCircuitBreaker.allowed);
+
+    if (
+      afterQuota.allowed.length === 0 &&
+      afterCircuitBreaker.allowed.length > 0 &&
+      didResyncQuota === false
+    ) {
+      didResyncQuota = true;
+      try {
+        await quotaTracker.syncFromDb();
+        afterQuota = filterBySpendingQuota(afterCircuitBreaker.allowed);
+      } catch {
+        // Best-effort resync only; fall back to cached decision.
+      }
+    }
+    totalQuotaFiltered += afterQuota.excludedCount;
+
     // Filter by exclusion list (health status is display-only, not used for routing)
-    const afterExclusions = filterByExclusions(afterCircuitBreaker.allowed, excludeIds);
+    const afterExclusions = filterByExclusions(afterQuota.allowed, excludeIds);
 
     if (afterExclusions.allowed.length > 0) {
       const candidates = [...afterExclusions.allowed];
@@ -641,6 +709,7 @@ async function performTieredSelection(
             upstream: selected.upstream,
             selectedTier: tier,
             circuitBreakerFiltered: totalCircuitBreakerFiltered,
+            quotaFiltered: totalQuotaFiltered,
             totalCandidates,
           };
         } catch (error) {

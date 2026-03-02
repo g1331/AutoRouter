@@ -4,6 +4,7 @@ const onConflictDoUpdateMock = vi.fn(async () => undefined);
 const valuesMock = vi.fn(() => ({ onConflictDoUpdate: onConflictDoUpdateMock }));
 const insertMock = vi.fn(() => ({ values: valuesMock }));
 const upstreamFindFirstMock = vi.fn();
+const snapshotFindFirstMock = vi.fn();
 
 vi.mock("drizzle-orm", async (importOriginal) => {
   const actual = await importOriginal<typeof import("drizzle-orm")>();
@@ -18,6 +19,9 @@ vi.mock("@/lib/db", () => ({
     query: {
       upstreams: {
         findFirst: upstreamFindFirstMock,
+      },
+      requestBillingSnapshots: {
+        findFirst: snapshotFindFirstMock,
       },
     },
     insert: insertMock,
@@ -34,10 +38,18 @@ vi.mock("@/lib/services/billing-price-service", () => ({
   resolveBillingModelPrice: vi.fn(),
 }));
 
+const mockAdjustSpending = vi.fn();
+vi.mock("@/lib/services/upstream-quota-tracker", () => ({
+  quotaTracker: {
+    adjustSpending: (...args: unknown[]) => mockAdjustSpending(...args),
+  },
+}));
+
 describe("billing-cost-service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     upstreamFindFirstMock.mockResolvedValue(null);
+    snapshotFindFirstMock.mockResolvedValue(null);
     onConflictDoUpdateMock.mockResolvedValue(undefined);
   });
 
@@ -166,5 +178,105 @@ describe("billing-cost-service", () => {
         outputMultiplier: 0.8,
       })
     );
+  });
+
+  it("applies quota delta after successful billed upsert", async () => {
+    const { resolveBillingModelPrice } = await import("@/lib/services/billing-price-service");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+
+    vi.mocked(resolveBillingModelPrice).mockResolvedValueOnce({
+      model: "gpt-4.1",
+      source: "litellm",
+      inputPricePerMillion: 10,
+      outputPricePerMillion: 30,
+      cacheReadInputPricePerMillion: null,
+      cacheWriteInputPricePerMillion: null,
+    });
+    upstreamFindFirstMock.mockResolvedValueOnce({
+      billingInputMultiplier: 1,
+      billingOutputMultiplier: 1,
+    });
+
+    await calculateAndPersistRequestBillingSnapshot({
+      requestLogId: "log-quota",
+      apiKeyId: "key-1",
+      upstreamId: "up-1",
+      model: "gpt-4.1",
+      usage: { promptTokens: 1000, completionTokens: 500, totalTokens: 1500 },
+    });
+
+    // (1000/1e6)*10 + (500/1e6)*30 = 0.01 + 0.015 = 0.025
+    expect(mockAdjustSpending).toHaveBeenCalledWith("up-1", expect.closeTo(0.025, 6));
+  });
+
+  it("does not apply quota delta for unbilled requests", async () => {
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+
+    await calculateAndPersistRequestBillingSnapshot({
+      requestLogId: "log-unbilled",
+      apiKeyId: "key-1",
+      upstreamId: "up-1",
+      model: null,
+      usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+    });
+
+    expect(mockAdjustSpending).not.toHaveBeenCalled();
+  });
+
+  it("rolls back previous billed cost when snapshot is overwritten as unbilled", async () => {
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+
+    snapshotFindFirstMock.mockResolvedValueOnce({
+      upstreamId: "up-rollback",
+      billingStatus: "billed",
+      finalCost: 0.0123,
+    });
+
+    await calculateAndPersistRequestBillingSnapshot({
+      requestLogId: "log-unbilled-rollback",
+      apiKeyId: "key-1",
+      upstreamId: "up-rollback",
+      model: null,
+      usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+    });
+
+    expect(mockAdjustSpending).toHaveBeenCalledWith("up-rollback", expect.closeTo(-0.0123, 8));
+  });
+
+  it("does not overcount quota on billed upsert retry", async () => {
+    const { resolveBillingModelPrice } = await import("@/lib/services/billing-price-service");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+
+    vi.mocked(resolveBillingModelPrice).mockResolvedValueOnce({
+      model: "gpt-4.1",
+      source: "litellm",
+      inputPricePerMillion: 10,
+      outputPricePerMillion: 30,
+      cacheReadInputPricePerMillion: null,
+      cacheWriteInputPricePerMillion: null,
+    });
+    upstreamFindFirstMock.mockResolvedValueOnce({
+      billingInputMultiplier: 1,
+      billingOutputMultiplier: 1,
+    });
+    snapshotFindFirstMock.mockResolvedValueOnce({
+      upstreamId: "up-1",
+      billingStatus: "billed",
+      finalCost: 0.025,
+    });
+
+    await calculateAndPersistRequestBillingSnapshot({
+      requestLogId: "log-quota-retry",
+      apiKeyId: "key-1",
+      upstreamId: "up-1",
+      model: "gpt-4.1",
+      usage: { promptTokens: 1000, completionTokens: 500, totalTokens: 1500 },
+    });
+
+    expect(mockAdjustSpending).not.toHaveBeenCalled();
   });
 });
