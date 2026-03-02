@@ -12,6 +12,16 @@ vi.mock("next-intl", () => ({
 // Mock hooks
 const mockCreateMutateAsync = vi.fn();
 const mockUpdateMutateAsync = vi.fn();
+const { mockToastError } = vi.hoisted(() => ({
+  mockToastError: vi.fn(),
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    error: mockToastError,
+    success: vi.fn(),
+  },
+}));
 
 vi.mock("@/hooks/use-upstreams", () => ({
   useCreateUpstream: () => ({
@@ -113,6 +123,8 @@ describe("UpstreamFormDialog", () => {
         // Form shows validation errors (default Zod messages)
         expect(mockCreateMutateAsync).not.toHaveBeenCalled();
       });
+
+      expect(mockToastError).toHaveBeenCalledWith("formValidationFailed");
     });
 
     it("shows validation error when api key is empty", async () => {
@@ -606,7 +618,9 @@ describe("UpstreamFormDialog", () => {
       expect(callArgs.spending_rules).toEqual([{ period_type: "daily", limit: 50 }]);
     });
 
-    it("blocks submit when rolling rule has no period_hours", async () => {
+    it("auto-fills rolling period_hours with default value", async () => {
+      mockCreateMutateAsync.mockResolvedValue({});
+
       render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
         wrapper: Wrapper,
       });
@@ -626,11 +640,18 @@ describe("UpstreamFormDialog", () => {
       fireEvent.click(screen.getAllByText("spendingPeriodDaily")[0]);
       fireEvent.click(screen.getAllByText("spendingPeriodRolling").slice(-1)[0]);
 
+      const periodHoursInput = screen.getByPlaceholderText("24");
+      expect(periodHoursInput).toHaveValue(24);
+
       const submitButton = screen.getByText("create");
       fireEvent.click(submitButton);
 
       await waitFor(() => {
-        expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+        expect(mockCreateMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            spending_rules: [{ period_type: "rolling", limit: 20, period_hours: 24 }],
+          })
+        );
       });
     });
   });

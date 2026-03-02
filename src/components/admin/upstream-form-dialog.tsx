@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -73,6 +74,8 @@ const spendingRuleSchema = z.object({
   limit: z.coerce.number().positive(),
   period_hours: z.number().int().min(1).max(8760).nullable(),
 });
+
+const ROLLING_DEFAULT_PERIOD_HOURS = 24;
 
 function hasValidRollingPeriodHours(rules: z.input<typeof spendingRuleSchema>[]): boolean {
   return rules.every(
@@ -145,7 +148,9 @@ function spendingRulesToApi(
   return rules.map((r) => ({
     period_type: r.period_type,
     limit: r.limit,
-    ...(r.period_type === "rolling" && r.period_hours ? { period_hours: r.period_hours } : {}),
+    ...(r.period_type === "rolling"
+      ? { period_hours: r.period_hours ?? ROLLING_DEFAULT_PERIOD_HOURS }
+      : {}),
   }));
 }
 
@@ -226,7 +231,8 @@ export function UpstreamFormDialog({
         spending_rules: (upstream.spending_rules ?? []).map((r) => ({
           period_type: r.period_type as "daily" | "monthly" | "rolling",
           limit: r.limit,
-          period_hours: r.period_hours ?? null,
+          period_hours:
+            r.period_type === "rolling" ? (r.period_hours ?? ROLLING_DEFAULT_PERIOD_HOURS) : null,
         })),
         route_capabilities: upstream.route_capabilities || [],
         allowed_models: upstream.allowed_models || null,
@@ -344,6 +350,25 @@ export function UpstreamFormDialog({
     }
   };
 
+  const onInvalidSubmit = () => {
+    const rules = form.getValues("spending_rules");
+    let hasRollingRuleWithMissingHours = false;
+
+    rules.forEach((rule, index) => {
+      if (rule.period_type === "rolling" && (rule.period_hours == null || rule.period_hours < 1)) {
+        hasRollingRuleWithMissingHours = true;
+        form.setError(`spending_rules.${index}.period_hours`, {
+          type: "manual",
+          message: t("spendingPeriodHoursRequired"),
+        });
+      }
+    });
+
+    toast.error(
+      hasRollingRuleWithMissingHours ? t("spendingPeriodHoursRequired") : t("formValidationFailed")
+    );
+  };
+
   const dialogContent = (
     <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
       <DialogHeader>
@@ -352,7 +377,7 @@ export function UpstreamFormDialog({
       </DialogHeader>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <form onSubmit={form.handleSubmit(onSubmit, onInvalidSubmit)} className="space-y-6">
           <FormField
             control={form.control}
             name="name"
@@ -552,7 +577,18 @@ export function UpstreamFormDialog({
                             value={field.value}
                             onValueChange={(v) => {
                               field.onChange(v);
-                              if (v !== "rolling") {
+                              if (v === "rolling") {
+                                const currentHours = form.getValues(
+                                  `spending_rules.${index}.period_hours`
+                                );
+                                if (currentHours == null) {
+                                  form.setValue(
+                                    `spending_rules.${index}.period_hours`,
+                                    ROLLING_DEFAULT_PERIOD_HOURS,
+                                    { shouldValidate: true, shouldDirty: true }
+                                  );
+                                }
+                              } else {
                                 form.setValue(`spending_rules.${index}.period_hours`, null);
                               }
                             }}
@@ -626,14 +662,23 @@ export function UpstreamFormDialog({
                                   step={1}
                                   inputMode="numeric"
                                   className="h-8 text-xs"
-                                  placeholder="24"
+                                  placeholder={String(ROLLING_DEFAULT_PERIOD_HOURS)}
                                   value={field.value ?? ""}
                                   onChange={(e) => {
                                     const v = e.target.value;
                                     field.onChange(v === "" ? null : Number(v));
                                   }}
+                                  onBlur={(e) => {
+                                    field.onBlur();
+                                    if (e.target.value.trim() === "") {
+                                      field.onChange(ROLLING_DEFAULT_PERIOD_HOURS);
+                                    }
+                                  }}
                                 />
                               </FormControl>
+                              <FormDescription className="text-xs">
+                                {t("spendingPeriodHoursDesc")}
+                              </FormDescription>
                               <FormMessage />
                             </FormItem>
                           )}
