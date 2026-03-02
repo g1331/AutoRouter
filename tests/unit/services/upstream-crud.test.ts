@@ -742,9 +742,7 @@ describe("upstream-crud", () => {
           providerType: null,
           allowedModels: null,
           modelRedirects: null,
-          spendingLimit: 50,
-          spendingPeriodType: "daily",
-          spendingPeriodHours: null,
+          spendingRules: [{ period_type: "daily", limit: 50 }],
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -760,13 +758,10 @@ describe("upstream-crud", () => {
         name: "quota-upstream",
         baseUrl: "https://api.example.com",
         apiKey: "sk-key",
-        spendingLimit: 50,
-        spendingPeriodType: "daily",
+        spendingRules: [{ period_type: "daily", limit: 50 }],
       });
 
-      expect(result.spendingLimit).toBe(50);
-      expect(result.spendingPeriodType).toBe("daily");
-      expect(result.spendingPeriodHours).toBeNull();
+      expect(result.spendingRules).toEqual([{ period_type: "daily", limit: 50 }]);
     });
 
     it("should include spending fields in updateUpstream", async () => {
@@ -795,9 +790,7 @@ describe("upstream-crud", () => {
           providerType: null,
           allowedModels: null,
           modelRedirects: null,
-          spendingLimit: 100,
-          spendingPeriodType: "rolling",
-          spendingPeriodHours: 24,
+          spendingRules: [{ period_type: "rolling", limit: 100, period_hours: 24 }],
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -812,16 +805,14 @@ describe("upstream-crud", () => {
       } as unknown as MockUpdateChain);
 
       const input: UpstreamUpdateInput = {
-        spendingLimit: 100,
-        spendingPeriodType: "rolling",
-        spendingPeriodHours: 24,
+        spendingRules: [{ period_type: "rolling", limit: 100, period_hours: 24 }],
       };
 
       const result = await updateUpstream("test-quota", input);
 
-      expect(result.spendingLimit).toBe(100);
-      expect(result.spendingPeriodType).toBe("rolling");
-      expect(result.spendingPeriodHours).toBe(24);
+      expect(result.spendingRules).toEqual([
+        { period_type: "rolling", limit: 100, period_hours: 24 },
+      ]);
     });
 
     it("should allow removing spending limit by setting null", async () => {
@@ -851,9 +842,7 @@ describe("upstream-crud", () => {
           providerType: null,
           allowedModels: null,
           modelRedirects: null,
-          spendingLimit: null,
-          spendingPeriodType: null,
-          spendingPeriodHours: null,
+          spendingRules: null,
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -868,16 +857,12 @@ describe("upstream-crud", () => {
       } as unknown as MockUpdateChain);
 
       const input: UpstreamUpdateInput = {
-        spendingLimit: null,
-        spendingPeriodType: null,
-        spendingPeriodHours: null,
+        spendingRules: null,
       };
 
       const result = await updateUpstream("test-quota", input);
 
-      expect(result.spendingLimit).toBeNull();
-      expect(result.spendingPeriodType).toBeNull();
-      expect(result.spendingPeriodHours).toBeNull();
+      expect(result.spendingRules).toBeNull();
     });
   });
 });

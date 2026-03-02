@@ -164,9 +164,7 @@ describe("UpstreamFormDialog", () => {
           weight: 1,
           billing_input_multiplier: 1,
           billing_output_multiplier: 1,
-          spending_limit: null,
-          spending_period_type: null,
-          spending_period_hours: null,
+          spending_rules: null,
           route_capabilities: [],
           allowed_models: null,
           model_redirects: null,
@@ -318,9 +316,7 @@ describe("UpstreamFormDialog", () => {
             weight: 1,
             billing_input_multiplier: 1,
             billing_output_multiplier: 1,
-            spending_limit: null,
-            spending_period_type: null,
-            spending_period_hours: null,
+            spending_rules: null,
             route_capabilities: [],
             allowed_models: null,
             model_redirects: null,
@@ -357,9 +353,7 @@ describe("UpstreamFormDialog", () => {
             weight: 1,
             billing_input_multiplier: 1,
             billing_output_multiplier: 1,
-            spending_limit: null,
-            spending_period_type: null,
-            spending_period_hours: null,
+            spending_rules: null,
             route_capabilities: [],
             allowed_models: null,
             model_redirects: null,
@@ -550,6 +544,7 @@ describe("UpstreamFormDialog", () => {
         wrapper: Wrapper,
       });
 
+      fireEvent.click(screen.getByText("addSpendingRule"));
       expect(screen.getByText("spendingLimit")).toBeInTheDocument();
     });
 
@@ -558,15 +553,14 @@ describe("UpstreamFormDialog", () => {
         wrapper: Wrapper,
       });
 
+      fireEvent.click(screen.getByText("addSpendingRule"));
       expect(screen.getByText("spendingPeriodType")).toBeInTheDocument();
     });
 
     it("populates spending fields in edit mode", () => {
       const upstreamWithQuota: Upstream = {
         ...mockUpstream,
-        spending_limit: 100,
-        spending_period_type: "daily",
-        spending_period_hours: null,
+        spending_rules: [{ period_type: "daily", limit: 100 }],
       };
 
       render(
@@ -592,6 +586,8 @@ describe("UpstreamFormDialog", () => {
       const nameInput = screen.getByPlaceholderText("upstreamNamePlaceholder");
       const urlInput = screen.getByPlaceholderText("baseUrlPlaceholder");
       const apiKeyInput = screen.getByPlaceholderText("apiKeyPlaceholder");
+
+      fireEvent.click(screen.getByText("addSpendingRule"));
       const limitInput = screen.getByPlaceholderText("spendingLimitPlaceholder");
 
       fireEvent.change(nameInput, { target: { value: "Quota Upstream" } });
@@ -607,7 +603,7 @@ describe("UpstreamFormDialog", () => {
       });
 
       const callArgs = mockCreateMutateAsync.mock.calls[0][0];
-      expect(callArgs.spending_limit).toBe(50);
+      expect(callArgs.spending_rules).toEqual([{ period_type: "daily", limit: 50 }]);
     });
   });
 });
