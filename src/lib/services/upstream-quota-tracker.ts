@@ -303,12 +303,14 @@ class UpstreamQuotaTracker {
     );
     if (!entry || entry.currentSpending < rule.limit) return null;
 
-    const hours = rule.period_hours ?? 24;
+    const configuredHours = rule.period_hours ?? 24;
+    const windowHours =
+      Number.isFinite(configuredHours) && configuredHours > 0 ? Math.floor(configuredHours) : 24;
     const now = new Date();
-    const windowStart = getRollingWindowStart(hours, now);
+    const windowStart = getRollingWindowStart(windowHours, now);
     const excessAmount = entry.currentSpending - rule.limit;
 
-    const scanHours = Math.min(hours, 24);
+    const scanHours = Math.min(windowHours, 8760);
     let cumulativeSlideOut = 0;
 
     for (let h = 0; h < scanHours; h++) {
@@ -331,7 +333,7 @@ class UpstreamQuotaTracker {
       cumulativeSlideOut += sliceCost;
 
       if (cumulativeSlideOut >= excessAmount) {
-        return new Date(sliceEnd.getTime() + hours * 60 * 60 * 1000);
+        return new Date(sliceEnd.getTime() + windowHours * 60 * 60 * 1000);
       }
     }
 
