@@ -25,27 +25,65 @@ function removeV1Prefix(path: string): string {
   return path.startsWith(V1_PREFIX) ? path.slice(V1_PREFIX.length) : path;
 }
 
+function containsTraversalToken(segment: string): boolean {
+  return segment.split(/[\\/]+/).some((part) => part === "." || part === "..");
+}
+
+function hasDotSegments(path: string): boolean {
+  const segments = path.split("/");
+
+  for (const segment of segments) {
+    if (containsTraversalToken(segment)) {
+      return true;
+    }
+
+    if (segment.includes("%")) {
+      try {
+        const decoded = decodeURIComponent(segment);
+        if (containsTraversalToken(decoded)) {
+          return true;
+        }
+      } catch {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function matchesPathFamily(path: string, familyRoot: string): boolean {
+  return path === familyRoot || path.startsWith(`${familyRoot}/`);
+}
+
 export function matchRouteCapability(method: string, path: string): RouteCapability | null {
   if (method.toUpperCase() !== "POST") {
     return null;
   }
 
   const normalizedPath = normalizeProxyPath(path);
+  if (hasDotSegments(normalizedPath)) {
+    return null;
+  }
   const withoutV1Prefix = removeV1Prefix(normalizedPath);
 
-  if (withoutV1Prefix === "messages" || withoutV1Prefix === "messages/count_tokens") {
+  if (matchesPathFamily(withoutV1Prefix, "messages")) {
     return "anthropic_messages";
   }
 
-  if (withoutV1Prefix === "responses") {
+  if (matchesPathFamily(withoutV1Prefix, "responses")) {
     return "codex_responses";
   }
 
-  if (withoutV1Prefix === "chat/completions") {
+  if (matchesPathFamily(withoutV1Prefix, "chat/completions")) {
     return "openai_chat_compatible";
   }
 
-  if (OPENAI_EXTENDED_SUFFIX_PATHS.has(withoutV1Prefix)) {
+  if (
+    Array.from(OPENAI_EXTENDED_SUFFIX_PATHS).some((familyRoot) =>
+      matchesPathFamily(withoutV1Prefix, familyRoot)
+    )
+  ) {
     return "openai_extended";
   }
 

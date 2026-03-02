@@ -936,16 +936,81 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   const matchedRouteCapability = matchRouteCapability(request.method, path);
 
   if (!matchedRouteCapability) {
-    log.warn(
-      { requestId, method: request.method, path, matchedRouteCapability: null },
-      "path capability not matched, skipping upstream routing"
-    );
-    return createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED", {
+    const unsupportedDurationMs = Date.now() - startTime;
+    const unsupportedResponse = createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED", {
       reason: "NO_HEALTHY_CANDIDATES",
       did_send_upstream: false,
       request_id: requestId,
       user_hint: "当前请求路径未匹配到受支持的能力类型，请检查请求方法和路径是否在支持列表中",
     });
+
+    const unsupportedRoutingDecision: RoutingDecisionLog = {
+      original_model: model ?? "(path-based)",
+      resolved_model: model ?? "(path-based)",
+      model_redirect_applied: false,
+      provider_type: null,
+      routing_type: "none",
+      matched_route_capability: null,
+      route_match_source: null,
+      capability_candidates_count: 0,
+      candidates: [],
+      excluded: [],
+      candidate_count: 0,
+      final_candidate_count: 0,
+      selected_upstream_id: null,
+      candidate_upstream_id: null,
+      actual_upstream_id: null,
+      did_send_upstream: false,
+      failure_stage: "candidate_selection",
+      selection_strategy: "weighted",
+    };
+
+    log.warn(
+      { requestId, method: request.method, path, matchedRouteCapability: null },
+      "path capability not matched, skipping upstream routing"
+    );
+    try {
+      const createdLog = await logRequest({
+        apiKeyId: validApiKey.id,
+        upstreamId: null,
+        method: request.method,
+        path,
+        model,
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        statusCode: unsupportedResponse.status,
+        durationMs: unsupportedDurationMs,
+        routingDurationMs: unsupportedDurationMs,
+        errorMessage: "path capability not matched, skipping upstream routing",
+        routingType,
+        priorityTier: null,
+        failoverAttempts: 0,
+        failoverHistory: null,
+        routingDecision: unsupportedRoutingDecision,
+      });
+
+      if (createdLog?.id) {
+        await persistBillingSnapshotSafely({
+          requestLogId: createdLog.id,
+          apiKeyId: validApiKey.id,
+          upstreamId: null,
+          model,
+          usage: {
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+          },
+          requestId,
+        });
+      }
+    } catch (error) {
+      log.error({ err: error, requestId, path }, "failed to log unsupported path request");
+    }
+
+    return unsupportedResponse;
   }
 
   // Get API key's authorized upstream IDs

@@ -407,10 +407,79 @@ describe("proxy route upstream selection", () => {
     );
   });
 
-  it("should return no-upstream-configured error when path is not matched", async () => {
+  it("should treat responses subpath as codex route capability", async () => {
+    const { db } = await import("@/lib/db");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const __mockLogger = (
+      (await import("@/lib/utils/logger")) as unknown as {
+        __mockLogger: { warn: ReturnType<typeof vi.fn> };
+      }
+    ).__mockLogger;
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-other" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-other",
+        name: "other-upstream",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["openai_chat_compatible"],
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/responses/compact", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        input: "hello",
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["responses", "compact"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(data).toEqual({
+      error: expect.objectContaining({
+        code: "NO_UPSTREAMS_CONFIGURED",
+        reason: "NO_HEALTHY_CANDIDATES",
+        did_send_upstream: false,
+      }),
+    });
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(forwardRequest).not.toHaveBeenCalled();
+    expect(__mockLogger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "responses/compact",
+        matchedRouteCapability: "codex_responses",
+        capabilityCandidatesCount: 0,
+      }),
+      "no upstream supports matched route capability"
+    );
+  });
+
+  it("should reject dot-segment responses subpath as unmatched capability", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
     const { routeByModel } = await import("@/lib/services/model-router");
+    const { logRequest } = await import("@/lib/services/request-logger");
     const __mockLogger = (
       (await import("@/lib/utils/logger")) as unknown as {
         __mockLogger: { warn: ReturnType<typeof vi.fn> };
@@ -419,6 +488,131 @@ describe("proxy route upstream selection", () => {
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
     ]);
+
+    const request = new NextRequest(
+      "http://localhost/api/proxy/v1/responses/%2e%2e/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-test",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5.2",
+          input: "hello",
+        }),
+      }
+    );
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["responses", "%2e%2e", "chat", "completions"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(data).toEqual({
+      error: expect.objectContaining({
+        code: "NO_UPSTREAMS_CONFIGURED",
+        reason: "NO_HEALTHY_CANDIDATES",
+        did_send_upstream: false,
+      }),
+    });
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(forwardRequest).not.toHaveBeenCalled();
+    expect(__mockLogger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "responses/%2e%2e/chat/completions",
+        matchedRouteCapability: null,
+      }),
+      "path capability not matched, skipping upstream routing"
+    );
+    expect(logRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKeyId: "key-1",
+        upstreamId: null,
+        path: "responses/%2e%2e/chat/completions",
+        statusCode: 503,
+      })
+    );
+  });
+
+  it("should reject encoded traversal segment with encoded slash as unmatched capability", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { logRequest } = await import("@/lib/services/request-logger");
+    const __mockLogger = (
+      (await import("@/lib/utils/logger")) as unknown as {
+        __mockLogger: { warn: ReturnType<typeof vi.fn> };
+      }
+    ).__mockLogger;
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+
+    const request = new NextRequest(
+      "http://localhost/api/proxy/v1/responses/%2e%2e%2fchat/completions",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-test",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5.2",
+          input: "hello",
+        }),
+      }
+    );
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["responses", "%2e%2e%2fchat", "completions"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(data).toEqual({
+      error: expect.objectContaining({
+        code: "NO_UPSTREAMS_CONFIGURED",
+        reason: "NO_HEALTHY_CANDIDATES",
+        did_send_upstream: false,
+      }),
+    });
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(forwardRequest).not.toHaveBeenCalled();
+    expect(__mockLogger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "responses/%2e%2e%2fchat/completions",
+        matchedRouteCapability: null,
+      }),
+      "path capability not matched, skipping upstream routing"
+    );
+    expect(logRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKeyId: "key-1",
+        upstreamId: null,
+        path: "responses/%2e%2e%2fchat/completions",
+        statusCode: 503,
+      })
+    );
+  });
+
+  it("should return no-upstream-configured error when path is not matched", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { logRequest } = await import("@/lib/services/request-logger");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+    const __mockLogger = (
+      (await import("@/lib/utils/logger")) as unknown as {
+        __mockLogger: { warn: ReturnType<typeof vi.fn> };
+      }
+    ).__mockLogger;
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(logRequest).mockResolvedValueOnce({ id: "unsupported-log" } as never);
 
     const request = new NextRequest("http://localhost/api/proxy/v1/custom/not-matched", {
       method: "POST",
@@ -453,6 +647,38 @@ describe("proxy route upstream selection", () => {
         matchedRouteCapability: null,
       }),
       "path capability not matched, skipping upstream routing"
+    );
+    expect(logRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKeyId: "key-1",
+        upstreamId: null,
+        path: "custom/not-matched",
+        model: "gpt-5.2",
+        statusCode: 503,
+        errorMessage: "path capability not matched, skipping upstream routing",
+        routingType: "tiered",
+        routingDecision: expect.objectContaining({
+          routing_type: "none",
+          matched_route_capability: null,
+          did_send_upstream: false,
+          failure_stage: "candidate_selection",
+        }),
+      })
+    );
+    expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestLogId: "unsupported-log",
+        apiKeyId: "key-1",
+        upstreamId: null,
+        model: "gpt-5.2",
+        usage: {
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+        },
+      })
     );
   });
 
