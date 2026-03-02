@@ -46,7 +46,7 @@ vi.mock("@/hooks/use-circuit-breaker", () => ({
 }));
 
 function getDesktopLayout() {
-  const root = document.querySelector("div.hidden.lg\\:block");
+  const root = document.querySelector("div.hidden.xl\\:block");
   if (!root) {
     throw new Error("Desktop layout root not found");
   }

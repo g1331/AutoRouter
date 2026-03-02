@@ -371,7 +371,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
     <div className="space-y-0">
       <div className="overflow-hidden rounded-cf-md border border-divider bg-card/92">
         {/* Desktop: Table Layout */}
-        <div className="hidden lg:block">
+        <div className="hidden xl:block">
           <Table
             frame="none"
             containerClassName="rounded-none bg-transparent"
@@ -625,7 +625,7 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
         </div>
 
         {/* Mobile/Tablet: Card Layout */}
-        <div className="lg:hidden divide-y divide-dashed divide-divider">
+        <div className="xl:hidden divide-y divide-dashed divide-divider">
           {tieredData.map((tier) => {
             const isCollapsed = collapsedTiers.has(tier.priority);
 
