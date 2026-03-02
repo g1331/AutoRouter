@@ -145,9 +145,9 @@ describe("UpstreamsTable", () => {
       expect(desktop.getByText("name")).toBeInTheDocument();
       expect(desktop.getByText("routeCapabilities")).toBeInTheDocument();
       expect(desktop.getByText("tableWeight")).toBeInTheDocument();
-      expect(desktop.getByText("tableHealth")).toBeInTheDocument();
       expect(desktop.getByText("tableCircuitBreaker")).toBeInTheDocument();
       expect(desktop.getByText("tableBaseUrl")).toBeInTheDocument();
+      expect(desktop.getByText("tableQuota")).toBeInTheDocument();
       expect(desktop.getByText("createdAt")).toBeInTheDocument();
       expect(desktop.getByText("actions")).toBeInTheDocument();
     });
@@ -168,7 +168,7 @@ describe("UpstreamsTable", () => {
       expect(desktop.getByText("https://api.openai.com/v1")).toBeInTheDocument();
     });
 
-    it("shows active badge for active upstream", () => {
+    it("shows active state via toggle switch for active upstream", () => {
       render(
         <UpstreamsTable
           upstreams={[mockUpstream]}
@@ -179,10 +179,10 @@ describe("UpstreamsTable", () => {
       );
 
       const desktop = getDesktopLayout();
-      expect(desktop.getAllByText("active").length).toBeGreaterThan(0);
+      expect(desktop.getByLabelText("quickDisable: Test Upstream")).toBeInTheDocument();
     });
 
-    it("renders quota exceeded badge and timing hints when quota data is available", () => {
+    it("renders quota badge and timing hints when quota data is available", () => {
       mockUpstreamQuotaData = {
         items: [
           {
@@ -226,7 +226,7 @@ describe("UpstreamsTable", () => {
 
       const desktop = getDesktopLayout();
 
-      expect(desktop.getByText("quotaExceeded")).toBeInTheDocument();
+      expect(desktop.getAllByText("tableQuota").length).toBeGreaterThan(1);
       expect(desktop.getByText(/quotaResets:/)).toBeInTheDocument();
       expect(desktop.getByText(/quotaRecovery:/)).toBeInTheDocument();
     });
@@ -307,7 +307,7 @@ describe("UpstreamsTable", () => {
       );
 
       const desktop = getDesktopLayout();
-      expect(desktop.getByText("TIER P0")).toBeInTheDocument();
+      expect(desktop.getByText("tier P0")).toBeInTheDocument();
     });
 
     it("displays tier section for upstreams with specific priority", () => {
@@ -322,7 +322,7 @@ describe("UpstreamsTable", () => {
       );
 
       const desktop = getDesktopLayout();
-      expect(desktop.getByText("TIER P1")).toBeInTheDocument();
+      expect(desktop.getByText("tier P1")).toBeInTheDocument();
     });
 
     it("groups upstreams by priority", () => {
@@ -346,8 +346,8 @@ describe("UpstreamsTable", () => {
       );
 
       const desktop = getDesktopLayout();
-      expect(desktop.getByText("TIER P0")).toBeInTheDocument();
-      expect(desktop.getByText("TIER P1")).toBeInTheDocument();
+      expect(desktop.getByText("tier P0")).toBeInTheDocument();
+      expect(desktop.getByText("tier P1")).toBeInTheDocument();
     });
 
     it("displays health summary in tier header", () => {
@@ -366,7 +366,7 @@ describe("UpstreamsTable", () => {
       );
 
       const desktop = getDesktopLayout();
-      expect(desktop.getByText(/1\/1 HEALTHY/)).toBeInTheDocument();
+      expect(desktop.getByText(/1\/1 tierHealthy/)).toBeInTheDocument();
     });
   });
 
@@ -402,7 +402,7 @@ describe("UpstreamsTable", () => {
       expect(desktop.getByText("Test Upstream")).toBeInTheDocument();
 
       // Click tier header to collapse
-      const tierHeader = desktop.getByText("TIER P0").closest("tr");
+      const tierHeader = desktop.getByText("tier P0").closest("tr");
       fireEvent.click(tierHeader!);
 
       // Upstream should be hidden
@@ -421,7 +421,7 @@ describe("UpstreamsTable", () => {
 
       const desktop = getDesktopLayout();
 
-      const tierHeader = desktop.getByText("TIER P0").closest("tr");
+      const tierHeader = desktop.getByText("tier P0").closest("tr");
 
       // Collapse
       fireEvent.click(tierHeader!);
@@ -448,7 +448,7 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      expect(screen.getAllByText("OK").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("healthHealthy").length).toBeGreaterThan(0);
     });
 
     it("displays offline status label for unhealthy upstream", () => {
@@ -468,13 +468,13 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      expect(screen.getAllByText("DOWN").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("healthUnhealthy").length).toBeGreaterThan(0);
     });
   });
 
-  describe("ASCII Progress Bar for Weight", () => {
-    it("displays weight as ASCII progress bar", () => {
-      const upstream = { ...mockUpstream, weight: 5 };
+  describe("Weight Display", () => {
+    it("displays weight as numeric value", () => {
+      const upstream = { ...mockUpstream, weight: 42 };
       render(
         <UpstreamsTable
           upstreams={[upstream]}
@@ -484,12 +484,8 @@ describe("UpstreamsTable", () => {
         />
       );
 
-      // Should have progress bar characters (multiple: one for weight, one for circuit summary)
-      const progressbars = screen.getAllByRole("progressbar");
-      expect(progressbars.length).toBeGreaterThan(0);
-      // Find the one with weight value "5"
-      const weightProgressbar = progressbars.find((pb) => pb.textContent?.includes("5"));
-      expect(weightProgressbar).toBeInTheDocument();
+      const desktop = getDesktopLayout();
+      expect(desktop.getByText("42")).toBeInTheDocument();
     });
   });
 

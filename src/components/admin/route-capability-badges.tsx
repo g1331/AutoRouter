@@ -168,7 +168,11 @@ export function RouteCapabilityBadge({ capability, className }: RouteCapabilityB
   const label = definition ? t(definition.labelKey) : capability;
 
   return (
-    <Badge variant="neutral" className={cn("inline-flex items-center gap-1.5", className)}>
+    <Badge
+      variant="neutral"
+      className={cn("inline-flex min-w-0 max-w-full items-center gap-1.5", className)}
+      title={label}
+    >
       <span
         className={cn(
           "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-cf-sm border",
@@ -177,7 +181,7 @@ export function RouteCapabilityBadge({ capability, className }: RouteCapabilityB
       >
         {iconMeta.render(cn("h-3.5 w-3.5", iconMeta.iconColorClass))}
       </span>
-      <span>{label}</span>
+      <span className="min-w-0 overflow-hidden text-clip whitespace-nowrap">{label}</span>
     </Badge>
   );
 }
@@ -198,7 +202,7 @@ export function RouteCapabilityBadges({
   }
 
   return (
-    <div className={cn("flex flex-wrap gap-1.5", className)}>
+    <div className={cn("flex min-w-0 max-w-full flex-nowrap gap-1.5 overflow-hidden", className)}>
       {capabilities.map((capability) => (
         <RouteCapabilityBadge key={capability} capability={capability} className={badgeClassName} />
       ))}
