@@ -207,6 +207,11 @@ export function UpstreamFormDialog({
     name: "spending_rules",
   });
 
+  const spendingRules = useWatch({
+    control: form.control,
+    name: "spending_rules",
+  });
+
   useEffect(() => {
     if (upstream && open) {
       form.reset({
@@ -531,7 +536,7 @@ export function UpstreamFormDialog({
 
             <div className="space-y-3">
               {spendingRuleFields.map((ruleField, index) => {
-                const periodType = form.watch(`spending_rules.${index}.period_type`);
+                const periodType = spendingRules?.[index]?.period_type ?? ruleField.period_type;
                 return (
                   <div
                     key={ruleField.id}
