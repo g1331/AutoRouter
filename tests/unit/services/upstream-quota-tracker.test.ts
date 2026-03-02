@@ -14,7 +14,7 @@ vi.mock("drizzle-orm", async (importOriginal) => {
     ...actual,
     eq: vi.fn(() => ({ __op: "eq" })),
     gte: vi.fn(() => ({ __op: "gte" })),
-    lte: vi.fn(() => ({ __op: "lte" })),
+    lt: vi.fn(() => ({ __op: "lt" })),
     and: vi.fn((...args: unknown[]) => ({ __op: "and", args })),
     isNotNull: vi.fn(() => ({ __op: "isNotNull" })),
     sum: vi.fn(() => ({ __op: "sum" })),
@@ -245,6 +245,27 @@ describe("upstream-quota-tracker", () => {
     });
   });
 
+  describe("adjustSpending", () => {
+    it("applies positive and negative deltas", () => {
+      quotaTracker.setRules("up-adjust", [{ period_type: "daily", limit: 100 }]);
+      quotaTracker.recordSpending("up-adjust", 40);
+      quotaTracker.adjustSpending("up-adjust", -15.5);
+      quotaTracker.adjustSpending("up-adjust", 5);
+
+      const entries = quotaTracker.getCacheEntries("up-adjust");
+      expect(entries![0].currentSpending).toBe(29.5);
+    });
+
+    it("never drops below zero", () => {
+      quotaTracker.setRules("up-adjust-zero", [{ period_type: "daily", limit: 100 }]);
+      quotaTracker.recordSpending("up-adjust-zero", 10);
+      quotaTracker.adjustSpending("up-adjust-zero", -100);
+
+      const entries = quotaTracker.getCacheEntries("up-adjust-zero");
+      expect(entries![0].currentSpending).toBe(0);
+    });
+  });
+
   describe("getQuotaStatus", () => {
     it("returns null for upstream without rules", () => {
       expect(quotaTracker.getQuotaStatus("nonexistent")).toBeNull();
@@ -417,7 +438,9 @@ describe("upstream-quota-tracker", () => {
       quotaTracker.setRules("up-1", [{ period_type: "rolling", limit: 100, period_hours: 24 }]);
       quotaTracker.recordSpending("up-1", 150); // excess = 50
 
-      whereMock.mockResolvedValueOnce([{ totalCost: "60" }]);
+      whereMock.mockResolvedValueOnce([
+        { billedAt: new Date("2025-06-14T14:40:00Z"), finalCost: 60 },
+      ]);
       fromMock.mockReturnValue({ where: whereMock });
       selectMock.mockReturnValue({ from: fromMock });
 
@@ -439,11 +462,9 @@ describe("upstream-quota-tracker", () => {
       quotaTracker.setRules("up-2", [{ period_type: "rolling", limit: 100, period_hours: 48 }]);
       quotaTracker.recordSpending("up-2", 110); // excess = 10
 
-      let queryCount = 0;
-      whereMock.mockImplementation(async () => {
-        queryCount += 1;
-        return [{ totalCost: queryCount === 31 ? "20" : "0" }];
-      });
+      whereMock.mockResolvedValueOnce([
+        { billedAt: new Date("2025-06-14T20:40:00Z"), finalCost: 20 },
+      ]);
       fromMock.mockReturnValue({ where: whereMock });
       selectMock.mockReturnValue({ from: fromMock });
 
@@ -454,7 +475,32 @@ describe("upstream-quota-tracker", () => {
       });
 
       expect(recovery).toEqual(new Date("2025-06-16T21:30:00Z"));
-      expect(queryCount).toBe(31);
+      expect(whereMock).toHaveBeenCalledTimes(1);
+
+      vi.useRealTimers();
+    });
+
+    it("uses half-open hourly slices to avoid boundary double counting", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2025-06-15T14:30:00Z"));
+
+      quotaTracker.setRules("up-3", [{ period_type: "rolling", limit: 100, period_hours: 24 }]);
+      quotaTracker.recordSpending("up-3", 110); // excess = 10
+
+      // Exactly on first hour boundary: should belong to the second slice only.
+      whereMock.mockResolvedValueOnce([
+        { billedAt: new Date("2025-06-14T15:30:00Z"), finalCost: 10 },
+      ]);
+      fromMock.mockReturnValue({ where: whereMock });
+      selectMock.mockReturnValue({ from: fromMock });
+
+      const recovery = await quotaTracker.estimateRecoveryTime("up-3", {
+        period_type: "rolling",
+        limit: 100,
+        period_hours: 24,
+      });
+
+      expect(recovery).toEqual(new Date("2025-06-15T16:30:00Z"));
 
       vi.useRealTimers();
     });

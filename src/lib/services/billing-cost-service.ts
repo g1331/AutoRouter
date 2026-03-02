@@ -46,6 +46,50 @@ interface NormalizedBillingUsage {
   cacheWriteTokens: number;
 }
 
+interface ExistingBillingSnapshot {
+  upstreamId: string | null;
+  billingStatus: string;
+  finalCost: number | null;
+}
+
+function parseSnapshotCost(value: number | null): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function applyQuotaDeltaAfterBilledUpsert(
+  previousSnapshot: ExistingBillingSnapshot | null,
+  nextUpstreamId: string | null,
+  nextFinalCost: number
+): void {
+  const deltaByUpstream = new Map<string, number>();
+
+  if (previousSnapshot?.billingStatus === "billed" && previousSnapshot.upstreamId) {
+    const previousCost = parseSnapshotCost(previousSnapshot.finalCost);
+    if (previousCost > 0) {
+      deltaByUpstream.set(
+        previousSnapshot.upstreamId,
+        (deltaByUpstream.get(previousSnapshot.upstreamId) ?? 0) - previousCost
+      );
+    }
+  }
+
+  const normalizedFinalCost = parseSnapshotCost(nextFinalCost);
+  if (nextUpstreamId && normalizedFinalCost > 0) {
+    deltaByUpstream.set(
+      nextUpstreamId,
+      (deltaByUpstream.get(nextUpstreamId) ?? 0) + normalizedFinalCost
+    );
+  }
+
+  for (const [upstreamId, delta] of deltaByUpstream) {
+    const normalizedDelta = Number(delta.toFixed(10));
+    if (normalizedDelta !== 0) {
+      quotaTracker.adjustSpending(upstreamId, normalizedDelta);
+    }
+  }
+}
+
 function normalizeUsage(usage: BillingUsageInput): NormalizedBillingUsage {
   const promptTokens = Math.max(0, Math.floor(usage.promptTokens || 0));
   const completionTokens = Math.max(0, Math.floor(usage.completionTokens || 0));
@@ -219,6 +263,14 @@ export async function calculateAndPersistRequestBillingSnapshot(
   const providerType = getProviderTypeForModel(model);
   const cost = calculateCost(resolvedPrice, usage, providerType, inputMultiplier, outputMultiplier);
   const now = input.billedAt ?? new Date();
+  const previousSnapshot = await db.query.requestBillingSnapshots.findFirst({
+    where: eq(requestBillingSnapshots.requestLogId, input.requestLogId),
+    columns: {
+      upstreamId: true,
+      billingStatus: true,
+      finalCost: true,
+    },
+  });
 
   await db
     .insert(requestBillingSnapshots)
@@ -276,9 +328,7 @@ export async function calculateAndPersistRequestBillingSnapshot(
       },
     });
 
-  if (input.upstreamId && cost.finalCost > 0) {
-    quotaTracker.recordSpending(input.upstreamId, cost.finalCost);
-  }
+  applyQuotaDeltaAfterBilledUpsert(previousSnapshot ?? null, input.upstreamId, cost.finalCost);
 
   return {
     status: "billed",

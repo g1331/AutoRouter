@@ -1,4 +1,4 @@
-import { and, eq, gte, isNotNull, lte, sum } from "drizzle-orm";
+import { and, eq, gte, isNotNull, lt, sum } from "drizzle-orm";
 import { db, requestBillingSnapshots, upstreams, type Upstream } from "@/lib/db";
 
 export type SpendingPeriodType = "daily" | "monthly" | "rolling";
@@ -39,6 +39,7 @@ const VALID_PERIOD_TYPES: SpendingPeriodType[] = ["daily", "monthly", "rolling"]
 const NORMAL_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 const URGENT_SYNC_INTERVAL_MS = 1 * 60 * 1000;
 const URGENT_THRESHOLD_PERCENT = 80;
+const HOUR_MS = 60 * 60 * 1000;
 
 function toStartOfTodayUtc(now: Date = new Date()): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -135,10 +136,16 @@ class UpstreamQuotaTracker {
 
   recordSpending(upstreamId: string, cost: number): void {
     if (cost <= 0) return;
+    this.adjustSpending(upstreamId, cost);
+  }
+
+  adjustSpending(upstreamId: string, delta: number): void {
+    if (!Number.isFinite(delta) || delta === 0) return;
     const entries = this.cache.get(upstreamId);
     if (!entries) return;
     for (const entry of entries) {
-      entry.currentSpending += cost;
+      const nextSpending = entry.currentSpending + delta;
+      entry.currentSpending = nextSpending > 0 ? Number(nextSpending.toFixed(10)) : 0;
     }
   }
 
@@ -311,28 +318,47 @@ class UpstreamQuotaTracker {
     const excessAmount = entry.currentSpending - rule.limit;
 
     const scanHours = Math.min(windowHours, 8760);
+    if (scanHours <= 0) return null;
+
+    const rows = await db
+      .select({
+        billedAt: requestBillingSnapshots.billedAt,
+        finalCost: requestBillingSnapshots.finalCost,
+      })
+      .from(requestBillingSnapshots)
+      .where(
+        and(
+          eq(requestBillingSnapshots.upstreamId, upstreamId),
+          eq(requestBillingSnapshots.billingStatus, "billed"),
+          gte(requestBillingSnapshots.billedAt, windowStart),
+          lt(requestBillingSnapshots.billedAt, now)
+        )
+      );
+
+    const windowStartMs = windowStart.getTime();
+    const hourlySlideOutCosts = new Array<number>(scanHours).fill(0);
+    for (const row of rows) {
+      const billedAtValue = row?.billedAt;
+      if (!billedAtValue) continue;
+
+      const billedAtMs =
+        billedAtValue instanceof Date ? billedAtValue.getTime() : new Date(billedAtValue).getTime();
+      if (!Number.isFinite(billedAtMs) || billedAtMs < windowStartMs) continue;
+
+      const cost = Number(row?.finalCost ?? 0);
+      if (!Number.isFinite(cost) || cost <= 0) continue;
+
+      const hourIndex = Math.floor((billedAtMs - windowStartMs) / HOUR_MS);
+      if (hourIndex < 0 || hourIndex >= scanHours) continue;
+      hourlySlideOutCosts[hourIndex] += cost;
+    }
+
     let cumulativeSlideOut = 0;
-
     for (let h = 0; h < scanHours; h++) {
-      const sliceStart = new Date(windowStart.getTime() + h * 60 * 60 * 1000);
-      const sliceEnd = new Date(sliceStart.getTime() + 60 * 60 * 1000);
-
-      const [row] = await db
-        .select({ totalCost: sum(requestBillingSnapshots.finalCost) })
-        .from(requestBillingSnapshots)
-        .where(
-          and(
-            eq(requestBillingSnapshots.upstreamId, upstreamId),
-            eq(requestBillingSnapshots.billingStatus, "billed"),
-            gte(requestBillingSnapshots.billedAt, sliceStart),
-            lte(requestBillingSnapshots.billedAt, sliceEnd)
-          )
-        );
-
-      const sliceCost = row?.totalCost ? Number(row.totalCost) : 0;
-      cumulativeSlideOut += sliceCost;
+      cumulativeSlideOut += hourlySlideOutCosts[h] ?? 0;
 
       if (cumulativeSlideOut >= excessAmount) {
+        const sliceEnd = new Date(windowStartMs + (h + 1) * HOUR_MS);
         return new Date(sliceEnd.getTime() + windowHours * 60 * 60 * 1000);
       }
     }
