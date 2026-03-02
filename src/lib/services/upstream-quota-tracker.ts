@@ -357,7 +357,7 @@ class UpstreamQuotaTracker {
     for (let h = 0; h < scanHours; h++) {
       cumulativeSlideOut += hourlySlideOutCosts[h] ?? 0;
 
-      if (cumulativeSlideOut >= excessAmount) {
+      if (cumulativeSlideOut > excessAmount) {
         const sliceEnd = new Date(windowStartMs + (h + 1) * HOUR_MS);
         return new Date(sliceEnd.getTime() + windowHours * 60 * 60 * 1000);
       }

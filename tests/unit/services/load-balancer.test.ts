@@ -1086,6 +1086,18 @@ describe("load-balancer", () => {
       expect(result.excludedCount).toBe(0);
     });
 
+    it("continues routing when quota initialization fails", async () => {
+      const u1 = makeUpstream({ id: "u1", priority: 0 });
+      mockFindMany.mockResolvedValue([u1]);
+
+      mockQuotaInitialize.mockRejectedValueOnce(new Error("quota init failed"));
+      mockIsWithinQuota.mockReturnValue(true);
+
+      const result = await selectFromProviderType("openai");
+      expect(result.upstream.id).toBe("u1");
+      expect(mockQuotaInitialize).toHaveBeenCalledTimes(1);
+    });
+
     it("integrates with tier selection - quota exceeded upstreams fall to next tier", async () => {
       const p0a = makeUpstream({ id: "p0a", priority: 0 });
       const p0b = makeUpstream({ id: "p0b", priority: 0 });

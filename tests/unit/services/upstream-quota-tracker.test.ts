@@ -485,7 +485,7 @@ describe("upstream-quota-tracker", () => {
       vi.setSystemTime(new Date("2025-06-15T14:30:00Z"));
 
       quotaTracker.setRules("up-3", [{ period_type: "rolling", limit: 100, period_hours: 24 }]);
-      quotaTracker.recordSpending("up-3", 110); // excess = 10
+      quotaTracker.recordSpending("up-3", 109); // excess = 9
 
       // Exactly on first hour boundary: should belong to the second slice only.
       whereMock.mockResolvedValueOnce([
@@ -501,6 +501,31 @@ describe("upstream-quota-tracker", () => {
       });
 
       expect(recovery).toEqual(new Date("2025-06-15T16:30:00Z"));
+
+      vi.useRealTimers();
+    });
+
+    it("requires spending to drop below limit before reporting recovery", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2025-06-15T14:30:00Z"));
+
+      quotaTracker.setRules("up-4", [{ period_type: "rolling", limit: 100, period_hours: 24 }]);
+      quotaTracker.recordSpending("up-4", 110); // excess = 10
+
+      whereMock.mockResolvedValueOnce([
+        { billedAt: new Date("2025-06-14T15:30:00Z"), finalCost: 10 },
+        { billedAt: new Date("2025-06-14T16:40:00Z"), finalCost: 1 },
+      ]);
+      fromMock.mockReturnValue({ where: whereMock });
+      selectMock.mockReturnValue({ from: fromMock });
+
+      const recovery = await quotaTracker.estimateRecoveryTime("up-4", {
+        period_type: "rolling",
+        limit: 100,
+        period_hours: 24,
+      });
+
+      expect(recovery).toEqual(new Date("2025-06-15T17:30:00Z"));
 
       vi.useRealTimers();
     });

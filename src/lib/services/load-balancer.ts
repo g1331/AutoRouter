@@ -460,7 +460,11 @@ async function selectFromUpstreamPool(
   },
   affinityScopeHint?: AffinityScope
 ): Promise<UpstreamSelectionResult> {
-  await quotaTracker.initialize();
+  try {
+    await quotaTracker.initialize();
+  } catch {
+    // Best-effort initialization only; continue routing with cached/default quota state.
+  }
 
   // Filter by allowed upstream IDs (API key authorization)
   let filteredUpstreams = allUpstreams;
