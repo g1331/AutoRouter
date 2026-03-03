@@ -1,9 +1,9 @@
 /**
- * API 类型定义
- * 与后端 Pydantic schemas 保持一致
+ * API type definitions
+ * Keep consistent with backend Pydantic schemas
  */
 
-// ========== API Key 相关类型 ==========
+// ========== API Key Types ==========
 
 export interface APIKeyCreate {
   name: string;
@@ -36,17 +36,17 @@ export interface APIKeyResponse {
 export type APIKey = APIKeyResponse;
 
 export interface APIKeyCreateResponse extends APIKeyResponse {
-  key_value: string; // 完整 key，仅在创建时返回一次
+  key_value: string; // Full key value, only returned on create
 }
 
 export interface APIKeyRevealResponse {
   id: string; // UUID
-  key_value: string; // 完整解密后的 key
+  key_value: string; // Full decrypted key value
   key_prefix: string;
   name: string;
 }
 
-// ========== Load Balancing 相关类型 ==========
+// ========== Load Balancing Types ==========
 
 /**
  * Provider type for routing and authentication
@@ -61,7 +61,7 @@ export type RouteCapability =
   | "gemini_code_assist_internal";
 export type RouteMatchSource = "path";
 
-// ========== Upstream Health 相关类型 ==========
+// ========== Upstream Health Types ==========
 
 export interface UpstreamHealthResponse {
   id?: string; // UUID
@@ -75,7 +75,7 @@ export interface UpstreamHealthResponse {
   error_message: string | null;
 }
 
-// ========== Circuit Breaker 相关类型 ==========
+// ========== Circuit Breaker Types ==========
 
 export type CircuitBreakerState = "closed" | "open" | "half_open";
 
@@ -113,7 +113,7 @@ export interface CircuitBreakerDetailResponse {
 // Type alias for convenience
 export type UpstreamHealth = UpstreamHealthResponse;
 
-// ========== Upstream 相关类型 ==========
+// ========== Upstream Types ==========
 
 export interface AffinityMigrationConfig {
   enabled: boolean;
@@ -148,7 +148,7 @@ export interface UpstreamUpdate {
   name?: string;
   base_url?: string;
   official_website_url?: string | null;
-  api_key?: string; // 留空表示不更新
+  api_key?: string; // Empty means do not update
   description?: string | null;
   is_default?: boolean;
   timeout?: number;
@@ -201,7 +201,7 @@ export interface UpstreamResponse {
 // Type alias for convenience
 export type Upstream = UpstreamResponse;
 
-// ========== Upstream Quota 相关类型 ==========
+// ========== Upstream Quota Types ==========
 
 export interface UpstreamQuotaRuleStatus {
   period_type: "daily" | "monthly" | "rolling";
@@ -249,7 +249,7 @@ export interface TestUpstreamResponse {
   tested_at: string; // ISO 8601 date string of when the test was performed
 }
 
-// ========== Request Log 相关类型 ==========
+// ========== Request Log Types ==========
 
 /**
  * Failover attempt record in request log
@@ -432,7 +432,7 @@ export interface RequestLogResponse {
 // Type alias for convenience
 export type RequestLog = RequestLogResponse;
 
-// ========== 分页相关类型 ==========
+// ========== Pagination Types ==========
 
 export interface PaginatedResponse<T> {
   items: T[];
@@ -446,7 +446,7 @@ export type PaginatedAPIKeysResponse = PaginatedResponse<APIKeyResponse>;
 export type PaginatedUpstreamsResponse = PaginatedResponse<UpstreamResponse>;
 export type PaginatedRequestLogsResponse = PaginatedResponse<RequestLogResponse>;
 
-// ========== Billing 相关类型 ==========
+// ========== Billing Types ==========
 
 export interface BillingSyncResponse {
   status: "success" | "partial" | "failed";
@@ -579,7 +579,7 @@ export interface RecentBillingDetail {
 
 export type PaginatedRecentBillingDetailsResponse = PaginatedResponse<RecentBillingDetail>;
 
-// ========== 补偿规则相关类型 ==========
+// ========== Header Compensation Types ==========
 
 export interface CompensationRule {
   id: string;
@@ -612,7 +612,7 @@ export interface CompensationRuleUpdate {
   mode?: string;
 }
 
-// ========== 错误响应类型 ==========
+// ========== Error Response Types ==========
 
 export interface ErrorDetail {
   error: string;
@@ -620,7 +620,7 @@ export interface ErrorDetail {
   request_id?: string;
 }
 
-// ========== 统计相关类型 ==========
+// ========== Statistics Types ==========
 
 export type TimeRange = "today" | "7d" | "30d";
 

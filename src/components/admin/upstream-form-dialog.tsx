@@ -618,7 +618,7 @@ export function UpstreamFormDialog({
         : null;
       const maxConcurrency = data.max_concurrency ?? null;
       if (isEdit) {
-        // 只有填写了 api_key 才更新
+        // Only include api_key when provided
         const updateData: {
           name: string;
           base_url: string;
