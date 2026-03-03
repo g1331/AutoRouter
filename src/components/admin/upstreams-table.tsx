@@ -438,7 +438,7 @@ export function UpstreamsTable({
               >
                 <div
                   className={cn(
-                    "grid gap-3 rounded-b-cf-md bg-surface-400/24",
+                    "grid gap-3 rounded-b-cf-md bg-surface-200/62 ring-1 ring-inset ring-surface-100/35",
                     isCompactDensity
                       ? "p-3 sm:p-3.5 md:grid-cols-2 2xl:grid-cols-3"
                       : "p-3 sm:p-4 xl:grid-cols-2"
