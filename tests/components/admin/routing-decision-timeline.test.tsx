@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { RoutingDecisionTimeline } from "@/components/admin/routing-decision-timeline";
-import type { RoutingDecisionLog } from "@/types/api";
+import type { FailoverAttempt, RoutingDecisionLog } from "@/types/api";
 
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
@@ -95,5 +95,64 @@ describe("RoutingDecisionTimeline", () => {
     expect(screen.queryByText(/perfTtft/)).not.toBeInTheDocument();
     expect(screen.queryByText(/perfTps/)).not.toBeInTheDocument();
     expect(screen.queryByText(/perfGen/)).not.toBeInTheDocument();
+  });
+
+  it("renders concurrency_full evidence in expanded retry and exclusion sections", () => {
+    const failoverHistory: FailoverAttempt[] = [
+      {
+        upstream_id: "up-1",
+        upstream_name: "openai-1",
+        attempted_at: new Date().toISOString(),
+        error_type: "concurrency_full",
+        error_message: "capacity reached",
+      },
+    ];
+
+    render(
+      <RoutingDecisionTimeline
+        routingDecision={{
+          ...baseRoutingDecision,
+          excluded: [{ id: "up-3", name: "openai-busy", reason: "concurrency_full" }],
+          did_send_upstream: true,
+          candidate_upstream_id: "up-2",
+          actual_upstream_id: "up-2",
+          failure_stage: null,
+        }}
+        upstreamName="rc"
+        routingType="provider_type"
+        groupName={null}
+        failoverAttempts={1}
+        failoverHistory={failoverHistory}
+        failoverDurationMs={12}
+        statusCode={200}
+        compact={false}
+      />
+    );
+
+    expect(screen.getByText("exclusionReason.concurrency_full")).toBeInTheDocument();
+    expect(screen.getByText("[concurrency_full]")).toBeInTheDocument();
+    expect(screen.getByText("capacity reached")).toBeInTheDocument();
+  });
+
+  it("keeps compact view transfer indicators visible when concurrency_full failover happened", () => {
+    render(
+      <RoutingDecisionTimeline
+        routingDecision={{
+          ...baseRoutingDecision,
+          excluded: [{ id: "up-3", name: "openai-busy", reason: "concurrency_full" }],
+          did_send_upstream: true,
+          candidate_upstream_id: "up-2",
+          actual_upstream_id: "up-2",
+          failure_stage: null,
+        }}
+        upstreamName="rc"
+        routingType="provider_type"
+        groupName={null}
+        failoverAttempts={1}
+      />
+    );
+
+    expect(screen.getByTitle("indicatorFailover")).toBeInTheDocument();
+    expect(screen.getByTitle("indicatorExcluded")).toBeInTheDocument();
   });
 });

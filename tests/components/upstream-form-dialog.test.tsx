@@ -216,6 +216,89 @@ describe("UpstreamFormDialog", () => {
       });
     });
 
+    it("auto-appends /v1 for codex capability and keeps preview consistent", async () => {
+      mockCreateMutateAsync.mockResolvedValueOnce({});
+
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("upstreamNamePlaceholder"), {
+        target: { value: "Codex Proxy" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("baseUrlPlaceholder"), {
+        target: { value: "https://www.right.codes/codex/" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("apiKeyPlaceholder"), {
+        target: { value: "sk-test-key" },
+      });
+      fireEvent.click(screen.getByText("capabilityCodexResponses"));
+
+      expect(screen.getByText("baseUrlAutoAppendV1Hint")).toBeInTheDocument();
+      expect(screen.getByText("https://www.right.codes/codex/v1/responses")).toBeInTheDocument();
+      expect(screen.getByText("finalRequestPreviewPath: /responses")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText("create"));
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            base_url: "https://www.right.codes/codex/v1",
+            route_capabilities: ["codex_responses"],
+          })
+        );
+      });
+    });
+
+    it("shows duplicate /v1 warning when manual /v1 overlaps with auto append", () => {
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("baseUrlPlaceholder"), {
+        target: { value: "https://www.right.codes/codex/v1" },
+      });
+      fireEvent.click(screen.getByText("capabilityCodexResponses"));
+
+      expect(screen.getByText("baseUrlDuplicateV1Warning")).toBeInTheDocument();
+      expect(screen.getByText("https://www.right.codes/codex/v1/responses")).toBeInTheDocument();
+    });
+
+    it("submits optional official website and max concurrency fields on create", async () => {
+      mockCreateMutateAsync.mockResolvedValueOnce({});
+
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("upstreamNamePlaceholder"), {
+        target: { value: "Configured Upstream" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("baseUrlPlaceholder"), {
+        target: { value: "https://api.example.com/v1" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("apiKeyPlaceholder"), {
+        target: { value: "sk-test-key" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("officialWebsiteUrlPlaceholder"), {
+        target: { value: "https://www.right.codes" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("maxConcurrencyPlaceholder"), {
+        target: { value: "7" },
+      });
+
+      fireEvent.click(screen.getByText("create"));
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            official_website_url: "https://www.right.codes",
+            max_concurrency: 7,
+          })
+        );
+      });
+    });
+
     it("closes dialog on successful creation", async () => {
       mockCreateMutateAsync.mockResolvedValueOnce({});
 

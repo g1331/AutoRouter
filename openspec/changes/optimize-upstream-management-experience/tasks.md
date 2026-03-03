@@ -55,11 +55,11 @@
 - [x] 6.4 将列表默认时间指标从 `created_at` 替换为 `last_used_at`（未使用显示占位文案）
 - [x] 6.5 重构操作区主次分层，保留高频直达并收敛低频操作
 - [x] 6.6 阶段F质量门禁：`pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run`
-- [ ] 6.7 提交阶段性 commit（包含阶段F全部改动与门禁修复）
+- [x] 6.7 提交阶段性 commit（包含阶段F全部改动与门禁修复）
 
 ## 7. 阶段G：端到端回归与发布前收口
 
-- [ ] 7.1 补齐并发控制、endpoint 体验、last_used、日志时间线的缺失单元/组件测试
-- [ ] 7.2 执行全量回归与关键手工验证（并发满转移不熔断、预览一致、官网跳转、日志证据）
-- [ ] 7.3 阶段G质量门禁：`pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run`
+- [x] 7.1 补齐并发控制、endpoint 体验、last_used、日志时间线的缺失单元/组件测试
+- [x] 7.2 执行全量回归与关键手工验证（并发满转移不熔断、预览一致、官网跳转、日志证据）
+- [x] 7.3 阶段G质量门禁：`pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run`
 - [ ] 7.4 提交阶段性 commit（阶段G收口与发布候选）
