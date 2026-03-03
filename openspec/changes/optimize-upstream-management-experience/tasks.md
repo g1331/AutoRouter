@@ -62,4 +62,4 @@
 - [x] 7.1 补齐并发控制、endpoint 体验、last_used、日志时间线的缺失单元/组件测试
 - [x] 7.2 执行全量回归与关键手工验证（并发满转移不熔断、预览一致、官网跳转、日志证据）
 - [x] 7.3 阶段G质量门禁：`pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run`
-- [ ] 7.4 提交阶段性 commit（阶段G收口与发布候选）
+- [x] 7.4 提交阶段性 commit（阶段G收口与发布候选）
