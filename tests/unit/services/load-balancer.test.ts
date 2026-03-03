@@ -74,6 +74,7 @@ import {
   recordConnection,
   releaseConnection,
   getConnectionCount,
+  getConnectionCountsSnapshot,
 } from "@/lib/services/load-balancer";
 import { affinityStore } from "@/lib/services/session-affinity";
 
@@ -1036,6 +1037,17 @@ describe("load-balancer", () => {
 
       expect(getConnectionCount("u1")).toBe(2);
       expect(getConnectionCount("u2")).toBe(1);
+    });
+
+    it("should expose current connection snapshot", () => {
+      recordConnection("u1");
+      recordConnection("u2");
+      recordConnection("u2");
+
+      expect(getConnectionCountsSnapshot()).toEqual({
+        u1: 1,
+        u2: 2,
+      });
     });
   });
 

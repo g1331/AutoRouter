@@ -11,14 +11,14 @@
 - [x] 1.2 扩展 API 类型与 transformer：补齐 `official_website_url`、`max_concurrency`、`last_used_at`
 - [x] 1.3 扩展 admin upstream create/update 路由 schema 与 payload 映射，打通新字段读写
 - [x] 1.4 阶段A质量门禁：`pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run`
-- [ ] 1.5 提交阶段性 commit（包含阶段A全部改动与门禁修复）
+- [x] 1.5 提交阶段性 commit（包含阶段A全部改动与门禁修复）
 
 ## 2. 阶段B：运行态数据补齐（last_used 与并发占用）
 
-- [ ] 2.1 在 upstream 列表查询链路增加 `last_used_at = MAX(request_logs.created_at)` 聚合，并处理“未使用”空值
-- [ ] 2.2 在负载均衡层提供可读取的并发占用快照（`current_concurrency`）
-- [ ] 2.3 将并发占用接入上游管理可读 API（与列表或状态接口保持一致）
-- [ ] 2.4 阶段B质量门禁：`pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run`
+- [x] 2.1 在 upstream 列表查询链路增加 `last_used_at = MAX(request_logs.created_at)` 聚合，并处理“未使用”空值
+- [x] 2.2 在负载均衡层提供可读取的并发占用快照（`current_concurrency`）
+- [x] 2.3 将并发占用接入上游管理可读 API（与列表或状态接口保持一致）
+- [x] 2.4 阶段B质量门禁：`pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run`
 - [ ] 2.5 提交阶段性 commit（包含阶段B全部改动与门禁修复）
 
 ## 3. 阶段C：并发控制路由语义（满载转移且不熔断）

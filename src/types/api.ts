@@ -178,6 +178,7 @@ export interface UpstreamResponse {
   is_default: boolean;
   timeout: number;
   is_active: boolean;
+  current_concurrency?: number;
   max_concurrency?: number | null;
   weight: number; // Load balancing weight
   priority: number; // Priority tier (lower = higher priority)

@@ -9,10 +9,26 @@ vi.mock("@/lib/db", () => ({
         findFirst: vi.fn(),
         findMany: vi.fn(),
       },
+      circuitBreakerStates: {
+        findFirst: vi.fn(),
+        findMany: vi.fn(() => Promise.resolve([])),
+      },
     },
-    select: vi.fn(() => ({
-      from: vi.fn(() => Promise.resolve([{ value: 0 }])),
-    })),
+    select: vi.fn((selection?: Record<string, unknown>) => {
+      if (selection && "value" in selection) {
+        return {
+          from: vi.fn(() => Promise.resolve([{ value: 0 }])),
+        };
+      }
+
+      return {
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            groupBy: vi.fn(() => Promise.resolve([])),
+          })),
+        })),
+      };
+    }),
     insert: vi.fn(() => ({
       values: vi.fn(() => ({
         returning: vi.fn(),
@@ -30,6 +46,11 @@ vi.mock("@/lib/db", () => ({
     })),
   },
   upstreams: {},
+  circuitBreakerStates: {},
+  requestLogs: {
+    upstreamId: "upstreamId",
+    createdAt: "createdAt",
+  },
 }));
 
 // Mock encryption module
@@ -66,7 +87,7 @@ vi.mock("dns", () => ({
 
 describe("upstream-service", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   afterEach(() => {

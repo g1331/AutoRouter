@@ -74,6 +74,7 @@ export interface UpstreamApiResponse {
   is_default: boolean;
   timeout: number;
   is_active: boolean;
+  current_concurrency: number;
   max_concurrency: number | null;
   config: string | null;
   weight: number;
@@ -124,6 +125,7 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
     is_default: upstream.isDefault,
     timeout: upstream.timeout,
     is_active: upstream.isActive,
+    current_concurrency: upstream.currentConcurrency,
     max_concurrency: upstream.maxConcurrency ?? null,
     config: upstream.config,
     weight: upstream.weight,

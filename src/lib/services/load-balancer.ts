@@ -96,6 +96,13 @@ export function getConnectionCount(upstreamId: string): number {
 }
 
 /**
+ * Get a shallow snapshot of current active connections keyed by upstream ID.
+ */
+export function getConnectionCountsSnapshot(): Record<string, number> {
+  return Object.fromEntries(connectionCounts.entries());
+}
+
+/**
  * Record a new connection to an upstream (increment counter).
  */
 export function recordConnection(upstreamId: string): void {

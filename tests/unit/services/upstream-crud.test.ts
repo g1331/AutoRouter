@@ -35,13 +35,28 @@ vi.mock("@/lib/db", () => ({
         findFirst: vi.fn(),
         findMany: vi.fn(),
       },
+      requestLogs: {
+        findFirst: vi.fn(),
+      },
       circuitBreakerStates: {
         findMany: vi.fn(() => Promise.resolve([])),
       },
     },
-    select: vi.fn(() => ({
-      from: vi.fn(() => Promise.resolve([{ value: 0 }])),
-    })),
+    select: vi.fn((selection?: Record<string, unknown>) => {
+      if (selection && "value" in selection) {
+        return {
+          from: vi.fn(() => Promise.resolve([{ value: 0 }])),
+        };
+      }
+
+      return {
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            groupBy: vi.fn(() => Promise.resolve([])),
+          })),
+        })),
+      };
+    }),
     insert: vi.fn(() => ({
       values: vi.fn(() => ({
         returning: vi.fn(() =>
@@ -72,6 +87,10 @@ vi.mock("@/lib/db", () => ({
   },
   upstreams: {},
   circuitBreakerStates: {},
+  requestLogs: {
+    upstreamId: "upstreamId",
+    createdAt: "createdAt",
+  },
 }));
 
 vi.mock("@/lib/utils/encryption", () => ({
@@ -79,9 +98,13 @@ vi.mock("@/lib/utils/encryption", () => ({
   decrypt: vi.fn((value: string) => value.replace("encrypted:", "")),
 }));
 
+vi.mock("@/lib/services/load-balancer", () => ({
+  getConnectionCountsSnapshot: vi.fn(() => ({})),
+}));
+
 describe("upstream-crud", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   describe("maskApiKey", () => {
@@ -500,9 +523,21 @@ describe("upstream-crud", () => {
       const { listUpstreams } = await import("@/lib/services/upstream-crud");
       const { db } = await import("@/lib/db");
 
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockResolvedValue([{ value: 2 }]),
-      } as unknown as MockSelectChain);
+      vi.mocked(db.select).mockImplementation((selection?: Record<string, unknown>) => {
+        if (selection && "value" in selection) {
+          return {
+            from: vi.fn().mockResolvedValue([{ value: 2 }]),
+          } as unknown as MockSelectChain;
+        }
+
+        return {
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              groupBy: vi.fn().mockResolvedValue([]),
+            })),
+          })),
+        } as unknown as MockSelectChain;
+      });
 
       vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
         {
@@ -553,9 +588,21 @@ describe("upstream-crud", () => {
       const { db } = await import("@/lib/db");
       const { decrypt } = await import("@/lib/utils/encryption");
 
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockResolvedValue([{ value: 1 }]),
-      } as unknown as MockSelectChain);
+      vi.mocked(db.select).mockImplementation((selection?: Record<string, unknown>) => {
+        if (selection && "value" in selection) {
+          return {
+            from: vi.fn().mockResolvedValue([{ value: 1 }]),
+          } as unknown as MockSelectChain;
+        }
+
+        return {
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              groupBy: vi.fn().mockResolvedValue([]),
+            })),
+          })),
+        } as unknown as MockSelectChain;
+      });
 
       vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
         {
