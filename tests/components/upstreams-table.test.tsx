@@ -168,7 +168,7 @@ describe("UpstreamsTable", () => {
     expect(onEdit).toHaveBeenCalledWith(baseUpstream);
   });
 
-  it("supports delete action in dropdown menu", async () => {
+  it("supports delete action directly", async () => {
     render(
       <UpstreamsTable
         upstreams={[baseUpstream]}
@@ -178,8 +178,7 @@ describe("UpstreamsTable", () => {
       />
     );
 
-    fireEvent.pointerDown(screen.getByLabelText("moreActions: OpenAI Main"));
-    fireEvent.click(await screen.findByText("delete"));
+    fireEvent.click(screen.getByLabelText("delete: OpenAI Main"));
 
     await waitFor(() => {
       expect(onDelete).toHaveBeenCalledWith(baseUpstream);
@@ -209,8 +208,7 @@ describe("UpstreamsTable", () => {
       />
     );
 
-    fireEvent.pointerDown(screen.getByLabelText("moreActions: OpenAI Main"));
-    fireEvent.click(await screen.findByText("recoverCircuitBreaker"));
+    fireEvent.click(screen.getByLabelText("recoverCircuitBreaker: OpenAI Main"));
 
     await waitFor(() => {
       expect(mockForceCircuitBreaker).toHaveBeenCalledWith({
@@ -313,6 +311,51 @@ describe("UpstreamsTable", () => {
     expect(screen.getByText("tableQuota")).toBeInTheDocument();
     expect(screen.getByText(/quotaResets:/)).toBeInTheDocument();
     expect(screen.getByText(/quotaRecovery:/)).toBeInTheDocument();
+  });
+
+  it("collapses quota details in compact density until expanded", () => {
+    mockUpstreamQuotaData = {
+      items: [
+        {
+          upstream_id: "upstream-1",
+          upstream_name: "OpenAI Main",
+          is_exceeded: false,
+          rules: [
+            {
+              period_type: "daily",
+              period_hours: null,
+              current_spending: 3,
+              spending_limit: 10,
+              percent_used: 30,
+              is_exceeded: false,
+              resets_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+              estimated_recovery_at: null,
+            },
+          ],
+        },
+      ],
+    };
+
+    render(
+      <UpstreamsTable
+        upstreams={[baseUpstream]}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onTest={onTest}
+        density="compact"
+      />
+    );
+
+    const quotaSummary = screen.getByText("showQuotaDetails");
+    const details = quotaSummary.closest("details");
+
+    expect(quotaSummary).toBeInTheDocument();
+    expect(details).toBeInTheDocument();
+    expect(details).not.toHaveAttribute("open");
+
+    fireEvent.click(quotaSummary);
+    expect(details).toHaveAttribute("open");
+    expect(screen.getByText(/quotaResets:/)).toBeInTheDocument();
   });
 
   it("renders capability badge text", () => {

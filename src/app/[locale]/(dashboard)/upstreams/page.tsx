@@ -6,8 +6,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
+  LayoutGrid,
   Plus,
   RotateCcw,
+  Rows3,
   Search,
   Server,
   SlidersHorizontal,
@@ -33,6 +35,7 @@ import { Badge } from "@/components/ui/badge";
 import { useUpstreams, useTestUpstream, useUpstreamHealth } from "@/hooks/use-upstreams";
 import type { RouteCapability, Upstream } from "@/types/api";
 import { ROUTE_CAPABILITY_DEFINITIONS } from "@/lib/route-capabilities";
+import { ROUTE_CAPABILITY_ICON_META } from "@/components/admin/route-capability-badges";
 import { cn } from "@/lib/utils";
 
 interface UpstreamsLoadingSkeletonProps {
@@ -73,6 +76,8 @@ type UpstreamStatusFilter =
   | "circuit_open"
   | "inactive";
 
+type WorkbenchDensity = "compact" | "comfortable";
+
 const STATUS_FILTERS: UpstreamStatusFilter[] = [
   "all",
   "healthy",
@@ -105,6 +110,7 @@ export default function UpstreamsPage() {
   const [statusFilter, setStatusFilter] = useState<UpstreamStatusFilter>("all");
   const [capabilityFilter, setCapabilityFilter] = useState<RouteCapability | "all">("all");
   const [includeInactive, setIncludeInactive] = useState(true);
+  const [workbenchDensity, setWorkbenchDensity] = useState<WorkbenchDensity>("compact");
 
   const pageSize = 10;
   const t = useTranslations("upstreams");
@@ -282,12 +288,30 @@ export default function UpstreamsPage() {
                       </div>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">{t("capabilityFilterAll")}</SelectItem>
-                      {ROUTE_CAPABILITY_DEFINITIONS.map((definition) => (
-                        <SelectItem key={definition.value} value={definition.value}>
-                          {t(definition.labelKey)}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="all">
+                        <span className="flex items-center gap-2">
+                          <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span>{t("capabilityFilterAll")}</span>
+                        </span>
+                      </SelectItem>
+                      {ROUTE_CAPABILITY_DEFINITIONS.map((definition) => {
+                        const iconMeta = ROUTE_CAPABILITY_ICON_META[definition.iconKey];
+                        return (
+                          <SelectItem key={definition.value} value={definition.value}>
+                            <span className="flex items-center gap-2">
+                              <span
+                                className={cn(
+                                  "inline-flex h-4 w-4 items-center justify-center rounded-[5px] border",
+                                  iconMeta.iconContainerClass
+                                )}
+                              >
+                                {iconMeta.render(cn("h-2.5 w-2.5", iconMeta.iconColorClass))}
+                              </span>
+                              <span>{t(definition.labelKey)}</span>
+                            </span>
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
@@ -316,6 +340,34 @@ export default function UpstreamsPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
+                  <div className="inline-flex items-center rounded-cf-sm border border-divider bg-surface-200/60 p-1">
+                    <span className="px-2 text-[11px] text-muted-foreground">
+                      {t("densityLabel")}
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={workbenchDensity === "compact" ? "secondary" : "ghost"}
+                      className="h-7 gap-1.5 px-2.5"
+                      onClick={() => setWorkbenchDensity("compact")}
+                      aria-pressed={workbenchDensity === "compact"}
+                    >
+                      <Rows3 className="h-3.5 w-3.5" aria-hidden="true" />
+                      {t("densityCompact")}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={workbenchDensity === "comfortable" ? "secondary" : "ghost"}
+                      className="h-7 gap-1.5 px-2.5"
+                      onClick={() => setWorkbenchDensity("comfortable")}
+                      aria-pressed={workbenchDensity === "comfortable"}
+                    >
+                      <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
+                      {t("densityComfortable")}
+                    </Button>
+                  </div>
+
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Switch
                       checked={includeInactive}
@@ -346,6 +398,7 @@ export default function UpstreamsPage() {
               onEdit={setEditUpstream}
               onDelete={setDeleteUpstream}
               onTest={setTestUpstream}
+              density={workbenchDensity}
             />
 
             {upstreamsData && upstreamsData.total_pages > 1 && (

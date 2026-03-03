@@ -63,3 +63,30 @@
 - [x] 7.2 执行全量回归与关键手工验证（并发满转移不熔断、预览一致、官网跳转、日志证据）
 - [x] 7.3 阶段G质量门禁：`pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run`
 - [x] 7.4 提交阶段性 commit（阶段G收口与发布候选）
+
+## 8. 阶段H：配置可发现性补强（快速定位）
+
+- [x] 8.1 在 `upstream-form-dialog` 增加“配置快速定位导航”，支持自动展开高级配置并跳转到目标区块
+- [x] 8.2 补齐中英文导航文案并完成阶段H质量门禁：`pnpm lint`、`pnpm exec tsc --noEmit`
+
+## 9. 阶段I：持续导航闭环（无需回顶部）
+
+- [x] 9.1 在高级配置实现粘性导航与区块级“上一项/下一项/返回快速定位”操作
+- [x] 9.2 增加悬浮“返回快速定位”入口并完成阶段I质量门禁：`pnpm lint`、`pnpm exec tsc --noEmit`
+
+## 10. 阶段J：侧边目录导航（WPS风格）
+
+- [x] 10.1 在桌面端实现“左侧目录 + 分组 + 图标 + 搜索”的配置导航，并支持点击跳转
+- [x] 10.2 在移动端保留紧凑导航并保持同一跳转语义，完成阶段J质量门禁：`pnpm lint`、`pnpm exec tsc --noEmit`
+
+## 11. 阶段K：编辑防丢失与焦点强化
+
+- [x] 11.1 固定弹窗标题、目录区和底部操作栏，形成“中间滚动、上下固定”的长表单编辑结构
+- [x] 11.2 新增未保存离开确认提示，拦截误触关闭导致的改动丢失
+- [x] 11.3 导航跳转后为目标区块增加短时高亮提示并完成阶段K质量门禁：`pnpm test:run tests/components/upstream-form-dialog.test.tsx`、`pnpm lint`、`pnpm exec tsc --noEmit`
+
+## 12. 阶段L：配置顺序重构与滚动修复
+
+- [x] 12.1 修复右侧配置区滚动语义，确保固定头尾下仍可连续编辑长表单
+- [x] 12.2 重构目录与配置组合顺序，将“描述”回归基础信息并按“基础信息 → 接入路由 → 策略成本 → 稳定性”组织
+- [x] 12.3 同步调整组件测试并完成阶段L质量门禁：`pnpm test:run tests/components/upstream-form-dialog.test.tsx`、`pnpm lint`、`pnpm exec tsc --noEmit`

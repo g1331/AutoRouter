@@ -7,7 +7,6 @@ import {
   ChevronDown,
   ChevronRight,
   ExternalLink,
-  MoreHorizontal,
   Pencil,
   Play,
   Server,
@@ -30,19 +29,13 @@ import { useForceCircuitBreaker } from "@/hooks/use-circuit-breaker";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { RouteCapabilityBadges } from "@/components/admin/route-capability-badges";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 interface UpstreamsTableProps {
   upstreams: Upstream[];
   onEdit: (upstream: Upstream) => void;
   onDelete: (upstream: Upstream) => void;
   onTest: (upstream: Upstream) => void;
+  density?: "comfortable" | "compact";
 }
 
 interface QuotaRule {
@@ -70,12 +63,19 @@ interface TierGroup {
   summary: TierSummary;
 }
 
-export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: UpstreamsTableProps) {
+export function UpstreamsTable({
+  upstreams,
+  onEdit,
+  onDelete,
+  onTest,
+  density = "comfortable",
+}: UpstreamsTableProps) {
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
   const locale = useLocale();
   const dateLocale = getDateLocale(locale);
   const [collapsedTiers, setCollapsedTiers] = useState<Set<number>>(new Set());
+  const isCompactDensity = density === "compact";
 
   const toggleActiveMutation = useToggleUpstreamActive();
   const forceCircuitBreakerMutation = useForceCircuitBreaker();
@@ -285,11 +285,14 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
           >
             <button
               type="button"
-              className="flex w-full items-start justify-between gap-3 border-b border-divider px-4 py-3 text-left"
+              className={cn(
+                "flex w-full items-start justify-between gap-3 border-b border-divider text-left",
+                isCompactDensity ? "px-3 py-2.5" : "px-4 py-3"
+              )}
               onClick={() => toggleTier(tier.priority)}
               aria-expanded={!isCollapsed}
             >
-              <div className="min-w-0 space-y-2">
+              <div className={cn("min-w-0", isCompactDensity ? "space-y-1.5" : "space-y-2")}>
                 <div className="flex items-center gap-2">
                   {isCollapsed ? (
                     <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -333,23 +336,85 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
             </button>
 
             {!isCollapsed && (
-              <div className="space-y-3 p-3 sm:p-4">
+              <div
+                className={cn(
+                  "grid gap-3",
+                  isCompactDensity
+                    ? "p-3 sm:p-3.5 md:grid-cols-2 2xl:grid-cols-3"
+                    : "p-3 sm:p-4 xl:grid-cols-2"
+                )}
+              >
                 {tier.upstreams.map((upstream) => {
                   const quota = quotaMap.get(upstream.id);
                   const concurrency = getConcurrencyInfo(upstream);
                   const showRecover =
                     upstream.circuit_breaker != null && upstream.circuit_breaker.state !== "closed";
+                  const quotaRuleNodes = quota?.rules.map((rule, index) => {
+                    const timing = formatQuotaTiming(rule);
+                    const variant: ProgressVariant = rule.is_exceeded
+                      ? "error"
+                      : rule.percent_used >= 80
+                        ? "warning"
+                        : "default";
+
+                    return (
+                      <div
+                        key={`${upstream.id}-quota-${index}`}
+                        className={cn(
+                          "rounded-cf-sm border border-divider bg-surface-200",
+                          isCompactDensity ? "px-2 py-1" : "px-2 py-1.5"
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-2 text-[11px]">
+                          <span className="text-muted-foreground">{formatQuotaPeriod(rule)}</span>
+                          <span
+                            className={cn(
+                              "font-mono",
+                              rule.is_exceeded
+                                ? "text-status-error"
+                                : rule.percent_used >= 80
+                                  ? "text-status-warning"
+                                  : "text-foreground"
+                            )}
+                          >
+                            ${rule.current_spending.toFixed(2)} / ${rule.spending_limit.toFixed(2)}{" "}
+                            ({Math.round(rule.percent_used)}%)
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center justify-between gap-2">
+                          <AsciiProgress
+                            value={rule.current_spending}
+                            max={rule.spending_limit}
+                            width={isCompactDensity ? 7 : 10}
+                            variant={variant}
+                            style="meter"
+                          />
+                          {timing && (
+                            <span className="text-[10px] text-muted-foreground">{timing}</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  });
 
                   return (
                     <article
                       key={upstream.id}
                       className={cn(
-                        "rounded-cf-md border border-divider bg-surface-200/35 p-3 sm:p-4",
+                        "rounded-cf-md border border-divider bg-surface-200/35",
+                        isCompactDensity ? "p-2.5 sm:p-3" : "p-3 sm:p-4",
                         !upstream.is_active && "opacity-80"
                       )}
                     >
-                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                        <div className="min-w-0 space-y-2">
+                      <div
+                        className={cn(
+                          "flex flex-col lg:flex-row lg:items-start lg:justify-between",
+                          isCompactDensity ? "gap-2" : "gap-3"
+                        )}
+                      >
+                        <div
+                          className={cn("min-w-0", isCompactDensity ? "space-y-1.5" : "space-y-2")}
+                        >
                           <div className="flex flex-wrap items-center gap-2">
                             <h3
                               className="type-body-medium truncate text-foreground"
@@ -389,7 +454,10 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                           <RouteCapabilityBadges
                             capabilities={upstream.route_capabilities}
                             className="max-w-full items-start gap-1.5"
-                            badgeClassName="px-2 py-0.5 text-[11px] leading-4 sm:text-xs"
+                            badgeClassName={cn(
+                              "px-2 py-0.5 text-[11px] leading-4",
+                              !isCompactDensity && "sm:text-xs"
+                            )}
                           />
                         </div>
 
@@ -411,7 +479,10 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                             variant="outline"
                             size="sm"
                             type="button"
-                            className="h-8 gap-1.5 border-divider bg-surface-200 px-2.5"
+                            className={cn(
+                              "gap-1.5 border-divider bg-surface-200 px-2.5",
+                              isCompactDensity ? "h-7 text-xs" : "h-8"
+                            )}
                             onClick={() => onTest(upstream)}
                             aria-label={`${tCommon("test")}: ${upstream.name}`}
                           >
@@ -423,69 +494,69 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                             variant="outline"
                             size="sm"
                             type="button"
-                            className="h-8 gap-1.5 border-divider bg-surface-200 px-2.5"
+                            className={cn(
+                              "gap-1.5 border-divider bg-surface-200 px-2.5",
+                              isCompactDensity ? "h-7 text-xs" : "h-8"
+                            )}
                             onClick={() => onEdit(upstream)}
                             aria-label={`${tCommon("edit")}: ${upstream.name}`}
                           >
                             <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
                             {tCommon("edit")}
                           </Button>
-
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                type="button"
-                                className="h-8 w-8 border-divider bg-surface-200"
-                                aria-label={`${t("moreActions")}: ${upstream.name}`}
-                              >
-                                <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44">
-                              {upstream.official_website_url && (
-                                <DropdownMenuItem asChild>
-                                  <a
-                                    href={upstream.official_website_url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                  >
-                                    <ExternalLink className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                                    {t("officialWebsiteAction")}
-                                  </a>
-                                </DropdownMenuItem>
+                          {showRecover && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              type="button"
+                              className={cn(
+                                "gap-1.5 border-status-warning/45 bg-status-warning-muted px-2.5 text-status-warning",
+                                isCompactDensity ? "h-7 text-xs" : "h-8"
                               )}
-                              {showRecover && (
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    void handleRecoverCircuit(upstream);
-                                  }}
-                                  disabled={
-                                    forceCircuitBreakerMutation.isPending &&
-                                    forceCircuitBreakerMutation.variables?.upstreamId ===
-                                      upstream.id
-                                  }
-                                >
-                                  <ShieldCheck className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                                  {t("recoverCircuitBreaker")}
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                className="text-status-error focus:text-status-error"
-                                onClick={() => onDelete(upstream)}
-                              >
-                                <Trash2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                                {tCommon("delete")}
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                              onClick={() => {
+                                void handleRecoverCircuit(upstream);
+                              }}
+                              disabled={
+                                forceCircuitBreakerMutation.isPending &&
+                                forceCircuitBreakerMutation.variables?.upstreamId === upstream.id
+                              }
+                              aria-label={`${t("recoverCircuitBreaker")}: ${upstream.name}`}
+                            >
+                              <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                              {t("recoverCircuitBreaker")}
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            type="button"
+                            className={cn(
+                              "gap-1.5 border-status-error/45 bg-status-error-muted px-2.5 text-status-error",
+                              isCompactDensity ? "h-7 text-xs" : "h-8"
+                            )}
+                            onClick={() => onDelete(upstream)}
+                            aria-label={`${tCommon("delete")}: ${upstream.name}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                            {tCommon("delete")}
+                          </Button>
                         </div>
                       </div>
 
-                      <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-                        <section className="rounded-cf-sm border border-divider bg-surface-300/45 p-3">
+                      <div
+                        className={cn(
+                          "mt-2.5 grid",
+                          isCompactDensity
+                            ? "gap-2 grid-cols-1"
+                            : "gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]"
+                        )}
+                      >
+                        <section
+                          className={cn(
+                            "rounded-cf-sm border border-divider bg-surface-300/45",
+                            isCompactDensity ? "p-2.5" : "p-3"
+                          )}
+                        >
                           <div className="mb-2 flex items-center justify-between">
                             <span className="text-xs text-muted-foreground">
                               {t("tableBaseUrl")}
@@ -517,7 +588,12 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                           </div>
                         </section>
 
-                        <section className="rounded-cf-sm border border-divider bg-surface-300/45 p-3">
+                        <section
+                          className={cn(
+                            "rounded-cf-sm border border-divider bg-surface-300/45",
+                            isCompactDensity ? "p-2.5" : "p-3"
+                          )}
+                        >
                           <div className="mb-2 text-xs text-muted-foreground">
                             {t("runtimeStatus")}
                           </div>
@@ -546,7 +622,12 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                           </div>
 
                           {!concurrency.unlimited && (
-                            <div className="mt-2 flex items-center justify-between gap-2 rounded-cf-sm border border-divider bg-surface-200 px-2 py-1.5">
+                            <div
+                              className={cn(
+                                "mt-2 flex items-center justify-between gap-2 rounded-cf-sm border border-divider bg-surface-200 px-2",
+                                isCompactDensity ? "py-1" : "py-1.5"
+                              )}
+                            >
                               <span className="text-[11px] text-muted-foreground">
                                 {t("concurrencyUsage")}
                               </span>
@@ -568,7 +649,12 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                         </section>
                       </div>
 
-                      <section className="mt-3 rounded-cf-sm border border-divider bg-surface-300/45 p-3">
+                      <section
+                        className={cn(
+                          "rounded-cf-sm border border-divider bg-surface-300/45",
+                          isCompactDensity ? "mt-2.5 p-2.5" : "mt-3 p-3"
+                        )}
+                      >
                         <div className="mb-2 flex items-center justify-between">
                           <span className="text-xs text-muted-foreground">{t("tableQuota")}</span>
                           {quota?.is_exceeded && (
@@ -585,58 +671,15 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                           <div className="text-[11px] text-muted-foreground">
                             {tCommon("noData")}
                           </div>
+                        ) : isCompactDensity ? (
+                          <details>
+                            <summary className="cursor-pointer select-none text-[11px] text-muted-foreground hover:text-foreground">
+                              {t("showQuotaDetails")}
+                            </summary>
+                            <div className="mt-2 space-y-1.5">{quotaRuleNodes}</div>
+                          </details>
                         ) : (
-                          <div className="space-y-2">
-                            {quota.rules.map((rule, index) => {
-                              const timing = formatQuotaTiming(rule);
-                              const variant: ProgressVariant = rule.is_exceeded
-                                ? "error"
-                                : rule.percent_used >= 80
-                                  ? "warning"
-                                  : "default";
-
-                              return (
-                                <div
-                                  key={`${upstream.id}-quota-${index}`}
-                                  className="rounded-cf-sm border border-divider bg-surface-200 px-2 py-1.5"
-                                >
-                                  <div className="flex items-center justify-between gap-2 text-[11px]">
-                                    <span className="text-muted-foreground">
-                                      {formatQuotaPeriod(rule)}
-                                    </span>
-                                    <span
-                                      className={cn(
-                                        "font-mono",
-                                        rule.is_exceeded
-                                          ? "text-status-error"
-                                          : rule.percent_used >= 80
-                                            ? "text-status-warning"
-                                            : "text-foreground"
-                                      )}
-                                    >
-                                      ${rule.current_spending.toFixed(2)} / $
-                                      {rule.spending_limit.toFixed(2)} (
-                                      {Math.round(rule.percent_used)}%)
-                                    </span>
-                                  </div>
-                                  <div className="mt-1 flex items-center justify-between gap-2">
-                                    <AsciiProgress
-                                      value={rule.current_spending}
-                                      max={rule.spending_limit}
-                                      width={10}
-                                      variant={variant}
-                                      style="meter"
-                                    />
-                                    {timing && (
-                                      <span className="text-[10px] text-muted-foreground">
-                                        {timing}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
+                          <div className="space-y-2">{quotaRuleNodes}</div>
                         )}
                       </section>
                     </article>
