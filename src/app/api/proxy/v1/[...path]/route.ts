@@ -22,6 +22,7 @@ import {
   selectFromUpstreamCandidates,
   recordConnection,
   releaseConnection,
+  AllCandidatesConcurrencyFullError,
   NoHealthyUpstreamsError,
   NoAuthorizedUpstreamsError,
 } from "@/lib/services/load-balancer";
@@ -130,7 +131,7 @@ function transformPathRoutingDecisionLog(
     model: string | null;
     capabilityCandidates: Upstream[];
     finalCandidates: Upstream[];
-    excludedCandidates: Array<{ upstream: Upstream; reason: "unhealthy" | "circuit_open" }>;
+    excludedCandidates: RoutingExcluded[];
   },
   selectedUpstreamId: string | null,
   diagnostics?: RoutingDecisionDiagnostics
@@ -140,12 +141,6 @@ function transformPathRoutingDecisionLog(
     name: upstream.name,
     weight: upstream.weight,
     circuit_state: "closed",
-  }));
-
-  const excluded: RoutingExcluded[] = input.excludedCandidates.map(({ upstream, reason }) => ({
-    id: upstream.id,
-    name: upstream.name,
-    reason,
   }));
 
   return {
@@ -158,7 +153,7 @@ function transformPathRoutingDecisionLog(
     route_match_source: input.routeMatchSource,
     capability_candidates_count: input.capabilityCandidates.length,
     candidates,
-    excluded,
+    excluded: input.excludedCandidates,
     candidate_count: input.capabilityCandidates.length,
     final_candidate_count: input.finalCandidates.length,
     selected_upstream_id: selectedUpstreamId,
@@ -170,6 +165,24 @@ function transformPathRoutingDecisionLog(
     ...(diagnostics?.failureStage !== undefined ? { failure_stage: diagnostics.failureStage } : {}),
     selection_strategy: "weighted",
   };
+}
+
+function mergeExcludedCandidates(
+  base: RoutingExcluded[],
+  additions: RoutingExcluded[]
+): RoutingExcluded[] {
+  if (additions.length === 0) {
+    return base;
+  }
+
+  const merged = new Map<string, RoutingExcluded>();
+  for (const item of base) {
+    merged.set(`${item.id}:${item.reason}`, item);
+  }
+  for (const item of additions) {
+    merged.set(`${item.id}:${item.reason}`, item);
+  }
+  return [...merged.values()];
 }
 
 /**
@@ -185,16 +198,19 @@ interface RoutingDecision {
 
 interface FailoverErrorWithHistory extends Error {
   failoverHistory?: FailoverAttempt[];
+  concurrencyExcludedCandidates?: RoutingExcluded[];
   didSendUpstream?: boolean;
 }
 
 function attachFailoverContext<T extends Error>(
   error: T,
   failoverHistory: FailoverAttempt[],
-  didSendUpstream: boolean
+  didSendUpstream: boolean,
+  concurrencyExcludedCandidates: RoutingExcluded[] = []
 ): T & FailoverErrorWithHistory {
   const enrichedError = error as T & FailoverErrorWithHistory;
   enrichedError.failoverHistory = [...failoverHistory];
+  enrichedError.concurrencyExcludedCandidates = [...concurrencyExcludedCandidates];
   enrichedError.didSendUpstream = didSendUpstream;
   return enrichedError;
 }
@@ -252,6 +268,16 @@ function isNoAuthorizedUpstreamsError(error: unknown): boolean {
   return error.message.toLowerCase().includes("no authorized upstreams");
 }
 
+function isAllCandidatesConcurrencyFullError(error: unknown): boolean {
+  if (error instanceof AllCandidatesConcurrencyFullError) {
+    return true;
+  }
+  if (!(error instanceof NoHealthyUpstreamsError)) {
+    return false;
+  }
+  return error.message.toLowerCase().includes("max concurrency");
+}
+
 function isDownstreamStreamingError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
@@ -294,6 +320,12 @@ function resolveFailureReason(
   if (error instanceof ClientDisconnectedError) {
     return "CLIENT_DISCONNECTED";
   }
+  if (
+    isAllCandidatesConcurrencyFullError(error) ||
+    (!didSendUpstream && lastFailoverAttempt?.error_type === "concurrency_full")
+  ) {
+    return "CONCURRENCY_FULL";
+  }
   if (!didSendUpstream) {
     return "NO_HEALTHY_CANDIDATES";
   }
@@ -318,6 +350,9 @@ function getUserHint(
       gemini_code_assist_internal: "Gemini Code Assist Internal",
     };
     return `当前密钥没有可用的 ${capabilityLabel[routeCapability]} 上游授权，请在密钥配置中绑定至少一个启用上游`;
+  }
+  if (reason === "CONCURRENCY_FULL") {
+    return "当前所有可选上游均已达到并发上限，请提高上游并发配置或增加可用上游后重试";
   }
   if (reason === "NO_HEALTHY_CANDIDATES") {
     return "当前没有可用上游候选，请检查上游启用状态、熔断状态与路径能力配置";
@@ -446,15 +481,56 @@ async function forwardWithFailover(
   selectedUpstream: Upstream;
   failedUpstreamIds: string[];
   failoverHistory: FailoverAttempt[];
+  concurrencyExcludedCandidates: RoutingExcluded[];
   affinityHit: boolean;
   affinityMigrated: boolean;
 }> {
   const failedUpstreamIds: string[] = [];
   const failoverHistory: FailoverAttempt[] = [];
+  const concurrencyExcludedCandidates: RoutingExcluded[] = [];
+  const recordedConcurrencyCandidates = new Set<string>();
   let lastError: Error | null = null;
   let didSendUpstream = false;
   let affinityHit = false;
   let affinityMigrated = false;
+
+  const appendConcurrencyExclusions = (
+    excludedCandidates: NonNullable<
+      Awaited<ReturnType<typeof selectFromUpstreamCandidates>>["concurrencyExcluded"]
+    >
+  ) => {
+    for (const excluded of excludedCandidates) {
+      if (
+        !concurrencyExcludedCandidates.some(
+          (candidate) =>
+            candidate.id === excluded.upstreamId && candidate.reason === "concurrency_full"
+        )
+      ) {
+        concurrencyExcludedCandidates.push({
+          id: excluded.upstreamId,
+          name: excluded.upstreamName,
+          reason: "concurrency_full",
+        });
+      }
+
+      if (recordedConcurrencyCandidates.has(excluded.upstreamId)) {
+        continue;
+      }
+
+      recordedConcurrencyCandidates.add(excluded.upstreamId);
+      failoverHistory.push({
+        upstream_id: excluded.upstreamId,
+        upstream_name: excluded.upstreamName,
+        upstream_provider_type:
+          excluded.upstreamProviderType ?? getProviderByRouteCapability(routeCapability),
+        upstream_base_url: excluded.upstreamBaseUrl,
+        attempted_at: new Date().toISOString(),
+        error_type: "concurrency_full",
+        error_message: `Concurrency limit reached (${excluded.currentConcurrency}/${excluded.maxConcurrency})`,
+        status_code: null,
+      });
+    }
+  };
 
   // Clone the request body once for potential retries
   const requestClone = request.clone();
@@ -469,7 +545,8 @@ async function forwardWithFailover(
       throw attachFailoverContext(
         new ClientDisconnectedError("Client disconnected during failover"),
         failoverHistory,
-        didSendUpstream
+        didSendUpstream,
+        concurrencyExcludedCandidates
       );
     }
 
@@ -494,6 +571,7 @@ async function forwardWithFailover(
         excludeIds,
         affinitySelectionContext
       );
+      appendConcurrencyExclusions(selection.concurrencyExcluded ?? []);
 
       selectedUpstream = selection.upstream;
       // Capture affinity info from first successful selection
@@ -506,16 +584,22 @@ async function forwardWithFailover(
         throw attachFailoverContext(
           error instanceof Error ? error : new Error(String(error)),
           failoverHistory,
-          didSendUpstream
+          didSendUpstream,
+          concurrencyExcludedCandidates
         );
       }
-      if (error instanceof NoHealthyUpstreamsError) {
+      if (error instanceof AllCandidatesConcurrencyFullError) {
+        appendConcurrencyExclusions(error.excludedCandidates);
+        lastError = error;
+        hasMoreUpstreams = false;
+      } else if (error instanceof NoHealthyUpstreamsError) {
         hasMoreUpstreams = false;
       } else {
         throw attachFailoverContext(
           error instanceof Error ? error : new Error(String(error)),
           failoverHistory,
-          didSendUpstream
+          didSendUpstream,
+          concurrencyExcludedCandidates
         );
       }
     }
@@ -527,14 +611,20 @@ async function forwardWithFailover(
       const exhaustedError = new NoHealthyUpstreamsError(
         lastError?.message ?? "All upstreams exhausted"
       );
-      throw attachFailoverContext(exhaustedError, failoverHistory, didSendUpstream);
+      throw attachFailoverContext(
+        exhaustedError,
+        failoverHistory,
+        didSendUpstream,
+        concurrencyExcludedCandidates
+      );
     }
 
     if (!selectedUpstream) {
       throw attachFailoverContext(
         new NoHealthyUpstreamsError("No upstream available"),
         failoverHistory,
-        didSendUpstream
+        didSendUpstream,
+        concurrencyExcludedCandidates
       );
     }
 
@@ -612,6 +702,7 @@ async function forwardWithFailover(
           selectedUpstream,
           failedUpstreamIds,
           failoverHistory,
+          concurrencyExcludedCandidates,
           affinityHit,
           affinityMigrated,
         };
@@ -622,6 +713,7 @@ async function forwardWithFailover(
         selectedUpstream,
         failedUpstreamIds,
         failoverHistory,
+        concurrencyExcludedCandidates,
         affinityHit,
         affinityMigrated,
       };
@@ -635,7 +727,8 @@ async function forwardWithFailover(
         throw attachFailoverContext(
           new ClientDisconnectedError("Client disconnected during request"),
           failoverHistory,
-          didSendUpstream
+          didSendUpstream,
+          concurrencyExcludedCandidates
         );
       }
 
@@ -669,7 +762,12 @@ async function forwardWithFailover(
       const nonFailoverError = (error instanceof Error ? error : new Error(String(error))) as
         | Error
         | FailoverErrorWithHistory;
-      throw attachFailoverContext(nonFailoverError, failoverHistory, didSendUpstream);
+      throw attachFailoverContext(
+        nonFailoverError,
+        failoverHistory,
+        didSendUpstream,
+        concurrencyExcludedCandidates
+      );
     }
   }
 }
@@ -1029,10 +1127,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   let candidateUpstreamIds: string[] = [];
   let capabilityCandidates: Upstream[] = [];
   let finalCapabilityCandidates: Upstream[] = [];
-  let excludedCapabilityCandidates: Array<{
-    upstream: Upstream;
-    reason: "unhealthy" | "circuit_open";
-  }> = [];
+  let excludedCapabilityCandidates: RoutingExcluded[] = [];
   let sessionId: string | null = null;
   let sessionIdSource: "header" | "body" | null = null;
   const activeUpstreams = await db.query.upstreams.findMany({
@@ -1193,6 +1288,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       result: proxyResult,
       selectedUpstream: selected,
       failoverHistory: history,
+      concurrencyExcludedCandidates: concurrencyExcludedFromSelection,
       affinityHit: afHit,
       affinityMigrated: afMigrated,
     } = await forwardWithFailover(
@@ -1207,6 +1303,10 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     const result: ProxyResult = proxyResult;
     const upstreamForLogging: Upstream = selected;
     failoverHistory = history;
+    excludedCapabilityCandidates = mergeExcludedCandidates(
+      excludedCapabilityCandidates,
+      concurrencyExcludedFromSelection
+    );
     isAffinityHit = afHit;
     isAffinityMigrated = afMigrated;
     priorityTier = selected.priority;
@@ -1622,6 +1722,17 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       Array.isArray((error as FailoverErrorWithHistory).failoverHistory)
     ) {
       failoverHistory = (error as FailoverErrorWithHistory).failoverHistory ?? [];
+    }
+    if (
+      error &&
+      typeof error === "object" &&
+      "concurrencyExcludedCandidates" in error &&
+      Array.isArray((error as FailoverErrorWithHistory).concurrencyExcludedCandidates)
+    ) {
+      excludedCapabilityCandidates = mergeExcludedCandidates(
+        excludedCapabilityCandidates,
+        (error as FailoverErrorWithHistory).concurrencyExcludedCandidates ?? []
+      );
     }
 
     const durationMs = Date.now() - startTime;

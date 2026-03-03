@@ -266,7 +266,8 @@ export interface FailoverAttempt {
     | "http_4xx"
     | "http_429"
     | "connection_error"
-    | "circuit_open";
+    | "circuit_open"
+    | "concurrency_full";
   error_message: string;
   status_code?: number | null;
   response_headers?: Record<string, string>;
@@ -312,7 +313,11 @@ export interface RoutingCandidate {
 /**
  * Exclusion reason for routing decision
  */
-export type ExclusionReason = "circuit_open" | "model_not_allowed" | "unhealthy";
+export type ExclusionReason =
+  | "circuit_open"
+  | "model_not_allowed"
+  | "unhealthy"
+  | "concurrency_full";
 
 /**
  * Excluded upstream in routing decision

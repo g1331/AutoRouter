@@ -70,6 +70,7 @@ import {
   filterBySpendingQuota,
   NoHealthyUpstreamsError,
   NoAuthorizedUpstreamsError,
+  AllCandidatesConcurrencyFullError,
   resetConnectionCounts,
   recordConnection,
   releaseConnection,
@@ -98,6 +99,7 @@ interface MockUpstreamOpts {
     metric: "tokens" | "length";
     threshold: number;
   } | null;
+  maxConcurrency?: number | null;
 }
 
 function getRouteCapabilitiesByProvider(providerType: string): string[] {
@@ -126,6 +128,7 @@ function makeUpstream(opts: MockUpstreamOpts = {}) {
     isDefault: false,
     timeout: 60,
     isActive: opts.isActive ?? true,
+    maxConcurrency: opts.maxConcurrency ?? null,
     config: null,
     weight: opts.weight ?? 1,
     priority: opts.priority ?? 0,
@@ -452,6 +455,56 @@ describe("load-balancer", () => {
 
         await expect(selectFromProviderType("openai", ["u1", "u2"], ["u1", "u2"])).rejects.toThrow(
           NoHealthyUpstreamsError
+        );
+      });
+    });
+
+    describe("concurrency capacity filtering", () => {
+      it("should exclude concurrency-full upstreams and select another candidate in same tier", async () => {
+        const full = makeUpstream({ id: "full", priority: 0, maxConcurrency: 1 });
+        const available = makeUpstream({ id: "available", priority: 0, maxConcurrency: 3 });
+        mockFindMany.mockResolvedValue([full, available]);
+
+        recordConnection("full");
+
+        const result = await selectFromProviderType("openai");
+        expect(result.upstream.id).toBe("available");
+        expect(result.concurrencyFiltered).toBe(1);
+        expect(result.concurrencyExcluded).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              upstreamId: "full",
+              maxConcurrency: 1,
+              currentConcurrency: 1,
+            }),
+          ])
+        );
+      });
+
+      it("should degrade to next tier when current tier is fully blocked by concurrency limit", async () => {
+        const p0 = makeUpstream({ id: "p0", priority: 0, maxConcurrency: 1 });
+        const p1 = makeUpstream({ id: "p1", priority: 1, maxConcurrency: 2 });
+        mockFindMany.mockResolvedValue([p0, p1]);
+
+        recordConnection("p0");
+
+        const result = await selectFromProviderType("openai");
+        expect(result.upstream.id).toBe("p1");
+        expect(result.selectedTier).toBe(1);
+        expect(result.concurrencyFiltered).toBe(1);
+      });
+
+      it("should throw AllCandidatesConcurrencyFullError when all candidates are full", async () => {
+        const u1 = makeUpstream({ id: "u1", priority: 0, maxConcurrency: 1 });
+        const u2 = makeUpstream({ id: "u2", priority: 1, maxConcurrency: 2 });
+        mockFindMany.mockResolvedValue([u1, u2]);
+
+        recordConnection("u1");
+        recordConnection("u2");
+        recordConnection("u2");
+
+        await expect(selectFromProviderType("openai")).rejects.toThrow(
+          AllCandidatesConcurrencyFullError
         );
       });
     });

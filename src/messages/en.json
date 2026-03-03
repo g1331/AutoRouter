@@ -291,7 +291,8 @@
     "exclusionReason": {
       "circuit_open": "Circuit breaker open",
       "model_not_allowed": "Model not allowed",
-      "unhealthy": "Unhealthy"
+      "unhealthy": "Unhealthy",
+      "concurrency_full": "Concurrency full"
     },
     "circuitState": {
       "closed": "Normal",

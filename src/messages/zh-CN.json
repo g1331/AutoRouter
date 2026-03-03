@@ -291,7 +291,8 @@
     "exclusionReason": {
       "circuit_open": "熔断",
       "model_not_allowed": "模型不支持",
-      "unhealthy": "不健康"
+      "unhealthy": "不健康",
+      "concurrency_full": "并发已满"
     },
     "circuitState": {
       "closed": "正常",

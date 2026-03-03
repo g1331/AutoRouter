@@ -42,6 +42,19 @@ export class NoAuthorizedUpstreamsError extends NoHealthyUpstreamsError {
 }
 
 /**
+ * Error thrown when all remaining candidates are excluded by concurrency capacity.
+ */
+export class AllCandidatesConcurrencyFullError extends NoHealthyUpstreamsError {
+  excludedCandidates: ConcurrencyExcludedCandidate[];
+
+  constructor(excludedCandidates: ConcurrencyExcludedCandidate[]) {
+    super("All candidate upstreams reached max concurrency");
+    this.name = "AllCandidatesConcurrencyFullError";
+    this.excludedCandidates = excludedCandidates;
+  }
+}
+
+/**
  * Upstream with health information for load balancing decisions.
  */
 export interface UpstreamWithHealth {
@@ -69,6 +82,8 @@ export interface UpstreamSelectionResult {
   selectedTier: number;
   circuitBreakerFiltered: number;
   quotaFiltered: number;
+  concurrencyFiltered?: number;
+  concurrencyExcluded?: ConcurrencyExcludedCandidate[];
   totalCandidates: number;
   affinityHit?: boolean; // Whether session affinity was used
   affinityMigrated?: boolean; // Whether session was migrated to higher priority upstream
@@ -79,6 +94,16 @@ export type ProviderTypeSelectionResult = UpstreamSelectionResult;
 export interface SelectFromProviderOptions {
   candidateUpstreamIds?: string[];
   affinityScope?: AffinityScope;
+}
+
+export interface ConcurrencyExcludedCandidate {
+  upstreamId: string;
+  upstreamName: string;
+  upstreamBaseUrl: string;
+  upstreamProviderType: ProviderType | null;
+  tier: number;
+  currentConcurrency: number;
+  maxConcurrency: number;
 }
 
 // In-memory state for load balancing (per-instance, not distributed)
@@ -243,6 +268,58 @@ export function filterBySpendingQuota(upstreamList: UpstreamWithCircuitBreaker[]
   }
 
   return { allowed, excludedCount };
+}
+
+function isConcurrencyFull(upstream: Upstream): {
+  full: boolean;
+  current: number;
+  max: number | null;
+} {
+  const max = upstream.maxConcurrency;
+  const current = getConnectionCount(upstream.id);
+
+  if (max === null || max === undefined || max <= 0) {
+    return { full: false, current, max: null };
+  }
+
+  return { full: current >= max, current, max };
+}
+
+export function filterByConcurrencyCapacity(
+  upstreamList: UpstreamWithCircuitBreaker[],
+  tier: number
+): {
+  allowed: UpstreamWithCircuitBreaker[];
+  excludedCount: number;
+  excluded: ConcurrencyExcludedCandidate[];
+} {
+  const allowed: UpstreamWithCircuitBreaker[] = [];
+  const excluded: ConcurrencyExcludedCandidate[] = [];
+
+  for (const entry of upstreamList) {
+    const concurrency = isConcurrencyFull(entry.upstream);
+
+    if (!concurrency.full || concurrency.max === null) {
+      allowed.push(entry);
+      continue;
+    }
+
+    excluded.push({
+      upstreamId: entry.upstream.id,
+      upstreamName: entry.upstream.name,
+      upstreamBaseUrl: entry.upstream.baseUrl,
+      upstreamProviderType: getPrimaryProviderByCapabilities(entry.upstream.routeCapabilities),
+      tier,
+      currentConcurrency: concurrency.current,
+      maxConcurrency: concurrency.max,
+    });
+  }
+
+  return {
+    allowed,
+    excludedCount: excluded.length,
+    excluded,
+  };
 }
 
 /**
@@ -510,6 +587,8 @@ async function selectFromUpstreamPool(
       // Respect excludeIds: if bound upstream is excluded, skip affinity and reselect
       const isExcluded = excludeIds?.includes(affinityEntry.upstreamId) ?? false;
       let isWithinQuota = quotaTracker.isWithinQuota(affinityEntry.upstreamId);
+      const boundConcurrency = boundUpstream ? isConcurrencyFull(boundUpstream.upstream) : null;
+      const isWithinConcurrency = boundConcurrency ? !boundConcurrency.full : true;
 
       if (!isWithinQuota && boundUpstream) {
         try {
@@ -524,14 +603,21 @@ async function selectFromUpstreamPool(
         }
       }
 
-      if (boundUpstream && isUpstreamAvailable(boundUpstream) && !isExcluded && isWithinQuota) {
+      if (
+        boundUpstream &&
+        isUpstreamAvailable(boundUpstream) &&
+        !isExcluded &&
+        isWithinQuota &&
+        isWithinConcurrency
+      ) {
         // Check if we should migrate to higher priority upstream
         // Filter out excluded upstreams from migration candidates
         const availableForMigration = filteredUpstreams.filter(
           (u) =>
             !excludeIds?.includes(u.upstream.id) &&
             isUpstreamAvailable(u) &&
-            quotaTracker.isWithinQuota(u.upstream.id)
+            quotaTracker.isWithinQuota(u.upstream.id) &&
+            !isConcurrencyFull(u.upstream).full
         );
         const migrationTarget = evaluateMigration(
           boundUpstream,
@@ -557,6 +643,8 @@ async function selectFromUpstreamPool(
               selectedTier: migrationTarget.upstream.priority,
               circuitBreakerFiltered: 0,
               quotaFiltered: 0,
+              concurrencyFiltered: 0,
+              concurrencyExcluded: [],
               totalCandidates,
               affinityHit: true,
               affinityMigrated: true,
@@ -577,6 +665,8 @@ async function selectFromUpstreamPool(
             selectedTier: boundUpstream.upstream.priority,
             circuitBreakerFiltered: 0,
             quotaFiltered: 0,
+            concurrencyFiltered: 0,
+            concurrencyExcluded: [],
             totalCandidates,
             affinityHit: true,
             affinityMigrated: false,
@@ -672,6 +762,9 @@ async function performTieredSelection(
 
   let totalCircuitBreakerFiltered = 0;
   let totalQuotaFiltered = 0;
+  let totalConcurrencyFiltered = 0;
+  let concurrencyScreenedCandidates = 0;
+  const concurrencyExcluded: ConcurrencyExcludedCandidate[] = [];
   let didResyncQuota = false;
 
   // Try each tier in priority order
@@ -700,9 +793,17 @@ async function performTieredSelection(
 
     // Filter by exclusion list (health status is display-only, not used for routing)
     const afterExclusions = filterByExclusions(afterQuota.allowed, excludeIds);
+    concurrencyScreenedCandidates += afterExclusions.allowed.length;
 
-    if (afterExclusions.allowed.length > 0) {
-      const candidates = [...afterExclusions.allowed];
+    // Filter by per-upstream concurrency capacity.
+    const afterConcurrency = filterByConcurrencyCapacity(afterExclusions.allowed, tier);
+    totalConcurrencyFiltered += afterConcurrency.excludedCount;
+    if (afterConcurrency.excluded.length > 0) {
+      concurrencyExcluded.push(...afterConcurrency.excluded);
+    }
+
+    if (afterConcurrency.allowed.length > 0) {
+      const candidates = [...afterConcurrency.allowed];
 
       while (candidates.length > 0) {
         // Select from this tier using weighted strategy
@@ -717,6 +818,8 @@ async function performTieredSelection(
             selectedTier: tier,
             circuitBreakerFiltered: totalCircuitBreakerFiltered,
             quotaFiltered: totalQuotaFiltered,
+            concurrencyFiltered: totalConcurrencyFiltered,
+            concurrencyExcluded,
             totalCandidates,
           };
         } catch (error) {
@@ -734,6 +837,14 @@ async function performTieredSelection(
     }
 
     // This tier exhausted, continue to next tier (degradation)
+  }
+
+  if (
+    concurrencyScreenedCandidates > 0 &&
+    totalConcurrencyFiltered > 0 &&
+    totalConcurrencyFiltered === concurrencyScreenedCandidates
+  ) {
+    throw new AllCandidatesConcurrencyFullError(concurrencyExcluded);
   }
 
   // All tiers exhausted

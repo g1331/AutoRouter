@@ -19,15 +19,15 @@
 - [x] 2.2 在负载均衡层提供可读取的并发占用快照（`current_concurrency`）
 - [x] 2.3 将并发占用接入上游管理可读 API（与列表或状态接口保持一致）
 - [x] 2.4 阶段B质量门禁：`pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run`
-- [ ] 2.5 提交阶段性 commit（包含阶段B全部改动与门禁修复）
+- [x] 2.5 提交阶段性 commit（包含阶段B全部改动与门禁修复）
 
 ## 3. 阶段C：并发控制路由语义（满载转移且不熔断）
 
-- [ ] 3.1 在候选筛选流程新增并发容量过滤（能力匹配后、加权选择前），实现 `concurrency_full` 排除
-- [ ] 3.2 实现并发槽位占用与释放的完整生命周期（普通响应、流式响应、异常中断）
-- [ ] 3.3 调整失败分类：并发满路径不调用 `markUnhealthy` 与 `recordFailure`
-- [ ] 3.4 增加“所有候选并发满载”统一错误语义与用户提示文案
-- [ ] 3.5 阶段C质量门禁：`pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run`
+- [x] 3.1 在候选筛选流程新增并发容量过滤（能力匹配后、加权选择前），实现 `concurrency_full` 排除
+- [x] 3.2 实现并发槽位占用与释放的完整生命周期（普通响应、流式响应、异常中断）
+- [x] 3.3 调整失败分类：并发满路径不调用 `markUnhealthy` 与 `recordFailure`
+- [x] 3.4 增加“所有候选并发满载”统一错误语义与用户提示文案
+- [x] 3.5 阶段C质量门禁：`pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run`
 - [ ] 3.6 提交阶段性 commit（包含阶段C全部改动与门禁修复）
 
 ## 4. 阶段D：可观测性增强（并发满转移日志闭环）
