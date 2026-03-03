@@ -204,7 +204,6 @@ type ConfigSectionId = BasicSectionId | AdvancedSectionId;
 interface ConfigSectionEntry {
   id: ConfigSectionId;
   label: string;
-  category: string;
   icon: LucideIcon;
 }
 
@@ -369,86 +368,67 @@ export function UpstreamFormDialog({
       {
         id: "basic-name",
         label: t("upstreamName"),
-        category: t("configCategoryBasic"),
         icon: Type,
       },
       {
         id: "basic-profile",
         label: t("upstreamDescription"),
-        category: t("configCategoryBasic"),
         icon: FileText,
       },
       {
         id: "basic-route-endpoint",
         label: t("baseUrl"),
-        category: t("configCategoryBasic"),
         icon: Link2,
       },
       {
         id: "basic-api-key",
         label: t("apiKey"),
-        category: t("configCategoryBasic"),
         icon: KeyRound,
       },
       {
         id: "advanced-priority-weight",
         label: t("priorityAndWeight"),
-        category: t("configCategoryStrategy"),
         icon: SlidersHorizontal,
       },
       {
         id: "advanced-model-routing",
         label: t("modelBasedRouting"),
-        category: t("configCategoryStrategy"),
         icon: Route,
       },
       {
         id: "advanced-billing-multipliers",
         label: t("billingMultipliers"),
-        category: t("configCategoryStrategy"),
         icon: Coins,
       },
       {
         id: "advanced-spending-quota",
         label: t("spendingQuota"),
-        category: t("configCategoryStrategy"),
         icon: Wallet,
       },
       {
         id: "advanced-capacity-control",
         label: t("maxConcurrency"),
-        category: t("configCategoryReliability"),
         icon: Gauge,
       },
       {
         id: "advanced-circuit-breaker",
         label: t("circuitBreakerConfig"),
-        category: t("configCategoryReliability"),
         icon: Shield,
       },
       {
         id: "advanced-affinity-migration",
         label: t("affinityMigrationConfig"),
-        category: t("configCategoryReliability"),
         icon: Shuffle,
       },
     ],
     [t]
   );
 
-  const groupedConfigSections = useMemo(() => {
+  const filteredConfigSections = useMemo(() => {
     const query = configSearchQuery.trim().toLowerCase();
-    const filtered = query
+    return query
       ? configSections.filter((section) => section.label.toLowerCase().includes(query))
       : configSections;
-
-    return filtered.reduce<Record<string, ConfigSectionEntry[]>>((groups, section) => {
-      if (!groups[section.category]) {
-        groups[section.category] = [];
-      }
-      groups[section.category].push(section);
-      return groups;
-    }, {});
   }, [configSearchQuery, configSections]);
 
   useEffect(() => {
@@ -842,38 +822,29 @@ export function UpstreamFormDialog({
                         className="h-8 pl-8 text-xs"
                       />
                     </div>
-                    {Object.keys(groupedConfigSections).length > 0 ? (
-                      <div className="mt-3 flex-1 space-y-3 overflow-y-auto pr-1 [scrollbar-gutter:stable]">
-                        {Object.entries(groupedConfigSections).map(([category, sections]) => (
-                          <div key={category} className="space-y-2">
-                            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                              {category}
-                            </p>
-                            <div className="space-y-1">
-                              {sections.map((section) => {
-                                const Icon = section.icon;
-                                return (
-                                  <Button
-                                    key={section.id}
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className={cn(
-                                      "h-8 w-full justify-start gap-2 border text-xs",
-                                      activeSectionId === section.id
-                                        ? "border-status-info/45 bg-status-info-muted text-foreground hover:bg-status-info-muted/90"
-                                        : "border-transparent text-muted-foreground hover:border-divider hover:bg-surface-300/65 hover:text-foreground"
-                                    )}
-                                    onClick={() => jumpToSection(section.id)}
-                                  >
-                                    <Icon className="h-3.5 w-3.5" />
-                                    <span className="truncate">{section.label}</span>
-                                  </Button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
+                    {filteredConfigSections.length > 0 ? (
+                      <div className="mt-3 flex-1 space-y-1 overflow-y-auto pr-1 [scrollbar-gutter:stable]">
+                        {filteredConfigSections.map((section) => {
+                          const Icon = section.icon;
+                          return (
+                            <Button
+                              key={section.id}
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className={cn(
+                                "h-8 w-full justify-start gap-2 border text-xs",
+                                activeSectionId === section.id
+                                  ? "border-status-info/45 bg-status-info-muted text-foreground hover:bg-status-info-muted/90"
+                                  : "border-transparent text-muted-foreground hover:border-divider hover:bg-surface-300/65 hover:text-foreground"
+                              )}
+                              onClick={() => jumpToSection(section.id)}
+                            >
+                              <Icon className="h-3.5 w-3.5" />
+                              <span className="truncate">{section.label}</span>
+                            </Button>
+                          );
+                        })}
                       </div>
                     ) : (
                       <p className="mt-3 text-xs text-muted-foreground">
@@ -906,38 +877,29 @@ export function UpstreamFormDialog({
                           />
                         </div>
                       </div>
-                      {Object.keys(groupedConfigSections).length > 0 ? (
-                        <div className="mt-3 space-y-3">
-                          {Object.entries(groupedConfigSections).map(([category, sections]) => (
-                            <div key={category} className="space-y-2">
-                              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                                {category}
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                {sections.map((section) => {
-                                  const Icon = section.icon;
-                                  return (
-                                    <Button
-                                      key={section.id}
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      className={cn(
-                                        "h-7 gap-1.5 border text-xs",
-                                        activeSectionId === section.id
-                                          ? "border-status-info/45 bg-status-info-muted text-foreground hover:bg-status-info-muted/90"
-                                          : "border-divider bg-card text-muted-foreground hover:bg-surface-300/65 hover:text-foreground"
-                                      )}
-                                      onClick={() => jumpToSection(section.id)}
-                                    >
-                                      <Icon className="h-3.5 w-3.5" />
-                                      {section.label}
-                                    </Button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          ))}
+                      {filteredConfigSections.length > 0 ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {filteredConfigSections.map((section) => {
+                            const Icon = section.icon;
+                            return (
+                              <Button
+                                key={section.id}
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className={cn(
+                                  "h-7 gap-1.5 border text-xs",
+                                  activeSectionId === section.id
+                                    ? "border-status-info/45 bg-status-info-muted text-foreground hover:bg-status-info-muted/90"
+                                    : "border-divider bg-card text-muted-foreground hover:bg-surface-300/65 hover:text-foreground"
+                                )}
+                                onClick={() => jumpToSection(section.id)}
+                              >
+                                <Icon className="h-3.5 w-3.5" />
+                                {section.label}
+                              </Button>
+                            );
+                          })}
                         </div>
                       ) : (
                         <p className="mt-3 text-xs text-muted-foreground">
@@ -995,7 +957,7 @@ export function UpstreamFormDialog({
                           control={form.control}
                           name="official_website_url"
                           render={({ field }) => (
-                            <FormItem>
+                            <FormItem className="sm:col-span-2">
                               <FormLabel>{t("officialWebsiteUrl")}</FormLabel>
                               <FormControl>
                                 <Input
@@ -1117,39 +1079,140 @@ export function UpstreamFormDialog({
                     </div>
                   </div>
 
-                  <div className="rounded-cf-sm border border-divider bg-surface-200/35">
-                    <div className="border-b border-divider px-4 py-3">
-                      <span className="text-sm font-medium text-foreground">
-                        {t("advancedConfig")}
-                      </span>
+                  <div id="upstream-advanced-config" className="mt-4 space-y-6">
+                    <div
+                      id="advanced-priority-weight"
+                      className={getSectionClassName("advanced-priority-weight", "space-y-6")}
+                    >
+                      <h3 className="text-sm font-medium text-muted-foreground">
+                        {t("priorityAndWeight")}
+                      </h3>
+                      <FormField
+                        control={form.control}
+                        name="priority"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("priority")}</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={0}
+                                max={100}
+                                placeholder={t("priorityPlaceholder")}
+                                {...field}
+                                onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 0)}
+                              />
+                            </FormControl>
+                            <FormDescription>{t("priorityDescription")}</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="weight"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("weight")}</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={100}
+                                placeholder={t("weightPlaceholder")}
+                                {...field}
+                                onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
+                              />
+                            </FormControl>
+                            <FormDescription>{t("weightDescription")}</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     </div>
-                    <div id="upstream-advanced-config" className="space-y-6 px-4 py-4">
-                      <div
-                        id="advanced-priority-weight"
-                        className={getSectionClassName("advanced-priority-weight", "space-y-6")}
-                      >
-                        <h3 className="text-sm font-medium text-muted-foreground">
-                          {t("priorityAndWeight")}
-                        </h3>
+
+                    {/* Model-based Routing Section */}
+                    <div
+                      id="advanced-model-routing"
+                      className={getSectionClassName("advanced-model-routing")}
+                    >
+                      <h3 className="mb-4 text-sm font-medium text-muted-foreground">
+                        {t("modelBasedRouting")}
+                      </h3>
+
+                      <FormField
+                        control={form.control}
+                        name="allowed_models"
+                        render={({ field }) => (
+                          <FormItem className="mt-4">
+                            <FormLabel>{t("allowedModels")}</FormLabel>
+                            <FormControl>
+                              <TagInput
+                                placeholder={t("allowedModelsPlaceholder")}
+                                tags={field.value || []}
+                                onTagsChange={(tags) =>
+                                  field.onChange(tags.length > 0 ? tags : null)
+                                }
+                              />
+                            </FormControl>
+                            <FormDescription>{t("allowedModelsDescription")}</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="model_redirects"
+                        render={({ field }) => (
+                          <FormItem className="mt-4">
+                            <FormLabel>{t("modelRedirects")}</FormLabel>
+                            <FormControl>
+                              <KeyValueInput
+                                placeholder={t("modelRedirectsPlaceholder")}
+                                entries={field.value || {}}
+                                onEntriesChange={(entries) =>
+                                  field.onChange(Object.keys(entries).length > 0 ? entries : null)
+                                }
+                                keyLabel={t("sourceModel")}
+                                valueLabel={t("targetModel")}
+                              />
+                            </FormControl>
+                            <FormDescription>{t("modelRedirectsDescription")}</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div
+                      id="advanced-billing-multipliers"
+                      className={getSectionClassName("advanced-billing-multipliers")}
+                    >
+                      <h3 className="mb-4 text-sm font-medium text-muted-foreground">
+                        {t("billingMultipliers")}
+                      </h3>
+
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <FormField
                           control={form.control}
-                          name="priority"
+                          name="billing_input_multiplier"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>{t("priority")}</FormLabel>
+                              <FormLabel>{t("billingInputMultiplier")}</FormLabel>
                               <FormControl>
                                 <Input
                                   type="number"
                                   min={0}
                                   max={100}
-                                  placeholder={t("priorityPlaceholder")}
+                                  step={0.01}
+                                  inputMode="decimal"
                                   {...field}
-                                  onChange={(e) =>
-                                    field.onChange(parseInt(e.target.value, 10) || 0)
-                                  }
+                                  onChange={(e) => field.onChange(Number(e.target.value) || 0)}
                                 />
                               </FormControl>
-                              <FormDescription>{t("priorityDescription")}</FormDescription>
+                              <FormDescription>{t("billingInputMultiplierDesc")}</FormDescription>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -1157,590 +1220,460 @@ export function UpstreamFormDialog({
 
                         <FormField
                           control={form.control}
-                          name="weight"
+                          name="billing_output_multiplier"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>{t("weight")}</FormLabel>
+                              <FormLabel>{t("billingOutputMultiplier")}</FormLabel>
                               <FormControl>
                                 <Input
                                   type="number"
-                                  min={1}
+                                  min={0}
                                   max={100}
-                                  placeholder={t("weightPlaceholder")}
+                                  step={0.01}
+                                  inputMode="decimal"
                                   {...field}
-                                  onChange={(e) =>
-                                    field.onChange(parseInt(e.target.value, 10) || 1)
-                                  }
+                                  onChange={(e) => field.onChange(Number(e.target.value) || 0)}
                                 />
                               </FormControl>
-                              <FormDescription>{t("weightDescription")}</FormDescription>
+                              <FormDescription>{t("billingOutputMultiplierDesc")}</FormDescription>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
                       </div>
+                    </div>
 
-                      {/* Model-based Routing Section */}
-                      <div
-                        id="advanced-model-routing"
-                        className={getSectionClassName("advanced-model-routing")}
-                      >
-                        <h3 className="mb-4 text-sm font-medium text-muted-foreground">
-                          {t("modelBasedRouting")}
-                        </h3>
-
-                        <FormField
-                          control={form.control}
-                          name="allowed_models"
-                          render={({ field }) => (
-                            <FormItem className="mt-4">
-                              <FormLabel>{t("allowedModels")}</FormLabel>
-                              <FormControl>
-                                <TagInput
-                                  placeholder={t("allowedModelsPlaceholder")}
-                                  tags={field.value || []}
-                                  onTagsChange={(tags) =>
-                                    field.onChange(tags.length > 0 ? tags : null)
-                                  }
-                                />
-                              </FormControl>
-                              <FormDescription>{t("allowedModelsDescription")}</FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="model_redirects"
-                          render={({ field }) => (
-                            <FormItem className="mt-4">
-                              <FormLabel>{t("modelRedirects")}</FormLabel>
-                              <FormControl>
-                                <KeyValueInput
-                                  placeholder={t("modelRedirectsPlaceholder")}
-                                  entries={field.value || {}}
-                                  onEntriesChange={(entries) =>
-                                    field.onChange(Object.keys(entries).length > 0 ? entries : null)
-                                  }
-                                  keyLabel={t("sourceModel")}
-                                  valueLabel={t("targetModel")}
-                                />
-                              </FormControl>
-                              <FormDescription>{t("modelRedirectsDescription")}</FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                    {/* Spending Quota Section */}
+                    <div
+                      id="advanced-spending-quota"
+                      className={getSectionClassName("advanced-spending-quota")}
+                    >
+                      <h3 className="mb-4 text-sm font-medium text-muted-foreground">
+                        {t("spendingQuota")}
+                      </h3>
+                      <div className="mb-4 flex justify-end">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1 text-xs"
+                          onClick={() =>
+                            appendSpendingRule({
+                              period_type: "daily",
+                              limit: 0,
+                              period_hours: null,
+                            })
+                          }
+                        >
+                          <Plus className="h-3 w-3" />
+                          {t("addSpendingRule")}
+                        </Button>
                       </div>
 
-                      <div
-                        id="advanced-billing-multipliers"
-                        className={getSectionClassName("advanced-billing-multipliers")}
-                      >
-                        <h3 className="mb-4 text-sm font-medium text-muted-foreground">
-                          {t("billingMultipliers")}
-                        </h3>
+                      {spendingRuleFields.length === 0 && (
+                        <p className="text-xs text-muted-foreground">{t("noSpendingRules")}</p>
+                      )}
 
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                          <FormField
-                            control={form.control}
-                            name="billing_input_multiplier"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>{t("billingInputMultiplier")}</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    max={100}
-                                    step={0.01}
-                                    inputMode="decimal"
-                                    {...field}
-                                    onChange={(e) => field.onChange(Number(e.target.value) || 0)}
-                                  />
-                                </FormControl>
-                                <FormDescription>{t("billingInputMultiplierDesc")}</FormDescription>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+                      <div className="space-y-3">
+                        {spendingRuleFields.map((ruleField, index) => {
+                          const periodType =
+                            spendingRules?.[index]?.period_type ?? ruleField.period_type;
+                          return (
+                            <div
+                              key={ruleField.id}
+                              className="grid grid-cols-[1fr_1fr_auto] items-start gap-2 rounded-cf-sm border border-divider bg-surface-300/30 p-3"
+                            >
+                              <FormField
+                                control={form.control}
+                                name={`spending_rules.${index}.period_type`}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="text-xs">
+                                      {t("spendingPeriodType")}
+                                    </FormLabel>
+                                    <Select
+                                      value={field.value}
+                                      onValueChange={(v) => {
+                                        field.onChange(v);
+                                        if (v === "rolling") {
+                                          const currentHours = form.getValues(
+                                            `spending_rules.${index}.period_hours`
+                                          );
+                                          if (currentHours == null) {
+                                            form.setValue(
+                                              `spending_rules.${index}.period_hours`,
+                                              ROLLING_DEFAULT_PERIOD_HOURS,
+                                              { shouldValidate: true, shouldDirty: true }
+                                            );
+                                          }
+                                        } else {
+                                          form.setValue(
+                                            `spending_rules.${index}.period_hours`,
+                                            null
+                                          );
+                                        }
+                                      }}
+                                    >
+                                      <FormControl>
+                                        <SelectTrigger className="h-8 text-xs">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                        <SelectItem value="daily">
+                                          {t("spendingPeriodDaily")}
+                                        </SelectItem>
+                                        <SelectItem value="monthly">
+                                          {t("spendingPeriodMonthly")}
+                                        </SelectItem>
+                                        <SelectItem value="rolling">
+                                          {t("spendingPeriodRolling")}
+                                        </SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
 
-                          <FormField
-                            control={form.control}
-                            name="billing_output_multiplier"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>{t("billingOutputMultiplier")}</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    max={100}
-                                    step={0.01}
-                                    inputMode="decimal"
-                                    {...field}
-                                    onChange={(e) => field.onChange(Number(e.target.value) || 0)}
-                                  />
-                                </FormControl>
-                                <FormDescription>
-                                  {t("billingOutputMultiplierDesc")}
-                                </FormDescription>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Spending Quota Section */}
-                      <div
-                        id="advanced-spending-quota"
-                        className={getSectionClassName("advanced-spending-quota")}
-                      >
-                        <h3 className="mb-4 text-sm font-medium text-muted-foreground">
-                          {t("spendingQuota")}
-                        </h3>
-                        <div className="mb-4 flex justify-end">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-7 gap-1 text-xs"
-                            onClick={() =>
-                              appendSpendingRule({
-                                period_type: "daily",
-                                limit: 0,
-                                period_hours: null,
-                              })
-                            }
-                          >
-                            <Plus className="h-3 w-3" />
-                            {t("addSpendingRule")}
-                          </Button>
-                        </div>
-
-                        {spendingRuleFields.length === 0 && (
-                          <p className="text-xs text-muted-foreground">{t("noSpendingRules")}</p>
-                        )}
-
-                        <div className="space-y-3">
-                          {spendingRuleFields.map((ruleField, index) => {
-                            const periodType =
-                              spendingRules?.[index]?.period_type ?? ruleField.period_type;
-                            return (
-                              <div
-                                key={ruleField.id}
-                                className="grid grid-cols-[1fr_1fr_auto] items-start gap-2 rounded-cf-sm border border-divider bg-surface-300/30 p-3"
-                              >
+                              <div className="space-y-2">
                                 <FormField
                                   control={form.control}
-                                  name={`spending_rules.${index}.period_type`}
+                                  name={`spending_rules.${index}.limit`}
                                   render={({ field }) => (
                                     <FormItem>
                                       <FormLabel className="text-xs">
-                                        {t("spendingPeriodType")}
+                                        {t("spendingLimit")}
                                       </FormLabel>
-                                      <Select
-                                        value={field.value}
-                                        onValueChange={(v) => {
-                                          field.onChange(v);
-                                          if (v === "rolling") {
-                                            const currentHours = form.getValues(
-                                              `spending_rules.${index}.period_hours`
-                                            );
-                                            if (currentHours == null) {
-                                              form.setValue(
-                                                `spending_rules.${index}.period_hours`,
-                                                ROLLING_DEFAULT_PERIOD_HOURS,
-                                                { shouldValidate: true, shouldDirty: true }
-                                              );
-                                            }
-                                          } else {
-                                            form.setValue(
-                                              `spending_rules.${index}.period_hours`,
-                                              null
-                                            );
+                                      <FormControl>
+                                        <Input
+                                          type="number"
+                                          min={0}
+                                          step={0.01}
+                                          inputMode="decimal"
+                                          className="h-8 text-xs"
+                                          placeholder={t("spendingLimitPlaceholder")}
+                                          {...field}
+                                          value={
+                                            field.value === 0
+                                              ? ""
+                                              : typeof field.value === "number" ||
+                                                  typeof field.value === "string"
+                                                ? field.value
+                                                : ""
                                           }
-                                        }}
-                                      >
-                                        <FormControl>
-                                          <SelectTrigger className="h-8 text-xs">
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                          <SelectItem value="daily">
-                                            {t("spendingPeriodDaily")}
-                                          </SelectItem>
-                                          <SelectItem value="monthly">
-                                            {t("spendingPeriodMonthly")}
-                                          </SelectItem>
-                                          <SelectItem value="rolling">
-                                            {t("spendingPeriodRolling")}
-                                          </SelectItem>
-                                        </SelectContent>
-                                      </Select>
+                                          onChange={(e) => field.onChange(e.target.value)}
+                                          onBlur={(e) => {
+                                            field.onBlur();
+                                            const raw = e.target.value.trim();
+                                            if (raw.startsWith(".")) {
+                                              field.onChange(`0${raw}`);
+                                            }
+                                          }}
+                                        />
+                                      </FormControl>
                                       <FormMessage />
                                     </FormItem>
                                   )}
                                 />
-
-                                <div className="space-y-2">
+                                {periodType === "rolling" && (
                                   <FormField
                                     control={form.control}
-                                    name={`spending_rules.${index}.limit`}
+                                    name={`spending_rules.${index}.period_hours`}
                                     render={({ field }) => (
                                       <FormItem>
                                         <FormLabel className="text-xs">
-                                          {t("spendingLimit")}
+                                          {t("spendingPeriodHours")}
                                         </FormLabel>
                                         <FormControl>
                                           <Input
                                             type="number"
-                                            min={0}
-                                            step={0.01}
-                                            inputMode="decimal"
+                                            min={1}
+                                            max={8760}
+                                            step={1}
+                                            inputMode="numeric"
                                             className="h-8 text-xs"
-                                            placeholder={t("spendingLimitPlaceholder")}
-                                            {...field}
-                                            value={
-                                              field.value === 0
-                                                ? ""
-                                                : typeof field.value === "number" ||
-                                                    typeof field.value === "string"
-                                                  ? field.value
-                                                  : ""
-                                            }
-                                            onChange={(e) => field.onChange(e.target.value)}
+                                            placeholder={String(ROLLING_DEFAULT_PERIOD_HOURS)}
+                                            value={field.value ?? ""}
+                                            onChange={(e) => {
+                                              const v = e.target.value;
+                                              field.onChange(v === "" ? null : Number(v));
+                                            }}
                                             onBlur={(e) => {
                                               field.onBlur();
-                                              const raw = e.target.value.trim();
-                                              if (raw.startsWith(".")) {
-                                                field.onChange(`0${raw}`);
+                                              if (e.target.value.trim() === "") {
+                                                field.onChange(ROLLING_DEFAULT_PERIOD_HOURS);
                                               }
                                             }}
                                           />
                                         </FormControl>
+                                        <FormDescription className="text-xs">
+                                          {t("spendingPeriodHoursDesc")}
+                                        </FormDescription>
                                         <FormMessage />
                                       </FormItem>
                                     )}
                                   />
-                                  {periodType === "rolling" && (
-                                    <FormField
-                                      control={form.control}
-                                      name={`spending_rules.${index}.period_hours`}
-                                      render={({ field }) => (
-                                        <FormItem>
-                                          <FormLabel className="text-xs">
-                                            {t("spendingPeriodHours")}
-                                          </FormLabel>
-                                          <FormControl>
-                                            <Input
-                                              type="number"
-                                              min={1}
-                                              max={8760}
-                                              step={1}
-                                              inputMode="numeric"
-                                              className="h-8 text-xs"
-                                              placeholder={String(ROLLING_DEFAULT_PERIOD_HOURS)}
-                                              value={field.value ?? ""}
-                                              onChange={(e) => {
-                                                const v = e.target.value;
-                                                field.onChange(v === "" ? null : Number(v));
-                                              }}
-                                              onBlur={(e) => {
-                                                field.onBlur();
-                                                if (e.target.value.trim() === "") {
-                                                  field.onChange(ROLLING_DEFAULT_PERIOD_HOURS);
-                                                }
-                                              }}
-                                            />
-                                          </FormControl>
-                                          <FormDescription className="text-xs">
-                                            {t("spendingPeriodHoursDesc")}
-                                          </FormDescription>
-                                          <FormMessage />
-                                        </FormItem>
-                                      )}
-                                    />
-                                  )}
-                                </div>
-
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="mt-6 h-8 w-8 text-status-error hover:bg-status-error-muted"
-                                  onClick={() => removeSpendingRule(index)}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
+                                )}
                               </div>
-                            );
-                          })}
+
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="mt-6 h-8 w-8 text-status-error hover:bg-status-error-muted"
+                                onClick={() => removeSpendingRule(index)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div
+                      id="advanced-capacity-control"
+                      className={getSectionClassName("advanced-capacity-control")}
+                    >
+                      <h3 className="mb-4 text-sm font-medium text-muted-foreground">
+                        {t("maxConcurrency")}
+                      </h3>
+                      <FormField
+                        control={form.control}
+                        name="max_concurrency"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("maxConcurrency")}</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={1}
+                                step={1}
+                                placeholder={t("maxConcurrencyPlaceholder")}
+                                value={field.value ?? ""}
+                                onChange={(e) => {
+                                  const rawValue = e.target.value.trim();
+                                  field.onChange(rawValue === "" ? null : Number(rawValue));
+                                }}
+                              />
+                            </FormControl>
+                            <FormDescription>{t("maxConcurrencyDesc")}</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    {/* Circuit Breaker Configuration Section */}
+                    <div
+                      id="advanced-circuit-breaker"
+                      className={getSectionClassName("advanced-circuit-breaker")}
+                    >
+                      <h3 className="mb-4 text-sm font-medium text-muted-foreground">
+                        {t("circuitBreakerConfig")}
+                      </h3>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">{t("failureThreshold")}</label>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={100}
+                            placeholder={circuitBreakerUseDefaultPlaceholder}
+                            value={circuitBreakerConfig?.failure_threshold ?? ""}
+                            onChange={(e) => {
+                              const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                              const currentConfig = form.getValues("circuit_breaker_config") || {};
+                              form.setValue(
+                                "circuit_breaker_config",
+                                val !== undefined
+                                  ? { ...currentConfig, failure_threshold: val }
+                                  : null,
+                                { shouldValidate: true }
+                              );
+                            }}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            {t("failureThresholdDesc")}
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">{t("successThreshold")}</label>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={100}
+                            placeholder={circuitBreakerUseDefaultPlaceholder}
+                            value={circuitBreakerConfig?.success_threshold ?? ""}
+                            onChange={(e) => {
+                              const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                              const currentConfig = form.getValues("circuit_breaker_config") || {};
+                              form.setValue(
+                                "circuit_breaker_config",
+                                val !== undefined
+                                  ? { ...currentConfig, success_threshold: val }
+                                  : null,
+                                { shouldValidate: true }
+                              );
+                            }}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            {t("successThresholdDesc")}
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">{t("openDuration")}</label>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={300}
+                            step={1}
+                            placeholder={circuitBreakerUseDefaultPlaceholder}
+                            value={circuitBreakerConfig?.open_duration ?? ""}
+                            onChange={(e) => {
+                              const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                              const currentConfig = form.getValues("circuit_breaker_config") || {};
+                              form.setValue(
+                                "circuit_breaker_config",
+                                val !== undefined ? { ...currentConfig, open_duration: val } : null,
+                                { shouldValidate: true }
+                              );
+                            }}
+                          />
+                          <p className="text-xs text-muted-foreground">{t("openDurationDesc")}</p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">{t("probeInterval")}</label>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={60}
+                            step={1}
+                            placeholder={circuitBreakerUseDefaultPlaceholder}
+                            value={circuitBreakerConfig?.probe_interval ?? ""}
+                            onChange={(e) => {
+                              const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                              const currentConfig = form.getValues("circuit_breaker_config") || {};
+                              form.setValue(
+                                "circuit_breaker_config",
+                                val !== undefined
+                                  ? { ...currentConfig, probe_interval: val }
+                                  : null,
+                                { shouldValidate: true }
+                              );
+                            }}
+                          />
+                          <p className="text-xs text-muted-foreground">{t("probeIntervalDesc")}</p>
                         </div>
                       </div>
+                    </div>
 
-                      <div
-                        id="advanced-capacity-control"
-                        className={getSectionClassName("advanced-capacity-control")}
-                      >
-                        <h3 className="mb-4 text-sm font-medium text-muted-foreground">
-                          {t("maxConcurrency")}
-                        </h3>
-                        <FormField
-                          control={form.control}
-                          name="max_concurrency"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>{t("maxConcurrency")}</FormLabel>
-                              <FormControl>
-                                <Input
-                                  type="number"
-                                  min={1}
-                                  step={1}
-                                  placeholder={t("maxConcurrencyPlaceholder")}
-                                  value={field.value ?? ""}
-                                  onChange={(e) => {
-                                    const rawValue = e.target.value.trim();
-                                    field.onChange(rawValue === "" ? null : Number(rawValue));
-                                  }}
-                                />
-                              </FormControl>
-                              <FormDescription>{t("maxConcurrencyDesc")}</FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
+                    {/* Session Affinity Migration Configuration Section */}
+                    <div
+                      id="advanced-affinity-migration"
+                      className={getSectionClassName("advanced-affinity-migration")}
+                    >
+                      <h3 className="mb-4 text-sm font-medium text-muted-foreground">
+                        {t("affinityMigrationConfig")}
+                      </h3>
 
-                      {/* Circuit Breaker Configuration Section */}
-                      <div
-                        id="advanced-circuit-breaker"
-                        className={getSectionClassName("advanced-circuit-breaker")}
-                      >
-                        <h3 className="mb-4 text-sm font-medium text-muted-foreground">
-                          {t("circuitBreakerConfig")}
-                        </h3>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">{t("failureThreshold")}</label>
-                            <Input
-                              type="number"
-                              min={1}
-                              max={100}
-                              placeholder={circuitBreakerUseDefaultPlaceholder}
-                              value={circuitBreakerConfig?.failure_threshold ?? ""}
-                              onChange={(e) => {
-                                const val = e.target.value
-                                  ? parseInt(e.target.value, 10)
-                                  : undefined;
-                                const currentConfig =
-                                  form.getValues("circuit_breaker_config") || {};
-                                form.setValue(
-                                  "circuit_breaker_config",
-                                  val !== undefined
-                                    ? { ...currentConfig, failure_threshold: val }
-                                    : null,
-                                  { shouldValidate: true }
-                                );
-                              }}
-                            />
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <label className="text-sm font-medium">
+                              {t("affinityMigrationEnabled")}
+                            </label>
                             <p className="text-xs text-muted-foreground">
-                              {t("failureThresholdDesc")}
+                              {t("affinityMigrationEnabledDesc")}
                             </p>
                           </div>
-
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">{t("successThreshold")}</label>
-                            <Input
-                              type="number"
-                              min={1}
-                              max={100}
-                              placeholder={circuitBreakerUseDefaultPlaceholder}
-                              value={circuitBreakerConfig?.success_threshold ?? ""}
-                              onChange={(e) => {
-                                const val = e.target.value
-                                  ? parseInt(e.target.value, 10)
-                                  : undefined;
-                                const currentConfig =
-                                  form.getValues("circuit_breaker_config") || {};
-                                form.setValue(
-                                  "circuit_breaker_config",
-                                  val !== undefined
-                                    ? { ...currentConfig, success_threshold: val }
-                                    : null,
-                                  { shouldValidate: true }
-                                );
-                              }}
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              {t("successThresholdDesc")}
-                            </p>
-                          </div>
-
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">{t("openDuration")}</label>
-                            <Input
-                              type="number"
-                              min={1}
-                              max={300}
-                              step={1}
-                              placeholder={circuitBreakerUseDefaultPlaceholder}
-                              value={circuitBreakerConfig?.open_duration ?? ""}
-                              onChange={(e) => {
-                                const val = e.target.value
-                                  ? parseInt(e.target.value, 10)
-                                  : undefined;
-                                const currentConfig =
-                                  form.getValues("circuit_breaker_config") || {};
-                                form.setValue(
-                                  "circuit_breaker_config",
-                                  val !== undefined
-                                    ? { ...currentConfig, open_duration: val }
-                                    : null,
-                                  { shouldValidate: true }
-                                );
-                              }}
-                            />
-                            <p className="text-xs text-muted-foreground">{t("openDurationDesc")}</p>
-                          </div>
-
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">{t("probeInterval")}</label>
-                            <Input
-                              type="number"
-                              min={1}
-                              max={60}
-                              step={1}
-                              placeholder={circuitBreakerUseDefaultPlaceholder}
-                              value={circuitBreakerConfig?.probe_interval ?? ""}
-                              onChange={(e) => {
-                                const val = e.target.value
-                                  ? parseInt(e.target.value, 10)
-                                  : undefined;
-                                const currentConfig =
-                                  form.getValues("circuit_breaker_config") || {};
-                                form.setValue(
-                                  "circuit_breaker_config",
-                                  val !== undefined
-                                    ? { ...currentConfig, probe_interval: val }
-                                    : null,
-                                  { shouldValidate: true }
-                                );
-                              }}
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              {t("probeIntervalDesc")}
-                            </p>
-                          </div>
+                          <Switch
+                            checked={affinityMigration?.enabled ?? false}
+                            onCheckedChange={(checked) => {
+                              const currentConfig = form.getValues("affinity_migration");
+                              form.setValue(
+                                "affinity_migration",
+                                checked
+                                  ? {
+                                      enabled: true,
+                                      metric: currentConfig?.metric ?? "tokens",
+                                      threshold: currentConfig?.threshold ?? 50000,
+                                    }
+                                  : null,
+                                { shouldValidate: true }
+                              );
+                            }}
+                          />
                         </div>
-                      </div>
 
-                      {/* Session Affinity Migration Configuration Section */}
-                      <div
-                        id="advanced-affinity-migration"
-                        className={getSectionClassName("advanced-affinity-migration")}
-                      >
-                        <h3 className="mb-4 text-sm font-medium text-muted-foreground">
-                          {t("affinityMigrationConfig")}
-                        </h3>
-
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <div className="space-y-0.5">
+                        {affinityMigration?.enabled && (
+                          <>
+                            <div className="space-y-2">
                               <label className="text-sm font-medium">
-                                {t("affinityMigrationEnabled")}
+                                {t("affinityMigrationMetric")}
                               </label>
+                              <Select
+                                value={affinityMigration.metric}
+                                onValueChange={(value: "tokens" | "length") => {
+                                  form.setValue(
+                                    "affinity_migration",
+                                    {
+                                      ...affinityMigration,
+                                      metric: value,
+                                    },
+                                    { shouldValidate: true }
+                                  );
+                                }}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="tokens">{t("metricTokens")}</SelectItem>
+                                  <SelectItem value="length">{t("metricLength")}</SelectItem>
+                                </SelectContent>
+                              </Select>
                               <p className="text-xs text-muted-foreground">
-                                {t("affinityMigrationEnabledDesc")}
+                                {t("affinityMigrationMetricDesc")}
                               </p>
                             </div>
-                            <Switch
-                              checked={affinityMigration?.enabled ?? false}
-                              onCheckedChange={(checked) => {
-                                const currentConfig = form.getValues("affinity_migration");
-                                form.setValue(
-                                  "affinity_migration",
-                                  checked
-                                    ? {
-                                        enabled: true,
-                                        metric: currentConfig?.metric ?? "tokens",
-                                        threshold: currentConfig?.threshold ?? 50000,
-                                      }
-                                    : null,
-                                  { shouldValidate: true }
-                                );
-                              }}
-                            />
-                          </div>
 
-                          {affinityMigration?.enabled && (
-                            <>
-                              <div className="space-y-2">
-                                <label className="text-sm font-medium">
-                                  {t("affinityMigrationMetric")}
-                                </label>
-                                <Select
-                                  value={affinityMigration.metric}
-                                  onValueChange={(value: "tokens" | "length") => {
-                                    form.setValue(
-                                      "affinity_migration",
-                                      {
-                                        ...affinityMigration,
-                                        metric: value,
-                                      },
-                                      { shouldValidate: true }
-                                    );
-                                  }}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="tokens">{t("metricTokens")}</SelectItem>
-                                    <SelectItem value="length">{t("metricLength")}</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <p className="text-xs text-muted-foreground">
-                                  {t("affinityMigrationMetricDesc")}
-                                </p>
-                              </div>
-
-                              <div className="space-y-2">
-                                <label className="text-sm font-medium">
-                                  {t("affinityMigrationThreshold")}
-                                </label>
-                                <Input
-                                  type="number"
-                                  min={1}
-                                  max={10000000}
-                                  step={1}
-                                  placeholder="50000"
-                                  value={affinityMigration.threshold}
-                                  onChange={(e) => {
-                                    const val = parseInt(e.target.value, 10) || 50000;
-                                    form.setValue(
-                                      "affinity_migration",
-                                      {
-                                        ...affinityMigration,
-                                        threshold: val,
-                                      },
-                                      { shouldValidate: true }
-                                    );
-                                  }}
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                  {affinityMigration.metric === "tokens"
-                                    ? t("affinityMigrationThresholdTokensDesc")
-                                    : t("affinityMigrationThresholdLengthDesc")}
-                                </p>
-                              </div>
-                            </>
-                          )}
-                        </div>
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">
+                                {t("affinityMigrationThreshold")}
+                              </label>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={10000000}
+                                step={1}
+                                placeholder="50000"
+                                value={affinityMigration.threshold}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value, 10) || 50000;
+                                  form.setValue(
+                                    "affinity_migration",
+                                    {
+                                      ...affinityMigration,
+                                      threshold: val,
+                                    },
+                                    { shouldValidate: true }
+                                  );
+                                }}
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                {affinityMigration.metric === "tokens"
+                                  ? t("affinityMigrationThresholdTokensDesc")
+                                  : t("affinityMigrationThresholdLengthDesc")}
+                              </p>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>

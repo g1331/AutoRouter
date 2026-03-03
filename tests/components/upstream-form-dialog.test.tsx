@@ -91,7 +91,7 @@ describe("UpstreamFormDialog", () => {
       expect(screen.getByText("createUpstreamTitle")).toBeInTheDocument();
     });
 
-    it("renders basic fields and side catalog groups", () => {
+    it("renders basic fields and unified side catalog", () => {
       render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
         wrapper: Wrapper,
       });
@@ -103,9 +103,11 @@ describe("UpstreamFormDialog", () => {
       expect(
         screen.getAllByPlaceholderText("configSearchPlaceholder").length
       ).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByText("configCategoryBasic").length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByText("configCategoryStrategy").length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByText("configCategoryReliability").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("upstreamName").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("priorityAndWeight").length).toBeGreaterThanOrEqual(1);
+      expect(screen.queryByText("configCategoryBasic")).not.toBeInTheDocument();
+      expect(screen.queryByText("configCategoryStrategy")).not.toBeInTheDocument();
+      expect(screen.queryByText("configCategoryReliability")).not.toBeInTheDocument();
     });
 
     it("keeps section order consistent with navigation order", () => {

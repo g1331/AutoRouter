@@ -8,7 +8,6 @@ import {
   ChevronRight,
   ExternalLink,
   Pencil,
-  Play,
   Server,
   ShieldCheck,
   Trash2,
@@ -67,7 +66,6 @@ export function UpstreamsTable({
   upstreams,
   onEdit,
   onDelete,
-  onTest,
   density = "comfortable",
 }: UpstreamsTableProps) {
   const t = useTranslations("upstreams");
@@ -473,19 +471,6 @@ export function UpstreamsTable({
                             }
                             aria-label={`${upstream.is_active ? t("quickDisable") : t("quickEnable")}: ${upstream.name}`}
                           />
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            type="button"
-                            className={cn(
-                              "border-divider bg-surface-200",
-                              isCompactDensity ? "h-7 w-7" : "h-8 w-8"
-                            )}
-                            onClick={() => onTest(upstream)}
-                            aria-label={`${tCommon("test")}: ${upstream.name}`}
-                          >
-                            <Play className="h-3.5 w-3.5" aria-hidden="true" />
-                          </Button>
 
                           <Button
                             variant="outline"

@@ -151,7 +151,7 @@ describe("UpstreamsTable", () => {
     });
   });
 
-  it("calls test and edit actions", () => {
+  it("hides test action and keeps edit action", () => {
     render(
       <UpstreamsTable
         upstreams={[baseUpstream]}
@@ -161,10 +161,10 @@ describe("UpstreamsTable", () => {
       />
     );
 
-    fireEvent.click(screen.getByLabelText("test: OpenAI Main"));
     fireEvent.click(screen.getByLabelText("edit: OpenAI Main"));
 
-    expect(onTest).toHaveBeenCalledWith(baseUpstream);
+    expect(screen.queryByLabelText("test: OpenAI Main")).not.toBeInTheDocument();
+    expect(onTest).not.toHaveBeenCalled();
     expect(onEdit).toHaveBeenCalledWith(baseUpstream);
   });
 
