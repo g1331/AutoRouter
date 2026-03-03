@@ -3,7 +3,16 @@
 import { formatDistanceToNow } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState, useMemo, Fragment, type SyntheticEvent } from "react";
-import { Pencil, Trash2, Server, Play, ChevronDown, ChevronRight, ShieldCheck } from "lucide-react";
+import {
+  Pencil,
+  Trash2,
+  Server,
+  Play,
+  ChevronDown,
+  ChevronRight,
+  ShieldCheck,
+  ExternalLink,
+} from "lucide-react";
 import type { Upstream } from "@/types/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -167,6 +176,21 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
     if (!upstream.health_status) return t("healthUnknown");
     if (upstream.health_status.is_healthy) return t("healthHealthy");
     return t("healthUnhealthy");
+  };
+
+  const renderOfficialWebsiteLink = (upstream: Upstream) => {
+    if (!upstream.official_website_url) return null;
+    return (
+      <a
+        href={upstream.official_website_url}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-1 rounded-cf-sm border border-divider px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-status-info/40 hover:text-status-info"
+      >
+        <span>{t("officialWebsiteAction")}</span>
+        <ExternalLink className="h-3 w-3" aria-hidden="true" />
+      </a>
+    );
   };
 
   const handleRecoverCircuit = async (upstream: Upstream, e?: SyntheticEvent) => {
@@ -535,6 +559,9 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                                   {(upstream.billing_output_multiplier ?? 1).toFixed(2)}
                                 </span>
                               </div>
+                              {upstream.official_website_url && (
+                                <div className="mt-2">{renderOfficialWebsiteLink(upstream)}</div>
+                              )}
                             </TableCell>
                             <TableCell className="px-2">
                               {!quotaMap.has(upstream.id) ? (
@@ -888,6 +915,9 @@ export function UpstreamsTable({ upstreams, onEdit, onDelete, onTest }: Upstream
                       >
                         {upstream.base_url}
                       </code>
+                      {upstream.official_website_url && (
+                        <div className="mt-1.5">{renderOfficialWebsiteLink(upstream)}</div>
+                      )}
 
                       {/* Actions */}
                       {renderActionBar(upstream)}

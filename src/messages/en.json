@@ -542,7 +542,20 @@
     "quickDisable": "Disable",
     "recoverCircuitBreaker": "Recover",
     "recoverCircuitBreakerSuccess": "Circuit breaker recovered",
-    "recoverCircuitBreakerFailed": "Failed to recover circuit breaker"
+    "recoverCircuitBreakerFailed": "Failed to recover circuit breaker",
+    "officialWebsiteUrl": "Official Website",
+    "officialWebsiteUrlPlaceholder": "https://platform.openai.com",
+    "officialWebsiteUrlDesc": "Optional. If configured, a direct website shortcut will appear in the upstream list.",
+    "officialWebsiteAction": "Website",
+    "maxConcurrency": "Max Concurrency",
+    "maxConcurrencyPlaceholder": "Leave empty for unlimited concurrency",
+    "maxConcurrencyDesc": "When full, requests are transferred to other available upstreams without opening circuit breaker.",
+    "baseUrlAutoAppendV1Hint": "The system auto-appended /v1 based on selected capabilities. Requests will be forwarded using this normalized endpoint.",
+    "baseUrlDuplicateV1Warning": "Your base URL already contains /v1. The system will prevent duplicated /v1 segments.",
+    "finalRequestPreview": "Final Request URL Preview",
+    "finalRequestPreviewEmpty": "Enter a valid base URL to preview the final request address",
+    "finalRequestPreviewHint": "The preview updates in real time after capability and base URL changes.",
+    "finalRequestPreviewPath": "Sample path"
   },
   "circuitBreaker": {
     "title": "Circuit Breaker Status",

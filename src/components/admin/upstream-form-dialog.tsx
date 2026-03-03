@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, useWatch, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -89,8 +89,10 @@ const createUpstreamFormSchema = z
   .object({
     name: z.string().min(1).max(100),
     base_url: z.string().url(),
+    official_website_url: z.union([z.literal(""), z.string().url()]),
     api_key: z.string().min(1),
     description: z.string().max(500),
+    max_concurrency: z.number().int().positive().nullable(),
     priority: z.number().int().min(0).max(100),
     weight: z.number().int().min(1).max(100),
     billing_input_multiplier: z.number().min(0).max(100),
@@ -116,8 +118,10 @@ const editUpstreamFormSchema = z
   .object({
     name: z.string().min(1).max(100),
     base_url: z.string().url(),
+    official_website_url: z.union([z.literal(""), z.string().url()]),
     api_key: z.string(),
     description: z.string().max(500),
+    max_concurrency: z.number().int().positive().nullable(),
     priority: z.number().int().min(0).max(100),
     weight: z.number().int().min(1).max(100),
     billing_input_multiplier: z.number().min(0).max(100),
@@ -140,6 +144,83 @@ const editUpstreamFormSchema = z
 
 type UpstreamFormValues = z.input<typeof editUpstreamFormSchema>;
 type UpstreamFormData = z.output<typeof editUpstreamFormSchema>;
+
+const V1_AUTO_APPEND_CAPABILITIES = new Set<RouteCapability>([
+  "anthropic_messages",
+  "codex_responses",
+  "openai_chat_compatible",
+  "openai_extended",
+]);
+
+const CAPABILITY_PREVIEW_PATHS: Record<RouteCapability, string> = {
+  anthropic_messages: "messages",
+  codex_responses: "responses",
+  openai_chat_compatible: "chat/completions",
+  openai_extended: "completions",
+  gemini_native_generate: "v1beta/models/{model}:generateContent",
+  gemini_code_assist_internal: "v1internal:generateContent",
+};
+
+interface EndpointPreviewState {
+  normalizedBaseUrl: string;
+  previewUrl: string;
+  previewPath: string;
+  duplicateV1Warning: boolean;
+  autoAppendV1Applied: boolean;
+}
+
+function shouldAutoAppendV1(routeCapabilities: RouteCapability[] | null | undefined): boolean {
+  return (routeCapabilities ?? []).some((capability) =>
+    V1_AUTO_APPEND_CAPABILITIES.has(capability)
+  );
+}
+
+function getPreviewPath(routeCapabilities: RouteCapability[] | null | undefined): string {
+  const firstCapability = (routeCapabilities ?? [])[0];
+  if (!firstCapability) {
+    return CAPABILITY_PREVIEW_PATHS.openai_chat_compatible;
+  }
+  return (
+    CAPABILITY_PREVIEW_PATHS[firstCapability] ?? CAPABILITY_PREVIEW_PATHS.openai_chat_compatible
+  );
+}
+
+function resolveEndpointPreview(
+  rawBaseUrl: string,
+  routeCapabilities: RouteCapability[] | null | undefined
+): EndpointPreviewState | null {
+  const trimmed = rawBaseUrl.trim();
+  if (!trimmed) return null;
+
+  try {
+    const url = new URL(trimmed);
+    const autoAppendV1 = shouldAutoAppendV1(routeCapabilities);
+    const normalizedPathname = url.pathname.replace(/\/+$/, "") || "/";
+    const manualV1Present = normalizedPathname.toLowerCase().endsWith("/v1");
+
+    let finalPathname = normalizedPathname;
+    let autoAppendV1Applied = false;
+    if (autoAppendV1 && !manualV1Present) {
+      finalPathname = `${normalizedPathname === "/" ? "" : normalizedPathname}/v1`;
+      autoAppendV1Applied = true;
+    }
+
+    url.pathname = finalPathname || "/";
+    const normalizedBaseUrl = url.toString().replace(/\/$/, "");
+    const previewPath = getPreviewPath(routeCapabilities);
+    const previewUrl = `${normalizedBaseUrl}/${previewPath.replace(/^\//, "")}`;
+
+    return {
+      normalizedBaseUrl,
+      previewUrl,
+      previewPath,
+      duplicateV1Warning: autoAppendV1 && manualV1Present,
+      autoAppendV1Applied,
+    };
+  } catch {
+    return null;
+  }
+}
 
 function spendingRulesToApi(
   rules: UpstreamFormData["spending_rules"]
@@ -176,8 +257,10 @@ export function UpstreamFormDialog({
     defaultValues: {
       name: "",
       base_url: "",
+      official_website_url: "",
       api_key: "",
       description: "",
+      max_concurrency: null,
       priority: 0,
       weight: 1,
       billing_input_multiplier: 1,
@@ -217,14 +300,28 @@ export function UpstreamFormDialog({
     control: form.control,
     name: "spending_rules",
   });
+  const watchedRouteCapabilities = useWatch({
+    control: form.control,
+    name: "route_capabilities",
+  });
+  const watchedBaseUrl = useWatch({
+    control: form.control,
+    name: "base_url",
+  });
+  const endpointPreview = useMemo(
+    () => resolveEndpointPreview(watchedBaseUrl ?? "", watchedRouteCapabilities),
+    [watchedBaseUrl, watchedRouteCapabilities]
+  );
 
   useEffect(() => {
     if (upstream && open) {
       form.reset({
         name: upstream.name,
         base_url: upstream.base_url,
+        official_website_url: upstream.official_website_url ?? "",
         api_key: "",
         description: upstream.description || "",
+        max_concurrency: upstream.max_concurrency ?? null,
         priority: upstream.priority ?? 0,
         weight: upstream.weight ?? 1,
         billing_input_multiplier: upstream.billing_input_multiplier ?? 1,
@@ -252,8 +349,10 @@ export function UpstreamFormDialog({
       form.reset({
         name: "",
         base_url: "",
+        official_website_url: "",
         api_key: "",
         description: "",
+        max_concurrency: null,
         priority: 0,
         weight: 1,
         billing_input_multiplier: 1,
@@ -271,13 +370,21 @@ export function UpstreamFormDialog({
   const onSubmit = async (values: UpstreamFormValues) => {
     try {
       const data = activeSchema.parse(values) as UpstreamFormData;
+      const endpointPreviewState = resolveEndpointPreview(data.base_url, data.route_capabilities);
+      const normalizedBaseUrl = endpointPreviewState?.normalizedBaseUrl ?? data.base_url.trim();
+      const officialWebsiteUrl = data.official_website_url.trim()
+        ? data.official_website_url.trim()
+        : null;
+      const maxConcurrency = data.max_concurrency ?? null;
       if (isEdit) {
         // 只有填写了 api_key 才更新
         const updateData: {
           name: string;
           base_url: string;
+          official_website_url?: string | null;
           api_key?: string;
           description: string | null;
+          max_concurrency?: number | null;
           priority?: number;
           weight?: number;
           billing_input_multiplier?: number;
@@ -305,7 +412,7 @@ export function UpstreamFormDialog({
           } | null;
         } = {
           name: data.name,
-          base_url: data.base_url,
+          base_url: normalizedBaseUrl,
           description: data.description || null,
           priority: data.priority,
           weight: data.weight,
@@ -318,6 +425,12 @@ export function UpstreamFormDialog({
           circuit_breaker_config: data.circuit_breaker_config,
           affinity_migration: data.affinity_migration,
         };
+        if (officialWebsiteUrl !== null || upstream.official_website_url != null) {
+          updateData.official_website_url = officialWebsiteUrl;
+        }
+        if (maxConcurrency !== null || upstream.max_concurrency != null) {
+          updateData.max_concurrency = maxConcurrency;
+        }
         if (data.api_key) {
           updateData.api_key = data.api_key;
         }
@@ -326,9 +439,41 @@ export function UpstreamFormDialog({
           data: updateData,
         });
       } else {
-        await createMutation.mutateAsync({
+        const createData: {
+          name: string;
+          base_url: string;
+          api_key: string;
+          official_website_url?: string | null;
+          max_concurrency?: number | null;
+          description: string | null;
+          priority: number;
+          weight: number;
+          billing_input_multiplier: number;
+          billing_output_multiplier: number;
+          spending_rules:
+            | {
+                period_type: "daily" | "monthly" | "rolling";
+                limit: number;
+                period_hours?: number;
+              }[]
+            | null;
+          route_capabilities: RouteCapability[] | null;
+          allowed_models: string[] | null;
+          model_redirects: Record<string, string> | null;
+          circuit_breaker_config: {
+            failure_threshold?: number;
+            success_threshold?: number;
+            open_duration?: number;
+            probe_interval?: number;
+          } | null;
+          affinity_migration: {
+            enabled: boolean;
+            metric: "tokens" | "length";
+            threshold: number;
+          } | null;
+        } = {
           name: data.name,
-          base_url: data.base_url,
+          base_url: normalizedBaseUrl,
           api_key: data.api_key!,
           description: data.description || null,
           priority: data.priority,
@@ -341,7 +486,14 @@ export function UpstreamFormDialog({
           model_redirects: data.model_redirects,
           circuit_breaker_config: data.circuit_breaker_config,
           affinity_migration: data.affinity_migration,
-        });
+        };
+        if (officialWebsiteUrl) {
+          createData.official_website_url = officialWebsiteUrl;
+        }
+        if (maxConcurrency !== null) {
+          createData.max_concurrency = maxConcurrency;
+        }
+        await createMutation.mutateAsync(createData);
       }
 
       onOpenChange(false);
@@ -470,6 +622,77 @@ export function UpstreamFormDialog({
               </FormItem>
             )}
           />
+          {endpointPreview?.autoAppendV1Applied && (
+            <p className="mt-2 rounded-cf-sm border border-status-info/30 bg-status-info-muted px-3 py-2 text-xs text-status-info">
+              {t("baseUrlAutoAppendV1Hint")}
+            </p>
+          )}
+          {endpointPreview?.duplicateV1Warning && (
+            <div className="mt-2 flex items-start gap-2 rounded-cf-sm border border-status-warning/40 bg-status-warning-muted px-3 py-2 text-xs text-status-warning">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span>{t("baseUrlDuplicateV1Warning")}</span>
+            </div>
+          )}
+          <div className="rounded-cf-sm border border-divider bg-surface-200/45 px-3 py-2.5">
+            <div className="text-xs font-medium text-muted-foreground">
+              {t("finalRequestPreview")}
+            </div>
+            <code className="mt-1 block break-all rounded-cf-sm border border-divider bg-surface-300/65 px-2 py-1 font-mono text-[11px] text-foreground">
+              {endpointPreview?.previewUrl ?? t("finalRequestPreviewEmpty")}
+            </code>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {endpointPreview
+                ? `${t("finalRequestPreviewPath")}: /${endpointPreview.previewPath}`
+                : t("finalRequestPreviewHint")}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="official_website_url"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("officialWebsiteUrl")}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="url"
+                      placeholder={t("officialWebsiteUrlPlaceholder")}
+                      {...field}
+                      value={field.value ?? ""}
+                    />
+                  </FormControl>
+                  <FormDescription>{t("officialWebsiteUrlDesc")}</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="max_concurrency"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("maxConcurrency")}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={1}
+                      step={1}
+                      placeholder={t("maxConcurrencyPlaceholder")}
+                      value={field.value ?? ""}
+                      onChange={(e) => {
+                        const rawValue = e.target.value.trim();
+                        field.onChange(rawValue === "" ? null : Number(rawValue));
+                      }}
+                    />
+                  </FormControl>
+                  <FormDescription>{t("maxConcurrencyDesc")}</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
 
           <FormField
             control={form.control}

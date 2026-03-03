@@ -40,12 +40,12 @@
 
 ## 5. 阶段E：Endpoint 配置体验升级（自动补全/预览/官网）
 
-- [ ] 5.1 在 `upstream-form-dialog` 增加 `official_website_url` 与 `max_concurrency` 表单项及校验
-- [ ] 5.2 实现能力感知 endpoint 自动补全与重复 `/v1` 告警规则
-- [ ] 5.3 增加“最终请求地址预览框”，并保证与运行时转发地址语义一致
-- [ ] 5.4 在上游列表/卡片增加官网跳转入口（无配置隐藏）
-- [ ] 5.5 阶段E质量门禁：`pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run`
-- [ ] 5.6 提交阶段性 commit（包含阶段E全部改动与门禁修复）
+- [x] 5.1 在 `upstream-form-dialog` 增加 `official_website_url` 与 `max_concurrency` 表单项及校验
+- [x] 5.2 实现能力感知 endpoint 自动补全与重复 `/v1` 告警规则
+- [x] 5.3 增加“最终请求地址预览框”，并保证与运行时转发地址语义一致
+- [x] 5.4 在上游列表/卡片增加官网跳转入口（无配置隐藏）
+- [x] 5.5 阶段E质量门禁：`pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run`
+- [x] 5.6 提交阶段性 commit（包含阶段E全部改动与门禁修复）
 
 ## 6. 阶段F：上游页面视觉重构（工作台化）
 

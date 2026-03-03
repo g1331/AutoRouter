@@ -542,7 +542,20 @@
     "quickDisable": "停用",
     "recoverCircuitBreaker": "恢复熔断",
     "recoverCircuitBreakerSuccess": "已提前结束熔断",
-    "recoverCircuitBreakerFailed": "提前结束熔断失败"
+    "recoverCircuitBreakerFailed": "提前结束熔断失败",
+    "officialWebsiteUrl": "官网地址",
+    "officialWebsiteUrlPlaceholder": "https://platform.openai.com",
+    "officialWebsiteUrlDesc": "可选，配置后可在上游列表直接跳转官网。",
+    "officialWebsiteAction": "官网",
+    "maxConcurrency": "并发上限",
+    "maxConcurrencyPlaceholder": "留空表示不限并发",
+    "maxConcurrencyDesc": "达到上限后会自动转移到其他可用上游，不会触发熔断。",
+    "baseUrlAutoAppendV1Hint": "已根据所选能力自动补全 /v1 后缀，保存后会按该地址转发。",
+    "baseUrlDuplicateV1Warning": "你输入的地址已经包含 /v1，系统会避免重复拼接。",
+    "finalRequestPreview": "最终请求地址预览",
+    "finalRequestPreviewEmpty": "请先填写有效的接口地址",
+    "finalRequestPreviewHint": "选择能力并填写接口地址后会实时展示最终请求地址。",
+    "finalRequestPreviewPath": "示例路径"
   },
   "circuitBreaker": {
     "title": "熔断器状态",
