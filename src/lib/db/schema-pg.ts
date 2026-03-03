@@ -46,10 +46,12 @@ export const upstreams = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     name: varchar("name", { length: 64 }).notNull().unique(),
     baseUrl: text("base_url").notNull(),
+    officialWebsiteUrl: text("official_website_url"),
     apiKeyEncrypted: text("api_key_encrypted").notNull(),
     isDefault: boolean("is_default").notNull().default(false),
     timeout: integer("timeout").notNull().default(60),
     isActive: boolean("is_active").notNull().default(true),
+    maxConcurrency: integer("max_concurrency"),
     config: text("config"), // JSON stored as text
     weight: integer("weight").notNull().default(1),
     priority: integer("priority").notNull().default(0),

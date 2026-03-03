@@ -124,10 +124,12 @@ export interface AffinityMigrationConfig {
 export interface UpstreamCreate {
   name: string;
   base_url: string;
+  official_website_url?: string | null;
   api_key: string;
   description?: string | null;
   is_default?: boolean;
   timeout?: number;
+  max_concurrency?: number | null;
   weight?: number; // Load balancing weight (default: 1)
   priority?: number; // Priority tier (default: 0, lower = higher priority)
   route_capabilities?: RouteCapability[] | null; // Path routing capability set
@@ -145,11 +147,13 @@ export interface UpstreamCreate {
 export interface UpstreamUpdate {
   name?: string;
   base_url?: string;
+  official_website_url?: string | null;
   api_key?: string; // 留空表示不更新
   description?: string | null;
   is_default?: boolean;
   timeout?: number;
   is_active?: boolean;
+  max_concurrency?: number | null;
   weight?: number; // Load balancing weight
   priority?: number; // Priority tier (lower = higher priority)
   route_capabilities?: RouteCapability[] | null; // Path routing capability set
@@ -168,11 +172,13 @@ export interface UpstreamResponse {
   id: string; // UUID
   name: string;
   base_url: string;
+  official_website_url?: string | null;
   description: string | null;
   api_key_masked: string; // "sk-***1234"
   is_default: boolean;
   timeout: number;
   is_active: boolean;
+  max_concurrency?: number | null;
   weight: number; // Load balancing weight
   priority: number; // Priority tier (lower = higher priority)
   health_status?: UpstreamHealthResponse | null; // Health status (populated when requested)
@@ -186,6 +192,7 @@ export interface UpstreamResponse {
   spending_rules?:
     | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
     | null;
+  last_used_at?: string | null;
   created_at: string; // ISO 8601 date string
   updated_at: string; // ISO 8601 date string
 }

@@ -47,12 +47,15 @@ describe("api-transformers", () => {
         name: "openai-prod",
         providerType: "openai",
         baseUrl: "https://api.openai.com",
+        officialWebsiteUrl: "https://openai.com",
         apiKeyMasked: "sk-***key",
         isDefault: true,
         timeout: 60,
         isActive: true,
+        maxConcurrency: 10,
         config: '{"model": "gpt-4"}',
         affinityMigration: null,
+        lastUsedAt: new Date("2024-01-15T11:00:00.000Z"),
         createdAt: new Date("2024-01-15T10:00:00.000Z"),
         updatedAt: new Date("2024-01-15T12:00:00.000Z"),
       };
@@ -63,11 +66,14 @@ describe("api-transformers", () => {
         id: "upstream-123",
         name: "openai-prod",
         base_url: "https://api.openai.com",
+        official_website_url: "https://openai.com",
         api_key_masked: "sk-***key",
         is_default: true,
         timeout: 60,
         is_active: true,
+        max_concurrency: 10,
         config: '{"model": "gpt-4"}',
+        last_used_at: "2024-01-15T11:00:00.000Z",
         created_at: "2024-01-15T10:00:00.000Z",
         updated_at: "2024-01-15T12:00:00.000Z",
         priority: undefined,
@@ -89,12 +95,15 @@ describe("api-transformers", () => {
         name: "anthropic-prod",
         providerType: "anthropic",
         baseUrl: "https://api.anthropic.com",
+        officialWebsiteUrl: null,
         apiKeyMasked: "sk-***abc",
         isDefault: false,
         timeout: 30,
         isActive: false,
+        maxConcurrency: null,
         config: null,
         affinityMigration: null,
+        lastUsedAt: null,
         createdAt: new Date("2024-01-10T08:00:00.000Z"),
         updatedAt: new Date("2024-01-10T08:00:00.000Z"),
       };
@@ -104,6 +113,9 @@ describe("api-transformers", () => {
       expect(result.config).toBeNull();
       expect(result.is_default).toBe(false);
       expect(result.is_active).toBe(false);
+      expect(result.official_website_url).toBeNull();
+      expect(result.max_concurrency).toBeNull();
+      expect(result.last_used_at).toBeNull();
     });
   });
 
@@ -116,12 +128,15 @@ describe("api-transformers", () => {
             name: "openai",
             providerType: "openai",
             baseUrl: "https://api.openai.com",
+            officialWebsiteUrl: null,
             apiKeyMasked: "sk-***1",
             isDefault: true,
             timeout: 60,
             isActive: true,
+            maxConcurrency: null,
             config: null,
             affinityMigration: null,
+            lastUsedAt: null,
             createdAt: new Date("2024-01-15T10:00:00.000Z"),
             updatedAt: new Date("2024-01-15T10:00:00.000Z"),
           },
@@ -130,12 +145,15 @@ describe("api-transformers", () => {
             name: "anthropic",
             providerType: "anthropic",
             baseUrl: "https://api.anthropic.com",
+            officialWebsiteUrl: null,
             apiKeyMasked: "sk-***2",
             isDefault: false,
             timeout: 30,
             isActive: true,
+            maxConcurrency: null,
             config: null,
             affinityMigration: null,
+            lastUsedAt: null,
             createdAt: new Date("2024-01-14T10:00:00.000Z"),
             updatedAt: new Date("2024-01-14T10:00:00.000Z"),
           },

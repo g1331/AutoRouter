@@ -102,6 +102,11 @@ describe("lib/db/schema", () => {
       expect(upstreams.baseUrl.name).toBe("base_url");
     });
 
+    it("has officialWebsiteUrl column", () => {
+      expect(upstreams.officialWebsiteUrl).toBeDefined();
+      expect(upstreams.officialWebsiteUrl.name).toBe("official_website_url");
+    });
+
     it("has apiKeyEncrypted column", () => {
       expect(upstreams.apiKeyEncrypted).toBeDefined();
       expect(upstreams.apiKeyEncrypted.name).toBe("api_key_encrypted");
@@ -125,6 +130,11 @@ describe("lib/db/schema", () => {
     it("has config column", () => {
       expect(upstreams.config).toBeDefined();
       expect(upstreams.config.name).toBe("config");
+    });
+
+    it("has maxConcurrency column", () => {
+      expect(upstreams.maxConcurrency).toBeDefined();
+      expect(upstreams.maxConcurrency.name).toBe("max_concurrency");
     });
 
     it("has timestamps", () => {

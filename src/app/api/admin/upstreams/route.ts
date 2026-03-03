@@ -47,10 +47,12 @@ const createUpstreamSchema = z
   .object({
     name: z.string().min(1).max(64),
     base_url: z.string().url(),
+    official_website_url: z.string().url().nullable().optional(),
     api_key: z.string().min(1),
     is_default: z.boolean().default(false),
     timeout: z.number().int().positive().default(60),
     config: z.string().nullable().optional(),
+    max_concurrency: z.number().int().positive().nullable().optional(),
     weight: z.number().int().min(1).max(100).default(1),
     priority: z.number().int().min(0).default(0),
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)).nullable().optional(),
@@ -129,10 +131,12 @@ export async function POST(request: NextRequest) {
     const input: UpstreamCreateInput = {
       name: validated.name,
       baseUrl: validated.base_url,
+      officialWebsiteUrl: validated.official_website_url ?? null,
       apiKey: validated.api_key,
       isDefault: validated.is_default,
       timeout: validated.timeout,
       config: validated.config ?? null,
+      maxConcurrency: validated.max_concurrency ?? null,
       weight: validated.weight,
       priority: validated.priority,
       routeCapabilities:

@@ -39,10 +39,12 @@ export const upstreams = sqliteTable(
       .$defaultFn(() => randomUUID()),
     name: text("name").notNull().unique(),
     baseUrl: text("base_url").notNull(),
+    officialWebsiteUrl: text("official_website_url"),
     apiKeyEncrypted: text("api_key_encrypted").notNull(),
     isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
     timeout: integer("timeout").notNull().default(60),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    maxConcurrency: integer("max_concurrency"),
     config: text("config"), // JSON stored as text
     weight: integer("weight").notNull().default(1),
     priority: integer("priority").notNull().default(0),

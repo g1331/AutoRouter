@@ -7,10 +7,10 @@
 
 ## 1. 阶段A：数据模型与契约基础（Schema/API）
 
-- [ ] 1.1 新增 upstream 字段 `officialWebsiteUrl`、`maxConcurrency`（PG/SQLite）并生成 Drizzle 迁移
-- [ ] 1.2 扩展 API 类型与 transformer：补齐 `official_website_url`、`max_concurrency`、`last_used_at`
-- [ ] 1.3 扩展 admin upstream create/update 路由 schema 与 payload 映射，打通新字段读写
-- [ ] 1.4 阶段A质量门禁：`pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run`
+- [x] 1.1 新增 upstream 字段 `officialWebsiteUrl`、`maxConcurrency`（PG/SQLite）并生成 Drizzle 迁移
+- [x] 1.2 扩展 API 类型与 transformer：补齐 `official_website_url`、`max_concurrency`、`last_used_at`
+- [x] 1.3 扩展 admin upstream create/update 路由 schema 与 payload 映射，打通新字段读写
+- [x] 1.4 阶段A质量门禁：`pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run`
 - [ ] 1.5 提交阶段性 commit（包含阶段A全部改动与门禁修复）
 
 ## 2. 阶段B：运行态数据补齐（last_used 与并发占用）
