@@ -416,12 +416,6 @@ export function UpstreamsTable({
                           className={cn("min-w-0", isCompactDensity ? "space-y-1.5" : "space-y-2")}
                         >
                           <div className="flex flex-wrap items-center gap-2">
-                            <h3
-                              className="type-body-medium truncate text-foreground"
-                              title={upstream.name}
-                            >
-                              {upstream.name}
-                            </h3>
                             <Badge
                               variant="outline"
                               className={cn(
@@ -433,6 +427,12 @@ export function UpstreamsTable({
                             >
                               {upstream.is_active ? t("active") : t("inactive")}
                             </Badge>
+                            <h3
+                              className="type-body-medium truncate text-foreground"
+                              title={upstream.name}
+                            >
+                              {upstream.name}
+                            </h3>
                             {concurrency.full && (
                               <Badge
                                 variant="outline"
@@ -461,7 +461,7 @@ export function UpstreamsTable({
                           />
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">
                           <Switch
                             checked={upstream.is_active}
                             onCheckedChange={async (nextActive) => {
@@ -471,38 +471,34 @@ export function UpstreamsTable({
                               toggleActiveMutation.isPending &&
                               toggleActiveMutation.variables?.id === upstream.id
                             }
-                            className="h-5 w-10"
                             aria-label={`${upstream.is_active ? t("quickDisable") : t("quickEnable")}: ${upstream.name}`}
                           />
-
                           <Button
                             variant="outline"
-                            size="sm"
+                            size="icon"
                             type="button"
                             className={cn(
-                              "gap-1.5 border-divider bg-surface-200 px-2.5",
-                              isCompactDensity ? "h-7 text-xs" : "h-8"
+                              "border-divider bg-surface-200",
+                              isCompactDensity ? "h-7 w-7" : "h-8 w-8"
                             )}
                             onClick={() => onTest(upstream)}
                             aria-label={`${tCommon("test")}: ${upstream.name}`}
                           >
                             <Play className="h-3.5 w-3.5" aria-hidden="true" />
-                            {tCommon("test")}
                           </Button>
 
                           <Button
                             variant="outline"
-                            size="sm"
+                            size="icon"
                             type="button"
                             className={cn(
-                              "gap-1.5 border-divider bg-surface-200 px-2.5",
-                              isCompactDensity ? "h-7 text-xs" : "h-8"
+                              "border-divider bg-surface-200",
+                              isCompactDensity ? "h-7 w-7" : "h-8 w-8"
                             )}
                             onClick={() => onEdit(upstream)}
                             aria-label={`${tCommon("edit")}: ${upstream.name}`}
                           >
                             <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                            {tCommon("edit")}
                           </Button>
                           {showRecover && (
                             <Button
@@ -528,17 +524,16 @@ export function UpstreamsTable({
                           )}
                           <Button
                             variant="outline"
-                            size="sm"
+                            size="icon"
                             type="button"
                             className={cn(
-                              "gap-1.5 border-status-error/45 bg-status-error-muted px-2.5 text-status-error",
-                              isCompactDensity ? "h-7 text-xs" : "h-8"
+                              "border-status-error/45 bg-status-error-muted text-status-error",
+                              isCompactDensity ? "h-7 w-7" : "h-8 w-8"
                             )}
                             onClick={() => onDelete(upstream)}
                             aria-label={`${tCommon("delete")}: ${upstream.name}`}
                           >
                             <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                            {tCommon("delete")}
                           </Button>
                         </div>
                       </div>
