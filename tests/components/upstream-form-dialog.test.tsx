@@ -43,6 +43,15 @@ describe("UpstreamFormDialog", () => {
 
   const mockOnOpenChange = vi.fn();
 
+  const ensureAdvancedConfigExpanded = () => {
+    expect(screen.getByPlaceholderText("priorityPlaceholder")).toBeInTheDocument();
+  };
+
+  const addSpendingRule = () => {
+    ensureAdvancedConfigExpanded();
+    fireEvent.click(screen.getByText("addSpendingRule"));
+  };
+
   const mockUpstream: Upstream = {
     id: "upstream-1",
     name: "OpenAI Production",
@@ -82,7 +91,7 @@ describe("UpstreamFormDialog", () => {
       expect(screen.getByText("createUpstreamTitle")).toBeInTheDocument();
     });
 
-    it("renders all form fields", () => {
+    it("renders basic fields and side catalog groups", () => {
       render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
         wrapper: Wrapper,
       });
@@ -91,6 +100,58 @@ describe("UpstreamFormDialog", () => {
       expect(screen.getByPlaceholderText("baseUrlPlaceholder")).toBeInTheDocument();
       expect(screen.getByPlaceholderText("apiKeyPlaceholder")).toBeInTheDocument();
       expect(screen.getByPlaceholderText("upstreamDescriptionPlaceholder")).toBeInTheDocument();
+      expect(
+        screen.getAllByPlaceholderText("configSearchPlaceholder").length
+      ).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("configCategoryBasic").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("configCategoryStrategy").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("configCategoryReliability").length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("keeps section order consistent with navigation order", () => {
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      ensureAdvancedConfigExpanded();
+
+      const orderedSectionIds = [
+        "basic-name",
+        "basic-profile",
+        "basic-route-endpoint",
+        "basic-api-key",
+        "advanced-priority-weight",
+        "advanced-model-routing",
+        "advanced-billing-multipliers",
+        "advanced-spending-quota",
+        "advanced-capacity-control",
+        "advanced-circuit-breaker",
+        "advanced-affinity-migration",
+      ];
+
+      const sectionElements = orderedSectionIds.map((sectionId) => {
+        const section = document.getElementById(sectionId);
+        expect(section).toBeInTheDocument();
+        return section as HTMLElement;
+      });
+
+      for (let i = 0; i < sectionElements.length - 1; i += 1) {
+        const current = sectionElements[i];
+        const next = sectionElements[i + 1];
+        expect(
+          current.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING
+        ).toBeTruthy();
+      }
+    });
+
+    it("reveals advanced fields after expansion", () => {
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      ensureAdvancedConfigExpanded();
+      expect(screen.getByPlaceholderText("priorityPlaceholder")).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("maxConcurrencyPlaceholder")).toBeInTheDocument();
     });
 
     it("renders route capability selector", () => {
@@ -283,6 +344,7 @@ describe("UpstreamFormDialog", () => {
       fireEvent.change(screen.getByPlaceholderText("officialWebsiteUrlPlaceholder"), {
         target: { value: "https://www.right.codes" },
       });
+      ensureAdvancedConfigExpanded();
       fireEvent.change(screen.getByPlaceholderText("maxConcurrencyPlaceholder"), {
         target: { value: "7" },
       });
@@ -361,6 +423,7 @@ describe("UpstreamFormDialog", () => {
 
       expect(screen.getByDisplayValue("OpenAI Production")).toBeInTheDocument();
       expect(screen.getByDisplayValue("https://api.openai.com/v1")).toBeInTheDocument();
+      ensureAdvancedConfigExpanded();
       expect(screen.getByDisplayValue("Production OpenAI API")).toBeInTheDocument();
     });
 
@@ -475,6 +538,7 @@ describe("UpstreamFormDialog", () => {
       const nameInput = screen.getByPlaceholderText("upstreamNamePlaceholder");
       const urlInput = screen.getByPlaceholderText("baseUrlPlaceholder");
       const apiKeyInput = screen.getByPlaceholderText("apiKeyPlaceholder");
+      ensureAdvancedConfigExpanded();
       const priorityInput = screen.getByPlaceholderText("priorityPlaceholder");
 
       fireEvent.change(nameInput, { target: { value: "Fallback Upstream" } });
@@ -511,6 +575,7 @@ describe("UpstreamFormDialog", () => {
         { wrapper: Wrapper }
       );
 
+      ensureAdvancedConfigExpanded();
       const priorityInput = screen.getByPlaceholderText("priorityPlaceholder");
       expect(priorityInput).toHaveValue(3);
     });
@@ -523,6 +588,7 @@ describe("UpstreamFormDialog", () => {
         { wrapper: Wrapper }
       );
 
+      ensureAdvancedConfigExpanded();
       const priorityInput = screen.getByPlaceholderText("priorityPlaceholder");
       fireEvent.change(priorityInput, { target: { value: "5" } });
 
@@ -550,6 +616,28 @@ describe("UpstreamFormDialog", () => {
       fireEvent.click(cancelButton);
 
       expect(mockOnOpenChange).toHaveBeenCalledWith(false);
+    });
+
+    it("prompts before closing when there are unsaved changes", async () => {
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("upstreamNamePlaceholder"), {
+        target: { value: "Changed but not saved" },
+      });
+
+      fireEvent.click(screen.getByText("cancel"));
+
+      expect(mockOnOpenChange).not.toHaveBeenCalledWith(false);
+      expect(screen.getByText("unsavedChangesTitle")).toBeInTheDocument();
+      expect(screen.getByText("unsavedChangesDescription")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText("discardChanges"));
+
+      await waitFor(() => {
+        expect(mockOnOpenChange).toHaveBeenCalledWith(false);
+      });
     });
 
     it("does not render content when closed", () => {
@@ -607,7 +695,7 @@ describe("UpstreamFormDialog", () => {
 
   describe("Error Handling", () => {
     it("handles create mutation error gracefully", async () => {
-      mockCreateMutateAsync.mockRejectedValueOnce(new Error("Create failed"));
+      mockCreateMutateAsync.mockRejectedValue(new Error("Create failed"));
 
       render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
         wrapper: Wrapper,
@@ -639,7 +727,7 @@ describe("UpstreamFormDialog", () => {
         wrapper: Wrapper,
       });
 
-      fireEvent.click(screen.getByText("addSpendingRule"));
+      addSpendingRule();
       expect(screen.getByText("spendingLimit")).toBeInTheDocument();
     });
 
@@ -648,7 +736,7 @@ describe("UpstreamFormDialog", () => {
         wrapper: Wrapper,
       });
 
-      fireEvent.click(screen.getByText("addSpendingRule"));
+      addSpendingRule();
       expect(screen.getByText("spendingPeriodType")).toBeInTheDocument();
     });
 
@@ -667,6 +755,7 @@ describe("UpstreamFormDialog", () => {
         { wrapper: Wrapper }
       );
 
+      ensureAdvancedConfigExpanded();
       const limitInput = screen.getByPlaceholderText("spendingLimitPlaceholder");
       expect(limitInput).toHaveValue(100);
     });
@@ -682,7 +771,7 @@ describe("UpstreamFormDialog", () => {
       const urlInput = screen.getByPlaceholderText("baseUrlPlaceholder");
       const apiKeyInput = screen.getByPlaceholderText("apiKeyPlaceholder");
 
-      fireEvent.click(screen.getByText("addSpendingRule"));
+      addSpendingRule();
       const limitInput = screen.getByPlaceholderText("spendingLimitPlaceholder");
 
       fireEvent.change(nameInput, { target: { value: "Quota Upstream" } });
@@ -710,7 +799,7 @@ describe("UpstreamFormDialog", () => {
       const urlInput = screen.getByPlaceholderText("baseUrlPlaceholder");
       const apiKeyInput = screen.getByPlaceholderText("apiKeyPlaceholder");
 
-      fireEvent.click(screen.getByText("addSpendingRule"));
+      addSpendingRule();
       const limitInput = screen.getByPlaceholderText("spendingLimitPlaceholder");
 
       fireEvent.change(nameInput, { target: { value: "Invalid Quota Upstream" } });
@@ -739,7 +828,7 @@ describe("UpstreamFormDialog", () => {
       const urlInput = screen.getByPlaceholderText("baseUrlPlaceholder");
       const apiKeyInput = screen.getByPlaceholderText("apiKeyPlaceholder");
 
-      fireEvent.click(screen.getByText("addSpendingRule"));
+      addSpendingRule();
       const limitInput = screen.getByPlaceholderText("spendingLimitPlaceholder");
 
       fireEvent.change(nameInput, { target: { value: "Rolling Upstream" } });
@@ -763,6 +852,21 @@ describe("UpstreamFormDialog", () => {
           })
         );
       });
+    });
+  });
+
+  describe("Catalog Navigation", () => {
+    it("expands advanced section and highlights target block when jumping from catalog", () => {
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      fireEvent.click(screen.getAllByText("priorityAndWeight")[0]);
+
+      expect(screen.getByPlaceholderText("priorityPlaceholder")).toBeInTheDocument();
+      expect(document.getElementById("advanced-priority-weight")).toHaveClass(
+        "bg-status-info-muted"
+      );
     });
   });
 });
