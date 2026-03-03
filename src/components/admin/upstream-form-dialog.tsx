@@ -858,10 +858,10 @@ export function UpstreamFormDialog({
                   ref={contentScrollContainerRef}
                   className="h-full min-h-0 flex-1 space-y-4 overflow-y-auto pr-1 [scrollbar-gutter:stable]"
                 >
-                  <div className="rounded-cf-sm border border-divider bg-surface-200/45 p-4">
+                  <div className="p-4">
                     <div
                       id="advanced-quick-jump"
-                      className="sticky top-0 z-20 rounded-cf-sm border border-divider bg-card/95 px-4 py-3 backdrop-blur lg:hidden"
+                      className="sticky top-0 z-20 mb-4 rounded-cf-sm border border-divider bg-card/95 px-4 py-3 backdrop-blur lg:hidden"
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-xs font-medium text-muted-foreground">
@@ -908,10 +908,7 @@ export function UpstreamFormDialog({
                       )}
                     </div>
 
-                    <div id="basic-name" className={getSectionClassName("basic-name", "mt-4")}>
-                      <h3 className="mb-3 text-sm font-medium text-muted-foreground">
-                        {t("upstreamName")}
-                      </h3>
+                    <div id="basic-name" className={getSectionClassName("basic-name")}>
                       <FormField
                         control={form.control}
                         name="name"
@@ -931,9 +928,6 @@ export function UpstreamFormDialog({
                       id="basic-profile"
                       className={getSectionClassName("basic-profile", "mt-4")}
                     >
-                      <h3 className="mb-3 text-sm font-medium text-muted-foreground">
-                        {t("upstreamDescription")}
-                      </h3>
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <FormField
                           control={form.control}
@@ -979,9 +973,6 @@ export function UpstreamFormDialog({
                       id="basic-route-endpoint"
                       className={getSectionClassName("basic-route-endpoint", "mt-4")}
                     >
-                      <h3 className="mb-3 text-sm font-medium text-muted-foreground">
-                        {t("baseUrl")}
-                      </h3>
                       <FormField
                         control={form.control}
                         name="route_capabilities"
@@ -1047,9 +1038,6 @@ export function UpstreamFormDialog({
                       id="basic-api-key"
                       className={getSectionClassName("basic-api-key", "mt-4")}
                     >
-                      <h3 className="mb-3 text-sm font-medium text-muted-foreground">
-                        {t("apiKey")}
-                      </h3>
                       <FormField
                         control={form.control}
                         name="api_key"
@@ -1079,7 +1067,7 @@ export function UpstreamFormDialog({
                     </div>
                   </div>
 
-                  <div id="upstream-advanced-config" className="mt-4 space-y-6">
+                  <div id="upstream-advanced-config" className="mt-4 space-y-6 px-4">
                     <div
                       id="advanced-priority-weight"
                       className={getSectionClassName("advanced-priority-weight", "space-y-6")}
@@ -1436,9 +1424,6 @@ export function UpstreamFormDialog({
                       id="advanced-capacity-control"
                       className={getSectionClassName("advanced-capacity-control")}
                     >
-                      <h3 className="mb-4 text-sm font-medium text-muted-foreground">
-                        {t("maxConcurrency")}
-                      </h3>
                       <FormField
                         control={form.control}
                         name="max_concurrency"

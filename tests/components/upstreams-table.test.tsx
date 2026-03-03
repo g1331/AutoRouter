@@ -110,7 +110,7 @@ describe("UpstreamsTable", () => {
     expect(screen.getByText("runtimeStatus")).toBeInTheDocument();
   });
 
-  it("supports collapsing and expanding a tier", () => {
+  it("supports collapsing and expanding a tier", async () => {
     render(
       <UpstreamsTable
         upstreams={[baseUpstream]}
@@ -122,7 +122,9 @@ describe("UpstreamsTable", () => {
 
     const tierToggle = screen.getByRole("button", { name: /collapse/i });
     fireEvent.click(tierToggle);
-    expect(screen.queryByText("OpenAI Main")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("OpenAI Main")).not.toBeInTheDocument();
+    });
 
     const expandToggle = screen.getByRole("button", { name: /expand/i });
     fireEvent.click(expandToggle);
