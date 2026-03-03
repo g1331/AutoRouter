@@ -28,14 +28,14 @@
 - [x] 3.3 调整失败分类：并发满路径不调用 `markUnhealthy` 与 `recordFailure`
 - [x] 3.4 增加“所有候选并发满载”统一错误语义与用户提示文案
 - [x] 3.5 阶段C质量门禁：`pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run`
-- [ ] 3.6 提交阶段性 commit（包含阶段C全部改动与门禁修复）
+- [x] 3.6 提交阶段性 commit（包含阶段C全部改动与门禁修复）
 
 ## 4. 阶段D：可观测性增强（并发满转移日志闭环）
 
-- [ ] 4.1 扩展类型枚举：`FailoverAttempt.error_type` 与 `RoutingExcluded.reason` 新增 `concurrency_full`
-- [ ] 4.2 在 proxy 路由日志写入中记录并发满排除与转移证据（failover history + routing decision）
-- [ ] 4.3 更新日志时间线数据映射，确保并发满原因在紧凑与详情视图均可识别
-- [ ] 4.4 阶段D质量门禁：`pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run`
+- [x] 4.1 扩展类型枚举：`FailoverAttempt.error_type` 与 `RoutingExcluded.reason` 新增 `concurrency_full`
+- [x] 4.2 在 proxy 路由日志写入中记录并发满排除与转移证据（failover history + routing decision）
+- [x] 4.3 更新日志时间线数据映射，确保并发满原因在紧凑与详情视图均可识别
+- [x] 4.4 阶段D质量门禁：`pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run`
 - [ ] 4.5 提交阶段性 commit（包含阶段D全部改动与门禁修复）
 
 ## 5. 阶段E：Endpoint 配置体验升级（自动补全/预览/官网）
