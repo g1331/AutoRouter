@@ -450,6 +450,7 @@ export default function UpstreamsPage() {
               onDelete={setDeleteUpstream}
               onTest={setTestUpstream}
               density={workbenchDensity}
+              hasActiveFilters={hasActiveFilters}
             />
 
             {upstreamsData && upstreamsData.total_pages > 1 && (

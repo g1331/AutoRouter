@@ -94,6 +94,21 @@ describe("UpstreamsTable", () => {
     expect(screen.getByText("noUpstreamsDesc")).toBeInTheDocument();
   });
 
+  it("renders filtered empty state when filters are active", () => {
+    render(
+      <UpstreamsTable
+        upstreams={[]}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onTest={onTest}
+        hasActiveFilters={true}
+      />
+    );
+
+    expect(screen.getByText("noFilteredUpstreams")).toBeInTheDocument();
+    expect(screen.getByText("noFilteredUpstreamsDesc")).toBeInTheDocument();
+  });
+
   it("renders tier workbench card and upstream basics", () => {
     render(
       <UpstreamsTable

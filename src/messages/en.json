@@ -412,6 +412,8 @@
     "deleteFailed": "Failed to delete Upstream",
     "noUpstreams": "NO UPSTREAMS FOUND",
     "noUpstreamsDesc": "Click the button above to add your first Upstream",
+    "noFilteredUpstreams": "No upstreams match current filters",
+    "noFilteredUpstreamsDesc": "Adjust or reset filters to view matching upstreams",
     "tableProvider": "PROVIDER",
     "tableBaseUrl": "BASE URL",
     "tableQuota": "QUOTA",

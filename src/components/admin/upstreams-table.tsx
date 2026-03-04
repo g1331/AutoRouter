@@ -27,6 +27,7 @@ interface UpstreamsTableProps {
   onDelete: (upstream: Upstream) => void;
   onTest: (upstream: Upstream) => void;
   density?: "comfortable" | "compact";
+  hasActiveFilters?: boolean;
 }
 
 interface QuotaRule {
@@ -61,6 +62,7 @@ export function UpstreamsTable({
   onEdit,
   onDelete,
   density = "comfortable",
+  hasActiveFilters = false,
 }: UpstreamsTableProps) {
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
@@ -343,8 +345,12 @@ export function UpstreamsTable({
         <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80">
           <Server className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
         </div>
-        <h3 className="type-title-medium mb-2 text-foreground">{t("noUpstreams")}</h3>
-        <p className="type-body-medium text-muted-foreground">{t("noUpstreamsDesc")}</p>
+        <h3 className="type-title-medium mb-2 text-foreground">
+          {hasActiveFilters ? t("noFilteredUpstreams") : t("noUpstreams")}
+        </h3>
+        <p className="type-body-medium text-muted-foreground">
+          {hasActiveFilters ? t("noFilteredUpstreamsDesc") : t("noUpstreamsDesc")}
+        </p>
       </div>
     );
   }

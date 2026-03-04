@@ -412,6 +412,8 @@
     "deleteFailed": "删除上游失败",
     "noUpstreams": "暂无上游",
     "noUpstreamsDesc": "点击上方按钮添加第一个上游",
+    "noFilteredUpstreams": "当前筛选条件下没有上游",
+    "noFilteredUpstreamsDesc": "请调整或重置筛选条件后重试",
     "tableProvider": "提供商",
     "tableBaseUrl": "接口地址",
     "tableQuota": "限额",
