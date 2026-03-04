@@ -11,6 +11,19 @@ import {
 } from "@/lib/services/proxy-client";
 import type { Upstream } from "@/lib/db";
 
+const loggerSpies = vi.hoisted(() => {
+  const info = vi.fn();
+  const debug = vi.fn();
+  const error = vi.fn();
+  const child = vi.fn(() => ({ info, debug, error }));
+  const createLogger = vi.fn(() => ({ child }));
+  return { info, debug, error, child, createLogger };
+});
+
+vi.mock("@/lib/utils/logger", () => ({
+  createLogger: loggerSpies.createLogger,
+}));
+
 // Mock encryption module
 vi.mock("@/lib/utils/encryption", () => ({
   decrypt: vi.fn((encrypted: string) => `decrypted-${encrypted}`),
@@ -1482,6 +1495,11 @@ describe("proxy-client", () => {
 
     beforeEach(() => {
       originalFetch = global.fetch;
+      loggerSpies.info.mockClear();
+      loggerSpies.debug.mockClear();
+      loggerSpies.error.mockClear();
+      loggerSpies.child.mockClear();
+      loggerSpies.createLogger.mockClear();
       vi.spyOn(console, "log").mockImplementation(() => {});
       vi.spyOn(console, "error").mockImplementation(() => {});
     });
@@ -1512,6 +1530,78 @@ describe("proxy-client", () => {
         expect.objectContaining({
           method: "POST",
         })
+      );
+    });
+
+    it("should preserve original request query string when forwarding", async () => {
+      const mockResponse = new Response(JSON.stringify({ id: "123" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+      global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+      const request = new Request(
+        "http://localhost/api/proxy/v1/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&token=test",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contents: [] }),
+        }
+      );
+
+      await forwardRequest(
+        request,
+        mockUpstream,
+        "v1beta/models/gemini-2.5-flash:streamGenerateContent",
+        "req-123"
+      );
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        "https://api.openai.com/v1/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&token=test",
+        expect.objectContaining({
+          method: "POST",
+        })
+      );
+    });
+
+    it("should log request info for Gemini native requests", async () => {
+      const geminiUpstream: UpstreamForProxy = {
+        ...mockUpstream,
+        providerType: "google",
+        baseUrl: "https://generativelanguage.googleapis.com",
+      };
+
+      const mockResponse = new Response(JSON.stringify({ candidates: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+      global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+      const request = new Request(
+        "http://localhost/api/proxy/v1/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: "hi" }] }],
+          }),
+        }
+      );
+
+      await forwardRequest(
+        request,
+        geminiUpstream,
+        "v1beta/models/gemini-2.5-flash:streamGenerateContent",
+        "req-123"
+      );
+
+      expect(loggerSpies.info).toHaveBeenCalledWith(
+        {
+          model: "gemini-2.5-flash",
+          stream: true,
+          messages: 1,
+        },
+        "request info"
       );
     });
 
@@ -1785,6 +1875,54 @@ describe("proxy-client", () => {
       expect(result.headers.get("Transfer-Encoding")).toBeNull();
     });
 
+    it("should strip content-encoding and content-length for non-stream responses", async () => {
+      const mockResponse = new Response(JSON.stringify({ error: "temporary unavailable" }), {
+        status: 503,
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Encoding": "gzip",
+          "Content-Length": "321",
+        },
+      });
+      global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+      const request = new Request("http://localhost/api", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+
+      const result = await forwardRequest(request, mockUpstream, "chat/completions", "req-123");
+
+      expect(result.statusCode).toBe(503);
+      expect(result.headers.get("Content-Encoding")).toBeNull();
+      expect(result.headers.get("Content-Length")).toBeNull();
+    });
+
+    it("should strip content-encoding and content-length for stream responses", async () => {
+      const sseData = 'data: {"id":"1"}\n\ndata: [DONE]\n\n';
+      const mockResponse = new Response(sseData, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Content-Encoding": "gzip",
+          "Content-Length": "999",
+        },
+      });
+      global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+      const request = new Request("http://localhost/api", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stream: true }),
+      });
+
+      const result = await forwardRequest(request, mockUpstream, "chat/completions", "req-123");
+
+      expect(result.isStream).toBe(true);
+      expect(result.headers.get("Content-Encoding")).toBeNull();
+      expect(result.headers.get("Content-Length")).toBeNull();
+    });
+
     it("should handle non-JSON response body", async () => {
       const mockResponse = new Response("Plain text response", {
         status: 200,
@@ -1842,6 +1980,10 @@ describe("proxy-client", () => {
         expect.objectContaining({
           statusCode: 200,
         })
+      );
+      expect(loggerSpies.info).toHaveBeenCalledWith(
+        expect.objectContaining({ bytes: expect.any(Number) }),
+        "request info (non-JSON)"
       );
     });
 

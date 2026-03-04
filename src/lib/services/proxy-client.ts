@@ -2,6 +2,7 @@ import type { Upstream } from "../db";
 import { decrypt } from "../utils/encryption";
 import { createLogger } from "../utils/logger";
 import { getPrimaryProviderByCapabilities } from "@/lib/route-capabilities";
+import { extractGeminiModelFromPath } from "./route-capability-matcher";
 
 const log = createLogger("proxy-client");
 
@@ -826,6 +827,55 @@ async function drainStream(stream: ReadableStream<Uint8Array>): Promise<void> {
   }
 }
 
+function countRequestMessages(bodyJson: Record<string, unknown>): number {
+  if (Array.isArray(bodyJson.messages)) {
+    return bodyJson.messages.length;
+  }
+
+  if (Array.isArray(bodyJson.contents)) {
+    return bodyJson.contents.length;
+  }
+
+  if (Array.isArray(bodyJson.input)) {
+    return bodyJson.input.length;
+  }
+
+  if (typeof bodyJson.input === "string") {
+    return bodyJson.input.trim() ? 1 : 0;
+  }
+
+  return 0;
+}
+
+function extractRequestModel(bodyJson: Record<string, unknown>, path: string): string {
+  if (typeof bodyJson.model === "string" && bodyJson.model.trim()) {
+    return bodyJson.model.trim();
+  }
+
+  return extractGeminiModelFromPath(path) ?? "N/A";
+}
+
+function isStreamRequest(
+  bodyJson: Record<string, unknown>,
+  path: string,
+  requestUrl: URL
+): boolean {
+  const queryAlt = requestUrl.searchParams.get("alt")?.toLowerCase();
+  return bodyJson.stream === true || queryAlt === "sse" || path.includes(":streamGenerateContent");
+}
+
+function summarizeRequestInfo(
+  bodyJson: Record<string, unknown>,
+  path: string,
+  requestUrl: URL
+): { model: string; stream: boolean; messages: number } {
+  return {
+    model: extractRequestModel(bodyJson, path),
+    stream: isStreamRequest(bodyJson, path, requestUrl),
+    messages: countRequestMessages(bodyJson),
+  };
+}
+
 /**
  * Forward request to upstream service.
  */
@@ -930,7 +980,10 @@ export async function forwardRequest(
 
   // Construct upstream URL
   const baseUrl = upstream.baseUrl.replace(/\/$/, "");
-  const url = `${baseUrl}/${path.replace(/^\//, "")}`;
+  const normalizedPath = path.replace(/^\//, "");
+  const requestUrl = new URL(request.url);
+  const requestSearch = requestUrl.search;
+  const url = `${baseUrl}/${normalizedPath}${normalizedPath.includes("?") ? "" : requestSearch}`;
 
   // Read request body
   const body = await request.arrayBuffer();
@@ -942,23 +995,13 @@ export async function forwardRequest(
     "upstream request"
   );
 
-  // Log request body summary
+  // Log request info summary
   if (body.byteLength > 0) {
     try {
-      const bodyJson = JSON.parse(new TextDecoder().decode(body));
-      const messageCount =
-        (bodyJson.messages || []).length ||
-        (Array.isArray(bodyJson.input) ? bodyJson.input.length : 0);
-      reqLog.info(
-        {
-          model: bodyJson.model || "N/A",
-          stream: bodyJson.stream || false,
-          messages: messageCount,
-        },
-        "request body"
-      );
+      const bodyJson = JSON.parse(new TextDecoder().decode(body)) as Record<string, unknown>;
+      reqLog.info(summarizeRequestInfo(bodyJson, path, requestUrl), "request info");
     } catch {
-      reqLog.info({ bytes: body.byteLength }, "request body (non-JSON)");
+      reqLog.info({ bytes: body.byteLength }, "request info (non-JSON)");
     }
   }
 
@@ -995,6 +1038,13 @@ export async function forwardRequest(
         responseHeaders.set(key, value);
       }
     });
+    // Node/undici may auto-decompress response bodies while keeping upstream
+    // encoding headers. Strip encoding metadata to prevent downstream re-decode
+    // errors (for example Z_DATA_ERROR: incorrect header check).
+    if (responseHeaders.has("content-encoding")) {
+      responseHeaders.delete("content-encoding");
+      responseHeaders.delete("content-length");
+    }
 
     // Check if streaming response
     const contentType = upstreamResponse.headers.get("content-type") || "";
