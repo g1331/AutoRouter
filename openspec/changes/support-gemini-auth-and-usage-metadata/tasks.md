@@ -41,3 +41,9 @@
 
 - [x] 7.1 在 `src/app/api/proxy/v1/[...path]/route.ts` 为 Gemini 路径能力路由引入上游 `modelRedirects` 解析，并让 routing decision 的 `resolved_model` 与 `model_redirect_applied` 反映真实结果（验收：成功与失败分支日志语义一致）
 - [x] 7.2 在 `tests/unit/api/proxy/route.test.ts` 增加 Gemini 路径模型重定向用例，断言 `logRequestStart`、`updateRequestLog`、`calculateAndPersistRequestBillingSnapshot` 全链路使用重定向后的模型（验收：定向测试通过）
+
+## 8. 覆盖率加固补丁
+
+- [x] 8.1 在 `tests/unit/api/proxy/route.test.ts` 增加 Gemini 路径重定向的失败分支场景，覆盖 `did_send_upstream=true` 时的 `resolved_model` 与 billing snapshot 一致性（验收：失败分支断言通过）
+- [x] 8.2 在 `tests/components/token-display.test.tsx` 与 `tests/components/logs-table.test.tsx` 增加 TTL 细分字段显示断言，覆盖 `>0` 显示与 `=0` 隐藏（验收：组件断言通过）
+- [x] 8.3 在 `tests/unit/services/traffic-recorder.test.ts` 增加 `x-goog-api-key` 入站/出站脱敏断言（验收：fixture 输出无明文密钥）

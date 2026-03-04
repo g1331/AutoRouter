@@ -447,6 +447,26 @@ describe("traffic recorder", () => {
       expect(fixture.outbound.request.headers["authorization"]).toBe("[REDACTED]");
     });
 
+    it("redacts x-goog-api-key in both inbound and outbound headers", () => {
+      const fixture = buildFixture({
+        ...baseParams,
+        inboundRequest: {
+          ...baseParams.inboundRequest,
+          headers: new Headers({
+            "x-goog-api-key": "client-google-key",
+            "content-type": "application/json",
+          }),
+        },
+        outboundHeaders: new Headers({
+          "x-goog-api-key": "upstream-google-key",
+          "content-type": "application/json",
+        }),
+      });
+
+      expect(fixture.inbound.headers["x-goog-api-key"]).toBe("[REDACTED]");
+      expect(fixture.outbound.request.headers["x-goog-api-key"]).toBe("[REDACTED]");
+    });
+
     it("omits downstream section when downstream response is not provided", () => {
       const fixture = buildFixture(baseParams);
       expect(fixture.downstream).toBeUndefined();

@@ -926,6 +926,128 @@ describe("proxy route upstream selection", () => {
     );
   });
 
+  it("should apply gemini model redirects in failure path when request was sent upstream", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType, NoHealthyUpstreamsError } =
+      await import("@/lib/services/load-balancer");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-google-redirect" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-google-redirect",
+        name: "google-upstream-redirect",
+        providerType: "google",
+        baseUrl: "https://generativelanguage.googleapis.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["gemini_native_generate"],
+        modelRedirects: {
+          "gemini-2.5-flash-lite": "gemini-2.5-flash",
+        },
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+    const googleUpstream = {
+      id: "up-google-redirect",
+      name: "google-upstream-redirect",
+      providerType: "google",
+      baseUrl: "https://generativelanguage.googleapis.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 0,
+      weight: 1,
+      modelRedirects: {
+        "gemini-2.5-flash-lite": "gemini-2.5-flash",
+      },
+    };
+
+    vi.mocked(selectFromProviderType)
+      .mockResolvedValueOnce({
+        upstream: googleUpstream,
+        providerType: "google",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 1,
+      })
+      .mockRejectedValueOnce(new NoHealthyUpstreamsError("No healthy upstreams available"));
+
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 503,
+      headers: new Headers({ "content-type": "application/json" }),
+      body: new TextEncoder().encode(
+        JSON.stringify({
+          error: { message: "upstream unavailable" },
+        })
+      ),
+      isStream: false,
+      usage: null,
+    });
+
+    const request = new NextRequest(
+      "http://localhost/api/proxy/v1/v1beta/models/gemini-2.5-flash-lite:generateContent",
+      {
+        method: "POST",
+        headers: {
+          "x-goog-api-key": "sk-x-goog-api-key",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: "hello" }] }],
+        }),
+      }
+    );
+
+    const response = await POST(request, {
+      params: Promise.resolve({
+        path: ["v1beta", "models", "gemini-2.5-flash-lite:generateContent"],
+      }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(data.error).toEqual(
+      expect.objectContaining({
+        code: "ALL_UPSTREAMS_UNAVAILABLE",
+        reason: "UPSTREAM_HTTP_ERROR",
+        did_send_upstream: true,
+      })
+    );
+    expect(routeByModel).not.toHaveBeenCalled();
+
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload).toEqual(
+      expect.objectContaining({
+        model: "gemini-2.5-flash",
+        routingDecision: expect.objectContaining({
+          original_model: "gemini-2.5-flash-lite",
+          resolved_model: "gemini-2.5-flash",
+          model_redirect_applied: true,
+          did_send_upstream: true,
+        }),
+      })
+    );
+    expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "gemini-2.5-flash",
+      })
+    );
+  });
+
   it("should return no-upstream-configured error when matched path has no capability candidates", async () => {
     const { db } = await import("@/lib/db");
     const { routeByModel } = await import("@/lib/services/model-router");
