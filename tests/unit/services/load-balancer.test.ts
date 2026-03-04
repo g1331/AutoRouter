@@ -699,9 +699,7 @@ describe("load-balancer", () => {
         expect(affinityStore.get("key1", "codex_responses", "session-abc")?.upstreamId).toBe(
           "u-tier1"
         );
-        expect(affinityStore.get("key1", "openai_chat_compatible", "session-abc")?.upstreamId).toBe(
-          "u-tier0"
-        );
+        expect(affinityStore.get("key1", "openai_chat_compatible", "session-abc")).toBeNull();
       });
 
       it("should use affinity binding when session exists and upstream is available", async () => {
@@ -840,7 +838,7 @@ describe("load-balancer", () => {
         expect(entry?.upstreamId).toBe("u1");
       });
 
-      it("should create new affinity entry on first request", async () => {
+      it("should not create affinity entry on first request during selection", async () => {
         const u1 = makeUpstream({ id: "u1", priority: 0 });
         mockFindMany.mockResolvedValue([u1]);
 
@@ -854,10 +852,9 @@ describe("load-balancer", () => {
           contentLength: 1024,
         });
 
-        // Cache should be created
+        // Binding happens only after successful upstream response in proxy route
         const entry = affinityStore.get("key1", "openai_chat_compatible", "session-abc");
-        expect(entry).not.toBeNull();
-        expect(entry?.upstreamId).toBe("u1");
+        expect(entry).toBeNull();
       });
 
       it("should behave normally without sessionId (no affinity)", async () => {
@@ -1008,7 +1005,7 @@ describe("load-balancer", () => {
         expect(result.affinityMigrated).toBe(false);
       });
 
-      it("should update affinity cache after migration", async () => {
+      it("should not update affinity cache during migration selection", async () => {
         const p0 = makeUpstream({
           id: "p0",
           priority: 0,
@@ -1027,9 +1024,9 @@ describe("load-balancer", () => {
           contentLength: 2048,
         });
 
-        // Cache should be updated to p0
+        // Binding happens only after successful upstream response in proxy route
         const entry = affinityStore.get("key1", "openai_chat_compatible", "session-abc");
-        expect(entry?.upstreamId).toBe("p0");
+        expect(entry?.upstreamId).toBe("p1");
       });
 
       it("should allow migration when cumulativeTokens is 0 (first request)", async () => {

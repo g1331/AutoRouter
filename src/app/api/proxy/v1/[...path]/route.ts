@@ -697,6 +697,15 @@ async function forwardWithFailover(
 
       // Success! Record success in circuit breaker and update health status
       void recordSuccess(selectedUpstream.id);
+      if (affinityContext?.sessionId) {
+        affinityStore.set(
+          affinityContext.apiKeyId,
+          routeCapability,
+          affinityContext.sessionId,
+          selectedUpstream.id,
+          affinityContext.contentLength
+        );
+      }
 
       // For streaming responses, we track the connection until the stream ends
       if (!result.isStream) {

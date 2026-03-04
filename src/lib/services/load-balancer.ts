@@ -666,14 +666,6 @@ async function selectFromUpstreamPool(
             if (!reservation.reserved) {
               // Migration target became full after filtering; continue to bound-upstream fallback.
             } else {
-              affinityStore.set(
-                apiKeyId,
-                affinityScope,
-                sessionId,
-                migrationTarget.upstream.id,
-                contentLength
-              );
-
               return {
                 upstream: migrationTarget.upstream,
                 selectedTier: migrationTarget.upstream.priority,
@@ -721,8 +713,7 @@ async function selectFromUpstreamPool(
       }
 
       // Bound upstream unavailable, reselect for this request only.
-      // Do not overwrite affinity cache here; keep the stable binding until
-      // a normal miss or explicit migration updates it.
+      // Do not overwrite affinity cache here; successful requests bind in proxy route.
       const result = await performTieredSelection(filteredUpstreams, excludeIds, totalCandidates);
 
       return {
@@ -735,15 +726,6 @@ async function selectFromUpstreamPool(
 
   // No affinity or cache miss - perform normal tiered selection
   const result = await performTieredSelection(filteredUpstreams, excludeIds, totalCandidates);
-
-  // Update affinity cache if context provided
-  if (affinityContext) {
-    const { apiKeyId, sessionId, contentLength } = affinityContext;
-    const affinityScope = affinityContext.affinityScope ?? affinityScopeHint;
-    if (affinityScope) {
-      affinityStore.set(apiKeyId, affinityScope, sessionId, result.upstream.id, contentLength);
-    }
-  }
 
   return {
     ...result,
