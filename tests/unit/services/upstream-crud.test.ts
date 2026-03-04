@@ -583,6 +583,83 @@ describe("upstream-crud", () => {
       expect(result.items[1].priority).toBe(5);
     });
 
+    it("should skip last-used aggregation query when current page has no upstreams", async () => {
+      const { listUpstreams } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.select).mockImplementation((selection?: Record<string, unknown>) => {
+        if (selection && "value" in selection) {
+          return {
+            from: vi.fn().mockResolvedValue([{ value: 0 }]),
+          } as unknown as MockSelectChain;
+        }
+
+        return {
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              groupBy: vi.fn().mockResolvedValue([]),
+            })),
+          })),
+        } as unknown as MockSelectChain;
+      });
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([]);
+
+      const result = await listUpstreams(1, 20);
+
+      expect(result.items).toEqual([]);
+      expect(result.total).toBe(0);
+      expect(result.totalPages).toBe(1);
+      expect(db.select).toHaveBeenCalledTimes(1);
+    });
+
+    it("should include last_used_at from request log aggregation", async () => {
+      const { listUpstreams } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+      const lastUsedAt = new Date("2026-03-01T10:00:00.000Z");
+
+      vi.mocked(db.select).mockImplementation((selection?: Record<string, unknown>) => {
+        if (selection && "value" in selection) {
+          return {
+            from: vi.fn().mockResolvedValue([{ value: 1 }]),
+          } as unknown as MockSelectChain;
+        }
+
+        return {
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              groupBy: vi.fn().mockResolvedValue([
+                { upstreamId: null, lastUsedAt: new Date("2026-03-01T09:00:00.000Z") },
+                { upstreamId: "id-1", lastUsedAt },
+              ]),
+            })),
+          })),
+        } as unknown as MockSelectChain;
+      });
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+        {
+          id: "id-1",
+          name: "upstream-1",
+          providerType: "openai",
+          baseUrl: "https://api.openai.com",
+          apiKeyEncrypted: "encrypted:sk-key-1",
+          isDefault: false,
+          timeout: 60,
+          isActive: true,
+          config: null,
+          priority: 0,
+          weight: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ] as unknown as PartialUpstream[]);
+
+      const result = await listUpstreams(1, 20);
+
+      expect(result.items[0].lastUsedAt).toEqual(lastUsedAt);
+    });
+
     it("should handle decryption errors gracefully", async () => {
       const { listUpstreams } = await import("@/lib/services/upstream-crud");
       const { db } = await import("@/lib/db");

@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { UpstreamsTable } from "@/components/admin/upstreams-table";
+import UpstreamsPage from "@/app/[locale]/(dashboard)/upstreams/page";
 import type { Upstream } from "@/types/api";
 
 vi.mock("next-intl", () => ({
@@ -24,6 +25,10 @@ vi.mock("sonner", () => ({
 
 const mockToggleUpstreamActive = vi.fn();
 let mockUpstreamQuotaData: unknown = undefined;
+const mockUseUpstreams = vi.fn();
+const mockUseAllUpstreams = vi.fn();
+const mockUseUpstreamHealth = vi.fn();
+const mockUseTestUpstream = vi.fn();
 vi.mock("@/hooks/use-upstreams", () => ({
   useToggleUpstreamActive: () => ({
     mutateAsync: mockToggleUpstreamActive,
@@ -34,6 +39,26 @@ vi.mock("@/hooks/use-upstreams", () => ({
     data: mockUpstreamQuotaData,
     isLoading: false,
   }),
+  useUpstreams: (...args: unknown[]) => mockUseUpstreams(...args),
+  useAllUpstreams: (...args: unknown[]) => mockUseAllUpstreams(...args),
+  useUpstreamHealth: (...args: unknown[]) => mockUseUpstreamHealth(...args),
+  useTestUpstream: (...args: unknown[]) => mockUseTestUpstream(...args),
+}));
+
+vi.mock("@/components/admin/topbar", () => ({
+  Topbar: ({ title }: { title: string }) => <div>{title}</div>,
+}));
+
+vi.mock("@/components/admin/upstream-form-dialog", () => ({
+  UpstreamFormDialog: () => null,
+}));
+
+vi.mock("@/components/admin/delete-upstream-dialog", () => ({
+  DeleteUpstreamDialog: () => null,
+}));
+
+vi.mock("@/components/admin/test-upstream-dialog", () => ({
+  TestUpstreamDialog: () => null,
 }));
 
 const mockForceCircuitBreaker = vi.fn();
@@ -123,6 +148,42 @@ describe("UpstreamsTable", () => {
     expect(screen.getByText("OpenAI Main")).toBeInTheDocument();
     expect(screen.getByText("https://api.openai.com/v1")).toBeInTheDocument();
     expect(screen.getByText("runtimeStatus")).toBeInTheDocument();
+  });
+
+  it("sorts tiers by priority and renders degraded/offline tier led labels", () => {
+    const healthyInP0: Upstream = {
+      ...baseUpstream,
+      id: "p0-healthy",
+      priority: 0,
+      health_status: { is_healthy: true, last_check: new Date().toISOString() },
+    };
+    const unhealthyInP0: Upstream = {
+      ...baseUpstream,
+      id: "p0-unhealthy",
+      priority: 0,
+      health_status: { is_healthy: false, last_check: new Date().toISOString() },
+    };
+    const unhealthyInP5: Upstream = {
+      ...baseUpstream,
+      id: "p5-unhealthy",
+      priority: 5,
+      health_status: { is_healthy: false, last_check: new Date().toISOString() },
+    };
+
+    render(
+      <UpstreamsTable
+        upstreams={[unhealthyInP5, healthyInP0, unhealthyInP0]}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onTest={onTest}
+      />
+    );
+
+    const tierP0 = screen.getByText("tier P0");
+    const tierP5 = screen.getByText("tier P5");
+    expect(tierP0.compareDocumentPosition(tierP5) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("tierLedDegraded")).toBeInTheDocument();
+    expect(screen.getByText("tierLedOffline")).toBeInTheDocument();
   });
 
   it("supports collapsing and expanding a tier", async () => {
@@ -386,5 +447,61 @@ describe("UpstreamsTable", () => {
     );
 
     expect(screen.getByText("capabilityOpenAIChatCompatible")).toBeInTheDocument();
+  });
+});
+
+describe("UpstreamsPage filter-aware empty state", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUpstreamQuotaData = undefined;
+    mockUseUpstreams.mockReturnValue({
+      data: {
+        items: [],
+        total: 0,
+        page: 1,
+        page_size: 10,
+        total_pages: 1,
+      },
+      isLoading: false,
+    });
+    mockUseAllUpstreams.mockReturnValue({
+      data: [],
+    });
+    mockUseUpstreamHealth.mockReturnValue({
+      data: {
+        data: [],
+      },
+    });
+    mockUseTestUpstream.mockReturnValue({
+      mutate: vi.fn(),
+      data: null,
+      isPending: false,
+    });
+  });
+
+  it("switches empty-state copy when filters become active and resets back", async () => {
+    render(<UpstreamsPage />);
+
+    expect(screen.getByText("noUpstreams")).toBeInTheDocument();
+    expect(screen.queryByText("noFilteredUpstreams")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("workbenchSearchPlaceholder"), {
+      target: { value: "openai" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("noFilteredUpstreams")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "resetFilters" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "resetFilters" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("noUpstreams")).toBeInTheDocument();
+      expect(screen.queryByText("noFilteredUpstreams")).not.toBeInTheDocument();
+      expect((screen.getByLabelText("workbenchSearchPlaceholder") as HTMLInputElement).value).toBe(
+        ""
+      );
+    });
   });
 });
