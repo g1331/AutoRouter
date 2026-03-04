@@ -9,6 +9,7 @@ import {
   injectAuthHeader,
   applyCompensationHeaders,
   type ProxyResult,
+  type HeaderDiff,
 } from "@/lib/services/proxy-client";
 import {
   logRequest,
@@ -40,7 +41,11 @@ import {
   type RouteCapability,
   type RouteMatchSource,
 } from "@/lib/route-capabilities";
-import { matchRouteCapability } from "@/lib/services/route-capability-matcher";
+import {
+  extractGeminiModelFromPath,
+  matchRouteCapability,
+} from "@/lib/services/route-capability-matcher";
+import { resolveModelWithRedirects } from "@/lib/services/model-router";
 import { ensureRouteCapabilityMigration } from "@/lib/services/route-capability-migration";
 import {
   type FailoverConfig,
@@ -127,7 +132,9 @@ function transformPathRoutingDecisionLog(
   input: {
     matchedRouteCapability: RouteCapability;
     routeMatchSource: RouteMatchSource;
-    model: string | null;
+    originalModel: string | null;
+    resolvedModel: string | null;
+    modelRedirectApplied: boolean;
     capabilityCandidates: Upstream[];
     finalCandidates: Upstream[];
     excludedCandidates: RoutingExcluded[];
@@ -143,9 +150,9 @@ function transformPathRoutingDecisionLog(
   }));
 
   return {
-    original_model: input.model ?? "(path-based)",
-    resolved_model: input.model ?? "(path-based)",
-    model_redirect_applied: false,
+    original_model: input.originalModel ?? "(path-based)",
+    resolved_model: input.resolvedModel ?? "(path-based)",
+    model_redirect_applied: input.modelRedirectApplied,
     provider_type: getProviderByRouteCapability(input.matchedRouteCapability),
     routing_type: "path_capability",
     matched_route_capability: input.matchedRouteCapability,
@@ -164,6 +171,21 @@ function transformPathRoutingDecisionLog(
     ...(diagnostics?.failureStage !== undefined ? { failure_stage: diagnostics.failureStage } : {}),
     selection_strategy: "weighted",
   };
+}
+
+function resolvePathRoutingModelForUpstream(
+  originalModel: string | null,
+  upstream: Upstream | null | undefined
+): { resolvedModel: string | null; redirectApplied: boolean } {
+  if (!originalModel || !upstream) {
+    return { resolvedModel: originalModel, redirectApplied: false };
+  }
+
+  const { resolvedModel, redirectApplied } = resolveModelWithRedirects(
+    originalModel,
+    upstream.modelRedirects
+  );
+  return { resolvedModel, redirectApplied };
 }
 
 function mergeExcludedCandidates(
@@ -199,19 +221,34 @@ interface FailoverErrorWithHistory extends Error {
   failoverHistory?: FailoverAttempt[];
   concurrencyExcludedCandidates?: RoutingExcluded[];
   didSendUpstream?: boolean;
+  headerDiff?: HeaderDiff | null;
 }
 
 function attachFailoverContext<T extends Error>(
   error: T,
   failoverHistory: FailoverAttempt[],
   didSendUpstream: boolean,
-  concurrencyExcludedCandidates: RoutingExcluded[] = []
+  concurrencyExcludedCandidates: RoutingExcluded[] = [],
+  headerDiff: HeaderDiff | null = null
 ): T & FailoverErrorWithHistory {
   const enrichedError = error as T & FailoverErrorWithHistory;
   enrichedError.failoverHistory = [...failoverHistory];
   enrichedError.concurrencyExcludedCandidates = [...concurrencyExcludedCandidates];
   enrichedError.didSendUpstream = didSendUpstream;
+  enrichedError.headerDiff = headerDiff;
   return enrichedError;
+}
+
+function extractHeaderDiffFromError(error: unknown): HeaderDiff | null {
+  if (!error || typeof error !== "object" || !("headerDiff" in error)) {
+    return null;
+  }
+  const candidate = (error as { headerDiff?: unknown }).headerDiff;
+  if (!candidate || typeof candidate !== "object") {
+    return null;
+  }
+
+  return candidate as HeaderDiff;
 }
 
 function isSyntheticFailoverAttempt(attempt: FailoverAttempt): boolean {
@@ -669,6 +706,7 @@ async function forwardWithFailover(
           response_headers: failedResponse.headers,
           response_body_text: failedResponse.bodyText,
           response_body_json: failedResponse.bodyJson,
+          header_diff: result.headerDiff ?? null,
         });
         failedUpstreamIds.push(selectedUpstream.id);
         lastError = new Error(`Upstream returned ${result.statusCode}`);
@@ -677,6 +715,15 @@ async function forwardWithFailover(
 
       // Success! Record success in circuit breaker and update health status
       void recordSuccess(selectedUpstream.id);
+      if (affinityContext?.sessionId) {
+        affinityStore.set(
+          affinityContext.apiKeyId,
+          routeCapability,
+          affinityContext.sessionId,
+          selectedUpstream.id,
+          affinityContext.contentLength
+        );
+      }
 
       // For streaming responses, we track the connection until the stream ends
       if (!result.isStream) {
@@ -715,6 +762,7 @@ async function forwardWithFailover(
     } catch (error) {
       // Release connection on error
       releaseConnection(selectedUpstream.id);
+      const errorHeaderDiff = extractHeaderDiffFromError(error);
 
       // Check if client disconnected
       if (request.signal.aborted) {
@@ -747,6 +795,7 @@ async function forwardWithFailover(
           error_type: getErrorType(error instanceof Error ? error : null, null),
           error_message: errorMessage,
           status_code: null,
+          header_diff: errorHeaderDiff,
         });
         failedUpstreamIds.push(selectedUpstream.id);
         lastError = error instanceof Error ? error : new Error(String(error));
@@ -761,7 +810,8 @@ async function forwardWithFailover(
         nonFailoverError,
         failoverHistory,
         didSendUpstream,
-        concurrencyExcludedCandidates
+        concurrencyExcludedCandidates,
+        errorHeaderDiff
       );
     }
   }
@@ -945,26 +995,52 @@ interface RequestContext {
   bodyJson: Record<string, unknown> | null;
 }
 
+type AuthSource = "authorization" | "x-api-key" | "x-goog-api-key" | "none";
+
+function extractProxyApiKey(request: NextRequest): {
+  keyValue: string | null;
+  authSource: AuthSource;
+} {
+  const fromAuthorization = extractApiKey(request.headers.get("authorization"));
+  if (fromAuthorization) {
+    return { keyValue: fromAuthorization, authSource: "authorization" };
+  }
+
+  const fromApiKey = extractApiKey(request.headers.get("x-api-key"));
+  if (fromApiKey) {
+    return { keyValue: fromApiKey, authSource: "x-api-key" };
+  }
+
+  const fromGoogleApiKey = extractApiKey(request.headers.get("x-goog-api-key"));
+  if (fromGoogleApiKey) {
+    return { keyValue: fromGoogleApiKey, authSource: "x-goog-api-key" };
+  }
+
+  return { keyValue: null, authSource: "none" };
+}
+
 /**
  * Extract request context (model, sessionId) from request body and headers.
  * Single-pass extraction to avoid parsing body multiple times.
  */
-async function extractRequestContext(request: NextRequest): Promise<RequestContext> {
+async function extractRequestContext(request: NextRequest, path: string): Promise<RequestContext> {
+  const modelFromPath = extractGeminiModelFromPath(path);
+
   try {
     const clonedRequest = request.clone();
     const bodyText = await clonedRequest.text();
 
     if (!bodyText) {
-      return { model: null, sessionId: null, bodyJson: null };
+      return { model: modelFromPath, sessionId: null, bodyJson: null };
     }
 
     const bodyJson = JSON.parse(bodyText) as Record<string, unknown>;
-    const model = typeof bodyJson.model === "string" ? bodyJson.model || null : null;
+    const modelFromBody = typeof bodyJson.model === "string" ? bodyJson.model || null : null;
 
-    return { model, sessionId: null, bodyJson };
+    return { model: modelFromBody ?? modelFromPath, sessionId: null, bodyJson };
   } catch {
     // Not JSON or empty body
-    return { model: null, sessionId: null, bodyJson: null };
+    return { model: modelFromPath, sessionId: null, bodyJson: null };
   }
 }
 
@@ -981,12 +1057,13 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   const path = pathSegments.join("/");
 
   // Extract and validate API key
-  const authHeader = request.headers.get("authorization");
-  const keyValue = extractApiKey(authHeader);
+  const { keyValue, authSource } = extractProxyApiKey(request);
 
   if (!keyValue) {
+    log.debug({ requestId, authSource }, "proxy auth: missing supported API key header");
     return NextResponse.json({ error: "Missing API key" }, { status: 401 });
   }
+  log.debug({ requestId, authSource }, "proxy auth: extracted API key");
 
   // Find API key by prefix and verify
   const keyPrefix = getKeyPrefix(keyValue);
@@ -1023,7 +1100,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   await ensureRouteCapabilityMigration();
 
   // Extract model from request body. For path-based routing, model may be absent.
-  const tempContext = await extractRequestContext(request);
+  const tempContext = await extractRequestContext(request, path);
   const model = tempContext.model;
   const bodyJson: Record<string, unknown> | null = tempContext.bodyJson;
   const matchedRouteCapability = matchRouteCapability(request.method, path);
@@ -1117,7 +1194,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
   // Route context
   let priorityTier: number | null = null;
-  const resolvedModel: string | null = model;
+  let resolvedModel: string | null = model;
+  let modelRedirectApplied = false;
   const routeMatchSource: RouteMatchSource = "path";
   let candidateUpstreamIds: string[] = [];
   let capabilityCandidates: Upstream[] = [];
@@ -1181,6 +1259,10 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
   const selectedCandidate = finalCapabilityCandidates[0];
   candidateUpstreamIds = finalCapabilityCandidates.map((upstream) => upstream.id);
+  ({ resolvedModel, redirectApplied: modelRedirectApplied } = resolvePathRoutingModelForUpstream(
+    model,
+    selectedCandidate
+  ));
 
   log.debug(
     {
@@ -1222,7 +1304,9 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     {
       matchedRouteCapability,
       routeMatchSource,
-      model,
+      originalModel: model,
+      resolvedModel,
+      modelRedirectApplied,
       capabilityCandidates,
       finalCandidates: finalCapabilityCandidates,
       excludedCandidates: excludedCapabilityCandidates,
@@ -1317,6 +1401,11 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       (c) => c.header.toLowerCase() === "session_id"
     );
 
+    ({ resolvedModel, redirectApplied: modelRedirectApplied } = resolvePathRoutingModelForUpstream(
+      model,
+      upstreamForLogging
+    ));
+
     // Build routing decision for logging
     const routingDecision: RoutingDecision = {
       routingType,
@@ -1331,7 +1420,9 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       {
         matchedRouteCapability,
         routeMatchSource,
-        model,
+        originalModel: model,
+        resolvedModel,
+        modelRedirectApplied,
         capabilityCandidates,
         finalCandidates: finalCapabilityCandidates,
         excludedCandidates: excludedCapabilityCandidates,
@@ -1414,6 +1505,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               cachedTokens: usage?.cachedTokens || 0,
               reasoningTokens: usage?.reasoningTokens || 0,
               cacheCreationTokens: usage?.cacheCreationTokens || 0,
+              cacheCreation5mTokens: usage?.cacheCreation5mTokens || 0,
+              cacheCreation1hTokens: usage?.cacheCreation1hTokens || 0,
               cacheReadTokens: usage?.cacheReadTokens || 0,
               statusCode: result.statusCode,
               durationMs: Date.now() - startTime,
@@ -1446,6 +1539,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               cachedTokens: usage?.cachedTokens || 0,
               reasoningTokens: usage?.reasoningTokens || 0,
               cacheCreationTokens: usage?.cacheCreationTokens || 0,
+              cacheCreation5mTokens: usage?.cacheCreation5mTokens || 0,
+              cacheCreation1hTokens: usage?.cacheCreation1hTokens || 0,
               cacheReadTokens: usage?.cacheReadTokens || 0,
               statusCode: result.statusCode,
               durationMs: Date.now() - startTime,
@@ -1592,6 +1687,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           cachedTokens: usage?.cachedTokens || 0,
           reasoningTokens: usage?.reasoningTokens || 0,
           cacheCreationTokens: usage?.cacheCreationTokens || 0,
+          cacheCreation5mTokens: usage?.cacheCreation5mTokens || 0,
+          cacheCreation1hTokens: usage?.cacheCreation1hTokens || 0,
           cacheReadTokens: usage?.cacheReadTokens || 0,
           statusCode: result.statusCode,
           durationMs,
@@ -1623,6 +1720,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           cachedTokens: usage?.cachedTokens || 0,
           reasoningTokens: usage?.reasoningTokens || 0,
           cacheCreationTokens: usage?.cacheCreationTokens || 0,
+          cacheCreation5mTokens: usage?.cacheCreation5mTokens || 0,
+          cacheCreation1hTokens: usage?.cacheCreation1hTokens || 0,
           cacheReadTokens: usage?.cacheReadTokens || 0,
           statusCode: result.statusCode,
           durationMs,
@@ -1767,6 +1866,13 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
     const errorStatusCode = getHttpStatusForError(errorCode);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const failureHeaderDiff =
+      attributionFailoverAttempt?.header_diff ??
+      (error as FailoverErrorWithHistory | null)?.headerDiff ??
+      null;
+    const sessionIdCompensated = Boolean(
+      failureHeaderDiff?.compensated.some((item) => item.header.toLowerCase() === "session_id")
+    );
     const errorDetails = {
       reason: failureReason,
       did_send_upstream: didSendUpstream,
@@ -1774,12 +1880,24 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       user_hint: getUserHint(errorCode, failureReason, matchedRouteCapability),
     } as const;
     const downstreamErrorBody = createUnifiedErrorBody(errorCode, errorDetails);
+    const upstreamForModelResolution =
+      attributionFailoverAttempt?.upstream_id != null
+        ? activeUpstreams.find(
+            (candidate) => candidate.id === attributionFailoverAttempt.upstream_id
+          )
+        : selectedCandidate;
+    ({ resolvedModel, redirectApplied: modelRedirectApplied } = resolvePathRoutingModelForUpstream(
+      model,
+      upstreamForModelResolution
+    ));
 
     const failureRoutingDecisionLog = transformPathRoutingDecisionLog(
       {
         matchedRouteCapability,
         routeMatchSource,
-        model,
+        originalModel: model,
+        resolvedModel,
+        modelRedirectApplied,
         capabilityCandidates,
         finalCandidates: finalCapabilityCandidates,
         excludedCandidates: excludedCapabilityCandidates,
@@ -1924,6 +2042,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         failoverAttempts: failoverHistory.length,
         failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
         routingDecision: failureRoutingDecisionLog,
+        sessionIdCompensated,
+        headerDiff: failureHeaderDiff,
       });
       persistedLogId = updatedLog?.id ?? requestLogId;
     } else {
@@ -1945,6 +2065,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         failoverAttempts: failoverHistory.length,
         failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
         routingDecision: failureRoutingDecisionLog,
+        sessionIdCompensated,
+        headerDiff: failureHeaderDiff,
       });
       persistedLogId = createdLog.id;
     }

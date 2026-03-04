@@ -406,6 +406,8 @@ describe("api-transformers", () => {
         cached_tokens: 10,
         reasoning_tokens: 20,
         cache_creation_tokens: 5,
+        cache_creation_5m_tokens: 0,
+        cache_creation_1h_tokens: 0,
         cache_read_tokens: 8,
         status_code: 200,
         duration_ms: 1500,
@@ -580,6 +582,11 @@ describe("api-transformers", () => {
             { header: "Cookie", source: "headers.cookie", value: "a=b" },
             { header: "X-Api-Key", source: "headers.x-api-key", value: "mysecretkey" },
             {
+              header: "X-Goog-Api-Key",
+              source: "headers.x-goog-api-key",
+              value: "mygoogsecret",
+            },
+            {
               header: "Authorization",
               source: "headers.authorization",
               value: "Bearer tokentoken",
@@ -613,6 +620,11 @@ describe("api-transformers", () => {
         (e) => e.header === "X-Api-Key"
       );
       expect(compensatedApiKey?.value).toContain("***");
+
+      const compensatedGoogApiKey = result.header_diff?.compensated.find(
+        (e) => e.header === "X-Goog-Api-Key"
+      );
+      expect(compensatedGoogApiKey?.value).toContain("***");
 
       const compensatedCookie = result.header_diff?.compensated.find((e) => e.header === "Cookie");
       expect(compensatedCookie?.value).toBe("***");

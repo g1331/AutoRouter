@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { matchRouteCapability } from "@/lib/services/route-capability-matcher";
+import {
+  extractGeminiModelFromPath,
+  matchRouteCapability,
+} from "@/lib/services/route-capability-matcher";
 
 describe("matchRouteCapability", () => {
   it("should match anthropic message routes", () => {
@@ -76,5 +79,27 @@ describe("matchRouteCapability", () => {
     expect(matchRouteCapability("GET", "/v1/responses")).toBeNull();
     expect(matchRouteCapability("GET", "/v1/responses/compact")).toBeNull();
     expect(matchRouteCapability("DELETE", "/v1/messages")).toBeNull();
+  });
+});
+
+describe("extractGeminiModelFromPath", () => {
+  it("should extract model from gemini native route path", () => {
+    expect(extractGeminiModelFromPath("/v1beta/models/gemini-2.5-flash:generateContent")).toBe(
+      "gemini-2.5-flash"
+    );
+    expect(
+      extractGeminiModelFromPath("/v1beta/models/gemini-3.1-pro-preview:streamGenerateContent")
+    ).toBe("gemini-3.1-pro-preview");
+  });
+
+  it("should decode URL-encoded model segments", () => {
+    expect(
+      extractGeminiModelFromPath("/v1beta/models/gemini-2.5-flash%2Dlite:generateContent")
+    ).toBe("gemini-2.5-flash-lite");
+  });
+
+  it("should return null for unsupported or unsafe paths", () => {
+    expect(extractGeminiModelFromPath("/v1/chat/completions")).toBeNull();
+    expect(extractGeminiModelFromPath("/v1beta/models/%2e%2e:generateContent")).toBeNull();
   });
 });

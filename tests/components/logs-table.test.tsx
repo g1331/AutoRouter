@@ -1043,6 +1043,42 @@ describe("LogsTable", () => {
       expect(screen.getByText(/retryTotalDuration/)).toBeInTheDocument();
     });
 
+    it("shows cache TTL split rows in expanded token details when values are present", () => {
+      const logWithTtlSplit: RequestLog = {
+        ...logWithFailoverBase,
+        cache_creation_tokens: 150,
+        cache_creation_5m_tokens: 120,
+        cache_creation_1h_tokens: 30,
+      };
+
+      render(<LogsTable logs={[logWithTtlSplit]} />);
+
+      const expandButton = screen.getByRole("button", { name: "expandDetails" });
+      fireEvent.click(expandButton);
+
+      expect(screen.getByText("tokenCacheWrite")).toBeInTheDocument();
+      expect(screen.getByText("tokenCacheWrite5m")).toBeInTheDocument();
+      expect(screen.getByText("tokenCacheWrite1h")).toBeInTheDocument();
+    });
+
+    it("hides cache TTL split rows in expanded token details when values are 0", () => {
+      const logWithoutTtlSplit: RequestLog = {
+        ...logWithFailoverBase,
+        cache_creation_tokens: 150,
+        cache_creation_5m_tokens: 0,
+        cache_creation_1h_tokens: 0,
+      };
+
+      render(<LogsTable logs={[logWithoutTtlSplit]} />);
+
+      const expandButton = screen.getByRole("button", { name: "expandDetails" });
+      fireEvent.click(expandButton);
+
+      expect(screen.getByText("tokenCacheWrite")).toBeInTheDocument();
+      expect(screen.queryByText("tokenCacheWrite5m")).not.toBeInTheDocument();
+      expect(screen.queryByText("tokenCacheWrite1h")).not.toBeInTheDocument();
+    });
+
     it("displays three-column layout with decision, performance, and token details", () => {
       const logWithRouting: RequestLog = {
         ...logWithFailoverBase,

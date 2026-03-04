@@ -2,6 +2,7 @@ import type { Upstream } from "../db";
 import { decrypt } from "../utils/encryption";
 import { createLogger } from "../utils/logger";
 import { getPrimaryProviderByCapabilities } from "@/lib/route-capabilities";
+import { extractGeminiModelFromPath } from "./route-capability-matcher";
 
 const log = createLogger("proxy-client");
 
@@ -25,6 +26,8 @@ export interface TokenUsage {
   reasoningTokens: number;
   cacheCreationTokens: number;
   cacheReadTokens: number;
+  cacheCreation5mTokens?: number;
+  cacheCreation1hTokens?: number;
 }
 
 /**
@@ -60,6 +63,8 @@ export interface HeaderDiff {
   unchanged: Array<{ header: string; value: string }>;
 }
 
+type ProxyRequestErrorWithHeaderDiff = Error & { headerDiff?: HeaderDiff };
+
 function maskSecretValue(value: string): string {
   const trimmed = value.trim();
   if (trimmed.length <= 6) return "***";
@@ -83,6 +88,7 @@ function sanitizeHeaderValueForLogging(headerNameLower: string, value: string): 
     case "proxy-authorization":
       return sanitizeAuthHeaderValue(value);
     case "x-api-key":
+    case "x-goog-api-key":
       return maskSecretValue(value);
     case "cookie":
     case "set-cookie":
@@ -201,34 +207,29 @@ export function filterHeaders(headers: Headers): {
 
 /**
  * Replace authentication credentials with upstream API key.
- * Detects which auth header the client used and preserves the same format.
+ * Inject outbound auth header by upstream provider type.
  */
 export function injectAuthHeader(
   headers: Record<string, string>,
   upstream: UpstreamForProxy
 ): Record<string, string> {
   const result = { ...headers };
+  const providerType = upstream.providerType.toLowerCase();
 
-  const keys = Object.keys(result);
-  const apiKeyHeaderKey = keys.find((k) => k.toLowerCase() === "x-api-key");
-  const authorizationHeaderKey = keys.find((k) => k.toLowerCase() === "authorization");
-
-  // Detect which auth format the client used (case-insensitive)
-  const usesApiKey = apiKeyHeaderKey !== undefined;
-
-  // Remove any existing auth headers from client (case-insensitive)
-  for (const key of keys) {
+  for (const key of Object.keys(result)) {
     const lower = key.toLowerCase();
-    if (lower === "authorization" || lower === "x-api-key") {
+    if (lower === "authorization" || lower === "x-api-key" || lower === "x-goog-api-key") {
       delete result[key];
     }
   }
 
-  // Preserve the client's auth header key casing when possible
-  if (usesApiKey) {
-    result[apiKeyHeaderKey ?? "x-api-key"] = upstream.apiKey;
+  if (providerType === "anthropic") {
+    result["x-api-key"] = upstream.apiKey;
+  } else if (providerType === "google") {
+    result["x-goog-api-key"] = upstream.apiKey;
   } else {
-    result[authorizationHeaderKey ?? "Authorization"] = `Bearer ${upstream.apiKey}`;
+    // Keep OpenAI-compatible behavior for openai/custom/unknown providers.
+    result["Authorization"] = `Bearer ${upstream.apiKey}`;
   }
 
   return result;
@@ -252,8 +253,14 @@ function getIntValue(data: Record<string, unknown>, key: string, defaultValue: n
 /**
  * Extract token usage from a usage object.
  */
-function extractFromUsageObject(usage: Record<string, unknown>): TokenUsage | null {
-  const defaultResult: TokenUsage = {
+interface NormalizedTokenUsage extends TokenUsage {
+  rawInputTokens: number;
+  cacheCreation5mTokens: number;
+  cacheCreation1hTokens: number;
+}
+
+function extractFromUsageObject(usage: Record<string, unknown>): NormalizedTokenUsage | null {
+  const defaultResult: NormalizedTokenUsage = {
     promptTokens: 0,
     completionTokens: 0,
     totalTokens: 0,
@@ -261,6 +268,9 @@ function extractFromUsageObject(usage: Record<string, unknown>): TokenUsage | nu
     reasoningTokens: 0,
     cacheCreationTokens: 0,
     cacheReadTokens: 0,
+    cacheCreation5mTokens: 0,
+    cacheCreation1hTokens: 0,
+    rawInputTokens: 0,
   };
 
   // OpenAI Chat Completions format: prompt_tokens / completion_tokens
@@ -292,6 +302,7 @@ function extractFromUsageObject(usage: Record<string, unknown>): TokenUsage | nu
       cachedTokens,
       reasoningTokens,
       cacheReadTokens: cachedTokens,
+      rawInputTokens: promptTokens,
     };
   }
 
@@ -307,9 +318,26 @@ function extractFromUsageObject(usage: Record<string, unknown>): TokenUsage | nu
     const completionTokens = getIntValue(usage, "output_tokens");
     const totalTokensRaw = getIntValue(usage, "total_tokens");
 
-    // Anthropic cache token format
-    const cacheCreationTokens = getIntValue(usage, "cache_creation_input_tokens");
+    const legacyCacheCreationTokens = getIntValue(usage, "cache_creation_input_tokens");
     const cacheReadTokens = getIntValue(usage, "cache_read_input_tokens");
+    const cacheCreationRaw = usage.cache_creation;
+    const cacheCreation =
+      typeof cacheCreationRaw === "object" && cacheCreationRaw !== null
+        ? (cacheCreationRaw as Record<string, unknown>)
+        : null;
+    const hasTtlSplit =
+      cacheCreation !== null &&
+      ("ephemeral_5m_input_tokens" in cacheCreation ||
+        "ephemeral_1h_input_tokens" in cacheCreation);
+    const cacheCreation5mTokens = cacheCreation
+      ? getIntValue(cacheCreation, "ephemeral_5m_input_tokens")
+      : 0;
+    const cacheCreation1hTokens = cacheCreation
+      ? getIntValue(cacheCreation, "ephemeral_1h_input_tokens")
+      : 0;
+    const cacheCreationTokens = hasTtlSplit
+      ? cacheCreation5mTokens + cacheCreation1hTokens
+      : legacyCacheCreationTokens;
 
     // Anthropic streaming may include input_tokens as 0 while cache_*_input_tokens is populated.
     const cacheFallbackTokens = cacheCreationTokens + cacheReadTokens;
@@ -334,7 +362,7 @@ function extractFromUsageObject(usage: Record<string, unknown>): TokenUsage | nu
     }
 
     // Prefer Anthropic cache_read/cache_creation when present, otherwise fall back to OpenAI cached_tokens
-    const useAnthropicCache = cacheReadTokens > 0 || cacheCreationTokens > 0;
+    const useAnthropicCache = hasTtlSplit || cacheReadTokens > 0 || cacheCreationTokens > 0;
     const cachedTokens = useAnthropicCache ? cacheReadTokens : cachedTokensFromDetails;
 
     return {
@@ -346,19 +374,60 @@ function extractFromUsageObject(usage: Record<string, unknown>): TokenUsage | nu
       reasoningTokens,
       cacheCreationTokens: useAnthropicCache ? cacheCreationTokens : 0,
       cacheReadTokens: useAnthropicCache ? cacheReadTokens : cachedTokens,
+      cacheCreation5mTokens: useAnthropicCache ? cacheCreation5mTokens : 0,
+      cacheCreation1hTokens: useAnthropicCache ? cacheCreation1hTokens : 0,
+      rawInputTokens: promptTokensRaw,
     };
   }
 
   return null;
 }
 
-/**
- * Extract token usage from response payload.
- */
-export function extractUsage(data: Record<string, unknown>): TokenUsage | null {
+function extractFromGeminiUsageMetadata(
+  usageMetadata: Record<string, unknown>
+): NormalizedTokenUsage | null {
+  const hasGeminiUsage =
+    "promptTokenCount" in usageMetadata ||
+    "candidatesTokenCount" in usageMetadata ||
+    "totalTokenCount" in usageMetadata ||
+    "cachedContentTokenCount" in usageMetadata;
+
+  if (!hasGeminiUsage) {
+    return null;
+  }
+
+  const promptTokens = getIntValue(usageMetadata, "promptTokenCount");
+  const completionTokens = getIntValue(usageMetadata, "candidatesTokenCount");
+  const totalTokens = getIntValue(
+    usageMetadata,
+    "totalTokenCount",
+    promptTokens + completionTokens
+  );
+  const cacheReadTokens = getIntValue(usageMetadata, "cachedContentTokenCount");
+
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens,
+    cachedTokens: cacheReadTokens,
+    reasoningTokens: 0,
+    cacheCreationTokens: 0,
+    cacheReadTokens,
+    cacheCreation5mTokens: 0,
+    cacheCreation1hTokens: 0,
+    rawInputTokens: promptTokens,
+  };
+}
+
+export function extractNormalizedUsage(data: Record<string, unknown>): NormalizedTokenUsage | null {
   // Check top-level usage field (OpenAI Chat Completions, Anthropic, Responses API non-streaming)
   if (typeof data.usage === "object" && data.usage !== null) {
     const result = extractFromUsageObject(data.usage as Record<string, unknown>);
+    if (result) return result;
+  }
+
+  if (typeof data.usageMetadata === "object" && data.usageMetadata !== null) {
+    const result = extractFromGeminiUsageMetadata(data.usageMetadata as Record<string, unknown>);
     if (result) return result;
   }
 
@@ -367,6 +436,12 @@ export function extractUsage(data: Record<string, unknown>): TokenUsage | null {
     const message = data.message as Record<string, unknown>;
     if (typeof message.usage === "object" && message.usage !== null) {
       const result = extractFromUsageObject(message.usage as Record<string, unknown>);
+      if (result) return result;
+    }
+    if (typeof message.usageMetadata === "object" && message.usageMetadata !== null) {
+      const result = extractFromGeminiUsageMetadata(
+        message.usageMetadata as Record<string, unknown>
+      );
       if (result) return result;
     }
   }
@@ -383,9 +458,44 @@ export function extractUsage(data: Record<string, unknown>): TokenUsage | null {
       const result = extractFromUsageObject(response.usage as Record<string, unknown>);
       if (result) return result;
     }
+    if (typeof response.usageMetadata === "object" && response.usageMetadata !== null) {
+      const result = extractFromGeminiUsageMetadata(
+        response.usageMetadata as Record<string, unknown>
+      );
+      if (result) return result;
+    }
   }
 
   return null;
+}
+
+/**
+ * Extract token usage from response payload.
+ */
+export function extractUsage(data: Record<string, unknown>): TokenUsage | null {
+  const normalized = extractNormalizedUsage(data);
+  if (!normalized) {
+    return null;
+  }
+
+  const usage: TokenUsage = {
+    promptTokens: normalized.promptTokens,
+    completionTokens: normalized.completionTokens,
+    totalTokens: normalized.totalTokens,
+    cachedTokens: normalized.cachedTokens,
+    reasoningTokens: normalized.reasoningTokens,
+    cacheCreationTokens: normalized.cacheCreationTokens,
+    cacheReadTokens: normalized.cacheReadTokens,
+  };
+
+  if (normalized.cacheCreation5mTokens > 0) {
+    usage.cacheCreation5mTokens = normalized.cacheCreation5mTokens;
+  }
+  if (normalized.cacheCreation1hTokens > 0) {
+    usage.cacheCreation1hTokens = normalized.cacheCreation1hTokens;
+  }
+
+  return usage;
 }
 
 const TTFT_METADATA_ONLY_EVENT_TYPES = new Set([
@@ -717,6 +827,55 @@ async function drainStream(stream: ReadableStream<Uint8Array>): Promise<void> {
   }
 }
 
+function countRequestMessages(bodyJson: Record<string, unknown>): number {
+  if (Array.isArray(bodyJson.messages)) {
+    return bodyJson.messages.length;
+  }
+
+  if (Array.isArray(bodyJson.contents)) {
+    return bodyJson.contents.length;
+  }
+
+  if (Array.isArray(bodyJson.input)) {
+    return bodyJson.input.length;
+  }
+
+  if (typeof bodyJson.input === "string") {
+    return bodyJson.input.trim() ? 1 : 0;
+  }
+
+  return 0;
+}
+
+function extractRequestModel(bodyJson: Record<string, unknown>, path: string): string {
+  if (typeof bodyJson.model === "string" && bodyJson.model.trim()) {
+    return bodyJson.model.trim();
+  }
+
+  return extractGeminiModelFromPath(path) ?? "N/A";
+}
+
+function isStreamRequest(
+  bodyJson: Record<string, unknown>,
+  path: string,
+  requestUrl: URL
+): boolean {
+  const queryAlt = requestUrl.searchParams.get("alt")?.toLowerCase();
+  return bodyJson.stream === true || queryAlt === "sse" || path.includes(":streamGenerateContent");
+}
+
+function summarizeRequestInfo(
+  bodyJson: Record<string, unknown>,
+  path: string,
+  requestUrl: URL
+): { model: string; stream: boolean; messages: number } {
+  return {
+    model: extractRequestModel(bodyJson, path),
+    stream: isStreamRequest(bodyJson, path, requestUrl),
+    messages: countRequestMessages(bodyJson),
+  };
+}
+
 /**
  * Forward request to upstream service.
  */
@@ -746,6 +905,15 @@ export async function forwardRequest(
     (k) => k.toLowerCase() === "authorization"
   );
   const hadApiKey = Object.keys(filteredHeaders).find((k) => k.toLowerCase() === "x-api-key");
+  const hadGoogApiKey = Object.keys(filteredHeaders).find(
+    (k) => k.toLowerCase() === "x-goog-api-key"
+  );
+  const outboundAuthHeader =
+    upstream.providerType.toLowerCase() === "anthropic"
+      ? { header: "x-api-key", value: upstream.apiKey }
+      : upstream.providerType.toLowerCase() === "google"
+        ? { header: "x-goog-api-key", value: upstream.apiKey }
+        : { header: "authorization", value: `Bearer ${upstream.apiKey}` };
 
   let authReplaced: HeaderDiff["auth_replaced"] = null;
   if (hadAuthorization) {
@@ -755,13 +923,31 @@ export async function forwardRequest(
         "authorization",
         filteredHeaders[hadAuthorization] ?? ""
       ),
-      outbound_value: sanitizeHeaderValueForLogging("authorization", `Bearer ${upstream.apiKey}`),
+      outbound_value: sanitizeHeaderValueForLogging(
+        outboundAuthHeader.header,
+        outboundAuthHeader.value
+      ),
     };
   } else if (hadApiKey) {
     authReplaced = {
       header: "x-api-key",
       inbound_value: sanitizeHeaderValueForLogging("x-api-key", filteredHeaders[hadApiKey] ?? ""),
-      outbound_value: sanitizeHeaderValueForLogging("x-api-key", upstream.apiKey),
+      outbound_value: sanitizeHeaderValueForLogging(
+        outboundAuthHeader.header,
+        outboundAuthHeader.value
+      ),
+    };
+  } else if (hadGoogApiKey) {
+    authReplaced = {
+      header: "x-goog-api-key",
+      inbound_value: sanitizeHeaderValueForLogging(
+        "x-goog-api-key",
+        filteredHeaders[hadGoogApiKey] ?? ""
+      ),
+      outbound_value: sanitizeHeaderValueForLogging(
+        outboundAuthHeader.header,
+        outboundAuthHeader.value
+      ),
     };
   }
 
@@ -783,10 +969,21 @@ export async function forwardRequest(
       unchanged.push({ header: lower, value: sanitizeHeaderValueForLogging(lower, value) });
     }
   }
+  const requestHeaderDiff: HeaderDiff = {
+    inbound_count: inboundCount,
+    outbound_count: outboundCount,
+    dropped,
+    auth_replaced: authReplaced,
+    compensated,
+    unchanged,
+  };
 
   // Construct upstream URL
   const baseUrl = upstream.baseUrl.replace(/\/$/, "");
-  const url = `${baseUrl}/${path.replace(/^\//, "")}`;
+  const normalizedPath = path.replace(/^\//, "");
+  const requestUrl = new URL(request.url);
+  const requestSearch = requestUrl.search;
+  const url = `${baseUrl}/${normalizedPath}${normalizedPath.includes("?") ? "" : requestSearch}`;
 
   // Read request body
   const body = await request.arrayBuffer();
@@ -798,23 +995,13 @@ export async function forwardRequest(
     "upstream request"
   );
 
-  // Log request body summary
+  // Log request info summary
   if (body.byteLength > 0) {
     try {
-      const bodyJson = JSON.parse(new TextDecoder().decode(body));
-      const messageCount =
-        (bodyJson.messages || []).length ||
-        (Array.isArray(bodyJson.input) ? bodyJson.input.length : 0);
-      reqLog.info(
-        {
-          model: bodyJson.model || "N/A",
-          stream: bodyJson.stream || false,
-          messages: messageCount,
-        },
-        "request body"
-      );
+      const bodyJson = JSON.parse(new TextDecoder().decode(body)) as Record<string, unknown>;
+      reqLog.info(summarizeRequestInfo(bodyJson, path, requestUrl), "request info");
     } catch {
-      reqLog.info({ bytes: body.byteLength }, "request body (non-JSON)");
+      reqLog.info({ bytes: body.byteLength }, "request info (non-JSON)");
     }
   }
 
@@ -851,6 +1038,13 @@ export async function forwardRequest(
         responseHeaders.set(key, value);
       }
     });
+    // Node/undici may auto-decompress response bodies while keeping upstream
+    // encoding headers. Strip encoding metadata to prevent downstream re-decode
+    // errors (for example Z_DATA_ERROR: incorrect header check).
+    if (responseHeaders.has("content-encoding")) {
+      responseHeaders.delete("content-encoding");
+      responseHeaders.delete("content-length");
+    }
 
     // Check if streaming response
     const contentType = upstreamResponse.headers.get("content-type") || "";
@@ -894,14 +1088,7 @@ export async function forwardRequest(
         isStream: true,
         usage,
         streamMetricsPromise,
-        headerDiff: {
-          inbound_count: inboundCount,
-          outbound_count: outboundCount,
-          dropped,
-          auth_replaced: authReplaced,
-          compensated,
-          unchanged,
-        },
+        headerDiff: requestHeaderDiff,
       };
     } else {
       // Regular response
@@ -936,14 +1123,7 @@ export async function forwardRequest(
         body: bodyBytes,
         isStream: false,
         usage,
-        headerDiff: {
-          inbound_count: inboundCount,
-          outbound_count: outboundCount,
-          dropped,
-          auth_replaced: authReplaced,
-          compensated,
-          unchanged,
-        },
+        headerDiff: requestHeaderDiff,
       };
     }
   } catch (error) {
@@ -951,11 +1131,16 @@ export async function forwardRequest(
 
     if (error instanceof Error && error.name === "AbortError") {
       reqLog.error({ timeout: upstream.timeout }, "upstream request timed out");
-      throw new Error(`Upstream request timed out after ${upstream.timeout}s`);
+      const timeoutError = new Error(`Upstream request timed out after ${upstream.timeout}s`);
+      (timeoutError as ProxyRequestErrorWithHeaderDiff).headerDiff = requestHeaderDiff;
+      throw timeoutError;
     }
 
-    reqLog.error({ err: error }, "upstream request failed");
-    throw error;
+    const requestError =
+      error instanceof Error ? error : new Error(typeof error === "string" ? error : String(error));
+    (requestError as ProxyRequestErrorWithHeaderDiff).headerDiff = requestHeaderDiff;
+    reqLog.error({ err: requestError }, "upstream request failed");
+    throw requestError;
   }
 }
 

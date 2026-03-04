@@ -291,6 +291,8 @@ export interface RequestLogApiResponse {
   cached_tokens: number;
   reasoning_tokens: number;
   cache_creation_tokens: number;
+  cache_creation_5m_tokens: number;
+  cache_creation_1h_tokens: number;
   cache_read_tokens: number;
   status_code: number | null;
   duration_ms: number | null;
@@ -367,6 +369,7 @@ function sanitizeHeaderValueForApi(headerNameLower: string, value: string): stri
     case "proxy-authorization":
       return sanitizeAuthHeaderValue(value);
     case "x-api-key":
+    case "x-goog-api-key":
       return maskSecretValue(value);
     case "cookie":
     case "set-cookie":
@@ -518,6 +521,8 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
     cached_tokens: log.cachedTokens,
     reasoning_tokens: log.reasoningTokens,
     cache_creation_tokens: log.cacheCreationTokens,
+    cache_creation_5m_tokens: log.cacheCreation5mTokens ?? 0,
+    cache_creation_1h_tokens: log.cacheCreation1hTokens ?? 0,
     cache_read_tokens: log.cacheReadTokens,
     status_code: log.statusCode,
     duration_ms: log.durationMs,

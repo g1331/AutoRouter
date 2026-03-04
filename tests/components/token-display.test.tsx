@@ -420,6 +420,48 @@ describe("TokenDetailContent", () => {
       expect(within(newInputRow as HTMLElement).getByText("200")).toBeInTheDocument();
     });
 
+    it("shows TTL split rows when cacheCreation5mTokens/cacheCreation1hTokens > 0", () => {
+      render(
+        <TokenDetailContent
+          promptTokens={1000}
+          completionTokens={200}
+          totalTokens={1200}
+          cachedTokens={0}
+          reasoningTokens={0}
+          cacheCreationTokens={150}
+          cacheCreation5mTokens={120}
+          cacheCreation1hTokens={30}
+          cacheReadTokens={0}
+        />
+      );
+
+      expect(screen.getByText("tokenCacheWrite")).toBeInTheDocument();
+      expect(screen.getByText("tokenCacheWrite5m")).toBeInTheDocument();
+      expect(screen.getByText("tokenCacheWrite1h")).toBeInTheDocument();
+      expect(screen.getByText("120")).toBeInTheDocument();
+      expect(screen.getByText("30")).toBeInTheDocument();
+    });
+
+    it("hides TTL split rows when cacheCreation5mTokens/cacheCreation1hTokens are 0", () => {
+      render(
+        <TokenDetailContent
+          promptTokens={1000}
+          completionTokens={200}
+          totalTokens={1200}
+          cachedTokens={0}
+          reasoningTokens={0}
+          cacheCreationTokens={150}
+          cacheCreation5mTokens={0}
+          cacheCreation1hTokens={0}
+          cacheReadTokens={0}
+        />
+      );
+
+      expect(screen.getByText("tokenCacheWrite")).toBeInTheDocument();
+      expect(screen.queryByText("tokenCacheWrite5m")).not.toBeInTheDocument();
+      expect(screen.queryByText("tokenCacheWrite1h")).not.toBeInTheDocument();
+    });
+
     it("caps cache hit percentage when cache read exceeds prompt tokens", () => {
       render(
         <TokenDetailContent

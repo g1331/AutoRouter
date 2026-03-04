@@ -236,6 +236,8 @@
     "tokenReasoning": "推理",
     "tokenReply": "回复",
     "tokenCacheWrite": "缓存写入",
+    "tokenCacheWrite5m": "5m 写入",
+    "tokenCacheWrite1h": "1h 写入",
     "tokenCacheRead": "缓存读取",
     "tokenCacheHit": "缓存读取",
     "tokenCacheHitShort": "读取",

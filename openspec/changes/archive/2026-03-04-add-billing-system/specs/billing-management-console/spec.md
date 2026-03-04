@@ -48,7 +48,7 @@
 
 ### Requirement: Avoid Duplicate Recent Table
 
-系统 SHOULD 避免在 Billing 页面重复展示“近期请求明细表”，以免与请求日志页面产生重复心智负担。
+系统 MUST 避免在 Billing 页面重复展示“近期请求明细表”，以免与请求日志页面产生重复心智负担。
 
 #### Scenario: Guide users to request logs
 

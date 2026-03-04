@@ -1,7 +1,7 @@
 import { eq, desc, count, and, gte, lte } from "drizzle-orm";
 import { db, requestLogs, type RequestLog } from "../db";
 import type { RoutingDecisionLog } from "@/types/api";
-import type { HeaderDiff } from "./proxy-client";
+import { extractNormalizedUsage, type HeaderDiff } from "./proxy-client";
 
 export interface LogRequestInput {
   apiKeyId: string | null;
@@ -15,6 +15,8 @@ export interface LogRequestInput {
   cachedTokens?: number;
   reasoningTokens?: number;
   cacheCreationTokens?: number;
+  cacheCreation5mTokens?: number;
+  cacheCreation1hTokens?: number;
   cacheReadTokens?: number;
   statusCode: number | null;
   durationMs: number | null;
@@ -71,6 +73,8 @@ export interface UpdateRequestLogInput {
   cachedTokens?: number;
   reasoningTokens?: number;
   cacheCreationTokens?: number;
+  cacheCreation5mTokens?: number;
+  cacheCreation1hTokens?: number;
   cacheReadTokens?: number;
   statusCode?: number | null;
   durationMs?: number | null;
@@ -116,6 +120,7 @@ export interface FailoverAttempt {
   response_headers?: Record<string, string>;
   response_body_text?: string | null;
   response_body_json?: unknown | null;
+  header_diff?: HeaderDiff | null;
 }
 
 export interface RequestLogResponse {
@@ -132,6 +137,8 @@ export interface RequestLogResponse {
   cachedTokens: number;
   reasoningTokens: number;
   cacheCreationTokens: number;
+  cacheCreation5mTokens: number;
+  cacheCreation1hTokens: number;
   cacheReadTokens: number;
   statusCode: number | null;
   durationMs: number | null;
@@ -225,6 +232,8 @@ export async function logRequestStart(input: StartRequestLogInput): Promise<Requ
       cachedTokens: 0,
       reasoningTokens: 0,
       cacheCreationTokens: 0,
+      cacheCreation5mTokens: 0,
+      cacheCreation1hTokens: 0,
       cacheReadTokens: 0,
       statusCode: null,
       durationMs: null,
@@ -267,6 +276,10 @@ export async function updateRequestLog(
   if (input.reasoningTokens !== undefined) updateValues.reasoningTokens = input.reasoningTokens;
   if (input.cacheCreationTokens !== undefined)
     updateValues.cacheCreationTokens = input.cacheCreationTokens;
+  if (input.cacheCreation5mTokens !== undefined)
+    updateValues.cacheCreation5mTokens = input.cacheCreation5mTokens;
+  if (input.cacheCreation1hTokens !== undefined)
+    updateValues.cacheCreation1hTokens = input.cacheCreation1hTokens;
   if (input.cacheReadTokens !== undefined) updateValues.cacheReadTokens = input.cacheReadTokens;
 
   if (input.statusCode !== undefined) updateValues.statusCode = input.statusCode;
@@ -330,6 +343,8 @@ export async function logRequest(input: LogRequestInput): Promise<RequestLog> {
       cachedTokens: input.cachedTokens ?? 0,
       reasoningTokens: input.reasoningTokens ?? 0,
       cacheCreationTokens: input.cacheCreationTokens ?? 0,
+      cacheCreation5mTokens: input.cacheCreation5mTokens ?? 0,
+      cacheCreation1hTokens: input.cacheCreation1hTokens ?? 0,
       cacheReadTokens: input.cacheReadTokens ?? 0,
       statusCode: input.statusCode,
       durationMs: input.durationMs,
@@ -355,21 +370,6 @@ export async function logRequest(input: LogRequestInput): Promise<RequestLog> {
   // Request logged to database - details available via admin API
 
   return logEntry;
-}
-
-/**
- * Safely extract an integer value from an object.
- */
-function getIntValue(data: Record<string, unknown>, key: string, defaultValue: number = 0): number {
-  const value = data[key];
-  if (typeof value === "number") {
-    return Math.floor(value);
-  }
-  if (typeof value === "string") {
-    const parsed = parseInt(value, 10);
-    return isNaN(parsed) ? defaultValue : parsed;
-  }
-  return defaultValue;
 }
 
 /**
@@ -413,6 +413,8 @@ export function extractTokenUsage(responseBody: Record<string, unknown> | null):
   cachedTokens: number;
   reasoningTokens: number;
   cacheCreationTokens: number;
+  cacheCreation5mTokens?: number;
+  cacheCreation1hTokens?: number;
   cacheReadTokens: number;
   rawInputTokens: number;
 } {
@@ -431,83 +433,41 @@ export function extractTokenUsage(responseBody: Record<string, unknown> | null):
     return defaultResult;
   }
 
-  const rawUsage = responseBody.usage;
-  if (typeof rawUsage !== "object" || rawUsage === null) {
+  const normalizedUsage = extractNormalizedUsage(responseBody);
+  if (!normalizedUsage) {
     return defaultResult;
   }
 
-  const usage = rawUsage as Record<string, unknown>;
+  const result: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    cachedTokens: number;
+    reasoningTokens: number;
+    cacheCreationTokens: number;
+    cacheCreation5mTokens?: number;
+    cacheCreation1hTokens?: number;
+    cacheReadTokens: number;
+    rawInputTokens: number;
+  } = {
+    promptTokens: normalizedUsage.promptTokens,
+    completionTokens: normalizedUsage.completionTokens,
+    totalTokens: normalizedUsage.totalTokens,
+    cachedTokens: normalizedUsage.cachedTokens,
+    reasoningTokens: normalizedUsage.reasoningTokens,
+    cacheCreationTokens: normalizedUsage.cacheCreationTokens,
+    cacheReadTokens: normalizedUsage.cacheReadTokens,
+    rawInputTokens: normalizedUsage.rawInputTokens,
+  };
 
-  // OpenAI format
-  const promptTokens = getIntValue(usage, "prompt_tokens");
-  const completionTokens = getIntValue(usage, "completion_tokens");
-  const totalTokens = getIntValue(usage, "total_tokens", promptTokens + completionTokens);
-
-  // Detect OpenAI format by key presence (not value) to handle zero-token edge cases
-  if ("prompt_tokens" in usage || "completion_tokens" in usage || "total_tokens" in usage) {
-    // Extract detailed token info for OpenAI
-    let cachedTokens = 0;
-    let reasoningTokens = 0;
-
-    // OpenAI prompt_tokens_details.cached_tokens
-    const promptDetails = usage.prompt_tokens_details;
-    if (typeof promptDetails === "object" && promptDetails !== null) {
-      cachedTokens = getIntValue(promptDetails as Record<string, unknown>, "cached_tokens");
-    }
-
-    // OpenAI completion_tokens_details.reasoning_tokens
-    const completionDetails = usage.completion_tokens_details;
-    if (typeof completionDetails === "object" && completionDetails !== null) {
-      reasoningTokens = getIntValue(
-        completionDetails as Record<string, unknown>,
-        "reasoning_tokens"
-      );
-    }
-
-    return {
-      promptTokens,
-      completionTokens,
-      totalTokens,
-      cachedTokens,
-      reasoningTokens,
-      cacheCreationTokens: 0,
-      cacheReadTokens: cachedTokens, // OpenAI cached_tokens is equivalent to cache_read
-      rawInputTokens: promptTokens,
-    };
+  if (normalizedUsage.cacheCreation5mTokens > 0) {
+    result.cacheCreation5mTokens = normalizedUsage.cacheCreation5mTokens;
+  }
+  if (normalizedUsage.cacheCreation1hTokens > 0) {
+    result.cacheCreation1hTokens = normalizedUsage.cacheCreation1hTokens;
   }
 
-  // Detect Anthropic format by key presence (including cache keys for cache-only payloads)
-  const inputTokens = getIntValue(usage, "input_tokens");
-  const outputTokens = getIntValue(usage, "output_tokens");
-  if (
-    "input_tokens" in usage ||
-    "output_tokens" in usage ||
-    "cache_creation_input_tokens" in usage ||
-    "cache_read_input_tokens" in usage
-  ) {
-    // Extract Anthropic cache tokens
-    const cacheCreationTokens = getIntValue(usage, "cache_creation_input_tokens");
-    const cacheReadTokens = getIntValue(usage, "cache_read_input_tokens");
-
-    // Anthropic may send streaming usage objects where input_tokens is present but 0,
-    // while cache_*_input_tokens carries the real input usage.
-    const cacheFallbackTokens = cacheReadTokens + cacheCreationTokens;
-    const promptTokensValue = inputTokens > 0 ? inputTokens : cacheFallbackTokens;
-    const totalTokensValue = getIntValue(usage, "total_tokens", promptTokensValue + outputTokens);
-
-    return {
-      promptTokens: promptTokensValue,
-      completionTokens: outputTokens,
-      totalTokens: totalTokensValue,
-      cachedTokens: cacheReadTokens, // Anthropic cache_read is the cached tokens
-      reasoningTokens: 0,
-      cacheCreationTokens,
-      cacheReadTokens,
-      rawInputTokens: inputTokens,
-    };
-  }
-
-  return defaultResult;
+  return result;
 }
 
 /**
@@ -596,6 +556,8 @@ export async function listRequestLogs(
     cachedTokens: log.cachedTokens,
     reasoningTokens: log.reasoningTokens,
     cacheCreationTokens: log.cacheCreationTokens,
+    cacheCreation5mTokens: log.cacheCreation5mTokens,
+    cacheCreation1hTokens: log.cacheCreation1hTokens,
     cacheReadTokens: log.cacheReadTokens,
     statusCode: log.statusCode,
     durationMs: log.durationMs,

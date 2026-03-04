@@ -67,11 +67,13 @@ describe("traffic recorder", () => {
         redactHeaders({
           AUTHORIZATION: "Bearer secret",
           "X-API-KEY": "secret-key",
+          "X-GOOG-API-KEY": "secret-google-key",
           "Content-Type": "application/json",
         })
       ).toEqual({
         AUTHORIZATION: "[REDACTED]",
         "X-API-KEY": "[REDACTED]",
+        "X-GOOG-API-KEY": "[REDACTED]",
         "Content-Type": "application/json",
       });
     });
@@ -443,6 +445,26 @@ describe("traffic recorder", () => {
       const fixture = buildFixture(baseParams);
       expect(fixture.inbound.headers["authorization"]).toBe("[REDACTED]");
       expect(fixture.outbound.request.headers["authorization"]).toBe("[REDACTED]");
+    });
+
+    it("redacts x-goog-api-key in both inbound and outbound headers", () => {
+      const fixture = buildFixture({
+        ...baseParams,
+        inboundRequest: {
+          ...baseParams.inboundRequest,
+          headers: new Headers({
+            "x-goog-api-key": "client-google-key",
+            "content-type": "application/json",
+          }),
+        },
+        outboundHeaders: new Headers({
+          "x-goog-api-key": "upstream-google-key",
+          "content-type": "application/json",
+        }),
+      });
+
+      expect(fixture.inbound.headers["x-goog-api-key"]).toBe("[REDACTED]");
+      expect(fixture.outbound.request.headers["x-goog-api-key"]).toBe("[REDACTED]");
     });
 
     it("omits downstream section when downstream response is not provided", () => {

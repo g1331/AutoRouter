@@ -279,4 +279,50 @@ describe("billing-cost-service", () => {
 
     expect(mockAdjustSpending).not.toHaveBeenCalled();
   });
+
+  it("keeps cache read/write billing mapping consistent", async () => {
+    const { resolveBillingModelPrice } = await import("@/lib/services/billing-price-service");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+
+    vi.mocked(resolveBillingModelPrice).mockResolvedValueOnce({
+      model: "gpt-4.1",
+      source: "litellm",
+      inputPricePerMillion: 2,
+      outputPricePerMillion: 8,
+      cacheReadInputPricePerMillion: 1,
+      cacheWriteInputPricePerMillion: 3,
+    });
+    upstreamFindFirstMock.mockResolvedValueOnce({
+      billingInputMultiplier: 1,
+      billingOutputMultiplier: 1,
+    });
+
+    const result = await calculateAndPersistRequestBillingSnapshot({
+      requestLogId: "log-cache-cost",
+      apiKeyId: "key-1",
+      upstreamId: "up-1",
+      model: "gpt-4.1",
+      usage: {
+        promptTokens: 1000,
+        completionTokens: 100,
+        totalTokens: 1100,
+        cacheReadTokens: 200,
+        cacheWriteTokens: 300,
+      },
+    });
+
+    expect(result.status).toBe("billed");
+    // input(500*2) + output(100*8) + cacheRead(200*1) + cacheWrite(300*3), all /1e6.
+    expect(result.finalCost).toBeCloseTo(0.0029, 8);
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        promptTokens: 500,
+        cacheReadTokens: 200,
+        cacheWriteTokens: 300,
+        cacheReadCost: expect.closeTo(0.0002, 8),
+        cacheWriteCost: expect.closeTo(0.0009, 8),
+      })
+    );
+  });
 });

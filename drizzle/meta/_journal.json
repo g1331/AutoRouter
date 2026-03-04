@@ -134,6 +134,13 @@
       "when": 1772617600001,
       "tag": "0018_tired_ultimatum",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1772602421966,
+      "tag": "0019_tearful_tigra",
+      "breakpoints": true
     }
   ]
 }

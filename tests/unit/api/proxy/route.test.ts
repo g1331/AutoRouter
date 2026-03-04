@@ -2,7 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
 vi.mock("@/lib/utils/auth", () => ({
-  extractApiKey: vi.fn(() => "sk-test"),
+  extractApiKey: vi.fn((authHeader: string | null) => {
+    if (!authHeader) return null;
+    const trimmed = authHeader.trim();
+    if (trimmed.toLowerCase().startsWith("bearer ")) {
+      return trimmed.slice(7).trim();
+    }
+    return trimmed;
+  }),
   getKeyPrefix: vi.fn(() => "sk-test"),
   verifyApiKey: vi.fn(() => true),
 }));
@@ -177,6 +184,28 @@ vi.mock("@/lib/services/circuit-breaker", () => {
 // Mock model-router module
 vi.mock("@/lib/services/model-router", () => ({
   routeByModel: vi.fn(),
+  resolveModelWithRedirects: vi.fn(
+    (model: string, modelRedirects: Record<string, string> | null | undefined) => {
+      if (!modelRedirects || Object.keys(modelRedirects).length === 0) {
+        return { resolvedModel: model, redirectApplied: false };
+      }
+
+      let currentModel = model;
+      let redirectApplied = false;
+      let depth = 0;
+      while (depth < 10) {
+        const targetModel = modelRedirects[currentModel];
+        if (!targetModel) {
+          break;
+        }
+        currentModel = targetModel;
+        redirectApplied = true;
+        depth += 1;
+      }
+
+      return { resolvedModel: currentModel, redirectApplied };
+    }
+  ),
   NoUpstreamGroupError: class NoUpstreamGroupError extends Error {
     constructor(message: string) {
       super(message);
@@ -291,6 +320,210 @@ describe("proxy route upstream selection", () => {
     vi.restoreAllMocks();
   });
 
+  describe("proxy auth header compatibility", () => {
+    it("should authenticate using x-api-key when authorization is absent", async () => {
+      const { db } = await import("@/lib/db");
+      const { getKeyPrefix, verifyApiKey } = await import("@/lib/utils/auth");
+      const __mockLogger = (
+        (await import("@/lib/utils/logger")) as unknown as {
+          __mockLogger: { debug: ReturnType<typeof vi.fn> };
+        }
+      ).__mockLogger;
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      ]);
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/custom/not-matched", {
+        method: "POST",
+        headers: {
+          "x-api-key": "sk-x-api-key",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5.2",
+          input: "hello",
+        }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["custom", "not-matched"] }),
+      });
+
+      expect(response.status).not.toBe(401);
+      expect(vi.mocked(getKeyPrefix)).toHaveBeenCalledWith("sk-x-api-key");
+      expect(vi.mocked(verifyApiKey)).toHaveBeenCalledWith("sk-x-api-key", "hash-1");
+      expect(__mockLogger.debug).toHaveBeenCalledWith(
+        expect.objectContaining({ authSource: "x-api-key" }),
+        "proxy auth: extracted API key"
+      );
+    });
+
+    it("should authenticate using x-goog-api-key when other headers are absent", async () => {
+      const { db } = await import("@/lib/db");
+      const { getKeyPrefix, verifyApiKey } = await import("@/lib/utils/auth");
+      const __mockLogger = (
+        (await import("@/lib/utils/logger")) as unknown as {
+          __mockLogger: { debug: ReturnType<typeof vi.fn> };
+        }
+      ).__mockLogger;
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      ]);
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/custom/not-matched", {
+        method: "POST",
+        headers: {
+          "x-goog-api-key": "sk-x-goog-api-key",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5.2",
+          input: "hello",
+        }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["custom", "not-matched"] }),
+      });
+
+      expect(response.status).not.toBe(401);
+      expect(vi.mocked(getKeyPrefix)).toHaveBeenCalledWith("sk-x-goog-api-key");
+      expect(vi.mocked(verifyApiKey)).toHaveBeenCalledWith("sk-x-goog-api-key", "hash-1");
+      expect(__mockLogger.debug).toHaveBeenCalledWith(
+        expect.objectContaining({ authSource: "x-goog-api-key" }),
+        "proxy auth: extracted API key"
+      );
+    });
+
+    it("should prioritize authorization over x-api-key and x-goog-api-key", async () => {
+      const { db } = await import("@/lib/db");
+      const { getKeyPrefix, verifyApiKey } = await import("@/lib/utils/auth");
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      ]);
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/custom/not-matched", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-auth-priority",
+          "x-api-key": "sk-x-api-fallback",
+          "x-goog-api-key": "sk-x-goog-fallback",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5.2",
+          input: "hello",
+        }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["custom", "not-matched"] }),
+      });
+
+      expect(response.status).not.toBe(401);
+      expect(vi.mocked(getKeyPrefix)).toHaveBeenCalledWith("sk-auth-priority");
+      expect(vi.mocked(verifyApiKey)).toHaveBeenCalledWith("sk-auth-priority", "hash-1");
+    });
+
+    it("should return Missing API key when all supported headers are absent", async () => {
+      const { db } = await import("@/lib/db");
+      const __mockLogger = (
+        (await import("@/lib/utils/logger")) as unknown as {
+          __mockLogger: { debug: ReturnType<typeof vi.fn> };
+        }
+      ).__mockLogger;
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5.2",
+          input: "hello",
+        }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["chat", "completions"] }),
+      });
+      const data = await response.json();
+
+      expect(response.status).toBe(401);
+      expect(data).toEqual({ error: "Missing API key" });
+      expect(db.query.apiKeys.findMany).not.toHaveBeenCalled();
+      expect(__mockLogger.debug).toHaveBeenCalledWith(
+        expect.objectContaining({ authSource: "none" }),
+        "proxy auth: missing supported API key header"
+      );
+    });
+
+    it("should return Invalid API key for unverifiable x-goog-api-key", async () => {
+      const { db } = await import("@/lib/db");
+      const { verifyApiKey } = await import("@/lib/utils/auth");
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      ]);
+      vi.mocked(verifyApiKey).mockResolvedValueOnce(false);
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "x-goog-api-key": "sk-invalid",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5.2",
+          input: "hello",
+        }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["chat", "completions"] }),
+      });
+      const data = await response.json();
+
+      expect(response.status).toBe(401);
+      expect(data).toEqual({ error: "Invalid API key" });
+    });
+
+    it("should return API key has expired for expired x-api-key", async () => {
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        {
+          id: "key-expired",
+          keyHash: "hash-expired",
+          expiresAt: new Date(Date.now() - 1_000),
+          isActive: true,
+        },
+      ]);
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "x-api-key": "sk-expired",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5.2",
+          input: "hello",
+        }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["chat", "completions"] }),
+      });
+      const data = await response.json();
+
+      expect(response.status).toBe(401);
+      expect(data).toEqual({ error: "API key has expired" });
+    });
+  });
+
   it("should route path capability request without model when route is matched", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
@@ -366,6 +599,453 @@ describe("proxy route upstream selection", () => {
     expect(routeByModel).not.toHaveBeenCalled();
     expect(selectFromProviderType).toHaveBeenCalledWith(["up-codex"], undefined, undefined);
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(codexUpstream);
+  });
+
+  it("should extract model from gemini native path when request body omits model", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { logRequestStart } = await import("@/lib/services/request-logger");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-google" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-google",
+        name: "google-upstream",
+        providerType: "google",
+        baseUrl: "https://generativelanguage.googleapis.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["gemini_native_generate"],
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+    const googleUpstream = {
+      id: "up-google",
+      name: "google-upstream",
+      providerType: "google",
+      baseUrl: "https://generativelanguage.googleapis.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 0,
+      weight: 1,
+    };
+
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: googleUpstream,
+      providerType: "google",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: {
+        promptTokens: 120,
+        completionTokens: 30,
+        totalTokens: 150,
+      },
+    });
+
+    const request = new NextRequest(
+      "http://localhost/api/proxy/v1/v1beta/models/gemini-2.5-flash-lite:generateContent",
+      {
+        method: "POST",
+        headers: {
+          "x-goog-api-key": "sk-x-goog-api-key",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: "hello" }] }],
+        }),
+      }
+    );
+
+    const response = await POST(request, {
+      params: Promise.resolve({
+        path: ["v1beta", "models", "gemini-2.5-flash-lite:generateContent"],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(selectFromProviderType).toHaveBeenCalledWith(["up-google"], undefined, undefined);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(googleUpstream);
+    expect(logRequestStart).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "v1beta/models/gemini-2.5-flash-lite:generateContent",
+        model: "gemini-2.5-flash-lite",
+      })
+    );
+    expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "gemini-2.5-flash-lite",
+      })
+    );
+  });
+
+  it("should prioritize body model over gemini path fallback model", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { logRequestStart } = await import("@/lib/services/request-logger");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-google" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-google",
+        name: "google-upstream",
+        providerType: "google",
+        baseUrl: "https://generativelanguage.googleapis.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["gemini_native_generate"],
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+    const googleUpstream = {
+      id: "up-google",
+      name: "google-upstream",
+      providerType: "google",
+      baseUrl: "https://generativelanguage.googleapis.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 0,
+      weight: 1,
+    };
+
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: googleUpstream,
+      providerType: "google",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: {
+        promptTokens: 10,
+        completionTokens: 2,
+        totalTokens: 12,
+      },
+    });
+
+    const request = new NextRequest(
+      "http://localhost/api/proxy/v1/v1beta/models/gemini-2.5-flash-lite:generateContent",
+      {
+        method: "POST",
+        headers: {
+          "x-goog-api-key": "sk-x-goog-api-key",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gemini-from-body",
+          contents: [{ role: "user", parts: [{ text: "hello" }] }],
+        }),
+      }
+    );
+
+    const response = await POST(request, {
+      params: Promise.resolve({
+        path: ["v1beta", "models", "gemini-2.5-flash-lite:generateContent"],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(selectFromProviderType).toHaveBeenCalledWith(["up-google"], undefined, undefined);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(googleUpstream);
+    expect(logRequestStart).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "gemini-from-body",
+      })
+    );
+    expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "gemini-from-body",
+      })
+    );
+  });
+
+  it("should apply gemini model redirects for path-capability routing decisions and billing", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { logRequestStart, updateRequestLog } = await import("@/lib/services/request-logger");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-google-redirect" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-google-redirect",
+        name: "google-upstream-redirect",
+        providerType: "google",
+        baseUrl: "https://generativelanguage.googleapis.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["gemini_native_generate"],
+        modelRedirects: {
+          "gemini-2.5-flash-lite": "gemini-2.5-flash",
+        },
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+    const googleUpstream = {
+      id: "up-google-redirect",
+      name: "google-upstream-redirect",
+      providerType: "google",
+      baseUrl: "https://generativelanguage.googleapis.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 0,
+      weight: 1,
+      modelRedirects: {
+        "gemini-2.5-flash-lite": "gemini-2.5-flash",
+      },
+    };
+
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: googleUpstream,
+      providerType: "google",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: {
+        promptTokens: 12,
+        completionTokens: 3,
+        totalTokens: 15,
+      },
+    });
+
+    const request = new NextRequest(
+      "http://localhost/api/proxy/v1/v1beta/models/gemini-2.5-flash-lite:generateContent",
+      {
+        method: "POST",
+        headers: {
+          "x-goog-api-key": "sk-x-goog-api-key",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: "hello" }] }],
+        }),
+      }
+    );
+
+    const response = await POST(request, {
+      params: Promise.resolve({
+        path: ["v1beta", "models", "gemini-2.5-flash-lite:generateContent"],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(selectFromProviderType).toHaveBeenCalledWith(
+      ["up-google-redirect"],
+      undefined,
+      undefined
+    );
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(googleUpstream);
+    expect(logRequestStart).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "gemini-2.5-flash",
+        routingDecision: expect.objectContaining({
+          original_model: "gemini-2.5-flash-lite",
+          resolved_model: "gemini-2.5-flash",
+          model_redirect_applied: true,
+        }),
+      })
+    );
+    expect(updateRequestLog).toHaveBeenCalledWith(
+      "log-id",
+      expect.objectContaining({
+        model: "gemini-2.5-flash",
+        routingDecision: expect.objectContaining({
+          original_model: "gemini-2.5-flash-lite",
+          resolved_model: "gemini-2.5-flash",
+          model_redirect_applied: true,
+        }),
+      })
+    );
+    expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "gemini-2.5-flash",
+      })
+    );
+  });
+
+  it("should apply gemini model redirects in failure path when request was sent upstream", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType, NoHealthyUpstreamsError } =
+      await import("@/lib/services/load-balancer");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-google-redirect" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-google-redirect",
+        name: "google-upstream-redirect",
+        providerType: "google",
+        baseUrl: "https://generativelanguage.googleapis.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["gemini_native_generate"],
+        modelRedirects: {
+          "gemini-2.5-flash-lite": "gemini-2.5-flash",
+        },
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+    const googleUpstream = {
+      id: "up-google-redirect",
+      name: "google-upstream-redirect",
+      providerType: "google",
+      baseUrl: "https://generativelanguage.googleapis.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 0,
+      weight: 1,
+      modelRedirects: {
+        "gemini-2.5-flash-lite": "gemini-2.5-flash",
+      },
+    };
+
+    vi.mocked(selectFromProviderType)
+      .mockResolvedValueOnce({
+        upstream: googleUpstream,
+        providerType: "google",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 1,
+      })
+      .mockRejectedValueOnce(new NoHealthyUpstreamsError("No healthy upstreams available"));
+
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 503,
+      headers: new Headers({ "content-type": "application/json" }),
+      body: new TextEncoder().encode(
+        JSON.stringify({
+          error: { message: "upstream unavailable" },
+        })
+      ),
+      isStream: false,
+      usage: null,
+    });
+
+    const request = new NextRequest(
+      "http://localhost/api/proxy/v1/v1beta/models/gemini-2.5-flash-lite:generateContent",
+      {
+        method: "POST",
+        headers: {
+          "x-goog-api-key": "sk-x-goog-api-key",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: "hello" }] }],
+        }),
+      }
+    );
+
+    const response = await POST(request, {
+      params: Promise.resolve({
+        path: ["v1beta", "models", "gemini-2.5-flash-lite:generateContent"],
+      }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(data.error).toEqual(
+      expect.objectContaining({
+        code: "ALL_UPSTREAMS_UNAVAILABLE",
+        reason: "UPSTREAM_HTTP_ERROR",
+        did_send_upstream: true,
+      })
+    );
+    expect(routeByModel).not.toHaveBeenCalled();
+
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload).toEqual(
+      expect.objectContaining({
+        model: "gemini-2.5-flash",
+        routingDecision: expect.objectContaining({
+          original_model: "gemini-2.5-flash-lite",
+          resolved_model: "gemini-2.5-flash",
+          model_redirect_applied: true,
+          did_send_upstream: true,
+        }),
+      })
+    );
+    expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "gemini-2.5-flash",
+      })
+    );
   });
 
   it("should return no-upstream-configured error when matched path has no capability candidates", async () => {
@@ -1216,11 +1896,23 @@ describe("proxy route upstream selection", () => {
       );
 
     vi.mocked(forwardRequest).mockResolvedValueOnce({
-      statusCode: 500,
+      statusCode: 503,
       headers: new Headers(),
       body: new Uint8Array(),
       isStream: false,
       usage: null,
+      headerDiff: {
+        inbound_count: 2,
+        outbound_count: 2,
+        dropped: [],
+        auth_replaced: {
+          header: "authorization",
+          inbound_value: "Bearer sk-***est",
+          outbound_value: "x-a***key",
+        },
+        compensated: [{ header: "session_id", source: "body.previous_response_id", value: "***" }],
+        unchanged: [{ header: "content-type", value: "application/json" }],
+      },
     });
 
     const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
@@ -1251,12 +1943,22 @@ describe("proxy route upstream selection", () => {
         expect.objectContaining({
           upstream_id: "up-anthropic-1",
           error_type: "http_5xx",
+          status_code: 503,
         }),
       ])
     );
     expect(updateLogPayload?.failoverHistory).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ error_type: "concurrency_full" })])
     );
+    expect(updateLogPayload?.headerDiff).toEqual(
+      expect.objectContaining({
+        auth_replaced: expect.objectContaining({ header: "authorization" }),
+        compensated: expect.arrayContaining([
+          expect.objectContaining({ header: "session_id", source: "body.previous_response_id" }),
+        ]),
+      })
+    );
+    expect(updateLogPayload?.sessionIdCompensated).toBe(true);
 
     const billingPayload = vi
       .mocked(calculateAndPersistRequestBillingSnapshot)
@@ -1739,6 +2441,18 @@ describe("proxy route upstream selection", () => {
         body: new TextEncoder().encode(JSON.stringify({ error: { message: "temporary failure" } })),
         isStream: false,
         usage: null,
+        headerDiff: {
+          inbound_count: 2,
+          outbound_count: 2,
+          dropped: [],
+          auth_replaced: {
+            header: "authorization",
+            inbound_value: "Bearer sk-***est",
+            outbound_value: "Bearer sk-***key",
+          },
+          compensated: [],
+          unchanged: [{ header: "content-type", value: "application/json" }],
+        },
       };
     });
 
@@ -1779,6 +2493,15 @@ describe("proxy route upstream selection", () => {
         did_send_upstream: true,
       })
     );
+    expect(updateLogPayload?.headerDiff).toEqual(
+      expect.objectContaining({
+        auth_replaced: expect.objectContaining({ header: "authorization" }),
+        unchanged: expect.arrayContaining([
+          expect.objectContaining({ header: "content-type", value: "application/json" }),
+        ]),
+      })
+    );
+    expect(updateLogPayload?.sessionIdCompensated).toBe(false);
   });
 
   it("should skip failure fixture when RECORDER_MODE is success", async () => {
@@ -3628,6 +4351,204 @@ describe("proxy route upstream selection", () => {
             cacheReadTokens: 0,
             cacheWriteTokens: 0,
           },
+        })
+      );
+    });
+
+    it("should include TTL split cache fields when falling back to logRequest after start-log failure", async () => {
+      const { db } = await import("@/lib/db");
+      const { forwardRequest } = await import("@/lib/services/proxy-client");
+      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+      const { logRequestStart, logRequest } = await import("@/lib/services/request-logger");
+
+      const openaiUpstream = {
+        id: "up-openai",
+        name: "openai-main",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+      };
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      ]);
+      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+        { upstreamId: "up-openai" },
+      ]);
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        {
+          ...openaiUpstream,
+          routeCapabilities: ["openai_chat_compatible"],
+        },
+      ]);
+      vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+      vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+        upstream: openaiUpstream,
+        providerType: "openai",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 1,
+      });
+
+      vi.mocked(logRequestStart).mockRejectedValueOnce(new Error("start log failed"));
+      vi.mocked(logRequest).mockResolvedValueOnce({ id: "fallback-log-id" } as never);
+
+      vi.mocked(forwardRequest).mockResolvedValueOnce({
+        statusCode: 200,
+        headers: new Headers(),
+        body: new Uint8Array(),
+        isStream: false,
+        usage: {
+          promptTokens: 1000,
+          completionTokens: 100,
+          totalTokens: 1100,
+          cachedTokens: 300,
+          cacheReadTokens: 300,
+          cacheCreationTokens: 250,
+          cacheCreation5mTokens: 200,
+          cacheCreation1hTokens: 50,
+        },
+      });
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-test",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4.1",
+          messages: [{ role: "user", content: "hello" }],
+        }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["chat", "completions"] }),
+      });
+
+      expect(response.status).toBe(200);
+      expect(logRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cacheCreationTokens: 250,
+          cacheCreation5mTokens: 200,
+          cacheCreation1hTokens: 50,
+          cacheReadTokens: 300,
+        })
+      );
+    });
+
+    it("should include TTL split cache fields in streaming fallback logRequest after start-log failure", async () => {
+      const { db } = await import("@/lib/db");
+      const { forwardRequest } = await import("@/lib/services/proxy-client");
+      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+      const { logRequestStart, logRequest } = await import("@/lib/services/request-logger");
+
+      const openaiUpstream = {
+        id: "up-openai",
+        name: "openai-main",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+      };
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      ]);
+      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+        { upstreamId: "up-openai" },
+      ]);
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        {
+          ...openaiUpstream,
+          routeCapabilities: ["openai_chat_compatible"],
+        },
+      ]);
+      vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+      vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+        upstream: openaiUpstream,
+        providerType: "openai",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 1,
+      });
+
+      vi.mocked(logRequestStart).mockRejectedValueOnce(new Error("start log failed"));
+      vi.mocked(logRequest).mockResolvedValueOnce({ id: "fallback-log-id-stream" } as never);
+
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"id":"evt-1"}\n\n'));
+          controller.close();
+        },
+      });
+
+      vi.mocked(forwardRequest).mockResolvedValueOnce({
+        statusCode: 200,
+        headers: new Headers({ "content-type": "text/event-stream" }),
+        body: stream,
+        isStream: true,
+        streamMetricsPromise: Promise.resolve({
+          usage: {
+            promptTokens: 1000,
+            completionTokens: 100,
+            totalTokens: 1100,
+            cachedTokens: 300,
+            cacheReadTokens: 300,
+            cacheCreationTokens: 250,
+            cacheCreation5mTokens: 200,
+            cacheCreation1hTokens: 50,
+          },
+          ttftMs: 123,
+        }),
+      });
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-test",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4.1",
+          messages: [{ role: "user", content: "hello" }],
+          stream: true,
+        }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["chat", "completions"] }),
+      });
+
+      expect(response.status).toBe(200);
+
+      const reader = response.body?.getReader();
+      if (reader) {
+        while (true) {
+          const { done } = await reader.read();
+          if (done) break;
+        }
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(logRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isStream: true,
+          cacheCreationTokens: 250,
+          cacheCreation5mTokens: 200,
+          cacheCreation1hTokens: 50,
+          cacheReadTokens: 300,
         })
       );
     });

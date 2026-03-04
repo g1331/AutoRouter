@@ -119,6 +119,7 @@ const SENSITIVE_HEADER_NAMES = new Set([
   "proxy-authorization",
   "x-forwarded-authorization",
   "x-api-key",
+  "x-goog-api-key",
   "cookie",
   "set-cookie",
   // PII / session tracking
