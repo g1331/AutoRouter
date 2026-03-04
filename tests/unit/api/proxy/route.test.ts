@@ -552,6 +552,106 @@ describe("proxy route upstream selection", () => {
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(codexUpstream);
   });
 
+  it("should extract model from gemini native path when request body omits model", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { logRequestStart } = await import("@/lib/services/request-logger");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-google" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-google",
+        name: "google-upstream",
+        providerType: "google",
+        baseUrl: "https://generativelanguage.googleapis.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["gemini_native_generate"],
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+    const googleUpstream = {
+      id: "up-google",
+      name: "google-upstream",
+      providerType: "google",
+      baseUrl: "https://generativelanguage.googleapis.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 0,
+      weight: 1,
+    };
+
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: googleUpstream,
+      providerType: "google",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: {
+        promptTokens: 120,
+        completionTokens: 30,
+        totalTokens: 150,
+      },
+    });
+
+    const request = new NextRequest(
+      "http://localhost/api/proxy/v1/v1beta/models/gemini-2.5-flash-lite:generateContent",
+      {
+        method: "POST",
+        headers: {
+          "x-goog-api-key": "sk-x-goog-api-key",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: "hello" }] }],
+        }),
+      }
+    );
+
+    const response = await POST(request, {
+      params: Promise.resolve({
+        path: ["v1beta", "models", "gemini-2.5-flash-lite:generateContent"],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(selectFromProviderType).toHaveBeenCalledWith(["up-google"], undefined, undefined);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(googleUpstream);
+    expect(logRequestStart).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "v1beta/models/gemini-2.5-flash-lite:generateContent",
+        model: "gemini-2.5-flash-lite",
+      })
+    );
+    expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "gemini-2.5-flash-lite",
+      })
+    );
+  });
+
   it("should return no-upstream-configured error when matched path has no capability candidates", async () => {
     const { db } = await import("@/lib/db");
     const { routeByModel } = await import("@/lib/services/model-router");

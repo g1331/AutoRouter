@@ -9,6 +9,7 @@
 
 **Goals:**
 - 让 Gemini 请求在网关入口可鉴权通过，并保留现有 key 校验和错误语义。
+- 让 Gemini 原生路径请求在 `body.model` 缺失时仍可提取模型名，并贯通日志与 billing 快照。
 - 建立统一 usage 归一化规则，覆盖 OpenAI / Anthropic / Gemini，避免双实现漂移。
 - 支持 Anthropic cache 写入 TTL 细分字段的解析、存储和对外输出。
 - 强化鉴权与 header 观测，同时确保敏感头值持续脱敏。
@@ -63,6 +64,16 @@
 
 - 方案：在 DB schema（PG/SQLite）、API 类型、transformer、日志响应中新增可空或默认 0 的细分字段，不移除既有 `cache_creation_tokens`。
 - UI 只在字段 > 0 时显示细分行，默认保持当前布局与信息层级。
+
+### 决策 5：Gemini 模型提取采用 `body.model` 优先 + 路径回退
+
+- 方案：在代理入口统一提取请求上下文时，优先读取 `body.model`；当其缺失时，仅针对 Gemini 原生路径 `/v1beta/models/{model}:(generateContent|streamGenerateContent)` 回退解析 URL 中的模型名。
+- 解析逻辑与路径能力匹配复用同一模式约束，并沿用路径安全校验（dot segment 拦截）以避免将异常路径当作模型名写入日志。
+- 提取结果直接写入 `logRequestStart`、`updateRequestLog`、`calculateAndPersistRequestBillingSnapshot` 入参，确保上游已发送场景下日志与计费维度都带 model。
+
+备选方案与取舍：
+- 只依赖 `body.model`：已在 Gemini CLI 真实流量中验证不可行，导致 `model_missing` 快照堆积。
+- 仅在响应阶段回填 model：失败响应（如上游 503）无法可靠回填，不能满足排障与计费一致性要求。
 
 日志详情布局示意：
 

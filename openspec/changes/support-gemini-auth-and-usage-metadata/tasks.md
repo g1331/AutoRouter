@@ -30,3 +30,9 @@
 - [x] 5.1 运行并通过定向测试集合（验收：proxy route、proxy client、request logger、auth 相关测试全部通过）
 - [x] 5.2 运行全量质量门禁 `pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run`（验收：无阻断错误）
 - [x] 5.3 复核 OpenSpec 变更完整性并更新任务勾选状态（验收：`openspec status --change support-gemini-auth-and-usage-metadata` 显示 apply-ready）
+
+## 6. Gemini CLI 路径模型提取补齐
+
+- [x] 6.1 在代理入口实现 Gemini 原生路径模型回退提取（验收：`body.model` 缺失时可从 `/v1beta/models/{model}:...` 得到 model）
+- [x] 6.2 增加路由单测覆盖 Gemini 路径提取并断言日志与 billing snapshot 使用同一 model（验收：`tests/unit/api/proxy/route.test.ts` 新增场景通过）
+- [x] 6.3 更新 OpenSpec proposal/design/spec，补齐该补丁的行为约束与验收标准（验收：变更文档与实现一致）

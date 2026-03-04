@@ -41,7 +41,10 @@ import {
   type RouteCapability,
   type RouteMatchSource,
 } from "@/lib/route-capabilities";
-import { matchRouteCapability } from "@/lib/services/route-capability-matcher";
+import {
+  extractGeminiModelFromPath,
+  matchRouteCapability,
+} from "@/lib/services/route-capability-matcher";
 import { ensureRouteCapabilityMigration } from "@/lib/services/route-capability-migration";
 import {
   type FailoverConfig,
@@ -993,22 +996,24 @@ function extractProxyApiKey(request: NextRequest): {
  * Extract request context (model, sessionId) from request body and headers.
  * Single-pass extraction to avoid parsing body multiple times.
  */
-async function extractRequestContext(request: NextRequest): Promise<RequestContext> {
+async function extractRequestContext(request: NextRequest, path: string): Promise<RequestContext> {
+  const modelFromPath = extractGeminiModelFromPath(path);
+
   try {
     const clonedRequest = request.clone();
     const bodyText = await clonedRequest.text();
 
     if (!bodyText) {
-      return { model: null, sessionId: null, bodyJson: null };
+      return { model: modelFromPath, sessionId: null, bodyJson: null };
     }
 
     const bodyJson = JSON.parse(bodyText) as Record<string, unknown>;
-    const model = typeof bodyJson.model === "string" ? bodyJson.model || null : null;
+    const modelFromBody = typeof bodyJson.model === "string" ? bodyJson.model || null : null;
 
-    return { model, sessionId: null, bodyJson };
+    return { model: modelFromBody ?? modelFromPath, sessionId: null, bodyJson };
   } catch {
     // Not JSON or empty body
-    return { model: null, sessionId: null, bodyJson: null };
+    return { model: modelFromPath, sessionId: null, bodyJson: null };
   }
 }
 
@@ -1068,7 +1073,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   await ensureRouteCapabilityMigration();
 
   // Extract model from request body. For path-based routing, model may be absent.
-  const tempContext = await extractRequestContext(request);
+  const tempContext = await extractRequestContext(request, path);
   const model = tempContext.model;
   const bodyJson: Record<string, unknown> | null = tempContext.bodyJson;
   const matchedRouteCapability = matchRouteCapability(request.method, path);

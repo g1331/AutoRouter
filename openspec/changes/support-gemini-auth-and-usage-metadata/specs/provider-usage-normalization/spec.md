@@ -1,5 +1,20 @@
 ## ADDED Requirements
 
+### Requirement: 系统必须为 Gemini 原生路径请求提取模型名
+系统在处理 Gemini 原生路径能力请求时，必须在 `body.model` 缺失的情况下从请求路径提取模型名，并用于日志与计费快照，避免 `model_missing` 误判。
+
+#### Scenario: body 缺失 model 时从路径提取
+- **WHEN** 请求路径为 `/v1beta/models/{model}:generateContent` 或 `/v1beta/models/{model}:streamGenerateContent` 且请求体不包含 `model`
+- **THEN** 系统必须将 `{model}` 作为本次请求的 model 写入请求日志与 billing snapshot
+
+#### Scenario: body.model 优先于路径回退
+- **WHEN** 请求体包含 `model` 且路径也可解析出模型名
+- **THEN** 系统必须优先使用 `body.model`，路径仅作为缺失时回退来源
+
+#### Scenario: 非 Gemini 原生路径不触发回退提取
+- **WHEN** 请求路径不匹配 Gemini 原生能力模式
+- **THEN** 系统不得从路径推断 model，保持现有模型提取语义
+
 ### Requirement: 系统必须解析 Gemini usageMetadata
 系统在处理 Gemini 响应时必须识别 `usageMetadata` 并归一化为内部 token 字段，以保证日志和计费链路可用。
 

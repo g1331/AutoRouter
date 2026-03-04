@@ -1,6 +1,6 @@
 import type { RouteCapability } from "@/lib/route-capabilities";
 
-const GEMINI_NATIVE_PATTERN = /^v1beta\/models\/[^/]+:(generateContent|streamGenerateContent)$/i;
+const GEMINI_NATIVE_PATTERN = /^v1beta\/models\/([^/]+):(generateContent|streamGenerateContent)$/i;
 
 const GEMINI_CODE_ASSIST_INTERNAL_PATHS = new Set([
   "v1internal:generateContent",
@@ -56,6 +56,31 @@ function matchesPathFamily(path: string, familyRoot: string): boolean {
   return path === familyRoot || path.startsWith(`${familyRoot}/`);
 }
 
+function extractGeminiModelFromNormalizedPath(path: string): string | null {
+  const match = path.match(GEMINI_NATIVE_PATTERN);
+  if (!match?.[1]) {
+    return null;
+  }
+
+  const rawModel = match[1];
+
+  try {
+    const decodedModel = decodeURIComponent(rawModel);
+    return containsTraversalToken(decodedModel) ? null : decodedModel;
+  } catch {
+    return containsTraversalToken(rawModel) ? null : rawModel;
+  }
+}
+
+export function extractGeminiModelFromPath(path: string): string | null {
+  const normalizedPath = normalizeProxyPath(path);
+  if (hasDotSegments(normalizedPath)) {
+    return null;
+  }
+
+  return extractGeminiModelFromNormalizedPath(normalizedPath);
+}
+
 export function matchRouteCapability(method: string, path: string): RouteCapability | null {
   if (method.toUpperCase() !== "POST") {
     return null;
@@ -87,7 +112,7 @@ export function matchRouteCapability(method: string, path: string): RouteCapabil
     return "openai_extended";
   }
 
-  if (GEMINI_NATIVE_PATTERN.test(normalizedPath)) {
+  if (extractGeminiModelFromNormalizedPath(normalizedPath)) {
     return "gemini_native_generate";
   }
 
