@@ -69,10 +69,13 @@ export interface UpstreamApiResponse {
   id: string;
   name: string;
   base_url: string;
+  official_website_url: string | null;
   api_key_masked: string;
   is_default: boolean;
   timeout: number;
   is_active: boolean;
+  current_concurrency: number;
+  max_concurrency: number | null;
   config: string | null;
   weight: number;
   priority: number;
@@ -89,6 +92,7 @@ export interface UpstreamApiResponse {
   spending_rules:
     | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
     | null;
+  last_used_at: string | null;
   created_at: string;
   updated_at: string;
   circuit_breaker: UpstreamCircuitBreakerApiResponse | null;
@@ -116,10 +120,13 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
     id: upstream.id,
     name: upstream.name,
     base_url: upstream.baseUrl,
+    official_website_url: upstream.officialWebsiteUrl ?? null,
     api_key_masked: upstream.apiKeyMasked,
     is_default: upstream.isDefault,
     timeout: upstream.timeout,
     is_active: upstream.isActive,
+    current_concurrency: upstream.currentConcurrency,
+    max_concurrency: upstream.maxConcurrency ?? null,
     config: upstream.config,
     weight: upstream.weight,
     priority: upstream.priority,
@@ -130,6 +137,7 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
     billing_input_multiplier: upstream.billingInputMultiplier ?? 1,
     billing_output_multiplier: upstream.billingOutputMultiplier ?? 1,
     spending_rules: upstream.spendingRules ?? null,
+    last_used_at: upstream.lastUsedAt?.toISOString() ?? null,
     created_at: upstream.createdAt.toISOString(),
     updated_at: upstream.updatedAt.toISOString(),
     circuit_breaker: upstream.circuitBreaker

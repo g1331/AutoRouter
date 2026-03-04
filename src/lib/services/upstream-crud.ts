@@ -1,8 +1,9 @@
-import { eq, desc, count } from "drizzle-orm";
-import { db, upstreams, circuitBreakerStates, type Upstream } from "../db";
+import { eq, desc, count, inArray, max } from "drizzle-orm";
+import { db, upstreams, circuitBreakerStates, requestLogs, type Upstream } from "../db";
 import { encrypt, decrypt } from "../utils/encryption";
 import { createLogger } from "../utils/logger";
 import { CircuitBreakerStateEnum } from "./circuit-breaker";
+import { getConnectionCountsSnapshot } from "./load-balancer";
 import {
   normalizeRouteCapabilities,
   resolveRouteCapabilities,
@@ -45,10 +46,12 @@ export class UpstreamNotFoundError extends Error {
 export interface UpstreamCreateInput {
   name: string;
   baseUrl: string;
+  officialWebsiteUrl?: string | null;
   apiKey: string;
   isDefault?: boolean;
   timeout?: number;
   config?: string | null;
+  maxConcurrency?: number | null;
   weight?: number;
   priority?: number;
   routeCapabilities?: RouteCapability[] | null;
@@ -75,11 +78,13 @@ export interface UpstreamCreateInput {
 export interface UpstreamUpdateInput {
   name?: string;
   baseUrl?: string;
+  officialWebsiteUrl?: string | null;
   apiKey?: string;
   isDefault?: boolean;
   timeout?: number;
   isActive?: boolean;
   config?: string | null;
+  maxConcurrency?: number | null;
   weight?: number;
   priority?: number;
   routeCapabilities?: RouteCapability[] | null;
@@ -107,10 +112,13 @@ export interface UpstreamResponse {
   id: string;
   name: string;
   baseUrl: string;
+  officialWebsiteUrl: string | null;
   apiKeyMasked: string;
   isDefault: boolean;
   timeout: number;
   isActive: boolean;
+  currentConcurrency: number;
+  maxConcurrency: number | null;
   config: string | null;
   weight: number;
   priority: number;
@@ -127,6 +135,7 @@ export interface UpstreamResponse {
   spendingRules:
     | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
     | null;
+  lastUsedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   circuitBreaker?: UpstreamCircuitBreakerStatus | null;
@@ -138,6 +147,30 @@ export interface PaginatedUpstreams {
   page: number;
   pageSize: number;
   totalPages: number;
+}
+
+async function getLastUsedAtMap(upstreamIds: string[]): Promise<Map<string, Date | null>> {
+  if (upstreamIds.length === 0) {
+    return new Map();
+  }
+
+  const rows = await db
+    .select({
+      upstreamId: requestLogs.upstreamId,
+      lastUsedAt: max(requestLogs.createdAt),
+    })
+    .from(requestLogs)
+    .where(inArray(requestLogs.upstreamId, upstreamIds))
+    .groupBy(requestLogs.upstreamId);
+
+  const lastUsedAtByUpstreamId = new Map<string, Date | null>();
+  for (const row of rows) {
+    if (row.upstreamId) {
+      lastUsedAtByUpstreamId.set(row.upstreamId, row.lastUsedAt ?? null);
+    }
+  }
+
+  return lastUsedAtByUpstreamId;
 }
 
 /**
@@ -160,10 +193,12 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
   const {
     name,
     baseUrl,
+    officialWebsiteUrl = null,
     apiKey,
     isDefault = false,
     timeout = 60,
     config,
+    maxConcurrency = null,
     weight = 1,
     priority = 0,
     routeCapabilities,
@@ -197,10 +232,12 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     .values({
       name,
       baseUrl,
+      officialWebsiteUrl,
       apiKeyEncrypted,
       isDefault,
       timeout,
       isActive: true,
+      maxConcurrency,
       config: config ?? null,
       weight,
       priority,
@@ -233,10 +270,13 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     id: newUpstream.id,
     name: newUpstream.name,
     baseUrl: newUpstream.baseUrl,
+    officialWebsiteUrl: newUpstream.officialWebsiteUrl,
     apiKeyMasked: maskApiKey(apiKey),
     isDefault: newUpstream.isDefault,
     timeout: newUpstream.timeout,
     isActive: newUpstream.isActive,
+    currentConcurrency: getConnectionCountsSnapshot()[newUpstream.id] ?? 0,
+    maxConcurrency: newUpstream.maxConcurrency,
     config: newUpstream.config,
     weight: newUpstream.weight,
     priority: newUpstream.priority,
@@ -247,6 +287,7 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     billingInputMultiplier: newUpstream.billingInputMultiplier,
     billingOutputMultiplier: newUpstream.billingOutputMultiplier,
     spendingRules: newUpstream.spendingRules as SpendingRules,
+    lastUsedAt: null,
     createdAt: newUpstream.createdAt,
     updatedAt: newUpstream.updatedAt,
   };
@@ -284,10 +325,13 @@ export async function updateUpstream(
 
   if (input.name !== undefined) updateValues.name = input.name;
   if (input.baseUrl !== undefined) updateValues.baseUrl = input.baseUrl;
+  if (input.officialWebsiteUrl !== undefined)
+    updateValues.officialWebsiteUrl = input.officialWebsiteUrl;
   if (input.apiKey !== undefined) updateValues.apiKeyEncrypted = encrypt(input.apiKey);
   if (input.isDefault !== undefined) updateValues.isDefault = input.isDefault;
   if (input.timeout !== undefined) updateValues.timeout = input.timeout;
   if (input.isActive !== undefined) updateValues.isActive = input.isActive;
+  if (input.maxConcurrency !== undefined) updateValues.maxConcurrency = input.maxConcurrency;
   if (input.config !== undefined) updateValues.config = input.config;
   if (input.weight !== undefined) updateValues.weight = input.weight;
   if (input.priority !== undefined) updateValues.priority = input.priority;
@@ -346,15 +390,19 @@ export async function updateUpstream(
   } catch {
     apiKeyMasked = "***error***";
   }
+  const lastUsedAtByUpstreamId = await getLastUsedAtMap([updated.id]);
 
   return {
     id: updated.id,
     name: updated.name,
     baseUrl: updated.baseUrl,
+    officialWebsiteUrl: updated.officialWebsiteUrl,
     apiKeyMasked,
     isDefault: updated.isDefault,
     timeout: updated.timeout,
     isActive: updated.isActive,
+    currentConcurrency: getConnectionCountsSnapshot()[updated.id] ?? 0,
+    maxConcurrency: updated.maxConcurrency,
     config: updated.config,
     weight: updated.weight,
     priority: updated.priority,
@@ -365,6 +413,7 @@ export async function updateUpstream(
     billingInputMultiplier: updated.billingInputMultiplier,
     billingOutputMultiplier: updated.billingOutputMultiplier,
     spendingRules: updated.spendingRules as SpendingRules,
+    lastUsedAt: lastUsedAtByUpstreamId.get(updated.id) ?? null,
     createdAt: updated.createdAt,
     updatedAt: updated.updatedAt,
   };
@@ -411,6 +460,8 @@ export async function listUpstreams(
 
   // Fetch circuit breaker states for all upstreams
   const upstreamIds = upstreamList.map((u) => u.id);
+  const currentConcurrencySnapshot = getConnectionCountsSnapshot();
+  const lastUsedAtByUpstreamId = await getLastUsedAtMap(upstreamIds);
   const cbStates =
     upstreamIds.length > 0
       ? await db.query.circuitBreakerStates.findMany({
@@ -461,10 +512,13 @@ export async function listUpstreams(
       id: upstream.id,
       name: upstream.name,
       baseUrl: upstream.baseUrl,
+      officialWebsiteUrl: upstream.officialWebsiteUrl,
       apiKeyMasked: maskedKey,
       isDefault: upstream.isDefault,
       timeout: upstream.timeout,
       isActive: upstream.isActive,
+      currentConcurrency: currentConcurrencySnapshot[upstream.id] ?? 0,
+      maxConcurrency: upstream.maxConcurrency,
       config: upstream.config,
       weight: upstream.weight,
       priority: upstream.priority,
@@ -475,6 +529,7 @@ export async function listUpstreams(
       billingInputMultiplier: upstream.billingInputMultiplier,
       billingOutputMultiplier: upstream.billingOutputMultiplier,
       spendingRules: upstream.spendingRules as SpendingRules,
+      lastUsedAt: lastUsedAtByUpstreamId.get(upstream.id) ?? null,
       createdAt: upstream.createdAt,
       updatedAt: upstream.updatedAt,
       circuitBreaker: cbState
@@ -522,14 +577,20 @@ export async function getUpstreamById(upstreamId: string): Promise<UpstreamRespo
     maskedKey = "***error***";
   }
 
+  const currentConcurrencySnapshot = getConnectionCountsSnapshot();
+  const lastUsedAtByUpstreamId = await getLastUsedAtMap([upstream.id]);
+
   return {
     id: upstream.id,
     name: upstream.name,
     baseUrl: upstream.baseUrl,
+    officialWebsiteUrl: upstream.officialWebsiteUrl,
     apiKeyMasked: maskedKey,
     isDefault: upstream.isDefault,
     timeout: upstream.timeout,
     isActive: upstream.isActive,
+    currentConcurrency: currentConcurrencySnapshot[upstream.id] ?? 0,
+    maxConcurrency: upstream.maxConcurrency,
     config: upstream.config,
     weight: upstream.weight,
     priority: upstream.priority,
@@ -540,6 +601,7 @@ export async function getUpstreamById(upstreamId: string): Promise<UpstreamRespo
     billingInputMultiplier: upstream.billingInputMultiplier,
     billingOutputMultiplier: upstream.billingOutputMultiplier,
     spendingRules: upstream.spendingRules as SpendingRules,
+    lastUsedAt: lastUsedAtByUpstreamId.get(upstream.id) ?? null,
     createdAt: upstream.createdAt,
     updatedAt: upstream.updatedAt,
   };

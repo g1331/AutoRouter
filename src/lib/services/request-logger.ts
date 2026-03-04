@@ -109,7 +109,8 @@ export interface FailoverAttempt {
     | "http_4xx"
     | "http_429"
     | "connection_error"
-    | "circuit_open";
+    | "circuit_open"
+    | "concurrency_full";
   error_message: string;
   status_code?: number | null;
   response_headers?: Record<string, string>;

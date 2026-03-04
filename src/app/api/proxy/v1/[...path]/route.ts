@@ -20,8 +20,8 @@ import {
 import { calculateAndPersistRequestBillingSnapshot } from "@/lib/services/billing-cost-service";
 import {
   selectFromUpstreamCandidates,
-  recordConnection,
   releaseConnection,
+  AllCandidatesConcurrencyFullError,
   NoHealthyUpstreamsError,
   NoAuthorizedUpstreamsError,
 } from "@/lib/services/load-balancer";
@@ -130,7 +130,7 @@ function transformPathRoutingDecisionLog(
     model: string | null;
     capabilityCandidates: Upstream[];
     finalCandidates: Upstream[];
-    excludedCandidates: Array<{ upstream: Upstream; reason: "unhealthy" | "circuit_open" }>;
+    excludedCandidates: RoutingExcluded[];
   },
   selectedUpstreamId: string | null,
   diagnostics?: RoutingDecisionDiagnostics
@@ -140,12 +140,6 @@ function transformPathRoutingDecisionLog(
     name: upstream.name,
     weight: upstream.weight,
     circuit_state: "closed",
-  }));
-
-  const excluded: RoutingExcluded[] = input.excludedCandidates.map(({ upstream, reason }) => ({
-    id: upstream.id,
-    name: upstream.name,
-    reason,
   }));
 
   return {
@@ -158,7 +152,7 @@ function transformPathRoutingDecisionLog(
     route_match_source: input.routeMatchSource,
     capability_candidates_count: input.capabilityCandidates.length,
     candidates,
-    excluded,
+    excluded: input.excludedCandidates,
     candidate_count: input.capabilityCandidates.length,
     final_candidate_count: input.finalCandidates.length,
     selected_upstream_id: selectedUpstreamId,
@@ -170,6 +164,24 @@ function transformPathRoutingDecisionLog(
     ...(diagnostics?.failureStage !== undefined ? { failure_stage: diagnostics.failureStage } : {}),
     selection_strategy: "weighted",
   };
+}
+
+function mergeExcludedCandidates(
+  base: RoutingExcluded[],
+  additions: RoutingExcluded[]
+): RoutingExcluded[] {
+  if (additions.length === 0) {
+    return base;
+  }
+
+  const merged = new Map<string, RoutingExcluded>();
+  for (const item of base) {
+    merged.set(`${item.id}:${item.reason}`, item);
+  }
+  for (const item of additions) {
+    merged.set(`${item.id}:${item.reason}`, item);
+  }
+  return [...merged.values()];
 }
 
 /**
@@ -185,18 +197,37 @@ interface RoutingDecision {
 
 interface FailoverErrorWithHistory extends Error {
   failoverHistory?: FailoverAttempt[];
+  concurrencyExcludedCandidates?: RoutingExcluded[];
   didSendUpstream?: boolean;
 }
 
 function attachFailoverContext<T extends Error>(
   error: T,
   failoverHistory: FailoverAttempt[],
-  didSendUpstream: boolean
+  didSendUpstream: boolean,
+  concurrencyExcludedCandidates: RoutingExcluded[] = []
 ): T & FailoverErrorWithHistory {
   const enrichedError = error as T & FailoverErrorWithHistory;
   enrichedError.failoverHistory = [...failoverHistory];
+  enrichedError.concurrencyExcludedCandidates = [...concurrencyExcludedCandidates];
   enrichedError.didSendUpstream = didSendUpstream;
   return enrichedError;
+}
+
+function isSyntheticFailoverAttempt(attempt: FailoverAttempt): boolean {
+  return attempt.error_type === "concurrency_full";
+}
+
+function getLastSentFailoverAttempt(
+  failoverHistory: FailoverAttempt[]
+): FailoverAttempt | undefined {
+  for (let index = failoverHistory.length - 1; index >= 0; index -= 1) {
+    const attempt = failoverHistory[index];
+    if (!isSyntheticFailoverAttempt(attempt)) {
+      return attempt;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -252,6 +283,16 @@ function isNoAuthorizedUpstreamsError(error: unknown): boolean {
   return error.message.toLowerCase().includes("no authorized upstreams");
 }
 
+function isAllCandidatesConcurrencyFullError(error: unknown): boolean {
+  if (error instanceof AllCandidatesConcurrencyFullError) {
+    return true;
+  }
+  if (!(error instanceof NoHealthyUpstreamsError)) {
+    return false;
+  }
+  return error.message.toLowerCase().includes("max concurrency");
+}
+
 function isDownstreamStreamingError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
@@ -294,6 +335,12 @@ function resolveFailureReason(
   if (error instanceof ClientDisconnectedError) {
     return "CLIENT_DISCONNECTED";
   }
+  if (
+    isAllCandidatesConcurrencyFullError(error) ||
+    (!didSendUpstream && lastFailoverAttempt?.error_type === "concurrency_full")
+  ) {
+    return "CONCURRENCY_FULL";
+  }
   if (!didSendUpstream) {
     return "NO_HEALTHY_CANDIDATES";
   }
@@ -318,6 +365,9 @@ function getUserHint(
       gemini_code_assist_internal: "Gemini Code Assist Internal",
     };
     return `当前密钥没有可用的 ${capabilityLabel[routeCapability]} 上游授权，请在密钥配置中绑定至少一个启用上游`;
+  }
+  if (reason === "CONCURRENCY_FULL") {
+    return "当前所有可选上游均已达到并发上限，请提高上游并发配置或增加可用上游后重试";
   }
   if (reason === "NO_HEALTHY_CANDIDATES") {
     return "当前没有可用上游候选，请检查上游启用状态、熔断状态与路径能力配置";
@@ -446,15 +496,38 @@ async function forwardWithFailover(
   selectedUpstream: Upstream;
   failedUpstreamIds: string[];
   failoverHistory: FailoverAttempt[];
+  concurrencyExcludedCandidates: RoutingExcluded[];
   affinityHit: boolean;
   affinityMigrated: boolean;
 }> {
   const failedUpstreamIds: string[] = [];
   const failoverHistory: FailoverAttempt[] = [];
+  const concurrencyExcludedCandidates: RoutingExcluded[] = [];
   let lastError: Error | null = null;
   let didSendUpstream = false;
   let affinityHit = false;
   let affinityMigrated = false;
+
+  const appendConcurrencyExclusions = (
+    excludedCandidates: NonNullable<
+      Awaited<ReturnType<typeof selectFromUpstreamCandidates>>["concurrencyExcluded"]
+    >
+  ) => {
+    for (const excluded of excludedCandidates) {
+      if (
+        !concurrencyExcludedCandidates.some(
+          (candidate) =>
+            candidate.id === excluded.upstreamId && candidate.reason === "concurrency_full"
+        )
+      ) {
+        concurrencyExcludedCandidates.push({
+          id: excluded.upstreamId,
+          name: excluded.upstreamName,
+          reason: "concurrency_full",
+        });
+      }
+    }
+  };
 
   // Clone the request body once for potential retries
   const requestClone = request.clone();
@@ -469,7 +542,8 @@ async function forwardWithFailover(
       throw attachFailoverContext(
         new ClientDisconnectedError("Client disconnected during failover"),
         failoverHistory,
-        didSendUpstream
+        didSendUpstream,
+        concurrencyExcludedCandidates
       );
     }
 
@@ -494,6 +568,7 @@ async function forwardWithFailover(
         excludeIds,
         affinitySelectionContext
       );
+      appendConcurrencyExclusions(selection.concurrencyExcluded ?? []);
 
       selectedUpstream = selection.upstream;
       // Capture affinity info from first successful selection
@@ -506,16 +581,22 @@ async function forwardWithFailover(
         throw attachFailoverContext(
           error instanceof Error ? error : new Error(String(error)),
           failoverHistory,
-          didSendUpstream
+          didSendUpstream,
+          concurrencyExcludedCandidates
         );
       }
-      if (error instanceof NoHealthyUpstreamsError) {
+      if (error instanceof AllCandidatesConcurrencyFullError) {
+        appendConcurrencyExclusions(error.excludedCandidates);
+        lastError = error;
+        hasMoreUpstreams = false;
+      } else if (error instanceof NoHealthyUpstreamsError) {
         hasMoreUpstreams = false;
       } else {
         throw attachFailoverContext(
           error instanceof Error ? error : new Error(String(error)),
           failoverHistory,
-          didSendUpstream
+          didSendUpstream,
+          concurrencyExcludedCandidates
         );
       }
     }
@@ -527,21 +608,25 @@ async function forwardWithFailover(
       const exhaustedError = new NoHealthyUpstreamsError(
         lastError?.message ?? "All upstreams exhausted"
       );
-      throw attachFailoverContext(exhaustedError, failoverHistory, didSendUpstream);
+      throw attachFailoverContext(
+        exhaustedError,
+        failoverHistory,
+        didSendUpstream,
+        concurrencyExcludedCandidates
+      );
     }
 
     if (!selectedUpstream) {
       throw attachFailoverContext(
         new NoHealthyUpstreamsError("No upstream available"),
         failoverHistory,
-        didSendUpstream
+        didSendUpstream,
+        concurrencyExcludedCandidates
       );
     }
 
     attemptCount++;
 
-    // Track connection for least-connections strategy
-    recordConnection(selectedUpstream.id);
     let attemptUpstreamBaseUrl = selectedUpstream.baseUrl;
 
     try {
@@ -612,6 +697,7 @@ async function forwardWithFailover(
           selectedUpstream,
           failedUpstreamIds,
           failoverHistory,
+          concurrencyExcludedCandidates,
           affinityHit,
           affinityMigrated,
         };
@@ -622,6 +708,7 @@ async function forwardWithFailover(
         selectedUpstream,
         failedUpstreamIds,
         failoverHistory,
+        concurrencyExcludedCandidates,
         affinityHit,
         affinityMigrated,
       };
@@ -635,7 +722,8 @@ async function forwardWithFailover(
         throw attachFailoverContext(
           new ClientDisconnectedError("Client disconnected during request"),
           failoverHistory,
-          didSendUpstream
+          didSendUpstream,
+          concurrencyExcludedCandidates
         );
       }
 
@@ -669,7 +757,12 @@ async function forwardWithFailover(
       const nonFailoverError = (error instanceof Error ? error : new Error(String(error))) as
         | Error
         | FailoverErrorWithHistory;
-      throw attachFailoverContext(nonFailoverError, failoverHistory, didSendUpstream);
+      throw attachFailoverContext(
+        nonFailoverError,
+        failoverHistory,
+        didSendUpstream,
+        concurrencyExcludedCandidates
+      );
     }
   }
 }
@@ -1029,10 +1122,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   let candidateUpstreamIds: string[] = [];
   let capabilityCandidates: Upstream[] = [];
   let finalCapabilityCandidates: Upstream[] = [];
-  let excludedCapabilityCandidates: Array<{
-    upstream: Upstream;
-    reason: "unhealthy" | "circuit_open";
-  }> = [];
+  let excludedCapabilityCandidates: RoutingExcluded[] = [];
   let sessionId: string | null = null;
   let sessionIdSource: "header" | "body" | null = null;
   const activeUpstreams = await db.query.upstreams.findMany({
@@ -1193,6 +1283,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       result: proxyResult,
       selectedUpstream: selected,
       failoverHistory: history,
+      concurrencyExcludedCandidates: concurrencyExcludedFromSelection,
       affinityHit: afHit,
       affinityMigrated: afMigrated,
     } = await forwardWithFailover(
@@ -1207,6 +1298,10 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     const result: ProxyResult = proxyResult;
     const upstreamForLogging: Upstream = selected;
     failoverHistory = history;
+    excludedCapabilityCandidates = mergeExcludedCandidates(
+      excludedCapabilityCandidates,
+      concurrencyExcludedFromSelection
+    );
     isAffinityHit = afHit;
     isAffinityMigrated = afMigrated;
     priorityTier = selected.priority;
@@ -1623,13 +1718,28 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     ) {
       failoverHistory = (error as FailoverErrorWithHistory).failoverHistory ?? [];
     }
+    if (
+      error &&
+      typeof error === "object" &&
+      "concurrencyExcludedCandidates" in error &&
+      Array.isArray((error as FailoverErrorWithHistory).concurrencyExcludedCandidates)
+    ) {
+      excludedCapabilityCandidates = mergeExcludedCandidates(
+        excludedCapabilityCandidates,
+        (error as FailoverErrorWithHistory).concurrencyExcludedCandidates ?? []
+      );
+    }
 
     const durationMs = Date.now() - startTime;
     const lastFailoverAttempt = failoverHistory[failoverHistory.length - 1];
+    const lastSentFailoverAttempt = getLastSentFailoverAttempt(failoverHistory);
     const didSendUpstream =
       typeof (error as FailoverErrorWithHistory | null)?.didSendUpstream === "boolean"
         ? Boolean((error as FailoverErrorWithHistory).didSendUpstream)
-        : failoverHistory.length > 0;
+        : lastSentFailoverAttempt != null;
+    const attributionFailoverAttempt = didSendUpstream
+      ? (lastSentFailoverAttempt ?? lastFailoverAttempt)
+      : lastFailoverAttempt;
 
     // Determine error code for unified response
     let errorCode: UnifiedErrorCode = "SERVICE_UNAVAILABLE";
@@ -1646,13 +1756,13 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       errorCode = "REQUEST_TIMEOUT";
     }
 
-    const failureStage = resolveFailureStage(error, didSendUpstream, lastFailoverAttempt);
-    const failureReason = resolveFailureReason(error, didSendUpstream, lastFailoverAttempt);
+    const failureStage = resolveFailureStage(error, didSendUpstream, attributionFailoverAttempt);
+    const failureReason = resolveFailureReason(error, didSendUpstream, attributionFailoverAttempt);
     const actualUpstreamId =
-      lastFailoverAttempt?.upstream_id ??
+      lastSentFailoverAttempt?.upstream_id ??
       (didSendUpstream ? (selectedCandidate?.id ?? null) : null);
     const candidateUpstreamId = didSendUpstream
-      ? (lastFailoverAttempt?.upstream_id ?? selectedCandidate?.id ?? null)
+      ? (attributionFailoverAttempt?.upstream_id ?? selectedCandidate?.id ?? null)
       : null;
 
     const errorStatusCode = getHttpStatusForError(errorCode);
@@ -1701,23 +1811,24 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         : {};
       let upstreamForFixture = fallbackUpstream;
 
-      if (didSendUpstream && lastFailoverAttempt?.upstream_id) {
+      if (didSendUpstream && attributionFailoverAttempt?.upstream_id) {
         const attemptProvider =
-          lastFailoverAttempt.upstream_provider_type === "openai" ||
-          lastFailoverAttempt.upstream_provider_type === "anthropic" ||
-          lastFailoverAttempt.upstream_provider_type === "google"
-            ? lastFailoverAttempt.upstream_provider_type
+          attributionFailoverAttempt.upstream_provider_type === "openai" ||
+          attributionFailoverAttempt.upstream_provider_type === "anthropic" ||
+          attributionFailoverAttempt.upstream_provider_type === "google"
+            ? attributionFailoverAttempt.upstream_provider_type
             : fallbackProviderType;
         upstreamForFixture = {
-          id: lastFailoverAttempt.upstream_id,
-          name: lastFailoverAttempt.upstream_name,
+          id: attributionFailoverAttempt.upstream_id,
+          name: attributionFailoverAttempt.upstream_name,
           providerType: attemptProvider,
-          baseUrl: lastFailoverAttempt.upstream_base_url ?? selectedCandidate?.baseUrl ?? "unknown",
+          baseUrl:
+            attributionFailoverAttempt.upstream_base_url ?? selectedCandidate?.baseUrl ?? "unknown",
         };
 
         try {
           const attemptedUpstream = await db.query.upstreams.findFirst({
-            where: eq(upstreams.id, lastFailoverAttempt.upstream_id),
+            where: eq(upstreams.id, attributionFailoverAttempt.upstream_id),
           });
           if (attemptedUpstream) {
             const attemptedUpstreamForProxy = prepareUpstreamForProxy(attemptedUpstream);
@@ -1769,17 +1880,19 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         upstream: upstreamForFixture,
         outboundHeaders,
         response: {
-          statusCode: lastFailoverAttempt?.status_code ?? errorStatusCode,
-          headers: lastFailoverAttempt?.response_headers ?? {},
-          bodyJson: lastFailoverAttempt?.response_body_json ?? null,
+          statusCode: attributionFailoverAttempt?.status_code ?? errorStatusCode,
+          headers: attributionFailoverAttempt?.response_headers ?? {},
+          bodyJson: attributionFailoverAttempt?.response_body_json ?? null,
           bodyText:
-            lastFailoverAttempt?.response_body_json == null
-              ? (lastFailoverAttempt?.response_body_text ?? null)
+            attributionFailoverAttempt?.response_body_json == null
+              ? (attributionFailoverAttempt?.response_body_text ?? null)
               : null,
         },
         outboundRequestSent: didSendUpstream,
         outboundResponseSource:
-          didSendUpstream && lastFailoverAttempt?.status_code != null ? "upstream" : "gateway",
+          didSendUpstream && attributionFailoverAttempt?.status_code != null
+            ? "upstream"
+            : "gateway",
         downstreamResponse: {
           statusCode: errorStatusCode,
           headers: { "content-type": "application/json" },

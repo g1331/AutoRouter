@@ -255,10 +255,12 @@ describe("Admin Upstreams API with new fields", () => {
         id: "upstream-1",
         name: "multi-model-upstream",
         baseUrl: "https://api.openai.com",
+        officialWebsiteUrl: "https://platform.openai.com",
         apiKeyMasked: "sk-***1234",
         isDefault: false,
         timeout: 60,
         isActive: true,
+        maxConcurrency: 12,
         config: null,
         weight: 1,
         priority: 0,
@@ -278,7 +280,9 @@ describe("Admin Upstreams API with new fields", () => {
         body: JSON.stringify({
           name: "multi-model-upstream",
           base_url: "https://api.openai.com",
+          official_website_url: "https://platform.openai.com",
           api_key: "sk-test-key-12345678",
+          max_concurrency: 12,
           route_capabilities: ["openai_chat_compatible"],
           allowed_models: ["gpt-4", "gpt-3.5-turbo"],
           model_redirects: { "gpt-4-turbo": "gpt-4" },
@@ -292,6 +296,14 @@ describe("Admin Upstreams API with new fields", () => {
       expect(data.route_capabilities).toEqual(["openai_chat_compatible"]);
       expect(data.allowed_models).toEqual(["gpt-4", "gpt-3.5-turbo"]);
       expect(data.model_redirects).toEqual({ "gpt-4-turbo": "gpt-4" });
+      expect(data.official_website_url).toBe("https://platform.openai.com");
+      expect(data.max_concurrency).toBe(12);
+      expect(mockCreateUpstream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          officialWebsiteUrl: "https://platform.openai.com",
+          maxConcurrency: 12,
+        })
+      );
     });
 
     it("should ignore legacy provider_type values without validation errors", async () => {
@@ -657,10 +669,12 @@ describe("Admin Upstreams API with new fields", () => {
         id: "upstream-1",
         name: "updated-upstream",
         baseUrl: "https://api.openai.com",
+        officialWebsiteUrl: "https://ai.google.dev",
         apiKeyMasked: "sk-***1234",
         isDefault: false,
         timeout: 60,
         isActive: true,
+        maxConcurrency: 8,
         config: null,
         weight: 1,
         priority: 0,
@@ -678,6 +692,8 @@ describe("Admin Upstreams API with new fields", () => {
           "content-type": "application/json",
         },
         body: JSON.stringify({
+          official_website_url: "https://ai.google.dev",
+          max_concurrency: 8,
           route_capabilities: ["gemini_native_generate"],
           allowed_models: ["gemini-pro", "gemini-ultra"],
           model_redirects: { gemini: "gemini-pro" },
@@ -691,6 +707,15 @@ describe("Admin Upstreams API with new fields", () => {
       expect(data.route_capabilities).toEqual(["gemini_native_generate"]);
       expect(data.allowed_models).toEqual(["gemini-pro", "gemini-ultra"]);
       expect(data.model_redirects).toEqual({ gemini: "gemini-pro" });
+      expect(data.official_website_url).toBe("https://ai.google.dev");
+      expect(data.max_concurrency).toBe(8);
+      expect(mockUpdateUpstream).toHaveBeenCalledWith(
+        "upstream-1",
+        expect.objectContaining({
+          officialWebsiteUrl: "https://ai.google.dev",
+          maxConcurrency: 8,
+        })
+      );
     });
   });
 
@@ -713,12 +738,14 @@ describe("Admin Upstreams API with new fields", () => {
             isDefault: false,
             timeout: 60,
             isActive: true,
+            currentConcurrency: 4,
             config: null,
             weight: 1,
             priority: 0,
             routeCapabilities: ["openai_chat_compatible"],
             allowedModels: ["gpt-4", "gpt-3.5-turbo"],
             modelRedirects: { "gpt-4-turbo": "gpt-4" },
+            lastUsedAt: new Date("2026-03-03T03:00:00.000Z"),
             createdAt: new Date(),
             updatedAt: new Date(),
           },
@@ -730,12 +757,14 @@ describe("Admin Upstreams API with new fields", () => {
             isDefault: false,
             timeout: 60,
             isActive: true,
+            currentConcurrency: 0,
             config: null,
             weight: 1,
             priority: 0,
             routeCapabilities: ["anthropic_messages"],
             allowedModels: null,
             modelRedirects: null,
+            lastUsedAt: null,
             createdAt: new Date(),
             updatedAt: new Date(),
           },
@@ -761,7 +790,11 @@ describe("Admin Upstreams API with new fields", () => {
       expect(data.items[0].route_capabilities).toEqual(["openai_chat_compatible"]);
       expect(data.items[0].allowed_models).toEqual(["gpt-4", "gpt-3.5-turbo"]);
       expect(data.items[0].model_redirects).toEqual({ "gpt-4-turbo": "gpt-4" });
+      expect(data.items[0].current_concurrency).toBe(4);
+      expect(data.items[0].last_used_at).toBe("2026-03-03T03:00:00.000Z");
       expect(data.items[1].route_capabilities).toEqual(["anthropic_messages"]);
+      expect(data.items[1].current_concurrency).toBe(0);
+      expect(data.items[1].last_used_at).toBeNull();
     });
 
     it("should handle upstreams with null new fields", async () => {
@@ -775,12 +808,14 @@ describe("Admin Upstreams API with new fields", () => {
             isDefault: false,
             timeout: 60,
             isActive: true,
+            currentConcurrency: 0,
             config: null,
             weight: 1,
             priority: 0,
             routeCapabilities: [],
             allowedModels: null,
             modelRedirects: null,
+            lastUsedAt: null,
             createdAt: new Date(),
             updatedAt: new Date(),
           },
@@ -805,6 +840,8 @@ describe("Admin Upstreams API with new fields", () => {
       expect(data.items[0].route_capabilities).toEqual([]);
       expect(data.items[0].allowed_models).toBeNull();
       expect(data.items[0].model_redirects).toBeNull();
+      expect(data.items[0].current_concurrency).toBe(0);
+      expect(data.items[0].last_used_at).toBeNull();
     });
   });
 
@@ -828,12 +865,14 @@ describe("Admin Upstreams API with new fields", () => {
         isDefault: false,
         timeout: 60,
         isActive: true,
+        currentConcurrency: 6,
         config: null,
         weight: 5,
         priority: 10,
         routeCapabilities: ["openai_chat_compatible", "openai_extended"],
         allowedModels: ["gpt-4", "gpt-4-turbo", "gpt-4-vision"],
         modelRedirects: { "gpt-4-preview": "gpt-4-turbo" },
+        lastUsedAt: new Date("2026-03-03T04:15:00.000Z"),
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -852,6 +891,8 @@ describe("Admin Upstreams API with new fields", () => {
       expect(data.route_capabilities).toEqual(["openai_chat_compatible", "openai_extended"]);
       expect(data.allowed_models).toEqual(["gpt-4", "gpt-4-turbo", "gpt-4-vision"]);
       expect(data.model_redirects).toEqual({ "gpt-4-preview": "gpt-4-turbo" });
+      expect(data.current_concurrency).toBe(6);
+      expect(data.last_used_at).toBe("2026-03-03T04:15:00.000Z");
     });
   });
 });

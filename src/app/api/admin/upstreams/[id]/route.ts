@@ -51,11 +51,13 @@ const updateUpstreamSchema = z
   .object({
     name: z.string().min(1).max(64).optional(),
     base_url: z.string().url().optional(),
+    official_website_url: z.string().url().nullable().optional(),
     api_key: z.string().min(1).optional(),
     is_default: z.boolean().optional(),
     timeout: z.number().int().positive().optional(),
     is_active: z.boolean().optional(),
     config: z.string().nullable().optional(),
+    max_concurrency: z.number().int().positive().nullable().optional(),
     weight: z.number().int().min(1).max(100).optional(),
     priority: z.number().int().min(0).optional(),
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)).nullable().optional(),
@@ -139,11 +141,15 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     const input: UpstreamUpdateInput = {};
     if (validated.name !== undefined) input.name = validated.name;
     if (validated.base_url !== undefined) input.baseUrl = validated.base_url;
+    if (validated.official_website_url !== undefined) {
+      input.officialWebsiteUrl = validated.official_website_url;
+    }
     if (validated.api_key !== undefined) input.apiKey = validated.api_key;
     if (validated.is_default !== undefined) input.isDefault = validated.is_default;
     if (validated.timeout !== undefined) input.timeout = validated.timeout;
     if (validated.is_active !== undefined) input.isActive = validated.is_active;
     if (validated.config !== undefined) input.config = validated.config;
+    if (validated.max_concurrency !== undefined) input.maxConcurrency = validated.max_concurrency;
     if (validated.weight !== undefined) input.weight = validated.weight;
     if (validated.priority !== undefined) input.priority = validated.priority;
     if (validated.route_capabilities !== undefined) {

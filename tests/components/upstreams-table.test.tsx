@@ -1,20 +1,21 @@
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { UpstreamsTable } from "@/components/admin/upstreams-table";
+import UpstreamsPage from "@/app/[locale]/(dashboard)/upstreams/page";
 import type { Upstream } from "@/types/api";
 
-// Mock next-intl
 vi.mock("next-intl", () => ({
-  useTranslations: () => (key: string) => key,
+  useTranslations: () => (key: string, values?: Record<string, unknown>) => {
+    if (!values) return key;
+    return `${key} ${JSON.stringify(values)}`;
+  },
   useLocale: () => "en",
 }));
 
-// Mock date-locale
 vi.mock("@/lib/date-locale", () => ({
   getDateLocale: () => undefined,
 }));
 
-// Mock sonner toast
 vi.mock("sonner", () => ({
   toast: {
     success: vi.fn(),
@@ -24,6 +25,10 @@ vi.mock("sonner", () => ({
 
 const mockToggleUpstreamActive = vi.fn();
 let mockUpstreamQuotaData: unknown = undefined;
+const mockUseUpstreams = vi.fn();
+const mockUseAllUpstreams = vi.fn();
+const mockUseUpstreamHealth = vi.fn();
+const mockUseTestUpstream = vi.fn();
 vi.mock("@/hooks/use-upstreams", () => ({
   useToggleUpstreamActive: () => ({
     mutateAsync: mockToggleUpstreamActive,
@@ -34,6 +39,26 @@ vi.mock("@/hooks/use-upstreams", () => ({
     data: mockUpstreamQuotaData,
     isLoading: false,
   }),
+  useUpstreams: (...args: unknown[]) => mockUseUpstreams(...args),
+  useAllUpstreams: (...args: unknown[]) => mockUseAllUpstreams(...args),
+  useUpstreamHealth: (...args: unknown[]) => mockUseUpstreamHealth(...args),
+  useTestUpstream: (...args: unknown[]) => mockUseTestUpstream(...args),
+}));
+
+vi.mock("@/components/admin/topbar", () => ({
+  Topbar: ({ title }: { title: string }) => <div>{title}</div>,
+}));
+
+vi.mock("@/components/admin/upstream-form-dialog", () => ({
+  UpstreamFormDialog: () => null,
+}));
+
+vi.mock("@/components/admin/delete-upstream-dialog", () => ({
+  DeleteUpstreamDialog: () => null,
+}));
+
+vi.mock("@/components/admin/test-upstream-dialog", () => ({
+  TestUpstreamDialog: () => null,
 }));
 
 const mockForceCircuitBreaker = vi.fn();
@@ -45,720 +70,438 @@ vi.mock("@/hooks/use-circuit-breaker", () => ({
   }),
 }));
 
-function getDesktopLayout() {
-  const root = document.querySelector("div.hidden.xl\\:block");
-  if (!root) {
-    throw new Error("Desktop layout root not found");
-  }
-  return within(root as HTMLElement);
-}
-
 describe("UpstreamsTable", () => {
-  const mockUpstream: Upstream = {
-    id: "test-id-1",
-    name: "Test Upstream",
+  const baseUpstream: Upstream = {
+    id: "upstream-1",
+    name: "OpenAI Main",
     base_url: "https://api.openai.com/v1",
+    official_website_url: null,
     api_key_masked: "sk-***1234",
     is_default: false,
     timeout: 60,
     is_active: true,
-    description: "Test description",
+    description: "primary",
     weight: 1,
     priority: 0,
+    current_concurrency: 1,
+    max_concurrency: 10,
     route_capabilities: ["openai_chat_compatible"],
     allowed_models: null,
     model_redirects: null,
-    health_status: null,
+    health_status: { is_healthy: true, last_check: new Date().toISOString() },
+    circuit_breaker: {
+      state: "closed",
+      failure_count: 0,
+      success_count: 0,
+      last_failure_at: null,
+      opened_at: null,
+      config: null,
+    },
     affinity_migration: null,
+    last_used_at: new Date().toISOString(),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
 
-  const mockOnEdit = vi.fn();
-  const mockOnDelete = vi.fn();
-  const mockOnTest = vi.fn();
+  const onEdit = vi.fn();
+  const onDelete = vi.fn();
+  const onTest = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
     mockUpstreamQuotaData = undefined;
   });
 
-  describe("Empty State", () => {
-    it("renders empty state when no upstreams provided", () => {
-      render(
-        <UpstreamsTable
-          upstreams={[]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
+  it("renders empty state", () => {
+    render(<UpstreamsTable upstreams={[]} onEdit={onEdit} onDelete={onDelete} onTest={onTest} />);
 
+    expect(screen.getByText("noUpstreams")).toBeInTheDocument();
+    expect(screen.getByText("noUpstreamsDesc")).toBeInTheDocument();
+  });
+
+  it("renders filtered empty state when filters are active", () => {
+    render(
+      <UpstreamsTable
+        upstreams={[]}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onTest={onTest}
+        hasActiveFilters={true}
+      />
+    );
+
+    expect(screen.getByText("noFilteredUpstreams")).toBeInTheDocument();
+    expect(screen.getByText("noFilteredUpstreamsDesc")).toBeInTheDocument();
+  });
+
+  it("renders tier workbench card and upstream basics", () => {
+    render(
+      <UpstreamsTable
+        upstreams={[baseUpstream]}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onTest={onTest}
+      />
+    );
+
+    expect(screen.getByText("tier P0")).toBeInTheDocument();
+    expect(screen.getByText("OpenAI Main")).toBeInTheDocument();
+    expect(screen.getByText("https://api.openai.com/v1")).toBeInTheDocument();
+    expect(screen.getByText("runtimeStatus")).toBeInTheDocument();
+  });
+
+  it("sorts tiers by priority and renders degraded/offline tier led labels", () => {
+    const healthyInP0: Upstream = {
+      ...baseUpstream,
+      id: "p0-healthy",
+      priority: 0,
+      health_status: { is_healthy: true, last_check: new Date().toISOString() },
+    };
+    const unhealthyInP0: Upstream = {
+      ...baseUpstream,
+      id: "p0-unhealthy",
+      priority: 0,
+      health_status: { is_healthy: false, last_check: new Date().toISOString() },
+    };
+    const unhealthyInP5: Upstream = {
+      ...baseUpstream,
+      id: "p5-unhealthy",
+      priority: 5,
+      health_status: { is_healthy: false, last_check: new Date().toISOString() },
+    };
+
+    render(
+      <UpstreamsTable
+        upstreams={[unhealthyInP5, healthyInP0, unhealthyInP0]}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onTest={onTest}
+      />
+    );
+
+    const tierP0 = screen.getByText("tier P0");
+    const tierP5 = screen.getByText("tier P5");
+    expect(tierP0.compareDocumentPosition(tierP5) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("tierLedDegraded")).toBeInTheDocument();
+    expect(screen.getByText("tierLedOffline")).toBeInTheDocument();
+  });
+
+  it("supports collapsing and expanding a tier", async () => {
+    render(
+      <UpstreamsTable
+        upstreams={[baseUpstream]}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onTest={onTest}
+      />
+    );
+
+    const tierToggle = screen.getByRole("button", { name: /collapse/i });
+    fireEvent.click(tierToggle);
+    await waitFor(() => {
+      expect(screen.queryByText("OpenAI Main")).not.toBeInTheDocument();
+    });
+
+    const expandToggle = screen.getByRole("button", { name: /expand/i });
+    fireEvent.click(expandToggle);
+    expect(screen.getByText("OpenAI Main")).toBeInTheDocument();
+  });
+
+  it("calls toggle mutation when active switch changes", async () => {
+    mockToggleUpstreamActive.mockResolvedValueOnce(undefined);
+
+    render(
+      <UpstreamsTable
+        upstreams={[baseUpstream]}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onTest={onTest}
+      />
+    );
+
+    fireEvent.click(screen.getByLabelText("quickDisable: OpenAI Main"));
+
+    await waitFor(() => {
+      expect(mockToggleUpstreamActive).toHaveBeenCalledWith({
+        id: "upstream-1",
+        nextActive: false,
+      });
+    });
+  });
+
+  it("hides test action and keeps edit action", () => {
+    render(
+      <UpstreamsTable
+        upstreams={[baseUpstream]}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onTest={onTest}
+      />
+    );
+
+    fireEvent.click(screen.getByLabelText("edit: OpenAI Main"));
+
+    expect(screen.queryByLabelText("test: OpenAI Main")).not.toBeInTheDocument();
+    expect(onTest).not.toHaveBeenCalled();
+    expect(onEdit).toHaveBeenCalledWith(baseUpstream);
+  });
+
+  it("supports delete action directly", async () => {
+    render(
+      <UpstreamsTable
+        upstreams={[baseUpstream]}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onTest={onTest}
+      />
+    );
+
+    fireEvent.click(screen.getByLabelText("delete: OpenAI Main"));
+
+    await waitFor(() => {
+      expect(onDelete).toHaveBeenCalledWith(baseUpstream);
+    });
+  });
+
+  it("shows circuit recover action when circuit is open", async () => {
+    mockForceCircuitBreaker.mockResolvedValueOnce(undefined);
+    const openCircuitUpstream: Upstream = {
+      ...baseUpstream,
+      circuit_breaker: {
+        state: "open",
+        failure_count: 2,
+        success_count: 0,
+        last_failure_at: null,
+        opened_at: null,
+        config: null,
+      },
+    };
+
+    render(
+      <UpstreamsTable
+        upstreams={[openCircuitUpstream]}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onTest={onTest}
+      />
+    );
+
+    fireEvent.click(screen.getByLabelText("recoverCircuitBreaker: OpenAI Main"));
+
+    await waitFor(() => {
+      expect(mockForceCircuitBreaker).toHaveBeenCalledWith({
+        upstreamId: "upstream-1",
+        action: "close",
+      });
+    });
+  });
+
+  it("shows official website link when configured", () => {
+    const withWebsite: Upstream = {
+      ...baseUpstream,
+      official_website_url: "https://platform.openai.com",
+    };
+
+    render(
+      <UpstreamsTable
+        upstreams={[withWebsite]}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onTest={onTest}
+      />
+    );
+
+    const links = screen.getAllByRole("link", { name: /officialWebsiteAction/i });
+    expect(links.length).toBeGreaterThan(0);
+  });
+
+  it("highlights concurrency full status", () => {
+    const full: Upstream = {
+      ...baseUpstream,
+      current_concurrency: 10,
+      max_concurrency: 10,
+    };
+
+    render(
+      <UpstreamsTable upstreams={[full]} onEdit={onEdit} onDelete={onDelete} onTest={onTest} />
+    );
+
+    expect(screen.getByText("concurrencyFullStatus")).toBeInTheDocument();
+  });
+
+  it("uses last_used_at and shows neverUsed for idle upstream", () => {
+    const neverUsed: Upstream = {
+      ...baseUpstream,
+      last_used_at: null,
+    };
+
+    render(
+      <UpstreamsTable upstreams={[neverUsed]} onEdit={onEdit} onDelete={onDelete} onTest={onTest} />
+    );
+
+    expect(screen.getByText("lastUsed:")).toBeInTheDocument();
+    expect(screen.getByText("neverUsed")).toBeInTheDocument();
+    expect(screen.queryByText("createdAt")).not.toBeInTheDocument();
+  });
+
+  it("renders quota block with timing hints", () => {
+    mockUpstreamQuotaData = {
+      items: [
+        {
+          upstream_id: "upstream-1",
+          upstream_name: "OpenAI Main",
+          is_exceeded: true,
+          rules: [
+            {
+              period_type: "daily",
+              period_hours: null,
+              current_spending: 10,
+              spending_limit: 10,
+              percent_used: 100,
+              is_exceeded: true,
+              resets_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+              estimated_recovery_at: null,
+            },
+            {
+              period_type: "rolling",
+              period_hours: 24,
+              current_spending: 12,
+              spending_limit: 10,
+              percent_used: 120,
+              is_exceeded: true,
+              resets_at: null,
+              estimated_recovery_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+            },
+          ],
+        },
+      ],
+    };
+
+    render(
+      <UpstreamsTable
+        upstreams={[baseUpstream]}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onTest={onTest}
+      />
+    );
+
+    expect(screen.getByText("tableQuota")).toBeInTheDocument();
+    expect(screen.getByText(/quotaResets:/)).toBeInTheDocument();
+    expect(screen.getByText(/quotaRecovery:/)).toBeInTheDocument();
+  });
+
+  it("collapses quota details in compact density until expanded", () => {
+    mockUpstreamQuotaData = {
+      items: [
+        {
+          upstream_id: "upstream-1",
+          upstream_name: "OpenAI Main",
+          is_exceeded: false,
+          rules: [
+            {
+              period_type: "daily",
+              period_hours: null,
+              current_spending: 3,
+              spending_limit: 10,
+              percent_used: 30,
+              is_exceeded: false,
+              resets_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+              estimated_recovery_at: null,
+            },
+          ],
+        },
+      ],
+    };
+
+    render(
+      <UpstreamsTable
+        upstreams={[baseUpstream]}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onTest={onTest}
+        density="compact"
+      />
+    );
+
+    const quotaSummary = screen.getByText("showQuotaDetails");
+    const details = quotaSummary.closest("details");
+
+    expect(quotaSummary).toBeInTheDocument();
+    expect(details).toBeInTheDocument();
+    expect(details).not.toHaveAttribute("open");
+
+    fireEvent.click(quotaSummary);
+    expect(details).toHaveAttribute("open");
+    expect(screen.getByText(/quotaResets:/)).toBeInTheDocument();
+  });
+
+  it("renders capability badge text", () => {
+    render(
+      <UpstreamsTable
+        upstreams={[baseUpstream]}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onTest={onTest}
+      />
+    );
+
+    expect(screen.getByText("capabilityOpenAIChatCompatible")).toBeInTheDocument();
+  });
+});
+
+describe("UpstreamsPage filter-aware empty state", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUpstreamQuotaData = undefined;
+    mockUseUpstreams.mockReturnValue({
+      data: {
+        items: [],
+        total: 0,
+        page: 1,
+        page_size: 10,
+        total_pages: 1,
+      },
+      isLoading: false,
+    });
+    mockUseAllUpstreams.mockReturnValue({
+      data: [],
+    });
+    mockUseUpstreamHealth.mockReturnValue({
+      data: {
+        data: [],
+      },
+    });
+    mockUseTestUpstream.mockReturnValue({
+      mutate: vi.fn(),
+      data: null,
+      isPending: false,
+    });
+  });
+
+  it("switches empty-state copy when filters become active and resets back", async () => {
+    render(<UpstreamsPage />);
+
+    expect(screen.getByText("noUpstreams")).toBeInTheDocument();
+    expect(screen.queryByText("noFilteredUpstreams")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("workbenchSearchPlaceholder"), {
+      target: { value: "openai" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("noFilteredUpstreams")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "resetFilters" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "resetFilters" }));
+
+    await waitFor(() => {
       expect(screen.getByText("noUpstreams")).toBeInTheDocument();
-      expect(screen.getByText("noUpstreamsDesc")).toBeInTheDocument();
-    });
-
-    it("shows Server icon in empty state", () => {
-      render(
-        <UpstreamsTable
-          upstreams={[]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
+      expect(screen.queryByText("noFilteredUpstreams")).not.toBeInTheDocument();
+      expect((screen.getByLabelText("workbenchSearchPlaceholder") as HTMLInputElement).value).toBe(
+        ""
       );
-
-      const emptyContainer = screen.getByText("noUpstreams").closest("div");
-      expect(emptyContainer).toBeInTheDocument();
-    });
-  });
-
-  describe("Deprecated Header", () => {
-    it("does not render deprecated terminal header", () => {
-      render(
-        <UpstreamsTable
-          upstreams={[mockUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      expect(screen.queryByText("SYS.UPSTREAM_ARRAY")).not.toBeInTheDocument();
-      expect(screen.queryByText("[1 NODES]")).not.toBeInTheDocument();
-    });
-  });
-
-  describe("Table Rendering", () => {
-    it("renders table headers", () => {
-      render(
-        <UpstreamsTable
-          upstreams={[mockUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-
-      expect(desktop.getByText("name")).toBeInTheDocument();
-      expect(desktop.getByText("routeCapabilities")).toBeInTheDocument();
-      expect(desktop.getByText("tableWeight")).toBeInTheDocument();
-      expect(desktop.getByText("tableCircuitBreaker")).toBeInTheDocument();
-      expect(desktop.getByText("tableBaseUrl")).toBeInTheDocument();
-      expect(desktop.getByText("tableQuota")).toBeInTheDocument();
-      expect(desktop.getByText("createdAt")).toBeInTheDocument();
-      expect(desktop.getByText("actions")).toBeInTheDocument();
-    });
-
-    it("renders upstream data correctly", () => {
-      render(
-        <UpstreamsTable
-          upstreams={[mockUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-
-      expect(desktop.getByText("Test Upstream")).toBeInTheDocument();
-      expect(desktop.getByText("https://api.openai.com/v1")).toBeInTheDocument();
-    });
-
-    it("shows active state via toggle switch for active upstream", () => {
-      render(
-        <UpstreamsTable
-          upstreams={[mockUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      expect(desktop.getByLabelText("quickDisable: Test Upstream")).toBeInTheDocument();
-    });
-
-    it("renders quota badge and timing hints when quota data is available", () => {
-      mockUpstreamQuotaData = {
-        items: [
-          {
-            upstream_id: "test-id-1",
-            upstream_name: "Test Upstream",
-            is_exceeded: true,
-            rules: [
-              {
-                period_type: "daily",
-                period_hours: null,
-                current_spending: 10,
-                spending_limit: 10,
-                percent_used: 100,
-                is_exceeded: true,
-                resets_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-                estimated_recovery_at: null,
-              },
-              {
-                period_type: "rolling",
-                period_hours: 24,
-                current_spending: 20,
-                spending_limit: 10,
-                percent_used: 200,
-                is_exceeded: true,
-                resets_at: null,
-                estimated_recovery_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-              },
-            ],
-          },
-        ],
-      };
-
-      render(
-        <UpstreamsTable
-          upstreams={[mockUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-
-      expect(desktop.getAllByText("tableQuota").length).toBeGreaterThan(1);
-      expect(desktop.getByText(/quotaResets:/)).toBeInTheDocument();
-      expect(desktop.getByText(/quotaRecovery:/)).toBeInTheDocument();
-    });
-  });
-
-  describe("Quick Actions", () => {
-    it("calls toggle mutation when toggle button is clicked", async () => {
-      mockToggleUpstreamActive.mockResolvedValueOnce(undefined);
-      render(
-        <UpstreamsTable
-          upstreams={[mockUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-
-      const toggleButton = desktop.getByLabelText("quickDisable: Test Upstream");
-      fireEvent.click(toggleButton);
-
-      await waitFor(() => {
-        expect(mockToggleUpstreamActive).toHaveBeenCalledWith({
-          id: "test-id-1",
-          nextActive: false,
-        });
-      });
-    });
-
-    it("shows recover button when circuit breaker is open and calls force-close", async () => {
-      mockForceCircuitBreaker.mockResolvedValueOnce(undefined);
-
-      const upstreamWithOpenCircuit: Upstream = {
-        ...mockUpstream,
-        circuit_breaker: {
-          state: "open",
-          failure_count: 5,
-          success_count: 0,
-          last_failure_at: null,
-          opened_at: null,
-          config: null,
-        },
-      };
-
-      render(
-        <UpstreamsTable
-          upstreams={[upstreamWithOpenCircuit]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-
-      const recoverButton = desktop.getByLabelText("recoverCircuitBreaker: Test Upstream");
-      fireEvent.click(recoverButton);
-
-      await waitFor(() => {
-        expect(mockForceCircuitBreaker).toHaveBeenCalledWith({
-          upstreamId: "test-id-1",
-          action: "close",
-        });
-      });
-    });
-  });
-
-  describe("Priority Tier Organization", () => {
-    it("displays TIER P0 section for upstreams with default priority", () => {
-      render(
-        <UpstreamsTable
-          upstreams={[mockUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      expect(desktop.getByText("tier P0")).toBeInTheDocument();
-    });
-
-    it("displays tier section for upstreams with specific priority", () => {
-      const priorityUpstream = { ...mockUpstream, priority: 1 };
-      render(
-        <UpstreamsTable
-          upstreams={[priorityUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      expect(desktop.getByText("tier P1")).toBeInTheDocument();
-    });
-
-    it("groups upstreams by priority", () => {
-      const upstreams = [
-        { ...mockUpstream, id: "1", name: "Upstream 1", priority: 0 },
-        { ...mockUpstream, id: "2", name: "Upstream 2", priority: 0 },
-        {
-          ...mockUpstream,
-          id: "3",
-          name: "Upstream 3",
-          priority: 1,
-        },
-      ];
-      render(
-        <UpstreamsTable
-          upstreams={upstreams}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      expect(desktop.getByText("tier P0")).toBeInTheDocument();
-      expect(desktop.getByText("tier P1")).toBeInTheDocument();
-    });
-
-    it("displays health summary in tier header", () => {
-      const healthyUpstream = {
-        ...mockUpstream,
-        priority: 0,
-        health_status: { is_healthy: true, last_check: new Date().toISOString() },
-      };
-      render(
-        <UpstreamsTable
-          upstreams={[healthyUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      expect(desktop.getByText(/1\/1 tierHealthy/)).toBeInTheDocument();
-    });
-  });
-
-  describe("Collapsible Tiers", () => {
-    it("shows expand/collapse button in tier header", () => {
-      render(
-        <UpstreamsTable
-          upstreams={[mockUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      const collapseButton = desktop.getByRole("button", { name: "collapse" });
-      expect(collapseButton).toBeInTheDocument();
-    });
-
-    it("collapses tier when header is clicked", () => {
-      render(
-        <UpstreamsTable
-          upstreams={[mockUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-
-      // Initially upstream is visible
-      expect(desktop.getByText("Test Upstream")).toBeInTheDocument();
-
-      // Click tier header to collapse
-      const tierHeader = desktop.getByText("tier P0").closest("tr");
-      fireEvent.click(tierHeader!);
-
-      // Upstream should be hidden
-      expect(desktop.queryByText("Test Upstream")).not.toBeInTheDocument();
-    });
-
-    it("expands tier when collapsed header is clicked", () => {
-      render(
-        <UpstreamsTable
-          upstreams={[mockUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-
-      const tierHeader = desktop.getByText("tier P0").closest("tr");
-
-      // Collapse
-      fireEvent.click(tierHeader!);
-      expect(desktop.queryByText("Test Upstream")).not.toBeInTheDocument();
-
-      // Expand
-      fireEvent.click(tierHeader!);
-      expect(desktop.getByText("Test Upstream")).toBeInTheDocument();
-    });
-  });
-
-  describe("Status Indicators", () => {
-    it("displays healthy status label for healthy upstream", () => {
-      const healthyUpstream = {
-        ...mockUpstream,
-        health_status: { is_healthy: true, last_check: new Date().toISOString() },
-      };
-      render(
-        <UpstreamsTable
-          upstreams={[healthyUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      expect(screen.getAllByText("healthHealthy").length).toBeGreaterThan(0);
-    });
-
-    it("displays offline status label for unhealthy upstream", () => {
-      const unhealthyUpstream = {
-        ...mockUpstream,
-        health_status: {
-          is_healthy: false,
-          last_check: new Date().toISOString(),
-        },
-      };
-      render(
-        <UpstreamsTable
-          upstreams={[unhealthyUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      expect(screen.getAllByText("healthUnhealthy").length).toBeGreaterThan(0);
-    });
-  });
-
-  describe("Weight Display", () => {
-    it("displays weight as numeric value", () => {
-      const upstream = { ...mockUpstream, weight: 42 };
-      render(
-        <UpstreamsTable
-          upstreams={[upstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      expect(desktop.getByText("42")).toBeInTheDocument();
-    });
-  });
-
-  describe("Route Capability Badges", () => {
-    it("renders OpenAI-compatible capability badge", () => {
-      render(
-        <UpstreamsTable
-          upstreams={[mockUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      const badge = desktop.getByText("capabilityOpenAIChatCompatible");
-      expect(badge).toBeInTheDocument();
-    });
-
-    it("renders Anthropic capability badge", () => {
-      const anthropicUpstream = {
-        ...mockUpstream,
-        route_capabilities: ["anthropic_messages"],
-      };
-      render(
-        <UpstreamsTable
-          upstreams={[anthropicUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      const badge = desktop.getByText("capabilityAnthropicMessages");
-      expect(badge).toBeInTheDocument();
-    });
-
-    it("renders Gemini capability badge", () => {
-      const googleUpstream = {
-        ...mockUpstream,
-        route_capabilities: ["gemini_native_generate"],
-      };
-      render(
-        <UpstreamsTable
-          upstreams={[googleUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      const badge = desktop.getByText("capabilityGeminiNativeGenerate");
-      expect(badge).toBeInTheDocument();
-    });
-  });
-
-  describe("Edit Action", () => {
-    it("shows edit button for each upstream", () => {
-      render(
-        <UpstreamsTable
-          upstreams={[mockUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      const editButton = desktop.getByLabelText("edit: Test Upstream");
-      expect(editButton).toBeInTheDocument();
-    });
-
-    it("calls onEdit when edit button is clicked", () => {
-      render(
-        <UpstreamsTable
-          upstreams={[mockUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      const editButton = desktop.getByLabelText("edit: Test Upstream");
-      fireEvent.click(editButton);
-
-      expect(mockOnEdit).toHaveBeenCalledWith(mockUpstream);
-    });
-  });
-
-  describe("Delete Action", () => {
-    it("shows delete button for each upstream", () => {
-      render(
-        <UpstreamsTable
-          upstreams={[mockUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      const deleteButton = desktop.getByLabelText("delete: Test Upstream");
-      expect(deleteButton).toBeInTheDocument();
-    });
-
-    it("calls onDelete when delete button is clicked", () => {
-      render(
-        <UpstreamsTable
-          upstreams={[mockUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      const deleteButton = desktop.getByLabelText("delete: Test Upstream");
-      fireEvent.click(deleteButton);
-
-      expect(mockOnDelete).toHaveBeenCalledWith(mockUpstream);
-    });
-  });
-
-  describe("Test Action", () => {
-    it("shows test button for each upstream", () => {
-      render(
-        <UpstreamsTable
-          upstreams={[mockUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      const testButton = desktop.getByLabelText("test: Test Upstream");
-      expect(testButton).toBeInTheDocument();
-    });
-
-    it("calls onTest when test button is clicked", () => {
-      render(
-        <UpstreamsTable
-          upstreams={[mockUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      const testButton = desktop.getByLabelText("test: Test Upstream");
-      fireEvent.click(testButton);
-
-      expect(mockOnTest).toHaveBeenCalledWith(mockUpstream);
-    });
-  });
-
-  describe("Multiple Upstreams", () => {
-    it("renders multiple upstreams correctly", () => {
-      const upstreams = [
-        mockUpstream,
-        {
-          ...mockUpstream,
-          id: "test-id-2",
-          name: "Second Upstream",
-          route_capabilities: ["anthropic_messages"],
-          base_url: "https://api.anthropic.com/v1",
-        },
-      ];
-      render(
-        <UpstreamsTable
-          upstreams={upstreams}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      expect(desktop.getByText("Test Upstream")).toBeInTheDocument();
-      expect(desktop.getByText("Second Upstream")).toBeInTheDocument();
-      expect(desktop.getByText("capabilityOpenAIChatCompatible")).toBeInTheDocument();
-      expect(desktop.getByText("capabilityAnthropicMessages")).toBeInTheDocument();
-    });
-  });
-
-  describe("Base URL Display", () => {
-    it("displays base URL in code element", () => {
-      render(
-        <UpstreamsTable
-          upstreams={[mockUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      const urlElement = desktop.getByText("https://api.openai.com/v1");
-      expect(urlElement.tagName).toBe("CODE");
-    });
-  });
-
-  describe("Error State Styling", () => {
-    it("does not render red glow background on unhealthy upstream rows", () => {
-      const unhealthyUpstream = {
-        ...mockUpstream,
-        health_status: {
-          is_healthy: false,
-          last_check: new Date().toISOString(),
-        },
-      };
-      render(
-        <UpstreamsTable
-          upstreams={[unhealthyUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-
-      const row = desktop.getByText("Test Upstream").closest("tr");
-      expect(row?.className ?? "").not.toContain("shadow-[inset_0_0_20px");
-    });
-  });
-
-  describe("Action Buttons Accessibility", () => {
-    it("has correct aria-labels for edit buttons", () => {
-      render(
-        <UpstreamsTable
-          upstreams={[mockUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      expect(desktop.getByLabelText("edit: Test Upstream")).toBeInTheDocument();
-    });
-
-    it("has correct aria-labels for delete buttons", () => {
-      render(
-        <UpstreamsTable
-          upstreams={[mockUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      expect(desktop.getByLabelText("delete: Test Upstream")).toBeInTheDocument();
-    });
-
-    it("has aria-expanded on collapse button", () => {
-      render(
-        <UpstreamsTable
-          upstreams={[mockUpstream]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onTest={mockOnTest}
-        />
-      );
-
-      const desktop = getDesktopLayout();
-      const collapseButton = desktop.getByRole("button", { name: "collapse" });
-      expect(collapseButton).toHaveAttribute("aria-expanded", "true");
     });
   });
 });

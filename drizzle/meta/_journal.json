@@ -127,6 +127,13 @@
       "when": 1772617600000,
       "tag": "0017_spending_rules_json",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1772617600001,
+      "tag": "0018_tired_ultimatum",
+      "breakpoints": true
     }
   ]
 }

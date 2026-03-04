@@ -35,13 +35,28 @@ vi.mock("@/lib/db", () => ({
         findFirst: vi.fn(),
         findMany: vi.fn(),
       },
+      requestLogs: {
+        findFirst: vi.fn(),
+      },
       circuitBreakerStates: {
         findMany: vi.fn(() => Promise.resolve([])),
       },
     },
-    select: vi.fn(() => ({
-      from: vi.fn(() => Promise.resolve([{ value: 0 }])),
-    })),
+    select: vi.fn((selection?: Record<string, unknown>) => {
+      if (selection && "value" in selection) {
+        return {
+          from: vi.fn(() => Promise.resolve([{ value: 0 }])),
+        };
+      }
+
+      return {
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            groupBy: vi.fn(() => Promise.resolve([])),
+          })),
+        })),
+      };
+    }),
     insert: vi.fn(() => ({
       values: vi.fn(() => ({
         returning: vi.fn(() =>
@@ -72,6 +87,10 @@ vi.mock("@/lib/db", () => ({
   },
   upstreams: {},
   circuitBreakerStates: {},
+  requestLogs: {
+    upstreamId: "upstreamId",
+    createdAt: "createdAt",
+  },
 }));
 
 vi.mock("@/lib/utils/encryption", () => ({
@@ -79,9 +98,13 @@ vi.mock("@/lib/utils/encryption", () => ({
   decrypt: vi.fn((value: string) => value.replace("encrypted:", "")),
 }));
 
+vi.mock("@/lib/services/load-balancer", () => ({
+  getConnectionCountsSnapshot: vi.fn(() => ({})),
+}));
+
 describe("upstream-crud", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   describe("maskApiKey", () => {
@@ -377,6 +400,69 @@ describe("upstream-crud", () => {
       expect(result.weight).toBe(10);
     });
 
+    it("should return lastUsedAt in update response when request logs exist", async () => {
+      const { updateUpstream } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+      const lastUsedAt = new Date("2026-03-03T10:00:00.000Z");
+
+      vi.mocked(db.select).mockImplementation((selection?: Record<string, unknown>) => {
+        if (selection && "value" in selection) {
+          return {
+            from: vi.fn().mockResolvedValue([{ value: 0 }]),
+          } as unknown as MockSelectChain;
+        }
+
+        return {
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              groupBy: vi.fn().mockResolvedValue([
+                { upstreamId: "test-id", lastUsedAt },
+                { upstreamId: null, lastUsedAt: new Date("2026-03-03T09:00:00.000Z") },
+              ]),
+            })),
+          })),
+        } as unknown as MockSelectChain;
+      });
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValueOnce({
+        id: "test-id",
+        name: "test-upstream",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com",
+        apiKeyEncrypted: "encrypted:sk-test-key",
+      } as unknown as PartialUpstream);
+
+      const mockReturning = vi.fn().mockResolvedValue([
+        {
+          id: "test-id",
+          name: "updated-upstream",
+          providerType: "openai",
+          baseUrl: "https://api.openai.com",
+          apiKeyEncrypted: "encrypted:sk-test-key",
+          isDefault: false,
+          timeout: 60,
+          isActive: true,
+          config: null,
+          priority: 0,
+          weight: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      vi.mocked(db.update).mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: mockReturning,
+          }),
+        }),
+      } as unknown as MockUpdateChain);
+
+      const result = await updateUpstream("test-id", { name: "updated-upstream" });
+
+      expect(result.lastUsedAt).toEqual(lastUsedAt);
+    });
+
     it("should normalize route capabilities when updating upstream", async () => {
       const { updateUpstream } = await import("@/lib/services/upstream-crud");
       const { db } = await import("@/lib/db");
@@ -500,9 +586,21 @@ describe("upstream-crud", () => {
       const { listUpstreams } = await import("@/lib/services/upstream-crud");
       const { db } = await import("@/lib/db");
 
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockResolvedValue([{ value: 2 }]),
-      } as unknown as MockSelectChain);
+      vi.mocked(db.select).mockImplementation((selection?: Record<string, unknown>) => {
+        if (selection && "value" in selection) {
+          return {
+            from: vi.fn().mockResolvedValue([{ value: 2 }]),
+          } as unknown as MockSelectChain;
+        }
+
+        return {
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              groupBy: vi.fn().mockResolvedValue([]),
+            })),
+          })),
+        } as unknown as MockSelectChain;
+      });
 
       vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
         {
@@ -548,14 +646,103 @@ describe("upstream-crud", () => {
       expect(result.items[1].priority).toBe(5);
     });
 
+    it("should skip last-used aggregation query when current page has no upstreams", async () => {
+      const { listUpstreams } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.select).mockImplementation((selection?: Record<string, unknown>) => {
+        if (selection && "value" in selection) {
+          return {
+            from: vi.fn().mockResolvedValue([{ value: 0 }]),
+          } as unknown as MockSelectChain;
+        }
+
+        return {
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              groupBy: vi.fn().mockResolvedValue([]),
+            })),
+          })),
+        } as unknown as MockSelectChain;
+      });
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([]);
+
+      const result = await listUpstreams(1, 20);
+
+      expect(result.items).toEqual([]);
+      expect(result.total).toBe(0);
+      expect(result.totalPages).toBe(1);
+      expect(db.select).toHaveBeenCalledTimes(1);
+    });
+
+    it("should include last_used_at from request log aggregation", async () => {
+      const { listUpstreams } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+      const lastUsedAt = new Date("2026-03-01T10:00:00.000Z");
+
+      vi.mocked(db.select).mockImplementation((selection?: Record<string, unknown>) => {
+        if (selection && "value" in selection) {
+          return {
+            from: vi.fn().mockResolvedValue([{ value: 1 }]),
+          } as unknown as MockSelectChain;
+        }
+
+        return {
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              groupBy: vi.fn().mockResolvedValue([
+                { upstreamId: null, lastUsedAt: new Date("2026-03-01T09:00:00.000Z") },
+                { upstreamId: "id-1", lastUsedAt },
+              ]),
+            })),
+          })),
+        } as unknown as MockSelectChain;
+      });
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+        {
+          id: "id-1",
+          name: "upstream-1",
+          providerType: "openai",
+          baseUrl: "https://api.openai.com",
+          apiKeyEncrypted: "encrypted:sk-key-1",
+          isDefault: false,
+          timeout: 60,
+          isActive: true,
+          config: null,
+          priority: 0,
+          weight: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ] as unknown as PartialUpstream[]);
+
+      const result = await listUpstreams(1, 20);
+
+      expect(result.items[0].lastUsedAt).toEqual(lastUsedAt);
+    });
+
     it("should handle decryption errors gracefully", async () => {
       const { listUpstreams } = await import("@/lib/services/upstream-crud");
       const { db } = await import("@/lib/db");
       const { decrypt } = await import("@/lib/utils/encryption");
 
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockResolvedValue([{ value: 1 }]),
-      } as unknown as MockSelectChain);
+      vi.mocked(db.select).mockImplementation((selection?: Record<string, unknown>) => {
+        if (selection && "value" in selection) {
+          return {
+            from: vi.fn().mockResolvedValue([{ value: 1 }]),
+          } as unknown as MockSelectChain;
+        }
+
+        return {
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              groupBy: vi.fn().mockResolvedValue([]),
+            })),
+          })),
+        } as unknown as MockSelectChain;
+      });
 
       vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
         {

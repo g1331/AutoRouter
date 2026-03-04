@@ -487,6 +487,8 @@ function RetryTimeline({
         return <CircleSlash className="w-3 h-3 text-red-500" />;
       case "circuit_open":
         return <Lock className="w-3 h-3 text-status-warning" />;
+      case "concurrency_full":
+        return <AlertTriangle className="w-3 h-3 text-status-warning" />;
       default:
         return <Zap className="w-3 h-3 text-status-error" />;
     }
@@ -532,7 +534,8 @@ function RetryTimeline({
                     "tabular-nums",
                     attempt.error_type === "http_5xx" && "text-status-error",
                     attempt.error_type === "timeout" && "text-status-warning",
-                    attempt.error_type === "http_429" && "text-orange-500"
+                    attempt.error_type === "http_429" && "text-orange-500",
+                    attempt.error_type === "concurrency_full" && "text-status-warning"
                   )}
                 >
                   [{statusLabel}]
