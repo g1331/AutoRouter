@@ -390,6 +390,7 @@ export async function updateUpstream(
   } catch {
     apiKeyMasked = "***error***";
   }
+  const lastUsedAtByUpstreamId = await getLastUsedAtMap([updated.id]);
 
   return {
     id: updated.id,
@@ -412,7 +413,7 @@ export async function updateUpstream(
     billingInputMultiplier: updated.billingInputMultiplier,
     billingOutputMultiplier: updated.billingOutputMultiplier,
     spendingRules: updated.spendingRules as SpendingRules,
-    lastUsedAt: null,
+    lastUsedAt: lastUsedAtByUpstreamId.get(updated.id) ?? null,
     createdAt: updated.createdAt,
     updatedAt: updated.updatedAt,
   };

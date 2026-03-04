@@ -400,6 +400,69 @@ describe("upstream-crud", () => {
       expect(result.weight).toBe(10);
     });
 
+    it("should return lastUsedAt in update response when request logs exist", async () => {
+      const { updateUpstream } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+      const lastUsedAt = new Date("2026-03-03T10:00:00.000Z");
+
+      vi.mocked(db.select).mockImplementation((selection?: Record<string, unknown>) => {
+        if (selection && "value" in selection) {
+          return {
+            from: vi.fn().mockResolvedValue([{ value: 0 }]),
+          } as unknown as MockSelectChain;
+        }
+
+        return {
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              groupBy: vi.fn().mockResolvedValue([
+                { upstreamId: "test-id", lastUsedAt },
+                { upstreamId: null, lastUsedAt: new Date("2026-03-03T09:00:00.000Z") },
+              ]),
+            })),
+          })),
+        } as unknown as MockSelectChain;
+      });
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValueOnce({
+        id: "test-id",
+        name: "test-upstream",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com",
+        apiKeyEncrypted: "encrypted:sk-test-key",
+      } as unknown as PartialUpstream);
+
+      const mockReturning = vi.fn().mockResolvedValue([
+        {
+          id: "test-id",
+          name: "updated-upstream",
+          providerType: "openai",
+          baseUrl: "https://api.openai.com",
+          apiKeyEncrypted: "encrypted:sk-test-key",
+          isDefault: false,
+          timeout: 60,
+          isActive: true,
+          config: null,
+          priority: 0,
+          weight: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      vi.mocked(db.update).mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: mockReturning,
+          }),
+        }),
+      } as unknown as MockUpdateChain);
+
+      const result = await updateUpstream("test-id", { name: "updated-upstream" });
+
+      expect(result.lastUsedAt).toEqual(lastUsedAt);
+    });
+
     it("should normalize route capabilities when updating upstream", async () => {
       const { updateUpstream } = await import("@/lib/services/upstream-crud");
       const { db } = await import("@/lib/db");
