@@ -10,6 +10,7 @@
 **Goals:**
 - 让 Gemini 请求在网关入口可鉴权通过，并保留现有 key 校验和错误语义。
 - 让 Gemini 原生路径请求在 `body.model` 缺失时仍可提取模型名，并贯通日志与 billing 快照。
+- 让 Gemini 路径能力路由在选定上游后应用该上游的 `modelRedirects`，并在日志/计费中记录重定向后的模型名。
 - 建立统一 usage 归一化规则，覆盖 OpenAI / Anthropic / Gemini，避免双实现漂移。
 - 支持 Anthropic cache 写入 TTL 细分字段的解析、存储和对外输出。
 - 强化鉴权与 header 观测，同时确保敏感头值持续脱敏。
@@ -74,6 +75,15 @@
 备选方案与取舍：
 - 只依赖 `body.model`：已在 Gemini CLI 真实流量中验证不可行，导致 `model_missing` 快照堆积。
 - 仅在响应阶段回填 model：失败响应（如上游 503）无法可靠回填，不能满足排障与计费一致性要求。
+
+### 决策 6：Gemini 路径能力路由按实际上游应用模型重定向
+
+- 方案：保留路径能力匹配作为上游选择入口；在选定候选上游后，使用该上游的 `modelRedirects` 解析 `resolvedModel`，并将结果用于 `logRequestStart`、`updateRequestLog`、`logRequest`、`calculateAndPersistRequestBillingSnapshot` 以及 `routingDecision` 的 `resolved_model`/`model_redirect_applied`。
+- 失败分支按“最后一次实际外发的上游”重新解析模型，保证 `did_send_upstream=true` 时日志中的 `resolved_model` 与真实外发目标一致。
+
+备选方案与取舍：
+- 始终使用原始 model：无法体现上游重定向策略，排障与成本对账会出现模型名偏差。
+- 只在 model-router 链路应用重定向：Gemini 路径能力链路与主链路语义不一致，造成运营观测混乱。
 
 日志详情布局示意：
 

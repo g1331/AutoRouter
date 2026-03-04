@@ -36,3 +36,8 @@
 - [x] 6.1 在代理入口实现 Gemini 原生路径模型回退提取（验收：`body.model` 缺失时可从 `/v1beta/models/{model}:...` 得到 model）
 - [x] 6.2 增加路由单测覆盖 Gemini 路径提取并断言日志与 billing snapshot 使用同一 model（验收：`tests/unit/api/proxy/route.test.ts` 新增场景通过）
 - [x] 6.3 更新 OpenSpec proposal/design/spec，补齐该补丁的行为约束与验收标准（验收：变更文档与实现一致）
+
+## 7. Gemini 路径模型重定向补丁
+
+- [x] 7.1 在 `src/app/api/proxy/v1/[...path]/route.ts` 为 Gemini 路径能力路由引入上游 `modelRedirects` 解析，并让 routing decision 的 `resolved_model` 与 `model_redirect_applied` 反映真实结果（验收：成功与失败分支日志语义一致）
+- [x] 7.2 在 `tests/unit/api/proxy/route.test.ts` 增加 Gemini 路径模型重定向用例，断言 `logRequestStart`、`updateRequestLog`、`calculateAndPersistRequestBillingSnapshot` 全链路使用重定向后的模型（验收：定向测试通过）

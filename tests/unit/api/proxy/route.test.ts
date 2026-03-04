@@ -184,6 +184,28 @@ vi.mock("@/lib/services/circuit-breaker", () => {
 // Mock model-router module
 vi.mock("@/lib/services/model-router", () => ({
   routeByModel: vi.fn(),
+  resolveModelWithRedirects: vi.fn(
+    (model: string, modelRedirects: Record<string, string> | null | undefined) => {
+      if (!modelRedirects || Object.keys(modelRedirects).length === 0) {
+        return { resolvedModel: model, redirectApplied: false };
+      }
+
+      let currentModel = model;
+      let redirectApplied = false;
+      let depth = 0;
+      while (depth < 10) {
+        const targetModel = modelRedirects[currentModel];
+        if (!targetModel) {
+          break;
+        }
+        currentModel = targetModel;
+        redirectApplied = true;
+        depth += 1;
+      }
+
+      return { resolvedModel: currentModel, redirectApplied };
+    }
+  ),
   NoUpstreamGroupError: class NoUpstreamGroupError extends Error {
     constructor(message: string) {
       super(message);
@@ -775,6 +797,131 @@ describe("proxy route upstream selection", () => {
     expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({
         model: "gemini-from-body",
+      })
+    );
+  });
+
+  it("should apply gemini model redirects for path-capability routing decisions and billing", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { logRequestStart, updateRequestLog } = await import("@/lib/services/request-logger");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-google-redirect" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-google-redirect",
+        name: "google-upstream-redirect",
+        providerType: "google",
+        baseUrl: "https://generativelanguage.googleapis.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["gemini_native_generate"],
+        modelRedirects: {
+          "gemini-2.5-flash-lite": "gemini-2.5-flash",
+        },
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+    const googleUpstream = {
+      id: "up-google-redirect",
+      name: "google-upstream-redirect",
+      providerType: "google",
+      baseUrl: "https://generativelanguage.googleapis.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 0,
+      weight: 1,
+      modelRedirects: {
+        "gemini-2.5-flash-lite": "gemini-2.5-flash",
+      },
+    };
+
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: googleUpstream,
+      providerType: "google",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: {
+        promptTokens: 12,
+        completionTokens: 3,
+        totalTokens: 15,
+      },
+    });
+
+    const request = new NextRequest(
+      "http://localhost/api/proxy/v1/v1beta/models/gemini-2.5-flash-lite:generateContent",
+      {
+        method: "POST",
+        headers: {
+          "x-goog-api-key": "sk-x-goog-api-key",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: "hello" }] }],
+        }),
+      }
+    );
+
+    const response = await POST(request, {
+      params: Promise.resolve({
+        path: ["v1beta", "models", "gemini-2.5-flash-lite:generateContent"],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(selectFromProviderType).toHaveBeenCalledWith(
+      ["up-google-redirect"],
+      undefined,
+      undefined
+    );
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(googleUpstream);
+    expect(logRequestStart).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "gemini-2.5-flash",
+        routingDecision: expect.objectContaining({
+          original_model: "gemini-2.5-flash-lite",
+          resolved_model: "gemini-2.5-flash",
+          model_redirect_applied: true,
+        }),
+      })
+    );
+    expect(updateRequestLog).toHaveBeenCalledWith(
+      "log-id",
+      expect.objectContaining({
+        model: "gemini-2.5-flash",
+        routingDecision: expect.objectContaining({
+          original_model: "gemini-2.5-flash-lite",
+          resolved_model: "gemini-2.5-flash",
+          model_redirect_applied: true,
+        }),
+      })
+    );
+    expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "gemini-2.5-flash",
       })
     );
   });

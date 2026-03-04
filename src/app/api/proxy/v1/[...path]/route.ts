@@ -45,6 +45,7 @@ import {
   extractGeminiModelFromPath,
   matchRouteCapability,
 } from "@/lib/services/route-capability-matcher";
+import { resolveModelWithRedirects } from "@/lib/services/model-router";
 import { ensureRouteCapabilityMigration } from "@/lib/services/route-capability-migration";
 import {
   type FailoverConfig,
@@ -131,7 +132,9 @@ function transformPathRoutingDecisionLog(
   input: {
     matchedRouteCapability: RouteCapability;
     routeMatchSource: RouteMatchSource;
-    model: string | null;
+    originalModel: string | null;
+    resolvedModel: string | null;
+    modelRedirectApplied: boolean;
     capabilityCandidates: Upstream[];
     finalCandidates: Upstream[];
     excludedCandidates: RoutingExcluded[];
@@ -147,9 +150,9 @@ function transformPathRoutingDecisionLog(
   }));
 
   return {
-    original_model: input.model ?? "(path-based)",
-    resolved_model: input.model ?? "(path-based)",
-    model_redirect_applied: false,
+    original_model: input.originalModel ?? "(path-based)",
+    resolved_model: input.resolvedModel ?? "(path-based)",
+    model_redirect_applied: input.modelRedirectApplied,
     provider_type: getProviderByRouteCapability(input.matchedRouteCapability),
     routing_type: "path_capability",
     matched_route_capability: input.matchedRouteCapability,
@@ -168,6 +171,21 @@ function transformPathRoutingDecisionLog(
     ...(diagnostics?.failureStage !== undefined ? { failure_stage: diagnostics.failureStage } : {}),
     selection_strategy: "weighted",
   };
+}
+
+function resolvePathRoutingModelForUpstream(
+  originalModel: string | null,
+  upstream: Upstream | null | undefined
+): { resolvedModel: string | null; redirectApplied: boolean } {
+  if (!originalModel || !upstream) {
+    return { resolvedModel: originalModel, redirectApplied: false };
+  }
+
+  const { resolvedModel, redirectApplied } = resolveModelWithRedirects(
+    originalModel,
+    upstream.modelRedirects
+  );
+  return { resolvedModel, redirectApplied };
 }
 
 function mergeExcludedCandidates(
@@ -1176,7 +1194,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
   // Route context
   let priorityTier: number | null = null;
-  const resolvedModel: string | null = model;
+  let resolvedModel: string | null = model;
+  let modelRedirectApplied = false;
   const routeMatchSource: RouteMatchSource = "path";
   let candidateUpstreamIds: string[] = [];
   let capabilityCandidates: Upstream[] = [];
@@ -1240,6 +1259,10 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
   const selectedCandidate = finalCapabilityCandidates[0];
   candidateUpstreamIds = finalCapabilityCandidates.map((upstream) => upstream.id);
+  ({ resolvedModel, redirectApplied: modelRedirectApplied } = resolvePathRoutingModelForUpstream(
+    model,
+    selectedCandidate
+  ));
 
   log.debug(
     {
@@ -1281,7 +1304,9 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     {
       matchedRouteCapability,
       routeMatchSource,
-      model,
+      originalModel: model,
+      resolvedModel,
+      modelRedirectApplied,
       capabilityCandidates,
       finalCandidates: finalCapabilityCandidates,
       excludedCandidates: excludedCapabilityCandidates,
@@ -1376,6 +1401,11 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       (c) => c.header.toLowerCase() === "session_id"
     );
 
+    ({ resolvedModel, redirectApplied: modelRedirectApplied } = resolvePathRoutingModelForUpstream(
+      model,
+      upstreamForLogging
+    ));
+
     // Build routing decision for logging
     const routingDecision: RoutingDecision = {
       routingType,
@@ -1390,7 +1420,9 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       {
         matchedRouteCapability,
         routeMatchSource,
-        model,
+        originalModel: model,
+        resolvedModel,
+        modelRedirectApplied,
         capabilityCandidates,
         finalCandidates: finalCapabilityCandidates,
         excludedCandidates: excludedCapabilityCandidates,
@@ -1846,12 +1878,24 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       user_hint: getUserHint(errorCode, failureReason, matchedRouteCapability),
     } as const;
     const downstreamErrorBody = createUnifiedErrorBody(errorCode, errorDetails);
+    const upstreamForModelResolution =
+      attributionFailoverAttempt?.upstream_id != null
+        ? activeUpstreams.find(
+            (candidate) => candidate.id === attributionFailoverAttempt.upstream_id
+          )
+        : selectedCandidate;
+    ({ resolvedModel, redirectApplied: modelRedirectApplied } = resolvePathRoutingModelForUpstream(
+      model,
+      upstreamForModelResolution
+    ));
 
     const failureRoutingDecisionLog = transformPathRoutingDecisionLog(
       {
         matchedRouteCapability,
         routeMatchSource,
-        model,
+        originalModel: model,
+        resolvedModel,
+        modelRedirectApplied,
         capabilityCandidates,
         finalCandidates: finalCapabilityCandidates,
         excludedCandidates: excludedCapabilityCandidates,
