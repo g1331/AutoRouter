@@ -9,6 +9,7 @@ import {
   injectAuthHeader,
   applyCompensationHeaders,
   type ProxyResult,
+  type HeaderDiff,
 } from "@/lib/services/proxy-client";
 import {
   logRequest,
@@ -199,19 +200,34 @@ interface FailoverErrorWithHistory extends Error {
   failoverHistory?: FailoverAttempt[];
   concurrencyExcludedCandidates?: RoutingExcluded[];
   didSendUpstream?: boolean;
+  headerDiff?: HeaderDiff | null;
 }
 
 function attachFailoverContext<T extends Error>(
   error: T,
   failoverHistory: FailoverAttempt[],
   didSendUpstream: boolean,
-  concurrencyExcludedCandidates: RoutingExcluded[] = []
+  concurrencyExcludedCandidates: RoutingExcluded[] = [],
+  headerDiff: HeaderDiff | null = null
 ): T & FailoverErrorWithHistory {
   const enrichedError = error as T & FailoverErrorWithHistory;
   enrichedError.failoverHistory = [...failoverHistory];
   enrichedError.concurrencyExcludedCandidates = [...concurrencyExcludedCandidates];
   enrichedError.didSendUpstream = didSendUpstream;
+  enrichedError.headerDiff = headerDiff;
   return enrichedError;
+}
+
+function extractHeaderDiffFromError(error: unknown): HeaderDiff | null {
+  if (!error || typeof error !== "object" || !("headerDiff" in error)) {
+    return null;
+  }
+  const candidate = (error as { headerDiff?: unknown }).headerDiff;
+  if (!candidate || typeof candidate !== "object") {
+    return null;
+  }
+
+  return candidate as HeaderDiff;
 }
 
 function isSyntheticFailoverAttempt(attempt: FailoverAttempt): boolean {
@@ -669,6 +685,7 @@ async function forwardWithFailover(
           response_headers: failedResponse.headers,
           response_body_text: failedResponse.bodyText,
           response_body_json: failedResponse.bodyJson,
+          header_diff: result.headerDiff ?? null,
         });
         failedUpstreamIds.push(selectedUpstream.id);
         lastError = new Error(`Upstream returned ${result.statusCode}`);
@@ -715,6 +732,7 @@ async function forwardWithFailover(
     } catch (error) {
       // Release connection on error
       releaseConnection(selectedUpstream.id);
+      const errorHeaderDiff = extractHeaderDiffFromError(error);
 
       // Check if client disconnected
       if (request.signal.aborted) {
@@ -747,6 +765,7 @@ async function forwardWithFailover(
           error_type: getErrorType(error instanceof Error ? error : null, null),
           error_message: errorMessage,
           status_code: null,
+          header_diff: errorHeaderDiff,
         });
         failedUpstreamIds.push(selectedUpstream.id);
         lastError = error instanceof Error ? error : new Error(String(error));
@@ -761,7 +780,8 @@ async function forwardWithFailover(
         nonFailoverError,
         failoverHistory,
         didSendUpstream,
-        concurrencyExcludedCandidates
+        concurrencyExcludedCandidates,
+        errorHeaderDiff
       );
     }
   }
@@ -1796,6 +1816,13 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
     const errorStatusCode = getHttpStatusForError(errorCode);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const failureHeaderDiff =
+      attributionFailoverAttempt?.header_diff ??
+      (error as FailoverErrorWithHistory | null)?.headerDiff ??
+      null;
+    const sessionIdCompensated = Boolean(
+      failureHeaderDiff?.compensated.some((item) => item.header.toLowerCase() === "session_id")
+    );
     const errorDetails = {
       reason: failureReason,
       did_send_upstream: didSendUpstream,
@@ -1953,6 +1980,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         failoverAttempts: failoverHistory.length,
         failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
         routingDecision: failureRoutingDecisionLog,
+        sessionIdCompensated,
+        headerDiff: failureHeaderDiff,
       });
       persistedLogId = updatedLog?.id ?? requestLogId;
     } else {
@@ -1974,6 +2003,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         failoverAttempts: failoverHistory.length,
         failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
         routingDecision: failureRoutingDecisionLog,
+        sessionIdCompensated,
+        headerDiff: failureHeaderDiff,
       });
       persistedLogId = createdLog.id;
     }

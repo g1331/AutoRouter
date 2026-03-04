@@ -1400,11 +1400,23 @@ describe("proxy route upstream selection", () => {
       );
 
     vi.mocked(forwardRequest).mockResolvedValueOnce({
-      statusCode: 500,
+      statusCode: 503,
       headers: new Headers(),
       body: new Uint8Array(),
       isStream: false,
       usage: null,
+      headerDiff: {
+        inbound_count: 2,
+        outbound_count: 2,
+        dropped: [],
+        auth_replaced: {
+          header: "authorization",
+          inbound_value: "Bearer sk-***est",
+          outbound_value: "x-a***key",
+        },
+        compensated: [{ header: "session_id", source: "body.previous_response_id", value: "***" }],
+        unchanged: [{ header: "content-type", value: "application/json" }],
+      },
     });
 
     const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
@@ -1435,12 +1447,22 @@ describe("proxy route upstream selection", () => {
         expect.objectContaining({
           upstream_id: "up-anthropic-1",
           error_type: "http_5xx",
+          status_code: 503,
         }),
       ])
     );
     expect(updateLogPayload?.failoverHistory).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ error_type: "concurrency_full" })])
     );
+    expect(updateLogPayload?.headerDiff).toEqual(
+      expect.objectContaining({
+        auth_replaced: expect.objectContaining({ header: "authorization" }),
+        compensated: expect.arrayContaining([
+          expect.objectContaining({ header: "session_id", source: "body.previous_response_id" }),
+        ]),
+      })
+    );
+    expect(updateLogPayload?.sessionIdCompensated).toBe(true);
 
     const billingPayload = vi
       .mocked(calculateAndPersistRequestBillingSnapshot)
@@ -1923,6 +1945,18 @@ describe("proxy route upstream selection", () => {
         body: new TextEncoder().encode(JSON.stringify({ error: { message: "temporary failure" } })),
         isStream: false,
         usage: null,
+        headerDiff: {
+          inbound_count: 2,
+          outbound_count: 2,
+          dropped: [],
+          auth_replaced: {
+            header: "authorization",
+            inbound_value: "Bearer sk-***est",
+            outbound_value: "Bearer sk-***key",
+          },
+          compensated: [],
+          unchanged: [{ header: "content-type", value: "application/json" }],
+        },
       };
     });
 
@@ -1963,6 +1997,15 @@ describe("proxy route upstream selection", () => {
         did_send_upstream: true,
       })
     );
+    expect(updateLogPayload?.headerDiff).toEqual(
+      expect.objectContaining({
+        auth_replaced: expect.objectContaining({ header: "authorization" }),
+        unchanged: expect.arrayContaining([
+          expect.objectContaining({ header: "content-type", value: "application/json" }),
+        ]),
+      })
+    );
+    expect(updateLogPayload?.sessionIdCompensated).toBe(false);
   });
 
   it("should skip failure fixture when RECORDER_MODE is success", async () => {

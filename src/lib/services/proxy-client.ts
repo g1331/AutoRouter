@@ -62,6 +62,8 @@ export interface HeaderDiff {
   unchanged: Array<{ header: string; value: string }>;
 }
 
+type ProxyRequestErrorWithHeaderDiff = Error & { headerDiff?: HeaderDiff };
+
 function maskSecretValue(value: string): string {
   const trimmed = value.trim();
   if (trimmed.length <= 6) return "***";
@@ -917,6 +919,14 @@ export async function forwardRequest(
       unchanged.push({ header: lower, value: sanitizeHeaderValueForLogging(lower, value) });
     }
   }
+  const requestHeaderDiff: HeaderDiff = {
+    inbound_count: inboundCount,
+    outbound_count: outboundCount,
+    dropped,
+    auth_replaced: authReplaced,
+    compensated,
+    unchanged,
+  };
 
   // Construct upstream URL
   const baseUrl = upstream.baseUrl.replace(/\/$/, "");
@@ -1028,14 +1038,7 @@ export async function forwardRequest(
         isStream: true,
         usage,
         streamMetricsPromise,
-        headerDiff: {
-          inbound_count: inboundCount,
-          outbound_count: outboundCount,
-          dropped,
-          auth_replaced: authReplaced,
-          compensated,
-          unchanged,
-        },
+        headerDiff: requestHeaderDiff,
       };
     } else {
       // Regular response
@@ -1070,14 +1073,7 @@ export async function forwardRequest(
         body: bodyBytes,
         isStream: false,
         usage,
-        headerDiff: {
-          inbound_count: inboundCount,
-          outbound_count: outboundCount,
-          dropped,
-          auth_replaced: authReplaced,
-          compensated,
-          unchanged,
-        },
+        headerDiff: requestHeaderDiff,
       };
     }
   } catch (error) {
@@ -1085,11 +1081,16 @@ export async function forwardRequest(
 
     if (error instanceof Error && error.name === "AbortError") {
       reqLog.error({ timeout: upstream.timeout }, "upstream request timed out");
-      throw new Error(`Upstream request timed out after ${upstream.timeout}s`);
+      const timeoutError = new Error(`Upstream request timed out after ${upstream.timeout}s`);
+      (timeoutError as ProxyRequestErrorWithHeaderDiff).headerDiff = requestHeaderDiff;
+      throw timeoutError;
     }
 
-    reqLog.error({ err: error }, "upstream request failed");
-    throw error;
+    const requestError =
+      error instanceof Error ? error : new Error(typeof error === "string" ? error : String(error));
+    (requestError as ProxyRequestErrorWithHeaderDiff).headerDiff = requestHeaderDiff;
+    reqLog.error({ err: requestError }, "upstream request failed");
+    throw requestError;
   }
 }
 

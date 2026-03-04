@@ -273,6 +273,7 @@ export interface FailoverAttempt {
   response_headers?: Record<string, string>;
   response_body_text?: string | null;
   response_body_json?: unknown | null;
+  header_diff?: RequestLogResponse["header_diff"];
 }
 
 /**
