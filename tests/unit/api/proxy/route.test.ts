@@ -177,6 +177,7 @@ vi.mock("@/lib/services/circuit-breaker", () => {
   return {
     recordSuccess: vi.fn(),
     recordFailure: vi.fn(),
+    getCircuitBreakerState: vi.fn(async () => null),
     CircuitBreakerOpenError,
   };
 });
@@ -311,9 +312,11 @@ describe("proxy route upstream selection", () => {
     delete process.env.RECORDER_MODE;
     const routeModule = await import("@/app/api/proxy/v1/[...path]/route");
     const { db } = await import("@/lib/db");
+    const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
     POST = routeModule.POST;
     vi.mocked(db.query.upstreams.findMany).mockResolvedValue(DEFAULT_ACTIVE_UPSTREAMS);
     vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValue([]);
+    vi.mocked(getCircuitBreakerState).mockResolvedValue(null);
   }, 30_000);
 
   afterEach(() => {
@@ -1966,6 +1969,241 @@ describe("proxy route upstream selection", () => {
     expect(billingPayload).toEqual(
       expect.objectContaining({
         upstreamId: "up-anthropic-1",
+      })
+    );
+  });
+
+  it("should persist real circuit_state for path capability candidates", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+
+    const openUpstream = {
+      id: "up-open",
+      name: "open-upstream",
+      providerType: "anthropic",
+      routeCapabilities: ["anthropic_messages"],
+      baseUrl: "https://open.example",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 0,
+      weight: 1,
+    };
+    const halfOpenUpstream = {
+      id: "up-half",
+      name: "half-open-upstream",
+      providerType: "anthropic",
+      routeCapabilities: ["anthropic_messages"],
+      baseUrl: "https://half.example",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 0,
+      weight: 2,
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: openUpstream.id },
+      { upstreamId: halfOpenUpstream.id },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([openUpstream, halfOpenUpstream]);
+    vi.mocked(getCircuitBreakerState).mockImplementation(async (upstreamId: string) => {
+      if (upstreamId === openUpstream.id) {
+        return { state: "open" } as never;
+      }
+      if (upstreamId === halfOpenUpstream.id) {
+        return { state: "half_open" } as never;
+      }
+      return null;
+    });
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: openUpstream,
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 2,
+    });
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: null,
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
+    expect(response.status).toBe(200);
+
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload?.routingDecision?.candidates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: openUpstream.id,
+          circuit_state: "open",
+        }),
+        expect.objectContaining({
+          id: halfOpenUpstream.id,
+          circuit_state: "half_open",
+        }),
+      ])
+    );
+  });
+
+  it("should keep exception-branch failover evidence in the same structured shape", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType, NoHealthyUpstreamsError } =
+      await import("@/lib/services/load-balancer");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+
+    const upstream = {
+      id: "up-timeout",
+      name: "timeout-upstream",
+      providerType: "anthropic",
+      routeCapabilities: ["anthropic_messages"],
+      baseUrl: "https://timeout.example",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 0,
+      weight: 1,
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: upstream.id },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([upstream]);
+    vi.mocked(selectFromProviderType)
+      .mockResolvedValueOnce({
+        upstream,
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 1,
+      })
+      .mockRejectedValueOnce(new NoHealthyUpstreamsError("all upstreams exhausted"));
+    vi.mocked(forwardRequest).mockRejectedValueOnce(
+      new Error("Upstream request timed out after 60s")
+    );
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
+    expect(response.status).toBe(503);
+
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload?.routingDecision).toEqual(
+      expect.objectContaining({
+        did_send_upstream: true,
+        failure_stage: "upstream_request",
+      })
+    );
+    expect(updateLogPayload?.failoverHistory).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          upstream_id: upstream.id,
+          error_type: "timeout",
+          status_code: null,
+          response_headers: {},
+          response_body_json: null,
+          response_body_text: expect.stringContaining("timed out"),
+        }),
+      ])
+    );
+  });
+
+  it("should classify downstream stream interruption as downstream_streaming stage", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+
+    const upstream = {
+      id: "up-stream",
+      name: "stream-upstream",
+      providerType: "openai",
+      routeCapabilities: ["openai_chat_compatible"],
+      baseUrl: "https://stream.example",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 0,
+      weight: 1,
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: upstream.id },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([upstream]);
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream,
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+    vi.mocked(forwardRequest).mockRejectedValueOnce(
+      new Error("downstream stream closed by client")
+    );
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.2",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["v1", "chat", "completions"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(data.error).toEqual(
+      expect.objectContaining({
+        did_send_upstream: true,
+        reason: "UPSTREAM_NETWORK_ERROR",
+      })
+    );
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload?.routingDecision).toEqual(
+      expect.objectContaining({
+        did_send_upstream: true,
+        failure_stage: "downstream_streaming",
       })
     );
   });

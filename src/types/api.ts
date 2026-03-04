@@ -302,6 +302,38 @@ export type RoutingFailureStage =
   | "downstream_streaming";
 
 /**
+ * Derived request lifecycle status for log stage visualization.
+ */
+export type RequestLifecycleStatus =
+  | "decision"
+  | "requesting"
+  | "completed_success"
+  | "completed_failed"
+  | "unknown";
+
+/**
+ * Aggregated upstream error summary for quick diagnostics.
+ */
+export interface UpstreamErrorSummary {
+  status_code: number | null;
+  error_type: FailoverAttempt["error_type"] | null;
+  error_message: string | null;
+  response_body_excerpt: string | null;
+}
+
+/**
+ * Unified stage timing breakdown derived from request log metrics.
+ */
+export interface RequestStageTimings {
+  total_ms: number | null;
+  decision_ms: number | null;
+  upstream_response_ms: number | null;
+  first_token_ms: number | null;
+  generation_ms: number | null;
+  gateway_processing_ms: number | null;
+}
+
+/**
  * Candidate upstream in routing decision
  */
 export interface RoutingCandidate {
@@ -414,6 +446,11 @@ export interface RequestLogResponse {
     compensated: Array<{ header: string; source: string; value: string }>;
     unchanged: Array<{ header: string; value: string }>;
   } | null;
+  lifecycle_status?: RequestLifecycleStatus;
+  did_send_upstream?: boolean | null;
+  failure_stage?: RoutingFailureStage | null;
+  upstream_error?: UpstreamErrorSummary | null;
+  stage_timings_ms?: RequestStageTimings | null;
   billing_status?: "billed" | "unbilled" | null;
   unbillable_reason?: string | null;
   price_source?: "manual" | "openrouter" | "litellm" | null;

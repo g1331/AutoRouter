@@ -437,6 +437,23 @@ describe("api-transformers", () => {
         priority_tier: undefined,
         session_id_compensated: undefined,
         header_diff: null,
+        lifecycle_status: "completed_success",
+        did_send_upstream: null,
+        failure_stage: null,
+        upstream_error: {
+          status_code: 502,
+          error_type: "http_5xx",
+          error_message: "HTTP 502 error",
+          response_body_excerpt: null,
+        },
+        stage_timings_ms: {
+          total_ms: 1500,
+          decision_ms: null,
+          upstream_response_ms: null,
+          first_token_ms: null,
+          generation_ms: null,
+          gateway_processing_ms: null,
+        },
       });
     });
 
@@ -544,6 +561,160 @@ describe("api-transformers", () => {
       expect(result.lb_strategy).toBeNull();
       expect(result.failover_attempts).toBe(0);
       expect(result.failover_history).toBeNull();
+      expect(result.lifecycle_status).toBe("unknown");
+      expect(result.upstream_error).toBeNull();
+      expect(result.stage_timings_ms).toEqual({
+        total_ms: null,
+        decision_ms: null,
+        upstream_response_ms: null,
+        first_token_ms: null,
+        generation_ms: null,
+        gateway_processing_ms: null,
+      });
+    });
+
+    it("derives decision/requesting lifecycle stages from did_send_upstream when status is null", () => {
+      const decisionLog = {
+        id: "log-decision",
+        apiKeyId: "key-1",
+        upstreamId: null,
+        upstreamName: null,
+        method: "POST",
+        path: "/v1/chat/completions",
+        model: "gpt-4",
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+        statusCode: null,
+        durationMs: 300,
+        routingDurationMs: 100,
+        errorMessage: null,
+        routingType: "direct",
+        groupName: null,
+        lbStrategy: null,
+        failoverAttempts: 0,
+        failoverHistory: null,
+        routingDecision: {
+          did_send_upstream: false,
+          failure_stage: "candidate_selection",
+        },
+        isStream: false,
+        createdAt: new Date("2024-01-15T10:30:00.000Z"),
+      };
+      const requestingLog = {
+        ...decisionLog,
+        id: "log-requesting",
+        routingDecision: {
+          did_send_upstream: true,
+          failure_stage: null,
+        },
+      };
+
+      const decisionResult = transformRequestLogToApi(decisionLog as never);
+      const requestingResult = transformRequestLogToApi(requestingLog as never);
+
+      expect(decisionResult.lifecycle_status).toBe("decision");
+      expect(decisionResult.did_send_upstream).toBe(false);
+      expect(decisionResult.failure_stage).toBe("candidate_selection");
+      expect(decisionResult.upstream_error).toBeNull();
+      expect(decisionResult.stage_timings_ms).toEqual({
+        total_ms: 300,
+        decision_ms: 100,
+        upstream_response_ms: null,
+        first_token_ms: null,
+        generation_ms: null,
+        gateway_processing_ms: 200,
+      });
+
+      expect(requestingResult.lifecycle_status).toBe("requesting");
+      expect(requestingResult.did_send_upstream).toBe(true);
+      expect(requestingResult.failure_stage).toBeNull();
+      expect(requestingResult.stage_timings_ms).toEqual({
+        total_ms: 300,
+        decision_ms: 100,
+        upstream_response_ms: 200,
+        first_token_ms: null,
+        generation_ms: null,
+        gateway_processing_ms: null,
+      });
+    });
+
+    it("derives stream timing breakdown and upstream error summary from failover history", () => {
+      const log = {
+        id: "log-failure",
+        apiKeyId: "key-1",
+        upstreamId: "upstream-2",
+        upstreamName: "openai-secondary",
+        method: "POST",
+        path: "/v1/chat/completions",
+        model: "gpt-4",
+        promptTokens: 20,
+        completionTokens: 40,
+        totalTokens: 60,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+        statusCode: 503,
+        durationMs: 1000,
+        routingDurationMs: 100,
+        ttftMs: 250,
+        isStream: true,
+        errorMessage: "service unavailable",
+        routingType: "direct",
+        groupName: null,
+        lbStrategy: null,
+        failoverAttempts: 2,
+        failoverHistory: [
+          {
+            upstream_id: "upstream-1",
+            upstream_name: "openai-primary",
+            attempted_at: "2024-01-15T10:29:40.000Z",
+            error_type: "http_429" as const,
+            error_message: "rate limited",
+            status_code: 429,
+            response_body_text: '{"error":{"message":"rate limit"}}',
+            response_body_json: { error: { message: "rate limit" } },
+          },
+          {
+            upstream_id: "upstream-2",
+            upstream_name: "openai-secondary",
+            attempted_at: "2024-01-15T10:29:45.000Z",
+            error_type: "concurrency_full" as const,
+            error_message: "max concurrency reached",
+            status_code: null,
+          },
+        ],
+        routingDecision: {
+          did_send_upstream: true,
+          failure_stage: "upstream_response",
+        },
+        createdAt: new Date("2024-01-15T10:30:00.000Z"),
+      };
+
+      const result = transformRequestLogToApi(log as never);
+
+      expect(result.lifecycle_status).toBe("completed_failed");
+      expect(result.did_send_upstream).toBe(true);
+      expect(result.failure_stage).toBe("upstream_response");
+      expect(result.upstream_error).toEqual({
+        status_code: 429,
+        error_type: "http_429",
+        error_message: "rate limited",
+        response_body_excerpt: '{"error":{"message":"rate limit"}}',
+      });
+      expect(result.stage_timings_ms).toEqual({
+        total_ms: 1000,
+        decision_ms: 100,
+        upstream_response_ms: 900,
+        first_token_ms: 250,
+        generation_ms: 650,
+        gateway_processing_ms: null,
+      });
     });
 
     it("should normalize header_diff and sanitize sensitive header values", () => {

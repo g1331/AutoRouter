@@ -31,6 +31,7 @@ import {
   recordSuccess,
   recordFailure,
   CircuitBreakerOpenError,
+  getCircuitBreakerState,
 } from "@/lib/services/circuit-breaker";
 import { randomUUID } from "crypto";
 import {
@@ -128,6 +129,41 @@ interface RoutingDecisionDiagnostics {
   failureStage?: RoutingFailureStage | null;
 }
 
+type CandidateCircuitStateMap = Record<string, RoutingCandidate["circuit_state"]>;
+
+function normalizeRoutingCircuitState(
+  state: string | null | undefined
+): RoutingCandidate["circuit_state"] {
+  if (state === "open" || state === "half_open" || state === "closed") {
+    return state;
+  }
+  return "closed";
+}
+
+async function buildCandidateCircuitStateMap(
+  capabilityCandidates: Upstream[],
+  requestId: string
+): Promise<CandidateCircuitStateMap> {
+  const candidateCircuitStates: CandidateCircuitStateMap = {};
+
+  await Promise.all(
+    capabilityCandidates.map(async (upstream) => {
+      try {
+        const circuitState = await getCircuitBreakerState(upstream.id);
+        candidateCircuitStates[upstream.id] = normalizeRoutingCircuitState(circuitState?.state);
+      } catch (error) {
+        candidateCircuitStates[upstream.id] = "closed";
+        log.warn(
+          { err: error, requestId, upstreamId: upstream.id },
+          "failed to resolve circuit breaker state for routing candidate"
+        );
+      }
+    })
+  );
+
+  return candidateCircuitStates;
+}
+
 function transformPathRoutingDecisionLog(
   input: {
     matchedRouteCapability: RouteCapability;
@@ -138,6 +174,7 @@ function transformPathRoutingDecisionLog(
     capabilityCandidates: Upstream[];
     finalCandidates: Upstream[];
     excludedCandidates: RoutingExcluded[];
+    candidateCircuitStates?: CandidateCircuitStateMap;
   },
   selectedUpstreamId: string | null,
   diagnostics?: RoutingDecisionDiagnostics
@@ -146,7 +183,7 @@ function transformPathRoutingDecisionLog(
     id: upstream.id,
     name: upstream.name,
     weight: upstream.weight,
-    circuit_state: "closed",
+    circuit_state: input.candidateCircuitStates?.[upstream.id] ?? "closed",
   }));
 
   return {
@@ -352,6 +389,9 @@ function resolveFailureStage(
   if (isDownstreamStreamingError(error)) {
     return "downstream_streaming";
   }
+  if (error instanceof ClientDisconnectedError && didSendUpstream) {
+    return "downstream_streaming";
+  }
   if (!didSendUpstream) {
     return "candidate_selection";
   }
@@ -385,6 +425,21 @@ function resolveFailureReason(
     return "UPSTREAM_HTTP_ERROR";
   }
   return "UPSTREAM_NETWORK_ERROR";
+}
+
+function resolveDidSendUpstream(
+  error: FailoverErrorWithHistory | null | undefined,
+  lastSentFailoverAttempt: FailoverAttempt | undefined
+): boolean {
+  const attachedDidSend =
+    typeof error?.didSendUpstream === "boolean" ? error.didSendUpstream : undefined;
+
+  // Prefer positive evidence: if any non-synthetic failover attempt exists, upstream was sent.
+  if (lastSentFailoverAttempt != null) {
+    return true;
+  }
+
+  return attachedDidSend === true;
 }
 
 function getUserHint(
@@ -430,6 +485,154 @@ function resolveUpstreamProvider(
 
 const MAX_FAILOVER_ERROR_BODY_BYTES = 256 * 1024;
 const FAILOVER_STREAM_CAPTURE_TIMEOUT_MS = 200;
+
+function truncateFailoverEvidenceText(text: string): string {
+  if (text.length <= MAX_FAILOVER_ERROR_BODY_BYTES) {
+    return text;
+  }
+  return `${text.slice(0, MAX_FAILOVER_ERROR_BODY_BYTES)}...[TRUNCATED]`;
+}
+
+function extractMessageFromErrorPayload(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const candidate = payload as {
+    message?: unknown;
+    detail?: unknown;
+    error?: unknown;
+  };
+
+  if (typeof candidate.message === "string" && candidate.message.trim()) {
+    return truncateFailoverEvidenceText(candidate.message.trim());
+  }
+  if (typeof candidate.detail === "string" && candidate.detail.trim()) {
+    return truncateFailoverEvidenceText(candidate.detail.trim());
+  }
+  if (candidate.error && candidate.error !== payload) {
+    return extractMessageFromErrorPayload(candidate.error);
+  }
+  return null;
+}
+
+function normalizeFailoverResponseHeaders(headers: unknown): Record<string, string> {
+  if (!headers) {
+    return {};
+  }
+  if (headers instanceof Headers) {
+    return Object.fromEntries(headers.entries());
+  }
+  if (Array.isArray(headers)) {
+    const entries = headers
+      .filter(
+        (entry): entry is [string, unknown] =>
+          Array.isArray(entry) && entry.length >= 2 && typeof entry[0] === "string"
+      )
+      .map(([key, value]) => [key, String(value)] as const);
+    return Object.fromEntries(entries);
+  }
+  if (typeof headers === "object") {
+    return Object.fromEntries(
+      Object.entries(headers as Record<string, unknown>).map(([key, value]) => [key, String(value)])
+    );
+  }
+  return {};
+}
+
+function extractFailoverBodyEvidence(body: unknown): {
+  bodyText: string | null;
+  bodyJson: unknown | null;
+} {
+  if (body == null) {
+    return { bodyText: null, bodyJson: null };
+  }
+
+  if (typeof body === "string") {
+    const bodyText = truncateFailoverEvidenceText(body);
+    try {
+      return { bodyText, bodyJson: JSON.parse(bodyText) };
+    } catch {
+      return { bodyText, bodyJson: null };
+    }
+  }
+
+  if (body instanceof Uint8Array) {
+    return extractFailoverBodyEvidence(new TextDecoder().decode(body));
+  }
+
+  if (typeof body === "object") {
+    try {
+      const bodyText = truncateFailoverEvidenceText(JSON.stringify(body));
+      return { bodyText, bodyJson: body };
+    } catch {
+      return { bodyText: null, bodyJson: null };
+    }
+  }
+
+  return {
+    bodyText: truncateFailoverEvidenceText(String(body)),
+    bodyJson: null,
+  };
+}
+
+function extractFailoverErrorEvidence(error: unknown): {
+  statusCode: number | null;
+  responseHeaders: Record<string, string>;
+  responseBodyText: string | null;
+  responseBodyJson: unknown | null;
+  errorMessage: string;
+} {
+  const errorObject =
+    error && typeof error === "object" ? (error as Record<string, unknown>) : null;
+
+  const statusCandidate = errorObject?.statusCode ?? errorObject?.status;
+  const statusCode =
+    typeof statusCandidate === "number" && Number.isFinite(statusCandidate)
+      ? Math.trunc(statusCandidate)
+      : null;
+
+  const responseHeaders = normalizeFailoverResponseHeaders(
+    errorObject?.headers ??
+      (errorObject?.response as Record<string, unknown> | undefined)?.headers ??
+      (errorObject?.cause as Record<string, unknown> | undefined)?.headers
+  );
+
+  const rawBody =
+    errorObject?.responseBody ??
+    errorObject?.body ??
+    (errorObject?.response as Record<string, unknown> | undefined)?.body ??
+    (errorObject?.cause as Record<string, unknown> | undefined)?.responseBody ??
+    (errorObject?.cause as Record<string, unknown> | undefined)?.body;
+  const bodyEvidence = extractFailoverBodyEvidence(rawBody);
+  const payloadMessage = extractMessageFromErrorPayload(bodyEvidence.bodyJson);
+  const fallbackErrorMessage =
+    error instanceof Error && error.message.trim() ? error.message.trim() : "Request failed";
+  const errorMessage = payloadMessage ?? truncateFailoverEvidenceText(fallbackErrorMessage);
+
+  return {
+    statusCode,
+    responseHeaders,
+    responseBodyText:
+      bodyEvidence.bodyText ?? (errorMessage ? truncateFailoverEvidenceText(errorMessage) : null),
+    responseBodyJson: bodyEvidence.bodyJson,
+    errorMessage,
+  };
+}
+
+function resolveFailedResponseErrorMessage(
+  statusCode: number,
+  failedResponse: { bodyText: string | null; bodyJson: unknown | null }
+): string {
+  const payloadMessage = extractMessageFromErrorPayload(failedResponse.bodyJson);
+  if (payloadMessage) {
+    return payloadMessage;
+  }
+  if (failedResponse.bodyText) {
+    return truncateFailoverEvidenceText(failedResponse.bodyText);
+  }
+  return `HTTP ${statusCode} error`;
+}
 
 async function captureFailedResponse(result: ProxyResult): Promise<{
   headers: Record<string, string>;
@@ -701,7 +904,7 @@ async function forwardWithFailover(
           upstream_base_url: attemptUpstreamBaseUrl,
           attempted_at: new Date().toISOString(),
           error_type: getErrorType(null, result.statusCode),
-          error_message: `HTTP ${result.statusCode} error`,
+          error_message: resolveFailedResponseErrorMessage(result.statusCode, failedResponse),
           status_code: result.statusCode,
           response_headers: failedResponse.headers,
           response_body_text: failedResponse.bodyText,
@@ -777,13 +980,14 @@ async function forwardWithFailover(
 
       // Record failure in circuit breaker for failoverable errors
       if (isFailoverableError(error) || error instanceof CircuitBreakerOpenError) {
+        const errorEvidence = extractFailoverErrorEvidence(error);
         void recordFailure(
           selectedUpstream.id,
-          getErrorType(error instanceof Error ? error : null, null)
+          getErrorType(error instanceof Error ? error : null, errorEvidence.statusCode)
         );
 
         // Mark upstream as unhealthy
-        const errorMessage = error instanceof Error ? error.message : "Request failed";
+        const errorMessage = errorEvidence.errorMessage;
         void markUnhealthy(selectedUpstream.id, errorMessage);
         // Record failover attempt
         failoverHistory.push({
@@ -792,9 +996,12 @@ async function forwardWithFailover(
           upstream_provider_type: resolveUpstreamProvider(selectedUpstream, routeCapability),
           upstream_base_url: attemptUpstreamBaseUrl,
           attempted_at: new Date().toISOString(),
-          error_type: getErrorType(error instanceof Error ? error : null, null),
+          error_type: getErrorType(error instanceof Error ? error : null, errorEvidence.statusCode),
           error_message: errorMessage,
-          status_code: null,
+          status_code: errorEvidence.statusCode,
+          response_headers: errorEvidence.responseHeaders,
+          response_body_text: errorEvidence.responseBodyText,
+          response_body_json: errorEvidence.responseBodyJson,
           header_diff: errorHeaderDiff,
         });
         failedUpstreamIds.push(selectedUpstream.id);
@@ -1201,6 +1408,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   let capabilityCandidates: Upstream[] = [];
   let finalCapabilityCandidates: Upstream[] = [];
   let excludedCapabilityCandidates: RoutingExcluded[] = [];
+  let candidateCircuitStates: CandidateCircuitStateMap = {};
   let sessionId: string | null = null;
   let sessionIdSource: "header" | "body" | null = null;
   const activeUpstreams = await db.query.upstreams.findMany({
@@ -1256,6 +1464,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
   finalCapabilityCandidates = authorizedCapabilityCandidates;
   excludedCapabilityCandidates = [];
+  candidateCircuitStates = await buildCandidateCircuitStateMap(capabilityCandidates, requestId);
 
   const selectedCandidate = finalCapabilityCandidates[0];
   candidateUpstreamIds = finalCapabilityCandidates.map((upstream) => upstream.id);
@@ -1310,6 +1519,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       capabilityCandidates,
       finalCandidates: finalCapabilityCandidates,
       excludedCandidates: excludedCapabilityCandidates,
+      candidateCircuitStates,
     },
     selectedCandidate?.id ?? null,
     {
@@ -1426,6 +1636,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         capabilityCandidates,
         finalCandidates: finalCapabilityCandidates,
         excludedCandidates: excludedCapabilityCandidates,
+        candidateCircuitStates,
       },
       upstreamForLogging.id,
       {
@@ -1832,10 +2043,10 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     const durationMs = Date.now() - startTime;
     const lastFailoverAttempt = failoverHistory[failoverHistory.length - 1];
     const lastSentFailoverAttempt = getLastSentFailoverAttempt(failoverHistory);
-    const didSendUpstream =
-      typeof (error as FailoverErrorWithHistory | null)?.didSendUpstream === "boolean"
-        ? Boolean((error as FailoverErrorWithHistory).didSendUpstream)
-        : lastSentFailoverAttempt != null;
+    const didSendUpstream = resolveDidSendUpstream(
+      error as FailoverErrorWithHistory | null,
+      lastSentFailoverAttempt
+    );
     const attributionFailoverAttempt = didSendUpstream
       ? (lastSentFailoverAttempt ?? lastFailoverAttempt)
       : lastFailoverAttempt;
@@ -1901,6 +2112,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         capabilityCandidates,
         finalCandidates: finalCapabilityCandidates,
         excludedCandidates: excludedCapabilityCandidates,
+        candidateCircuitStates,
       },
       actualUpstreamId,
       {
