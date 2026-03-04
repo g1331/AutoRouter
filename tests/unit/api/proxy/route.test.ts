@@ -4441,5 +4441,116 @@ describe("proxy route upstream selection", () => {
         })
       );
     });
+
+    it("should include TTL split cache fields in streaming fallback logRequest after start-log failure", async () => {
+      const { db } = await import("@/lib/db");
+      const { forwardRequest } = await import("@/lib/services/proxy-client");
+      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+      const { logRequestStart, logRequest } = await import("@/lib/services/request-logger");
+
+      const openaiUpstream = {
+        id: "up-openai",
+        name: "openai-main",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+      };
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      ]);
+      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+        { upstreamId: "up-openai" },
+      ]);
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        {
+          ...openaiUpstream,
+          routeCapabilities: ["openai_chat_compatible"],
+        },
+      ]);
+      vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+      vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+        upstream: openaiUpstream,
+        providerType: "openai",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 1,
+      });
+
+      vi.mocked(logRequestStart).mockRejectedValueOnce(new Error("start log failed"));
+      vi.mocked(logRequest).mockResolvedValueOnce({ id: "fallback-log-id-stream" } as never);
+
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"id":"evt-1"}\n\n'));
+          controller.close();
+        },
+      });
+
+      vi.mocked(forwardRequest).mockResolvedValueOnce({
+        statusCode: 200,
+        headers: new Headers({ "content-type": "text/event-stream" }),
+        body: stream,
+        isStream: true,
+        streamMetricsPromise: Promise.resolve({
+          usage: {
+            promptTokens: 1000,
+            completionTokens: 100,
+            totalTokens: 1100,
+            cachedTokens: 300,
+            cacheReadTokens: 300,
+            cacheCreationTokens: 250,
+            cacheCreation5mTokens: 200,
+            cacheCreation1hTokens: 50,
+          },
+          ttftMs: 123,
+        }),
+      });
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-test",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4.1",
+          messages: [{ role: "user", content: "hello" }],
+          stream: true,
+        }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["chat", "completions"] }),
+      });
+
+      expect(response.status).toBe(200);
+
+      const reader = response.body?.getReader();
+      if (reader) {
+        while (true) {
+          const { done } = await reader.read();
+          if (done) break;
+        }
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(logRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isStream: true,
+          cacheCreationTokens: 250,
+          cacheCreation5mTokens: 200,
+          cacheCreation1hTokens: 50,
+          cacheReadTokens: 300,
+        })
+      );
+    });
   });
 });

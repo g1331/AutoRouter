@@ -1539,6 +1539,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               cachedTokens: usage?.cachedTokens || 0,
               reasoningTokens: usage?.reasoningTokens || 0,
               cacheCreationTokens: usage?.cacheCreationTokens || 0,
+              cacheCreation5mTokens: usage?.cacheCreation5mTokens || 0,
+              cacheCreation1hTokens: usage?.cacheCreation1hTokens || 0,
               cacheReadTokens: usage?.cacheReadTokens || 0,
               statusCode: result.statusCode,
               durationMs: Date.now() - startTime,
