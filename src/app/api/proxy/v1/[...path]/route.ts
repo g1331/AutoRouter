@@ -215,6 +215,22 @@ function attachFailoverContext<T extends Error>(
   return enrichedError;
 }
 
+function isSyntheticFailoverAttempt(attempt: FailoverAttempt): boolean {
+  return attempt.error_type === "concurrency_full";
+}
+
+function getLastSentFailoverAttempt(
+  failoverHistory: FailoverAttempt[]
+): FailoverAttempt | undefined {
+  for (let index = failoverHistory.length - 1; index >= 0; index -= 1) {
+    const attempt = failoverHistory[index];
+    if (!isSyntheticFailoverAttempt(attempt)) {
+      return attempt;
+    }
+  }
+  return undefined;
+}
+
 /**
  * Determine error type for failover logging.
  */
@@ -1737,10 +1753,11 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
     const durationMs = Date.now() - startTime;
     const lastFailoverAttempt = failoverHistory[failoverHistory.length - 1];
+    const lastSentFailoverAttempt = getLastSentFailoverAttempt(failoverHistory);
     const didSendUpstream =
       typeof (error as FailoverErrorWithHistory | null)?.didSendUpstream === "boolean"
         ? Boolean((error as FailoverErrorWithHistory).didSendUpstream)
-        : failoverHistory.length > 0;
+        : lastSentFailoverAttempt != null;
 
     // Determine error code for unified response
     let errorCode: UnifiedErrorCode = "SERVICE_UNAVAILABLE";
@@ -1760,7 +1777,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     const failureStage = resolveFailureStage(error, didSendUpstream, lastFailoverAttempt);
     const failureReason = resolveFailureReason(error, didSendUpstream, lastFailoverAttempt);
     const actualUpstreamId =
-      lastFailoverAttempt?.upstream_id ??
+      lastSentFailoverAttempt?.upstream_id ??
       (didSendUpstream ? (selectedCandidate?.id ?? null) : null);
     const candidateUpstreamId = didSendUpstream
       ? (lastFailoverAttempt?.upstream_id ?? selectedCandidate?.id ?? null)

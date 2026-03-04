@@ -380,6 +380,7 @@
     "createUpstreamTitle": "添加新的上游",
     "editUpstreamTitle": "编辑上游",
     "createUpstreamDesc": "配置一个新的上游 AI 服务提供商",
+    "editUpstreamDesc": "编辑上游AI服务提供商",
     "upstreamName": "名称",
     "upstreamNamePlaceholder": "例如: openai-primary",
     "upstreamNameRequired": "名称不能为空",

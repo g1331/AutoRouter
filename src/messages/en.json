@@ -380,6 +380,7 @@
     "createUpstreamTitle": "Add New Upstream",
     "editUpstreamTitle": "Edit Upstream",
     "createUpstreamDesc": "Configure a new upstream AI service provider",
+    "editUpstreamDesc": "Edit upstream AI service provider",
     "upstreamName": "Name",
     "upstreamNamePlaceholder": "e.g., openai-primary",
     "upstreamNameRequired": "Name is required",

@@ -1152,6 +1152,118 @@ describe("proxy route upstream selection", () => {
     );
   });
 
+  it("should attribute failed upstream to last sent attempt when final exclusion is concurrency_full", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType, AllCandidatesConcurrencyFullError } =
+      await import("@/lib/services/load-balancer");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+
+    const firstUpstream = {
+      id: "up-anthropic-1",
+      name: "anthropic-1",
+      providerType: "anthropic",
+      baseUrl: "https://api.anthropic.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-anthropic-1" },
+      { upstreamId: "up-anthropic-2" },
+    ]);
+
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream: firstUpstream,
+      providerType: "anthropic",
+      resolvedModel: "claude-test",
+      candidateUpstreams: [],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "claude-test",
+        resolvedModel: "claude-test",
+        providerType: "anthropic",
+        upstreamName: "anthropic-1",
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 2,
+        finalCandidateCount: 2,
+      },
+    });
+
+    vi.mocked(selectFromProviderType)
+      .mockResolvedValueOnce({
+        upstream: firstUpstream,
+        providerType: "anthropic",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 2,
+      })
+      .mockRejectedValueOnce(
+        new AllCandidatesConcurrencyFullError([
+          {
+            upstreamId: "up-anthropic-2",
+            upstreamName: "anthropic-2",
+            upstreamBaseUrl: "https://api.anthropic.com",
+            upstreamProviderType: "anthropic",
+            tier: 0,
+            currentConcurrency: 2,
+            maxConcurrency: 2,
+          },
+        ])
+      );
+
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 500,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: null,
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-test",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
+    expect(response.status).toBe(503);
+
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload?.upstreamId).toBe("up-anthropic-1");
+    expect(updateLogPayload?.routingDecision).toEqual(
+      expect.objectContaining({
+        actual_upstream_id: "up-anthropic-1",
+        did_send_upstream: true,
+      })
+    );
+
+    const billingPayload = vi
+      .mocked(calculateAndPersistRequestBillingSnapshot)
+      .mock.calls.at(-1)?.[0];
+    expect(billingPayload).toEqual(
+      expect.objectContaining({
+        upstreamId: "up-anthropic-1",
+      })
+    );
+  });
+
   it("should return 503 when circuit breaker is open for all upstreams", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");

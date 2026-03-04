@@ -801,7 +801,9 @@ export function UpstreamFormDialog({
       <div className="flex h-full min-h-0 flex-col">
         <DialogHeader className="shrink-0 border-b border-divider bg-card px-6 py-4 text-left">
           <DialogTitle>{isEdit ? t("editUpstreamTitle") : t("createUpstreamTitle")}</DialogTitle>
-          <DialogDescription>{t("createUpstreamDesc")}</DialogDescription>
+          <DialogDescription>
+            {isEdit ? t("editUpstreamDesc") : t("createUpstreamDesc")}
+          </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
