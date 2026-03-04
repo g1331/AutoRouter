@@ -67,11 +67,13 @@ describe("traffic recorder", () => {
         redactHeaders({
           AUTHORIZATION: "Bearer secret",
           "X-API-KEY": "secret-key",
+          "X-GOOG-API-KEY": "secret-google-key",
           "Content-Type": "application/json",
         })
       ).toEqual({
         AUTHORIZATION: "[REDACTED]",
         "X-API-KEY": "[REDACTED]",
+        "X-GOOG-API-KEY": "[REDACTED]",
         "Content-Type": "application/json",
       });
     });
