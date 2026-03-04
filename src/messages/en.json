@@ -361,7 +361,12 @@
     "billingReasonModelMissing": "Model missing",
     "billingReasonUsageMissing": "Usage missing",
     "billingReasonPriceNotFound": "Price not found",
-    "billingReasonCalculationError": "Calculation error"
+    "billingReasonCalculationError": "Calculation error",
+    "lifecycleTimeline": "Request Lifecycle",
+    "lifecycleDecision": "Decision",
+    "lifecycleRequest": "Request",
+    "lifecycleResponse": "Response",
+    "lifecycleComplete": "Complete"
   },
   "upstreams": {
     "title": "Upstreams",

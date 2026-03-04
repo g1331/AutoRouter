@@ -361,7 +361,17 @@
     "billingReasonModelMissing": "缺少模型名",
     "billingReasonUsageMissing": "缺少 usage",
     "billingReasonPriceNotFound": "未找到价格",
-    "billingReasonCalculationError": "计算失败"
+    "billingReasonCalculationError": "计算失败",
+    "lifecycleTimeline": "请求生命周期",
+    "lifecycleDecision": "决策",
+    "lifecycleRequest": "请求",
+    "lifecycleResponse": "响应",
+    "lifecycleComplete": "完成",
+    "lifecycleStageDecision": "决策中",
+    "lifecycleStageRequesting": "请求中",
+    "lifecycleStageCompleted": "已完成",
+    "lifecycleStageFailed": "失败",
+    "lifecycleStageUnknown": "未知"
   },
   "upstreams": {
     "title": "上游管理",

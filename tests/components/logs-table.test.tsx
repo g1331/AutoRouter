@@ -92,8 +92,7 @@ describe("LogsTable", () => {
       expect(screen.getByText("tableModel")).toBeInTheDocument();
       expect(screen.getByText("tableTokens")).toBeInTheDocument();
       expect(screen.getByText("tableCost")).toBeInTheDocument();
-      expect(screen.getByText("tableStatus")).toBeInTheDocument();
-      expect(screen.getByText("tableDuration")).toBeInTheDocument();
+      expect(screen.getByText("lifecycleTableHeader")).toBeInTheDocument();
     });
 
     it("renders log data correctly", () => {
@@ -179,47 +178,41 @@ describe("LogsTable", () => {
   });
 
   describe("Status Indicators", () => {
-    it("renders success status badge for 2xx status", () => {
+    it("renders 2xx status code with success color in lifecycle track", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 200 }]} />);
 
-      const badge = screen.getByText("200");
-      expect(badge).toBeInTheDocument();
-      expect(badge.className).toContain("bg-status-success-muted");
+      const statusEl = screen.getAllByText("200")[0];
+      expect(statusEl).toBeInTheDocument();
+      expect(statusEl.className).toContain("text-status-success");
     });
 
-    it("renders warning status badge for 4xx status", () => {
+    it("renders 4xx status code with error color in lifecycle track", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 400 }]} />);
 
-      const badge = screen.getByText("400");
-      expect(badge).toBeInTheDocument();
-      expect(badge.className).toContain("bg-status-warning-muted");
+      const statusEl = screen.getAllByText("400")[0];
+      expect(statusEl).toBeInTheDocument();
+      expect(statusEl.className).toContain("text-status-error");
     });
 
-    it("renders error status badge for 5xx status", () => {
+    it("renders 5xx status code with error color in lifecycle track", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 500 }]} />);
 
-      const badge = screen.getByText("500");
-      expect(badge).toBeInTheDocument();
-      expect(badge.className).toContain("bg-status-error-muted");
+      const statusEl = screen.getAllByText("500")[0];
+      expect(statusEl).toBeInTheDocument();
+      expect(statusEl.className).toContain("text-status-error");
     });
 
-    it("renders dash for null status code", () => {
+    it("renders complete label without status code for null status", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: null }]} />);
 
-      const dashBadges = screen
-        .getAllByText("-")
-        .filter(
-          (el) => el.className.includes("bg-surface-200") && el.className.includes("font-mono")
-        );
-      expect(dashBadges.length).toBeGreaterThan(0);
+      expect(screen.getAllByText("lifecycleComplete").length).toBeGreaterThan(0);
     });
 
-    it("renders status badge with monospace alignment classes", () => {
+    it("renders status code in monospace font via lifecycle track", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 500 }]} />);
 
-      const badge = screen.getByText("500");
-      expect(badge.className).toContain("font-mono");
-      expect(badge.className).toContain("tabular-nums");
+      const track = screen.getAllByText("500")[0].closest(".font-mono");
+      expect(track).toBeInTheDocument();
     });
   });
 
@@ -261,50 +254,131 @@ describe("LogsTable", () => {
     });
   });
 
-  describe("Duration Formatting", () => {
-    it("renders milliseconds for durations under 1 second", () => {
-      render(<LogsTable logs={[{ ...mockLog, duration_ms: 500 }]} />);
+  describe("Lifecycle Track Timing Display", () => {
+    it("renders stage timing in milliseconds when under 1 second", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              stage_timings_ms: {
+                total_ms: 600,
+                decision_ms: 50,
+                upstream_response_ms: 500,
+                first_token_ms: null,
+                generation_ms: null,
+                gateway_processing_ms: null,
+              },
+            },
+          ]}
+        />
+      );
 
       expect(screen.getByText("500ms")).toBeInTheDocument();
     });
 
-    it("renders seconds for durations over 1 second", () => {
-      render(<LogsTable logs={[{ ...mockLog, duration_ms: 1500 }]} />);
+    it("renders stage timing in seconds when over 1 second", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              stage_timings_ms: {
+                total_ms: 1600,
+                decision_ms: 100,
+                upstream_response_ms: 1500,
+                first_token_ms: null,
+                generation_ms: null,
+                gateway_processing_ms: null,
+              },
+            },
+          ]}
+        />
+      );
 
-      expect(screen.getByText("1.50s")).toBeInTheDocument();
+      expect(screen.getByText("1.5s")).toBeInTheDocument();
     });
 
-    it("renders dash for null duration", () => {
+    it("renders stage labels without timing values when no stage_timings_ms provided", () => {
       render(<LogsTable logs={[{ ...mockLog, duration_ms: null }]} />);
 
-      const dashes = screen.getAllByText("-");
-      expect(dashes.length).toBeGreaterThan(0);
+      // Stage labels always visible in lifecycle track
+      expect(screen.getAllByText("lifecycleDecision").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("lifecycleComplete").length).toBeGreaterThan(0);
     });
   });
 
   describe("TTFT Formatting", () => {
-    it("renders seconds with three decimals for TTFT over 1000ms", () => {
-      render(<LogsTable logs={[{ ...mockLog, ttft_ms: 1222 }]} />);
+    it("renders TTFT in lifecycle track response segment for streaming requests", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              is_stream: true,
+              stage_timings_ms: {
+                total_ms: 1500,
+                decision_ms: 100,
+                upstream_response_ms: 1300,
+                first_token_ms: 650,
+                generation_ms: 650,
+                gateway_processing_ms: null,
+              },
+            },
+          ]}
+        />
+      );
 
-      const ttft = screen.getByText("1.222s");
-      expect(ttft).toBeInTheDocument();
-      expect(ttft.className).toContain("text-status-error");
+      // Sub-text contains "perfTtft 650ms · perfGen 650ms"
+      expect(screen.getByText(/650ms/)).toBeInTheDocument();
     });
 
-    it("renders milliseconds for TTFT under 1000ms", () => {
-      render(<LogsTable logs={[{ ...mockLog, ttft_ms: 650 }]} />);
+    it("renders TTFT over 1 second in compact seconds format", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              is_stream: true,
+              stage_timings_ms: {
+                total_ms: 2500,
+                decision_ms: 100,
+                upstream_response_ms: 2300,
+                first_token_ms: 1222,
+                generation_ms: 1078,
+                gateway_processing_ms: null,
+              },
+            },
+          ]}
+        />
+      );
 
-      const ttft = screen.getByText("650ms");
-      expect(ttft).toBeInTheDocument();
-      expect(ttft.className).toContain("text-status-warning");
+      // fmtMs(1222) → "1.2s"
+      expect(screen.getByText(/1\.2s/)).toBeInTheDocument();
     });
 
-    it("uses success color for fast TTFT", () => {
-      render(<LogsTable logs={[{ ...mockLog, ttft_ms: 220 }]} />);
+    it("shows streaming TTFT sub-timing in response segment", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              is_stream: true,
+              stage_timings_ms: {
+                total_ms: 1000,
+                decision_ms: 50,
+                upstream_response_ms: 900,
+                first_token_ms: 220,
+                generation_ms: 680,
+                gateway_processing_ms: null,
+              },
+            },
+          ]}
+        />
+      );
 
-      const ttft = screen.getByText("220ms");
-      expect(ttft).toBeInTheDocument();
-      expect(ttft.className).toContain("text-status-success");
+      // Sub-text contains "perfTtft 220ms · perfGen 680ms"
+      expect(screen.getByText(/220ms/)).toBeInTheDocument();
     });
 
     it("does not render short-sample hint in row performance line", () => {
@@ -1092,7 +1166,7 @@ describe("LogsTable", () => {
       fireEvent.click(expandButton);
 
       expect(screen.getByText("timelineModelResolution")).toBeInTheDocument();
-      expect(screen.getByText("performanceStats")).toBeInTheDocument();
+      expect(screen.getByText("lifecycleTimeline")).toBeInTheDocument();
       expect(screen.getByText("tokenDetails")).toBeInTheDocument();
 
       const gridContainer = container.querySelector("[class*='xl:grid-cols-']");
