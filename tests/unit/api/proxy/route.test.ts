@@ -1037,14 +1037,7 @@ describe("proxy route upstream selection", () => {
     expect(recordFailure).not.toHaveBeenCalledWith("up-anthropic-1", expect.any(String));
 
     const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
-    expect(updateLogPayload?.failoverHistory).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          upstream_id: "up-anthropic-1",
-          error_type: "concurrency_full",
-        }),
-      ])
-    );
+    expect(updateLogPayload?.failoverHistory).toBeNull();
     expect(updateLogPayload?.routingDecision?.excluded).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -1252,6 +1245,17 @@ describe("proxy route upstream selection", () => {
         actual_upstream_id: "up-anthropic-1",
         did_send_upstream: true,
       })
+    );
+    expect(updateLogPayload?.failoverHistory).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          upstream_id: "up-anthropic-1",
+          error_type: "http_5xx",
+        }),
+      ])
+    );
+    expect(updateLogPayload?.failoverHistory).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ error_type: "concurrency_full" })])
     );
 
     const billingPayload = vi

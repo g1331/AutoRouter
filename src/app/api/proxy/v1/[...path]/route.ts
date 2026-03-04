@@ -20,7 +20,6 @@ import {
 import { calculateAndPersistRequestBillingSnapshot } from "@/lib/services/billing-cost-service";
 import {
   selectFromUpstreamCandidates,
-  recordConnection,
   releaseConnection,
   AllCandidatesConcurrencyFullError,
   NoHealthyUpstreamsError,
@@ -504,7 +503,6 @@ async function forwardWithFailover(
   const failedUpstreamIds: string[] = [];
   const failoverHistory: FailoverAttempt[] = [];
   const concurrencyExcludedCandidates: RoutingExcluded[] = [];
-  const recordedConcurrencyCandidates = new Set<string>();
   let lastError: Error | null = null;
   let didSendUpstream = false;
   let affinityHit = false;
@@ -528,23 +526,6 @@ async function forwardWithFailover(
           reason: "concurrency_full",
         });
       }
-
-      if (recordedConcurrencyCandidates.has(excluded.upstreamId)) {
-        continue;
-      }
-
-      recordedConcurrencyCandidates.add(excluded.upstreamId);
-      failoverHistory.push({
-        upstream_id: excluded.upstreamId,
-        upstream_name: excluded.upstreamName,
-        upstream_provider_type:
-          excluded.upstreamProviderType ?? getProviderByRouteCapability(routeCapability),
-        upstream_base_url: excluded.upstreamBaseUrl,
-        attempted_at: new Date().toISOString(),
-        error_type: "concurrency_full",
-        error_message: `Concurrency limit reached (${excluded.currentConcurrency}/${excluded.maxConcurrency})`,
-        status_code: null,
-      });
     }
   };
 
@@ -646,8 +627,6 @@ async function forwardWithFailover(
 
     attemptCount++;
 
-    // Track connection for least-connections strategy
-    recordConnection(selectedUpstream.id);
     let attemptUpstreamBaseUrl = selectedUpstream.baseUrl;
 
     try {
@@ -1758,6 +1737,9 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       typeof (error as FailoverErrorWithHistory | null)?.didSendUpstream === "boolean"
         ? Boolean((error as FailoverErrorWithHistory).didSendUpstream)
         : lastSentFailoverAttempt != null;
+    const attributionFailoverAttempt = didSendUpstream
+      ? (lastSentFailoverAttempt ?? lastFailoverAttempt)
+      : lastFailoverAttempt;
 
     // Determine error code for unified response
     let errorCode: UnifiedErrorCode = "SERVICE_UNAVAILABLE";
@@ -1774,13 +1756,13 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       errorCode = "REQUEST_TIMEOUT";
     }
 
-    const failureStage = resolveFailureStage(error, didSendUpstream, lastFailoverAttempt);
-    const failureReason = resolveFailureReason(error, didSendUpstream, lastFailoverAttempt);
+    const failureStage = resolveFailureStage(error, didSendUpstream, attributionFailoverAttempt);
+    const failureReason = resolveFailureReason(error, didSendUpstream, attributionFailoverAttempt);
     const actualUpstreamId =
       lastSentFailoverAttempt?.upstream_id ??
       (didSendUpstream ? (selectedCandidate?.id ?? null) : null);
     const candidateUpstreamId = didSendUpstream
-      ? (lastFailoverAttempt?.upstream_id ?? selectedCandidate?.id ?? null)
+      ? (attributionFailoverAttempt?.upstream_id ?? selectedCandidate?.id ?? null)
       : null;
 
     const errorStatusCode = getHttpStatusForError(errorCode);
@@ -1829,23 +1811,24 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         : {};
       let upstreamForFixture = fallbackUpstream;
 
-      if (didSendUpstream && lastFailoverAttempt?.upstream_id) {
+      if (didSendUpstream && attributionFailoverAttempt?.upstream_id) {
         const attemptProvider =
-          lastFailoverAttempt.upstream_provider_type === "openai" ||
-          lastFailoverAttempt.upstream_provider_type === "anthropic" ||
-          lastFailoverAttempt.upstream_provider_type === "google"
-            ? lastFailoverAttempt.upstream_provider_type
+          attributionFailoverAttempt.upstream_provider_type === "openai" ||
+          attributionFailoverAttempt.upstream_provider_type === "anthropic" ||
+          attributionFailoverAttempt.upstream_provider_type === "google"
+            ? attributionFailoverAttempt.upstream_provider_type
             : fallbackProviderType;
         upstreamForFixture = {
-          id: lastFailoverAttempt.upstream_id,
-          name: lastFailoverAttempt.upstream_name,
+          id: attributionFailoverAttempt.upstream_id,
+          name: attributionFailoverAttempt.upstream_name,
           providerType: attemptProvider,
-          baseUrl: lastFailoverAttempt.upstream_base_url ?? selectedCandidate?.baseUrl ?? "unknown",
+          baseUrl:
+            attributionFailoverAttempt.upstream_base_url ?? selectedCandidate?.baseUrl ?? "unknown",
         };
 
         try {
           const attemptedUpstream = await db.query.upstreams.findFirst({
-            where: eq(upstreams.id, lastFailoverAttempt.upstream_id),
+            where: eq(upstreams.id, attributionFailoverAttempt.upstream_id),
           });
           if (attemptedUpstream) {
             const attemptedUpstreamForProxy = prepareUpstreamForProxy(attemptedUpstream);
@@ -1897,17 +1880,19 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         upstream: upstreamForFixture,
         outboundHeaders,
         response: {
-          statusCode: lastFailoverAttempt?.status_code ?? errorStatusCode,
-          headers: lastFailoverAttempt?.response_headers ?? {},
-          bodyJson: lastFailoverAttempt?.response_body_json ?? null,
+          statusCode: attributionFailoverAttempt?.status_code ?? errorStatusCode,
+          headers: attributionFailoverAttempt?.response_headers ?? {},
+          bodyJson: attributionFailoverAttempt?.response_body_json ?? null,
           bodyText:
-            lastFailoverAttempt?.response_body_json == null
-              ? (lastFailoverAttempt?.response_body_text ?? null)
+            attributionFailoverAttempt?.response_body_json == null
+              ? (attributionFailoverAttempt?.response_body_text ?? null)
               : null,
         },
         outboundRequestSent: didSendUpstream,
         outboundResponseSource:
-          didSendUpstream && lastFailoverAttempt?.status_code != null ? "upstream" : "gateway",
+          didSendUpstream && attributionFailoverAttempt?.status_code != null
+            ? "upstream"
+            : "gateway",
         downstreamResponse: {
           statusCode: errorStatusCode,
           headers: { "content-type": "application/json" },

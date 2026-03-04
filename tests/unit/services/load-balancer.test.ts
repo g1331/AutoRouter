@@ -507,6 +507,44 @@ describe("load-balancer", () => {
           AllCandidatesConcurrencyFullError
         );
       });
+
+      it("should reserve connection slot during selection and reject the next request at maxConcurrency", async () => {
+        const limited = makeUpstream({ id: "limited", priority: 0, maxConcurrency: 1 });
+        mockFindMany.mockResolvedValue([limited]);
+
+        const first = await selectFromProviderType("openai");
+        expect(first.upstream.id).toBe("limited");
+        expect(getConnectionCount("limited")).toBe(1);
+
+        await expect(selectFromProviderType("openai")).rejects.toThrow(
+          AllCandidatesConcurrencyFullError
+        );
+      });
+
+      it("should degrade when selected upstream becomes full before slot reservation", async () => {
+        const p0 = makeUpstream({ id: "p0", priority: 0, maxConcurrency: 1 });
+        const p1 = makeUpstream({ id: "p1", priority: 1, maxConcurrency: 1 });
+        mockFindMany.mockResolvedValue([p0, p1]);
+
+        mockAcquireCircuitBreakerPermit.mockImplementation(async (upstreamId: string) => {
+          if (upstreamId === "p0") {
+            recordConnection("p0");
+          }
+        });
+
+        const result = await selectFromProviderType("openai");
+        expect(result.upstream.id).toBe("p1");
+        expect(result.selectedTier).toBe(1);
+        expect(result.concurrencyExcluded).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              upstreamId: "p0",
+              maxConcurrency: 1,
+              currentConcurrency: 1,
+            }),
+          ])
+        );
+      });
     });
 
     describe("candidate upstream selection", () => {

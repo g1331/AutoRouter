@@ -285,6 +285,44 @@ function isConcurrencyFull(upstream: Upstream): {
   return { full: current >= max, current, max };
 }
 
+function toConcurrencyExcludedCandidate(
+  entry: UpstreamWithCircuitBreaker,
+  tier: number,
+  currentConcurrency: number,
+  maxConcurrency: number
+): ConcurrencyExcludedCandidate {
+  return {
+    upstreamId: entry.upstream.id,
+    upstreamName: entry.upstream.name,
+    upstreamBaseUrl: entry.upstream.baseUrl,
+    upstreamProviderType: getPrimaryProviderByCapabilities(entry.upstream.routeCapabilities),
+    tier,
+    currentConcurrency,
+    maxConcurrency,
+  };
+}
+
+function tryReserveConnectionSlot(upstream: Upstream): {
+  reserved: boolean;
+  current: number;
+  max: number | null;
+} {
+  const current = getConnectionCount(upstream.id);
+  const max = upstream.maxConcurrency;
+
+  if (max === null || max === undefined || max <= 0) {
+    connectionCounts.set(upstream.id, current + 1);
+    return { reserved: true, current, max: null };
+  }
+
+  if (current >= max) {
+    return { reserved: false, current, max };
+  }
+
+  connectionCounts.set(upstream.id, current + 1);
+  return { reserved: true, current, max };
+}
+
 export function filterByConcurrencyCapacity(
   upstreamList: UpstreamWithCircuitBreaker[],
   tier: number
@@ -304,15 +342,9 @@ export function filterByConcurrencyCapacity(
       continue;
     }
 
-    excluded.push({
-      upstreamId: entry.upstream.id,
-      upstreamName: entry.upstream.name,
-      upstreamBaseUrl: entry.upstream.baseUrl,
-      upstreamProviderType: getPrimaryProviderByCapabilities(entry.upstream.routeCapabilities),
-      tier,
-      currentConcurrency: concurrency.current,
-      maxConcurrency: concurrency.max,
-    });
+    excluded.push(
+      toConcurrencyExcludedCandidate(entry, tier, concurrency.current, concurrency.max)
+    );
   }
 
   return {
@@ -630,25 +662,30 @@ async function selectFromUpstreamPool(
           // Migrate to higher priority upstream
           try {
             await acquireCircuitBreakerPermit(migrationTarget.upstream.id);
-            affinityStore.set(
-              apiKeyId,
-              affinityScope,
-              sessionId,
-              migrationTarget.upstream.id,
-              contentLength
-            );
+            const reservation = tryReserveConnectionSlot(migrationTarget.upstream);
+            if (!reservation.reserved) {
+              // Migration target became full after filtering; continue to bound-upstream fallback.
+            } else {
+              affinityStore.set(
+                apiKeyId,
+                affinityScope,
+                sessionId,
+                migrationTarget.upstream.id,
+                contentLength
+              );
 
-            return {
-              upstream: migrationTarget.upstream,
-              selectedTier: migrationTarget.upstream.priority,
-              circuitBreakerFiltered: 0,
-              quotaFiltered: 0,
-              concurrencyFiltered: 0,
-              concurrencyExcluded: [],
-              totalCandidates,
-              affinityHit: true,
-              affinityMigrated: true,
-            };
+              return {
+                upstream: migrationTarget.upstream,
+                selectedTier: migrationTarget.upstream.priority,
+                circuitBreakerFiltered: 0,
+                quotaFiltered: 0,
+                concurrencyFiltered: 0,
+                concurrencyExcluded: [],
+                totalCandidates,
+                affinityHit: true,
+                affinityMigrated: true,
+              };
+            }
           } catch (error) {
             if (!(error instanceof CircuitBreakerOpenError)) {
               throw error;
@@ -660,17 +697,21 @@ async function selectFromUpstreamPool(
         // Use bound upstream (no migration)
         try {
           await acquireCircuitBreakerPermit(boundUpstream.upstream.id);
-          return {
-            upstream: boundUpstream.upstream,
-            selectedTier: boundUpstream.upstream.priority,
-            circuitBreakerFiltered: 0,
-            quotaFiltered: 0,
-            concurrencyFiltered: 0,
-            concurrencyExcluded: [],
-            totalCandidates,
-            affinityHit: true,
-            affinityMigrated: false,
-          };
+          const reservation = tryReserveConnectionSlot(boundUpstream.upstream);
+          if (reservation.reserved) {
+            return {
+              upstream: boundUpstream.upstream,
+              selectedTier: boundUpstream.upstream.priority,
+              circuitBreakerFiltered: 0,
+              quotaFiltered: 0,
+              concurrencyFiltered: 0,
+              concurrencyExcluded: [],
+              totalCandidates,
+              affinityHit: true,
+              affinityMigrated: false,
+            };
+          }
+          // Bound upstream became full after filtering; fall through to normal reselect.
         } catch (error) {
           if (!(error instanceof CircuitBreakerOpenError)) {
             throw error;
@@ -812,6 +853,23 @@ async function performTieredSelection(
         try {
           // Reserve circuit breaker permit right before returning the selected upstream.
           await acquireCircuitBreakerPermit(selected.upstream.id);
+          const reservation = tryReserveConnectionSlot(selected.upstream);
+
+          if (!reservation.reserved && reservation.max !== null) {
+            totalConcurrencyFiltered += 1;
+            concurrencyExcluded.push(
+              toConcurrencyExcludedCandidate(selected, tier, reservation.current, reservation.max)
+            );
+            const idx = candidates.findIndex((u) => u.upstream.id === selected.upstream.id);
+            if (idx >= 0) {
+              candidates.splice(idx, 1);
+              continue;
+            }
+          }
+
+          if (!reservation.reserved) {
+            throw new NoHealthyUpstreamsError("Failed to reserve upstream connection slot");
+          }
 
           return {
             upstream: selected.upstream,
