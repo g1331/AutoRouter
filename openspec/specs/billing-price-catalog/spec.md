@@ -1,5 +1,8 @@
-## ADDED Requirements
+# billing-price-catalog Specification
 
+## Purpose
+TBD - created by archiving change add-billing-system. Update Purpose after archive.
+## Requirements
 ### Requirement: LiteLLM Model Price Catalog
 
 系统 MUST 提供模型价格目录，并支持从 LiteLLM 同步标准化价格数据。
@@ -61,7 +64,7 @@
 
 ### Requirement: Reset Manual Override To Official Price
 
-系统 SHOULD 提供将手动覆盖“一键重置为官方价格”的能力，用于在 LiteLLM 价格表已补全或管理员希望回到标准口径时快速回滚。
+系统 MUST 提供将手动覆盖“一键重置为官方价格”的能力，用于在 LiteLLM 价格表已补全或管理员希望回到标准口径时快速回滚。
 
 #### Scenario: Reset single model override to official price
 
@@ -97,3 +100,4 @@
 
 - **WHEN** 未定价模型已补充手动价格或后续同步拿到有效价格
 - **THEN** 该模型 SHALL 不再出现在未定价列表中
+

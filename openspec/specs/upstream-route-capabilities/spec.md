@@ -4,7 +4,7 @@
 TBD - created by archiving change path-capability-routing. Update Purpose after archive.
 ## Requirements
 ### Requirement: 上游支持多能力配置
-系统 SHALL 允许单个上游配置多个能力类型，并将该配置作为路径路由候选过滤的依据。
+系统 SHALL 允许单个上游配置多个能力类型，并将该配置作为路径路由候选过滤的第一层依据；在满足能力匹配后，系统 MUST 继续按运行态约束（健康、熔断、配额、并发容量）进行候选筛选。
 
 #### Scenario: 创建上游时配置多个能力
 - **WHEN** 管理员创建上游并提交多个能力类型
@@ -13,6 +13,14 @@ TBD - created by archiving change path-capability-routing. Update Purpose after 
 #### Scenario: 更新上游能力集合
 - **WHEN** 管理员在编辑上游时新增或移除能力类型
 - **THEN** 系统更新存储并立即用于后续路由决策
+
+#### Scenario: 能力匹配后执行并发容量过滤
+- **WHEN** 请求路径已匹配某能力且该能力对应候选上游中存在并发满载项
+- **THEN** 系统 MUST 将并发满载上游从本次候选集中排除，并继续尝试其他可用候选
+
+#### Scenario: 并发容量排除不改变能力配置语义
+- **WHEN** 上游因并发满载在某次请求中被排除
+- **THEN** 系统 MUST 保持该上游的能力配置不变，且后续请求在容量恢复后仍可参与同能力路由
 
 ### Requirement: 能力配置输入校验
 系统 SHALL 对上游能力配置执行严格校验，拒绝未知能力类型和空能力项。
