@@ -12,6 +12,8 @@ interface TokenDisplayProps {
   cachedTokens: number;
   reasoningTokens: number;
   cacheCreationTokens: number;
+  cacheCreation5mTokens?: number;
+  cacheCreation1hTokens?: number;
   cacheReadTokens: number;
 }
 
@@ -110,6 +112,8 @@ export function TokenDetailContent({
   cachedTokens,
   reasoningTokens,
   cacheCreationTokens,
+  cacheCreation5mTokens = 0,
+  cacheCreation1hTokens = 0,
   cacheReadTokens,
   showHeader = true,
   className,
@@ -150,12 +154,33 @@ export function TokenDetailContent({
 
   // Anthropic: cache creation tokens (subset of input tokens) can be useful to show explicitly.
   if (cacheCreationTokens > 0) {
-    mainRows.splice(1, 0, {
+    const cacheWriteInsertIndex = 1;
+    mainRows.splice(cacheWriteInsertIndex, 0, {
       label: t("tokenCacheWrite"),
       value: cacheCreationTokens,
       highlight: false,
       indent: true,
     });
+
+    let ttlInsertIndex = cacheWriteInsertIndex + 1;
+    if (cacheCreation5mTokens > 0) {
+      mainRows.splice(ttlInsertIndex, 0, {
+        label: t("tokenCacheWrite5m"),
+        value: cacheCreation5mTokens,
+        highlight: false,
+        indent: true,
+      });
+      ttlInsertIndex += 1;
+    }
+
+    if (cacheCreation1hTokens > 0) {
+      mainRows.splice(ttlInsertIndex, 0, {
+        label: t("tokenCacheWrite1h"),
+        value: cacheCreation1hTokens,
+        highlight: false,
+        indent: true,
+      });
+    }
   }
 
   // Show reasoning breakdown if present (OpenAI o1/o3 models)
@@ -248,6 +273,8 @@ export function TokenDisplay({
   totalTokens,
   cachedTokens,
   cacheCreationTokens,
+  cacheCreation5mTokens: _cacheCreation5mTokens = 0,
+  cacheCreation1hTokens: _cacheCreation1hTokens = 0,
   cacheReadTokens,
 }: TokenDisplayProps) {
   const t = useTranslations("logs");

@@ -607,6 +607,8 @@ export function LogsTable({ logs }: LogsTableProps) {
                     cachedTokens={log.cached_tokens}
                     reasoningTokens={log.reasoning_tokens}
                     cacheCreationTokens={log.cache_creation_tokens}
+                    cacheCreation5mTokens={log.cache_creation_5m_tokens}
+                    cacheCreation1hTokens={log.cache_creation_1h_tokens}
                     cacheReadTokens={log.cache_read_tokens}
                     showHeader={false}
                   />
@@ -1040,6 +1042,8 @@ export function LogsTable({ logs }: LogsTableProps) {
                               cachedTokens={log.cached_tokens}
                               reasoningTokens={log.reasoning_tokens}
                               cacheCreationTokens={log.cache_creation_tokens}
+                              cacheCreation5mTokens={log.cache_creation_5m_tokens}
+                              cacheCreation1hTokens={log.cache_creation_1h_tokens}
                               cacheReadTokens={log.cache_read_tokens}
                             />
                           </div>
@@ -1229,6 +1233,8 @@ export function LogsTable({ logs }: LogsTableProps) {
                               cachedTokens={log.cached_tokens}
                               reasoningTokens={log.reasoning_tokens}
                               cacheCreationTokens={log.cache_creation_tokens}
+                              cacheCreation5mTokens={log.cache_creation_5m_tokens}
+                              cacheCreation1hTokens={log.cache_creation_1h_tokens}
                               cacheReadTokens={log.cache_read_tokens}
                             />
                           </TableCell>

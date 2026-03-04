@@ -232,6 +232,8 @@
     "tokenReasoning": "Reasoning",
     "tokenReply": "Reply",
     "tokenCacheWrite": "Cache Write",
+    "tokenCacheWrite5m": "5m Write",
+    "tokenCacheWrite1h": "1h Write",
     "tokenCacheRead": "Cache Read",
     "tokenCacheHit": "Cache Hit",
     "tokenCacheHitShort": "Hit",

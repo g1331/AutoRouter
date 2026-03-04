@@ -175,6 +175,8 @@ export const requestLogs = pgTable(
     cachedTokens: integer("cached_tokens").notNull().default(0),
     reasoningTokens: integer("reasoning_tokens").notNull().default(0),
     cacheCreationTokens: integer("cache_creation_tokens").notNull().default(0),
+    cacheCreation5mTokens: integer("cache_creation_5m_tokens").notNull().default(0),
+    cacheCreation1hTokens: integer("cache_creation_1h_tokens").notNull().default(0),
     cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
     statusCode: integer("status_code"),
     durationMs: integer("duration_ms"),

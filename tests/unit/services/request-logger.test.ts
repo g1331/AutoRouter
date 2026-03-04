@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { extractTokenUsage, extractModelName } from "@/lib/services/request-logger";
+import { extractUsage } from "@/lib/services/proxy-client";
 
 // Mock the database module
 vi.mock("@/lib/db", () => ({
@@ -396,6 +397,85 @@ describe("request-logger", () => {
           cacheReadTokens: 0,
           rawInputTokens: 0,
         });
+      });
+
+      it("should extract cache_creation TTL split fields from Anthropic payload", () => {
+        const response = {
+          usage: {
+            input_tokens: 1000,
+            output_tokens: 200,
+            cache_read_input_tokens: 300,
+            cache_creation: {
+              ephemeral_5m_input_tokens: 120,
+              ephemeral_1h_input_tokens: 80,
+            },
+          },
+        };
+
+        const usage = extractTokenUsage(response);
+
+        expect(usage).toEqual({
+          promptTokens: 1000,
+          completionTokens: 200,
+          totalTokens: 1200,
+          cachedTokens: 300,
+          reasoningTokens: 0,
+          cacheCreationTokens: 200,
+          cacheCreation5mTokens: 120,
+          cacheCreation1hTokens: 80,
+          cacheReadTokens: 300,
+          rawInputTokens: 1000,
+        });
+      });
+    });
+
+    describe("Gemini usageMetadata format", () => {
+      it("should extract usageMetadata and fall back total tokens when totalTokenCount is missing", () => {
+        const response = {
+          usageMetadata: {
+            promptTokenCount: 90,
+            candidatesTokenCount: 10,
+            cachedContentTokenCount: 60,
+          },
+        };
+
+        const usage = extractTokenUsage(response);
+
+        expect(usage).toEqual({
+          promptTokens: 90,
+          completionTokens: 10,
+          totalTokens: 100,
+          cachedTokens: 60,
+          reasoningTokens: 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 60,
+          rawInputTokens: 90,
+        });
+      });
+
+      it("should stay consistent with proxy-client extractUsage for the same payload", () => {
+        const payload = {
+          usageMetadata: {
+            promptTokenCount: 120,
+            candidatesTokenCount: 30,
+            totalTokenCount: 150,
+            cachedContentTokenCount: 75,
+          },
+        };
+
+        const loggerUsage = extractTokenUsage(payload);
+        const proxyUsage = extractUsage(payload);
+
+        expect(proxyUsage).not.toBeNull();
+        expect({
+          promptTokens: loggerUsage.promptTokens,
+          completionTokens: loggerUsage.completionTokens,
+          totalTokens: loggerUsage.totalTokens,
+          cachedTokens: loggerUsage.cachedTokens,
+          reasoningTokens: loggerUsage.reasoningTokens,
+          cacheCreationTokens: loggerUsage.cacheCreationTokens,
+          cacheReadTokens: loggerUsage.cacheReadTokens,
+        }).toEqual(proxyUsage);
       });
     });
 

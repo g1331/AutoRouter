@@ -2,7 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
 vi.mock("@/lib/utils/auth", () => ({
-  extractApiKey: vi.fn(() => "sk-test"),
+  extractApiKey: vi.fn((authHeader: string | null) => {
+    if (!authHeader) return null;
+    const trimmed = authHeader.trim();
+    if (trimmed.toLowerCase().startsWith("bearer ")) {
+      return trimmed.slice(7).trim();
+    }
+    return trimmed;
+  }),
   getKeyPrefix: vi.fn(() => "sk-test"),
   verifyApiKey: vi.fn(() => true),
 }));
@@ -289,6 +296,183 @@ describe("proxy route upstream selection", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  describe("proxy auth header compatibility", () => {
+    it("should authenticate using x-api-key when authorization is absent", async () => {
+      const { db } = await import("@/lib/db");
+      const { getKeyPrefix, verifyApiKey } = await import("@/lib/utils/auth");
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      ]);
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/custom/not-matched", {
+        method: "POST",
+        headers: {
+          "x-api-key": "sk-x-api-key",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5.2",
+          input: "hello",
+        }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["custom", "not-matched"] }),
+      });
+
+      expect(response.status).not.toBe(401);
+      expect(vi.mocked(getKeyPrefix)).toHaveBeenCalledWith("sk-x-api-key");
+      expect(vi.mocked(verifyApiKey)).toHaveBeenCalledWith("sk-x-api-key", "hash-1");
+    });
+
+    it("should authenticate using x-goog-api-key when other headers are absent", async () => {
+      const { db } = await import("@/lib/db");
+      const { getKeyPrefix, verifyApiKey } = await import("@/lib/utils/auth");
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      ]);
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/custom/not-matched", {
+        method: "POST",
+        headers: {
+          "x-goog-api-key": "sk-x-goog-api-key",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5.2",
+          input: "hello",
+        }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["custom", "not-matched"] }),
+      });
+
+      expect(response.status).not.toBe(401);
+      expect(vi.mocked(getKeyPrefix)).toHaveBeenCalledWith("sk-x-goog-api-key");
+      expect(vi.mocked(verifyApiKey)).toHaveBeenCalledWith("sk-x-goog-api-key", "hash-1");
+    });
+
+    it("should prioritize authorization over x-api-key and x-goog-api-key", async () => {
+      const { db } = await import("@/lib/db");
+      const { getKeyPrefix, verifyApiKey } = await import("@/lib/utils/auth");
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      ]);
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/custom/not-matched", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-auth-priority",
+          "x-api-key": "sk-x-api-fallback",
+          "x-goog-api-key": "sk-x-goog-fallback",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5.2",
+          input: "hello",
+        }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["custom", "not-matched"] }),
+      });
+
+      expect(response.status).not.toBe(401);
+      expect(vi.mocked(getKeyPrefix)).toHaveBeenCalledWith("sk-auth-priority");
+      expect(vi.mocked(verifyApiKey)).toHaveBeenCalledWith("sk-auth-priority", "hash-1");
+    });
+
+    it("should return Missing API key when all supported headers are absent", async () => {
+      const { db } = await import("@/lib/db");
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5.2",
+          input: "hello",
+        }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["chat", "completions"] }),
+      });
+      const data = await response.json();
+
+      expect(response.status).toBe(401);
+      expect(data).toEqual({ error: "Missing API key" });
+      expect(db.query.apiKeys.findMany).not.toHaveBeenCalled();
+    });
+
+    it("should return Invalid API key for unverifiable x-goog-api-key", async () => {
+      const { db } = await import("@/lib/db");
+      const { verifyApiKey } = await import("@/lib/utils/auth");
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      ]);
+      vi.mocked(verifyApiKey).mockResolvedValueOnce(false);
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "x-goog-api-key": "sk-invalid",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5.2",
+          input: "hello",
+        }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["chat", "completions"] }),
+      });
+      const data = await response.json();
+
+      expect(response.status).toBe(401);
+      expect(data).toEqual({ error: "Invalid API key" });
+    });
+
+    it("should return API key has expired for expired x-api-key", async () => {
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        {
+          id: "key-expired",
+          keyHash: "hash-expired",
+          expiresAt: new Date(Date.now() - 1_000),
+          isActive: true,
+        },
+      ]);
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "x-api-key": "sk-expired",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-5.2",
+          input: "hello",
+        }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["chat", "completions"] }),
+      });
+      const data = await response.json();
+
+      expect(response.status).toBe(401);
+      expect(data).toEqual({ error: "API key has expired" });
+    });
   });
 
   it("should route path capability request without model when route is matched", async () => {

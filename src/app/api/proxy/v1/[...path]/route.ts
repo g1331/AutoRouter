@@ -945,6 +945,30 @@ interface RequestContext {
   bodyJson: Record<string, unknown> | null;
 }
 
+type AuthSource = "authorization" | "x-api-key" | "x-goog-api-key" | "none";
+
+function extractProxyApiKey(request: NextRequest): {
+  keyValue: string | null;
+  authSource: AuthSource;
+} {
+  const fromAuthorization = extractApiKey(request.headers.get("authorization"));
+  if (fromAuthorization) {
+    return { keyValue: fromAuthorization, authSource: "authorization" };
+  }
+
+  const fromApiKey = extractApiKey(request.headers.get("x-api-key"));
+  if (fromApiKey) {
+    return { keyValue: fromApiKey, authSource: "x-api-key" };
+  }
+
+  const fromGoogleApiKey = extractApiKey(request.headers.get("x-goog-api-key"));
+  if (fromGoogleApiKey) {
+    return { keyValue: fromGoogleApiKey, authSource: "x-goog-api-key" };
+  }
+
+  return { keyValue: null, authSource: "none" };
+}
+
 /**
  * Extract request context (model, sessionId) from request body and headers.
  * Single-pass extraction to avoid parsing body multiple times.
@@ -981,12 +1005,13 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   const path = pathSegments.join("/");
 
   // Extract and validate API key
-  const authHeader = request.headers.get("authorization");
-  const keyValue = extractApiKey(authHeader);
+  const { keyValue, authSource } = extractProxyApiKey(request);
 
   if (!keyValue) {
+    log.debug({ requestId, authSource }, "proxy auth: missing supported API key header");
     return NextResponse.json({ error: "Missing API key" }, { status: 401 });
   }
+  log.debug({ requestId, authSource }, "proxy auth: extracted API key");
 
   // Find API key by prefix and verify
   const keyPrefix = getKeyPrefix(keyValue);
@@ -1414,6 +1439,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               cachedTokens: usage?.cachedTokens || 0,
               reasoningTokens: usage?.reasoningTokens || 0,
               cacheCreationTokens: usage?.cacheCreationTokens || 0,
+              cacheCreation5mTokens: usage?.cacheCreation5mTokens || 0,
+              cacheCreation1hTokens: usage?.cacheCreation1hTokens || 0,
               cacheReadTokens: usage?.cacheReadTokens || 0,
               statusCode: result.statusCode,
               durationMs: Date.now() - startTime,
@@ -1592,6 +1619,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           cachedTokens: usage?.cachedTokens || 0,
           reasoningTokens: usage?.reasoningTokens || 0,
           cacheCreationTokens: usage?.cacheCreationTokens || 0,
+          cacheCreation5mTokens: usage?.cacheCreation5mTokens || 0,
+          cacheCreation1hTokens: usage?.cacheCreation1hTokens || 0,
           cacheReadTokens: usage?.cacheReadTokens || 0,
           statusCode: result.statusCode,
           durationMs,
