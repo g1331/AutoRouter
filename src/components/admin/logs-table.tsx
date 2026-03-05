@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useRef, Fragment } from "react";
 import { formatDistanceToNow, subDays, startOfDay } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
-import { ScrollText, Filter, ChevronDown, ChevronUp } from "lucide-react";
+import { ScrollText, Filter, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import type { RequestLog, TimeRange } from "@/types/api";
 import {
   Table,
@@ -337,39 +337,23 @@ export function LogsTable({ logs }: LogsTableProps) {
     switch (status) {
       case "decision":
         return {
-          label: t("lifecycleStageDecision"),
+          icon: true,
           color: "text-blue-500",
           bgColor: "bg-blue-500/10",
           borderColor: "border-blue-500/20",
         };
       case "requesting":
         return {
-          label: t("lifecycleStageRequesting"),
+          icon: true,
           color: "text-purple-500",
           bgColor: "bg-purple-500/10",
           borderColor: "border-purple-500/20",
         };
       case "completed_success":
-        return {
-          label: t("lifecycleStageCompleted"),
-          color: "text-green-500",
-          bgColor: "bg-green-500/10",
-          borderColor: "border-green-500/20",
-        };
       case "completed_failed":
-        return {
-          label: t("lifecycleStageFailed"),
-          color: "text-red-500",
-          bgColor: "bg-red-500/10",
-          borderColor: "border-red-500/20",
-        };
+        return null;
       default:
-        return {
-          label: t("lifecycleStageUnknown"),
-          color: "text-muted-foreground",
-          bgColor: "bg-surface-300",
-          borderColor: "border-divider",
-        };
+        return null;
     }
   };
 
@@ -431,8 +415,12 @@ export function LogsTable({ logs }: LogsTableProps) {
     // Build routing decision details
     const routingSteps = [];
     if (log.routing_decision) {
+      const { original_model, resolved_model, model_redirect_applied } = log.routing_decision;
+      const modelDisplay = model_redirect_applied
+        ? `${original_model} → ${resolved_model}`
+        : resolved_model || original_model;
       routingSteps.push(
-        `1 模型解析: ${log.routing_decision}${log.group_name ? ` (${log.group_name})` : ""}`
+        `1 模型解析: ${modelDisplay}${log.group_name ? ` (${log.group_name})` : ""}`
       );
     }
     if (log.session_id) {
@@ -1029,6 +1017,7 @@ export function LogsTable({ logs }: LogsTableProps) {
                           </Badge>
                           {(() => {
                             const stageInfo = getLifecycleStageInfo(log);
+                            if (!stageInfo) return null;
                             return (
                               <span
                                 className={cn(
@@ -1038,7 +1027,7 @@ export function LogsTable({ logs }: LogsTableProps) {
                                   stageInfo.borderColor
                                 )}
                               >
-                                {stageInfo.label}
+                                <Loader2 className="h-3 w-3 animate-spin" />
                               </span>
                             );
                           })()}
@@ -1251,6 +1240,7 @@ export function LogsTable({ logs }: LogsTableProps) {
                               </Badge>
                               {(() => {
                                 const stageInfo = getLifecycleStageInfo(log);
+                                if (!stageInfo) return null;
                                 return (
                                   <span
                                     className={cn(
@@ -1260,7 +1250,7 @@ export function LogsTable({ logs }: LogsTableProps) {
                                       stageInfo.borderColor
                                     )}
                                   >
-                                    {stageInfo.label}
+                                    <Loader2 className="h-3 w-3 animate-spin" />
                                   </span>
                                 );
                               })()}
