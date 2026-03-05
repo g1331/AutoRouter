@@ -1,6 +1,6 @@
 "use client";
 
-import { Database } from "lucide-react";
+import { Database, Download } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -302,15 +302,13 @@ export function TokenDisplay({
         <div className="flex flex-wrap gap-1 mt-0.5">
           {effectiveCacheRead > 0 && (
             <Badge variant="info" className="px-1.5 py-0 text-[9px] w-fit gap-0.5">
-              <Database className="w-2.5 h-2.5" aria-hidden="true" />
-              <span>{t("tokenCacheHitShort")}</span>
+              <Download className="w-2.5 h-2.5" aria-hidden="true" />
               <span>{effectiveCacheRead.toLocaleString()}</span>
             </Badge>
           )}
           {cacheCreationTokens > 0 && (
             <Badge variant="info" className="px-1.5 py-0 text-[9px] w-fit gap-0.5">
               <Database className="w-2.5 h-2.5" aria-hidden="true" />
-              <span>{t("tokenCacheWriteShort")}</span>
               <span>{cacheCreationTokens.toLocaleString()}</span>
             </Badge>
           )}

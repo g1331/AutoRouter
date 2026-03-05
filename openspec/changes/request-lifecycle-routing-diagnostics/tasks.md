@@ -27,3 +27,7 @@
 
 - [x] 5.1 更新组件测试覆盖单行轨道与失败摘要显示（输入：logs-table 与 routing-decision 组件；输出：关键交互与展示断言；验收：新增测试稳定通过）
 - [x] 5.2 执行最终质量门禁并确认可实施状态（输入：全量改动；输出：`pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run` 通过；验收：OpenSpec 进入 apply-ready）
+
+## 6. UI 细节优化
+
+- [x] 6.1 将缓存读取和写入的文字标签替换为图标（输入：缓存读取/写入文字标签；输出：使用 Download 和 Database 图标替代；验收：UI 更简洁，图标语义清晰）

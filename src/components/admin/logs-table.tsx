@@ -1104,7 +1104,7 @@ export function LogsTable({ logs }: LogsTableProps) {
             </div>
           ) : (
             <div className="overflow-hidden">
-              <Table frame="none" className="table-fixed">
+              <Table frame="none" className="table-fixed border-collapse">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8"></TableHead>
@@ -1165,13 +1165,13 @@ export function LogsTable({ logs }: LogsTableProps) {
                               </button>
                             )}
                           </TableCell>
-                          <TableCell className="font-mono text-xs whitespace-nowrap">
+                          <TableCell className="font-mono text-[11px] whitespace-nowrap p-1.5">
                             {formatDistanceToNow(new Date(log.created_at), {
                               addSuffix: true,
                               locale: dateLocale,
                             })}
                           </TableCell>
-                          <TableCell className="hidden lg:table-cell">
+                          <TableCell className="hidden lg:table-cell p-1.5">
                             <RoutingDecisionTimeline
                               routingDecision={log.routing_decision}
                               upstreamName={upstreamDisplayName}
@@ -1184,18 +1184,18 @@ export function LogsTable({ logs }: LogsTableProps) {
                               compact={true}
                             />
                           </TableCell>
-                          <TableCell>
-                            <code className="rounded-cf-sm border border-divider bg-surface-300 px-1.5 py-0.5 font-mono text-xs text-foreground">
+                          <TableCell className="py-1 pl-1 pr-0">
+                            <code className="rounded-cf-sm border border-divider bg-surface-300 px-1 py-0.5 font-mono text-xs text-foreground whitespace-nowrap">
                               {log.method || "-"}
                             </code>
                           </TableCell>
-                          <TableCell className="hidden max-w-[200px] truncate font-mono text-xs lg:table-cell">
+                          <TableCell className="hidden font-mono text-xs lg:table-cell py-1 pl-0 pr-1 whitespace-nowrap">
                             {log.path || <span className="text-muted-foreground">-</span>}
                           </TableCell>
-                          <TableCell className="hidden font-mono text-xs xl:table-cell">
+                          <TableCell className="hidden font-mono text-xs xl:table-cell p-1 whitespace-nowrap">
                             {log.model || <span className="text-muted-foreground">-</span>}
                           </TableCell>
-                          <TableCell className="hidden md:table-cell">
+                          <TableCell className="hidden md:table-cell p-1">
                             <TokenDisplay
                               promptTokens={log.prompt_tokens}
                               completionTokens={log.completion_tokens}
@@ -1208,9 +1208,9 @@ export function LogsTable({ logs }: LogsTableProps) {
                               cacheReadTokens={log.cache_read_tokens}
                             />
                           </TableCell>
-                          <TableCell className="px-3">
+                          <TableCell className="px-1 py-1">
                             <div className="flex flex-col gap-0">
-                              <span className="font-mono text-xs tabular-nums">
+                              <span className="font-mono text-xs tabular-nums whitespace-nowrap">
                                 {formatBillingCost(log)}
                               </span>
                               {log.billing_status === "unbilled" && (
@@ -1227,12 +1227,12 @@ export function LogsTable({ logs }: LogsTableProps) {
                               )}
                             </div>
                           </TableCell>
-                          <TableCell className="px-3">
+                          <TableCell className="px-1 py-1">
                             <div className="flex flex-col items-start gap-1">
                               <Badge
                                 variant={getStatusBadgeVariant(log.status_code)}
                                 className={cn(
-                                  "px-2 py-0.5 text-[11px] leading-none font-mono tabular-nums",
+                                  "px-1.5 py-0.5 text-[11px] leading-none font-mono tabular-nums whitespace-nowrap",
                                   log.status_code === null && "text-muted-foreground"
                                 )}
                               >
@@ -1256,9 +1256,9 @@ export function LogsTable({ logs }: LogsTableProps) {
                               })()}
                             </div>
                           </TableCell>
-                          <TableCell className="px-3 font-mono text-xs leading-tight">
+                          <TableCell className="px-1 py-1 font-mono text-xs leading-tight">
                             <div className="flex flex-col gap-0">
-                              <span className="tabular-nums">
+                              <span className="tabular-nums whitespace-nowrap">
                                 {formatDuration(log.duration_ms)}
                               </span>
                               {(log.ttft_ms != null || requestTps != null) && (
