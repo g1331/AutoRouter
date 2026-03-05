@@ -120,6 +120,7 @@ export function RoutingDecisionTimeline({
         tiered: t("routingTiered"),
         group: t("routingGroup"),
         default: t("routingDefault"),
+        path_capability: t("routingPathCapability"),
       };
       return labels[routingType] || routingType;
     }
@@ -131,6 +132,10 @@ export function RoutingDecisionTimeline({
     };
     return labels[routingDecision.routing_type] || routingDecision.routing_type;
   }, [routingDecision, routingType, t]);
+
+  const showRoutingTypeBadge =
+    (routingDecision?.routing_type ?? routingType) !== "path_capability" &&
+    routingTypeLabel != null;
 
   const didSendUpstream = routingDecision?.did_send_upstream;
   const finalUpstreamLabel =
@@ -148,7 +153,7 @@ export function RoutingDecisionTimeline({
           <span className="font-mono text-xs">{finalUpstreamLabel}</span>
         </div>
         <div className="flex min-w-0 items-center gap-1 flex-wrap">
-          {routingTypeLabel && (
+          {showRoutingTypeBadge && (
             <Badge
               variant="success"
               title={routingTypeLabel}
