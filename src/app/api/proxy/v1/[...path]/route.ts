@@ -292,6 +292,18 @@ function isSyntheticFailoverAttempt(attempt: FailoverAttempt): boolean {
   return attempt.error_type === "concurrency_full";
 }
 
+const CIRCUIT_BREAKER_NEUTRAL_PATHS = new Set(["messages/count_tokens"]);
+
+function normalizeCircuitBreakerPath(path: string): string {
+  const normalized = path.trim().replace(/^\/+/, "").replace(/\/+$/, "").toLowerCase();
+  return normalized.startsWith("v1/") ? normalized.slice("v1/".length) : normalized;
+}
+
+function shouldRecordCircuitBreakerFailure(path: string): boolean {
+  const normalizedPath = normalizeCircuitBreakerPath(path);
+  return !CIRCUIT_BREAKER_NEUTRAL_PATHS.has(normalizedPath);
+}
+
 function getLastSentFailoverAttempt(
   failoverHistory: FailoverAttempt[]
 ): FailoverAttempt | undefined {
@@ -891,11 +903,14 @@ async function forwardWithFailover(
       // Check if response indicates we should failover
       if (shouldTriggerFailover(result.statusCode, config)) {
         const failedResponse = await captureFailedResponse(result);
+        const errorType = getErrorType(null, result.statusCode);
         // Release connection and mark as unhealthy
         releaseConnection(selectedUpstream.id);
         void markUnhealthy(selectedUpstream.id, `HTTP ${result.statusCode} error`);
-        // Record failure in circuit breaker
-        void recordFailure(selectedUpstream.id, `http_${result.statusCode}`);
+        // Record failure in circuit breaker when this route should affect upstream reliability.
+        if (shouldRecordCircuitBreakerFailure(path)) {
+          void recordFailure(selectedUpstream.id, `http_${result.statusCode}`);
+        }
         // Record failover attempt
         failoverHistory.push({
           upstream_id: selectedUpstream.id,
@@ -903,7 +918,7 @@ async function forwardWithFailover(
           upstream_provider_type: resolveUpstreamProvider(selectedUpstream, routeCapability),
           upstream_base_url: attemptUpstreamBaseUrl,
           attempted_at: new Date().toISOString(),
-          error_type: getErrorType(null, result.statusCode),
+          error_type: errorType,
           error_message: resolveFailedResponseErrorMessage(result.statusCode, failedResponse),
           status_code: result.statusCode,
           response_headers: failedResponse.headers,
@@ -981,10 +996,13 @@ async function forwardWithFailover(
       // Record failure in circuit breaker for failoverable errors
       if (isFailoverableError(error) || error instanceof CircuitBreakerOpenError) {
         const errorEvidence = extractFailoverErrorEvidence(error);
-        void recordFailure(
-          selectedUpstream.id,
-          getErrorType(error instanceof Error ? error : null, errorEvidence.statusCode)
+        const errorType = getErrorType(
+          error instanceof Error ? error : null,
+          errorEvidence.statusCode
         );
+        if (shouldRecordCircuitBreakerFailure(path)) {
+          void recordFailure(selectedUpstream.id, errorType);
+        }
 
         // Mark upstream as unhealthy
         const errorMessage = errorEvidence.errorMessage;
@@ -996,7 +1014,7 @@ async function forwardWithFailover(
           upstream_provider_type: resolveUpstreamProvider(selectedUpstream, routeCapability),
           upstream_base_url: attemptUpstreamBaseUrl,
           attempted_at: new Date().toISOString(),
-          error_type: getErrorType(error instanceof Error ? error : null, errorEvidence.statusCode),
+          error_type: errorType,
           error_message: errorMessage,
           status_code: errorEvidence.statusCode,
           response_headers: errorEvidence.responseHeaders,

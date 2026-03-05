@@ -1626,6 +1626,177 @@ describe("proxy route upstream selection", () => {
     );
   });
 
+  it("should skip circuit-breaker failure count for messages/count_tokens HTTP failures", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { markUnhealthy } = await import("@/lib/services/health-checker");
+    const { recordFailure } = await import("@/lib/services/circuit-breaker");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-anthropic-1" },
+      { upstreamId: "up-anthropic-2" },
+    ]);
+
+    const firstUpstream = {
+      id: "up-anthropic-1",
+      name: "anthropic-1",
+      providerType: "anthropic",
+      baseUrl: "https://api.anthropic.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+    const secondUpstream = {
+      id: "up-anthropic-2",
+      name: "anthropic-2",
+      providerType: "anthropic",
+      baseUrl: "https://api.anthropic.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    vi.mocked(selectFromProviderType)
+      .mockResolvedValueOnce({
+        upstream: firstUpstream,
+        providerType: "anthropic",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 2,
+      })
+      .mockResolvedValueOnce({
+        upstream: secondUpstream,
+        providerType: "anthropic",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 2,
+      });
+
+    vi.mocked(forwardRequest)
+      .mockResolvedValueOnce({
+        statusCode: 500,
+        headers: new Headers(),
+        body: new Uint8Array(),
+        isStream: false,
+        usage: null,
+      })
+      .mockResolvedValueOnce({
+        statusCode: 200,
+        headers: new Headers(),
+        body: new Uint8Array(),
+        isStream: false,
+        usage: null,
+      });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/messages/count_tokens", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-test",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["v1", "messages", "count_tokens"] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(markUnhealthy).toHaveBeenCalledWith("up-anthropic-1", "HTTP 500 error");
+    expect(recordFailure).not.toHaveBeenCalled();
+  });
+
+  it("should skip circuit-breaker failure count for messages/count_tokens network errors", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { markUnhealthy } = await import("@/lib/services/health-checker");
+    const { recordFailure } = await import("@/lib/services/circuit-breaker");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-anthropic-1" },
+      { upstreamId: "up-anthropic-2" },
+    ]);
+
+    const firstUpstream = {
+      id: "up-anthropic-1",
+      name: "anthropic-1",
+      providerType: "anthropic",
+      baseUrl: "https://api.anthropic.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+    const secondUpstream = {
+      id: "up-anthropic-2",
+      name: "anthropic-2",
+      providerType: "anthropic",
+      baseUrl: "https://api.anthropic.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    vi.mocked(selectFromProviderType)
+      .mockResolvedValueOnce({
+        upstream: firstUpstream,
+        providerType: "anthropic",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 2,
+      })
+      .mockResolvedValueOnce({
+        upstream: secondUpstream,
+        providerType: "anthropic",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 2,
+      });
+
+    vi.mocked(forwardRequest)
+      .mockRejectedValueOnce(new Error("timeout while forwarding count tokens"))
+      .mockResolvedValueOnce({
+        statusCode: 200,
+        headers: new Headers(),
+        body: new Uint8Array(),
+        isStream: false,
+        usage: null,
+      });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/messages/count_tokens", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-test",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["v1", "messages", "count_tokens"] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(markUnhealthy).toHaveBeenCalledWith(
+      "up-anthropic-1",
+      "timeout while forwarding count tokens"
+    );
+    expect(recordFailure).not.toHaveBeenCalled();
+  });
+
   it("should record concurrency_full transfer evidence without unhealthy or circuit-breaker failure", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
