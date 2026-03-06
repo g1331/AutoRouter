@@ -24,14 +24,6 @@ type SegState = "done" | "active" | "pending" | "failed" | "success";
 type SegKey = "decision" | "request" | "response" | "complete";
 type TrackSegKey = SegKey | "first_output" | "generation";
 
-interface Seg {
-  key: SegKey;
-  label: string;
-  time: string | null;
-  sub: string | null;
-  state: SegState;
-}
-
 interface TrackSeg {
   key: TrackSegKey;
   label: string;
@@ -124,93 +116,6 @@ function getLifecycleContext(props: LifecycleTrackProps) {
     generationMs,
     cumulativeFirstOutputMs,
   };
-}
-
-function buildSegs(props: LifecycleTrackProps, t: (key: string) => string): Seg[] {
-  const {
-    effectiveStatus,
-    isSuccess,
-    isDone,
-    isDecision,
-    errInResp,
-    errInReq,
-    errText,
-    totalMs,
-    decisionMs,
-    upstreamMs,
-    gatewayProcessingMs,
-    firstTokenMs,
-    generationMs,
-    cumulativeFirstOutputMs,
-  } = getLifecycleContext(props);
-
-  const decSeg: Seg = {
-    key: "decision",
-    label: t("lifecycleDecision"),
-    time: decisionMs != null ? fmtStageDuration(decisionMs, decisionMs) : null,
-    sub: null,
-    state: isDecision ? "active" : "done",
-  };
-
-  const requestTime =
-    isDone && gatewayProcessingMs != null
-      ? fmtStageDuration(totalMs, gatewayProcessingMs)
-      : isDone && !props.isStream && upstreamMs != null
-        ? fmtStageDuration(totalMs, upstreamMs)
-        : isDone && props.isStream && firstTokenMs == null && upstreamMs != null
-          ? fmtStageDuration(totalMs, upstreamMs)
-          : null;
-
-  const reqSeg: Seg = {
-    key: "request",
-    label: t("lifecycleRequest"),
-    time: requestTime,
-    sub: errInReq ? errText : null,
-    state: isDecision
-      ? "pending"
-      : effectiveStatus === "requesting"
-        ? "active"
-        : errInReq
-          ? "failed"
-          : "done",
-  };
-
-  const responseSubParts = errInResp
-    ? [errText]
-    : isDone
-      ? [
-          firstTokenMs != null
-            ? `${t("journeyFirstOutput")} ${fmtStageDuration(cumulativeFirstOutputMs, firstTokenMs)}`
-            : null,
-          generationMs != null && totalMs != null ? `${t("perfGen")} ${fmtMs(generationMs)}` : null,
-        ]
-      : [];
-
-  const respSeg: Seg = {
-    key: "response",
-    label: t("lifecycleResponse"),
-    time:
-      !errInResp && isDone && generationMs != null ? fmtStageDuration(totalMs, generationMs) : null,
-    sub: responseSubParts.filter(Boolean).join(" · ") || null,
-    state: !isDone ? "pending" : errInResp ? "failed" : errInReq ? "pending" : "done",
-  };
-
-  const completeTime =
-    props.statusCode != null
-      ? totalMs != null
-        ? `${props.statusCode} · ${fmtMs(totalMs)}`
-        : String(props.statusCode)
-      : null;
-
-  const completeSeg: Seg = {
-    key: "complete",
-    label: t("lifecycleComplete"),
-    time: completeTime,
-    sub: null,
-    state: !isDone ? "pending" : isSuccess ? "success" : "failed",
-  };
-
-  return [decSeg, reqSeg, respSeg, completeSeg];
 }
 
 function buildTrackSegs(props: LifecycleTrackProps, t: (key: string) => string): TrackSeg[] {
@@ -403,22 +308,6 @@ const SUB_CLS: Record<SegState, string> = {
   success: "text-status-success/75",
 };
 
-const BAR_SEGMENT_CLS: Record<SegState, string> = {
-  done: "bg-surface-200/70",
-  active: "bg-[linear-gradient(180deg,rgba(59,130,246,0.12),rgba(15,23,42,0.02))]",
-  pending: "bg-surface-200/35 opacity-75",
-  failed: "bg-[linear-gradient(180deg,rgba(220,38,38,0.10),rgba(15,23,42,0.03))]",
-  success: "bg-[linear-gradient(180deg,rgba(22,163,74,0.10),rgba(15,23,42,0.03))]",
-};
-
-const BAR_ACCENT_CLS: Record<SegState, string> = {
-  done: "bg-muted-foreground/20",
-  active: "bg-blue-400/70",
-  pending: "bg-muted-foreground/15",
-  failed: "bg-status-error/70",
-  success: "bg-status-success/70",
-};
-
 function SegCard({
   seg,
   index,
@@ -487,42 +376,6 @@ function SegCard({
   );
 }
 
-function CompleteTime({ seg }: { seg: Seg }) {
-  if (!seg.time) {
-    return <div className="h-[16px]" />;
-  }
-
-  const [statusPart, durationPart] = seg.time.split(" · ");
-  const statusClass =
-    seg.state === "success"
-      ? "text-status-success"
-      : seg.state === "failed"
-        ? "text-status-error"
-        : "text-foreground";
-
-  if (!durationPart) {
-    return (
-      <div className={cn("font-mono text-[11px] tabular-nums", statusClass)}>{statusPart}</div>
-    );
-  }
-
-  return (
-    <div className="font-mono text-[11px] tabular-nums">
-      <span className={statusClass}>{statusPart}</span>
-      <span className="text-muted-foreground/55"> · </span>
-      <span
-        className={cn(
-          "text-foreground",
-          seg.state === "failed" && "text-status-error",
-          seg.state === "success" && "text-status-success"
-        )}
-      >
-        {durationPart}
-      </span>
-    </div>
-  );
-}
-
 export function LifecycleTrack({
   lifecycleStatus,
   stageTimings,
@@ -543,7 +396,6 @@ export function LifecycleTrack({
     failureStage,
     durationMs,
   };
-  const segs = buildSegs(props, t);
   const trackSegs = buildTrackSegs(props, t);
 
   if (compact) {

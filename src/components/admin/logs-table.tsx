@@ -1842,6 +1842,9 @@ export function LogsTable({ logs }: LogsTableProps) {
 
           <div className="w-full sm:w-[220px]">
             <Input
+              id="logs-model-filter"
+              name="logs-model-filter"
+              aria-label={t("filterModel")}
               type="text"
               placeholder={t("filterModel")}
               value={modelFilter}
