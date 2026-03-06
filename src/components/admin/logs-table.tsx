@@ -880,6 +880,7 @@ export function LogsTable({ logs }: LogsTableProps) {
             </div>
           </>
         ),
+        focusedContent: null,
       },
       {
         index: 2,
@@ -1300,6 +1301,10 @@ export function LogsTable({ logs }: LogsTableProps) {
     const activeJourneyStep =
       journeySteps.find((step) => step.index === activeJourneyStepIndex) ?? journeySteps[0];
     const activeJourneyTone = JOURNEY_TONE_STYLES[activeJourneyStep.tone];
+    const activeJourneyDetail =
+      activeJourneyStep.focusedContent !== undefined
+        ? activeJourneyStep.focusedContent
+        : activeJourneyStep.content;
     const journeyViewOptions = [
       { value: "focused" as const, label: t("journeyViewFocused") },
       { value: "sequential" as const, label: t("journeyViewSequential") },
@@ -1487,7 +1492,9 @@ export function LogsTable({ logs }: LogsTableProps) {
                           {activeJourneyStep.metrics}
                         </div>
                       </div>
-                      <div className="space-y-2 text-[11px]">{activeJourneyStep.content}</div>
+                      {activeJourneyDetail ? (
+                        <div className="space-y-2 text-[11px]">{activeJourneyDetail}</div>
+                      ) : null}
                     </div>
                   </>
                 ) : (

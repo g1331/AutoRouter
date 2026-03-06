@@ -378,6 +378,8 @@
     "lifecycleDecision": "Decision",
     "lifecycleRequest": "Request",
     "lifecycleResponse": "Response",
+    "lifecycleFirstOutput": "First output",
+    "lifecycleGeneration": "Generation",
     "lifecycleComplete": "Complete",
     "journeyDecisionResult": "Decision result",
     "journeySelectionReason": "Selection reason",

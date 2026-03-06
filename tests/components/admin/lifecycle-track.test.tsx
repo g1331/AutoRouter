@@ -53,6 +53,7 @@ describe("LifecycleTrack", () => {
       );
 
       expect(screen.getByText(/500ms \(\+400ms\)/)).toBeInTheDocument();
+      expect(screen.getByTitle(/lifecycleResponse · 0ms/)).toBeInTheDocument();
     });
 
     it("shows status code in complete segment with success color", () => {
@@ -84,9 +85,40 @@ describe("LifecycleTrack", () => {
         />
       );
 
-      expect(screen.getByText(/journeyFirstOutput 400ms \(\+320ms\)/)).toBeInTheDocument();
+      expect(screen.getByText("lifecycleFirstOutput")).toBeInTheDocument();
+      expect(screen.getByText(/400ms \(\+320ms\)/)).toBeInTheDocument();
       expect(screen.getByText(/1\.2s \(\+780ms\)/)).toBeInTheDocument();
       expect(screen.queryByText("1.1s")).not.toBeInTheDocument();
+    });
+
+    it("uses first output and generation stages in the top track for streaming requests", () => {
+      render(
+        <LifecycleTrack
+          statusCode={200}
+          isStream={true}
+          lifecycleStatus="completed_success"
+          stageTimings={{
+            total_ms: 1200,
+            decision_ms: 80,
+            upstream_response_ms: 1100,
+            first_token_ms: 320,
+            generation_ms: 780,
+            gateway_processing_ms: null,
+          }}
+        />
+      );
+
+      expect(screen.getByText("lifecycleRequest")).toBeInTheDocument();
+      expect(screen.queryByText("lifecycleResponse")).not.toBeInTheDocument();
+      expect(screen.getByText("0ms")).toBeInTheDocument();
+
+      const requestSeg = screen.getByTitle(/lifecycleRequest · 0ms/);
+      const firstOutputSeg = screen.getByTitle(/lifecycleFirstOutput/);
+      const generationSeg = screen.getByTitle(/lifecycleGeneration/);
+
+      expect(requestSeg).toHaveStyle({ flexGrow: "96" });
+      expect(firstOutputSeg).toHaveStyle({ flexGrow: "320" });
+      expect(generationSeg).toHaveStyle({ flexGrow: "780" });
     });
 
     it("does not show streaming sub-timings for non-streaming requests", () => {
@@ -209,7 +241,7 @@ describe("LifecycleTrack", () => {
 
       const decisionEl = screen.getByText("lifecycleDecision");
       expect(decisionEl).toBeInTheDocument();
-      expect(document.querySelector('[class*="-translate-y-0.5"]')).not.toBeNull();
+      expect(document.querySelector('[data-state="active"]')).not.toBeNull();
     });
 
     it("shows pending stages when request is in-progress", () => {
@@ -267,8 +299,8 @@ describe("LifecycleTrack", () => {
         />
       );
 
-      expect(screen.getByText("lifecycleResponse")).toBeInTheDocument();
-      expect(screen.getByText(/journeyFirstOutput 1\.2s \(\+900ms\)/)).toBeInTheDocument();
+      expect(screen.getByText("lifecycleGeneration")).toBeInTheDocument();
+      expect(screen.getByText(/1\.6s \(\+400ms\)/)).toBeInTheDocument();
       expect(screen.getByText(/200 · 1\.6s/)).toBeInTheDocument();
     });
 

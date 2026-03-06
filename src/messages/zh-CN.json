@@ -378,6 +378,8 @@
     "lifecycleDecision": "决策",
     "lifecycleRequest": "请求",
     "lifecycleResponse": "响应",
+    "lifecycleFirstOutput": "首个输出",
+    "lifecycleGeneration": "生成",
     "lifecycleComplete": "完成",
     "lifecycleStageDecision": "决策中",
     "lifecycleStageRequesting": "请求中",
