@@ -76,6 +76,26 @@ function TruncatedTextTooltip({ text }: { text: string }) {
   );
 }
 
+function RequestModeBadge({ isStream, compact = false }: { isStream: boolean; compact?: boolean }) {
+  const t = useTranslations("logs");
+  const label = isStream ? t("requestModeStreaming") : t("requestModeNonStreaming");
+  const shortLabel = isStream ? t("requestModeStreamingShort") : t("requestModeNonStreamingShort");
+
+  return (
+    <Badge
+      variant={isStream ? "info" : "neutral"}
+      className={cn(
+        "shrink-0 whitespace-nowrap rounded-cf-sm px-1.5 py-0 text-[9px] leading-4",
+        compact && "px-1 py-0 text-[8px] leading-4"
+      )}
+      aria-label={label}
+      title={label}
+    >
+      <span>{compact ? shortLabel : label}</span>
+    </Badge>
+  );
+}
+
 function InterfaceTypeCell({
   method,
   path,
@@ -1093,6 +1113,7 @@ export function LogsTable({ logs }: LogsTableProps) {
                           <code className="shrink-0 rounded-cf-sm border border-divider bg-surface-300 px-1.5 py-0.5 font-mono text-xs text-foreground">
                             {log.method || "-"}
                           </code>
+                          <RequestModeBadge isStream={log.is_stream} />
                           <InterfaceTypeCell
                             method={log.method}
                             path={log.path}
@@ -1315,9 +1336,12 @@ export function LogsTable({ logs }: LogsTableProps) {
                               />
                             </TableCell>
                             <TableCell className="px-2 py-1">
-                              <code className="rounded-cf-sm border border-divider bg-surface-300 px-1 py-0.5 font-mono text-[10px] text-foreground whitespace-nowrap">
-                                {log.method || "-"}
-                              </code>
+                              <div className="flex flex-col items-start gap-0.5">
+                                <code className="rounded-cf-sm border border-divider bg-surface-300 px-1 py-0.5 font-mono text-[10px] text-foreground whitespace-nowrap">
+                                  {log.method || "-"}
+                                </code>
+                                <RequestModeBadge isStream={log.is_stream} compact />
+                              </div>
                             </TableCell>
                             <TableCell className="hidden text-[10px] lg:table-cell w-[84px] px-2 py-1 pr-1 min-w-0">
                               <InterfaceTypeCell

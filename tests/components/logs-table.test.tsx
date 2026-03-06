@@ -100,10 +100,17 @@ describe("LogsTable", () => {
       render(<LogsTable logs={[mockLog]} />);
 
       expect(screen.getByText("POST")).toBeInTheDocument();
+      expect(screen.getByLabelText("requestModeNonStreaming")).toBeInTheDocument();
       expect(
         screen.getByLabelText("capabilityOpenAIChatCompatible: POST /v1/chat/completions")
       ).toBeInTheDocument();
       expect(screen.getByText("gpt-4")).toBeInTheDocument();
+    });
+
+    it("renders streaming mode indicator for stream requests", () => {
+      render(<LogsTable logs={[{ ...mockLog, id: "test-id-stream", is_stream: true }]} />);
+
+      expect(screen.getByLabelText("requestModeStreaming")).toBeInTheDocument();
     });
 
     it("renders billed cost directly in the table row", () => {
@@ -125,7 +132,7 @@ describe("LogsTable", () => {
   });
 
   describe("Mobile Layout Billing Display", () => {
-    it("keeps interface type text visible in mobile cards", () => {
+    it("keeps interface type text and request mode visible in mobile cards", () => {
       const originalMatchMedia = window.matchMedia;
 
       window.matchMedia = ((query: string) => ({
@@ -143,6 +150,7 @@ describe("LogsTable", () => {
         render(<LogsTable logs={[mockLog]} />);
 
         expect(screen.getByText("capabilityOpenAIChatCompatible")).toBeInTheDocument();
+        expect(screen.getByLabelText("requestModeNonStreaming")).toBeInTheDocument();
         expect(
           screen.getByLabelText("capabilityOpenAIChatCompatible: POST /v1/chat/completions")
         ).toBeInTheDocument();
