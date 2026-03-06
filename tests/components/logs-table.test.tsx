@@ -995,9 +995,9 @@ describe("LogsTable", () => {
       selected_upstream_id: "upstream-1",
       candidates: [
         { id: "upstream-1", name: "openai-1", weight: 100, circuit_state: "closed" },
-        { id: "upstream-2", name: "openai-2", weight: 50, circuit_state: "closed" },
+        { id: "upstream-2", name: "openai-2", weight: 50, circuit_state: "half_open" },
       ],
-      excluded: [],
+      excluded: [{ id: "upstream-3", name: "openai-3", reason: "concurrency_full" }],
     };
 
     const attemptedAt = "2026-02-02T00:00:00.000Z";
@@ -1105,13 +1105,37 @@ describe("LogsTable", () => {
 
       render(<LogsTable logs={[logWithRouting]} />);
 
-      // Click expand button
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
       fireEvent.click(expandButton);
 
-      // Both token details and timeline stages should be visible
       expect(screen.getByText("tokenDetails")).toBeInTheDocument();
+      expect(screen.getByText("lifecycleTimeline")).toBeInTheDocument();
       expect(screen.getByText("timelineModelResolution")).toBeInTheDocument();
+    });
+
+    it("restores structured session and candidate upstream diagnostics in expanded view", () => {
+      const sessionId = "session-1234567890abcdef";
+      const logWithRouting: RequestLog = {
+        ...logWithFailoverBase,
+        routing_decision: mockRoutingDecision,
+        session_id: sessionId,
+        affinity_hit: true,
+        session_id_compensated: true,
+      };
+
+      render(<LogsTable logs={[logWithRouting]} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+
+      expect(screen.getByText("timelineSessionAffinity")).toBeInTheDocument();
+      expect(screen.getByTitle(sessionId)).toBeInTheDocument();
+      expect(screen.getByText("compensationBadge")).toBeInTheDocument();
+      expect(screen.getByText(/weighted_random/)).toBeInTheDocument();
+      expect(screen.getByText("openai-1")).toBeInTheDocument();
+      expect(screen.getByText("openai-3")).toBeInTheDocument();
+      expect(screen.getByText("w:100")).toBeInTheDocument();
+      expect(screen.getByText("circuitState.half_open")).toBeInTheDocument();
+      expect(screen.getByText("exclusionReason.concurrency_full")).toBeInTheDocument();
     });
 
     it("shows session affinity stage when routing decision is null", () => {

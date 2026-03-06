@@ -543,43 +543,20 @@ export function LogsTable({ logs }: LogsTableProps) {
     const genMs = log.stage_timings_ms?.generation_ms ?? getGenerationMs(log);
     const upstreamMs = log.stage_timings_ms?.upstream_response_ms ?? null;
 
-    // Build routing decision details
-    const routingSteps = [];
-    if (log.routing_decision) {
-      const { original_model, resolved_model, model_redirect_applied } = log.routing_decision;
-      const modelDisplay = model_redirect_applied
-        ? `${original_model} → ${resolved_model}`
-        : resolved_model || original_model;
-      routingSteps.push(
-        `1 模型解析: ${modelDisplay}${log.group_name ? ` (${log.group_name})` : ""}`
-      );
-    }
-    if (log.session_id) {
-      if (log.affinity_hit) {
-        routingSteps.push(`2 会话亲和性: 命中 ID ${log.session_id.slice(0, 8)}...`);
-      } else if (log.session_id_compensated) {
-        routingSteps.push(`2 会话亲和性: 补偿 ID ${log.session_id.slice(0, 8)}...`);
-      } else {
-        routingSteps.push(`2 会话亲和性: 未命中`);
-      }
-    }
-    if (upstreamDisplayName) {
-      const routingTypeLabel =
-        log.routing_type === "direct"
-          ? "直连"
-          : log.routing_type === "provider_type"
-            ? "按提供商"
-            : log.routing_type === "tiered"
-              ? "分层"
-              : "未知";
-      routingSteps.push(`3 上游选择: ${routingTypeLabel} → ${upstreamDisplayName}`);
-    }
+    const hasRoutingDiagnostics = Boolean(
+      log.routing_decision ||
+      log.session_id ||
+      log.session_id_compensated ||
+      log.failover_attempts > 0 ||
+      upstreamDisplayName ||
+      log.routing_type
+    );
 
     return (
       <div className={cn("space-y-4 font-mono text-xs", className)}>
         {/* Unified Lifecycle Progress Bar */}
         <div className={cn(DETAIL_PANEL_CLASS)}>
-          <div className={DETAIL_PANEL_HEADER_CLASS}>请求生命周期</div>
+          <div className={DETAIL_PANEL_HEADER_CLASS}>{t("performanceStats")}</div>
           <div className={cn(DETAIL_PANEL_BODY_CLASS, "space-y-3")}>
             {/* Progress Bar */}
             {totalMs != null && totalMs > 0 && (
@@ -643,62 +620,32 @@ export function LogsTable({ logs }: LogsTableProps) {
                 </div>
               </div>
             )}
-
-            {/* Routing Decision Steps */}
-            {routingSteps.length > 0 && (
-              <>
-                <div className="border-t border-dashed border-divider" />
-                <div className="space-y-1">
-                  {routingSteps.map((step, idx) => (
-                    <div key={idx} className="text-[11px] text-muted-foreground">
-                      {step}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {/* Failover History */}
-            {log.failover_attempts > 0 &&
-              log.failover_history &&
-              log.failover_history.length > 0 && (
-                <>
-                  <div className="border-t border-dashed border-divider" />
-                  <div className="space-y-1">
-                    <div className="text-[11px] font-medium text-status-warning">
-                      4 执行与重试: 故障转移 ({log.failover_attempts} 次尝试)
-                    </div>
-                    {log.failover_history.map((attempt, idx) => (
-                      <div key={idx} className="text-[11px] text-muted-foreground pl-4">
-                        • {attempt.upstream_name} - {attempt.error_type}
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-
-            {/* Final Result */}
-            {log.status_code != null && (
-              <>
-                <div className="border-t border-dashed border-divider" />
-                <div className="text-[11px]">
-                  <span className="text-muted-foreground">5 最终结果: </span>
-                  <span
-                    className={cn(
-                      "font-medium",
-                      log.status_code >= 200 && log.status_code < 300
-                        ? "text-status-success"
-                        : "text-status-error"
-                    )}
-                  >
-                    {log.status_code >= 200 && log.status_code < 300 ? "成功" : "失败"} (
-                    {log.status_code})
-                  </span>
-                </div>
-              </>
-            )}
           </div>
         </div>
+
+        {hasRoutingDiagnostics && (
+          <section className={DETAIL_PANEL_CLASS}>
+            <div className={DETAIL_PANEL_HEADER_CLASS}>{t("lifecycleTimeline")}</div>
+            <div className={cn(DETAIL_PANEL_BODY_CLASS, "overflow-hidden")}>
+              <RoutingDecisionTimeline
+                routingDecision={log.routing_decision}
+                upstreamName={upstreamDisplayName}
+                routingType={log.routing_type}
+                groupName={log.group_name}
+                failoverAttempts={log.failover_attempts}
+                failoverHistory={log.failover_history}
+                failoverDurationMs={failoverDurationMs}
+                statusCode={log.status_code}
+                sessionId={log.session_id}
+                affinityHit={log.affinity_hit}
+                affinityMigrated={log.affinity_migrated}
+                sessionIdCompensated={log.session_id_compensated}
+                compact={false}
+                showStageConnector={false}
+              />
+            </div>
+          </section>
+        )}
 
         {/* Token & Billing Details (2-column grid) */}
         <div className="grid gap-4 xl:grid-cols-2">
@@ -897,11 +844,18 @@ export function LogsTable({ logs }: LogsTableProps) {
     const isExpanded = expandedRows.has(log.id);
     const hasFailover = log.failover_attempts > 0;
     const hasRoutingDecision = !!log.routing_decision;
+    const hasSessionDiagnostics = !!log.session_id || !!log.session_id_compensated;
+    const hasHeaderDiff = !!log.header_diff;
     // Token details moved from tooltip into the expanded row, so allow expansion
     // whenever there is something meaningful to show.
     // - In-progress requests: tokens may be 0 but routing_decision can exist
     // - Normal requests: routing_decision may be null but token stats usually exist
-    const canExpand = hasFailover || hasRoutingDecision || log.total_tokens > 0;
+    const canExpand =
+      hasFailover ||
+      hasRoutingDecision ||
+      hasSessionDiagnostics ||
+      hasHeaderDiff ||
+      log.total_tokens > 0;
     const isNew = newLogIds.has(log.id);
     const isError = hasErrorState(log);
     const upstreamDisplayName =
