@@ -285,6 +285,8 @@ export function LogsTable({ logs }: LogsTableProps) {
 
   // Expanded rows state for failover details
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [focusedJourneySteps, setFocusedJourneySteps] = useState<Record<string, number>>({});
+  const [journeyViewMode, setJourneyViewMode] = useState<"focused" | "sequential">("focused");
 
   // Track new log IDs for scan animation
   const [newLogIds, setNewLogIds] = useState<Set<string>>(new Set());
@@ -717,42 +719,601 @@ export function LogsTable({ logs }: LogsTableProps) {
       );
     };
 
-    const renderJourneyStep = (options: {
-      index: number;
-      title: string;
-      metrics?: ReactNode;
-      children: ReactNode;
-      isLast?: boolean;
-    }) => {
-      const { index, title, metrics, children, isLast = false } = options;
-      return (
-        <div className="relative pl-10">
-          {!isLast ? (
-            <div className="absolute left-[13px] top-8 bottom-[-14px] w-px bg-divider/80" />
-          ) : null}
-          <div className="absolute left-0 top-0.5 flex h-7 w-7 items-center justify-center rounded-full border border-divider bg-surface-200/90 text-[11px] font-semibold text-foreground shadow-[var(--vr-shadow-xs)]">
-            {index}
-          </div>
-          <section className="rounded-cf-sm border border-divider bg-surface-300/45 p-3 shadow-[var(--vr-shadow-xs)]">
-            <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
-              <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                {title}
-              </div>
-              {metrics ? <div className="flex flex-wrap justify-end gap-1">{metrics}</div> : null}
-            </div>
-            <div className="space-y-2 text-[11px]">{children}</div>
-          </section>
-        </div>
+    type JourneyTone = "neutral" | "info" | "warning" | "success" | "error";
+
+    const JOURNEY_TONE_STYLES: Record<
+      JourneyTone,
+      {
+        tab: string;
+        tabActive: string;
+        number: string;
+        accent: string;
+        panel: string;
+      }
+    > = {
+      neutral: {
+        tab: "border-divider bg-surface-200/70 hover:border-foreground/10 hover:bg-surface-200",
+        tabActive:
+          "border-foreground/15 bg-surface-200 text-foreground shadow-[0_12px_30px_rgba(15,23,42,0.08)]",
+        number: "border-divider bg-surface-300 text-muted-foreground",
+        accent: "bg-[linear-gradient(90deg,rgba(148,163,184,0.65),rgba(148,163,184,0.15))]",
+        panel: "border-divider bg-surface-200/75",
+      },
+      info: {
+        tab: "border-divider bg-surface-200/70 hover:border-sky-500/20 hover:bg-sky-500/5",
+        tabActive:
+          "border-sky-500/25 bg-[linear-gradient(180deg,rgba(14,165,233,0.08),rgba(15,23,42,0.02))] text-foreground shadow-[0_12px_30px_rgba(2,132,199,0.12)]",
+        number: "border-sky-500/20 bg-sky-500/10 text-sky-600",
+        accent: "bg-[linear-gradient(90deg,rgba(14,165,233,0.85),rgba(14,165,233,0.2))]",
+        panel:
+          "border-sky-500/20 bg-[linear-gradient(180deg,rgba(14,165,233,0.07),rgba(15,23,42,0.02))]",
+      },
+      warning: {
+        tab: "border-divider bg-surface-200/70 hover:border-amber-500/20 hover:bg-amber-500/5",
+        tabActive:
+          "border-amber-500/25 bg-[linear-gradient(180deg,rgba(245,158,11,0.08),rgba(15,23,42,0.02))] text-foreground shadow-[0_12px_30px_rgba(217,119,6,0.12)]",
+        number: "border-amber-500/20 bg-amber-500/10 text-amber-600",
+        accent: "bg-[linear-gradient(90deg,rgba(245,158,11,0.85),rgba(245,158,11,0.18))]",
+        panel:
+          "border-amber-500/20 bg-[linear-gradient(180deg,rgba(245,158,11,0.07),rgba(15,23,42,0.02))]",
+      },
+      success: {
+        tab: "border-divider bg-surface-200/70 hover:border-emerald-500/20 hover:bg-emerald-500/5",
+        tabActive:
+          "border-emerald-500/25 bg-[linear-gradient(180deg,rgba(16,185,129,0.08),rgba(15,23,42,0.02))] text-foreground shadow-[0_12px_30px_rgba(5,150,105,0.12)]",
+        number: "border-emerald-500/20 bg-emerald-500/10 text-emerald-600",
+        accent: "bg-[linear-gradient(90deg,rgba(16,185,129,0.85),rgba(16,185,129,0.18))]",
+        panel:
+          "border-emerald-500/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.07),rgba(15,23,42,0.02))]",
+      },
+      error: {
+        tab: "border-divider bg-surface-200/70 hover:border-status-error/20 hover:bg-status-error-muted/10",
+        tabActive:
+          "border-status-error/25 bg-[linear-gradient(180deg,rgba(220,38,38,0.08),rgba(15,23,42,0.02))] text-foreground shadow-[0_12px_30px_rgba(185,28,28,0.12)]",
+        number: "border-status-error/20 bg-status-error-muted/20 text-status-error",
+        accent: "bg-[linear-gradient(90deg,rgba(220,38,38,0.9),rgba(220,38,38,0.2))]",
+        panel:
+          "border-status-error/20 bg-[linear-gradient(180deg,rgba(220,38,38,0.07),rgba(15,23,42,0.02))]",
+      },
+    };
+
+    const requestSignature = [log.method, log.path].filter(Boolean).join(" ");
+    const candidateSummary = routingDecision
+      ? String(routingDecision.final_candidate_count) +
+        "/" +
+        String(routingDecision.candidate_count) +
+        " " +
+        t("tooltipCandidates").toLowerCase()
+      : null;
+    const requestArrivedSummary = (modelDisplay ?? log.model ?? requestSignature) || "-";
+    const requestArrivedMeta = [requestSignature || null, requestModeLabel, groupName]
+      .filter(Boolean)
+      .join(" · ");
+    const decisionStepSummary = routingDecision
+      ? getSelectionReasonText(decisionSelectionReason)
+      : t("noRoutingDecision");
+    const decisionStepMeta = [
+      decisionUpstreamLabel !== "-" ? decisionUpstreamLabel : null,
+      candidateSummary,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    const requestExecutionSummary =
+      didSendUpstream === false
+        ? t("journeyRequestNotSent")
+        : t("journeyRequestSentTo") + " " + finalUpstreamLabel;
+    const requestExecutionMeta = hasFailoverHistory
+      ? String(log.failover_attempts) + " " + t("retryAttemptsSummary")
+      : finalSelectionReason
+        ? getSelectionReasonText(finalSelectionReason)
+        : didSendUpstream === false
+          ? t("timelineNoUpstreamSent")
+          : t("timelineDirectSuccess");
+    const responseStepSummary =
+      ttftMs != null
+        ? t("journeyFirstOutput") +
+          " " +
+          (formatStageDurationText(cumulativeFirstOutputMs, ttftMs) ?? "")
+        : genMs != null
+          ? t("journeyGenerationFinished") + " " + (responsePhaseDurationText ?? "")
+          : requestModeLabel;
+    const responseStepMeta =
+      requestTps != null
+        ? t("perfTps") + " " + requestTps.toFixed(1) + " tok/s"
+        : genMs != null
+          ? t("perfGen")
+          : null;
+    const completeStepSummary =
+      log.status_code != null
+        ? totalMs != null
+          ? String(log.status_code) + " · " + formatMetricText(totalMs)
+          : String(log.status_code)
+        : finalUpstreamLabel;
+    const completeStepMeta = [failureStageLabel, totalMs != null ? formatMetricText(totalMs) : null]
+      .filter(Boolean)
+      .join(" · ");
+    const getDefaultJourneyStepIndex = () => {
+      if (didSendUpstream === false || hasFailoverHistory || hasFailoverWithoutHistory) {
+        return 3;
+      }
+      if (log.is_stream && (ttftMs != null || genMs != null)) {
+        return 4;
+      }
+      if (isError) {
+        return 5;
+      }
+      return 2;
+    };
+
+    const activeJourneyStepIndex = focusedJourneySteps[log.id] ?? getDefaultJourneyStepIndex();
+    const setActiveJourneyStep = (stepIndex: number) => {
+      setFocusedJourneySteps((prev) =>
+        prev[log.id] === stepIndex ? prev : { ...prev, [log.id]: stepIndex }
       );
     };
+
+    const journeySteps = [
+      {
+        index: 1,
+        title: t("journeyRequestArrived"),
+        summary: requestArrivedSummary,
+        meta: requestArrivedMeta,
+        tone: "neutral" as JourneyTone,
+        metrics: (
+          <>
+            {renderMetricPill(requestModeLabel, "", "neutral")}
+            {routingTypeLabel ? renderMetricPill(routingTypeLabel, "", "neutral") : null}
+          </>
+        ),
+        content: (
+          <>
+            <div className="font-medium text-foreground">{modelDisplay ?? log.model ?? "-"}</div>
+            <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+              {log.method ? <span>{log.method}</span> : null}
+              {log.path ? <span className="break-all">{log.path}</span> : null}
+              {groupName ? <span>{groupName}</span> : null}
+              {routingDecision?.model_redirect_applied ? (
+                <Badge variant="info" className="px-1.5 py-0 text-[10px]">
+                  {t("timelineModelResolution")}
+                </Badge>
+              ) : null}
+            </div>
+          </>
+        ),
+      },
+      {
+        index: 2,
+        title: t("lifecycleDecision"),
+        summary: decisionStepSummary,
+        meta: decisionStepMeta,
+        tone: routingDecision ? ("info" as JourneyTone) : ("neutral" as JourneyTone),
+        metrics: (
+          <>
+            {routingTypeLabel ? renderMetricPill(routingTypeLabel, "", "neutral") : null}
+            {routingDecision
+              ? renderMetricPill(
+                  t("tooltipCandidates"),
+                  String(routingDecision.final_candidate_count) +
+                    "/" +
+                    String(routingDecision.candidate_count),
+                  "neutral"
+                )
+              : null}
+            {decisionDurationText
+              ? renderMetricPill(t("tableDuration"), decisionDurationText, "info")
+              : null}
+          </>
+        ),
+        content: (
+          <>
+            <div className="rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
+              <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+                {t("timelineModelResolution")}
+              </div>
+              {routingDecision ? (
+                <div className="space-y-2">
+                  <div className="font-medium text-foreground">{modelDisplay}</div>
+                  <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+                    {groupName ? <span>{groupName}</span> : null}
+                    <span>
+                      {t("tooltipStrategy")}:{" "}
+                      <span className="text-foreground">{routingDecision.selection_strategy}</span>
+                    </span>
+                    <span>{candidateSummary}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-muted-foreground">{t("noRoutingDecision")}</div>
+              )}
+            </div>
+
+            <div className="rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
+              <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+                {t("journeySelectionBasis")}
+              </div>
+              <div className="space-y-2">
+                {routingDecision?.matched_route_capability ? (
+                  <div className="text-muted-foreground">
+                    {t("matchedRouteCapability")}:{" "}
+                    <span className="text-foreground">
+                      {routingDecision.matched_route_capability}
+                    </span>
+                    {routingDecision.route_match_source ? (
+                      <span className="ml-2">
+                        ({t("routeMatchSource")}:{" "}
+                        {routingDecision.route_match_source === "path"
+                          ? t("routeMatchSourcePath")
+                          : t("routeMatchSourceModelFallback")}
+                        )
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <div className="space-y-2 rounded-cf-sm border border-divider/80 bg-surface-300/65 p-2">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    {t("timelineSessionAffinity")}
+                  </div>
+                  {hasSession ? (
+                    <>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {log.affinity_hit && !log.affinity_migrated
+                          ? renderMetricPill(t("timelineAffinityHit"), "", "success")
+                          : null}
+                        {log.affinity_migrated
+                          ? renderMetricPill(t("timelineAffinityMigrated"), "", "warning")
+                          : null}
+                        {!log.affinity_hit
+                          ? renderMetricPill(t("timelineAffinityMissed"), "", "neutral")
+                          : null}
+                        {log.session_id_compensated ? (
+                          <Badge variant="warning" className="px-1.5 py-0 text-[10px]">
+                            {t("compensationBadge")}
+                          </Badge>
+                        ) : null}
+                      </div>
+                      {renderJourneyField({
+                        label: t("timelineSessionId"),
+                        value: log.session_id ?? "-",
+                        title: log.session_id ?? undefined,
+                        valueClassName: "break-all",
+                      })}
+                    </>
+                  ) : (
+                    <div className="text-muted-foreground">{t("timelineNoSession")}</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
+              <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+                {t("journeyDecisionResult")}
+              </div>
+              <div className="space-y-2">
+                {renderJourneyField({
+                  label: t("journeyInitialUpstream"),
+                  value: (
+                    <span className="font-medium text-foreground">{decisionUpstreamLabel}</span>
+                  ),
+                })}
+                {renderJourneyField({
+                  label: t("journeySelectionReason"),
+                  value: getSelectionReasonText(decisionSelectionReason),
+                  valueClassName: decisionSelectionReason ? undefined : "text-muted-foreground",
+                })}
+                {routingDecision?.candidates?.length ? (
+                  <div className="space-y-1.5">
+                    {routingDecision.candidates.map((candidate) => {
+                      const isSelected = candidate.id === decisionSelectedCandidateId;
+                      return (
+                        <div
+                          key={candidate.id}
+                          className={cn(
+                            "flex flex-wrap items-center gap-2 rounded-cf-sm border border-divider bg-surface-300/65 px-2 py-1.5",
+                            isSelected && "border-emerald-500/30 bg-emerald-500/10"
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "font-medium",
+                              isSelected ? "text-foreground" : "text-muted-foreground"
+                            )}
+                          >
+                            {isSelected ? "●" : "○"}
+                          </span>
+                          <span className="min-w-0 flex-1 text-foreground">{candidate.name}</span>
+                          <Badge variant="neutral" className="px-1.5 py-0 text-[10px]">
+                            {t("circuitState." + candidate.circuit_state)}
+                          </Badge>
+                          <span className="rounded-cf-sm border border-divider bg-surface-300 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            {"w:" + String(candidate.weight)}
+                          </span>
+                          {isSelected ? (
+                            <Badge variant="success" className="px-1.5 py-0 text-[10px]">
+                              {t("timelineSelected")}
+                            </Badge>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-muted-foreground">{t("noRoutingDecision")}</div>
+                )}
+                {routingDecision?.excluded?.length ? (
+                  <div className="space-y-1.5">
+                    {routingDecision.excluded.map((excluded) => (
+                      <div
+                        key={excluded.id}
+                        className="flex flex-wrap items-center gap-2 rounded-cf-sm border border-red-500/20 bg-red-500/5 px-2 py-1.5"
+                      >
+                        <span className="min-w-0 flex-1 text-foreground">{excluded.name}</span>
+                        <Badge variant="error" className="px-1.5 py-0 text-[10px]">
+                          {t("exclusionReason." + excluded.reason)}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </>
+        ),
+      },
+      {
+        index: 3,
+        title: t("lifecycleRequest"),
+        summary: requestExecutionSummary,
+        meta: requestExecutionMeta,
+        tone:
+          hasFailoverHistory || hasFailoverWithoutHistory
+            ? ("warning" as JourneyTone)
+            : didSendUpstream === false
+              ? ("error" as JourneyTone)
+              : ("warning" as JourneyTone),
+        metrics: (
+          <>
+            {requestPhaseDurationText
+              ? renderMetricPill(t("tableDuration"), requestPhaseDurationText, "warning")
+              : null}
+            {failoverDurationText
+              ? renderMetricPill(t("retryTotalDuration"), failoverDurationText, "warning")
+              : null}
+          </>
+        ),
+        content: (
+          <div className="space-y-2 rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              {t("timelineExecutionRetries")}
+            </div>
+            {renderJourneyField({
+              label: t("journeyRequestAction"),
+              value:
+                didSendUpstream === false ? (
+                  <span className="text-muted-foreground">{t("journeyRequestNotSent")}</span>
+                ) : (
+                  <span>
+                    {t("journeyRequestSentTo")}{" "}
+                    <span className="font-medium text-foreground">{finalUpstreamLabel}</span>
+                  </span>
+                ),
+            })}
+            {hasFailoverHistory ? (
+              <>
+                {finalSelectionReason
+                  ? renderJourneyField({
+                      label: t("journeySelectionReason"),
+                      value: getSelectionReasonText(finalSelectionReason),
+                    })
+                  : null}
+                {getRetryReasonText(finalSelectionReason)
+                  ? renderJourneyField({
+                      label: t("journeyRetryReason"),
+                      value: getRetryReasonText(finalSelectionReason)!,
+                      valueClassName: "text-muted-foreground",
+                    })
+                  : null}
+                {failoverDurationText
+                  ? renderJourneyField({
+                      label: t("retryTotalDuration"),
+                      value: failoverDurationText,
+                      valueClassName: "text-muted-foreground",
+                    })
+                  : null}
+                <div className="space-y-1.5">
+                  {log.failover_history!.map((attempt, index) => (
+                    <div
+                      key={
+                        (attempt.upstream_id ?? attempt.upstream_name ?? "attempt") + "-" + index
+                      }
+                      className="rounded-cf-sm border border-divider bg-surface-300/65 px-2 py-1.5"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-foreground">
+                          {t("retryAttempt")} {index + 1}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {attempt.upstream_name || t("upstreamUnknown")}
+                        </span>
+                        <span className="text-muted-foreground">[{attempt.error_type}]</span>
+                      </div>
+                      {attempt.selection_reason
+                        ? renderJourneyField({
+                            label: t("journeySelectionReason"),
+                            value: getSelectionReasonText(attempt.selection_reason),
+                            className: "mt-1",
+                          })
+                        : null}
+                      {getRetryReasonText(attempt.selection_reason)
+                        ? renderJourneyField({
+                            label: t("journeyRetryReason"),
+                            value: getRetryReasonText(attempt.selection_reason)!,
+                            className: "mt-1",
+                            valueClassName: "text-muted-foreground",
+                          })
+                        : null}
+                      {attempt.error_message ? (
+                        <div className="mt-1 text-[11px] text-muted-foreground">
+                          {attempt.error_message}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : hasFailoverWithoutHistory ? (
+              <div className="text-muted-foreground">
+                {t("timelineFailoverNoDetails", { count: log.failover_attempts })}
+              </div>
+            ) : didSendUpstream === false ? (
+              <div className="text-muted-foreground">{t("timelineNoUpstreamSent")}</div>
+            ) : (
+              <div className="text-muted-foreground">{t("timelineDirectSuccess")}</div>
+            )}
+          </div>
+        ),
+      },
+      {
+        index: 4,
+        title: t("lifecycleResponse"),
+        summary: responseStepSummary,
+        meta: responseStepMeta,
+        tone:
+          isError && routingDecision?.failure_stage === "downstream_streaming"
+            ? ("error" as JourneyTone)
+            : ("success" as JourneyTone),
+        metrics: (
+          <>
+            {responsePhaseDurationText
+              ? renderMetricPill(t("tableDuration"), responsePhaseDurationText, "success")
+              : null}
+            {requestTps != null
+              ? renderMetricPill(t("perfTps"), requestTps.toFixed(1) + " tok/s", "success")
+              : null}
+          </>
+        ),
+        content: (
+          <div className="space-y-2">
+            {ttftMs != null ? (
+              <div className="rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
+                <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    {t("journeyFirstOutput")}
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {formatStageDurationText(cumulativeFirstOutputMs, ttftMs)
+                      ? renderMetricPill(
+                          t("tableDuration"),
+                          formatStageDurationText(cumulativeFirstOutputMs, ttftMs)!,
+                          "warning"
+                        )
+                      : null}
+                  </div>
+                </div>
+                <div className="text-muted-foreground">{t("perfTtft")}</div>
+              </div>
+            ) : null}
+
+            {genMs != null ? (
+              <div className="rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
+                <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    {t("journeyGenerationFinished")}
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {responsePhaseDurationText
+                      ? renderMetricPill(t("tableDuration"), responsePhaseDurationText, "success")
+                      : null}
+                  </div>
+                </div>
+                {requestTps != null ? (
+                  <div className="text-muted-foreground">
+                    {t("perfTps")}:{" "}
+                    <span className="text-foreground">{requestTps.toFixed(1) + " tok/s"}</span>
+                  </div>
+                ) : null}
+              </div>
+            ) : ttftMs == null ? (
+              <div className="text-muted-foreground">{requestModeLabel}</div>
+            ) : null}
+          </div>
+        ),
+      },
+      {
+        index: 5,
+        title: t("lifecycleComplete"),
+        summary: completeStepSummary,
+        meta: completeStepMeta,
+        tone:
+          statusVariant === "error"
+            ? ("error" as JourneyTone)
+            : statusVariant === "success"
+              ? ("success" as JourneyTone)
+              : ("neutral" as JourneyTone),
+        metrics: (
+          <>
+            {log.status_code != null
+              ? renderMetricPill(t("tableStatus"), String(log.status_code), statusVariant)
+              : null}
+            {totalMs != null
+              ? renderMetricPill(t("tableDuration"), formatMetricText(totalMs), "info")
+              : null}
+          </>
+        ),
+        content: (
+          <>
+            {renderJourneyField({
+              label: t("timelineFinalUpstream"),
+              value: (
+                <span
+                  className={cn(
+                    "font-medium",
+                    log.status_code != null && log.status_code >= 200 && log.status_code < 300
+                      ? "text-status-success"
+                      : isError
+                        ? "text-status-error"
+                        : "text-foreground"
+                  )}
+                >
+                  {finalUpstreamLabel}
+                </span>
+              ),
+            })}
+            {failureStageLabel
+              ? renderJourneyField({
+                  label: t("timelineFailureStage"),
+                  value: <span className="text-status-error">{failureStageLabel}</span>,
+                })
+              : null}
+            {requestTps != null
+              ? renderJourneyField({
+                  label: t("perfTps"),
+                  value: requestTps.toFixed(1) + " tok/s",
+                })
+              : null}
+          </>
+        ),
+      },
+    ];
+
+    const activeJourneyStep =
+      journeySteps.find((step) => step.index === activeJourneyStepIndex) ?? journeySteps[0];
+    const activeJourneyTone = JOURNEY_TONE_STYLES[activeJourneyStep.tone];
+    const journeyViewOptions = [
+      { value: "focused" as const, label: t("journeyViewFocused") },
+      { value: "sequential" as const, label: t("journeyViewSequential") },
+    ];
 
     return (
       <div className={cn("space-y-4 font-mono text-xs", className)}>
         {hasLifecycleFusion && (
-          <section className={DETAIL_PANEL_CLASS}>
-            <div className={DETAIL_PANEL_HEADER_CLASS}>{t("lifecycleTimeline")}</div>
-            <div className={cn(DETAIL_PANEL_BODY_CLASS, "space-y-3")}>
-              <div className="rounded-cf-sm border border-divider bg-surface-200/35 p-3 shadow-[var(--vr-shadow-xs)]">
+          <section className="space-y-3">
+            <div className="px-1 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              {t("lifecycleTimeline")}
+            </div>
+            <div className="space-y-3">
+              <div className="space-y-2">
                 <div className="sm:hidden">
                   <LifecycleTrack
                     lifecycleStatus={log.lifecycle_status ?? undefined}
@@ -776,7 +1337,7 @@ export function LogsTable({ logs }: LogsTableProps) {
                     durationMs={totalMs}
                   />
                 </div>
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
                   {log.status_code != null
                     ? renderMetricPill(t("tableStatus"), String(log.status_code), statusVariant)
                     : null}
@@ -791,462 +1352,196 @@ export function LogsTable({ logs }: LogsTableProps) {
               </div>
 
               <div className="space-y-3">
-                {renderJourneyStep({
-                  index: 1,
-                  title: t("journeyRequestArrived"),
-                  metrics: (
-                    <>
-                      {renderMetricPill(requestModeLabel, "", "neutral")}
-                      {routingTypeLabel ? renderMetricPill(routingTypeLabel, "", "neutral") : null}
-                    </>
-                  ),
-                  children: (
-                    <>
-                      <div className="font-medium text-foreground">
-                        {modelDisplay ?? log.model ?? "-"}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-                        {log.method ? <span>{log.method}</span> : null}
-                        {groupName ? <span>{groupName}</span> : null}
-                        {routingDecision?.model_redirect_applied ? (
-                          <Badge variant="info" className="px-1.5 py-0 text-[10px]">
-                            {t("timelineModelResolution")}
-                          </Badge>
-                        ) : null}
-                      </div>
-                    </>
-                  ),
-                })}
+                <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                      {t("journeyViewLabel")}
+                    </div>
+                    <div className="mt-1 text-[11px] leading-relaxed text-muted-foreground/80">
+                      {journeyViewMode === "focused"
+                        ? t("journeyViewFocused")
+                        : t("journeyViewSequential")}
+                    </div>
+                  </div>
+                  <div
+                    className="flex flex-wrap items-center gap-1"
+                    role="group"
+                    aria-label={t("journeyViewLabel")}
+                  >
+                    {journeyViewOptions.map((option) => {
+                      const isActive = journeyViewMode === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setJourneyViewMode(option.value)}
+                          aria-pressed={isActive}
+                          aria-label={option.label}
+                          className={cn(
+                            "rounded-full px-3 py-1.5 text-[10px] uppercase tracking-[0.16em] transition-all duration-200 ease-out",
+                            isActive
+                              ? "bg-foreground text-background shadow-[0_10px_24px_rgba(15,23,42,0.16)]"
+                              : "text-muted-foreground hover:text-foreground"
+                          )}
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-                {renderJourneyStep({
-                  index: 2,
-                  title: t("lifecycleDecision"),
-                  metrics: (
-                    <>
-                      {routingTypeLabel ? renderMetricPill(routingTypeLabel, "", "neutral") : null}
-                      {routingDecision
-                        ? renderMetricPill(
-                            t("tooltipCandidates"),
-                            String(routingDecision.final_candidate_count) +
-                              "/" +
-                              String(routingDecision.candidate_count),
-                            "neutral"
-                          )
-                        : null}
-                      {decisionDurationText
-                        ? renderMetricPill(t("tableDuration"), decisionDurationText, "info")
-                        : null}
-                    </>
-                  ),
-                  children: (
-                    <>
-                      <div className="rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
-                        <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-                          {t("timelineModelResolution")}
-                        </div>
-                        {routingDecision ? (
-                          <div className="space-y-2">
-                            <div className="font-medium text-foreground">{modelDisplay}</div>
-                            <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-                              {groupName ? <span>{groupName}</span> : null}
-                              <span>
-                                {t("tooltipStrategy")}:{" "}
-                                <span className="text-foreground">
-                                  {routingDecision.selection_strategy}
+                {journeyViewMode === "focused" ? (
+                  <>
+                    <div className="relative">
+                      <div className="pointer-events-none absolute left-7 right-7 top-7 hidden h-px bg-[linear-gradient(90deg,transparent,rgba(148,163,184,0.4),transparent)] xl:block" />
+                      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+                        {journeySteps.map((step) => {
+                          const tone = JOURNEY_TONE_STYLES[step.tone];
+                          const isActive = step.index === activeJourneyStep.index;
+                          return (
+                            <button
+                              key={step.index}
+                              type="button"
+                              onClick={() => setActiveJourneyStep(step.index)}
+                              aria-pressed={isActive}
+                              aria-label={step.title}
+                              className={cn(
+                                "group relative overflow-hidden rounded-[20px] border px-3 py-3 text-left transition-all duration-200 ease-out",
+                                "before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.55),transparent)]",
+                                "hover:-translate-y-0.5 active:translate-y-0",
+                                tone.tab,
+                                isActive && cn("-translate-y-0.5", tone.tabActive)
+                              )}
+                            >
+                              <div
+                                className={cn(
+                                  "absolute inset-x-3 top-0 h-0.5 rounded-full opacity-0 transition-opacity duration-200",
+                                  tone.accent,
+                                  isActive && "opacity-100"
+                                )}
+                              />
+                              <div className="flex items-start gap-3">
+                                <span
+                                  className={cn(
+                                    "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold transition-colors duration-200",
+                                    tone.number
+                                  )}
+                                >
+                                  {step.index}
                                 </span>
-                              </span>
-                              <span>
-                                {String(routingDecision.final_candidate_count) +
-                                  "/" +
-                                  String(routingDecision.candidate_count) +
-                                  " " +
-                                  t("tooltipCandidates").toLowerCase()}
-                              </span>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="text-muted-foreground">{t("noRoutingDecision")}</div>
-                        )}
-                      </div>
-
-                      <div className="rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
-                        <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-                          {t("journeySelectionBasis")}
-                        </div>
-                        <div className="space-y-2">
-                          {routingDecision?.matched_route_capability ? (
-                            <div className="text-muted-foreground">
-                              {t("matchedRouteCapability")}:{" "}
-                              <span className="text-foreground">
-                                {routingDecision.matched_route_capability}
-                              </span>
-                              {routingDecision.route_match_source ? (
-                                <span className="ml-2">
-                                  ({t("routeMatchSource")}:{" "}
-                                  {routingDecision.route_match_source === "path"
-                                    ? t("routeMatchSourcePath")
-                                    : t("routeMatchSourceModelFallback")}
-                                  )
-                                </span>
-                              ) : null}
-                            </div>
-                          ) : null}
-
-                          <div className="space-y-2 rounded-cf-sm border border-divider/80 bg-surface-300/65 p-2">
-                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                              {t("timelineSessionAffinity")}
-                            </div>
-                            {hasSession ? (
-                              <>
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                  {log.affinity_hit && !log.affinity_migrated
-                                    ? renderMetricPill(t("timelineAffinityHit"), "", "success")
-                                    : null}
-                                  {log.affinity_migrated
-                                    ? renderMetricPill(t("timelineAffinityMigrated"), "", "warning")
-                                    : null}
-                                  {!log.affinity_hit
-                                    ? renderMetricPill(t("timelineAffinityMissed"), "", "neutral")
-                                    : null}
-                                  {log.session_id_compensated ? (
-                                    <Badge variant="warning" className="px-1.5 py-0 text-[10px]">
-                                      {t("compensationBadge")}
-                                    </Badge>
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                                    {step.title}
+                                  </div>
+                                  <div className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-foreground">
+                                    {step.summary}
+                                  </div>
+                                  {step.meta ? (
+                                    <div className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-muted-foreground/80">
+                                      {step.meta}
+                                    </div>
                                   ) : null}
                                 </div>
-                                {renderJourneyField({
-                                  label: t("timelineSessionId"),
-                                  value: log.session_id ?? "-",
-                                  title: log.session_id ?? undefined,
-                                  valueClassName: "break-all",
-                                })}
-                              </>
-                            ) : (
-                              <div className="text-muted-foreground">{t("timelineNoSession")}</div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
-                        <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-                          {t("journeyDecisionResult")}
-                        </div>
-                        <div className="space-y-2">
-                          {renderJourneyField({
-                            label: t("journeyInitialUpstream"),
-                            value: (
-                              <span className="font-medium text-foreground">
-                                {decisionUpstreamLabel}
-                              </span>
-                            ),
-                          })}
-                          {renderJourneyField({
-                            label: t("journeySelectionReason"),
-                            value: getSelectionReasonText(decisionSelectionReason),
-                            valueClassName: decisionSelectionReason
-                              ? undefined
-                              : "text-muted-foreground",
-                          })}
-                          {routingDecision?.candidates?.length ? (
-                            <div className="space-y-1.5">
-                              {routingDecision.candidates.map((candidate) => {
-                                const isSelected = candidate.id === decisionSelectedCandidateId;
-                                return (
-                                  <div
-                                    key={candidate.id}
-                                    className={cn(
-                                      "flex flex-wrap items-center gap-2 rounded-cf-sm border border-divider bg-surface-300/65 px-2 py-1.5",
-                                      isSelected && "border-emerald-500/30 bg-emerald-500/10"
-                                    )}
-                                  >
-                                    <span
-                                      className={cn(
-                                        "font-medium",
-                                        isSelected ? "text-foreground" : "text-muted-foreground"
-                                      )}
-                                    >
-                                      {isSelected ? "●" : "○"}
-                                    </span>
-                                    <span className="min-w-0 flex-1 text-foreground">
-                                      {candidate.name}
-                                    </span>
-                                    <Badge variant="neutral" className="px-1.5 py-0 text-[10px]">
-                                      {t("circuitState." + candidate.circuit_state)}
-                                    </Badge>
-                                    <span className="rounded-cf-sm border border-divider bg-surface-300 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                                      {"w:" + String(candidate.weight)}
-                                    </span>
-                                    {isSelected ? (
-                                      <Badge variant="success" className="px-1.5 py-0 text-[10px]">
-                                        {t("timelineSelected")}
-                                      </Badge>
-                                    ) : null}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <div className="text-muted-foreground">{t("noRoutingDecision")}</div>
-                          )}
-                          {routingDecision?.excluded?.length ? (
-                            <div className="space-y-1.5">
-                              {routingDecision.excluded.map((excluded) => (
-                                <div
-                                  key={excluded.id}
-                                  className="flex flex-wrap items-center gap-2 rounded-cf-sm border border-red-500/20 bg-red-500/5 px-2 py-1.5"
-                                >
-                                  <span className="min-w-0 flex-1 text-foreground">
-                                    {excluded.name}
-                                  </span>
-                                  <Badge variant="error" className="px-1.5 py-0 text-[10px]">
-                                    {t("exclusionReason." + excluded.reason)}
-                                  </Badge>
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    </>
-                  ),
-                })}
-
-                {renderJourneyStep({
-                  index: 3,
-                  title: t("lifecycleRequest"),
-                  metrics: (
-                    <>
-                      {requestPhaseDurationText
-                        ? renderMetricPill(t("tableDuration"), requestPhaseDurationText, "warning")
-                        : null}
-                      {failoverDurationText
-                        ? renderMetricPill(t("retryTotalDuration"), failoverDurationText, "warning")
-                        : null}
-                    </>
-                  ),
-                  children: (
-                    <div className="space-y-2 rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                        {t("timelineExecutionRetries")}
-                      </div>
-                      {renderJourneyField({
-                        label: t("journeyRequestAction"),
-                        value:
-                          didSendUpstream === false ? (
-                            <span className="text-muted-foreground">
-                              {t("journeyRequestNotSent")}
-                            </span>
-                          ) : (
-                            <span>
-                              {t("journeyRequestSentTo")}{" "}
-                              <span className="font-medium text-foreground">
-                                {finalUpstreamLabel}
-                              </span>
-                            </span>
-                          ),
-                      })}
-                      {hasFailoverHistory ? (
-                        <>
-                          {finalSelectionReason
-                            ? renderJourneyField({
-                                label: t("journeySelectionReason"),
-                                value: getSelectionReasonText(finalSelectionReason),
-                              })
-                            : null}
-                          {getRetryReasonText(finalSelectionReason)
-                            ? renderJourneyField({
-                                label: t("journeyRetryReason"),
-                                value: getRetryReasonText(finalSelectionReason)!,
-                                valueClassName: "text-muted-foreground",
-                              })
-                            : null}
-                          {failoverDurationText
-                            ? renderJourneyField({
-                                label: t("retryTotalDuration"),
-                                value: failoverDurationText,
-                                valueClassName: "text-muted-foreground",
-                              })
-                            : null}
-                          <div className="space-y-1.5">
-                            {log.failover_history!.map((attempt, index) => (
-                              <div
-                                key={
-                                  (attempt.upstream_id ?? attempt.upstream_name ?? "attempt") +
-                                  "-" +
-                                  index
-                                }
-                                className="rounded-cf-sm border border-divider bg-surface-300/65 px-2 py-1.5"
-                              >
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="font-medium text-foreground">
-                                    {t("retryAttempt")} {index + 1}
-                                  </span>
-                                  <span className="text-muted-foreground">
-                                    {attempt.upstream_name || t("upstreamUnknown")}
-                                  </span>
-                                  <span className="text-muted-foreground">
-                                    [{attempt.error_type}]
-                                  </span>
-                                </div>
-                                {attempt.selection_reason
-                                  ? renderJourneyField({
-                                      label: t("journeySelectionReason"),
-                                      value: getSelectionReasonText(attempt.selection_reason),
-                                      className: "mt-1",
-                                    })
-                                  : null}
-                                {getRetryReasonText(attempt.selection_reason)
-                                  ? renderJourneyField({
-                                      label: t("journeyRetryReason"),
-                                      value: getRetryReasonText(attempt.selection_reason)!,
-                                      className: "mt-1",
-                                      valueClassName: "text-muted-foreground",
-                                    })
-                                  : null}
-                                {attempt.error_message ? (
-                                  <div className="mt-1 text-[11px] text-muted-foreground">
-                                    {attempt.error_message}
-                                  </div>
-                                ) : null}
                               </div>
-                            ))}
-                          </div>
-                        </>
-                      ) : hasFailoverWithoutHistory ? (
-                        <div className="text-muted-foreground">
-                          {t("timelineFailoverNoDetails", { count: log.failover_attempts })}
-                        </div>
-                      ) : didSendUpstream === false ? (
-                        <div className="text-muted-foreground">{t("timelineNoUpstreamSent")}</div>
-                      ) : (
-                        <div className="text-muted-foreground">{t("timelineDirectSuccess")}</div>
-                      )}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  ),
-                })}
 
-                {renderJourneyStep({
-                  index: 4,
-                  title: t("lifecycleResponse"),
-                  metrics: (
-                    <>
-                      {responsePhaseDurationText
-                        ? renderMetricPill(t("tableDuration"), responsePhaseDurationText, "success")
-                        : null}
-                      {requestTps != null
-                        ? renderMetricPill(
-                            t("perfTps"),
-                            requestTps.toFixed(1) + " tok/s",
-                            "success"
-                          )
-                        : null}
-                    </>
-                  ),
-                  children: (
-                    <div className="space-y-2">
-                      {ttftMs != null ? (
-                        <div className="rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
-                          <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
-                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                              {t("journeyFirstOutput")}
-                            </div>
-                            <div className="flex flex-wrap gap-1">
-                              {formatStageDurationText(cumulativeFirstOutputMs, ttftMs)
-                                ? renderMetricPill(
-                                    t("tableDuration"),
-                                    formatStageDurationText(cumulativeFirstOutputMs, ttftMs)!,
-                                    "warning"
-                                  )
-                                : null}
+                    <div
+                      className={cn(
+                        "relative overflow-hidden rounded-[22px] border p-3 shadow-[0_12px_32px_rgba(15,23,42,0.06)] transition-all duration-200 ease-out",
+                        activeJourneyTone.panel
+                      )}
+                    >
+                      <div
+                        className={cn("absolute inset-x-0 top-0 h-0.5", activeJourneyTone.accent)}
+                      />
+                      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={cn(
+                                "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold",
+                                activeJourneyTone.number
+                              )}
+                            >
+                              {activeJourneyStep.index}
+                            </span>
+                            <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                              {activeJourneyStep.title}
                             </div>
                           </div>
-                          <div className="text-muted-foreground">{t("perfTtft")}</div>
-                        </div>
-                      ) : null}
-
-                      {genMs != null ? (
-                        <div className="rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
-                          <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
-                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                              {t("journeyGenerationFinished")}
-                            </div>
-                            <div className="flex flex-wrap gap-1">
-                              {responsePhaseDurationText
-                                ? renderMetricPill(
-                                    t("tableDuration"),
-                                    responsePhaseDurationText,
-                                    "success"
-                                  )
-                                : null}
-                            </div>
+                          <div className="mt-2 text-[11px] leading-relaxed text-foreground">
+                            {activeJourneyStep.summary}
                           </div>
-                          {requestTps != null ? (
-                            <div className="text-muted-foreground">
-                              {t("perfTps")}:{" "}
-                              <span className="text-foreground">
-                                {requestTps.toFixed(1) + " tok/s"}
-                              </span>
+                          {activeJourneyStep.meta ? (
+                            <div className="mt-1 text-[10px] leading-relaxed text-muted-foreground/80">
+                              {activeJourneyStep.meta}
                             </div>
                           ) : null}
                         </div>
-                      ) : ttftMs == null ? (
-                        <div className="text-muted-foreground">{requestModeLabel}</div>
-                      ) : null}
+                        <div className="flex flex-wrap justify-end gap-1">
+                          {activeJourneyStep.metrics}
+                        </div>
+                      </div>
+                      <div className="space-y-2 text-[11px]">{activeJourneyStep.content}</div>
                     </div>
-                  ),
-                })}
-
-                {renderJourneyStep({
-                  index: 5,
-                  title: t("lifecycleComplete"),
-                  metrics: (
-                    <>
-                      {log.status_code != null
-                        ? renderMetricPill(t("tableStatus"), String(log.status_code), statusVariant)
-                        : null}
-                      {totalMs != null
-                        ? renderMetricPill(t("tableDuration"), formatMetricText(totalMs), "info")
-                        : null}
-                    </>
-                  ),
-                  isLast: true,
-                  children: (
-                    <>
-                      {renderJourneyField({
-                        label: t("timelineFinalUpstream"),
-                        value: (
-                          <span
-                            className={cn(
-                              "font-medium",
-                              log.status_code != null &&
-                                log.status_code >= 200 &&
-                                log.status_code < 300
-                                ? "text-status-success"
-                                : isError
-                                  ? "text-status-error"
-                                  : "text-foreground"
-                            )}
-                          >
-                            {finalUpstreamLabel}
-                          </span>
-                        ),
-                      })}
-                      {failureStageLabel
-                        ? renderJourneyField({
-                            label: t("timelineFailureStage"),
-                            value: <span className="text-status-error">{failureStageLabel}</span>,
-                          })
-                        : null}
-                      {requestTps != null
-                        ? renderJourneyField({
-                            label: t("perfTps"),
-                            value: requestTps.toFixed(1) + " tok/s",
-                          })
-                        : null}
-                    </>
-                  ),
-                })}
+                  </>
+                ) : (
+                  <div className="space-y-3">
+                    {journeySteps.map((step) => {
+                      const tone = JOURNEY_TONE_STYLES[step.tone];
+                      return (
+                        <section
+                          key={step.index}
+                          aria-label={step.title}
+                          className={cn(
+                            "relative overflow-hidden rounded-[22px] border p-3 shadow-[0_12px_30px_rgba(15,23,42,0.06)] transition-all duration-200 ease-out sm:p-3.5",
+                            tone.panel
+                          )}
+                        >
+                          <div className={cn("absolute inset-x-0 top-0 h-0.5", tone.accent)} />
+                          <div className="flex items-start gap-3">
+                            <div className="relative z-10 pt-0.5">
+                              <span
+                                className={cn(
+                                  "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold",
+                                  tone.number
+                                )}
+                              >
+                                {step.index}
+                              </span>
+                            </div>
+                            <div className="min-w-0 flex-1 space-y-3">
+                              <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                                    {step.title}
+                                  </div>
+                                  <div className="mt-1 text-[11px] leading-relaxed text-foreground">
+                                    {step.summary}
+                                  </div>
+                                  {step.meta ? (
+                                    <div className="mt-1 text-[10px] leading-relaxed text-muted-foreground/80">
+                                      {step.meta}
+                                    </div>
+                                  ) : null}
+                                </div>
+                                <div className="flex flex-wrap justify-end gap-1">
+                                  {step.metrics}
+                                </div>
+                              </div>
+                              <div className="space-y-2 text-[11px]">{step.content}</div>
+                            </div>
+                          </div>
+                        </section>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </section>
@@ -2010,7 +2305,7 @@ export function LogsTable({ logs }: LogsTableProps) {
                           </TableRow>
 
                           {isExpanded && canExpand && (
-                            <TableRow className="bg-surface-300/30">
+                            <TableRow className="border-b-0 bg-transparent hover:bg-transparent">
                               <TableCell colSpan={10} className="p-0">
                                 {renderExpandedDetails({
                                   log,
@@ -2018,7 +2313,7 @@ export function LogsTable({ logs }: LogsTableProps) {
                                   failoverDurationMs,
                                   requestTps,
                                   isError,
-                                  className: "px-4 py-3 border-t border-dashed border-divider",
+                                  className: "px-4 py-3",
                                 })}
                               </TableCell>
                             </TableRow>

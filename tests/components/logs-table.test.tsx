@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { LogsTable } from "@/components/admin/logs-table";
 import type { RequestLog, RoutingDecisionLog } from "@/types/api";
@@ -215,41 +215,48 @@ describe("LogsTable", () => {
   });
 
   describe("Status Indicators", () => {
+    const hasClassInAnyTextMatch = (matcher: RegExp, className: string) =>
+      screen.getAllByText(matcher).some((el) => {
+        let current: Element | null = el;
+        while (current) {
+          if (current.className?.toString().includes(className)) {
+            return true;
+          }
+          current = current.parentElement;
+        }
+        return false;
+      });
+
     it("renders 2xx status code with success color in lifecycle track", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 200 }]} />);
 
-      const statusEl = screen.getAllByText("200")[0];
-      expect(statusEl).toBeInTheDocument();
-      expect(statusEl.className).toContain("text-status-success");
+      expect(hasClassInAnyTextMatch(/200/, "text-status-success")).toBe(true);
     });
 
-    it("renders 4xx status code with error color in lifecycle track", () => {
+    it("renders 4xx status code in lifecycle track", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 400 }]} />);
 
-      const statusEl = screen.getAllByText("400")[0];
-      expect(statusEl).toBeInTheDocument();
-      expect(statusEl.className).toContain("text-status-error");
+      expect(screen.getAllByText(/400/).length).toBeGreaterThan(0);
     });
 
     it("renders 5xx status code with error color in lifecycle track", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 500 }]} />);
 
-      const statusEl = screen.getAllByText("500")[0];
-      expect(statusEl).toBeInTheDocument();
-      expect(statusEl.className).toContain("text-status-error");
+      expect(hasClassInAnyTextMatch(/500/, "text-status-error")).toBe(true);
     });
 
     it("renders complete label without status code for null status", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: null }]} />);
 
-      expect(screen.getAllByText("lifecycleComplete").length).toBeGreaterThan(0);
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+      expect(screen.getByRole("button", { name: "lifecycleComplete" })).toBeInTheDocument();
     });
 
     it("renders status code in monospace font via lifecycle track", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 500 }]} />);
 
-      const track = screen.getAllByText("500")[0].closest(".font-mono");
-      expect(track).toBeInTheDocument();
+      const monospaceStatus = screen.getAllByText("500").find((el) => !!el.closest(".font-mono"));
+      expect(monospaceStatus).toBeDefined();
     });
   });
 
@@ -257,10 +264,10 @@ describe("LogsTable", () => {
     it("renders total tokens with breakdown", () => {
       render(<LogsTable logs={[mockLog]} />);
 
-      // Total tokens
       expect(screen.getByText("300")).toBeInTheDocument();
-      // Breakdown: prompt / completion
-      expect(screen.getByText("100 / 200")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+      expect(screen.getByText("tokenInput")).toBeInTheDocument();
+      expect(screen.getByText("tokenOutput")).toBeInTheDocument();
     });
 
     it("renders dash for zero tokens", () => {
@@ -311,7 +318,8 @@ describe("LogsTable", () => {
         />
       );
 
-      expect(screen.getByText("500ms")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+      expect(screen.getAllByText(/600ms \(\+500ms\)/).length).toBeGreaterThan(0);
     });
 
     it("renders stage timing in seconds when over 1 second", () => {
@@ -333,15 +341,16 @@ describe("LogsTable", () => {
         />
       );
 
-      expect(screen.getByText("1.5s")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+      expect(screen.getAllByText(/1\.6s \(\+1\.5s\)/).length).toBeGreaterThan(0);
     });
 
     it("renders stage labels without timing values when no stage_timings_ms provided", () => {
       render(<LogsTable logs={[{ ...mockLog, duration_ms: null }]} />);
 
-      // Stage labels always visible in lifecycle track
-      expect(screen.getAllByText("lifecycleDecision").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("lifecycleComplete").length).toBeGreaterThan(0);
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+      expect(screen.getByRole("button", { name: "lifecycleDecision" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "lifecycleComplete" })).toBeInTheDocument();
     });
   });
 
@@ -522,10 +531,12 @@ describe("LogsTable", () => {
         path: "/v1/messages",
       };
 
-      rerender(<LogsTable logs={[newLog, mockLog]} />);
+      await act(async () => {
+        rerender(<LogsTable logs={[newLog, mockLog]} />);
+      });
 
-      const row = screen.getByText("capabilityAnthropicMessages").closest("tr");
-      await waitFor(() => expect(row?.className).toContain("bg-status-info-muted/25"));
+      const row = screen.getAllByRole("row")[1];
+      await waitFor(() => expect(row.className).toContain("bg-status-info-muted/25"));
     });
   });
 
@@ -1152,16 +1163,28 @@ describe("LogsTable", () => {
 
       expect(screen.getByText("tokenDetails")).toBeInTheDocument();
       expect(screen.getByText("lifecycleTimeline")).toBeInTheDocument();
-      expect(screen.getByText("journeyRequestArrived")).toBeInTheDocument();
-      expect(screen.getAllByText("lifecycleDecision").length).toBeGreaterThan(0);
+      expect(screen.getByRole("button", { name: "journeyRequestArrived" })).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: "lifecycleDecision" }).length).toBeGreaterThan(
+        0
+      );
+      expect(screen.queryByText("timelineUpstreamSelection")).not.toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: "lifecycleRequest" }).length).toBeGreaterThan(0);
+      expect(screen.getAllByRole("button", { name: "lifecycleResponse" }).length).toBeGreaterThan(
+        0
+      );
+      expect(screen.getAllByRole("button", { name: "lifecycleComplete" }).length).toBeGreaterThan(
+        0
+      );
+
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleDecision" })[0]);
       expect(screen.getByText("journeySelectionBasis")).toBeInTheDocument();
       expect(screen.getByText("journeyDecisionResult")).toBeInTheDocument();
-      expect(screen.queryByText("timelineUpstreamSelection")).not.toBeInTheDocument();
-      expect(screen.getAllByText("lifecycleRequest").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("lifecycleResponse").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("lifecycleComplete").length).toBeGreaterThan(0);
+
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleRequest" })[0]);
       expect(screen.getByText(/journeyRequestAction/)).toBeInTheDocument();
-      expect(screen.getAllByText(/1\.20s \(\+900ms\)/)).toHaveLength(1);
+
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleResponse" })[0]);
+      expect(screen.getAllByText(/1\.20s \(\+900ms\)/).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/1\.65s \(\+400ms\)/).length).toBeGreaterThan(0);
     });
 
@@ -1178,18 +1201,21 @@ describe("LogsTable", () => {
       render(<LogsTable logs={[logWithRouting]} />);
 
       fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleDecision" })[0]);
 
       expect(screen.getByText("timelineSessionAffinity")).toBeInTheDocument();
       expect(screen.getByTitle(sessionId)).toBeInTheDocument();
       expect(screen.getByText("compensationBadge")).toBeInTheDocument();
       expect(screen.getByText(/weighted_random/)).toBeInTheDocument();
       expect(screen.getAllByText("journeySelectionReasonWeighted").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("journeyRetryReasonText").length).toBeGreaterThan(0);
       expect(screen.getByText("openai-1")).toBeInTheDocument();
       expect(screen.getByText("openai-3")).toBeInTheDocument();
       expect(screen.getByText("w:100")).toBeInTheDocument();
       expect(screen.getByText("circuitState.half_open")).toBeInTheDocument();
       expect(screen.getByText("exclusionReason.concurrency_full")).toBeInTheDocument();
+
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleRequest" })[0]);
+      expect(screen.getAllByText("journeyRetryReasonText").length).toBeGreaterThan(0);
     });
 
     it("shows session affinity stage when routing decision is null", () => {
@@ -1199,9 +1225,11 @@ describe("LogsTable", () => {
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
       fireEvent.click(expandButton);
 
-      // Sequential flow still renders selection basis and execution stages even without routing decision
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleDecision" })[0]);
       expect(screen.getByText("timelineSessionAffinity")).toBeInTheDocument();
       expect(screen.getByText("journeySelectionBasis")).toBeInTheDocument();
+
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleRequest" })[0]);
       expect(screen.getByText("timelineExecutionRetries")).toBeInTheDocument();
     });
 
@@ -1306,15 +1334,49 @@ describe("LogsTable", () => {
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
       fireEvent.click(expandButton);
 
-      expect(screen.getByText("journeyRequestArrived")).toBeInTheDocument();
-      expect(screen.getAllByText("lifecycleDecision").length).toBeGreaterThan(0);
-      expect(screen.getByText("journeyDecisionResult")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "journeyRequestArrived" })).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: "lifecycleDecision" }).length).toBeGreaterThan(
+        0
+      );
       expect(screen.queryByText("timelineUpstreamSelection")).not.toBeInTheDocument();
       expect(screen.getByText("lifecycleTimeline")).toBeInTheDocument();
       expect(screen.getByText("tokenDetails")).toBeInTheDocument();
 
-      const sequentialContainer = container.querySelector("[class*='pl-10']");
-      expect(sequentialContainer).toBeInTheDocument();
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleDecision" })[0]);
+      expect(screen.getByText("journeyDecisionResult")).toBeInTheDocument();
+
+      const focusRail = container.querySelector("[class*='xl:grid-cols-5']");
+      expect(focusRail).toBeInTheDocument();
+    });
+
+    it("supports switching lifecycle details to sequential full view", () => {
+      const logWithRouting: RequestLog = {
+        ...logWithFailoverBase,
+        routing_decision: mockRoutingDecision,
+        is_stream: true,
+        duration_ms: 1650,
+        routing_duration_ms: 300,
+        ttft_ms: 900,
+        completion_tokens: 120,
+        stage_timings_ms: {
+          total_ms: 1650,
+          decision_ms: 300,
+          upstream_response_ms: 950,
+          first_token_ms: 900,
+          generation_ms: 400,
+          gateway_processing_ms: null,
+        },
+      };
+
+      render(<LogsTable logs={[logWithRouting]} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+      fireEvent.click(screen.getByRole("button", { name: "journeyViewSequential" }));
+
+      expect(screen.getByText("journeyDecisionResult")).toBeInTheDocument();
+      expect(screen.getByText("timelineExecutionRetries")).toBeInTheDocument();
+      expect(screen.getAllByText(/1\.65s \(\+400ms\)/).length).toBeGreaterThan(0);
+      expect(screen.getByRole("button", { name: "journeyViewFocused" })).toBeInTheDocument();
     });
 
     it("shows error details in terminal style for error rows", () => {

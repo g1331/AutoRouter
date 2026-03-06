@@ -167,42 +167,105 @@ function buildSegs(props: LifecycleTrackProps, t: (key: string) => string): Seg[
   return [decSeg, reqSeg, respSeg, completeSeg];
 }
 
+const CONTAINER_CLS: Record<SegState, string> = {
+  done: "border-divider bg-surface-200/70 shadow-[var(--vr-shadow-xs)]",
+  active:
+    "border-foreground/15 bg-surface-200 shadow-[0_10px_28px_rgba(15,23,42,0.08)] -translate-y-0.5",
+  pending: "border-divider/70 bg-surface-200/40 opacity-70",
+  failed:
+    "border-status-error/20 bg-[linear-gradient(180deg,rgba(220,38,38,0.08),rgba(15,23,42,0.02))] shadow-[var(--vr-shadow-xs)]",
+  success:
+    "border-status-success/20 bg-[linear-gradient(180deg,rgba(22,163,74,0.08),rgba(15,23,42,0.02))] shadow-[var(--vr-shadow-xs)]",
+};
+
+const NUMBER_CLS: Record<SegState, string> = {
+  done: "border-divider bg-surface-300 text-muted-foreground",
+  active: "border-foreground/15 bg-surface-300 text-foreground",
+  pending: "border-divider/60 bg-surface-300/50 text-muted-foreground/50",
+  failed: "border-status-error/25 bg-status-error-muted/30 text-status-error",
+  success: "border-status-success/25 bg-status-success-muted/35 text-status-success",
+};
+
 const LABEL_CLS: Record<SegState, string> = {
   done: "text-muted-foreground",
-  active: "text-foreground font-medium",
-  pending: "text-muted-foreground/35",
+  active: "text-foreground",
+  pending: "text-muted-foreground/45",
   failed: "text-status-error",
   success: "text-status-success",
 };
 
 const TIME_CLS: Record<SegState, string> = {
-  done: "text-muted-foreground",
+  done: "text-foreground",
   active: "text-foreground",
-  pending: "text-muted-foreground/35",
-  failed: "text-status-error/80",
+  pending: "text-muted-foreground/45",
+  failed: "text-status-error",
   success: "text-status-success",
 };
 
 const SUB_CLS: Record<SegState, string> = {
-  done: "text-muted-foreground/60",
-  active: "text-muted-foreground/70",
-  pending: "text-muted-foreground/35",
-  failed: "text-status-error/70",
-  success: "text-status-success/70",
+  done: "text-muted-foreground/70",
+  active: "text-muted-foreground/80",
+  pending: "text-muted-foreground/40",
+  failed: "text-status-error/75",
+  success: "text-status-success/75",
 };
 
-function SegBlock({ seg }: { seg: Seg }) {
-  const bracketCls = "text-muted-foreground/45";
+function SegCard({ seg, index, compact = false }: { seg: Seg; index: number; compact?: boolean }) {
   return (
-    <span className={cn("inline-flex items-baseline gap-0", LABEL_CLS[seg.state])}>
-      <span className={bracketCls}>[</span>
-      <span>{seg.label}</span>
-      {seg.time != null && (
-        <span className={cn("ml-0.5 tabular-nums", TIME_CLS[seg.state])}>{seg.time}</span>
+    <div
+      className={cn(
+        "group relative min-w-0 overflow-hidden rounded-[18px] border px-3 py-2.5 transition-all duration-200 ease-out",
+        "before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.55),transparent)]",
+        compact ? "flex-1 px-2.5 py-2" : "min-h-[86px]",
+        CONTAINER_CLS[seg.state]
       )}
-      {seg.sub != null && <span className={cn("ml-0.5", SUB_CLS[seg.state])}>{seg.sub}</span>}
-      <span className={bracketCls}>]</span>
-    </span>
+    >
+      <div className="flex items-center gap-2">
+        <span
+          className={cn(
+            "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold transition-colors duration-200",
+            NUMBER_CLS[seg.state]
+          )}
+        >
+          {index}
+        </span>
+        <span
+          className={cn(
+            "min-w-0 truncate text-[10px] uppercase tracking-[0.16em] transition-colors duration-200",
+            LABEL_CLS[seg.state]
+          )}
+        >
+          {seg.label}
+        </span>
+      </div>
+
+      <div className={cn("mt-2 space-y-1", compact && "mt-1.5")}>
+        {seg.time ? (
+          <div
+            className={cn(
+              "font-mono text-[11px] tabular-nums transition-colors duration-200",
+              TIME_CLS[seg.state]
+            )}
+          >
+            {seg.time}
+          </div>
+        ) : (
+          <div className="h-[16px]" />
+        )}
+        {seg.sub ? (
+          <div
+            className={cn(
+              "line-clamp-2 text-[10px] leading-relaxed transition-colors duration-200",
+              SUB_CLS[seg.state]
+            )}
+          >
+            {seg.sub}
+          </div>
+        ) : (
+          <div className="h-[14px]" />
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -239,28 +302,30 @@ export function LifecycleTrack({
       segs.find((s) => s.key === "decision") ??
       segs[0];
     const completeSeg = segs[segs.length - 1];
-    const showBoth = primarySeg !== completeSeg;
+    const compactSegs = primarySeg !== completeSeg ? [primarySeg, completeSeg] : [primarySeg];
+
     return (
-      <div className="flex items-baseline gap-0 font-mono text-xs overflow-hidden">
-        <SegBlock seg={primarySeg} />
-        {showBoth && (
-          <>
-            <span className="text-muted-foreground/30 mx-0.5">─</span>
-            <SegBlock seg={completeSeg} />
-          </>
-        )}
+      <div className="flex min-w-0 gap-1.5 overflow-hidden">
+        {compactSegs.map((seg) => (
+          <SegCard
+            key={seg.key}
+            seg={seg}
+            index={1 + segs.findIndex((item) => item.key === seg.key)}
+            compact
+          />
+        ))}
       </div>
     );
   }
 
   return (
-    <div className="flex items-baseline gap-0 font-mono text-xs">
-      {segs.map((seg, i) => (
-        <span key={seg.key} className="inline-flex items-baseline gap-0">
-          {i > 0 && <span className="text-muted-foreground/30 mx-0.5">──</span>}
-          <SegBlock seg={seg} />
-        </span>
-      ))}
+    <div className="relative">
+      <div className="pointer-events-none absolute left-6 right-6 top-5 hidden h-px bg-[linear-gradient(90deg,transparent,rgba(148,163,184,0.45),transparent)] lg:block" />
+      <div className="grid gap-2 lg:grid-cols-4">
+        {segs.map((seg, index) => (
+          <SegCard key={seg.key} seg={seg} index={index + 1} />
+        ))}
+      </div>
     </div>
   );
 }
