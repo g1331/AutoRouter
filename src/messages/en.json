@@ -332,6 +332,11 @@
     "timelineUpstreamLatency": "Upstream latency",
     "timelineLatencyBreakdown": "Latency Breakdown",
     "timelineOtherLatency": "Other latency",
+    "journeyRequestArrived": "Request enters gateway",
+    "journeySelectionBasis": "Selection basis",
+    "journeyCumulative": "Cumulative",
+    "journeyFirstOutput": "First output arrives",
+    "journeyGenerationFinished": "Stream remaining output",
     "failureStage": {
       "auth_filter": "Authorization filter",
       "candidate_selection": "Candidate selection",

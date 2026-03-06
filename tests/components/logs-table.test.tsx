@@ -1097,10 +1097,23 @@ describe("LogsTable", () => {
       expect(screen.getByText(/10 \* \$3\.00 \/ 1M \* 1\.2 =/)).toBeInTheDocument();
     });
 
-    it("shows routing decision timeline in expanded view when available", () => {
+    it("shows sequential lifecycle flow in expanded view when available", () => {
       const logWithRouting: RequestLog = {
         ...logWithFailoverBase,
         routing_decision: mockRoutingDecision,
+        is_stream: true,
+        duration_ms: 1650,
+        routing_duration_ms: 300,
+        ttft_ms: 900,
+        completion_tokens: 120,
+        stage_timings_ms: {
+          total_ms: 1650,
+          decision_ms: 300,
+          upstream_response_ms: 950,
+          first_token_ms: 900,
+          generation_ms: 400,
+          gateway_processing_ms: null,
+        },
       };
 
       render(<LogsTable logs={[logWithRouting]} />);
@@ -1110,7 +1123,15 @@ describe("LogsTable", () => {
 
       expect(screen.getByText("tokenDetails")).toBeInTheDocument();
       expect(screen.getByText("lifecycleTimeline")).toBeInTheDocument();
-      expect(screen.getByText("timelineModelResolution")).toBeInTheDocument();
+      expect(screen.getByText("journeyRequestArrived")).toBeInTheDocument();
+      expect(screen.getAllByText("lifecycleDecision").length).toBeGreaterThan(0);
+      expect(screen.getByText("journeySelectionBasis")).toBeInTheDocument();
+      expect(screen.getByText("timelineUpstreamSelection")).toBeInTheDocument();
+      expect(screen.getAllByText("lifecycleRequest").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("lifecycleResponse").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("lifecycleComplete").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("perfTtft 900ms").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("perfGen 400ms").length).toBeGreaterThan(0);
     });
 
     it("restores structured session and candidate upstream diagnostics in expanded view", () => {
@@ -1145,8 +1166,9 @@ describe("LogsTable", () => {
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
       fireEvent.click(expandButton);
 
-      // Timeline still renders session affinity and execution stages even without routing decision
+      // Sequential flow still renders selection basis and execution stages even without routing decision
       expect(screen.getByText("timelineSessionAffinity")).toBeInTheDocument();
+      expect(screen.getByText("journeySelectionBasis")).toBeInTheDocument();
       expect(screen.getByText("timelineExecutionRetries")).toBeInTheDocument();
     });
 
@@ -1175,7 +1197,7 @@ describe("LogsTable", () => {
       expect(screen.getAllByText(/retryAttempt/).length).toBeGreaterThan(0);
       expect(screen.getByText(/failed-upstream/)).toBeInTheDocument();
       expect(screen.getByText(/Request timed out/)).toBeInTheDocument();
-      expect(screen.getByText(/retryTotalDuration/)).toBeInTheDocument();
+      expect(screen.getAllByText(/retryTotalDuration/).length).toBeGreaterThan(0);
     });
 
     it("shows cache TTL split rows in expanded token details when values are present", () => {
@@ -1214,7 +1236,7 @@ describe("LogsTable", () => {
       expect(screen.queryByText("tokenCacheWrite1h")).not.toBeInTheDocument();
     });
 
-    it("displays three-column layout with decision, performance, and token details", () => {
+    it("displays sequential lifecycle flow alongside expanded token details", () => {
       const logWithRouting: RequestLog = {
         ...logWithFailoverBase,
         routing_decision: mockRoutingDecision,
@@ -1226,12 +1248,14 @@ describe("LogsTable", () => {
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
       fireEvent.click(expandButton);
 
-      expect(screen.getByText("timelineModelResolution")).toBeInTheDocument();
+      expect(screen.getByText("journeyRequestArrived")).toBeInTheDocument();
+      expect(screen.getAllByText("lifecycleDecision").length).toBeGreaterThan(0);
+      expect(screen.getByText("timelineUpstreamSelection")).toBeInTheDocument();
       expect(screen.getByText("lifecycleTimeline")).toBeInTheDocument();
       expect(screen.getByText("tokenDetails")).toBeInTheDocument();
 
-      const gridContainer = container.querySelector("[class*='xl:grid-cols-']");
-      expect(gridContainer).toBeInTheDocument();
+      const sequentialContainer = container.querySelector("[class*='pl-10']");
+      expect(sequentialContainer).toBeInTheDocument();
     });
 
     it("shows error details in terminal style for error rows", () => {

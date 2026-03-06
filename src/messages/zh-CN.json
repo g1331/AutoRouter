@@ -332,6 +332,11 @@
     "timelineUpstreamLatency": "上游响应耗时",
     "timelineLatencyBreakdown": "耗时分布",
     "timelineOtherLatency": "其他耗时",
+    "journeyRequestArrived": "请求进入网关",
+    "journeySelectionBasis": "选择依据",
+    "journeyCumulative": "累计至此",
+    "journeyFirstOutput": "收到首个输出",
+    "journeyGenerationFinished": "持续生成并完成输出",
     "failureStage": {
       "auth_filter": "授权过滤",
       "candidate_selection": "候选选择",
