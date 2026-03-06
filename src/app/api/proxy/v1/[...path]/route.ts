@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractApiKey, getKeyPrefix, verifyApiKey } from "@/lib/utils/auth";
-import { db, apiKeys, apiKeyUpstreams, upstreams, type Upstream } from "@/lib/db";
-import { eq, and } from "drizzle-orm";
+import {
+  db,
+  apiKeys,
+  apiKeyUpstreams,
+  upstreams,
+  circuitBreakerStates,
+  type Upstream,
+} from "@/lib/db";
+import { eq, and, inArray } from "drizzle-orm";
 import {
   forwardRequest,
   prepareUpstreamForProxy,
@@ -31,7 +38,6 @@ import {
   recordSuccess,
   recordFailure,
   CircuitBreakerOpenError,
-  getCircuitBreakerState,
 } from "@/lib/services/circuit-breaker";
 import { randomUUID } from "crypto";
 import {
@@ -147,21 +153,33 @@ async function buildCandidateCircuitStateMap(
   requestId: string
 ): Promise<CandidateCircuitStateMap> {
   const candidateCircuitStates: CandidateCircuitStateMap = {};
+  if (capabilityCandidates.length === 0) {
+    return candidateCircuitStates;
+  }
 
-  await Promise.all(
-    capabilityCandidates.map(async (upstream) => {
-      try {
-        const circuitState = await getCircuitBreakerState(upstream.id);
-        candidateCircuitStates[upstream.id] = normalizeRoutingCircuitState(circuitState?.state);
-      } catch (error) {
-        candidateCircuitStates[upstream.id] = "closed";
-        log.warn(
-          { err: error, requestId, upstreamId: upstream.id },
-          "failed to resolve circuit breaker state for routing candidate"
-        );
-      }
-    })
-  );
+  try {
+    const circuitStateRows = await db.query.circuitBreakerStates.findMany({
+      where: inArray(
+        circuitBreakerStates.upstreamId,
+        capabilityCandidates.map((upstream) => upstream.id)
+      ),
+    });
+    const circuitStateMap = new Map(
+      circuitStateRows.map((row) => [row.upstreamId, normalizeRoutingCircuitState(row.state)])
+    );
+
+    for (const upstream of capabilityCandidates) {
+      candidateCircuitStates[upstream.id] = circuitStateMap.get(upstream.id) ?? "closed";
+    }
+  } catch (error) {
+    for (const upstream of capabilityCandidates) {
+      candidateCircuitStates[upstream.id] = "closed";
+    }
+    log.warn(
+      { err: error, requestId, candidateCount: capabilityCandidates.length },
+      "failed to resolve circuit breaker states for routing candidates"
+    );
+  }
 
   return candidateCircuitStates;
 }
@@ -568,26 +586,50 @@ function extractMessageFromErrorPayload(payload: unknown): string | null {
   return null;
 }
 
+const FAILOVER_REDACTED_RESPONSE_HEADERS = new Set([
+  "authorization",
+  "proxy-authorization",
+  "x-api-key",
+  "x-goog-api-key",
+  "cookie",
+  "set-cookie",
+  "www-authenticate",
+  "proxy-authenticate",
+  "authentication-info",
+  "proxy-authentication-info",
+]);
+
+function sanitizeFailoverResponseHeaderValue(headerName: string, value: string): string {
+  if (!value) {
+    return "";
+  }
+  return FAILOVER_REDACTED_RESPONSE_HEADERS.has(headerName.toLowerCase()) ? "***" : value;
+}
 function normalizeFailoverResponseHeaders(headers: unknown): Record<string, string> {
+  const normalizeEntries = (entries: Iterable<[string, unknown]>): Record<string, string> =>
+    Object.fromEntries(
+      [...entries]
+        .filter(([key]) => typeof key === "string")
+        .map(
+          ([key, value]) => [key, sanitizeFailoverResponseHeaderValue(key, String(value))] as const
+        )
+    );
+
   if (!headers) {
     return {};
   }
   if (headers instanceof Headers) {
-    return Object.fromEntries(headers.entries());
+    return normalizeEntries(headers.entries());
   }
   if (Array.isArray(headers)) {
-    const entries = headers
-      .filter(
-        (entry): entry is [string, unknown] =>
-          Array.isArray(entry) && entry.length >= 2 && typeof entry[0] === "string"
-      )
-      .map(([key, value]) => [key, String(value)] as const);
-    return Object.fromEntries(entries);
+    const entries = headers.filter(
+      (entry): entry is [string, unknown] =>
+        Array.isArray(entry) && entry.length >= 2 && typeof entry[0] === "string"
+    );
+    return normalizeEntries(entries);
   }
   if (typeof headers === "object") {
-    return Object.fromEntries(
-      Object.entries(headers as Record<string, unknown>).map(([key, value]) => [key, String(value)])
-    );
+    return normalizeEntries(Object.entries(headers as Record<string, unknown>));
   }
   return {};
 }
@@ -615,8 +657,12 @@ function extractFailoverBodyEvidence(body: unknown): {
 
   if (typeof body === "object") {
     try {
-      const bodyText = truncateFailoverEvidenceText(JSON.stringify(body));
-      return { bodyText, bodyJson: body };
+      const serialized = JSON.stringify(body);
+      const bodyText = truncateFailoverEvidenceText(serialized);
+      return {
+        bodyText,
+        bodyJson: serialized.length <= MAX_FAILOVER_ERROR_BODY_BYTES ? body : null,
+      };
     } catch {
       return { bodyText: null, bodyJson: null };
     }
@@ -691,7 +737,7 @@ async function captureFailedResponse(result: ProxyResult): Promise<{
   bodyText: string | null;
   bodyJson: unknown | null;
 }> {
-  const headers = Object.fromEntries(result.headers.entries());
+  const headers = normalizeFailoverResponseHeaders(result.headers);
 
   if (result.isStream) {
     const reader = (result.body as ReadableStream<Uint8Array>).getReader();

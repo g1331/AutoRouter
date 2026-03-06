@@ -30,12 +30,16 @@ vi.mock("@/lib/db", () => ({
       upstreamHealth: {
         findMany: vi.fn(),
       },
+      circuitBreakerStates: {
+        findMany: vi.fn(),
+      },
     },
   },
   apiKeys: {},
   apiKeyUpstreams: {},
   upstreams: {},
   upstreamHealth: {},
+  circuitBreakerStates: {},
 }));
 
 vi.mock("@/lib/services/route-capability-migration", () => ({
@@ -312,11 +316,10 @@ describe("proxy route upstream selection", () => {
     delete process.env.RECORDER_MODE;
     const routeModule = await import("@/app/api/proxy/v1/[...path]/route");
     const { db } = await import("@/lib/db");
-    const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
     POST = routeModule.POST;
     vi.mocked(db.query.upstreams.findMany).mockResolvedValue(DEFAULT_ACTIVE_UPSTREAMS);
     vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValue([]);
-    vi.mocked(getCircuitBreakerState).mockResolvedValue(null);
+    vi.mocked(db.query.circuitBreakerStates.findMany).mockResolvedValue([]);
   }, 30_000);
 
   afterEach(() => {
@@ -2148,7 +2151,6 @@ describe("proxy route upstream selection", () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
     const { selectFromProviderType } = await import("@/lib/services/load-balancer");
-    const { getCircuitBreakerState } = await import("@/lib/services/circuit-breaker");
     const { updateRequestLog } = await import("@/lib/services/request-logger");
 
     const openUpstream = {
@@ -2184,15 +2186,10 @@ describe("proxy route upstream selection", () => {
       { upstreamId: halfOpenUpstream.id },
     ]);
     vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([openUpstream, halfOpenUpstream]);
-    vi.mocked(getCircuitBreakerState).mockImplementation(async (upstreamId: string) => {
-      if (upstreamId === openUpstream.id) {
-        return { state: "open" } as never;
-      }
-      if (upstreamId === halfOpenUpstream.id) {
-        return { state: "half_open" } as never;
-      }
-      return null;
-    });
+    vi.mocked(db.query.circuitBreakerStates.findMany).mockResolvedValueOnce([
+      { upstreamId: openUpstream.id, state: "open" },
+      { upstreamId: halfOpenUpstream.id, state: "half_open" },
+    ] as never);
     vi.mocked(selectFromProviderType).mockResolvedValueOnce({
       upstream: openUpstream,
       selectedTier: 0,
@@ -2271,9 +2268,19 @@ describe("proxy route upstream selection", () => {
         totalCandidates: 1,
       })
       .mockRejectedValueOnce(new NoHealthyUpstreamsError("all upstreams exhausted"));
-    vi.mocked(forwardRequest).mockRejectedValueOnce(
-      new Error("Upstream request timed out after 60s")
-    );
+    const largeErrorBody = {
+      error: { message: "timeout payload" },
+      debug: "x".repeat(300 * 1024),
+    };
+    const failoverError = Object.assign(new Error("Upstream request timed out after 60s"), {
+      headers: {
+        "set-cookie": "session=abc",
+        "x-upstream-trace": "trace-2",
+        "www-authenticate": 'Bearer realm="private"',
+      },
+      body: largeErrorBody,
+    });
+    vi.mocked(forwardRequest).mockRejectedValueOnce(failoverError);
 
     const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
       method: "POST",
@@ -2302,9 +2309,13 @@ describe("proxy route upstream selection", () => {
           upstream_id: upstream.id,
           error_type: "timeout",
           status_code: null,
-          response_headers: {},
+          response_headers: expect.objectContaining({
+            "set-cookie": "***",
+            "x-upstream-trace": "trace-2",
+            "www-authenticate": "***",
+          }),
           response_body_json: null,
-          response_body_text: expect.stringContaining("timed out"),
+          response_body_text: expect.stringContaining("...[TRUNCATED]"),
         }),
       ])
     );
@@ -2534,7 +2545,12 @@ describe("proxy route upstream selection", () => {
 
     vi.mocked(forwardRequest).mockResolvedValueOnce({
       statusCode: 500,
-      headers: new Headers({ "content-type": "application/json", "x-upstream-trace": "trace-1" }),
+      headers: new Headers({
+        "content-type": "application/json",
+        "x-upstream-trace": "trace-1",
+        "set-cookie": "session=abc",
+        "www-authenticate": 'Bearer realm="private"',
+      }),
       body: new TextEncoder().encode(
         JSON.stringify({ error: { type: "server_error", message: "upstream failed once" } })
       ),
@@ -2603,7 +2619,12 @@ describe("proxy route upstream selection", () => {
     expect(failoverHistory?.[0]?.status_code).toBe(500);
     expect(failoverHistory?.[0]).not.toHaveProperty("outbound_request_headers");
     expect(failoverHistory?.[0]?.response_headers).toEqual(
-      expect.objectContaining({ "content-type": "application/json", "x-upstream-trace": "trace-1" })
+      expect.objectContaining({
+        "content-type": "application/json",
+        "x-upstream-trace": "trace-1",
+        "set-cookie": "***",
+        "www-authenticate": "***",
+      })
     );
     expect(failoverHistory?.[0]?.response_body_json).toEqual(
       expect.objectContaining({

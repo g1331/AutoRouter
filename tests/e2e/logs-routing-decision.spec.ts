@@ -86,15 +86,11 @@ test.describe("Logs routing diagnostics", () => {
     await expect(page.getByText("Not sent to upstream")).toBeVisible();
 
     await page.getByRole("button", { name: "Expand failover details" }).first().click();
+    await page.getByRole("button", { name: "Decision" }).first().click();
 
-    const rcCandidateRow = page
-      .locator("div.flex.items-center.gap-2.p-1.rounded")
-      .filter({ hasText: "rc" })
-      .filter({ hasText: "w:2" })
-      .first();
-
-    await expect(rcCandidateRow).toBeVisible();
-    await expect(rcCandidateRow).not.toContainText("Selected");
+    await expect(page.getByText("Selection basis")).toBeVisible();
+    await expect(page.getByText("rc", { exact: true })).toBeVisible();
+    await expect(page.getByText("w:2", { exact: true })).toBeVisible();
     await expect(page.getByText("Selected", { exact: true })).toHaveCount(0);
   });
 });

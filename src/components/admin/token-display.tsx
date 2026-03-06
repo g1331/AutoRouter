@@ -327,16 +327,26 @@ export function TokenDisplay({
       </span>
       {/* Row 3: Cache indicators */}
       {(effectiveCacheRead > 0 || cacheCreationTokens > 0) && (
-        <div className="flex flex-wrap gap-1 mt-0.5">
+        <div className="mt-0.5 flex flex-wrap gap-1">
           {effectiveCacheRead > 0 && (
-            <Badge variant="info" className="px-1.5 py-0 text-[9px] w-fit gap-0.5">
-              <Download className="w-2.5 h-2.5" aria-hidden="true" />
+            <Badge
+              variant="info"
+              className="w-fit gap-1 px-1.5 py-0 text-[9px]"
+              aria-label={`${t("tokenCacheHit")} ${effectiveCacheRead.toLocaleString()}`}
+            >
+              <Download className="h-2.5 w-2.5" aria-hidden="true" />
+              <span>{t("tokenCacheHitShort")}</span>
               <span>{effectiveCacheRead.toLocaleString()}</span>
             </Badge>
           )}
           {cacheCreationTokens > 0 && (
-            <Badge variant="info" className="px-1.5 py-0 text-[9px] w-fit gap-0.5">
-              <Database className="w-2.5 h-2.5" aria-hidden="true" />
+            <Badge
+              variant="info"
+              className="w-fit gap-1 px-1.5 py-0 text-[9px]"
+              aria-label={`${t("tokenCacheWrite")} ${cacheCreationTokens.toLocaleString()}`}
+            >
+              <Database className="h-2.5 w-2.5" aria-hidden="true" />
+              <span>{t("tokenCacheWriteShort")}</span>
               <span>{cacheCreationTokens.toLocaleString()}</span>
             </Badge>
           )}
