@@ -26,6 +26,19 @@ function fmtMs(ms: number | null | undefined): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
+function fmtStageDuration(cumulativeMs: number | null, deltaMs: number | null): string | null {
+  if (cumulativeMs != null && deltaMs != null) {
+    return `${fmtMs(cumulativeMs)} (+${fmtMs(deltaMs)})`;
+  }
+  if (cumulativeMs != null) {
+    return fmtMs(cumulativeMs);
+  }
+  if (deltaMs != null) {
+    return fmtMs(deltaMs);
+  }
+  return null;
+}
+
 type SegState = "done" | "active" | "pending" | "failed" | "success";
 
 interface Seg {
@@ -60,7 +73,6 @@ function buildSegs(props: LifecycleTrackProps, t: (key: string) => string): Seg[
   const isDone = isFailed || isSuccess;
   const isDecision = effectiveStatus === "decision";
 
-  // downstream_streaming failure shows in response segment; all others in request segment
   const errInResp = isFailed && failureStage === "downstream_streaming";
   const errInReq = isFailed && !errInResp;
 
@@ -76,28 +88,37 @@ function buildSegs(props: LifecycleTrackProps, t: (key: string) => string): Seg[
     if (parts.length > 0) errText = parts.join(" · ");
   }
 
-  // Compute total time: prefer stage_timings_ms.total_ms, fallback to durationMs
   const totalMs = stageTimings?.total_ms ?? durationMs ?? null;
+  const decisionMs = stageTimings?.decision_ms ?? null;
+  const upstreamMs =
+    stageTimings?.upstream_response_ms ?? stageTimings?.gateway_processing_ms ?? null;
+  const gatewayProcessingMs = stageTimings?.gateway_processing_ms ?? null;
+  const firstTokenMs = isStream ? (stageTimings?.first_token_ms ?? null) : null;
+  const generationMs = isStream ? (stageTimings?.generation_ms ?? null) : null;
+  const cumulativeFirstOutputMs =
+    decisionMs != null && firstTokenMs != null ? decisionMs + firstTokenMs : firstTokenMs;
 
-  // --- Decision segment ---
   const decSeg: Seg = {
     key: "decision",
     label: t("lifecycleDecision"),
-    time: stageTimings?.decision_ms != null ? fmtMs(stageTimings.decision_ms) : null,
+    time: decisionMs != null ? fmtStageDuration(decisionMs, decisionMs) : null,
     sub: null,
     state: isDecision ? "active" : "done",
   };
 
-  // --- Request segment ---
-  const hasUpstreamMs =
-    stageTimings?.upstream_response_ms != null || stageTimings?.gateway_processing_ms != null;
-  const upstreamMs =
-    stageTimings?.upstream_response_ms ?? stageTimings?.gateway_processing_ms ?? null;
+  const requestTime =
+    isDone && gatewayProcessingMs != null
+      ? fmtStageDuration(totalMs, gatewayProcessingMs)
+      : isDone && !isStream && upstreamMs != null
+        ? fmtStageDuration(totalMs, upstreamMs)
+        : isDone && isStream && firstTokenMs == null && upstreamMs != null
+          ? fmtStageDuration(totalMs, upstreamMs)
+          : null;
 
   const reqSeg: Seg = {
     key: "request",
     label: t("lifecycleRequest"),
-    time: isDone && hasUpstreamMs ? fmtMs(upstreamMs) : null,
+    time: requestTime,
     sub: errInReq ? errText : null,
     state: isDecision
       ? "pending"
@@ -108,31 +129,26 @@ function buildSegs(props: LifecycleTrackProps, t: (key: string) => string): Seg[
           : "done",
   };
 
-  // --- Response segment ---
-  const streamSub =
-    isStream && (stageTimings?.first_token_ms != null || stageTimings?.generation_ms != null)
+  const responseSubParts = errInResp
+    ? [errText]
+    : isDone
       ? [
-          stageTimings?.first_token_ms != null
-            ? `${t("perfTtft")} ${fmtMs(stageTimings.first_token_ms)}`
+          firstTokenMs != null
+            ? `${t("journeyFirstOutput")} ${fmtStageDuration(cumulativeFirstOutputMs, firstTokenMs)}`
             : null,
-          stageTimings?.generation_ms != null
-            ? `${t("perfGen")} ${fmtMs(stageTimings.generation_ms)}`
-            : null,
+          generationMs != null && totalMs != null ? `${t("perfGen")} ${fmtMs(generationMs)}` : null,
         ]
-          .filter(Boolean)
-          .join(" · ")
-      : null;
+      : [];
 
   const respSeg: Seg = {
     key: "response",
     label: t("lifecycleResponse"),
-    time: null,
-    sub: errInResp ? errText : isDone && !errInReq ? streamSub : null,
+    time:
+      !errInResp && isDone && generationMs != null ? fmtStageDuration(totalMs, generationMs) : null,
+    sub: responseSubParts.filter(Boolean).join(" · ") || null,
     state: !isDone ? "pending" : errInResp ? "failed" : errInReq ? "pending" : "done",
   };
 
-  // --- Complete segment ---
-  // Show status code + total time (if available)
   const completeTime =
     statusCode != null
       ? totalMs != null
@@ -215,7 +231,13 @@ export function LifecycleTrack({
   );
 
   if (compact) {
-    const primarySeg = segs.find((s) => s.state === "active" || s.state === "failed") ?? segs[0];
+    const primarySeg =
+      segs.find((s) => s.state === "active" || s.state === "failed") ??
+      (isStream
+        ? segs.find((s) => s.key === "response" && (s.time != null || s.sub != null))
+        : segs.find((s) => s.key === "request" && (s.time != null || s.sub != null))) ??
+      segs.find((s) => s.key === "decision") ??
+      segs[0];
     const completeSeg = segs[segs.length - 1];
     const showBoth = primarySeg !== completeSeg;
     return (

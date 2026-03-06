@@ -15,6 +15,7 @@ import {
   type AffinityScope,
 } from "./session-affinity";
 import { getPrimaryProviderByCapabilities } from "@/lib/route-capabilities";
+import type { RoutingSelectionReason } from "@/types/api";
 import { quotaTracker } from "./upstream-quota-tracker";
 
 // Re-export for convenience
@@ -87,6 +88,7 @@ export interface UpstreamSelectionResult {
   totalCandidates: number;
   affinityHit?: boolean; // Whether session affinity was used
   affinityMigrated?: boolean; // Whether session was migrated to higher priority upstream
+  selectionReason?: RoutingSelectionReason | null;
 }
 
 export type ProviderTypeSelectionResult = UpstreamSelectionResult;
@@ -104,6 +106,43 @@ export interface ConcurrencyExcludedCandidate {
   tier: number;
   currentConcurrency: number;
   maxConcurrency: number;
+}
+
+function normalizeSelectionCircuitState(
+  state: string | null | undefined
+): RoutingSelectionReason["selected_circuit_state"] {
+  if (state === "closed" || state === "open" || state === "half_open") {
+    return state;
+  }
+  return null;
+}
+
+function createSelectionReason(options: {
+  code: RoutingSelectionReason["code"];
+  upstreamId: string;
+  selectedTier: number;
+  totalCandidates: number;
+  finalCandidateCount: number;
+  selectedCircuitState?: RoutingSelectionReason["selected_circuit_state"];
+}): RoutingSelectionReason {
+  const {
+    code,
+    upstreamId,
+    selectedTier,
+    totalCandidates,
+    finalCandidateCount,
+    selectedCircuitState = null,
+  } = options;
+
+  return {
+    code,
+    selected_upstream_id: upstreamId,
+    selected_tier: selectedTier,
+    selected_circuit_state: selectedCircuitState ?? null,
+    candidate_count: totalCandidates,
+    final_candidate_count: finalCandidateCount,
+    retry_reason: null,
+  };
 }
 
 // In-memory state for load balancing (per-instance, not distributed)
@@ -676,6 +715,16 @@ async function selectFromUpstreamPool(
                 totalCandidates,
                 affinityHit: true,
                 affinityMigrated: true,
+                selectionReason: createSelectionReason({
+                  code: "affinity_migrated",
+                  upstreamId: migrationTarget.upstream.id,
+                  selectedTier: migrationTarget.upstream.priority,
+                  totalCandidates,
+                  finalCandidateCount: 1,
+                  selectedCircuitState: normalizeSelectionCircuitState(
+                    migrationTarget.circuitState
+                  ),
+                }),
               };
             }
           } catch (error) {
@@ -701,6 +750,14 @@ async function selectFromUpstreamPool(
               totalCandidates,
               affinityHit: true,
               affinityMigrated: false,
+              selectionReason: createSelectionReason({
+                code: "affinity_hit",
+                upstreamId: boundUpstream.upstream.id,
+                selectedTier: boundUpstream.upstream.priority,
+                totalCandidates,
+                finalCandidateCount: 1,
+                selectedCircuitState: normalizeSelectionCircuitState(boundUpstream.circuitState),
+              }),
             };
           }
           // Bound upstream became full after filtering; fall through to normal reselect.
@@ -853,6 +910,13 @@ async function performTieredSelection(
             throw new NoHealthyUpstreamsError("Failed to reserve upstream connection slot");
           }
 
+          const selectionReasonCode: RoutingSelectionReason["code"] =
+            selected.circuitState === "half_open"
+              ? "half_open_probe"
+              : afterConcurrency.allowed.length === 1
+                ? "single_candidate_remaining"
+                : "weighted_selection";
+
           return {
             upstream: selected.upstream,
             selectedTier: tier,
@@ -861,6 +925,14 @@ async function performTieredSelection(
             concurrencyFiltered: totalConcurrencyFiltered,
             concurrencyExcluded,
             totalCandidates,
+            selectionReason: createSelectionReason({
+              code: selectionReasonCode,
+              upstreamId: selected.upstream.id,
+              selectedTier: tier,
+              totalCandidates,
+              finalCandidateCount: afterConcurrency.allowed.length,
+              selectedCircuitState: normalizeSelectionCircuitState(selected.circuitState),
+            }),
           };
         } catch (error) {
           if (error instanceof CircuitBreakerOpenError) {

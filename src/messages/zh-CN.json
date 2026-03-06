@@ -383,7 +383,31 @@
     "lifecycleStageRequesting": "请求中",
     "lifecycleStageCompleted": "已完成",
     "lifecycleStageFailed": "失败",
-    "lifecycleStageUnknown": "未知"
+    "lifecycleStageUnknown": "未知",
+    "journeyDecisionResult": "决策结果",
+    "journeySelectionReason": "选中原因",
+    "journeySelectionReasonUnavailable": "该日志未记录结构化选中原因",
+    "journeySelectionReasonAffinityHit": "命中会话亲和性绑定，继续沿用该上游",
+    "journeySelectionReasonAffinityMigrated": "根据亲和性迁移规则，切到更高优先级上游",
+    "journeySelectionReasonWeighted": "在剩余可用候选中按权重选中该上游",
+    "journeySelectionReasonHalfOpen": "该上游处于恢复探测阶段，本次请求作为探测流量发送",
+    "journeySelectionReasonSingleCandidate": "经过筛选后仅剩这一个可用候选",
+    "journeyRetryReason": "改选原因",
+    "journeyRetryReasonText": "上一跳 {upstream} 因 {reason} 失败，本次改试当前上游",
+    "journeyRequestAction": "执行动作",
+    "journeyRequestSentTo": "已向以下上游发起请求",
+    "journeyRequestNotSent": "未发送到上游，流程在网关内结束",
+    "retryErrorType": {
+      "timeout": "超时",
+      "http_5xx": "5xx 错误",
+      "http_4xx": "4xx 错误",
+      "http_429": "429 限流",
+      "connection_error": "连接失败",
+      "circuit_open": "熔断阻断",
+      "concurrency_full": "并发已满",
+      "unknown": "未知原因"
+    },
+    "journeyInitialUpstream": "首次选中上游"
   },
   "upstreams": {
     "title": "上游管理",

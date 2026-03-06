@@ -378,7 +378,31 @@
     "lifecycleDecision": "Decision",
     "lifecycleRequest": "Request",
     "lifecycleResponse": "Response",
-    "lifecycleComplete": "Complete"
+    "lifecycleComplete": "Complete",
+    "journeyDecisionResult": "Decision result",
+    "journeySelectionReason": "Selection reason",
+    "journeySelectionReasonUnavailable": "This log did not record a structured selection reason",
+    "journeySelectionReasonAffinityHit": "Reused the upstream because session affinity hit the existing binding",
+    "journeySelectionReasonAffinityMigrated": "Moved the session to a higher-priority upstream because affinity migration applied",
+    "journeySelectionReasonWeighted": "Selected this upstream by weight among the remaining available candidates",
+    "journeySelectionReasonHalfOpen": "Sent this request as a half-open probe to verify the recovering upstream",
+    "journeySelectionReasonSingleCandidate": "Selected this upstream because only one candidate remained after filtering",
+    "journeyRetryReason": "Retry reason",
+    "journeyRetryReasonText": "Retried the current upstream after {upstream} failed with {reason}",
+    "journeyRequestAction": "Execution action",
+    "journeyRequestSentTo": "Sent request to the following upstream",
+    "journeyRequestNotSent": "Did not send the request upstream; the flow ended inside the gateway",
+    "retryErrorType": {
+      "timeout": "timeout",
+      "http_5xx": "HTTP 5xx",
+      "http_4xx": "HTTP 4xx",
+      "http_429": "HTTP 429",
+      "connection_error": "connection error",
+      "circuit_open": "circuit open",
+      "concurrency_full": "concurrency full",
+      "unknown": "unknown reason"
+    },
+    "journeyInitialUpstream": "Initially selected upstream"
   },
   "upstreams": {
     "title": "Upstreams",

@@ -39,7 +39,7 @@ describe("LifecycleTrack", () => {
         />
       );
 
-      expect(screen.getByText("50ms")).toBeInTheDocument();
+      expect(screen.getByText(/50ms \(\+50ms\)/)).toBeInTheDocument();
     });
 
     it("shows upstream response timing", () => {
@@ -52,7 +52,7 @@ describe("LifecycleTrack", () => {
         />
       );
 
-      expect(screen.getByText("400ms")).toBeInTheDocument();
+      expect(screen.getByText(/500ms \(\+400ms\)/)).toBeInTheDocument();
     });
 
     it("shows status code in complete segment with success color", () => {
@@ -84,8 +84,9 @@ describe("LifecycleTrack", () => {
         />
       );
 
-      expect(screen.getByText(/320ms/)).toBeInTheDocument();
-      expect(screen.getByText(/780ms/)).toBeInTheDocument();
+      expect(screen.getByText(/journeyFirstOutput 400ms \(\+320ms\)/)).toBeInTheDocument();
+      expect(screen.getByText(/1\.2s \(\+780ms\)/)).toBeInTheDocument();
+      expect(screen.queryByText("1.1s")).not.toBeInTheDocument();
     });
 
     it("does not show streaming sub-timings for non-streaming requests", () => {
@@ -245,6 +246,29 @@ describe("LifecycleTrack", () => {
       );
 
       expect(screen.getByText("200")).toBeInTheDocument();
+    });
+
+    it("prefers response summary in compact mode for completed streaming requests", () => {
+      render(
+        <LifecycleTrack
+          statusCode={200}
+          isStream={true}
+          lifecycleStatus="completed_success"
+          stageTimings={{
+            total_ms: 1650,
+            decision_ms: 300,
+            upstream_response_ms: 950,
+            first_token_ms: 900,
+            generation_ms: 400,
+            gateway_processing_ms: null,
+          }}
+          compact
+        />
+      );
+
+      expect(screen.getByText("lifecycleResponse")).toBeInTheDocument();
+      expect(screen.getByText(/journeyFirstOutput 1\.2s \(\+900ms\)/)).toBeInTheDocument();
+      expect(screen.getByText(/200 · 1\.6s/)).toBeInTheDocument();
     });
 
     it("shows failed status code with error color in compact mode", () => {

@@ -67,6 +67,7 @@ import type {
   RoutingCandidate,
   RoutingExcluded,
   RoutingFailureStage,
+  RoutingSelectionReason,
 } from "@/types/api";
 import {
   shouldRecordFixture,
@@ -127,6 +128,7 @@ interface RoutingDecisionDiagnostics {
   actualUpstreamId?: string | null;
   didSendUpstream?: boolean;
   failureStage?: RoutingFailureStage | null;
+  finalSelectionReason?: RoutingSelectionReason | null;
 }
 
 type CandidateCircuitStateMap = Record<string, RoutingCandidate["circuit_state"]>;
@@ -206,7 +208,45 @@ function transformPathRoutingDecisionLog(
       ? { did_send_upstream: diagnostics.didSendUpstream }
       : {}),
     ...(diagnostics?.failureStage !== undefined ? { failure_stage: diagnostics.failureStage } : {}),
+    final_selection_reason: diagnostics?.finalSelectionReason ?? null,
     selection_strategy: "weighted",
+  };
+}
+
+function buildRetryReason(
+  failoverHistory: FailoverAttempt[]
+): RoutingSelectionReason["retry_reason"] {
+  const previousAttempt =
+    failoverHistory.length > 0 ? failoverHistory[failoverHistory.length - 1] : null;
+
+  if (!previousAttempt) {
+    return null;
+  }
+
+  return {
+    previous_upstream_id: previousAttempt.upstream_id ?? null,
+    previous_upstream_name: previousAttempt.upstream_name ?? null,
+    previous_error_type: previousAttempt.error_type ?? null,
+    previous_error_message: previousAttempt.error_message ?? null,
+  };
+}
+
+function attachRetryReason(
+  selectionReason: RoutingSelectionReason | null | undefined,
+  failoverHistory: FailoverAttempt[]
+): RoutingSelectionReason | null {
+  if (!selectionReason) {
+    return null;
+  }
+
+  const retryReason = buildRetryReason(failoverHistory);
+  if (!retryReason) {
+    return selectionReason;
+  }
+
+  return {
+    ...selectionReason,
+    retry_reason: retryReason,
   };
 }
 
@@ -751,6 +791,7 @@ async function forwardWithFailover(
   concurrencyExcludedCandidates: RoutingExcluded[];
   affinityHit: boolean;
   affinityMigrated: boolean;
+  finalSelectionReason: RoutingSelectionReason | null;
 }> {
   const failedUpstreamIds: string[] = [];
   const failoverHistory: FailoverAttempt[] = [];
@@ -759,6 +800,7 @@ async function forwardWithFailover(
   let didSendUpstream = false;
   let affinityHit = false;
   let affinityMigrated = false;
+  let finalSelectionReason: RoutingSelectionReason | null = null;
 
   const appendConcurrencyExclusions = (
     excludedCandidates: NonNullable<
@@ -823,6 +865,7 @@ async function forwardWithFailover(
       appendConcurrencyExclusions(selection.concurrencyExcluded ?? []);
 
       selectedUpstream = selection.upstream;
+      finalSelectionReason = attachRetryReason(selection.selectionReason ?? null, failoverHistory);
       // Capture affinity info from first successful selection
       if (failedUpstreamIds.length === 0) {
         affinityHit = selection.affinityHit ?? false;
@@ -924,6 +967,7 @@ async function forwardWithFailover(
           response_headers: failedResponse.headers,
           response_body_text: failedResponse.bodyText,
           response_body_json: failedResponse.bodyJson,
+          selection_reason: finalSelectionReason,
           header_diff: result.headerDiff ?? null,
         });
         failedUpstreamIds.push(selectedUpstream.id);
@@ -965,6 +1009,7 @@ async function forwardWithFailover(
           concurrencyExcludedCandidates,
           affinityHit,
           affinityMigrated,
+          finalSelectionReason,
         };
       }
 
@@ -976,6 +1021,7 @@ async function forwardWithFailover(
         concurrencyExcludedCandidates,
         affinityHit,
         affinityMigrated,
+        finalSelectionReason,
       };
     } catch (error) {
       // Release connection on error
@@ -1020,6 +1066,7 @@ async function forwardWithFailover(
           response_headers: errorEvidence.responseHeaders,
           response_body_text: errorEvidence.responseBodyText,
           response_body_json: errorEvidence.responseBodyJson,
+          selection_reason: finalSelectionReason,
           header_diff: errorHeaderDiff,
         });
         failedUpstreamIds.push(selectedUpstream.id);
@@ -1598,6 +1645,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       concurrencyExcludedCandidates: concurrencyExcludedFromSelection,
       affinityHit: afHit,
       affinityMigrated: afMigrated,
+      finalSelectionReason,
     } = await forwardWithFailover(
       request,
       matchedRouteCapability,
@@ -1662,6 +1710,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         actualUpstreamId: upstreamForLogging.id,
         didSendUpstream: true,
         failureStage: null,
+        finalSelectionReason,
       }
     );
 
@@ -2138,6 +2187,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         actualUpstreamId,
         didSendUpstream,
         failureStage,
+        finalSelectionReason: attributionFailoverAttempt?.selection_reason ?? null,
       }
     );
 

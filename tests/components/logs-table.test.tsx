@@ -366,8 +366,10 @@ describe("LogsTable", () => {
         />
       );
 
-      // Sub-text contains "perfTtft 650ms · perfGen 650ms"
-      expect(screen.getByText(/650ms/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+
+      // Expanded timing details contain TTFT and generation timing.
+      expect(screen.getAllByText(/650ms/).length).toBeGreaterThan(0);
     });
 
     it("renders TTFT over 1 second in compact seconds format", () => {
@@ -390,8 +392,10 @@ describe("LogsTable", () => {
         />
       );
 
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+
       // fmtMs(1222) → "1.2s"
-      expect(screen.getByText(/1\.2s/)).toBeInTheDocument();
+      expect(screen.getAllByText(/1\.2s/).length).toBeGreaterThan(0);
     });
 
     it("shows streaming TTFT sub-timing in response segment", () => {
@@ -414,8 +418,10 @@ describe("LogsTable", () => {
         />
       );
 
-      // Sub-text contains "perfTtft 220ms · perfGen 680ms"
-      expect(screen.getByText(/220ms/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+
+      // Expanded timing details contain TTFT sub-timing.
+      expect(screen.getAllByText(/220ms/).length).toBeGreaterThan(0);
     });
 
     it("does not render short-sample hint in row performance line", () => {
@@ -444,8 +450,8 @@ describe("LogsTable", () => {
       render(<LogsTable logs={[streamLog]} />);
 
       fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
-      expect(screen.queryAllByText(/perfGen/).length).toBeGreaterThan(0);
-      expect(screen.queryAllByText("450ms").length).toBeGreaterThan(0);
+      expect(screen.getByText("journeyGenerationFinished")).toBeInTheDocument();
+      expect(screen.getAllByText(/450ms/).length).toBeGreaterThan(0);
     });
 
     it("does not show TPS when completion tokens are below threshold", () => {
@@ -993,6 +999,20 @@ describe("LogsTable", () => {
       candidate_count: 3,
       final_candidate_count: 2,
       selected_upstream_id: "upstream-1",
+      final_selection_reason: {
+        code: "single_candidate_remaining",
+        selected_upstream_id: "upstream-1",
+        selected_tier: 0,
+        selected_circuit_state: "closed",
+        candidate_count: 3,
+        final_candidate_count: 2,
+        retry_reason: {
+          previous_upstream_id: "upstream-9",
+          previous_upstream_name: "failed-upstream",
+          previous_error_type: "timeout",
+          previous_error_message: "Request timed out",
+        },
+      },
       candidates: [
         { id: "upstream-1", name: "openai-1", weight: 100, circuit_state: "closed" },
         { id: "upstream-2", name: "openai-2", weight: 50, circuit_state: "half_open" },
@@ -1011,6 +1031,15 @@ describe("LogsTable", () => {
           error_type: "timeout",
           error_message: "Request timed out",
           attempted_at: attemptedAt,
+          selection_reason: {
+            code: "weighted_selection",
+            selected_upstream_id: "upstream-1",
+            selected_tier: 0,
+            selected_circuit_state: "closed",
+            candidate_count: 3,
+            final_candidate_count: 2,
+            retry_reason: null,
+          },
         },
       ],
     };
@@ -1126,12 +1155,14 @@ describe("LogsTable", () => {
       expect(screen.getByText("journeyRequestArrived")).toBeInTheDocument();
       expect(screen.getAllByText("lifecycleDecision").length).toBeGreaterThan(0);
       expect(screen.getByText("journeySelectionBasis")).toBeInTheDocument();
-      expect(screen.getByText("timelineUpstreamSelection")).toBeInTheDocument();
+      expect(screen.getByText("journeyDecisionResult")).toBeInTheDocument();
+      expect(screen.queryByText("timelineUpstreamSelection")).not.toBeInTheDocument();
       expect(screen.getAllByText("lifecycleRequest").length).toBeGreaterThan(0);
       expect(screen.getAllByText("lifecycleResponse").length).toBeGreaterThan(0);
       expect(screen.getAllByText("lifecycleComplete").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("perfTtft 900ms").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("perfGen 400ms").length).toBeGreaterThan(0);
+      expect(screen.getByText(/journeyRequestAction/)).toBeInTheDocument();
+      expect(screen.getAllByText(/1\.20s \(\+900ms\)/)).toHaveLength(1);
+      expect(screen.getAllByText(/1\.65s \(\+400ms\)/).length).toBeGreaterThan(0);
     });
 
     it("restores structured session and candidate upstream diagnostics in expanded view", () => {
@@ -1152,6 +1183,8 @@ describe("LogsTable", () => {
       expect(screen.getByTitle(sessionId)).toBeInTheDocument();
       expect(screen.getByText("compensationBadge")).toBeInTheDocument();
       expect(screen.getByText(/weighted_random/)).toBeInTheDocument();
+      expect(screen.getAllByText("journeySelectionReasonWeighted").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("journeyRetryReasonText").length).toBeGreaterThan(0);
       expect(screen.getByText("openai-1")).toBeInTheDocument();
       expect(screen.getByText("openai-3")).toBeInTheDocument();
       expect(screen.getByText("w:100")).toBeInTheDocument();
@@ -1193,10 +1226,35 @@ describe("LogsTable", () => {
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
       fireEvent.click(expandButton);
 
-      // Retry timeline should show attempt with upstream name and error message
+      // Retry timeline should show attempt with upstream name, reason, and error message
       expect(screen.getAllByText(/retryAttempt/).length).toBeGreaterThan(0);
-      expect(screen.getByText(/failed-upstream/)).toBeInTheDocument();
+      expect(screen.getAllByText(/failed-upstream/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText("journeySelectionReasonWeighted").length).toBeGreaterThan(0);
       expect(screen.getByText(/Request timed out/)).toBeInTheDocument();
+      expect(screen.getAllByText(/retryTotalDuration/).length).toBeGreaterThan(0);
+    });
+
+    it("uses the same failover duration text in request header and details", () => {
+      const requestStart = new Date();
+      const failoverAt = new Date(requestStart.getTime() + 580);
+      const logWithStableFailoverDuration: RequestLog = {
+        ...logWithFailoverBase,
+        created_at: requestStart.toISOString(),
+        duration_ms: 1000,
+        failover_history: [
+          {
+            ...logWithFailoverBase.failover_history![0],
+            attempted_at: failoverAt.toISOString(),
+          },
+        ],
+      };
+
+      render(<LogsTable logs={[logWithStableFailoverDuration]} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+
+      expect(screen.getByText(/retryTotalDuration 420ms \(\+420ms\)/)).toBeInTheDocument();
+      expect(screen.getByText("420ms (+420ms)")).toBeInTheDocument();
       expect(screen.getAllByText(/retryTotalDuration/).length).toBeGreaterThan(0);
     });
 
@@ -1250,7 +1308,8 @@ describe("LogsTable", () => {
 
       expect(screen.getByText("journeyRequestArrived")).toBeInTheDocument();
       expect(screen.getAllByText("lifecycleDecision").length).toBeGreaterThan(0);
-      expect(screen.getByText("timelineUpstreamSelection")).toBeInTheDocument();
+      expect(screen.getByText("journeyDecisionResult")).toBeInTheDocument();
+      expect(screen.queryByText("timelineUpstreamSelection")).not.toBeInTheDocument();
       expect(screen.getByText("lifecycleTimeline")).toBeInTheDocument();
       expect(screen.getByText("tokenDetails")).toBeInTheDocument();
 

@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useRef, Fragment, type ReactNode } from "
 import { formatDistanceToNow, subDays, startOfDay } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
 import { ScrollText, Filter, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
-import type { RequestLog, TimeRange } from "@/types/api";
+import type { FailoverErrorType, RequestLog, RoutingSelectionReason, TimeRange } from "@/types/api";
 import {
   Table,
   TableBody,
@@ -539,6 +539,7 @@ export function LogsTable({ logs }: LogsTableProps) {
 
     const totalMs = log.stage_timings_ms?.total_ms ?? log.duration_ms ?? null;
     const routingMs = log.stage_timings_ms?.decision_ms ?? log.routing_duration_ms ?? null;
+    const upstreamResponseMs = log.stage_timings_ms?.upstream_response_ms ?? null;
     const ttftMs = log.stage_timings_ms?.first_token_ms ?? log.ttft_ms ?? null;
     const genMs = log.stage_timings_ms?.generation_ms ?? getGenerationMs(log);
 
@@ -621,6 +622,82 @@ export function LogsTable({ logs }: LogsTableProps) {
     const requestModeLabel = t(log.is_stream ? "requestModeStreaming" : "requestModeNonStreaming");
     const cumulativeFirstOutputMs =
       routingMs != null && ttftMs != null ? routingMs + ttftMs : ttftMs;
+    const finalSelectionReason = routingDecision?.final_selection_reason ?? null;
+    const firstFailoverAttempt = hasFailoverHistory ? log.failover_history![0] : null;
+    const decisionSelectionReason =
+      firstFailoverAttempt?.selection_reason ?? (hasFailoverHistory ? null : finalSelectionReason);
+    const decisionUpstreamLabel =
+      firstFailoverAttempt?.upstream_name ??
+      firstFailoverAttempt?.upstream_id ??
+      finalUpstreamLabel;
+    const decisionSelectedCandidateId =
+      firstFailoverAttempt?.selection_reason?.selected_upstream_id ??
+      firstFailoverAttempt?.upstream_id ??
+      selectedCandidateId;
+
+    const formatStageDurationText = (cumulativeMs: number | null, deltaMs: number | null) => {
+      if (cumulativeMs != null && deltaMs != null) {
+        return formatMetricText(cumulativeMs) + " (+" + formatMetricText(deltaMs) + ")";
+      }
+      if (cumulativeMs != null) {
+        return formatMetricText(cumulativeMs);
+      }
+      if (deltaMs != null) {
+        return formatMetricText(deltaMs);
+      }
+      return null;
+    };
+
+    const formatRetryErrorType = (errorType: FailoverErrorType | null | undefined) => {
+      if (!errorType) {
+        return t("retryErrorType.unknown");
+      }
+      return t("retryErrorType." + errorType);
+    };
+
+    const getSelectionReasonText = (reason: RoutingSelectionReason | null | undefined) => {
+      if (!reason) {
+        return t("journeySelectionReasonUnavailable");
+      }
+
+      switch (reason.code) {
+        case "affinity_hit":
+          return t("journeySelectionReasonAffinityHit");
+        case "affinity_migrated":
+          return t("journeySelectionReasonAffinityMigrated");
+        case "half_open_probe":
+          return t("journeySelectionReasonHalfOpen");
+        case "single_candidate_remaining":
+          return t("journeySelectionReasonSingleCandidate");
+        case "weighted_selection":
+        default:
+          return t("journeySelectionReasonWeighted");
+      }
+    };
+
+    const getRetryReasonText = (reason: RoutingSelectionReason | null | undefined) => {
+      const retryReason = reason?.retry_reason;
+      if (!retryReason) {
+        return null;
+      }
+
+      return t("journeyRetryReasonText", {
+        upstream: retryReason.previous_upstream_name ?? t("upstreamUnknown"),
+        reason: formatRetryErrorType(retryReason.previous_error_type),
+      });
+    };
+
+    const decisionDurationText = formatStageDurationText(routingMs, routingMs);
+    const requestPhaseDurationText =
+      didSendUpstream === false || log.is_stream
+        ? null
+        : formatStageDurationText(totalMs, upstreamResponseMs);
+    const responsePhaseDurationText =
+      genMs != null ? formatStageDurationText(totalMs, genMs) : null;
+    const failoverDurationText =
+      failoverDurationMs != null
+        ? formatStageDurationText(failoverDurationMs, failoverDurationMs)
+        : null;
 
     const renderJourneyField = (options: {
       label: string;
@@ -746,15 +823,18 @@ export function LogsTable({ logs }: LogsTableProps) {
                   title: t("lifecycleDecision"),
                   metrics: (
                     <>
-                      {routingMs != null
-                        ? renderMetricPill(t("tableDuration"), formatMetricText(routingMs), "info")
-                        : null}
-                      {routingMs != null
+                      {routingTypeLabel ? renderMetricPill(routingTypeLabel, "", "neutral") : null}
+                      {routingDecision
                         ? renderMetricPill(
-                            t("journeyCumulative"),
-                            formatMetricText(routingMs),
+                            t("tooltipCandidates"),
+                            String(routingDecision.final_candidate_count) +
+                              "/" +
+                              String(routingDecision.candidate_count),
                             "neutral"
                           )
+                        : null}
+                      {decisionDurationText
+                        ? renderMetricPill(t("tableDuration"), decisionDurationText, "info")
                         : null}
                     </>
                   ),
@@ -847,111 +927,101 @@ export function LogsTable({ logs }: LogsTableProps) {
                           </div>
                         </div>
                       </div>
+
+                      <div className="rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
+                        <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+                          {t("journeyDecisionResult")}
+                        </div>
+                        <div className="space-y-2">
+                          {renderJourneyField({
+                            label: t("journeyInitialUpstream"),
+                            value: (
+                              <span className="font-medium text-foreground">
+                                {decisionUpstreamLabel}
+                              </span>
+                            ),
+                          })}
+                          {renderJourneyField({
+                            label: t("journeySelectionReason"),
+                            value: getSelectionReasonText(decisionSelectionReason),
+                            valueClassName: decisionSelectionReason
+                              ? undefined
+                              : "text-muted-foreground",
+                          })}
+                          {routingDecision?.candidates?.length ? (
+                            <div className="space-y-1.5">
+                              {routingDecision.candidates.map((candidate) => {
+                                const isSelected = candidate.id === decisionSelectedCandidateId;
+                                return (
+                                  <div
+                                    key={candidate.id}
+                                    className={cn(
+                                      "flex flex-wrap items-center gap-2 rounded-cf-sm border border-divider bg-surface-300/65 px-2 py-1.5",
+                                      isSelected && "border-emerald-500/30 bg-emerald-500/10"
+                                    )}
+                                  >
+                                    <span
+                                      className={cn(
+                                        "font-medium",
+                                        isSelected ? "text-foreground" : "text-muted-foreground"
+                                      )}
+                                    >
+                                      {isSelected ? "●" : "○"}
+                                    </span>
+                                    <span className="min-w-0 flex-1 text-foreground">
+                                      {candidate.name}
+                                    </span>
+                                    <Badge variant="neutral" className="px-1.5 py-0 text-[10px]">
+                                      {t("circuitState." + candidate.circuit_state)}
+                                    </Badge>
+                                    <span className="rounded-cf-sm border border-divider bg-surface-300 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                      {"w:" + String(candidate.weight)}
+                                    </span>
+                                    {isSelected ? (
+                                      <Badge variant="success" className="px-1.5 py-0 text-[10px]">
+                                        {t("timelineSelected")}
+                                      </Badge>
+                                    ) : null}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="text-muted-foreground">{t("noRoutingDecision")}</div>
+                          )}
+                          {routingDecision?.excluded?.length ? (
+                            <div className="space-y-1.5">
+                              {routingDecision.excluded.map((excluded) => (
+                                <div
+                                  key={excluded.id}
+                                  className="flex flex-wrap items-center gap-2 rounded-cf-sm border border-red-500/20 bg-red-500/5 px-2 py-1.5"
+                                >
+                                  <span className="min-w-0 flex-1 text-foreground">
+                                    {excluded.name}
+                                  </span>
+                                  <Badge variant="error" className="px-1.5 py-0 text-[10px]">
+                                    {t("exclusionReason." + excluded.reason)}
+                                  </Badge>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
                     </>
                   ),
                 })}
 
                 {renderJourneyStep({
                   index: 3,
-                  title: t("timelineUpstreamSelection"),
-                  metrics: (
-                    <>
-                      {routingTypeLabel ? renderMetricPill(routingTypeLabel, "", "neutral") : null}
-                      {routingDecision
-                        ? renderMetricPill(
-                            t("tooltipCandidates"),
-                            String(routingDecision.final_candidate_count) +
-                              "/" +
-                              String(routingDecision.candidate_count),
-                            "neutral"
-                          )
-                        : null}
-                    </>
-                  ),
-                  children: (
-                    <>
-                      {renderJourneyField({
-                        label: t("timelineFinalUpstream"),
-                        value: (
-                          <span className="font-medium text-foreground">{finalUpstreamLabel}</span>
-                        ),
-                      })}
-                      {routingDecision?.candidates?.length ? (
-                        <div className="space-y-1.5">
-                          {routingDecision.candidates.map((candidate) => {
-                            const isSelected = candidate.id === selectedCandidateId;
-                            return (
-                              <div
-                                key={candidate.id}
-                                className={cn(
-                                  "flex flex-wrap items-center gap-2 rounded-cf-sm border border-divider bg-surface-200/70 px-2 py-1.5",
-                                  isSelected && "border-emerald-500/30 bg-emerald-500/10"
-                                )}
-                              >
-                                <span
-                                  className={cn(
-                                    "font-medium",
-                                    isSelected ? "text-foreground" : "text-muted-foreground"
-                                  )}
-                                >
-                                  {isSelected ? "●" : "○"}
-                                </span>
-                                <span className="min-w-0 flex-1 text-foreground">
-                                  {candidate.name}
-                                </span>
-                                <Badge variant="neutral" className="px-1.5 py-0 text-[10px]">
-                                  {t("circuitState." + candidate.circuit_state)}
-                                </Badge>
-                                <span className="rounded-cf-sm border border-divider bg-surface-300 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                                  {"w:" + String(candidate.weight)}
-                                </span>
-                                {isSelected ? (
-                                  <Badge variant="success" className="px-1.5 py-0 text-[10px]">
-                                    {t("timelineSelected")}
-                                  </Badge>
-                                ) : null}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="text-muted-foreground">{t("noRoutingDecision")}</div>
-                      )}
-                      {routingDecision?.excluded?.length ? (
-                        <div className="space-y-1.5">
-                          {routingDecision.excluded.map((excluded) => (
-                            <div
-                              key={excluded.id}
-                              className="flex flex-wrap items-center gap-2 rounded-cf-sm border border-red-500/20 bg-red-500/5 px-2 py-1.5"
-                            >
-                              <span className="min-w-0 flex-1 text-foreground">
-                                {excluded.name}
-                              </span>
-                              <Badge variant="error" className="px-1.5 py-0 text-[10px]">
-                                {t("exclusionReason." + excluded.reason)}
-                              </Badge>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
-                    </>
-                  ),
-                })}
-
-                {renderJourneyStep({
-                  index: 4,
                   title: t("lifecycleRequest"),
                   metrics: (
                     <>
-                      {didSendUpstream === false
-                        ? renderMetricPill(t("timelineSentNo"), "", "warning")
-                        : renderMetricPill(t("timelineSentYes"), "", "success")}
-                      {failoverDurationMs != null
-                        ? renderMetricPill(
-                            t("retryTotalDuration"),
-                            formatMetricText(failoverDurationMs),
-                            "warning"
-                          )
+                      {requestPhaseDurationText
+                        ? renderMetricPill(t("tableDuration"), requestPhaseDurationText, "warning")
+                        : null}
+                      {failoverDurationText
+                        ? renderMetricPill(t("retryTotalDuration"), failoverDurationText, "warning")
                         : null}
                     </>
                   ),
@@ -960,19 +1030,44 @@ export function LogsTable({ logs }: LogsTableProps) {
                       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                         {t("timelineExecutionRetries")}
                       </div>
-                      {didSendUpstream === false ? (
-                        <div className="text-muted-foreground">{t("timelineNoUpstreamSent")}</div>
-                      ) : (
-                        renderJourneyField({
-                          label: t("timelineFinalUpstream"),
-                          value: finalUpstreamLabel,
-                        })
-                      )}
+                      {renderJourneyField({
+                        label: t("journeyRequestAction"),
+                        value:
+                          didSendUpstream === false ? (
+                            <span className="text-muted-foreground">
+                              {t("journeyRequestNotSent")}
+                            </span>
+                          ) : (
+                            <span>
+                              {t("journeyRequestSentTo")}{" "}
+                              <span className="font-medium text-foreground">
+                                {finalUpstreamLabel}
+                              </span>
+                            </span>
+                          ),
+                      })}
                       {hasFailoverHistory ? (
                         <>
-                          <div className="text-muted-foreground">
-                            {t("retryTotalDuration")}: {formatDuration(failoverDurationMs)}
-                          </div>
+                          {finalSelectionReason
+                            ? renderJourneyField({
+                                label: t("journeySelectionReason"),
+                                value: getSelectionReasonText(finalSelectionReason),
+                              })
+                            : null}
+                          {getRetryReasonText(finalSelectionReason)
+                            ? renderJourneyField({
+                                label: t("journeyRetryReason"),
+                                value: getRetryReasonText(finalSelectionReason)!,
+                                valueClassName: "text-muted-foreground",
+                              })
+                            : null}
+                          {failoverDurationText
+                            ? renderJourneyField({
+                                label: t("retryTotalDuration"),
+                                value: failoverDurationText,
+                                valueClassName: "text-muted-foreground",
+                              })
+                            : null}
                           <div className="space-y-1.5">
                             {log.failover_history!.map((attempt, index) => (
                               <div
@@ -994,6 +1089,21 @@ export function LogsTable({ logs }: LogsTableProps) {
                                     [{attempt.error_type}]
                                   </span>
                                 </div>
+                                {attempt.selection_reason
+                                  ? renderJourneyField({
+                                      label: t("journeySelectionReason"),
+                                      value: getSelectionReasonText(attempt.selection_reason),
+                                      className: "mt-1",
+                                    })
+                                  : null}
+                                {getRetryReasonText(attempt.selection_reason)
+                                  ? renderJourneyField({
+                                      label: t("journeyRetryReason"),
+                                      value: getRetryReasonText(attempt.selection_reason)!,
+                                      className: "mt-1",
+                                      valueClassName: "text-muted-foreground",
+                                    })
+                                  : null}
                                 {attempt.error_message ? (
                                   <div className="mt-1 text-[11px] text-muted-foreground">
                                     {attempt.error_message}
@@ -1007,6 +1117,8 @@ export function LogsTable({ logs }: LogsTableProps) {
                         <div className="text-muted-foreground">
                           {t("timelineFailoverNoDetails", { count: log.failover_attempts })}
                         </div>
+                      ) : didSendUpstream === false ? (
+                        <div className="text-muted-foreground">{t("timelineNoUpstreamSent")}</div>
                       ) : (
                         <div className="text-muted-foreground">{t("timelineDirectSuccess")}</div>
                       )}
@@ -1015,15 +1127,12 @@ export function LogsTable({ logs }: LogsTableProps) {
                 })}
 
                 {renderJourneyStep({
-                  index: 5,
+                  index: 4,
                   title: t("lifecycleResponse"),
                   metrics: (
                     <>
-                      {ttftMs != null
-                        ? renderMetricPill(t("perfTtft"), formatMetricText(ttftMs), "warning")
-                        : null}
-                      {genMs != null
-                        ? renderMetricPill(t("perfGen"), formatMetricText(genMs), "success")
+                      {responsePhaseDurationText
+                        ? renderMetricPill(t("tableDuration"), responsePhaseDurationText, "success")
                         : null}
                       {requestTps != null
                         ? renderMetricPill(
@@ -1043,16 +1152,11 @@ export function LogsTable({ logs }: LogsTableProps) {
                               {t("journeyFirstOutput")}
                             </div>
                             <div className="flex flex-wrap gap-1">
-                              {renderMetricPill(
-                                t("tableDuration"),
-                                formatMetricText(ttftMs),
-                                "warning"
-                              )}
-                              {cumulativeFirstOutputMs != null
+                              {formatStageDurationText(cumulativeFirstOutputMs, ttftMs)
                                 ? renderMetricPill(
-                                    t("journeyCumulative"),
-                                    formatMetricText(cumulativeFirstOutputMs),
-                                    "neutral"
+                                    t("tableDuration"),
+                                    formatStageDurationText(cumulativeFirstOutputMs, ttftMs)!,
+                                    "warning"
                                   )
                                 : null}
                             </div>
@@ -1068,16 +1172,11 @@ export function LogsTable({ logs }: LogsTableProps) {
                               {t("journeyGenerationFinished")}
                             </div>
                             <div className="flex flex-wrap gap-1">
-                              {renderMetricPill(
-                                t("tableDuration"),
-                                formatMetricText(genMs),
-                                "success"
-                              )}
-                              {totalMs != null
+                              {responsePhaseDurationText
                                 ? renderMetricPill(
-                                    t("journeyCumulative"),
-                                    formatMetricText(totalMs),
-                                    "neutral"
+                                    t("tableDuration"),
+                                    responsePhaseDurationText,
+                                    "success"
                                   )
                                 : null}
                             </div>
@@ -1099,7 +1198,7 @@ export function LogsTable({ logs }: LogsTableProps) {
                 })}
 
                 {renderJourneyStep({
-                  index: 6,
+                  index: 5,
                   title: t("lifecycleComplete"),
                   metrics: (
                     <>
