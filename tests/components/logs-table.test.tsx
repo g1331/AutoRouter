@@ -88,18 +88,21 @@ describe("LogsTable", () => {
 
       expect(screen.getByText("tableTime")).toBeInTheDocument();
       expect(screen.getByText("tableMethod")).toBeInTheDocument();
-      expect(screen.getByText("tablePath")).toBeInTheDocument();
+      expect(screen.getByText("tableInterfaceType")).toBeInTheDocument();
       expect(screen.getByText("tableModel")).toBeInTheDocument();
       expect(screen.getByText("tableTokens")).toBeInTheDocument();
       expect(screen.getByText("tableCost")).toBeInTheDocument();
-      expect(screen.getByText("lifecycleTableHeader")).toBeInTheDocument();
+      expect(screen.getByText("tableStatus")).toBeInTheDocument();
+      expect(screen.getByText("tableDuration")).toBeInTheDocument();
     });
 
     it("renders log data correctly", () => {
       render(<LogsTable logs={[mockLog]} />);
 
       expect(screen.getByText("POST")).toBeInTheDocument();
-      expect(screen.getByText("/v1/chat/completions")).toBeInTheDocument();
+      expect(
+        screen.getByLabelText("capabilityOpenAIChatCompatible: POST /v1/chat/completions")
+      ).toBeInTheDocument();
       expect(screen.getByText("gpt-4")).toBeInTheDocument();
     });
 
@@ -122,6 +125,32 @@ describe("LogsTable", () => {
   });
 
   describe("Mobile Layout Billing Display", () => {
+    it("keeps interface type text visible in mobile cards", () => {
+      const originalMatchMedia = window.matchMedia;
+
+      window.matchMedia = ((query: string) => ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      })) as unknown as typeof window.matchMedia;
+
+      try {
+        render(<LogsTable logs={[mockLog]} />);
+
+        expect(screen.getByText("capabilityOpenAIChatCompatible")).toBeInTheDocument();
+        expect(
+          screen.getByLabelText("capabilityOpenAIChatCompatible: POST /v1/chat/completions")
+        ).toBeInTheDocument();
+      } finally {
+        window.matchMedia = originalMatchMedia;
+      }
+    });
+
     it("does not render billed status label in mobile cards", async () => {
       const originalMatchMedia = window.matchMedia;
 
@@ -481,7 +510,7 @@ describe("LogsTable", () => {
 
       rerender(<LogsTable logs={[newLog, mockLog]} />);
 
-      const row = screen.getByText("/v1/messages").closest("tr");
+      const row = screen.getByText("capabilityAnthropicMessages").closest("tr");
       await waitFor(() => expect(row?.className).toContain("bg-status-info-muted/25"));
     });
   });
@@ -1183,6 +1212,41 @@ describe("LogsTable", () => {
       // Should show terminal-style error details
       expect(screen.getByText(/ERROR_TYPE:/)).toBeInTheDocument();
       expect(screen.getByText(/STATUS:/)).toBeInTheDocument();
+    });
+
+    it("keeps header diff collapsed by default and expands on demand", () => {
+      const logWithHeaderDiff: RequestLog = {
+        ...logWithFailoverBase,
+        header_diff: {
+          inbound_count: 3,
+          outbound_count: 2,
+          dropped: [{ header: "x-forwarded-for", value: "127.0.0.1" }],
+          auth_replaced: {
+            header: "authorization",
+            inbound_value: "Bearer sk-old-token",
+            outbound_value: "Bearer sk-new-token",
+          },
+          compensated: [],
+          unchanged: [],
+        },
+      };
+
+      render(<LogsTable logs={[logWithHeaderDiff]} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+
+      expect(screen.getByText("headerDiffTitle")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Expand diff" })).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "headerDiffShowValues" })
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText("authorization")).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Expand diff" }));
+
+      expect(screen.getByRole("button", { name: "Collapse diff" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "headerDiffShowValues" })).toBeInTheDocument();
+      expect(screen.getByText("authorization")).toBeInTheDocument();
     });
   });
 });

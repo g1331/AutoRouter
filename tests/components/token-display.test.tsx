@@ -254,6 +254,8 @@ describe("TokenDetailContent", () => {
       expect(screen.getByText("tokenInput")).toBeInTheDocument();
       expect(screen.getByText("tokenOutput")).toBeInTheDocument();
       expect(screen.getByText("tokenTotal")).toBeInTheDocument();
+      expect(screen.getAllByText("↑").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("↓").length).toBeGreaterThan(0);
     });
 
     it("renders formatted token values", () => {

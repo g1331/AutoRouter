@@ -26,10 +26,12 @@ import { getDateLocale } from "@/lib/date-locale";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { ROUTE_CAPABILITY_ICON_META } from "@/components/admin/route-capability-badges";
 import { TokenDisplay, TokenDetailContent } from "@/components/admin/token-display";
 import { RoutingDecisionTimeline } from "@/components/admin/routing-decision-timeline";
-import { LifecycleTrack } from "@/components/admin/lifecycle-track";
 import { HeaderDiffPanel } from "@/components/logs/header-diff-panel";
+import { matchRouteCapability } from "@/lib/services/route-capability-matcher";
+import { ROUTE_CAPABILITY_DEFINITIONS } from "@/lib/route-capabilities";
 
 interface LogsTableProps {
   logs: RequestLog[];
@@ -74,6 +76,90 @@ function TruncatedTextTooltip({ text }: { text: string }) {
   );
 }
 
+function InterfaceTypeCell({
+  method,
+  path,
+  matchedCapability,
+  className,
+  variant = "desktop",
+}: {
+  method: string | null;
+  path: string | null;
+  matchedCapability?: string | null;
+  className?: string;
+  variant?: "desktop" | "mobile";
+}) {
+  const tUpstreams = useTranslations("upstreams");
+
+  if (!path) {
+    return <span className="text-muted-foreground">-</span>;
+  }
+
+  const capability = matchedCapability ?? (method ? matchRouteCapability(method, path) : null);
+  if (!capability) {
+    return <TruncatedTextTooltip text={path} />;
+  }
+
+  const definition = ROUTE_CAPABILITY_DEFINITIONS.find((item) => item.value === capability);
+  if (!definition) {
+    return <TruncatedTextTooltip text={path} />;
+  }
+
+  const iconMeta =
+    ROUTE_CAPABILITY_ICON_META[definition.iconKey] ?? ROUTE_CAPABILITY_ICON_META.circle_help;
+  const label = tUpstreams(definition.labelKey);
+  const requestLabel = method ? `${method} ${path}` : path;
+  const isMobile = variant === "mobile";
+
+  const trigger = (
+    <div
+      className={cn(
+        isMobile ? "flex min-w-0 items-center gap-1.5" : "inline-flex items-center justify-center",
+        !isMobile && "cursor-help",
+        className
+      )}
+      aria-label={`${label}: ${requestLabel}`}
+      title={!isMobile ? label : undefined}
+    >
+      <span
+        className={cn(
+          "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-cf-sm border",
+          iconMeta.iconContainerClass
+        )}
+      >
+        {iconMeta.render(cn("h-3.5 w-3.5", iconMeta.iconColorClass))}
+      </span>
+      {isMobile && <span className="min-w-0 truncate text-foreground">{label}</span>}
+    </div>
+  );
+
+  if (isMobile) {
+    return trigger;
+  }
+
+  return (
+    <Tooltip delayDuration={200}>
+      <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+      <TooltipContent
+        side="top"
+        align="start"
+        className={cn(
+          "p-2.5",
+          "border-divider bg-surface-200 text-foreground",
+          "shadow-[var(--vr-shadow-md)]",
+          "max-w-[80vw] sm:max-w-[640px]"
+        )}
+      >
+        <div className="space-y-1">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+          <div className="font-mono text-[11px] leading-snug whitespace-pre-wrap break-words">
+            {requestLabel}
+          </div>
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 function getTtftPerformanceClass(ttftMs: number): string {
   if (ttftMs >= 1000) return "text-status-error";
   if (ttftMs >= 500) return "text-status-warning";
@@ -1007,9 +1093,13 @@ export function LogsTable({ logs }: LogsTableProps) {
                           <code className="shrink-0 rounded-cf-sm border border-divider bg-surface-300 px-1.5 py-0.5 font-mono text-xs text-foreground">
                             {log.method || "-"}
                           </code>
-                          <span className="min-w-0 font-mono text-xs text-foreground break-all">
-                            {log.path || "-"}
-                          </span>
+                          <InterfaceTypeCell
+                            method={log.method}
+                            path={log.path}
+                            matchedCapability={log.routing_decision?.matched_route_capability}
+                            className="text-xs"
+                            variant="mobile"
+                          />
                         </div>
 
                         {log.total_tokens > 0 && (
@@ -1143,10 +1233,10 @@ export function LogsTable({ logs }: LogsTableProps) {
                         {t("tableUpstream")}
                       </TableHead>
                       <TableHead className="w-[72px] px-2">{t("tableMethod")}</TableHead>
-                      <TableHead className="hidden lg:table-cell px-2 pr-4">
-                        {t("tablePath")}
+                      <TableHead className="hidden lg:table-cell w-[84px] px-2 text-left">
+                        {t("tableInterfaceType")}
                       </TableHead>
-                      <TableHead className="hidden xl:table-cell px-2 pl-4">
+                      <TableHead className="hidden xl:table-cell px-2 pl-1">
                         {t("tableModel")}
                       </TableHead>
                       <TableHead className="hidden md:table-cell px-2">
@@ -1229,14 +1319,16 @@ export function LogsTable({ logs }: LogsTableProps) {
                                 {log.method || "-"}
                               </code>
                             </TableCell>
-                            <TableCell className="hidden font-mono text-[10px] lg:table-cell px-2 py-1 pr-4 min-w-0">
-                              {log.path ? (
-                                <TruncatedTextTooltip text={log.path} />
-                              ) : (
-                                <span className="text-muted-foreground">-</span>
-                              )}
+                            <TableCell className="hidden text-[10px] lg:table-cell w-[84px] px-2 py-1 pr-1 min-w-0">
+                              <InterfaceTypeCell
+                                method={log.method}
+                                path={log.path}
+                                matchedCapability={log.routing_decision?.matched_route_capability}
+                                variant="desktop"
+                                className="ml-auto"
+                              />
                             </TableCell>
-                            <TableCell className="hidden font-mono text-[10px] xl:table-cell px-2 py-1 pl-4 min-w-0">
+                            <TableCell className="hidden font-mono text-[10px] xl:table-cell px-2 py-1 pl-1 min-w-0">
                               {log.model ? (
                                 <TruncatedTextTooltip text={log.model} />
                               ) : (

@@ -22,6 +22,22 @@ interface TokenDetailContentProps extends TokenDisplayProps {
   className?: string;
 }
 
+type TokenDirection = "input" | "output";
+
+function TokenDirectionMarker({ direction }: { direction: TokenDirection }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "inline-flex shrink-0 items-center font-semibold",
+        direction === "input" ? "text-status-info" : "text-status-success"
+      )}
+    >
+      {direction === "input" ? "↑" : "↓"}
+    </span>
+  );
+}
+
 /**
  * Calculate effective cache read tokens.
  * - Anthropic: uses cacheReadTokens directly
@@ -131,9 +147,10 @@ export function TokenDetailContent({
     value: number;
     highlight: boolean;
     indent?: boolean;
+    direction?: TokenDirection;
   }> = [
-    { label: t("tokenInput"), value: promptTokens, highlight: true },
-    { label: t("tokenOutput"), value: completionTokens, highlight: true },
+    { label: t("tokenInput"), value: promptTokens, highlight: true, direction: "input" },
+    { label: t("tokenOutput"), value: completionTokens, highlight: true, direction: "output" },
   ];
 
   // Input breakdown: cache hit is a subset of input_tokens (not additive).
@@ -149,6 +166,7 @@ export function TokenDetailContent({
       value: newInputTokens,
       highlight: false,
       indent: true,
+      direction: "input",
     });
   }
 
@@ -221,11 +239,13 @@ export function TokenDetailContent({
           <div key={idx} className="grid grid-cols-[auto_auto] items-center gap-x-3">
             <span
               className={cn(
+                "inline-flex items-center gap-1",
                 row.highlight ? "text-foreground" : "text-muted-foreground",
                 row.indent ? "pl-4" : ""
               )}
             >
-              {row.label}
+              {row.direction && <TokenDirectionMarker direction={row.direction} />}
+              <span>{row.label}</span>
             </span>
             <span
               className={cn(
@@ -294,8 +314,16 @@ export function TokenDisplay({
       {/* Row 1: Total tokens - primary emphasis */}
       <span className="text-foreground">{totalTokens.toLocaleString()}</span>
       {/* Row 2: New Input / Output breakdown - secondary */}
-      <span className="text-[10px] text-muted-foreground">
-        {newInputTokens.toLocaleString()} / {completionTokens.toLocaleString()}
+      <span className="flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
+        <span className="inline-flex items-center gap-0.5">
+          <TokenDirectionMarker direction="input" />
+          <span>{newInputTokens.toLocaleString()}</span>
+        </span>
+        <span>/</span>
+        <span className="inline-flex items-center gap-0.5">
+          <TokenDirectionMarker direction="output" />
+          <span>{completionTokens.toLocaleString()}</span>
+        </span>
       </span>
       {/* Row 3: Cache indicators */}
       {(effectiveCacheRead > 0 || cacheCreationTokens > 0) && (
