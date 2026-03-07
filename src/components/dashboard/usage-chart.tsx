@@ -16,12 +16,12 @@ import {
 } from "recharts";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { StatsTimeseriesResponse } from "@/types/api";
 import type { TimeseriesMetric } from "@/hooks/use-dashboard-stats";
 
 import { formatNumber, getChartTheme, getUpstreamColor } from "./chart-theme";
+import { DashboardLoadingBlock, DashboardLoadingSurface } from "./dashboard-loading";
 
 interface UsageChartProps {
   data: StatsTimeseriesResponse | undefined;
@@ -123,8 +123,78 @@ function CustomLegend({
   );
 }
 
+function UsageSummaryLoading({ loadingLabel }: { loadingLabel: string }) {
+  return (
+    <DashboardLoadingSurface
+      loadingLabel={loadingLabel}
+      data-testid="usage-chart-summary-loading"
+      className="mt-1 flex items-end gap-2"
+    >
+      <DashboardLoadingBlock tone="accent" className="h-6 w-14" />
+      <DashboardLoadingBlock tone="muted" className="mb-0.5 h-3 w-10" />
+    </DashboardLoadingSurface>
+  );
+}
+
+function UsageChartLoading({ loadingLabel }: { loadingLabel: string }) {
+  return (
+    <DashboardLoadingSurface
+      loadingLabel={loadingLabel}
+      data-testid="usage-chart-loading-skeleton"
+      className="flex h-full w-full flex-col gap-4 rounded-cf-md border border-divider/75 bg-surface-200/55 p-4"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <DashboardLoadingBlock className="h-3 w-16" />
+          <DashboardLoadingBlock className="h-3 w-12" />
+          <DashboardLoadingBlock className="h-3 w-14" />
+        </div>
+        <div className="flex items-center gap-1.5 rounded-cf-sm border border-divider/70 bg-surface-300/45 p-1">
+          <DashboardLoadingBlock tone="accent" className="h-7 w-16" />
+          <DashboardLoadingBlock className="h-7 w-14" />
+          <DashboardLoadingBlock className="h-7 w-12" />
+        </div>
+      </div>
+
+      <div className="grid flex-1 grid-cols-[36px_minmax(0,1fr)] gap-3 rounded-cf-md border border-divider/65 bg-card/55 p-3">
+        <div className="flex flex-col justify-between py-1.5">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <DashboardLoadingBlock key={`usage-chart-axis-${index}`} className="h-2.5 w-full" />
+          ))}
+        </div>
+
+        <div className="relative overflow-hidden rounded-cf-sm border border-divider/60 bg-surface-200/40 px-3 pb-3 pt-4">
+          <div className="absolute inset-x-0 top-4 h-px bg-divider/55" />
+          <div className="absolute inset-x-0 top-1/2 h-px bg-divider/45" />
+          <div className="absolute inset-x-0 bottom-9 h-px bg-divider/55" />
+          <div className="absolute inset-y-0 left-0 w-px bg-divider/50" />
+          <div className="absolute inset-x-0 bottom-0 h-px bg-divider/60" />
+
+          <div className="grid h-full grid-cols-8 items-end gap-2">
+            {["35%", "52%", "44%", "68%", "58%", "76%", "63%", "81%"].map((height, index) => (
+              <DashboardLoadingBlock
+                key={`usage-chart-bar-${index}`}
+                tone={index % 3 === 0 ? "accent" : "default"}
+                className="w-full"
+                style={{ height }}
+              />
+            ))}
+          </div>
+
+          <div className="mt-3 grid grid-cols-4 gap-2">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <DashboardLoadingBlock key={`usage-chart-label-${index}`} className="h-2.5 w-full" />
+            ))}
+          </div>
+        </div>
+      </div>
+    </DashboardLoadingSurface>
+  );
+}
+
 export function UsageChart({ data, isLoading, metric, onMetricChange }: UsageChartProps) {
   const t = useTranslations("dashboard");
+  const tCommon = useTranslations("common");
   const { resolvedTheme } = useTheme();
   const mode = resolvedTheme === "light" ? "light" : "dark";
   const theme = getChartTheme(mode);
@@ -216,7 +286,7 @@ export function UsageChart({ data, isLoading, metric, onMetricChange }: UsageCha
             <div>
               <p className="type-label-medium text-muted-foreground">{t("stats.totalRequests")}</p>
               {isLoading ? (
-                <Skeleton variant="inline" className="mt-1 h-6 w-16" />
+                <UsageSummaryLoading loadingLabel={tCommon("loading")} />
               ) : (
                 <p className="type-display-small text-foreground">
                   {formatNumber(totals.requests)}
@@ -228,7 +298,7 @@ export function UsageChart({ data, isLoading, metric, onMetricChange }: UsageCha
                 {t("stats.totalTokensUsed")}
               </p>
               {isLoading ? (
-                <Skeleton variant="inline" className="mt-1 h-6 w-16" />
+                <UsageSummaryLoading loadingLabel={tCommon("loading")} />
               ) : (
                 <p className="type-display-small text-foreground">{formatNumber(totals.tokens)}</p>
               )}
@@ -255,27 +325,7 @@ export function UsageChart({ data, isLoading, metric, onMetricChange }: UsageCha
 
         <div className="h-[280px] sm:h-[320px]">
           {isLoading ? (
-            <div
-              data-testid="usage-chart-loading-skeleton"
-              className="flex h-full w-full flex-col gap-4 rounded-cf-sm border border-divider/75 bg-surface-300/35 p-3"
-            >
-              <div className="grid grid-cols-3 gap-2">
-                <div className="h-4 animate-pulse rounded-cf-sm bg-surface-400/70" />
-                <div className="h-4 animate-pulse rounded-cf-sm bg-surface-400/70" />
-                <div className="h-4 animate-pulse rounded-cf-sm bg-surface-400/70" />
-              </div>
-
-              <div className="grid flex-1 grid-cols-8 items-end gap-2">
-                <div className="h-[35%] animate-pulse rounded-cf-sm bg-surface-400/70" />
-                <div className="h-[52%] animate-pulse rounded-cf-sm bg-surface-400/70" />
-                <div className="h-[44%] animate-pulse rounded-cf-sm bg-surface-400/70" />
-                <div className="h-[68%] animate-pulse rounded-cf-sm bg-surface-400/70" />
-                <div className="h-[58%] animate-pulse rounded-cf-sm bg-surface-400/70" />
-                <div className="h-[76%] animate-pulse rounded-cf-sm bg-surface-400/70" />
-                <div className="h-[63%] animate-pulse rounded-cf-sm bg-surface-400/70" />
-                <div className="h-[81%] animate-pulse rounded-cf-sm bg-surface-400/70" />
-              </div>
-            </div>
+            <UsageChartLoading loadingLabel={tCommon("loading")} />
           ) : chartData.length === 0 ? (
             <div className="flex h-full w-full items-center justify-center">
               <p className="type-body-medium text-muted-foreground">{t("stats.noData")}</p>

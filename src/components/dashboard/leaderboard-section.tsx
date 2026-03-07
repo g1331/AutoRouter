@@ -4,11 +4,11 @@ import { useTranslations } from "next-intl";
 import { Cpu, Key, Server, Trophy } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { StatsLeaderboardResponse } from "@/types/api";
 
 import { formatNumber } from "./chart-theme";
+import { DashboardLoadingBlock, DashboardLoadingSurface } from "./dashboard-loading";
 
 interface LeaderboardSectionProps {
   data: StatsLeaderboardResponse | undefined;
@@ -61,6 +61,45 @@ interface LeaderboardTableProps {
   isLoading: boolean;
   emptyMessage: string;
   showPerformanceMetrics?: boolean;
+  loadingLabel: string;
+}
+
+function LeaderboardTableLoading({
+  loadingLabel,
+  showPerformanceMetrics,
+}: {
+  loadingLabel: string;
+  showPerformanceMetrics: boolean;
+}) {
+  return (
+    <DashboardLoadingSurface loadingLabel={loadingLabel} className="space-y-2.5">
+      {Array.from({ length: 5 }).map((_, index) => (
+        <div
+          key={`leaderboard-loading-row-${index}`}
+          data-testid="leaderboard-loading-row"
+          className="flex items-center justify-between gap-3 rounded-cf-sm border border-divider/65 bg-surface-200/45 px-2.5 py-2"
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full border border-amber-500/18 bg-amber-500/8">
+              <DashboardLoadingBlock tone="accent" className="h-3 w-3 rounded-full" />
+            </div>
+            <div className="min-w-0 space-y-1.5">
+              <DashboardLoadingBlock className="h-3 w-24" />
+              <DashboardLoadingBlock tone="muted" className="h-2.5 w-16" />
+            </div>
+          </div>
+
+          <div className="space-y-1.5 text-right">
+            <DashboardLoadingBlock className="ml-auto h-3 w-12" />
+            <DashboardLoadingBlock tone="muted" className="ml-auto h-2.5 w-16" />
+            {showPerformanceMetrics ? (
+              <DashboardLoadingBlock tone="muted" className="ml-auto h-2.5 w-20" />
+            ) : null}
+          </div>
+        </div>
+      ))}
+    </DashboardLoadingSurface>
+  );
 }
 
 function LeaderboardTable({
@@ -70,6 +109,7 @@ function LeaderboardTable({
   isLoading,
   emptyMessage,
   showPerformanceMetrics = false,
+  loadingLabel,
 }: LeaderboardTableProps) {
   const t = useTranslations("dashboard");
 
@@ -84,14 +124,10 @@ function LeaderboardTable({
         </div>
 
         {isLoading ? (
-          <div className="space-y-3">
-            {[1, 2, 3, 4, 5].map((row) => (
-              <div key={row} className="flex items-center justify-between">
-                <Skeleton variant="inline" className="h-4 w-32" />
-                <Skeleton variant="inline" className="h-4 w-16" />
-              </div>
-            ))}
-          </div>
+          <LeaderboardTableLoading
+            loadingLabel={loadingLabel}
+            showPerformanceMetrics={showPerformanceMetrics}
+          />
         ) : items.length === 0 ? (
           <p className="type-body-small py-6 text-center text-muted-foreground">{emptyMessage}</p>
         ) : (
@@ -151,6 +187,7 @@ function LeaderboardTable({
 
 export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps) {
   const t = useTranslations("dashboard");
+  const tCommon = useTranslations("common");
 
   const apiKeyItems =
     data?.api_keys.map((item, index) => ({
@@ -194,6 +231,7 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
           items={apiKeyItems}
           isLoading={isLoading}
           emptyMessage={t("stats.noApiKeys")}
+          loadingLabel={tCommon("loading")}
         />
         <LeaderboardTable
           title={t("stats.upstreamRanking")}
@@ -202,6 +240,7 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
           isLoading={isLoading}
           emptyMessage={t("stats.noUpstreams")}
           showPerformanceMetrics
+          loadingLabel={tCommon("loading")}
         />
         <LeaderboardTable
           title={t("stats.modelRanking")}
@@ -209,6 +248,7 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
           items={modelItems}
           isLoading={isLoading}
           emptyMessage={t("stats.noModels")}
+          loadingLabel={tCommon("loading")}
         />
       </div>
     </section>

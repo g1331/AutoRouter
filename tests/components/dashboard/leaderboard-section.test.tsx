@@ -58,6 +58,7 @@ describe("LeaderboardSection", () => {
       expect(screen.getByText("stats.apiKeyRanking")).toBeInTheDocument();
       expect(screen.getByText("stats.upstreamRanking")).toBeInTheDocument();
       expect(screen.getByText("stats.modelRanking")).toBeInTheDocument();
+      expect(screen.getAllByTestId("leaderboard-loading-row")).toHaveLength(15);
     });
 
     it("renders section header when loading", () => {

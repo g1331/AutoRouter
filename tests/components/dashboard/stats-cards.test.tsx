@@ -30,9 +30,9 @@ describe("StatsCards", () => {
     it("renders skeletons when loading", () => {
       render(<StatsCards {...defaultProps} isLoading={true} />);
 
-      // Should show skeleton placeholders
-      const skeletons = screen.getAllByText("---");
+      const skeletons = screen.getAllByTestId("dashboard-stat-value-loading");
       expect(skeletons.length).toBe(5);
+      expect(screen.queryByText("---")).not.toBeInTheDocument();
     });
 
     it("renders stat labels when loading", () => {

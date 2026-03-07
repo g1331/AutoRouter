@@ -45,6 +45,11 @@ vi.mock("recharts", () => ({
 }));
 
 describe("UsageChart", () => {
+  const defaultProps = {
+    metric: "requests" as const,
+    onMetricChange: vi.fn(),
+  };
+
   const mockTimeseriesData: StatsTimeseriesResponse = {
     range: "7d",
     granularity: "day",
@@ -115,29 +120,30 @@ describe("UsageChart", () => {
 
   describe("Loading State", () => {
     it("renders chart skeleton when loading", () => {
-      render(<UsageChart data={undefined} isLoading={true} timeRange="7d" />);
+      render(<UsageChart {...defaultProps} data={undefined} isLoading={true} timeRange="7d" />);
 
       expect(screen.getByTestId("usage-chart-loading-skeleton")).toBeInTheDocument();
     });
 
     it("renders skeleton for total requests when loading", () => {
-      render(<UsageChart data={undefined} isLoading={true} timeRange="7d" />);
+      render(<UsageChart {...defaultProps} data={undefined} isLoading={true} timeRange="7d" />);
 
-      // Should have Skeleton components with Loading aria-label
-      const skeletons = screen.getAllByRole("status", { name: "Loading" });
-      // At least 2 skeletons for requests and tokens
-      expect(skeletons.length).toBeGreaterThanOrEqual(2);
+      const summaryLoaders = screen.getAllByTestId("usage-chart-summary-loading");
+      expect(summaryLoaders.length).toBe(2);
+      expect(screen.queryByText("---")).not.toBeInTheDocument();
     });
 
     it("renders section headers when loading", () => {
-      render(<UsageChart data={undefined} isLoading={true} timeRange="7d" />);
+      render(<UsageChart {...defaultProps} data={undefined} isLoading={true} timeRange="7d" />);
 
       expect(screen.getByText("stats.usageStatistics")).toBeInTheDocument();
       expect(screen.getByText("stats.usageDescription")).toBeInTheDocument();
     });
 
     it("does not use spinner animation in loading state", () => {
-      const { container } = render(<UsageChart data={undefined} isLoading={true} timeRange="7d" />);
+      const { container } = render(
+        <UsageChart {...defaultProps} data={undefined} isLoading={true} timeRange="7d" />
+      );
 
       const spinner = container.querySelector(".animate-spin");
       expect(spinner).not.toBeInTheDocument();
@@ -153,19 +159,19 @@ describe("UsageChart", () => {
         series: [],
       };
 
-      render(<UsageChart data={emptyData} isLoading={false} timeRange="7d" />);
+      render(<UsageChart {...defaultProps} data={emptyData} isLoading={false} timeRange="7d" />);
 
       expect(screen.getByText("stats.noData")).toBeInTheDocument();
     });
 
     it("renders no data message when data is undefined", () => {
-      render(<UsageChart data={undefined} isLoading={false} timeRange="7d" />);
+      render(<UsageChart {...defaultProps} data={undefined} isLoading={false} timeRange="7d" />);
 
       expect(screen.getByText("stats.noData")).toBeInTheDocument();
     });
 
     it("shows zero totals when no data", () => {
-      render(<UsageChart data={undefined} isLoading={false} timeRange="7d" />);
+      render(<UsageChart {...defaultProps} data={undefined} isLoading={false} timeRange="7d" />);
 
       // Should display "0" for totals
       const zeros = screen.getAllByText("0");
@@ -175,13 +181,17 @@ describe("UsageChart", () => {
 
   describe("Data Rendering", () => {
     it("renders area chart when data is provided", () => {
-      render(<UsageChart data={mockTimeseriesData} isLoading={false} timeRange="7d" />);
+      render(
+        <UsageChart {...defaultProps} data={mockTimeseriesData} isLoading={false} timeRange="7d" />
+      );
 
       expect(screen.getByTestId("area-chart")).toBeInTheDocument();
     });
 
     it("renders correct number of data points", () => {
-      render(<UsageChart data={mockTimeseriesData} isLoading={false} timeRange="7d" />);
+      render(
+        <UsageChart {...defaultProps} data={mockTimeseriesData} isLoading={false} timeRange="7d" />
+      );
 
       const chart = screen.getByTestId("area-chart");
       // 2 unique timestamps
@@ -189,27 +199,35 @@ describe("UsageChart", () => {
     });
 
     it("renders area for each upstream", () => {
-      render(<UsageChart data={mockTimeseriesData} isLoading={false} timeRange="7d" />);
+      render(
+        <UsageChart {...defaultProps} data={mockTimeseriesData} isLoading={false} timeRange="7d" />
+      );
 
       expect(screen.getByTestId("area-OpenAI")).toBeInTheDocument();
       expect(screen.getByTestId("area-Anthropic")).toBeInTheDocument();
     });
 
     it("renders chart axes", () => {
-      render(<UsageChart data={mockTimeseriesData} isLoading={false} timeRange="7d" />);
+      render(
+        <UsageChart {...defaultProps} data={mockTimeseriesData} isLoading={false} timeRange="7d" />
+      );
 
       expect(screen.getByTestId("x-axis")).toBeInTheDocument();
       expect(screen.getByTestId("y-axis")).toBeInTheDocument();
     });
 
     it("renders cartesian grid", () => {
-      render(<UsageChart data={mockTimeseriesData} isLoading={false} timeRange="7d" />);
+      render(
+        <UsageChart {...defaultProps} data={mockTimeseriesData} isLoading={false} timeRange="7d" />
+      );
 
       expect(screen.getByTestId("cartesian-grid")).toBeInTheDocument();
     });
 
     it("renders tooltip and legend", () => {
-      render(<UsageChart data={mockTimeseriesData} isLoading={false} timeRange="7d" />);
+      render(
+        <UsageChart {...defaultProps} data={mockTimeseriesData} isLoading={false} timeRange="7d" />
+      );
 
       expect(screen.getByTestId("tooltip")).toBeInTheDocument();
       expect(screen.getByTestId("legend")).toBeInTheDocument();

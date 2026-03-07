@@ -4,10 +4,10 @@ import { useTranslations } from "next-intl";
 import { Activity, Clock, Zap, Timer, Database } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 import { formatDuration, formatNumber } from "./chart-theme";
+import { DashboardLoadingBlock, DashboardLoadingSurface } from "./dashboard-loading";
 
 interface StatsCardsProps {
   todayRequests: number;
@@ -40,13 +40,24 @@ function AnimatedCounter({
   value,
   isLoading,
   valueClassName,
+  loadingLabel,
 }: {
   value: string;
   isLoading: boolean;
   valueClassName?: string;
+  loadingLabel: string;
 }) {
   if (isLoading) {
-    return <Skeleton variant="counter" placeholder="---" />;
+    return (
+      <DashboardLoadingSurface
+        loadingLabel={loadingLabel}
+        data-testid="dashboard-stat-value-loading"
+        className="flex items-end gap-2 pt-1"
+      >
+        <DashboardLoadingBlock tone="accent" className="h-8 w-20 sm:w-24" />
+        <DashboardLoadingBlock tone="muted" className="mb-1 h-4 w-8" />
+      </DashboardLoadingSurface>
+    );
   }
 
   return <p className={cn("type-display-medium", valueClassName ?? "text-foreground")}>{value}</p>;
@@ -60,6 +71,7 @@ function StatCard({
   isLoading,
   delay = 0,
   valueClassName,
+  loadingLabel,
 }: {
   title: string;
   value: string;
@@ -68,6 +80,7 @@ function StatCard({
   isLoading: boolean;
   delay?: number;
   valueClassName?: string;
+  loadingLabel: string;
 }) {
   return (
     <Card
@@ -81,7 +94,12 @@ function StatCard({
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 space-y-2">
             <p className="type-label-medium text-muted-foreground">{title}</p>
-            <AnimatedCounter value={value} isLoading={isLoading} valueClassName={valueClassName} />
+            <AnimatedCounter
+              value={value}
+              isLoading={isLoading}
+              valueClassName={valueClassName}
+              loadingLabel={loadingLabel}
+            />
             <p className="type-body-small text-muted-foreground">{subtitle}</p>
           </div>
 
@@ -103,6 +121,7 @@ export function StatsCards({
   isLoading,
 }: StatsCardsProps) {
   const t = useTranslations("dashboard");
+  const tCommon = useTranslations("common");
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
@@ -113,6 +132,7 @@ export function StatsCards({
         icon={Activity}
         isLoading={isLoading}
         delay={0}
+        loadingLabel={tCommon("loading")}
       />
       <StatCard
         title={t("stats.avgResponseTime")}
@@ -121,6 +141,7 @@ export function StatsCards({
         icon={Clock}
         isLoading={isLoading}
         delay={80}
+        loadingLabel={tCommon("loading")}
       />
       <StatCard
         title={t("stats.totalTokens")}
@@ -129,6 +150,7 @@ export function StatsCards({
         icon={Zap}
         isLoading={isLoading}
         delay={160}
+        loadingLabel={tCommon("loading")}
       />
       <StatCard
         title={t("stats.avgTtft")}
@@ -138,6 +160,7 @@ export function StatsCards({
         isLoading={isLoading}
         delay={240}
         valueClassName={avgTtftMs > 0 ? getTtftPerformanceClass(avgTtftMs) : "text-foreground"}
+        loadingLabel={tCommon("loading")}
       />
       <StatCard
         title={t("stats.cacheHitRate")}
@@ -146,6 +169,7 @@ export function StatsCards({
         icon={Database}
         isLoading={isLoading}
         delay={320}
+        loadingLabel={tCommon("loading")}
       />
     </div>
   );
