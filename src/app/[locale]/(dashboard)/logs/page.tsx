@@ -18,6 +18,10 @@ interface LogsLoadingSkeletonProps {
   loadingLabel: string;
 }
 
+const LOGS_LOADING_BLOCK_CLASS =
+  "rounded-cf-sm motion-safe:animate-pulse motion-reduce:animate-none";
+const LOGS_SECTION_ENTER_CLASS = "animate-log-section-enter motion-reduce:animate-none";
+
 function LogsLoadingSkeleton({ loadingLabel }: LogsLoadingSkeletonProps) {
   return (
     <Card variant="outlined" className="border-divider bg-surface-200/70">
@@ -29,30 +33,30 @@ function LogsLoadingSkeleton({ loadingLabel }: LogsLoadingSkeletonProps) {
         >
           <div className="border-b border-divider bg-surface-200 px-4 py-2.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="h-4 w-44 animate-pulse rounded-cf-sm bg-surface-400/70" />
+              <div className={cn(LOGS_LOADING_BLOCK_CLASS, "h-4 w-44 bg-surface-400/70")} />
               <div className="flex items-center gap-2">
-                <div className="h-4 w-20 animate-pulse rounded-cf-sm bg-surface-400/60" />
-                <div className="h-4 w-16 animate-pulse rounded-cf-sm bg-surface-400/60" />
+                <div className={cn(LOGS_LOADING_BLOCK_CLASS, "h-4 w-20 bg-surface-400/60")} />
+                <div className={cn(LOGS_LOADING_BLOCK_CLASS, "h-4 w-16 bg-surface-400/60")} />
               </div>
             </div>
           </div>
 
           <div className="border-b border-divider bg-surface-200 px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
-              <div className="h-8 w-28 animate-pulse rounded-cf-sm bg-surface-300/75" />
-              <div className="h-8 w-32 animate-pulse rounded-cf-sm bg-surface-300/75" />
-              <div className="h-8 w-24 animate-pulse rounded-cf-sm bg-surface-300/75" />
+              <div className={cn(LOGS_LOADING_BLOCK_CLASS, "h-8 w-28 bg-surface-300/75")} />
+              <div className={cn(LOGS_LOADING_BLOCK_CLASS, "h-8 w-32 bg-surface-300/75")} />
+              <div className={cn(LOGS_LOADING_BLOCK_CLASS, "h-8 w-24 bg-surface-300/75")} />
             </div>
           </div>
 
           <div className="border-b border-divider bg-surface-300/70 px-4 py-2.5">
             <div className="grid grid-cols-12 gap-3">
-              <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
-              <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
-              <div className="col-span-3 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
-              <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
-              <div className="col-span-1 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
-              <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
+              <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-2 h-3 bg-surface-400/70")} />
+              <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-2 h-3 bg-surface-400/70")} />
+              <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-3 h-3 bg-surface-400/70")} />
+              <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-2 h-3 bg-surface-400/70")} />
+              <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-1 h-3 bg-surface-400/70")} />
+              <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-2 h-3 bg-surface-400/70")} />
             </div>
           </div>
 
@@ -62,13 +66,13 @@ function LogsLoadingSkeleton({ loadingLabel }: LogsLoadingSkeletonProps) {
                 key={`logs-loading-row-${index}`}
                 className="grid grid-cols-12 items-center gap-3 px-4 py-3"
               >
-                <div className="col-span-1 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
-                <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
-                <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
-                <div className="col-span-3 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
-                <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
-                <div className="col-span-1 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
-                <div className="col-span-1 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
+                <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-1 h-3 bg-surface-300/80")} />
+                <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-2 h-3 bg-surface-300/80")} />
+                <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-2 h-3 bg-surface-300/80")} />
+                <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-3 h-3 bg-surface-300/80")} />
+                <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-2 h-3 bg-surface-300/80")} />
+                <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-1 h-3 bg-surface-300/80")} />
+                <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-1 h-3 bg-surface-300/80")} />
               </div>
             ))}
           </div>
@@ -81,6 +85,7 @@ function LogsLoadingSkeleton({ loadingLabel }: LogsLoadingSkeletonProps) {
 export default function LogsPage() {
   const [page, setPage] = useState(1);
   const [refetchInterval, setRefetchInterval] = useState<number | false>(false);
+  const [isManualRefreshPending, setIsManualRefreshPending] = useState(false);
   const pageSize = 20;
 
   const t = useTranslations("logs");
@@ -89,7 +94,7 @@ export default function LogsPage() {
   const effectiveRefetchInterval =
     refetchInterval !== false ? refetchInterval : fallbackRefetchIntervalMs;
 
-  const { data, isLoading, isFetching, refetch } = useRequestLogs(page, pageSize, undefined, {
+  const { data, isLoading, refetch } = useRequestLogs(page, pageSize, undefined, {
     refetchInterval: effectiveRefetchInterval,
   });
 
@@ -97,16 +102,31 @@ export default function LogsPage() {
     setRefetchInterval(interval);
   }, []);
 
-  const handleManualRefresh = useCallback(() => {
-    refetch();
+  const handleManualRefresh = useCallback(async () => {
+    setIsManualRefreshPending(true);
+    try {
+      await refetch();
+    } finally {
+      setIsManualRefreshPending(false);
+    }
   }, [refetch]);
+
+  const liveStatusMotionClass =
+    connectionState === "live"
+      ? "animate-log-badge-live motion-reduce:animate-none"
+      : connectionState === "connecting"
+        ? "animate-log-badge-connect motion-reduce:animate-none"
+        : "";
 
   return (
     <>
       <Topbar title={t("pageTitle")} />
 
       <div className="mx-auto max-w-7xl space-y-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
-        <Card variant="outlined" className="border-divider bg-surface-200/70">
+        <Card
+          variant="outlined"
+          className={cn("border-divider bg-surface-200/70", LOGS_SECTION_ENTER_CLASS)}
+        >
           <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
             <div className="space-y-1.5">
               <div className="flex items-center gap-2 text-amber-500">
@@ -123,7 +143,7 @@ export default function LogsPage() {
                         ? "info"
                         : "warning"
                   }
-                  className={cn("px-2 py-0.5 text-[10px] leading-none")}
+                  className={cn("px-2 py-0.5 text-[10px] leading-none", liveStatusMotionClass)}
                 >
                   {connectionState === "live"
                     ? t("liveStatusLive")
@@ -142,22 +162,30 @@ export default function LogsPage() {
             <RefreshIntervalSelect
               onIntervalChange={handleIntervalChange}
               onManualRefresh={handleManualRefresh}
-              isRefreshing={isFetching}
+              isRefreshing={isManualRefreshPending}
             />
           </CardContent>
         </Card>
 
         {isLoading ? (
-          <LogsLoadingSkeleton loadingLabel={tCommon("loading")} />
+          <div className={LOGS_SECTION_ENTER_CLASS} style={{ animationDelay: "70ms" }}>
+            <LogsLoadingSkeleton loadingLabel={tCommon("loading")} />
+          </div>
         ) : (
           <>
-            <LogsTable
-              logs={data?.items || []}
-              isLive={connectionState === "live" || effectiveRefetchInterval !== false}
-            />
+            <div className={LOGS_SECTION_ENTER_CLASS} style={{ animationDelay: "70ms" }}>
+              <LogsTable
+                logs={data?.items || []}
+                isLive={connectionState === "live" || effectiveRefetchInterval !== false}
+              />
+            </div>
 
             {data && data.total_pages > 1 && (
-              <Card variant="filled" className="border border-divider">
+              <Card
+                variant="filled"
+                className={cn("border border-divider", LOGS_SECTION_ENTER_CLASS)}
+                style={{ animationDelay: "140ms" }}
+              >
                 <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="type-body-small text-muted-foreground">
                     {tCommon("items")}{" "}

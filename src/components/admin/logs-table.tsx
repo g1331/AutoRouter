@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useRef, Fragment, type ReactNode } from "react";
 import { formatDistanceToNow, subDays, startOfDay } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
-import { ScrollText, Filter, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { ScrollText, Filter, ChevronDown, Loader2 } from "lucide-react";
 import type {
   ExclusionReason,
   FailoverErrorType,
@@ -63,6 +63,34 @@ const DETAIL_PANEL_CLASS =
 const DETAIL_PANEL_HEADER_CLASS =
   "border-b border-divider/80 bg-surface-200/70 px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground";
 const DETAIL_PANEL_BODY_CLASS = "px-3 py-2.5";
+const LOGS_COLOR_TRANSITION_CLASS =
+  "transition-[background-color,border-color,color,opacity] duration-cf-fast ease-cf-standard motion-reduce:transition-none";
+const LOGS_SURFACE_TRANSITION_CLASS =
+  "transition-[transform,background-color,border-color,box-shadow,color,opacity] duration-cf-fast ease-cf-standard motion-reduce:transform-none motion-reduce:transition-none";
+const LOGS_ICON_TRANSFORM_CLASS =
+  "transition-transform duration-cf-fast ease-cf-standard motion-reduce:transform-none motion-reduce:transition-none";
+const LOGS_INTERACTIVE_RAISE_CLASS =
+  "motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0";
+const LOGS_SECTION_ENTER_CLASS = "animate-log-section-enter motion-reduce:animate-none";
+const LOGS_CARD_ENTER_CLASS = "animate-log-card-enter motion-reduce:animate-none";
+const LOGS_CARD_EMPHASIS_CLASS = "animate-log-card-emphasis motion-reduce:animate-none";
+const LOGS_ROW_ENTER_CLASS = "animate-log-row-enter motion-reduce:animate-none";
+const LOGS_ROW_EMPHASIS_CLASS = "animate-log-row-emphasis motion-reduce:animate-none";
+const LOGS_DETAIL_ENTER_CLASS = "animate-log-detail-enter motion-reduce:animate-none";
+const LOGS_LIVE_HIGHLIGHT_CLASS = "animate-log-live-highlight motion-reduce:animate-none";
+
+function getLogEntryAnimationDelay(index: number) {
+  return `${Math.min(index * 35, 210)}ms`;
+}
+
+function ExpandChevron({ expanded, className }: { expanded: boolean; className?: string }) {
+  return (
+    <ChevronDown
+      className={cn("h-4 w-4", LOGS_ICON_TRANSFORM_CLASS, expanded && "rotate-180", className)}
+      aria-hidden="true"
+    />
+  );
+}
 
 function TruncatedTextTooltip({ text }: { text: string }) {
   return (
@@ -397,6 +425,8 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
       };
     }
   }, [logs]);
+
+  const hasLiveActivity = newLogIds.size > 0 || changedLogIds.size > 0;
 
   const toggleRow = (logId: string) => {
     const newExpanded = new Set(expandedRows);
@@ -1494,7 +1524,9 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                           aria-pressed={isActive}
                           aria-label={option.label}
                           className={cn(
-                            "rounded-full px-3 py-1.5 text-[10px] uppercase tracking-[0.16em] transition-all duration-200 ease-out",
+                            "rounded-full px-3 py-1.5 text-[10px] uppercase tracking-[0.16em]",
+                            LOGS_SURFACE_TRANSITION_CLASS,
+                            LOGS_INTERACTIVE_RAISE_CLASS,
                             isActive
                               ? "border border-divider bg-surface-300 text-foreground shadow-[var(--vr-shadow-xs)]"
                               : "text-muted-foreground hover:bg-surface-200/70 hover:text-foreground"
@@ -1523,16 +1555,17 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                               aria-pressed={isActive}
                               aria-label={step.title}
                               className={cn(
-                                "group relative overflow-hidden rounded-[20px] border px-3 py-3 text-left transition-all duration-200 ease-out",
+                                "group relative overflow-hidden rounded-[20px] border px-3 py-3 text-left",
+                                LOGS_SURFACE_TRANSITION_CLASS,
                                 "before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.55),transparent)]",
-                                "hover:-translate-y-0.5 active:translate-y-0",
+                                "motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0",
                                 tone.tab,
-                                isActive && cn("-translate-y-0.5", tone.tabActive)
+                                isActive && cn("motion-safe:-translate-y-0.5", tone.tabActive)
                               )}
                             >
                               <div
                                 className={cn(
-                                  "absolute inset-x-3 top-0 h-0.5 rounded-full opacity-0 transition-opacity duration-200",
+                                  "absolute inset-x-3 top-0 h-0.5 rounded-full opacity-0 transition-opacity duration-cf-fast ease-cf-standard motion-reduce:transition-none",
                                   tone.accent,
                                   isActive && "opacity-100"
                                 )}
@@ -1540,7 +1573,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                               <div className="flex items-start gap-3">
                                 <span
                                   className={cn(
-                                    "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold transition-colors duration-200",
+                                    "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold transition-[background-color,border-color,color] duration-cf-fast ease-cf-standard motion-reduce:transition-none",
                                     tone.number
                                   )}
                                 >
@@ -1567,8 +1600,10 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                     </div>
 
                     <div
+                      key={`journey-panel-${activeJourneyStep.index}-${journeyViewMode}`}
                       className={cn(
-                        "relative overflow-hidden rounded-[22px] border p-3 shadow-[0_12px_32px_rgba(15,23,42,0.06)] transition-all duration-200 ease-out",
+                        "relative overflow-hidden rounded-[22px] border p-3 shadow-[0_12px_32px_rgba(15,23,42,0.06)] transition-[background-color,border-color,box-shadow,opacity] duration-cf-normal ease-cf-standard motion-reduce:transition-none",
+                        LOGS_CARD_ENTER_CLASS,
                         activeJourneyTone.panel
                       )}
                     >
@@ -1617,9 +1652,11 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                           key={step.index}
                           aria-label={step.title}
                           className={cn(
-                            "relative overflow-hidden rounded-[22px] border p-3 shadow-[0_12px_30px_rgba(15,23,42,0.06)] transition-all duration-200 ease-out sm:p-3.5",
+                            "relative overflow-hidden rounded-[22px] border p-3 shadow-[0_12px_30px_rgba(15,23,42,0.06)] transition-[background-color,border-color,box-shadow,opacity] duration-cf-normal ease-cf-standard motion-reduce:transition-none sm:p-3.5",
+                            LOGS_CARD_ENTER_CLASS,
                             tone.panel
                           )}
+                          style={{ animationDelay: `${Math.min(step.index - 1, 4) * 45}ms` }}
                         >
                           <div className={cn("absolute inset-x-0 top-0 h-0.5", tone.accent)} />
                           <div className="flex items-start gap-3">
@@ -1928,8 +1965,18 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
 
   if (logs.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80">
+      <div
+        className={cn(
+          "flex flex-col items-center justify-center py-16 text-center",
+          LOGS_SECTION_ENTER_CLASS
+        )}
+      >
+        <div
+          className={cn(
+            "mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80",
+            LOGS_CARD_ENTER_CLASS
+          )}
+        >
           <ScrollText className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
         </div>
         <h3 className="type-title-medium mb-2 text-foreground">{t("noLogs")}</h3>
@@ -1939,9 +1986,17 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
   }
 
   return (
-    <div className="overflow-hidden rounded-cf-md border border-divider bg-surface-200/70">
+    <div
+      className={cn(
+        "overflow-hidden rounded-cf-md border border-divider bg-surface-200/70",
+        LOGS_SECTION_ENTER_CLASS
+      )}
+    >
       {/* Filter Controls */}
-      <div className="border-b border-divider bg-surface-200 p-4">
+      <div
+        className={cn("border-b border-divider bg-surface-200 p-4", LOGS_SECTION_ENTER_CLASS)}
+        style={{ animationDelay: "40ms" }}
+      >
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -1994,7 +2049,9 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
               type="button"
               onClick={() => setPerformancePreset(value)}
               className={cn(
-                "rounded-cf-sm border px-2 py-1 font-mono text-xs transition-colors",
+                "rounded-cf-sm border px-2 py-1 font-mono text-xs",
+                LOGS_SURFACE_TRANSITION_CLASS,
+                LOGS_INTERACTIVE_RAISE_CLASS,
                 performancePreset === value
                   ? "border-amber-500/45 bg-amber-500/10 text-amber-500"
                   : "border-divider bg-surface-300 text-muted-foreground hover:bg-surface-300/70"
@@ -2006,33 +2063,84 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
         </div>
       </div>
 
-      <div className="border-b border-divider bg-surface-200/70 px-4 py-3">
+      <div
+        className={cn(
+          "border-b border-divider bg-surface-200/70 px-4 py-3",
+          LOGS_SECTION_ENTER_CLASS
+        )}
+        style={{ animationDelay: "90ms" }}
+      >
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
-          <div className="rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2">
+          <div
+            className={cn(
+              "rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2",
+              LOGS_CARD_ENTER_CLASS,
+              LOGS_SURFACE_TRANSITION_CLASS,
+              LOGS_INTERACTIVE_RAISE_CLASS,
+              hasLiveActivity && LOGS_LIVE_HIGHLIGHT_CLASS
+            )}
+            style={{ animationDelay: "130ms" }}
+          >
             <p className="type-caption text-muted-foreground">{t("summaryP50Ttft")}</p>
             <p className="font-mono text-sm text-foreground">
               {formatSummaryTtft(performanceSummary.p50TtftMs)}
             </p>
           </div>
-          <div className="rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2">
+          <div
+            className={cn(
+              "rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2",
+              LOGS_CARD_ENTER_CLASS,
+              LOGS_SURFACE_TRANSITION_CLASS,
+              LOGS_INTERACTIVE_RAISE_CLASS,
+              hasLiveActivity && LOGS_LIVE_HIGHLIGHT_CLASS
+            )}
+            style={{ animationDelay: "170ms" }}
+          >
             <p className="type-caption text-muted-foreground">{t("summaryP90Ttft")}</p>
             <p className="font-mono text-sm text-foreground">
               {formatSummaryTtft(performanceSummary.p90TtftMs)}
             </p>
           </div>
-          <div className="rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2">
+          <div
+            className={cn(
+              "rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2",
+              LOGS_CARD_ENTER_CLASS,
+              LOGS_SURFACE_TRANSITION_CLASS,
+              LOGS_INTERACTIVE_RAISE_CLASS,
+              hasLiveActivity && LOGS_LIVE_HIGHLIGHT_CLASS
+            )}
+            style={{ animationDelay: "210ms" }}
+          >
             <p className="type-caption text-muted-foreground">{t("summaryP50Tps")}</p>
             <p className="font-mono text-sm text-foreground">
               {formatSummaryTps(performanceSummary.p50Tps)}
             </p>
           </div>
-          <div className="rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2">
+          <div
+            className={cn(
+              "rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2",
+              LOGS_CARD_ENTER_CLASS,
+              LOGS_SURFACE_TRANSITION_CLASS,
+              LOGS_INTERACTIVE_RAISE_CLASS,
+              hasLiveActivity && LOGS_LIVE_HIGHLIGHT_CLASS
+            )}
+            style={{ animationDelay: "250ms" }}
+          >
             <p className="type-caption text-muted-foreground">{t("summarySlowRatio")}</p>
             <p className="font-mono text-sm text-foreground">
               {formatPercent(performanceSummary.slowRatio)}
             </p>
           </div>
-          <div className="rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2">
+          <div
+            className={cn(
+              "rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2",
+              LOGS_CARD_ENTER_CLASS,
+              LOGS_SURFACE_TRANSITION_CLASS,
+              LOGS_INTERACTIVE_RAISE_CLASS,
+              hasLiveActivity && LOGS_LIVE_HIGHLIGHT_CLASS
+            )}
+            style={{ animationDelay: "290ms" }}
+          >
             <p className="type-caption text-muted-foreground">{t("summaryStreamRatio")}</p>
             <p className="font-mono text-sm text-foreground">
               {formatPercent(performanceSummary.streamRatio)}
@@ -2042,8 +2150,18 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
       </div>
 
       {filteredLogs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80">
+        <div
+          className={cn(
+            "flex flex-col items-center justify-center py-16 text-center",
+            LOGS_SECTION_ENTER_CLASS
+          )}
+        >
+          <div
+            className={cn(
+              "mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80",
+              LOGS_CARD_ENTER_CLASS
+            )}
+          >
             <Filter className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
           </div>
           <h3 className="type-title-medium mb-2 text-foreground">{t("noMatchingLogs")}</h3>
@@ -2053,7 +2171,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
         <>
           {isMobileLayout ? (
             <div className="space-y-3 p-3">
-              {filteredLogs.map((log) => {
+              {filteredLogs.map((log, index) => {
                 const {
                   isExpanded,
                   canExpand,
@@ -2065,15 +2183,21 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                   requestTps,
                   displayTotalTokens,
                 } = getLogDerived(log);
+                const entryAnimationDelay = getLogEntryAnimationDelay(index);
+                const mobileEntryMotionClass =
+                  isNew || isChanged ? LOGS_CARD_EMPHASIS_CLASS : LOGS_CARD_ENTER_CLASS;
 
                 return (
                   <div
                     key={log.id}
                     className={cn(
-                      "rounded-cf-md border border-divider bg-surface-200/70 p-3",
+                      "rounded-cf-md border border-divider bg-surface-200/70 p-3 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0",
+                      LOGS_SURFACE_TRANSITION_CLASS,
+                      mobileEntryMotionClass,
                       isError && "border-l-2 border-l-status-error/45",
                       (isNew || isChanged) && "bg-status-info-muted/25"
                     )}
+                    style={{ animationDelay: entryAnimationDelay }}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1 space-y-2">
@@ -2148,7 +2272,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                             }
                           >
                             {isLogInProgress(log) ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
+                              <Loader2 className="h-3 w-3 motion-safe:animate-spin motion-reduce:animate-none" />
                             ) : (
                               log.status_code
                             )}
@@ -2199,29 +2323,30 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                       <button
                         type="button"
                         onClick={() => toggleRow(log.id)}
-                        className="mt-3 inline-flex w-full items-center justify-between rounded-cf-sm border border-divider bg-surface-300/70 px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-surface-300"
+                        className={cn(
+                          "mt-3 inline-flex w-full items-center justify-between rounded-cf-sm border border-divider bg-surface-300/70 px-3 py-2 text-left text-xs text-muted-foreground hover:bg-surface-300",
+                          LOGS_COLOR_TRANSITION_CLASS
+                        )}
                         aria-expanded={isExpanded}
                         aria-label={isExpanded ? t("collapseDetails") : t("expandDetails")}
                       >
                         <span>{isExpanded ? t("collapseDetails") : t("expandDetails")}</span>
-                        {isExpanded ? (
-                          <ChevronUp className="h-4 w-4" aria-hidden="true" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4" aria-hidden="true" />
-                        )}
+                        <ExpandChevron expanded={isExpanded} />
                       </button>
                     )}
 
-                    {isExpanded &&
-                      canExpand &&
-                      renderExpandedDetails({
-                        log,
-                        upstreamDisplayName,
-                        failoverDurationMs,
-                        requestTps,
-                        isError,
-                        className: "mt-3 border-t border-dashed border-divider pt-3",
-                      })}
+                    {isExpanded && canExpand && (
+                      <div className={LOGS_DETAIL_ENTER_CLASS}>
+                        {renderExpandedDetails({
+                          log,
+                          upstreamDisplayName,
+                          failoverDurationMs,
+                          requestTps,
+                          isError,
+                          className: "mt-3 border-t border-dashed border-divider pt-3",
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -2257,7 +2382,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredLogs.map((log) => {
+                    {filteredLogs.map((log, index) => {
                       const {
                         isExpanded,
                         canExpand,
@@ -2268,11 +2393,16 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                         failoverDurationMs,
                         requestTps,
                       } = getLogDerived(log);
+                      const entryAnimationDelay = getLogEntryAnimationDelay(index);
+                      const rowEntryMotionClass =
+                        isNew || isChanged ? LOGS_ROW_EMPHASIS_CLASS : LOGS_ROW_ENTER_CLASS;
 
                       return (
                         <Fragment key={log.id}>
                           <TableRow
                             className={cn(
+                              rowEntryMotionClass,
+                              LOGS_COLOR_TRANSITION_CLASS,
                               // Error row accent (subtle left border, no glow)
                               isError && "border-l-2 border-l-status-error/45",
                               // New row subtle highlight
@@ -2280,8 +2410,10 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                               canExpand &&
                                 (isError
                                   ? "cursor-pointer hover:bg-status-error-muted/15"
-                                  : "cursor-pointer hover:bg-surface-300/50")
+                                  : "cursor-pointer hover:bg-surface-300/50"),
+                              isExpanded && "bg-surface-300/55"
                             )}
+                            style={{ animationDelay: entryAnimationDelay }}
                             onClick={() => canExpand && toggleRow(log.id)}
                           >
                             <TableCell className="px-2 py-1.5">
@@ -2292,16 +2424,18 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                     e.stopPropagation();
                                     toggleRow(log.id);
                                   }}
-                                  className="rounded-cf-sm p-1 transition-colors hover:bg-surface-300"
+                                  className={cn(
+                                    "rounded-cf-sm p-1 hover:bg-surface-300",
+                                    LOGS_COLOR_TRANSITION_CLASS
+                                  )}
                                   aria-label={
                                     isExpanded ? t("collapseDetails") : t("expandDetails")
                                   }
                                 >
-                                  {isExpanded ? (
-                                    <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                                  ) : (
-                                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                                  )}
+                                  <ExpandChevron
+                                    expanded={isExpanded}
+                                    className="text-muted-foreground"
+                                  />
                                 </button>
                               )}
                             </TableCell>
@@ -2399,7 +2533,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                   }
                                 >
                                   {isLogInProgress(log) ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    <Loader2 className="h-3 w-3 motion-safe:animate-spin motion-reduce:animate-none" />
                                   ) : (
                                     log.status_code
                                   )}
@@ -2440,14 +2574,16 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                           {isExpanded && canExpand && (
                             <TableRow className="border-b-0 bg-transparent hover:bg-transparent">
                               <TableCell colSpan={10} className="p-0">
-                                {renderExpandedDetails({
-                                  log,
-                                  upstreamDisplayName,
-                                  failoverDurationMs,
-                                  requestTps,
-                                  isError,
-                                  className: "px-4 py-3",
-                                })}
+                                <div className={cn("px-4 py-3", LOGS_DETAIL_ENTER_CLASS)}>
+                                  {renderExpandedDetails({
+                                    log,
+                                    upstreamDisplayName,
+                                    failoverDurationMs,
+                                    requestTps,
+                                    isError,
+                                    className: "",
+                                  })}
+                                </div>
                               </TableCell>
                             </TableRow>
                           )}

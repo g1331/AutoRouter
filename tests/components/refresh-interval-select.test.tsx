@@ -115,10 +115,11 @@ describe("RefreshIntervalSelect", () => {
         />
       );
 
-      // Find the RefreshCw icon (it has animate-spin class when refreshing)
       const button = screen.getByText("manualRefresh").closest("button");
       const icon = button?.querySelector("svg");
-      expect(icon).toHaveClass("animate-spin");
+      expect(button).toHaveAttribute("aria-busy", "true");
+      expect(icon).toHaveClass("motion-safe:animate-spin");
+      expect(icon).toHaveClass("motion-reduce:animate-none");
     });
   });
 

@@ -11,8 +11,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const STORAGE_KEY = "logs-refresh-interval";
+const REFRESH_ICON_MOTION_CLASS =
+  "origin-center transition-transform duration-cf-fast ease-cf-standard motion-reduce:transition-none";
 
 export type RefreshInterval = "0" | "10" | "30" | "60";
 
@@ -95,8 +98,16 @@ export function RefreshIntervalSelect({
         onClick={onManualRefresh}
         disabled={isRefreshing}
         className="gap-1.5"
+        aria-busy={isRefreshing}
       >
-        <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} aria-hidden="true" />
+        <RefreshCw
+          className={cn(
+            "h-4 w-4",
+            REFRESH_ICON_MOTION_CLASS,
+            isRefreshing && "motion-safe:animate-spin motion-reduce:animate-none"
+          )}
+          aria-hidden="true"
+        />
         {t("manualRefresh")}
       </Button>
     </div>

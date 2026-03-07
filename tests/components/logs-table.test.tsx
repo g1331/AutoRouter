@@ -107,6 +107,13 @@ describe("LogsTable", () => {
       expect(screen.getByText("gpt-4")).toBeInTheDocument();
     });
 
+    it("applies entry motion class to desktop rows on first render", () => {
+      render(<LogsTable logs={[mockLog]} />);
+
+      const row = screen.getAllByRole("row")[1];
+      expect(row.className).toContain("animate-log-row-enter");
+    });
+
     it("renders streaming mode indicator for stream requests", () => {
       render(<LogsTable logs={[{ ...mockLog, id: "test-id-stream", is_stream: true }]} />);
 
@@ -695,7 +702,14 @@ describe("LogsTable", () => {
       });
 
       const row = screen.getAllByRole("row")[1];
-      await waitFor(() => expect(row.className).toContain("bg-status-info-muted/25"));
+      const summaryTile = screen.getByText("summaryP50Ttft").closest("div");
+
+      await waitFor(() => {
+        expect(row.className).toContain("bg-status-info-muted/25");
+        expect(row.className).toContain("animate-log-row-emphasis");
+        expect(summaryTile).toBeInTheDocument();
+        expect(summaryTile?.className).toContain("animate-log-live-highlight");
+      });
     });
   });
 
@@ -708,6 +722,17 @@ describe("LogsTable", () => {
       expect(screen.getByText("summaryP50Tps")).toBeInTheDocument();
       expect(screen.getByText("summarySlowRatio")).toBeInTheDocument();
       expect(screen.getByText("summaryStreamRatio")).toBeInTheDocument();
+    });
+
+    it("adds hover motion to summary tiles and quick filter chips", () => {
+      render(<LogsTable logs={[mockLog]} />);
+
+      const summaryTile = screen.getByText("summaryP50Ttft").closest("div");
+      const quickFilter = screen.getByRole("button", { name: "presetHighTtft" });
+
+      expect(summaryTile).toBeInTheDocument();
+      expect(summaryTile?.className).toContain("motion-safe:hover:-translate-y-0.5");
+      expect(quickFilter.className).toContain("motion-safe:hover:-translate-y-0.5");
     });
 
     it("filters to high TTFT logs with quick filter preset", () => {
@@ -1306,6 +1331,14 @@ describe("LogsTable", () => {
       expect(screen.getByText("tokenInput")).toBeInTheDocument();
       expect(screen.getByText("tokenOutput")).toBeInTheDocument();
       expect(screen.getByText("tokenTotal")).toBeInTheDocument();
+    });
+
+    it("applies detail enter animation when expanded content opens", () => {
+      const { container } = render(<LogsTable logs={[mockLog]} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+
+      expect(container.querySelector(".animate-log-detail-enter")).toBeInTheDocument();
     });
 
     it("shows billing breakdown formula under token details when billed", () => {
