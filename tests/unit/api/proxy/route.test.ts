@@ -4696,7 +4696,13 @@ describe("proxy route upstream selection", () => {
 
       expect(response.status).toBe(200);
 
-      abortController.abort();
+      const reader = response.body?.getReader();
+      expect(reader).toBeDefined();
+
+      const firstChunk = await reader!.read();
+      expect(firstChunk.done).toBe(false);
+
+      await reader!.cancel("Client disconnected");
       await expect
         .poll(() => vi.mocked(calculateAndPersistRequestBillingSnapshot).mock.calls.length)
         .toBe(1);

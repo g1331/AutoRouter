@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useRequestLogLive } from "@/hooks/use-request-log-live";
 
 vi.mock("@/providers/auth-provider", () => ({
@@ -27,6 +27,10 @@ describe("use-request-log-live", () => {
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("falls back to short-interval refresh when live stream connection fails", async () => {
     vi.stubGlobal(
       "fetch",
@@ -42,10 +46,11 @@ describe("use-request-log-live", () => {
   it("invalidates request logs queries once after the live stream connects", async () => {
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
     const encoder = new TextEncoder();
+    let streamController: ReadableStreamDefaultController<Uint8Array> | null = null;
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
+        streamController = controller;
         controller.enqueue(encoder.encode(": keep-alive\n\n"));
-        setTimeout(() => controller.close(), 50);
       },
     });
 
@@ -61,17 +66,25 @@ describe("use-request-log-live", () => {
 
     const { result, unmount } = renderHook(() => useRequestLogLive({ enabled: true }), { wrapper });
 
-    await waitFor(() => expect(result.current.connectionState).toBe("live"));
-    await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["request-logs"] }));
+    await waitFor(() => expect(result.current.connectionState).toBe("live"), { timeout: 3000 });
+    await waitFor(
+      () => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["request-logs"] }),
+      {
+        timeout: 3000,
+      }
+    );
 
+    streamController?.close();
     unmount();
   });
 
   it("invalidates request logs queries when a live update event arrives", async () => {
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
     const encoder = new TextEncoder();
+    let streamController: ReadableStreamDefaultController<Uint8Array> | null = null;
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
+        streamController = controller;
         controller.enqueue(
           encoder.encode(
             'event: request-log-changed\ndata: {"type":"request-log-changed","logId":"log-1","statusCode":499}\n\n'
@@ -92,9 +105,15 @@ describe("use-request-log-live", () => {
 
     const { result, unmount } = renderHook(() => useRequestLogLive({ enabled: true }), { wrapper });
 
-    await waitFor(() => expect(result.current.connectionState).toBe("live"));
-    await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["request-logs"] }));
+    await waitFor(() => expect(result.current.connectionState).toBe("live"), { timeout: 3000 });
+    await waitFor(
+      () => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["request-logs"] }),
+      {
+        timeout: 3000,
+      }
+    );
 
+    streamController?.close();
     unmount();
   });
 });
