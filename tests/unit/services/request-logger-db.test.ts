@@ -4,6 +4,7 @@ const dbInsertMock = vi.fn();
 const dbUpdateMock = vi.fn();
 const dbSelectMock = vi.fn();
 const requestLogsFindManyMock = vi.fn();
+const calculateAndPersistRequestBillingSnapshotMock = vi.fn();
 
 vi.mock("@/lib/db", () => ({
   db: {
@@ -30,13 +31,20 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   return {
     ...actual,
     and: vi.fn((...args) => ({ __op: "and", args })),
+    asc: vi.fn((arg) => ({ __op: "asc", arg })),
     count: vi.fn(() => ({ __op: "count" })),
     desc: vi.fn((arg) => ({ __op: "desc", arg })),
     eq: vi.fn((a, b) => ({ __op: "eq", a, b })),
     gte: vi.fn((a, b) => ({ __op: "gte", a, b })),
+    isNull: vi.fn((arg) => ({ __op: "isNull", arg })),
     lte: vi.fn((a, b) => ({ __op: "lte", a, b })),
   };
 });
+
+vi.mock("@/lib/services/billing-cost-service", () => ({
+  calculateAndPersistRequestBillingSnapshot: (...args: unknown[]) =>
+    calculateAndPersistRequestBillingSnapshotMock(...args),
+}));
 
 describe("request-logger (db flows)", () => {
   beforeEach(() => {
@@ -130,6 +138,37 @@ describe("request-logger (db flows)", () => {
         ttftMs: 99,
         isStream: true,
         sessionIdCompensated: true,
+      })
+    );
+  });
+
+  it("logRequestStart persists isStream when provided", async () => {
+    const { logRequestStart } = await import("@/lib/services/request-logger");
+
+    const returningMock = vi.fn().mockResolvedValueOnce([{ id: "log-stream-start" }]);
+    const valuesMock = vi.fn().mockReturnValue({ returning: returningMock });
+    dbInsertMock.mockReturnValueOnce({ values: valuesMock });
+
+    await logRequestStart({
+      apiKeyId: "key-1",
+      upstreamId: null,
+      method: "POST",
+      path: "/v1/chat/completions",
+      model: "gpt-4.1",
+      isStream: true,
+      routingType: "tiered",
+      sessionId: "sid-1",
+    });
+
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKeyId: "key-1",
+        method: "POST",
+        path: "/v1/chat/completions",
+        model: "gpt-4.1",
+        isStream: true,
+        statusCode: null,
+        durationMs: null,
       })
     );
   });
@@ -293,5 +332,73 @@ describe("request-logger (db flows)", () => {
     expect(result.items[0].priceSource).toBeNull();
     expect(result.items[1].failoverHistory).toBeNull();
     expect(result.items[1].routingDecision).toBeNull();
+  });
+
+  it("reconcileStaleInProgressRequestLogs skips streams and persists billing snapshots", async () => {
+    const { reconcileStaleInProgressRequestLogs } = await import("@/lib/services/request-logger");
+
+    const now = new Date("2026-03-07T12:00:00.000Z");
+    requestLogsFindManyMock.mockResolvedValueOnce([
+      {
+        id: "log-stale",
+        createdAt: new Date("2026-03-07T11:40:00.000Z"),
+        isStream: false,
+      },
+      {
+        id: "log-active-stream",
+        createdAt: new Date("2026-03-07T11:40:00.000Z"),
+        isStream: true,
+      },
+      {
+        id: "log-fresh",
+        createdAt: new Date("2026-03-07T11:58:00.000Z"),
+        isStream: false,
+      },
+    ]);
+
+    const returningMock = vi.fn().mockResolvedValueOnce([
+      {
+        id: "log-stale",
+        statusCode: 520,
+        apiKeyId: "key-1",
+        upstreamId: "upstream-1",
+        model: "gpt-4.1",
+      },
+    ]);
+    const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
+    const setMock = vi.fn().mockReturnValue({ where: whereMock });
+    dbUpdateMock.mockReturnValue({ set: setMock });
+    calculateAndPersistRequestBillingSnapshotMock.mockResolvedValueOnce({
+      status: "unbilled",
+      unbillableReason: "usage_missing",
+      finalCost: null,
+      source: null,
+    });
+
+    const reconciled = await reconcileStaleInProgressRequestLogs({ now });
+
+    expect(reconciled).toBe(1);
+    expect(requestLogsFindManyMock).toHaveBeenCalledTimes(1);
+    expect(setMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 520,
+        errorMessage: expect.stringContaining("stale reconciliation timeout window"),
+      })
+    );
+    expect(whereMock).toHaveBeenCalledTimes(1);
+    expect(calculateAndPersistRequestBillingSnapshotMock).toHaveBeenCalledTimes(1);
+    expect(calculateAndPersistRequestBillingSnapshotMock).toHaveBeenCalledWith({
+      requestLogId: "log-stale",
+      apiKeyId: "key-1",
+      upstreamId: "upstream-1",
+      model: "gpt-4.1",
+      usage: {
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+      },
+    });
   });
 });

@@ -7,8 +7,11 @@ import { ChevronLeft, ChevronRight, ScrollText } from "lucide-react";
 import { LogsTable } from "@/components/admin/logs-table";
 import { RefreshIntervalSelect } from "@/components/admin/refresh-interval-select";
 import { Topbar } from "@/components/admin/topbar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import { useRequestLogLive } from "@/hooks/use-request-log-live";
 import { useRequestLogs } from "@/hooks/use-request-logs";
 
 interface LogsLoadingSkeletonProps {
@@ -82,9 +85,12 @@ export default function LogsPage() {
 
   const t = useTranslations("logs");
   const tCommon = useTranslations("common");
+  const { connectionState, fallbackRefetchIntervalMs } = useRequestLogLive({ enabled: true });
+  const effectiveRefetchInterval =
+    refetchInterval !== false ? refetchInterval : fallbackRefetchIntervalMs;
 
   const { data, isLoading, isFetching, refetch } = useRequestLogs(page, pageSize, undefined, {
-    refetchInterval,
+    refetchInterval: effectiveRefetchInterval,
   });
 
   const handleIntervalChange = useCallback((interval: number | false) => {
@@ -108,6 +114,29 @@ export default function LogsPage() {
                 <span className="type-label-medium">{t("management")}</span>
               </div>
               <p className="type-body-medium text-muted-foreground">{t("managementDesc")}</p>
+              <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-muted-foreground">
+                <Badge
+                  variant={
+                    connectionState === "live"
+                      ? "success"
+                      : connectionState === "connecting"
+                        ? "info"
+                        : "warning"
+                  }
+                  className={cn("px-2 py-0.5 text-[10px] leading-none")}
+                >
+                  {connectionState === "live"
+                    ? t("liveStatusLive")
+                    : connectionState === "connecting"
+                      ? t("liveStatusConnecting")
+                      : t("liveStatusFallback")}
+                </Badge>
+                <span>
+                  {connectionState === "fallback"
+                    ? t("liveStatusFallbackDesc")
+                    : t("liveStatusLiveDesc")}
+                </span>
+              </div>
             </div>
 
             <RefreshIntervalSelect
@@ -122,7 +151,10 @@ export default function LogsPage() {
           <LogsLoadingSkeleton loadingLabel={tCommon("loading")} />
         ) : (
           <>
-            <LogsTable logs={data?.items || []} isLive={refetchInterval !== false} />
+            <LogsTable
+              logs={data?.items || []}
+              isLive={connectionState === "live" || effectiveRefetchInterval !== false}
+            />
 
             {data && data.total_pages > 1 && (
               <Card variant="filled" className="border border-divider">

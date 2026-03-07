@@ -1,7 +1,17 @@
-import { eq, desc, count, and, gte, lte } from "drizzle-orm";
+import { eq, desc, count, and, gte, lte, asc, isNull } from "drizzle-orm";
 import { db, requestLogs, type RequestLog } from "../db";
 import type { FailoverErrorType, RoutingDecisionLog, RoutingSelectionReason } from "@/types/api";
 import { extractNormalizedUsage, type HeaderDiff } from "./proxy-client";
+import { publishRequestLogLiveUpdate } from "./request-log-live-updates";
+import { calculateAndPersistRequestBillingSnapshot } from "./billing-cost-service";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("request-logger");
+const REQUEST_LOG_STALE_MINUTES = 15;
+const REQUEST_LOG_STALE_SCAN_LIMIT = 200;
+const STALE_REQUEST_LOG_STATUS_CODE = 520;
+const STALE_REQUEST_LOG_ERROR_MESSAGE =
+  "Request did not settle before the stale reconciliation timeout window";
 
 export interface LogRequestInput {
   apiKeyId: string | null;
@@ -50,6 +60,7 @@ export interface StartRequestLogInput {
   method: string | null;
   path: string | null;
   model: string | null;
+  isStream?: boolean;
   // Routing decision fields
   routingType?: "tiered" | "direct" | "provider_type" | null;
   priorityTier?: number | null;
@@ -190,6 +201,64 @@ export interface ListRequestLogsFilter {
   endTime?: Date;
 }
 
+function parseRequestLogCreatedAt(value: Date | string | number | null | undefined): Date | null {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  if (typeof value === "number") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+}
+
+async function persistZeroUsageBillingSnapshot(
+  logEntry: Pick<RequestLog, "id" | "apiKeyId" | "upstreamId" | "model"> | null | undefined
+): Promise<void> {
+  if (!logEntry) {
+    return;
+  }
+
+  try {
+    await calculateAndPersistRequestBillingSnapshot({
+      requestLogId: logEntry.id,
+      apiKeyId: logEntry.apiKeyId,
+      upstreamId: logEntry.upstreamId,
+      model: logEntry.model,
+      usage: {
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+      },
+    });
+  } catch (error) {
+    log.error(
+      { err: error, requestLogId: logEntry.id },
+      "failed to persist zero-usage billing snapshot for terminal request log"
+    );
+  }
+}
+
+function notifyRequestLogChange(
+  logEntry: Pick<RequestLog, "id" | "statusCode"> | null | undefined
+): void {
+  if (!logEntry) {
+    return;
+  }
+
+  publishRequestLogLiveUpdate({
+    type: "request-log-changed",
+    logId: logEntry.id,
+    statusCode: logEntry.statusCode ?? null,
+  });
+}
+
 function normalizeBillingStatus(value: string | null | undefined): "billed" | "unbilled" | null {
   if (value === "billed" || value === "unbilled") {
     return value;
@@ -232,6 +301,7 @@ export async function logRequestStart(input: StartRequestLogInput): Promise<Requ
       statusCode: null,
       durationMs: null,
       errorMessage: null,
+      isStream: input.isStream ?? false,
       // Routing decision fields
       routingType: input.routingType ?? null,
       priorityTier: input.priorityTier ?? null,
@@ -243,6 +313,8 @@ export async function logRequestStart(input: StartRequestLogInput): Promise<Requ
       createdAt: new Date(),
     })
     .returning();
+
+  notifyRequestLogChange(logEntry);
 
   return logEntry;
 }
@@ -316,6 +388,8 @@ export async function updateRequestLog(
     .where(eq(requestLogs.id, id))
     .returning();
 
+  notifyRequestLogChange(updated ?? null);
+
   return updated ?? null;
 }
 
@@ -363,7 +437,56 @@ export async function logRequest(input: LogRequestInput): Promise<RequestLog> {
 
   // Request logged to database - details available via admin API
 
+  notifyRequestLogChange(logEntry);
+
   return logEntry;
+}
+
+export async function reconcileStaleInProgressRequestLogs(options?: {
+  now?: Date;
+  limit?: number;
+}): Promise<number> {
+  const now = options?.now ?? new Date();
+  const limit = options?.limit ?? REQUEST_LOG_STALE_SCAN_LIMIT;
+  const cutoff = new Date(now.getTime() - REQUEST_LOG_STALE_MINUTES * 60 * 1000);
+
+  const candidates = await db.query.requestLogs.findMany({
+    where: isNull(requestLogs.statusCode),
+    orderBy: [asc(requestLogs.createdAt)],
+    limit,
+    columns: {
+      id: true,
+      createdAt: true,
+      isStream: true,
+    },
+  });
+
+  let reconciled = 0;
+
+  for (const candidate of candidates) {
+    if (candidate.isStream) {
+      continue;
+    }
+
+    const createdAt = parseRequestLogCreatedAt(candidate.createdAt);
+    if (!createdAt || createdAt > cutoff) {
+      continue;
+    }
+
+    const durationMs = Math.max(0, now.getTime() - createdAt.getTime());
+    const updated = await updateRequestLog(candidate.id, {
+      statusCode: STALE_REQUEST_LOG_STATUS_CODE,
+      durationMs,
+      errorMessage: STALE_REQUEST_LOG_ERROR_MESSAGE,
+    });
+
+    if (updated) {
+      await persistZeroUsageBillingSnapshot(updated);
+      reconciled += 1;
+    }
+  }
+
+  return reconciled;
 }
 
 /**
@@ -492,6 +615,14 @@ export async function listRequestLogs(
   pageSize: number = 20,
   filters: ListRequestLogsFilter = {}
 ): Promise<PaginatedRequestLogs> {
+  if (process.env.NODE_ENV !== "test") {
+    try {
+      await reconcileStaleInProgressRequestLogs();
+    } catch (error) {
+      log.warn({ err: error }, "failed to reconcile stale in-progress request logs");
+    }
+  }
+
   // Validate pagination params
   page = Math.max(1, page);
   pageSize = Math.min(100, Math.max(1, pageSize));

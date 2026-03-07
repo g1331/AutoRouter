@@ -360,6 +360,43 @@ describe("LogsTable", () => {
       const monospaceStatus = screen.getAllByText("500").find((el) => !!el.closest(".font-mono"));
       expect(monospaceStatus).toBeDefined();
     });
+
+    it("renders only status code for 499 client disconnect logs", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              id: "cancelled-log",
+              status_code: 499,
+            },
+          ]}
+        />
+      );
+
+      expect(screen.getAllByText("499").length).toBeGreaterThan(0);
+      expect(screen.queryByText("displayStatusCancelled")).not.toBeInTheDocument();
+      expect(screen.queryByText("displayStatusInterrupted")).not.toBeInTheDocument();
+    });
+
+    it("renders spinner without dash for in-progress logs", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              id: "in-progress-log",
+              status_code: null,
+              duration_ms: null,
+            },
+          ]}
+          isLive
+        />
+      );
+
+      expect(screen.getByLabelText("displayStatusInProgress")).not.toHaveTextContent("-");
+      expect(screen.queryByText("displayStatusInProgress")).not.toBeInTheDocument();
+    });
   });
 
   describe("Token Formatting", () => {
@@ -1192,6 +1229,17 @@ describe("LogsTable", () => {
       expect(screen.getByText("exclusionReason.concurrency_full")).toBeInTheDocument();
     });
 
+    const hasAncestorClass = (element: HTMLElement, className: string) => {
+      let current: HTMLElement | null = element;
+      while (current) {
+        if (current.className?.toString().includes(className)) {
+          return true;
+        }
+        current = current.parentElement;
+      }
+      return false;
+    };
+
     it("shows expand indicator when token details exist even without failover", () => {
       render(<LogsTable logs={[mockLog]} />);
 
@@ -1370,10 +1418,43 @@ describe("LogsTable", () => {
       expect(screen.getByText("openai-3")).toBeInTheDocument();
       expect(screen.getByText("w:100")).toBeInTheDocument();
       expect(screen.getByText("circuitState.half_open")).toBeInTheDocument();
-      expect(screen.getAllByText("exclusionReason.concurrency_full").length).toBeGreaterThan(0);
+      const concurrencyFullBadges = screen.getAllByText("exclusionReason.concurrency_full");
+      expect(concurrencyFullBadges.length).toBeGreaterThan(0);
+      expect(
+        hasAncestorClass(screen.getByText("circuitState.half_open"), "text-status-warning")
+      ).toBe(true);
+      expect(hasAncestorClass(screen.getByText("openai-2"), "bg-status-warning-muted/10")).toBe(
+        true
+      );
+      expect(hasAncestorClass(concurrencyFullBadges[0], "text-status-warning")).toBe(true);
 
       fireEvent.click(screen.getAllByRole("button", { name: "lifecycleRequest" })[0]);
       expect(screen.getAllByText("journeyRetryReasonText").length).toBeGreaterThan(0);
+    });
+
+    it("uses error styling for circuit-open excluded upstreams in expanded view", () => {
+      const logWithCircuitOpenExclusion: RequestLog = {
+        ...logWithFailoverBase,
+        routing_decision: {
+          ...mockRoutingDecision,
+          excluded: [
+            ...mockRoutingDecision.excluded,
+            { id: "upstream-4", name: "openai-4", reason: "circuit_open" },
+          ],
+        },
+      };
+
+      render(<LogsTable logs={[logWithCircuitOpenExclusion]} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleDecision" })[0]);
+
+      expect(screen.getByText("openai-4")).toBeInTheDocument();
+      expect(screen.getByText("exclusionReason.circuit_open")).toBeInTheDocument();
+      expect(
+        hasAncestorClass(screen.getByText("exclusionReason.circuit_open"), "text-status-error")
+      ).toBe(true);
+      expect(hasAncestorClass(screen.getByText("openai-4"), "bg-status-error-muted/10")).toBe(true);
     });
 
     it("shows session affinity stage when routing decision is null", () => {
@@ -1417,6 +1498,17 @@ describe("LogsTable", () => {
       expect(screen.getAllByText(/failed-upstream/).length).toBeGreaterThan(0);
       expect(screen.getAllByText("journeySelectionReasonWeighted").length).toBeGreaterThan(0);
       expect(screen.getByText(/Request timed out/)).toBeInTheDocument();
+      const errorText = screen.getByText(/Request timed out/);
+      let current: HTMLElement | null = errorText as HTMLElement;
+      let hasErrorClass = false;
+      while (current) {
+        if (current.className?.toString().includes("text-status-error")) {
+          hasErrorClass = true;
+          break;
+        }
+        current = current.parentElement;
+      }
+      expect(hasErrorClass).toBe(true);
       expect(screen.getAllByText(/retryTotalDuration/).length).toBeGreaterThan(0);
     });
 

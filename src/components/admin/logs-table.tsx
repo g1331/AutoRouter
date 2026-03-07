@@ -4,7 +4,14 @@ import { useState, useMemo, useEffect, useRef, Fragment, type ReactNode } from "
 import { formatDistanceToNow, subDays, startOfDay } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
 import { ScrollText, Filter, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
-import type { FailoverErrorType, RequestLog, RoutingSelectionReason, TimeRange } from "@/types/api";
+import type {
+  ExclusionReason,
+  FailoverErrorType,
+  RequestLog,
+  RoutingCircuitState,
+  RoutingSelectionReason,
+  TimeRange,
+} from "@/types/api";
 import {
   Table,
   TableBody,
@@ -235,7 +242,7 @@ function getPercentile(values: number[], percentile: number): number | null {
   return sorted[Math.max(0, Math.min(index, sorted.length - 1))];
 }
 
-export function LogsTable({ logs }: LogsTableProps) {
+export function LogsTable({ logs, isLive = false }: LogsTableProps) {
   const t = useTranslations("logs");
   const locale = useLocale();
   const dateLocale = getDateLocale(locale);
@@ -307,7 +314,9 @@ export function LogsTable({ logs }: LogsTableProps) {
 
   // Track new log IDs for scan animation
   const [newLogIds, setNewLogIds] = useState<Set<string>>(new Set());
+  const [changedLogIds, setChangedLogIds] = useState<Set<string>>(new Set());
   const prevLogIdsRef = useRef<Set<string> | null>(null); // null = initial load
+  const prevLogSignaturesRef = useRef<Map<string, string> | null>(null);
   const isInitialLoadRef = useRef(true);
 
   useEffect(() => {
@@ -328,40 +337,60 @@ export function LogsTable({ logs }: LogsTableProps) {
   // Detect new logs and trigger animation (skip initial load)
   useEffect(() => {
     const currentIds = new Set(logs.map((log) => log.id));
+    const currentSignatures = new Map(
+      logs.map((log) => [
+        log.id,
+        `${log.status_code ?? "pending"}:${log.lifecycle_status ?? "unknown"}:${log.failure_stage ?? "unknown"}`,
+      ])
+    );
 
     // Skip animation on initial load
     if (isInitialLoadRef.current) {
       isInitialLoadRef.current = false;
       prevLogIdsRef.current = currentIds;
+      prevLogSignaturesRef.current = currentSignatures;
       return;
     }
 
     const prevIds = prevLogIdsRef.current;
+    const prevSignatures = prevLogSignaturesRef.current;
     if (!prevIds) {
       prevLogIdsRef.current = currentIds;
+      prevLogSignaturesRef.current = currentSignatures;
       return;
     }
 
     const newIds = new Set<string>();
+    const changedIds = new Set<string>();
     currentIds.forEach((id) => {
       if (!prevIds.has(id)) {
         newIds.add(id);
+        return;
+      }
+
+      const prevSignature = prevSignatures?.get(id);
+      const currentSignature = currentSignatures.get(id);
+      if (prevSignature && currentSignature && prevSignature !== currentSignature) {
+        changedIds.add(id);
       }
     });
 
     // Always update the ref first
     prevLogIdsRef.current = currentIds;
+    prevLogSignaturesRef.current = currentSignatures;
 
-    if (newIds.size > 0) {
+    if (newIds.size > 0 || changedIds.size > 0) {
       // Use queueMicrotask to defer state updates
       queueMicrotask(() => {
         setNewLogIds(newIds);
+        setChangedLogIds(changedIds);
       });
 
       // Clear animation after it completes
       const clearTimer = setTimeout(() => {
         setNewLogIds(new Set());
-      }, 500);
+        setChangedLogIds(new Set());
+      }, 1200);
 
       return () => {
         clearTimeout(clearTimer);
@@ -482,29 +511,77 @@ export function LogsTable({ logs }: LogsTableProps) {
     return "neutral";
   };
 
-  const getLifecycleStageInfo = (log: RequestLog) => {
-    const status = log.lifecycle_status;
+  const getCircuitStateVariant = (
+    circuitState: RoutingCircuitState
+  ): "neutral" | "warning" | "error" => {
+    if (circuitState === "open") {
+      return "error";
+    }
+    if (circuitState === "half_open") {
+      return "warning";
+    }
+    return "neutral";
+  };
 
-    switch (status) {
-      case "decision":
+  const getCandidateStateClasses = (circuitState: RoutingCircuitState, isSelected: boolean) => {
+    if (circuitState === "open") {
+      return {
+        row: "border-status-error/20 bg-status-error-muted/10",
+        text: "text-status-error",
+        marker: "text-status-error",
+      };
+    }
+
+    if (circuitState === "half_open") {
+      return {
+        row: "border-status-warning/20 bg-status-warning-muted/10",
+        text: "text-status-warning",
+        marker: "text-status-warning",
+      };
+    }
+
+    if (isSelected) {
+      return {
+        row: "border-emerald-500/30 bg-emerald-500/10",
+        text: "text-foreground",
+        marker: "text-foreground",
+      };
+    }
+
+    return {
+      row: "border-divider bg-surface-300/65",
+      text: "text-foreground",
+      marker: "text-muted-foreground",
+    };
+  };
+
+  const getExcludedReasonVariant = (reason: ExclusionReason): "neutral" | "warning" | "error" => {
+    if (reason === "concurrency_full") {
+      return "warning";
+    }
+    if (reason === "model_not_allowed") {
+      return "neutral";
+    }
+    return "error";
+  };
+
+  const getExcludedReasonClasses = (reason: ExclusionReason) => {
+    switch (reason) {
+      case "concurrency_full":
         return {
-          icon: true,
-          color: "text-blue-500",
-          bgColor: "bg-blue-500/10",
-          borderColor: "border-blue-500/20",
+          row: "border-status-warning/20 bg-status-warning-muted/10",
+          text: "text-status-warning",
         };
-      case "requesting":
+      case "model_not_allowed":
         return {
-          icon: true,
-          color: "text-purple-500",
-          bgColor: "bg-purple-500/10",
-          borderColor: "border-purple-500/20",
+          row: "border-divider bg-surface-300/65",
+          text: "text-foreground",
         };
-      case "completed_success":
-      case "completed_failed":
-        return null;
       default:
-        return null;
+        return {
+          row: "border-status-error/20 bg-status-error-muted/10",
+          text: "text-status-error",
+        };
     }
   };
 
@@ -544,6 +621,8 @@ export function LogsTable({ logs }: LogsTableProps) {
   const hasErrorState = (log: RequestLog): boolean => {
     return log.status_code !== null && log.status_code >= 400;
   };
+
+  const isLogInProgress = (log: RequestLog) => log.status_code == null;
 
   const renderExpandedDetails = (options: {
     log: RequestLog;
@@ -1024,24 +1103,28 @@ export function LogsTable({ logs }: LogsTableProps) {
                   <div className="space-y-1.5">
                     {routingDecision.candidates.map((candidate) => {
                       const isSelected = candidate.id === decisionSelectedCandidateId;
+                      const candidateStateClasses = getCandidateStateClasses(
+                        candidate.circuit_state,
+                        isSelected
+                      );
                       return (
                         <div
                           key={candidate.id}
                           className={cn(
-                            "flex flex-wrap items-center gap-2 rounded-cf-sm border border-divider bg-surface-300/65 px-2 py-1.5",
-                            isSelected && "border-emerald-500/30 bg-emerald-500/10"
+                            "flex flex-wrap items-center gap-2 rounded-cf-sm border px-2 py-1.5",
+                            candidateStateClasses.row
                           )}
                         >
-                          <span
-                            className={cn(
-                              "font-medium",
-                              isSelected ? "text-foreground" : "text-muted-foreground"
-                            )}
-                          >
+                          <span className={cn("font-medium", candidateStateClasses.marker)}>
                             {isSelected ? "●" : "○"}
                           </span>
-                          <span className="min-w-0 flex-1 text-foreground">{candidate.name}</span>
-                          <Badge variant="neutral" className="px-1.5 py-0 text-[10px]">
+                          <span className={cn("min-w-0 flex-1", candidateStateClasses.text)}>
+                            {candidate.name}
+                          </span>
+                          <Badge
+                            variant={getCircuitStateVariant(candidate.circuit_state)}
+                            className="px-1.5 py-0 text-[10px]"
+                          >
                             {t("circuitState." + candidate.circuit_state)}
                           </Badge>
                           <span className="rounded-cf-sm border border-divider bg-surface-300 px-1.5 py-0.5 text-[10px] text-muted-foreground">
@@ -1061,17 +1144,28 @@ export function LogsTable({ logs }: LogsTableProps) {
                 )}
                 {routingDecision?.excluded?.length ? (
                   <div className="space-y-1.5">
-                    {routingDecision.excluded.map((excluded) => (
-                      <div
-                        key={excluded.id}
-                        className="flex flex-wrap items-center gap-2 rounded-cf-sm border border-red-500/20 bg-red-500/5 px-2 py-1.5"
-                      >
-                        <span className="min-w-0 flex-1 text-foreground">{excluded.name}</span>
-                        <Badge variant="error" className="px-1.5 py-0 text-[10px]">
-                          {t("exclusionReason." + excluded.reason)}
-                        </Badge>
-                      </div>
-                    ))}
+                    {routingDecision.excluded.map((excluded) => {
+                      const excludedReasonClasses = getExcludedReasonClasses(excluded.reason);
+                      return (
+                        <div
+                          key={excluded.id}
+                          className={cn(
+                            "flex flex-wrap items-center gap-2 rounded-cf-sm border px-2 py-1.5",
+                            excludedReasonClasses.row
+                          )}
+                        >
+                          <span className={cn("min-w-0 flex-1", excludedReasonClasses.text)}>
+                            {excluded.name}
+                          </span>
+                          <Badge
+                            variant={getExcludedReasonVariant(excluded.reason)}
+                            className="px-1.5 py-0 text-[10px]"
+                          >
+                            {t("exclusionReason." + excluded.reason)}
+                          </Badge>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : null}
               </div>
@@ -1172,7 +1266,7 @@ export function LogsTable({ logs }: LogsTableProps) {
                           })
                         : null}
                       {attempt.error_message ? (
-                        <div className="mt-1 text-[11px] text-muted-foreground">
+                        <div className="mt-1 rounded-cf-sm border border-status-error/25 bg-status-error-muted/10 px-2 py-1 text-[11px] text-status-error">
                           {attempt.error_message}
                         </div>
                       ) : null}
@@ -1402,8 +1496,8 @@ export function LogsTable({ logs }: LogsTableProps) {
                           className={cn(
                             "rounded-full px-3 py-1.5 text-[10px] uppercase tracking-[0.16em] transition-all duration-200 ease-out",
                             isActive
-                              ? "bg-foreground text-background shadow-[0_10px_24px_rgba(15,23,42,0.16)]"
-                              : "text-muted-foreground hover:text-foreground"
+                              ? "border border-divider bg-surface-300 text-foreground shadow-[var(--vr-shadow-xs)]"
+                              : "text-muted-foreground hover:bg-surface-200/70 hover:text-foreground"
                           )}
                         >
                           {option.label}
@@ -1789,6 +1883,7 @@ export function LogsTable({ logs }: LogsTableProps) {
       hasHeaderDiff ||
       displayTotalTokens > 0;
     const isNew = newLogIds.has(log.id);
+    const isChanged = changedLogIds.has(log.id);
     const isError = hasErrorState(log);
     const upstreamDisplayName =
       log.upstream_id === null ? null : (log.upstream_name ?? t("upstreamUnknown"));
@@ -1822,6 +1917,7 @@ export function LogsTable({ logs }: LogsTableProps) {
       isExpanded,
       canExpand,
       isNew,
+      isChanged,
       isError,
       upstreamDisplayName,
       failoverDurationMs,
@@ -1962,6 +2058,7 @@ export function LogsTable({ logs }: LogsTableProps) {
                   isExpanded,
                   canExpand,
                   isNew,
+                  isChanged,
                   isError,
                   upstreamDisplayName,
                   failoverDurationMs,
@@ -1975,7 +2072,7 @@ export function LogsTable({ logs }: LogsTableProps) {
                     className={cn(
                       "rounded-cf-md border border-divider bg-surface-200/70 p-3",
                       isError && "border-l-2 border-l-status-error/45",
-                      isNew && "bg-status-info-muted/25"
+                      (isNew || isChanged) && "bg-status-info-muted/25"
                     )}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -2040,28 +2137,22 @@ export function LogsTable({ logs }: LogsTableProps) {
                           <Badge
                             variant={getStatusBadgeVariant(log.status_code)}
                             className={cn(
-                              "px-2 py-0.5 text-[11px] leading-none font-mono tabular-nums",
-                              log.status_code === null && "text-muted-foreground"
+                              "flex min-h-6 min-w-6 items-center justify-center px-2 py-0.5 text-[11px] leading-none font-mono tabular-nums",
+                              isLogInProgress(log) &&
+                                (isLive
+                                  ? "border-status-info/30 bg-status-info-muted/25 text-status-info"
+                                  : "text-muted-foreground")
                             )}
+                            aria-label={
+                              isLogInProgress(log) ? t("displayStatusInProgress") : undefined
+                            }
                           >
-                            {log.status_code ?? "-"}
+                            {isLogInProgress(log) ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              log.status_code
+                            )}
                           </Badge>
-                          {(() => {
-                            const stageInfo = getLifecycleStageInfo(log);
-                            if (!stageInfo) return null;
-                            return (
-                              <span
-                                className={cn(
-                                  "inline-flex items-center rounded-cf-sm border px-1.5 py-0.5 text-[10px] font-medium leading-none",
-                                  stageInfo.color,
-                                  stageInfo.bgColor,
-                                  stageInfo.borderColor
-                                )}
-                              >
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              </span>
-                            );
-                          })()}
                         </div>
                         <div className="mt-1 tabular-nums">{formatDuration(log.duration_ms)}</div>
                         {shouldShowBillingCost(log) ? (
@@ -2171,6 +2262,7 @@ export function LogsTable({ logs }: LogsTableProps) {
                         isExpanded,
                         canExpand,
                         isNew,
+                        isChanged,
                         isError,
                         upstreamDisplayName,
                         failoverDurationMs,
@@ -2184,7 +2276,7 @@ export function LogsTable({ logs }: LogsTableProps) {
                               // Error row accent (subtle left border, no glow)
                               isError && "border-l-2 border-l-status-error/45",
                               // New row subtle highlight
-                              isNew && "bg-status-info-muted/25",
+                              (isNew || isChanged) && "bg-status-info-muted/25",
                               canExpand &&
                                 (isError
                                   ? "cursor-pointer hover:bg-status-error-muted/15"
@@ -2296,28 +2388,22 @@ export function LogsTable({ logs }: LogsTableProps) {
                                 <Badge
                                   variant={getStatusBadgeVariant(log.status_code)}
                                   className={cn(
-                                    "px-1.5 py-0.5 text-[10px] leading-none font-mono tabular-nums whitespace-nowrap",
-                                    log.status_code === null && "text-muted-foreground"
+                                    "flex min-h-5 min-w-5 items-center justify-center px-1.5 py-0.5 text-[10px] leading-none font-mono tabular-nums whitespace-nowrap",
+                                    isLogInProgress(log) &&
+                                      (isLive
+                                        ? "border-status-info/30 bg-status-info-muted/25 text-status-info"
+                                        : "text-muted-foreground")
                                   )}
+                                  aria-label={
+                                    isLogInProgress(log) ? t("displayStatusInProgress") : undefined
+                                  }
                                 >
-                                  {log.status_code ?? "-"}
+                                  {isLogInProgress(log) ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    log.status_code
+                                  )}
                                 </Badge>
-                                {(() => {
-                                  const stageInfo = getLifecycleStageInfo(log);
-                                  if (!stageInfo) return null;
-                                  return (
-                                    <span
-                                      className={cn(
-                                        "inline-flex items-center rounded-cf-sm border px-1.5 py-0.5 text-[10px] font-medium leading-none",
-                                        stageInfo.color,
-                                        stageInfo.bgColor,
-                                        stageInfo.borderColor
-                                      )}
-                                    >
-                                      <Loader2 className="h-3 w-3 animate-spin" />
-                                    </span>
-                                  );
-                                })()}
                               </div>
                             </TableCell>
                             <TableCell className="px-2 py-1 font-mono text-[10px] leading-tight">

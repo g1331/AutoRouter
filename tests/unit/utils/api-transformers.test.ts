@@ -717,6 +717,55 @@ describe("api-transformers", () => {
       });
     });
 
+    it("derives cancelled and interrupted display statuses from 499 responses", () => {
+      const interruptedLog = {
+        id: "log-interrupted",
+        apiKeyId: "key-1",
+        upstreamId: "up-1",
+        upstreamName: "up-1",
+        method: "POST",
+        path: "/v1/chat/completions",
+        model: "gpt-4",
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+        statusCode: 499,
+        durationMs: 900,
+        routingDurationMs: 120,
+        errorMessage: "Client disconnected during downstream streaming",
+        routingType: "provider_type",
+        groupName: null,
+        lbStrategy: null,
+        failoverAttempts: 0,
+        failoverHistory: null,
+        routingDecision: {
+          did_send_upstream: true,
+          failure_stage: "downstream_streaming",
+        },
+        isStream: true,
+        createdAt: new Date("2024-01-15T10:30:00.000Z"),
+      };
+      const cancelledLog = {
+        ...interruptedLog,
+        id: "log-cancelled",
+        routingDecision: {
+          did_send_upstream: false,
+          failure_stage: "candidate_selection",
+        },
+      };
+
+      expect(transformRequestLogToApi(interruptedLog as never).lifecycle_status).toBe(
+        "completed_failed"
+      );
+      expect(transformRequestLogToApi(cancelledLog as never).lifecycle_status).toBe(
+        "completed_failed"
+      );
+    });
+
     it("should normalize header_diff and sanitize sensitive header values", () => {
       const log = {
         id: "log-hdiff-1",
