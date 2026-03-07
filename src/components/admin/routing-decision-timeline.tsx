@@ -143,6 +143,9 @@ export function RoutingDecisionTimeline({
   const failureStageLabel = routingDecision?.failure_stage
     ? t(`failureStage.${routingDecision.failure_stage}`)
     : null;
+  const hasConcurrencyFullSignal =
+    routingDecision?.excluded.some((item) => item.reason === "concurrency_full") === true ||
+    failoverHistory?.some((attempt) => attempt.error_type === "concurrency_full") === true;
 
   // ---------- Compact View ----------
   if (compact) {
@@ -171,7 +174,16 @@ export function RoutingDecisionTimeline({
               {routingDecision.final_candidate_count}/{routingDecision.candidate_count}
             </span>
           )}
-          <div className="flex shrink-0 items-center gap-0.5 ml-1">
+          {hasConcurrencyFullSignal && (
+            <Badge
+              variant="warning"
+              className="max-w-[7.5rem] min-w-0 px-1.5 py-0 text-[10px] leading-4"
+            >
+              <AlertTriangle className="mr-1 h-3 w-3 shrink-0" />
+              <span className="min-w-0 truncate">{t("exclusionReason.concurrency_full")}</span>
+            </Badge>
+          )}
+          <div className="ml-1 flex shrink-0 items-center gap-0.5">
             {indicators.redirect && (
               <span title={t("indicatorRedirect")}>
                 <RefreshCw className="w-3 h-3 text-status-info" />

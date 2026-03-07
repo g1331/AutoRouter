@@ -197,6 +197,42 @@ describe("LogsTable", () => {
       }
     });
 
+    it("shows concurrency-full signal in mobile cards when routing excludes candidates for concurrency", () => {
+      const originalMatchMedia = window.matchMedia;
+
+      window.matchMedia = ((query: string) => ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      })) as unknown as typeof window.matchMedia;
+
+      try {
+        const routingDecision: RoutingDecisionLog = {
+          original_model: "gpt-4",
+          resolved_model: "gpt-4",
+          model_redirect_applied: false,
+          routing_type: "group",
+          selection_strategy: "weighted_random",
+          candidate_count: 3,
+          final_candidate_count: 2,
+          selected_upstream_id: "upstream-1",
+          candidates: [],
+          excluded: [{ id: "upstream-3", name: "openai-3", reason: "concurrency_full" }],
+        };
+
+        render(<LogsTable logs={[{ ...mockLog, routing_decision: routingDecision }]} />);
+
+        expect(screen.getAllByText("exclusionReason.concurrency_full").length).toBeGreaterThan(0);
+      } finally {
+        window.matchMedia = originalMatchMedia;
+      }
+    });
+
     it("does not show dash together with unbillable usage-missing reason in mobile cards", async () => {
       const originalMatchMedia = window.matchMedia;
 
@@ -1141,6 +1177,21 @@ describe("LogsTable", () => {
       ],
     };
 
+    it("shows compact concurrency-full signal in the desktop routing summary", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              routing_decision: mockRoutingDecision,
+            },
+          ]}
+        />
+      );
+
+      expect(screen.getByText("exclusionReason.concurrency_full")).toBeInTheDocument();
+    });
+
     it("shows expand indicator when token details exist even without failover", () => {
       render(<LogsTable logs={[mockLog]} />);
 
@@ -1319,7 +1370,7 @@ describe("LogsTable", () => {
       expect(screen.getByText("openai-3")).toBeInTheDocument();
       expect(screen.getByText("w:100")).toBeInTheDocument();
       expect(screen.getByText("circuitState.half_open")).toBeInTheDocument();
-      expect(screen.getByText("exclusionReason.concurrency_full")).toBeInTheDocument();
+      expect(screen.getAllByText("exclusionReason.concurrency_full").length).toBeGreaterThan(0);
 
       fireEvent.click(screen.getAllByRole("button", { name: "lifecycleRequest" })[0]);
       expect(screen.getAllByText("journeyRetryReasonText").length).toBeGreaterThan(0);

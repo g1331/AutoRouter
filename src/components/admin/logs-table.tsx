@@ -217,6 +217,15 @@ function getRequestTps(log: RequestLog): number | null {
   return Math.round((log.completion_tokens / log.duration_ms) * 1000 * 10) / 10;
 }
 
+function hasConcurrencyFullSignal(
+  log: Pick<RequestLog, "routing_decision" | "failover_history">
+): boolean {
+  return (
+    log.routing_decision?.excluded?.some((item) => item.reason === "concurrency_full") === true ||
+    log.failover_history?.some((attempt) => attempt.error_type === "concurrency_full") === true
+  );
+}
+
 function getPercentile(values: number[], percentile: number): number | null {
   if (values.length === 0) {
     return null;
@@ -2002,6 +2011,11 @@ export function LogsTable({ logs }: LogsTableProps) {
                             className="text-xs"
                             variant="mobile"
                           />
+                          {hasConcurrencyFullSignal(log) && (
+                            <Badge variant="warning" className="px-1.5 py-0 text-[10px] leading-4">
+                              {t("exclusionReason.concurrency_full")}
+                            </Badge>
+                          )}
                         </div>
 
                         {displayTotalTokens > 0 && (
@@ -2212,6 +2226,7 @@ export function LogsTable({ logs }: LogsTableProps) {
                                 routingType={log.routing_type}
                                 groupName={log.group_name}
                                 failoverAttempts={log.failover_attempts}
+                                failoverHistory={log.failover_history}
                                 sessionId={log.session_id}
                                 affinityHit={log.affinity_hit}
                                 affinityMigrated={log.affinity_migrated}
