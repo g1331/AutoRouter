@@ -196,6 +196,72 @@ describe("LogsTable", () => {
         window.matchMedia = originalMatchMedia;
       }
     });
+
+    it("does not show dash together with unbillable usage-missing reason in mobile cards", async () => {
+      const originalMatchMedia = window.matchMedia;
+
+      window.matchMedia = ((query: string) => ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      })) as unknown as typeof window.matchMedia;
+
+      try {
+        render(
+          <LogsTable
+            logs={[
+              {
+                ...mockLog,
+                billing_status: "unbilled",
+                unbillable_reason: "usage_missing",
+                final_cost: null,
+              },
+            ]}
+          />
+        );
+
+        await waitFor(() => {
+          expect(screen.getByText("billingReasonUsageMissing")).toBeInTheDocument();
+        });
+        const reason = screen.getByText("billingReasonUsageMissing");
+        const billingContainer = reason.parentElement;
+        expect(billingContainer).not.toBeNull();
+        expect(billingContainer).not.toHaveTextContent(/^-$/);
+        expect(billingContainer).not.toHaveTextContent(/^-billingReasonUsageMissing$/);
+      } finally {
+        window.matchMedia = originalMatchMedia;
+      }
+    });
+  });
+
+  describe("Billing Display", () => {
+    it("does not show dash together with unbillable usage-missing reason in table rows", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              billing_status: "unbilled",
+              unbillable_reason: "usage_missing",
+              final_cost: null,
+            },
+          ]}
+        />
+      );
+
+      const reason = screen.getByText("billingReasonUsageMissing");
+      const billingContainer = reason.parentElement;
+
+      expect(reason).toBeInTheDocument();
+      expect(billingContainer).not.toBeNull();
+      expect(billingContainer).not.toHaveTextContent(/^-$/);
+      expect(billingContainer).not.toHaveTextContent(/^-billingReasonUsageMissing$/);
+    });
   });
 
   describe("Upstream Display", () => {
@@ -268,6 +334,26 @@ describe("LogsTable", () => {
       fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
       expect(screen.getByText("tokenInput")).toBeInTheDocument();
       expect(screen.getByText("tokenOutput")).toBeInTheDocument();
+    });
+
+    it("renders display total including cache summary", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              prompt_tokens: 4,
+              completion_tokens: 1076,
+              total_tokens: 1080,
+              cached_tokens: 2348,
+              cache_creation_tokens: 11528,
+              cache_read_tokens: 2348,
+            },
+          ]}
+        />
+      );
+
+      expect(screen.getByText(/14[,.\s\u00a0\u202f]?956/)).toBeInTheDocument();
     });
 
     it("renders dash for zero tokens", () => {
@@ -1086,6 +1172,27 @@ describe("LogsTable", () => {
 
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
       expect(expandButton).toBeInTheDocument();
+    });
+
+    it("shows expand button when cache summary exists even if raw total is zero", () => {
+      const cacheOnlyLog: RequestLog = {
+        ...logWithFailoverBase,
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        total_tokens: 0,
+        cached_tokens: 30,
+        cache_creation_tokens: 20,
+        cache_read_tokens: 30,
+        failover_attempts: 0,
+        failover_history: null,
+        routing_decision: null,
+        session_id: null,
+      };
+
+      render(<LogsTable logs={[cacheOnlyLog]} />);
+
+      expect(screen.getByRole("button", { name: "expandDetails" })).toBeInTheDocument();
+      expect(screen.getByText("50")).toBeInTheDocument();
     });
 
     it("expands row on click to show token details", () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Database, Download } from "lucide-react";
+import { Download, Upload } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -53,6 +53,10 @@ interface CacheUsageBreakdown {
   cacheHitRate: number | null;
 }
 
+interface TokenDisplayMetrics extends CacheUsageBreakdown {
+  displayTotalTokens: number;
+}
+
 function formatCacheRate(rate: number | null): string {
   if (rate === null || !Number.isFinite(rate)) {
     return "0.00";
@@ -98,6 +102,37 @@ function getCacheUsageBreakdown(
   };
 }
 
+export function getDisplayTokenMetrics({
+  promptTokens,
+  completionTokens,
+  totalTokens,
+  cachedTokens,
+  cacheCreationTokens,
+  cacheReadTokens,
+}: Pick<
+  TokenDisplayProps,
+  | "promptTokens"
+  | "completionTokens"
+  | "totalTokens"
+  | "cachedTokens"
+  | "cacheCreationTokens"
+  | "cacheReadTokens"
+>): TokenDisplayMetrics {
+  const cacheUsageBreakdown = getCacheUsageBreakdown(promptTokens, cacheReadTokens, cachedTokens);
+  const displayTotalTokens = Math.max(
+    Math.max(totalTokens, 0),
+    cacheUsageBreakdown.newInputTokens +
+      Math.max(completionTokens, 0) +
+      Math.max(cacheCreationTokens, 0) +
+      cacheUsageBreakdown.effectiveCacheRead
+  );
+
+  return {
+    ...cacheUsageBreakdown,
+    displayTotalTokens,
+  };
+}
+
 /**
  * Token Detail Content
  *
@@ -135,11 +170,15 @@ export function TokenDetailContent({
   className,
 }: TokenDetailContentProps) {
   const t = useTranslations("logs");
-  const { effectiveCacheRead, newInputTokens, cacheHitRate } = getCacheUsageBreakdown(
-    promptTokens,
-    cacheReadTokens,
-    cachedTokens
-  );
+  const { effectiveCacheRead, newInputTokens, cacheHitRate, displayTotalTokens } =
+    getDisplayTokenMetrics({
+      promptTokens,
+      completionTokens,
+      totalTokens,
+      cachedTokens,
+      cacheCreationTokens,
+      cacheReadTokens,
+    });
 
   // Build main token rows (input, output, reasoning breakdown)
   const mainRows: Array<{
@@ -264,7 +303,7 @@ export function TokenDetailContent({
         <div className="grid grid-cols-[auto_auto] items-center gap-x-3">
           <span className="font-medium text-foreground">{t("tokenTotal")}</span>
           <span className="font-medium text-foreground text-right justify-self-end">
-            {totalTokens.toLocaleString()}
+            {displayTotalTokens.toLocaleString()}
           </span>
         </div>
         {effectiveCacheRead > 0 && cacheHitRate !== null && (
@@ -285,7 +324,7 @@ export function TokenDetailContent({
  * Follows the neutral dashboard style:
  * - Total uses foreground for primary emphasis
  * - Input/Output breakdown uses muted foreground
- * - Cache indicator with Database icon in info color when effectiveCacheRead > 0
+ * - Cache indicators use clearer upload/download icons for write vs read
  */
 export function TokenDisplay({
   promptTokens,
@@ -299,20 +338,23 @@ export function TokenDisplay({
 }: TokenDisplayProps) {
   const t = useTranslations("logs");
 
-  if (totalTokens === 0) {
+  const { effectiveCacheRead, newInputTokens, displayTotalTokens } = getDisplayTokenMetrics({
+    promptTokens,
+    completionTokens,
+    totalTokens,
+    cachedTokens,
+    cacheCreationTokens,
+    cacheReadTokens,
+  });
+
+  if (displayTotalTokens === 0) {
     return <span className="text-muted-foreground">-</span>;
   }
-
-  const { effectiveCacheRead, newInputTokens } = getCacheUsageBreakdown(
-    promptTokens,
-    cacheReadTokens,
-    cachedTokens
-  );
 
   return (
     <div className="flex flex-col text-xs font-mono">
       {/* Row 1: Total tokens - primary emphasis */}
-      <span className="text-foreground">{totalTokens.toLocaleString()}</span>
+      <span className="text-foreground">{displayTotalTokens.toLocaleString()}</span>
       {/* Row 2: New Input / Output breakdown - secondary */}
       <span className="flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
         <span className="inline-flex items-center gap-0.5">
@@ -328,6 +370,17 @@ export function TokenDisplay({
       {/* Row 3: Cache indicators */}
       {(effectiveCacheRead > 0 || cacheCreationTokens > 0) && (
         <div className="mt-0.5 flex flex-wrap gap-1">
+          {cacheCreationTokens > 0 && (
+            <Badge
+              variant="info"
+              className="w-fit gap-1 px-1.5 py-0 text-[9px]"
+              aria-label={`${t("tokenCacheWrite")} ${cacheCreationTokens.toLocaleString()}`}
+            >
+              <Upload className="h-2.5 w-2.5" aria-hidden="true" />
+              <span className="font-semibold">W</span>
+              <span>{cacheCreationTokens.toLocaleString()}</span>
+            </Badge>
+          )}
           {effectiveCacheRead > 0 && (
             <Badge
               variant="info"
@@ -335,19 +388,8 @@ export function TokenDisplay({
               aria-label={`${t("tokenCacheHit")} ${effectiveCacheRead.toLocaleString()}`}
             >
               <Download className="h-2.5 w-2.5" aria-hidden="true" />
-              <span>{t("tokenCacheHitShort")}</span>
+              <span className="font-semibold">R</span>
               <span>{effectiveCacheRead.toLocaleString()}</span>
-            </Badge>
-          )}
-          {cacheCreationTokens > 0 && (
-            <Badge
-              variant="info"
-              className="w-fit gap-1 px-1.5 py-0 text-[9px]"
-              aria-label={`${t("tokenCacheWrite")} ${cacheCreationTokens.toLocaleString()}`}
-            >
-              <Database className="h-2.5 w-2.5" aria-hidden="true" />
-              <span>{t("tokenCacheWriteShort")}</span>
-              <span>{cacheCreationTokens.toLocaleString()}</span>
             </Badge>
           )}
         </div>

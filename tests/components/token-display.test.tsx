@@ -61,6 +61,22 @@ describe("TokenDisplay", () => {
       expect(screen.getByText("300")).toBeInTheDocument();
     });
 
+    it("renders total tokens including cache summary", () => {
+      render(
+        <TokenDisplay
+          promptTokens={4}
+          completionTokens={1076}
+          totalTokens={1080}
+          cachedTokens={2348}
+          reasoningTokens={0}
+          cacheCreationTokens={11528}
+          cacheReadTokens={2348}
+        />
+      );
+
+      expect(screen.getByText(formatNumberRegex(14956))).toBeInTheDocument();
+    });
+
     it("renders input/output breakdown", () => {
       render(
         <TokenDisplay
@@ -92,9 +108,10 @@ describe("TokenDisplay", () => {
         />
       );
 
-      const cacheHitBadge = screen.getByText("tokenCacheHitShort").closest("div");
+      const cacheHitBadge = screen.getByLabelText("tokenCacheHit 50").closest("div");
       expect(cacheHitBadge).not.toBeNull();
       expect(within(cacheHitBadge as HTMLElement).getByText("50")).toBeInTheDocument();
+      expect(screen.queryByText("tokenCacheHitShort")).not.toBeInTheDocument();
     });
 
     it("does not show cache badge when cachedTokens is 0", () => {
@@ -150,7 +167,7 @@ describe("TokenDisplay", () => {
       );
 
       // Should render cache badge with cachedTokens value
-      const cacheHitBadge = screen.getByText("tokenCacheHitShort").closest("div");
+      const cacheHitBadge = screen.getByLabelText("tokenCacheHit 50").closest("div");
       expect(cacheHitBadge).not.toBeNull();
       expect(within(cacheHitBadge as HTMLElement).getByText("50")).toBeInTheDocument();
     });
@@ -169,7 +186,7 @@ describe("TokenDisplay", () => {
       );
 
       // Cache badge should use cacheReadTokens (30) not cachedTokens (50)
-      const cacheHitBadge = screen.getByText("tokenCacheHitShort").closest("div");
+      const cacheHitBadge = screen.getByLabelText("tokenCacheHit 30").closest("div");
       expect(cacheHitBadge).not.toBeNull();
       expect(within(cacheHitBadge as HTMLElement).getByText("30")).toBeInTheDocument();
     });
@@ -190,6 +207,23 @@ describe("TokenDisplay", () => {
       expect(screen.getByText(hasExactTextContent("↑50/↓200"))).toBeInTheDocument();
     });
 
+    it("renders computed total when raw total is zero but cache summary exists", () => {
+      render(
+        <TokenDisplay
+          promptTokens={0}
+          completionTokens={0}
+          totalTokens={0}
+          cachedTokens={30}
+          reasoningTokens={0}
+          cacheCreationTokens={20}
+          cacheReadTokens={30}
+        />
+      );
+
+      expect(screen.queryByText("-")).not.toBeInTheDocument();
+      expect(screen.getByText("50")).toBeInTheDocument();
+    });
+
     it("shows cache write badge when cacheCreationTokens > 0", () => {
       render(
         <TokenDisplay
@@ -203,9 +237,35 @@ describe("TokenDisplay", () => {
         />
       );
 
-      const cacheWriteBadge = screen.getByText("tokenCacheWriteShort").closest("div");
+      const cacheWriteBadge = screen.getByLabelText("tokenCacheWrite 100").closest("div");
       expect(cacheWriteBadge).not.toBeNull();
       expect(within(cacheWriteBadge as HTMLElement).getByText("100")).toBeInTheDocument();
+      expect(screen.queryByText("tokenCacheWriteShort")).not.toBeInTheDocument();
+    });
+
+    it("renders cache write badge before cache read badge when both are present", () => {
+      render(
+        <TokenDisplay
+          promptTokens={1000}
+          completionTokens={200}
+          totalTokens={1200}
+          cachedTokens={0}
+          reasoningTokens={0}
+          cacheCreationTokens={100}
+          cacheReadTokens={800}
+        />
+      );
+
+      const cacheWriteBadge = screen.getByLabelText("tokenCacheWrite 100");
+      const cacheReadBadge = screen.getByLabelText("tokenCacheHit 800");
+
+      expect(cacheWriteBadge).toHaveTextContent("W");
+      expect(cacheWriteBadge).toHaveTextContent("100");
+      expect(cacheReadBadge).toHaveTextContent("R");
+      expect(cacheReadBadge).toHaveTextContent("800");
+      expect(
+        cacheWriteBadge.compareDocumentPosition(cacheReadBadge) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
     });
 
     it("keeps new input tokens when cache read exceeds prompt tokens", () => {
@@ -223,7 +283,7 @@ describe("TokenDisplay", () => {
 
       expect(screen.getByText(hasExactTextContent("↑14/↓758"))).toBeInTheDocument();
 
-      const cacheHitBadge = screen.getByText("tokenCacheHitShort").closest("div");
+      const cacheHitBadge = screen.getByLabelText("tokenCacheHit 28,750").closest("div");
       expect(cacheHitBadge).not.toBeNull();
       expect(
         within(cacheHitBadge as HTMLElement).getByText(formatNumberRegex(28750))
@@ -526,6 +586,23 @@ describe("TokenDetailContent", () => {
   });
 
   describe("Complex Scenarios", () => {
+    it("shows total row including cache summary when present", () => {
+      render(
+        <TokenDetailContent
+          promptTokens={4}
+          completionTokens={1076}
+          totalTokens={1080}
+          cachedTokens={2348}
+          reasoningTokens={0}
+          cacheCreationTokens={11528}
+          cacheReadTokens={2348}
+        />
+      );
+
+      expect(screen.getByText("tokenTotal")).toBeInTheDocument();
+      expect(screen.getByText(formatNumberRegex(14956))).toBeInTheDocument();
+    });
+
     it("shows complete breakdown for reasoning + cache scenario", () => {
       render(
         <TokenDetailContent

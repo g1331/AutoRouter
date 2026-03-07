@@ -27,7 +27,11 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ROUTE_CAPABILITY_ICON_META } from "@/components/admin/route-capability-badges";
-import { TokenDisplay, TokenDetailContent } from "@/components/admin/token-display";
+import {
+  TokenDisplay,
+  TokenDetailContent,
+  getDisplayTokenMetrics,
+} from "@/components/admin/token-display";
 import { RoutingDecisionTimeline } from "@/components/admin/routing-decision-timeline";
 import { LifecycleTrack } from "@/components/admin/lifecycle-track";
 import { HeaderDiffPanel } from "@/components/logs/header-diff-panel";
@@ -260,6 +264,10 @@ export function LogsTable({ logs }: LogsTableProps) {
       return `${log.final_cost.toFixed(6)} ${currency}`;
     }
     return usdFormatter.format(log.final_cost);
+  };
+
+  const shouldShowBillingCost = (log: RequestLog): boolean => {
+    return !(log.billing_status === "unbilled" && log.unbillable_reason && log.final_cost == null);
   };
 
   const formatMoneyValue = (
@@ -1753,6 +1761,14 @@ export function LogsTable({ logs }: LogsTableProps) {
     const hasRoutingDecision = !!log.routing_decision;
     const hasSessionDiagnostics = !!log.session_id || !!log.session_id_compensated;
     const hasHeaderDiff = !!log.header_diff;
+    const { displayTotalTokens } = getDisplayTokenMetrics({
+      promptTokens: log.prompt_tokens,
+      completionTokens: log.completion_tokens,
+      totalTokens: log.total_tokens,
+      cachedTokens: log.cached_tokens,
+      cacheCreationTokens: log.cache_creation_tokens,
+      cacheReadTokens: log.cache_read_tokens,
+    });
     // Token details moved from tooltip into the expanded row, so allow expansion
     // whenever there is something meaningful to show.
     // - In-progress requests: tokens may be 0 but routing_decision can exist
@@ -1762,7 +1778,7 @@ export function LogsTable({ logs }: LogsTableProps) {
       hasRoutingDecision ||
       hasSessionDiagnostics ||
       hasHeaderDiff ||
-      log.total_tokens > 0;
+      displayTotalTokens > 0;
     const isNew = newLogIds.has(log.id);
     const isError = hasErrorState(log);
     const upstreamDisplayName =
@@ -1801,6 +1817,7 @@ export function LogsTable({ logs }: LogsTableProps) {
       upstreamDisplayName,
       failoverDurationMs,
       requestTps,
+      displayTotalTokens,
     };
   };
 
@@ -1940,6 +1957,7 @@ export function LogsTable({ logs }: LogsTableProps) {
                   upstreamDisplayName,
                   failoverDurationMs,
                   requestTps,
+                  displayTotalTokens,
                 } = getLogDerived(log);
 
                 return (
@@ -1986,7 +2004,7 @@ export function LogsTable({ logs }: LogsTableProps) {
                           />
                         </div>
 
-                        {log.total_tokens > 0 && (
+                        {displayTotalTokens > 0 && (
                           <div className="pt-1">
                             <TokenDisplay
                               promptTokens={log.prompt_tokens}
@@ -2032,9 +2050,11 @@ export function LogsTable({ logs }: LogsTableProps) {
                           })()}
                         </div>
                         <div className="mt-1 tabular-nums">{formatDuration(log.duration_ms)}</div>
-                        <div className="mt-1 tabular-nums text-foreground">
-                          {formatBillingCost(log)}
-                        </div>
+                        {shouldShowBillingCost(log) ? (
+                          <div className="mt-1 tabular-nums text-foreground">
+                            {formatBillingCost(log)}
+                          </div>
+                        ) : null}
                         {log.billing_status === "unbilled" && log.unbillable_reason && (
                           <div className="mt-0.5 max-w-[160px] text-[11px] text-status-warning">
                             {resolveBillingReasonLabel(log.unbillable_reason)}
@@ -2237,9 +2257,11 @@ export function LogsTable({ logs }: LogsTableProps) {
                             </TableCell>
                             <TableCell className="px-2 py-1 text-right">
                               <div className="flex flex-col items-end gap-0">
-                                <span className="font-mono text-[11px] tabular-nums whitespace-nowrap">
-                                  {formatBillingCost(log)}
-                                </span>
+                                {shouldShowBillingCost(log) ? (
+                                  <span className="font-mono text-[11px] tabular-nums whitespace-nowrap">
+                                    {formatBillingCost(log)}
+                                  </span>
+                                ) : null}
                                 {log.billing_status === "unbilled" && (
                                   <p className="mt-1 text-[10px] text-status-warning">
                                     {log.unbillable_reason
