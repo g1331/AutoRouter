@@ -4697,7 +4697,9 @@ describe("proxy route upstream selection", () => {
       expect(response.status).toBe(200);
 
       abortController.abort();
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await expect
+        .poll(() => vi.mocked(calculateAndPersistRequestBillingSnapshot).mock.calls.length)
+        .toBe(1);
 
       expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledTimes(1);
       expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
