@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act, within } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { LogsTable } from "@/components/admin/logs-table";
 import type { RequestLog, RoutingDecisionLog } from "@/types/api";
@@ -1393,7 +1393,27 @@ describe("LogsTable", () => {
       expect(screen.getAllByText(/retryTotalDuration/).length).toBeGreaterThan(0);
     });
 
-    it("shows cache TTL split rows in expanded token details when values are present", () => {
+    it("shows a 5m badge on cache write and hides duplicate TTL row in expanded token details", () => {
+      const logWithSingleTtlBucket: RequestLog = {
+        ...logWithFailoverBase,
+        cache_creation_tokens: 150,
+        cache_creation_5m_tokens: 150,
+        cache_creation_1h_tokens: 0,
+      };
+
+      render(<LogsTable logs={[logWithSingleTtlBucket]} />);
+
+      const expandButton = screen.getByRole("button", { name: "expandDetails" });
+      fireEvent.click(expandButton);
+
+      const cacheWriteRow = screen.getByText("tokenCacheWrite").closest("div")?.parentElement;
+      expect(cacheWriteRow).not.toBeNull();
+      expect(within(cacheWriteRow as HTMLElement).getByText("5m")).toBeInTheDocument();
+      expect(screen.queryByText("tokenCacheWrite5m")).not.toBeInTheDocument();
+      expect(screen.queryByText("tokenCacheWrite1h")).not.toBeInTheDocument();
+    });
+
+    it("shows cache TTL split rows in expanded token details when values are both present", () => {
       const logWithTtlSplit: RequestLog = {
         ...logWithFailoverBase,
         cache_creation_tokens: 150,

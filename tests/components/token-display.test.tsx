@@ -22,6 +22,11 @@ function hasExactTextContent(expected: string) {
   return (_content: string, element: Element | null) => element?.textContent === expected;
 }
 
+function getDetailRow(label: string): HTMLElement | null {
+  const labelElement = screen.getByText(label);
+  return labelElement.closest("div")?.parentElement as HTMLElement | null;
+}
+
 /**
  * TokenDisplay Component Tests
  *
@@ -316,8 +321,8 @@ describe("TokenDetailContent", () => {
       expect(screen.getByText("tokenInput")).toBeInTheDocument();
       expect(screen.getByText("tokenOutput")).toBeInTheDocument();
       expect(screen.getByText("tokenTotal")).toBeInTheDocument();
-      expect(screen.getAllByText("↑").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("↓").length).toBeGreaterThan(0);
+      expect(screen.queryByText("↑")).not.toBeInTheDocument();
+      expect(screen.queryByText("↓")).not.toBeInTheDocument();
     });
 
     it("renders formatted token values", () => {
@@ -412,11 +417,11 @@ describe("TokenDetailContent", () => {
       expect(screen.getByText("tokenCacheHit")).toBeInTheDocument();
       expect(screen.getByText("tokenInputNew")).toBeInTheDocument();
 
-      const cacheHitRow = screen.getByText("tokenCacheHit").closest("div");
+      const cacheHitRow = getDetailRow("tokenCacheHit");
       expect(cacheHitRow).not.toBeNull();
       expect(within(cacheHitRow as HTMLElement).getByText("50")).toBeInTheDocument();
 
-      const newInputRow = screen.getByText("tokenInputNew").closest("div");
+      const newInputRow = getDetailRow("tokenInputNew");
       expect(newInputRow).not.toBeNull();
       expect(within(newInputRow as HTMLElement).getByText("50")).toBeInTheDocument();
     });
@@ -453,7 +458,7 @@ describe("TokenDetailContent", () => {
       );
 
       // Should show 50 (cacheReadTokens), not 80 (cachedTokens)
-      const cacheHitRow = screen.getByText("tokenCacheHit").closest("div");
+      const cacheHitRow = getDetailRow("tokenCacheHit");
       expect(cacheHitRow).not.toBeNull();
       expect(within(cacheHitRow as HTMLElement).getByText("50")).toBeInTheDocument();
       expect(screen.queryByText("80")).not.toBeInTheDocument();
@@ -479,12 +484,58 @@ describe("TokenDetailContent", () => {
       expect(screen.getByText("800")).toBeInTheDocument();
 
       // new input = 1000 - 800 = 200 (assert within the "tokenInputNew" row)
-      const newInputRow = screen.getByText("tokenInputNew").closest("div");
+      const newInputRow = getDetailRow("tokenInputNew");
       expect(newInputRow).not.toBeNull();
       expect(within(newInputRow as HTMLElement).getByText("200")).toBeInTheDocument();
     });
 
-    it("shows TTL split rows when cacheCreation5mTokens/cacheCreation1hTokens > 0", () => {
+    it("shows a 5m badge on cache write and hides duplicate TTL row when total equals 5m bucket", () => {
+      render(
+        <TokenDetailContent
+          promptTokens={1000}
+          completionTokens={200}
+          totalTokens={1200}
+          cachedTokens={0}
+          reasoningTokens={0}
+          cacheCreationTokens={150}
+          cacheCreation5mTokens={150}
+          cacheCreation1hTokens={0}
+          cacheReadTokens={0}
+        />
+      );
+
+      const cacheWriteRow = getDetailRow("tokenCacheWrite");
+      expect(cacheWriteRow).not.toBeNull();
+      expect(within(cacheWriteRow as HTMLElement).getByText("5m")).toBeInTheDocument();
+      expect(screen.getAllByText("150").length).toBeGreaterThan(0);
+      expect(screen.queryByText("tokenCacheWrite5m")).not.toBeInTheDocument();
+      expect(screen.queryByText("tokenCacheWrite1h")).not.toBeInTheDocument();
+    });
+
+    it("shows a 1h badge on cache write and hides duplicate TTL row when total equals 1h bucket", () => {
+      render(
+        <TokenDetailContent
+          promptTokens={1000}
+          completionTokens={200}
+          totalTokens={1200}
+          cachedTokens={0}
+          reasoningTokens={0}
+          cacheCreationTokens={150}
+          cacheCreation5mTokens={0}
+          cacheCreation1hTokens={150}
+          cacheReadTokens={0}
+        />
+      );
+
+      const cacheWriteRow = getDetailRow("tokenCacheWrite");
+      expect(cacheWriteRow).not.toBeNull();
+      expect(within(cacheWriteRow as HTMLElement).getByText("1h")).toBeInTheDocument();
+      expect(screen.getAllByText("150").length).toBeGreaterThan(0);
+      expect(screen.queryByText("tokenCacheWrite5m")).not.toBeInTheDocument();
+      expect(screen.queryByText("tokenCacheWrite1h")).not.toBeInTheDocument();
+    });
+
+    it("shows TTL split rows when cacheCreation5mTokens/cacheCreation1hTokens are both present", () => {
       render(
         <TokenDetailContent
           promptTokens={1000}
@@ -544,7 +595,7 @@ describe("TokenDetailContent", () => {
       const percentage = Number.parseFloat(percentageText.replace("%", ""));
       expect(percentage).toBeLessThanOrEqual(100);
 
-      const newInputRow = screen.getByText("tokenInputNew").closest("div");
+      const newInputRow = getDetailRow("tokenInputNew");
       expect(newInputRow).not.toBeNull();
       expect(within(newInputRow as HTMLElement).getByText("14")).toBeInTheDocument();
     });

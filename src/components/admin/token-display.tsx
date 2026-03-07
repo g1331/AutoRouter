@@ -24,6 +24,15 @@ interface TokenDetailContentProps extends TokenDisplayProps {
 
 type TokenDirection = "input" | "output";
 
+type TokenDetailRow = {
+  label: string;
+  value: number;
+  highlight: boolean;
+  indent?: boolean;
+  direction?: TokenDirection;
+  badges?: string[];
+};
+
 function TokenDirectionMarker({ direction }: { direction: TokenDirection }) {
   return (
     <span
@@ -156,6 +165,30 @@ export function getDisplayTokenMetrics({
  * 总计: 4,503
  * ```
  */
+function getCacheWriteTtlBadge(
+  cacheCreationTokens: number,
+  cacheCreation5mTokens: number,
+  cacheCreation1hTokens: number
+): string | null {
+  if (
+    cacheCreationTokens > 0 &&
+    cacheCreation5mTokens === cacheCreationTokens &&
+    cacheCreation1hTokens === 0
+  ) {
+    return "5m";
+  }
+
+  if (
+    cacheCreationTokens > 0 &&
+    cacheCreation1hTokens === cacheCreationTokens &&
+    cacheCreation5mTokens === 0
+  ) {
+    return "1h";
+  }
+
+  return null;
+}
+
 export function TokenDetailContent({
   promptTokens,
   completionTokens,
@@ -179,15 +212,14 @@ export function TokenDetailContent({
       cacheCreationTokens,
       cacheReadTokens,
     });
+  const cacheWriteTtlBadge = getCacheWriteTtlBadge(
+    cacheCreationTokens,
+    cacheCreation5mTokens,
+    cacheCreation1hTokens
+  );
 
   // Build main token rows (input, output, reasoning breakdown)
-  const mainRows: Array<{
-    label: string;
-    value: number;
-    highlight: boolean;
-    indent?: boolean;
-    direction?: TokenDirection;
-  }> = [
+  const mainRows: TokenDetailRow[] = [
     { label: t("tokenInput"), value: promptTokens, highlight: true, direction: "input" },
     { label: t("tokenOutput"), value: completionTokens, highlight: true, direction: "output" },
   ];
@@ -217,10 +249,11 @@ export function TokenDetailContent({
       value: cacheCreationTokens,
       highlight: false,
       indent: true,
+      badges: cacheWriteTtlBadge ? [cacheWriteTtlBadge] : undefined,
     });
 
     let ttlInsertIndex = cacheWriteInsertIndex + 1;
-    if (cacheCreation5mTokens > 0) {
+    if (cacheCreation5mTokens > 0 && cacheWriteTtlBadge !== "5m") {
       mainRows.splice(ttlInsertIndex, 0, {
         label: t("tokenCacheWrite5m"),
         value: cacheCreation5mTokens,
@@ -230,7 +263,7 @@ export function TokenDetailContent({
       ttlInsertIndex += 1;
     }
 
-    if (cacheCreation1hTokens > 0) {
+    if (cacheCreation1hTokens > 0 && cacheWriteTtlBadge !== "1h") {
       mainRows.splice(ttlInsertIndex, 0, {
         label: t("tokenCacheWrite1h"),
         value: cacheCreation1hTokens,
@@ -276,16 +309,24 @@ export function TokenDetailContent({
       <div className="space-y-1">
         {mainRows.map((row, idx) => (
           <div key={idx} className="grid grid-cols-[auto_auto] items-center gap-x-3">
-            <span
+            <div
               className={cn(
                 "inline-flex items-center gap-1",
                 row.highlight ? "text-foreground" : "text-muted-foreground",
                 row.indent ? "pl-4" : ""
               )}
             >
-              {row.direction && <TokenDirectionMarker direction={row.direction} />}
+              {row.badges?.map((badge) => (
+                <Badge
+                  key={badge}
+                  variant="info"
+                  className="h-4 min-w-[1.7rem] justify-center px-1.5 py-0 text-[10px] leading-4 font-semibold uppercase tracking-wide"
+                >
+                  {badge}
+                </Badge>
+              ))}
               <span>{row.label}</span>
-            </span>
+            </div>
             <span
               className={cn(
                 row.highlight ? "text-foreground" : "text-muted-foreground",
