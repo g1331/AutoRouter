@@ -30,7 +30,7 @@ vi.mock("next-intl", () => ({
       "exclusionReason.unhealthy": "Unhealthy",
       "circuitState.closed": "Normal",
       "circuitState.open": "Open",
-      "circuitState.half_open": "Recovering",
+      "circuitState.half_open": "Probing",
     };
     return translations[key] || key;
   },

@@ -1,7 +1,8 @@
-import { and, gte, sql, count, sum, avg, inArray, isNotNull, ne } from "drizzle-orm";
+import { and, gte, sql, count, sum, inArray, isNotNull, ne } from "drizzle-orm";
 import { db, requestLogs, apiKeys, upstreams } from "../db";
 import { config } from "../utils/config";
 import { getPrimaryProviderByCapabilities } from "@/lib/route-capabilities";
+import { reconcileStaleInProgressRequestLogs } from "./request-logger";
 
 export type TimeRange = "today" | "7d" | "30d";
 
@@ -70,9 +71,11 @@ export interface StatsLeaderboard {
 
 const MIN_TPS_COMPLETION_TOKENS = 10;
 const MIN_TPS_DURATION_MS = 100;
+const successfulRequestCondition = sql`${requestLogs.statusCode} BETWEEN 200 AND 299`;
 
 const tpsEligibleCondition = sql`
   ${requestLogs.isStream}
+  and ${successfulRequestCondition}
   and ${requestLogs.completionTokens} >= ${MIN_TPS_COMPLETION_TOKENS}
   and ${requestLogs.durationMs} is not null
   and ${requestLogs.durationMs} > ${MIN_TPS_DURATION_MS}
@@ -112,15 +115,23 @@ function getGranularity(rangeType: TimeRange): "hour" | "day" {
  * Get overview statistics for the dashboard.
  */
 export async function getOverviewStats(): Promise<StatsOverview> {
+  if (process.env.NODE_ENV !== "test") {
+    await reconcileStaleInProgressRequestLogs().catch(() => undefined);
+  }
+
   const startOfToday = getTimeRangeStart("today");
 
   const result = await db
     .select({
       totalRequests: count(requestLogs.id),
-      avgDuration: avg(requestLogs.durationMs),
+      avgDuration: sql<
+        string | null
+      >`avg(case when ${successfulRequestCondition} then ${requestLogs.durationMs} end)`,
       totalTokens: sum(requestLogs.totalTokens),
       successCount: count(sql`CASE WHEN ${requestLogs.statusCode} BETWEEN 200 AND 299 THEN 1 END`),
-      avgTtft: avg(requestLogs.ttftMs),
+      avgTtft: sql<
+        string | null
+      >`avg(case when ${successfulRequestCondition} then ${requestLogs.ttftMs} end)`,
       totalCacheReadTokens: sum(requestLogs.cacheReadTokens),
       totalEffectivePromptTokens: sql<number>`
         sum(
@@ -168,6 +179,10 @@ export async function getTimeseriesStats(
   rangeType: TimeRange = "7d",
   metric: TimeseriesMetric = "requests"
 ): Promise<StatsTimeseries> {
+  if (process.env.NODE_ENV !== "test") {
+    await reconcileStaleInProgressRequestLogs().catch(() => undefined);
+  }
+
   const startTime = getTimeRangeStart(rangeType);
   const granularity = getGranularity(rangeType);
 
@@ -187,8 +202,16 @@ export async function getTimeseriesStats(
       timeBucket: timeBucketExpr,
       requestCount: count(requestLogs.id),
       totalTokens: sum(requestLogs.totalTokens),
-      avgDuration: avg(requestLogs.durationMs),
-      ...(metric === "ttft" ? { avgTtft: avg(requestLogs.ttftMs) } : {}),
+      avgDuration: sql<
+        string | null
+      >`avg(case when ${successfulRequestCondition} then ${requestLogs.durationMs} end)`,
+      ...(metric === "ttft"
+        ? {
+            avgTtft: sql<
+              string | null
+            >`avg(case when ${successfulRequestCondition} then ${requestLogs.ttftMs} end)`,
+          }
+        : {}),
       ...(metric === "tps"
         ? {
             totalCompletionTokens: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.completionTokens} else 0 end)`,
@@ -292,6 +315,10 @@ export async function getLeaderboardStats(
   rangeType: TimeRange = "7d",
   limit: number = 5
 ): Promise<StatsLeaderboard> {
+  if (process.env.NODE_ENV !== "test") {
+    await reconcileStaleInProgressRequestLogs().catch(() => undefined);
+  }
+
   const startTime = getTimeRangeStart(rangeType);
   limit = Math.min(50, Math.max(1, limit));
 
@@ -336,7 +363,9 @@ export async function getLeaderboardStats(
       upstreamId: requestLogs.upstreamId,
       requestCount: count(requestLogs.id),
       totalTokens: sum(requestLogs.totalTokens),
-      avgTtft: avg(requestLogs.ttftMs),
+      avgTtft: sql<
+        string | null
+      >`avg(case when ${successfulRequestCondition} then ${requestLogs.ttftMs} end)`,
       totalCompletionTokens: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.completionTokens} else 0 end)`,
       totalDurationMs: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.durationMs} else 0 end)`,
     })

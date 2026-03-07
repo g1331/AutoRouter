@@ -4028,7 +4028,7 @@ describe("proxy route upstream selection", () => {
     const { forwardRequest } = await import("@/lib/services/proxy-client");
     const { routeByModel } = await import("@/lib/services/model-router");
     const { selectFromProviderType } = await import("@/lib/services/load-balancer");
-    const { updateRequestLog } = await import("@/lib/services/request-logger");
+    const { logRequestStart, updateRequestLog } = await import("@/lib/services/request-logger");
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
@@ -4120,6 +4120,19 @@ describe("proxy route upstream selection", () => {
     });
 
     expect(response.status).toBe(200);
+    expect(logRequestStart).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "gpt-4o-mini",
+        isStream: true,
+      })
+    );
+    expect(updateRequestLog).toHaveBeenCalled();
+    expect(vi.mocked(updateRequestLog).mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        upstreamId: "up-openai",
+        isStream: true,
+      })
+    );
 
     const reader = response.body?.getReader();
     if (reader) {
@@ -4131,7 +4144,6 @@ describe("proxy route upstream selection", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 50));
 
-    expect(updateRequestLog).toHaveBeenCalled();
     const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
     expect(updateLogPayload?.isStream).toBe(true);
     expect(updateLogPayload?.ttftMs).toBe(321);
@@ -4607,6 +4619,112 @@ describe("proxy route upstream selection", () => {
   });
 
   describe("billing snapshot integration", () => {
+    it("should persist an unbilled snapshot when downstream streaming disconnect settles the log", async () => {
+      const { db } = await import("@/lib/db");
+      const { forwardRequest } = await import("@/lib/services/proxy-client");
+      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+      const { calculateAndPersistRequestBillingSnapshot } =
+        await import("@/lib/services/billing-cost-service");
+
+      const openaiUpstream = {
+        id: "up-openai",
+        name: "openai-main",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+      };
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      ]);
+      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+        { upstreamId: "up-openai" },
+      ]);
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        {
+          ...openaiUpstream,
+          routeCapabilities: ["openai_chat_compatible"],
+        },
+      ]);
+      vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+      vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+        upstream: openaiUpstream,
+        providerType: "openai",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 1,
+      });
+
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"id":"evt-1"}\n\n'));
+        },
+      });
+
+      vi.mocked(forwardRequest).mockResolvedValueOnce({
+        statusCode: 200,
+        headers: new Headers({ "content-type": "text/event-stream" }),
+        body: stream,
+        isStream: true,
+        streamMetricsPromise: new Promise(() => undefined),
+      });
+
+      const abortController = new AbortController();
+      const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-test",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4.1",
+          messages: [{ role: "user", content: "hello" }],
+          stream: true,
+        }),
+        signal: abortController.signal,
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["chat", "completions"] }),
+      });
+
+      expect(response.status).toBe(200);
+
+      const reader = response.body?.getReader();
+      expect(reader).toBeDefined();
+
+      const firstChunk = await reader!.read();
+      expect(firstChunk.done).toBe(false);
+
+      await reader!.cancel("Client disconnected");
+      await expect
+        .poll(() => vi.mocked(calculateAndPersistRequestBillingSnapshot).mock.calls.length)
+        .toBe(1);
+
+      expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledTimes(1);
+      expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestLogId: "log-id",
+          apiKeyId: "key-1",
+          upstreamId: "up-openai",
+          model: "gpt-4.1",
+          usage: {
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+          },
+        })
+      );
+    });
+
     it("should persist billed snapshot after successful non-stream response", async () => {
       const { db } = await import("@/lib/db");
       const { forwardRequest } = await import("@/lib/services/proxy-client");

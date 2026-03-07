@@ -571,7 +571,7 @@ function RetryTimeline({
               </div>
               {attempt.error_message && (
                 <div
-                  className="max-w-md truncate pl-5 text-[11px] text-muted-foreground"
+                  className="max-w-md truncate pl-5 text-[11px] text-status-error"
                   title={attempt.error_message}
                 >
                   {attempt.error_message}

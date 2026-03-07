@@ -1268,6 +1268,80 @@ function wrapStreamWithConnectionTracking(
   });
 }
 
+function wrapStreamWithDownstreamSettlement(
+  stream: ReadableStream<Uint8Array>,
+  abortSignal: AbortSignal | undefined,
+  onAbort: () => void
+): ReadableStream<Uint8Array> {
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  let streamCompleted = false;
+  let abortHandled = false;
+
+  const handleAbortOnce = () => {
+    if (streamCompleted || abortHandled) {
+      return;
+    }
+    abortHandled = true;
+    onAbort();
+  };
+
+  return new ReadableStream({
+    async start(controller) {
+      reader = stream.getReader();
+
+      const abortHandler = () => {
+        handleAbortOnce();
+        void reader?.cancel("Client disconnected").catch(() => undefined);
+        try {
+          controller.close();
+        } catch {
+          // Controller may already be closed.
+        }
+      };
+
+      if (abortSignal) {
+        abortSignal.addEventListener("abort", abortHandler, { once: true });
+      }
+
+      try {
+        while (true) {
+          if (abortSignal?.aborted) {
+            handleAbortOnce();
+            break;
+          }
+
+          const { done, value } = await reader.read();
+          if (done) {
+            streamCompleted = true;
+            break;
+          }
+
+          controller.enqueue(value);
+        }
+
+        controller.close();
+      } catch (error) {
+        if (abortSignal?.aborted) {
+          handleAbortOnce();
+          return;
+        }
+
+        controller.error(error);
+      } finally {
+        reader?.releaseLock();
+        reader = null;
+        if (abortSignal) {
+          abortSignal.removeEventListener("abort", abortHandler);
+        }
+      }
+    },
+    async cancel(reason) {
+      handleAbortOnce();
+      await reader?.cancel(reason);
+    },
+  });
+}
+
 /**
  * Compute total input tokens for affinity tracking, avoiding double-count.
  *
@@ -1311,6 +1385,7 @@ interface RequestContext {
   model: string | null;
   sessionId: string | null;
   bodyJson: Record<string, unknown> | null;
+  isStream: boolean;
 }
 
 type AuthSource = "authorization" | "x-api-key" | "x-goog-api-key" | "none";
@@ -1349,16 +1424,17 @@ async function extractRequestContext(request: NextRequest, path: string): Promis
     const bodyText = await clonedRequest.text();
 
     if (!bodyText) {
-      return { model: modelFromPath, sessionId: null, bodyJson: null };
+      return { model: modelFromPath, sessionId: null, bodyJson: null, isStream: false };
     }
 
     const bodyJson = JSON.parse(bodyText) as Record<string, unknown>;
     const modelFromBody = typeof bodyJson.model === "string" ? bodyJson.model || null : null;
+    const isStream = bodyJson.stream === true;
 
-    return { model: modelFromBody ?? modelFromPath, sessionId: null, bodyJson };
+    return { model: modelFromBody ?? modelFromPath, sessionId: null, bodyJson, isStream };
   } catch {
     // Not JSON or empty body
-    return { model: modelFromPath, sessionId: null, bodyJson: null };
+    return { model: modelFromPath, sessionId: null, bodyJson: null, isStream: false };
   }
 }
 
@@ -1421,6 +1497,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   const tempContext = await extractRequestContext(request, path);
   const model = tempContext.model;
   const bodyJson: Record<string, unknown> | null = tempContext.bodyJson;
+  const requestedStream = tempContext.isStream;
   const matchedRouteCapability = matchRouteCapability(request.method, path);
 
   if (!matchedRouteCapability) {
@@ -1650,6 +1727,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       method: request.method,
       path,
       model: resolvedModel,
+      isStream: requestedStream,
       routingType,
       priorityTier: null,
       routingDecision: initialRoutingDecisionLog,
@@ -1764,6 +1842,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     if (requestLogId) {
       void updateRequestLog(requestLogId, {
         upstreamId: upstreamForLogging.id,
+        isStream: result.isStream,
         routingDecision: finalRoutingDecisionLog,
       }).catch((e) => log.error({ err: e, requestId }, "failed to update request log upstream"));
     }
@@ -1776,6 +1855,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       const originalStream = result.body as ReadableStream<Uint8Array>;
       let recordingStream: ReadableStream<Uint8Array> | null = null;
       let responseStream = originalStream;
+      let streamTerminalStateSettled = false;
 
       if (shouldRecordSuccess && inboundBody) {
         const [clientStream, recordStream] = teeStreamForRecording(originalStream);
@@ -1786,8 +1866,102 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         result.streamMetricsPromise ??
         Promise.resolve({ usage: result.usage ?? null, ttftMs: result.ttftMs });
 
+      const settleStreamingDisconnect = async () => {
+        if (streamTerminalStateSettled) {
+          return;
+        }
+        streamTerminalStateSettled = true;
+
+        const disconnectRoutingDecisionLog: RoutingDecisionLog = {
+          ...finalRoutingDecisionLog,
+          failure_stage: "downstream_streaming",
+        };
+        const disconnectStatusCode = getHttpStatusForError("CLIENT_DISCONNECTED");
+        const disconnectErrorMessage = "Client disconnected during downstream streaming";
+        const disconnectDurationMs = Date.now() - startTime;
+        const disconnectUsageForBilling = {
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+        };
+
+        if (requestLogId) {
+          const updatedLog = await updateRequestLog(requestLogId, {
+            upstreamId: upstreamForLogging.id,
+            model: resolvedModel,
+            statusCode: disconnectStatusCode,
+            durationMs: disconnectDurationMs,
+            routingDurationMs,
+            errorMessage: disconnectErrorMessage,
+            routingType: routingDecision.routingType,
+            priorityTier: routingDecision.priorityTier,
+            failoverAttempts: routingDecision.failoverAttempts,
+            failoverHistory:
+              routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
+            routingDecision: disconnectRoutingDecisionLog,
+            affinityHit: isAffinityHit,
+            affinityMigrated: isAffinityMigrated,
+            isStream: true,
+            sessionIdCompensated,
+            headerDiff,
+          });
+
+          await persistBillingSnapshotSafely({
+            requestLogId: updatedLog?.id ?? requestLogId,
+            apiKeyId: validApiKey.id,
+            upstreamId: upstreamForLogging.id,
+            model: resolvedModel,
+            usage: disconnectUsageForBilling,
+            requestId,
+          });
+          return;
+        }
+
+        const createdLog = await logRequest({
+          apiKeyId: validApiKey.id,
+          upstreamId: upstreamForLogging.id,
+          method: request.method,
+          path,
+          model: resolvedModel,
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          statusCode: disconnectStatusCode,
+          durationMs: disconnectDurationMs,
+          routingDurationMs,
+          errorMessage: disconnectErrorMessage,
+          routingType: routingDecision.routingType,
+          priorityTier: routingDecision.priorityTier,
+          failoverAttempts: routingDecision.failoverAttempts,
+          failoverHistory:
+            routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
+          routingDecision: disconnectRoutingDecisionLog,
+          sessionId,
+          affinityHit: isAffinityHit,
+          affinityMigrated: isAffinityMigrated,
+          isStream: true,
+          sessionIdCompensated,
+          headerDiff,
+        });
+
+        await persistBillingSnapshotSafely({
+          requestLogId: createdLog.id,
+          apiKeyId: validApiKey.id,
+          upstreamId: upstreamForLogging.id,
+          model: resolvedModel,
+          usage: disconnectUsageForBilling,
+          requestId,
+        });
+      };
+
       void metricsPromise
         .then(async ({ usage, ttftMs }) => {
+          if (streamTerminalStateSettled || request.signal.aborted) {
+            return;
+          }
+
           // Update session affinity cumulative tokens if we have a session
           if (affinityContext?.sessionId && usage) {
             const affinityUsage: AffinityUsage = {
@@ -1898,6 +2072,12 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           }
         })
         .catch((e) => log.error({ err: e, requestId }, "failed to log request"));
+
+      responseStream = wrapStreamWithDownstreamSettlement(responseStream, request.signal, () => {
+        void settleStreamingDisconnect().catch((error) =>
+          log.error({ err: error, requestId }, "failed to settle downstream streaming disconnect")
+        );
+      });
 
       // Set streaming headers
       responseHeaders.set("Content-Type", "text/event-stream");

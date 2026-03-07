@@ -115,7 +115,7 @@ The upstreams table displays circuit breaker status:
 
 - **Normal** (green): Circuit is CLOSED
 - **OPEN** (red): Circuit is open, requests blocked
-- **Recovering** (yellow): Circuit is HALF_OPEN, probing
+- **Probing** (yellow): Circuit is HALF_OPEN, probing
 
 Click on the status badge to view detailed information and manually control the circuit breaker state.
 
