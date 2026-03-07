@@ -596,6 +596,17 @@ describe("load-balancer", () => {
         expect(result.upstream.id).toBe("working");
       });
 
+      it("should return weighted selection reason when multiple candidates remain", async () => {
+        const u1 = makeUpstream({ id: "weighted-a", priority: 0 });
+        const u2 = makeUpstream({ id: "weighted-b", priority: 0 });
+        mockFindMany.mockResolvedValue([u1, u2]);
+
+        const result = await selectFromProviderType("openai");
+
+        expect(["weighted-a", "weighted-b"]).toContain(result.upstream.id);
+        expect(result.selectionReason?.code).toBe("weighted_selection");
+      });
+
       it("should allow half_open upstreams when probe is eligible", async () => {
         const u1 = makeUpstream({ id: "half", priority: 0 });
         mockFindMany.mockResolvedValue([u1]);
@@ -613,6 +624,7 @@ describe("load-balancer", () => {
 
         const result = await selectFromProviderType("openai");
         expect(result.upstream.id).toBe("half");
+        expect(result.selectionReason?.code).toBe("half_open_probe");
         expect(mockAcquireCircuitBreakerPermit).toHaveBeenCalledWith("half");
       });
 
@@ -720,6 +732,7 @@ describe("load-balancer", () => {
         expect(result.upstream.id).toBe("u1");
         expect(result.affinityHit).toBe(true);
         expect(result.affinityMigrated).toBe(false);
+        expect(result.selectionReason?.code).toBe("affinity_hit");
       });
 
       it("should reselect when bound upstream is unavailable (circuit open)", async () => {
@@ -1228,6 +1241,7 @@ describe("load-balancer", () => {
 
       expect(mockQuotaSyncFromDb).toHaveBeenCalledTimes(1);
       expect(result.upstream.id).toBe("u1");
+      expect(result.selectionReason?.code).toBe("single_candidate_remaining");
     });
   });
 });

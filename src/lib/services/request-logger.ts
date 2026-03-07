@@ -1,6 +1,6 @@
 import { eq, desc, count, and, gte, lte } from "drizzle-orm";
 import { db, requestLogs, type RequestLog } from "../db";
-import type { RoutingDecisionLog } from "@/types/api";
+import type { FailoverErrorType, RoutingDecisionLog, RoutingSelectionReason } from "@/types/api";
 import { extractNormalizedUsage, type HeaderDiff } from "./proxy-client";
 
 export interface LogRequestInput {
@@ -107,19 +107,13 @@ export interface FailoverAttempt {
   upstream_provider_type?: string;
   upstream_base_url?: string;
   attempted_at: string; // ISO timestamp
-  error_type:
-    | "timeout"
-    | "http_5xx"
-    | "http_4xx"
-    | "http_429"
-    | "connection_error"
-    | "circuit_open"
-    | "concurrency_full";
+  error_type: FailoverErrorType;
   error_message: string;
   status_code?: number | null;
   response_headers?: Record<string, string>;
   response_body_text?: string | null;
   response_body_json?: unknown | null;
+  selection_reason?: RoutingSelectionReason | null;
   header_diff?: HeaderDiff | null;
 }
 

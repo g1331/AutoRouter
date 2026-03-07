@@ -13,7 +13,12 @@ import type {
   PaginatedRequestLogs,
   FailoverAttempt,
 } from "@/lib/services/request-logger";
-import type { RouteCapability, RoutingDecisionLog } from "@/types/api";
+import type {
+  RouteCapability,
+  RoutingDecisionLog,
+  RoutingFailureStage,
+  RequestLifecycleStatus,
+} from "@/types/api";
 import type {
   StatsOverview,
   StatsTimeseries,
@@ -327,6 +332,23 @@ export interface RequestLogApiResponse {
     compensated: Array<{ header: string; source: string; value: string }>;
     unchanged: Array<{ header: string; value: string }>;
   } | null;
+  lifecycle_status: RequestLifecycleStatus;
+  did_send_upstream: boolean | null;
+  failure_stage: RoutingFailureStage | null;
+  upstream_error: {
+    status_code: number | null;
+    error_type: FailoverAttempt["error_type"] | null;
+    error_message: string | null;
+    response_body_excerpt: string | null;
+  } | null;
+  stage_timings_ms: {
+    total_ms: number | null;
+    decision_ms: number | null;
+    upstream_response_ms: number | null;
+    first_token_ms: number | null;
+    generation_ms: number | null;
+    gateway_processing_ms: number | null;
+  };
   billing_status?: "billed" | "unbilled" | null;
   unbillable_reason?: string | null;
   price_source?: string | null;
@@ -485,6 +507,127 @@ function normalizeHeaderDiffForApi(
 
 // ========== RequestLog Transformers ==========
 
+const MAX_UPSTREAM_ERROR_EXCERPT_CHARS = 2048;
+
+function clampNonNegativeMs(value: number | null | undefined): number | null {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return null;
+  }
+  return Math.max(0, Math.trunc(value));
+}
+
+function deriveLifecycleStatus(
+  statusCode: number | null,
+  didSendUpstream: boolean | null
+): RequestLifecycleStatus {
+  if (typeof statusCode === "number") {
+    if (statusCode >= 200 && statusCode < 300) {
+      return "completed_success";
+    }
+    if (statusCode >= 400) {
+      return "completed_failed";
+    }
+    return "unknown";
+  }
+
+  if (didSendUpstream === false) {
+    return "decision";
+  }
+  if (didSendUpstream === true) {
+    return "requesting";
+  }
+  return "unknown";
+}
+
+function getLastSentFailoverAttempt(
+  failoverHistory: FailoverAttempt[] | null
+): FailoverAttempt | null {
+  if (!failoverHistory || failoverHistory.length === 0) {
+    return null;
+  }
+  for (let index = failoverHistory.length - 1; index >= 0; index -= 1) {
+    const attempt = failoverHistory[index];
+    if (attempt.error_type !== "concurrency_full") {
+      return attempt;
+    }
+  }
+  return null;
+}
+
+function toUpstreamErrorExcerpt(
+  responseBodyText: string | null | undefined,
+  responseBodyJson: unknown
+): string | null {
+  if (typeof responseBodyText === "string" && responseBodyText.trim()) {
+    return responseBodyText.slice(0, MAX_UPSTREAM_ERROR_EXCERPT_CHARS);
+  }
+  if (responseBodyJson == null) {
+    return null;
+  }
+  try {
+    return JSON.stringify(responseBodyJson).slice(0, MAX_UPSTREAM_ERROR_EXCERPT_CHARS);
+  } catch {
+    return null;
+  }
+}
+
+function deriveUpstreamErrorSummary(
+  failoverHistory: FailoverAttempt[] | null,
+  didSendUpstream: boolean | null
+): RequestLogApiResponse["upstream_error"] {
+  if (didSendUpstream === false) {
+    return null;
+  }
+
+  const attempt = getLastSentFailoverAttempt(failoverHistory);
+  if (!attempt) {
+    return null;
+  }
+
+  return {
+    status_code: attempt.status_code ?? null,
+    error_type: attempt.error_type ?? null,
+    error_message: attempt.error_message ?? null,
+    response_body_excerpt: toUpstreamErrorExcerpt(
+      attempt.response_body_text ?? null,
+      attempt.response_body_json ?? null
+    ),
+  };
+}
+
+function deriveStageTimings(
+  log: RequestLogResponse,
+  didSendUpstream: boolean | null
+): RequestLogApiResponse["stage_timings_ms"] {
+  const totalMs = clampNonNegativeMs(log.durationMs);
+  const decisionMs = clampNonNegativeMs(log.routingDurationMs);
+  const firstTokenMs = log.isStream ? clampNonNegativeMs(log.ttftMs) : null;
+
+  let upstreamResponseMs: number | null = null;
+  if (didSendUpstream === true && totalMs != null && decisionMs != null) {
+    upstreamResponseMs = Math.max(0, totalMs - decisionMs);
+  }
+
+  let generationMs: number | null = null;
+  if (log.isStream && upstreamResponseMs != null && firstTokenMs != null) {
+    generationMs = Math.max(0, upstreamResponseMs - firstTokenMs);
+  }
+
+  let gatewayProcessingMs: number | null = null;
+  if (didSendUpstream === false && totalMs != null) {
+    gatewayProcessingMs = decisionMs != null ? Math.max(0, totalMs - decisionMs) : totalMs;
+  }
+
+  return {
+    total_ms: totalMs,
+    decision_ms: decisionMs,
+    upstream_response_ms: didSendUpstream === true ? upstreamResponseMs : null,
+    first_token_ms: firstTokenMs,
+    generation_ms: generationMs,
+    gateway_processing_ms: gatewayProcessingMs,
+  };
+}
+
 /**
  * Transform a service layer request log to API response format.
  * Converts camelCase properties to snake_case for API consistency.
@@ -506,6 +649,14 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
     log.finalCost !== undefined ||
     log.currency !== undefined ||
     log.billedAt !== undefined;
+  const didSendUpstream =
+    typeof log.routingDecision?.did_send_upstream === "boolean"
+      ? log.routingDecision.did_send_upstream
+      : null;
+  const failureStage = log.routingDecision?.failure_stage ?? null;
+  const lifecycleStatus = deriveLifecycleStatus(log.statusCode, didSendUpstream);
+  const upstreamError = deriveUpstreamErrorSummary(log.failoverHistory, didSendUpstream);
+  const stageTimings = deriveStageTimings(log, didSendUpstream);
 
   return {
     id: log.id,
@@ -543,6 +694,11 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
     is_stream: log.isStream,
     session_id_compensated: log.sessionIdCompensated,
     header_diff: normalizeHeaderDiffForApi(log.headerDiff),
+    lifecycle_status: lifecycleStatus,
+    did_send_upstream: didSendUpstream,
+    failure_stage: failureStage,
+    upstream_error: upstreamError,
+    stage_timings_ms: stageTimings,
     ...(hasBillingFields
       ? {
           billing_status: log.billingStatus,

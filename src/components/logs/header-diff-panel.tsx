@@ -1,8 +1,8 @@
 "use client";
 
-import { Eye, EyeOff } from "lucide-react";
+import { ChevronDown, ChevronUp, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 
 interface HeaderDiff {
@@ -31,7 +31,14 @@ function maskHeaderValue(value: string | null): string {
 
 export function HeaderDiffPanel({ headerDiff, className }: HeaderDiffPanelProps) {
   const t = useTranslations("logs");
+  const locale = useLocale();
+  const [isExpanded, setIsExpanded] = useState(false);
   const [showValues, setShowValues] = useState(false);
+  const isZh = locale === "zh-CN" || locale === "zh";
+  const expandLabel = isZh ? "展开差异" : "Expand diff";
+  const collapseLabel = isZh ? "收起差异" : "Collapse diff";
+  const showValuesLabel = t("headerDiffShowValues");
+  const hideValuesLabel = t("headerDiffHideValues");
 
   const delta = headerDiff.outbound_count - headerDiff.inbound_count;
   const deltaLabel = delta > 0 ? `+${delta}` : delta < 0 ? `${delta}` : "±0";
@@ -66,101 +73,124 @@ export function HeaderDiffPanel({ headerDiff, className }: HeaderDiffPanelProps)
         <span className={cn("ml-auto tabular-nums font-medium", deltaClass)}>{deltaLabel}</span>
         <button
           type="button"
-          onClick={() => setShowValues((prev) => !prev)}
+          onClick={() => setIsExpanded((prev) => !prev)}
           className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded border border-divider px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
-          aria-label={showValues ? t("headerDiffHideValues") : t("headerDiffShowValues")}
+          aria-expanded={isExpanded}
+          aria-label={isExpanded ? collapseLabel : expandLabel}
         >
-          {showValues ? (
-            <EyeOff className="h-3 w-3" aria-hidden="true" />
+          {isExpanded ? (
+            <ChevronUp className="h-3 w-3" aria-hidden="true" />
           ) : (
-            <Eye className="h-3 w-3" aria-hidden="true" />
+            <ChevronDown className="h-3 w-3" aria-hidden="true" />
           )}
-          <span>{showValues ? t("headerDiffHideValues") : t("headerDiffShowValues")}</span>
+          <span>{isExpanded ? collapseLabel : expandLabel}</span>
         </button>
-      </div>
-
-      <div className="overflow-hidden rounded border border-divider bg-surface-400/20">
-        {headerDiff.dropped.map((item) => (
-          <div
-            key={`drop-${item.header}-${item.value}`}
-            className="flex min-w-0 flex-wrap items-baseline gap-2 border-b border-divider/40 bg-status-error/8 px-3 py-1 last:border-b-0"
+        {isExpanded && (
+          <button
+            type="button"
+            onClick={() => setShowValues((prev) => !prev)}
+            className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded border border-divider px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+            aria-label={showValues ? hideValuesLabel : showValuesLabel}
           >
-            <span className="w-3 shrink-0 select-none text-status-error">-</span>
-            <code className="text-status-error">{item.header}</code>
-            <span className="text-divider">:</span>
-            <code
-              className={cn("flex-1 min-w-0 text-status-error line-through opacity-70", valueClass)}
-            >
-              {renderValue(item.value)}
-            </code>
-          </div>
-        ))}
-
-        {headerDiff.auth_replaced && (
-          <div className="flex min-w-0 flex-wrap items-baseline gap-2 border-b border-divider/40 bg-status-warning/8 px-3 py-1 last:border-b-0">
-            <span className="w-3 shrink-0 select-none text-status-warning">~</span>
-            <code className="shrink-0 text-status-warning">{headerDiff.auth_replaced.header}</code>
-            <span className="shrink-0 text-divider">:</span>
-            <code
-              className={cn(
-                "min-w-0 flex-1 basis-full text-status-warning line-through opacity-70 sm:basis-[140px]",
-                valueClass
-              )}
-            >
-              {renderValue(headerDiff.auth_replaced.inbound_value)}
-            </code>
-            <span className="basis-full pl-5 text-divider sm:basis-auto sm:pl-0 sm:shrink-0">
-              →
-            </span>
-            <code
-              className={cn(
-                "min-w-0 flex-1 basis-full text-status-warning sm:basis-auto",
-                valueClass
-              )}
-            >
-              {renderValue(headerDiff.auth_replaced.outbound_value)}
-            </code>
-            <span className={cn(rowTailClass, "text-muted-foreground")}>
-              {t("headerDiffAuthReplaced")}
-            </span>
-          </div>
+            {showValues ? (
+              <EyeOff className="h-3 w-3" aria-hidden="true" />
+            ) : (
+              <Eye className="h-3 w-3" aria-hidden="true" />
+            )}
+            <span>{showValues ? hideValuesLabel : showValuesLabel}</span>
+          </button>
         )}
-
-        {headerDiff.compensated.map((item) => (
-          <div
-            key={`comp-${item.header}-${item.source}`}
-            className="flex min-w-0 flex-wrap items-baseline gap-2 border-b border-divider/40 bg-status-success/8 px-3 py-1 last:border-b-0"
-          >
-            <span className="w-3 shrink-0 select-none text-status-success">+</span>
-            <code className="shrink-0 text-amber-400">{item.header}</code>
-            <span className="shrink-0 text-divider">:</span>
-            <code className={cn("flex-1 min-w-0 text-foreground", valueClass)}>
-              {renderValue(item.value)}
-            </code>
-            <span className={cn("text-muted-foreground/60", sourceClass)}>← {item.source}</span>
-          </div>
-        ))}
-
-        {headerDiff.unchanged.map((item) => (
-          <div
-            key={`same-${item.header}-${item.value}`}
-            className="flex min-w-0 flex-wrap items-baseline gap-2 border-b border-divider/40 px-3 py-1 text-muted-foreground last:border-b-0"
-          >
-            <span className="w-3 shrink-0 select-none">=</span>
-            <code className="shrink-0">{item.header}</code>
-            <span className="shrink-0 text-divider">:</span>
-            <code className={cn("flex-1 min-w-0", valueClass)}>{renderValue(item.value)}</code>
-            <span className={rowTailClass}>{t("headerDiffUnchanged")}</span>
-          </div>
-        ))}
-
-        {headerDiff.dropped.length === 0 &&
-          !headerDiff.auth_replaced &&
-          headerDiff.compensated.length === 0 &&
-          headerDiff.unchanged.length === 0 && (
-            <div className="px-3 py-2 text-muted-foreground/60">{t("headerDiffNoChanges")}</div>
-          )}
       </div>
+
+      {isExpanded && (
+        <div className="overflow-hidden rounded border border-divider bg-surface-400/20">
+          {headerDiff.dropped.map((item) => (
+            <div
+              key={`drop-${item.header}-${item.value}`}
+              className="flex min-w-0 flex-wrap items-baseline gap-2 border-b border-divider/40 bg-status-error/8 px-3 py-1 last:border-b-0"
+            >
+              <span className="w-3 shrink-0 select-none text-status-error">-</span>
+              <code className="text-status-error">{item.header}</code>
+              <span className="text-divider">:</span>
+              <code
+                className={cn(
+                  "flex-1 min-w-0 text-status-error line-through opacity-70",
+                  valueClass
+                )}
+              >
+                {renderValue(item.value)}
+              </code>
+            </div>
+          ))}
+
+          {headerDiff.auth_replaced && (
+            <div className="flex min-w-0 flex-wrap items-baseline gap-2 border-b border-divider/40 bg-status-warning/8 px-3 py-1 last:border-b-0">
+              <span className="w-3 shrink-0 select-none text-status-warning">~</span>
+              <code className="shrink-0 text-status-warning">
+                {headerDiff.auth_replaced.header}
+              </code>
+              <span className="shrink-0 text-divider">:</span>
+              <code
+                className={cn(
+                  "min-w-0 flex-1 basis-full text-status-warning line-through opacity-70 sm:basis-[140px]",
+                  valueClass
+                )}
+              >
+                {renderValue(headerDiff.auth_replaced.inbound_value)}
+              </code>
+              <span className="basis-full pl-5 text-divider sm:basis-auto sm:pl-0 sm:shrink-0">
+                →
+              </span>
+              <code
+                className={cn(
+                  "min-w-0 flex-1 basis-full text-status-warning sm:basis-auto",
+                  valueClass
+                )}
+              >
+                {renderValue(headerDiff.auth_replaced.outbound_value)}
+              </code>
+              <span className={cn(rowTailClass, "text-muted-foreground")}>
+                {t("headerDiffAuthReplaced")}
+              </span>
+            </div>
+          )}
+
+          {headerDiff.compensated.map((item) => (
+            <div
+              key={`comp-${item.header}-${item.source}`}
+              className="flex min-w-0 flex-wrap items-baseline gap-2 border-b border-divider/40 bg-status-success/8 px-3 py-1 last:border-b-0"
+            >
+              <span className="w-3 shrink-0 select-none text-status-success">+</span>
+              <code className="shrink-0 text-amber-400">{item.header}</code>
+              <span className="shrink-0 text-divider">:</span>
+              <code className={cn("flex-1 min-w-0 text-foreground", valueClass)}>
+                {renderValue(item.value)}
+              </code>
+              <span className={cn("text-muted-foreground/60", sourceClass)}>← {item.source}</span>
+            </div>
+          ))}
+
+          {headerDiff.unchanged.map((item) => (
+            <div
+              key={`same-${item.header}-${item.value}`}
+              className="flex min-w-0 flex-wrap items-baseline gap-2 border-b border-divider/40 px-3 py-1 text-muted-foreground last:border-b-0"
+            >
+              <span className="w-3 shrink-0 select-none">=</span>
+              <code className="shrink-0">{item.header}</code>
+              <span className="shrink-0 text-divider">:</span>
+              <code className={cn("flex-1 min-w-0", valueClass)}>{renderValue(item.value)}</code>
+              <span className={rowTailClass}>{t("headerDiffUnchanged")}</span>
+            </div>
+          ))}
+
+          {headerDiff.dropped.length === 0 &&
+            !headerDiff.auth_replaced &&
+            headerDiff.compensated.length === 0 &&
+            headerDiff.unchanged.length === 0 && (
+              <div className="px-3 py-2 text-muted-foreground/60">{t("headerDiffNoChanges")}</div>
+            )}
+        </div>
+      )}
     </div>
   );
 }

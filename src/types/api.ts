@@ -251,6 +251,39 @@ export interface TestUpstreamResponse {
 
 // ========== Request Log Types ==========
 
+export type FailoverErrorType =
+  | "timeout"
+  | "http_5xx"
+  | "http_4xx"
+  | "http_429"
+  | "connection_error"
+  | "circuit_open"
+  | "concurrency_full";
+
+export interface RoutingRetryReason {
+  previous_upstream_id: string | null;
+  previous_upstream_name: string | null;
+  previous_error_type: FailoverErrorType | null;
+  previous_error_message: string | null;
+}
+
+export type RoutingSelectionReasonCode =
+  | "affinity_hit"
+  | "affinity_migrated"
+  | "weighted_selection"
+  | "half_open_probe"
+  | "single_candidate_remaining";
+
+export interface RoutingSelectionReason {
+  code: RoutingSelectionReasonCode;
+  selected_upstream_id: string | null;
+  selected_tier?: number | null;
+  selected_circuit_state?: RoutingCircuitState | null;
+  candidate_count?: number | null;
+  final_candidate_count?: number | null;
+  retry_reason?: RoutingRetryReason | null;
+}
+
 /**
  * Failover attempt record in request log
  */
@@ -260,19 +293,13 @@ export interface FailoverAttempt {
   upstream_provider_type?: string;
   upstream_base_url?: string;
   attempted_at: string; // ISO 8601 date string
-  error_type:
-    | "timeout"
-    | "http_5xx"
-    | "http_4xx"
-    | "http_429"
-    | "connection_error"
-    | "circuit_open"
-    | "concurrency_full";
+  error_type: FailoverErrorType;
   error_message: string;
   status_code?: number | null;
   response_headers?: Record<string, string>;
   response_body_text?: string | null;
   response_body_json?: unknown | null;
+  selection_reason?: RoutingSelectionReason | null;
   header_diff?: RequestLogResponse["header_diff"];
 }
 
@@ -300,6 +327,38 @@ export type RoutingFailureStage =
   | "upstream_request"
   | "upstream_response"
   | "downstream_streaming";
+
+/**
+ * Derived request lifecycle status for log stage visualization.
+ */
+export type RequestLifecycleStatus =
+  | "decision"
+  | "requesting"
+  | "completed_success"
+  | "completed_failed"
+  | "unknown";
+
+/**
+ * Aggregated upstream error summary for quick diagnostics.
+ */
+export interface UpstreamErrorSummary {
+  status_code: number | null;
+  error_type: FailoverAttempt["error_type"] | null;
+  error_message: string | null;
+  response_body_excerpt: string | null;
+}
+
+/**
+ * Unified stage timing breakdown derived from request log metrics.
+ */
+export interface RequestStageTimings {
+  total_ms: number | null;
+  decision_ms: number | null;
+  upstream_response_ms: number | null;
+  first_token_ms: number | null;
+  generation_ms: number | null;
+  gateway_processing_ms: number | null;
+}
 
 /**
  * Candidate upstream in routing decision
@@ -361,6 +420,7 @@ export interface RoutingDecisionLog {
   actual_upstream_id?: string | null;
   did_send_upstream?: boolean;
   failure_stage?: RoutingFailureStage | null;
+  final_selection_reason?: RoutingSelectionReason | null;
   selection_strategy: string; // lb_strategy
 }
 
@@ -414,6 +474,11 @@ export interface RequestLogResponse {
     compensated: Array<{ header: string; source: string; value: string }>;
     unchanged: Array<{ header: string; value: string }>;
   } | null;
+  lifecycle_status?: RequestLifecycleStatus;
+  did_send_upstream?: boolean | null;
+  failure_stage?: RoutingFailureStage | null;
+  upstream_error?: UpstreamErrorSummary | null;
+  stage_timings_ms?: RequestStageTimings | null;
   billing_status?: "billed" | "unbilled" | null;
   unbillable_reason?: string | null;
   price_source?: "manual" | "openrouter" | "litellm" | null;

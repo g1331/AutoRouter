@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { LogsTable } from "@/components/admin/logs-table";
 import type { RequestLog, RoutingDecisionLog } from "@/types/api";
@@ -88,7 +88,7 @@ describe("LogsTable", () => {
 
       expect(screen.getByText("tableTime")).toBeInTheDocument();
       expect(screen.getByText("tableMethod")).toBeInTheDocument();
-      expect(screen.getByText("tablePath")).toBeInTheDocument();
+      expect(screen.getByText("tableInterfaceType")).toBeInTheDocument();
       expect(screen.getByText("tableModel")).toBeInTheDocument();
       expect(screen.getByText("tableTokens")).toBeInTheDocument();
       expect(screen.getByText("tableCost")).toBeInTheDocument();
@@ -100,8 +100,17 @@ describe("LogsTable", () => {
       render(<LogsTable logs={[mockLog]} />);
 
       expect(screen.getByText("POST")).toBeInTheDocument();
-      expect(screen.getByText("/v1/chat/completions")).toBeInTheDocument();
+      expect(screen.getByLabelText("requestModeNonStreaming")).toBeInTheDocument();
+      expect(
+        screen.getByLabelText("capabilityOpenAIChatCompatible: POST /v1/chat/completions")
+      ).toBeInTheDocument();
       expect(screen.getByText("gpt-4")).toBeInTheDocument();
+    });
+
+    it("renders streaming mode indicator for stream requests", () => {
+      render(<LogsTable logs={[{ ...mockLog, id: "test-id-stream", is_stream: true }]} />);
+
+      expect(screen.getByLabelText("requestModeStreaming")).toBeInTheDocument();
     });
 
     it("renders billed cost directly in the table row", () => {
@@ -123,6 +132,33 @@ describe("LogsTable", () => {
   });
 
   describe("Mobile Layout Billing Display", () => {
+    it("keeps interface type text and request mode visible in mobile cards", () => {
+      const originalMatchMedia = window.matchMedia;
+
+      window.matchMedia = ((query: string) => ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      })) as unknown as typeof window.matchMedia;
+
+      try {
+        render(<LogsTable logs={[mockLog]} />);
+
+        expect(screen.getByText("capabilityOpenAIChatCompatible")).toBeInTheDocument();
+        expect(screen.getByLabelText("requestModeNonStreaming")).toBeInTheDocument();
+        expect(
+          screen.getByLabelText("capabilityOpenAIChatCompatible: POST /v1/chat/completions")
+        ).toBeInTheDocument();
+      } finally {
+        window.matchMedia = originalMatchMedia;
+      }
+    });
+
     it("does not render billed status label in mobile cards", async () => {
       const originalMatchMedia = window.matchMedia;
 
@@ -179,47 +215,48 @@ describe("LogsTable", () => {
   });
 
   describe("Status Indicators", () => {
-    it("renders success status badge for 2xx status", () => {
+    const hasClassInAnyTextMatch = (matcher: RegExp, className: string) =>
+      screen.getAllByText(matcher).some((el) => {
+        let current: Element | null = el;
+        while (current) {
+          if (current.className?.toString().includes(className)) {
+            return true;
+          }
+          current = current.parentElement;
+        }
+        return false;
+      });
+
+    it("renders 2xx status code with success color in lifecycle track", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 200 }]} />);
 
-      const badge = screen.getByText("200");
-      expect(badge).toBeInTheDocument();
-      expect(badge.className).toContain("bg-status-success-muted");
+      expect(hasClassInAnyTextMatch(/200/, "text-status-success")).toBe(true);
     });
 
-    it("renders warning status badge for 4xx status", () => {
+    it("renders 4xx status code in lifecycle track", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 400 }]} />);
 
-      const badge = screen.getByText("400");
-      expect(badge).toBeInTheDocument();
-      expect(badge.className).toContain("bg-status-warning-muted");
+      expect(screen.getAllByText(/400/).length).toBeGreaterThan(0);
     });
 
-    it("renders error status badge for 5xx status", () => {
+    it("renders 5xx status code with error color in lifecycle track", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 500 }]} />);
 
-      const badge = screen.getByText("500");
-      expect(badge).toBeInTheDocument();
-      expect(badge.className).toContain("bg-status-error-muted");
+      expect(hasClassInAnyTextMatch(/500/, "text-status-error")).toBe(true);
     });
 
-    it("renders dash for null status code", () => {
+    it("renders complete label without status code for null status", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: null }]} />);
 
-      const dashBadges = screen
-        .getAllByText("-")
-        .filter(
-          (el) => el.className.includes("bg-surface-200") && el.className.includes("font-mono")
-        );
-      expect(dashBadges.length).toBeGreaterThan(0);
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+      expect(screen.getByRole("button", { name: "lifecycleComplete" })).toBeInTheDocument();
     });
 
-    it("renders status badge with monospace alignment classes", () => {
+    it("renders status code in monospace font via lifecycle track", () => {
       render(<LogsTable logs={[{ ...mockLog, status_code: 500 }]} />);
 
-      const badge = screen.getByText("500");
-      expect(badge.className).toContain("font-mono");
-      expect(badge.className).toContain("tabular-nums");
+      const monospaceStatus = screen.getAllByText("500").find((el) => !!el.closest(".font-mono"));
+      expect(monospaceStatus).toBeDefined();
     });
   });
 
@@ -227,10 +264,10 @@ describe("LogsTable", () => {
     it("renders total tokens with breakdown", () => {
       render(<LogsTable logs={[mockLog]} />);
 
-      // Total tokens
       expect(screen.getByText("300")).toBeInTheDocument();
-      // Breakdown: prompt / completion
-      expect(screen.getByText("100 / 200")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+      expect(screen.getByText("tokenInput")).toBeInTheDocument();
+      expect(screen.getByText("tokenOutput")).toBeInTheDocument();
     });
 
     it("renders dash for zero tokens", () => {
@@ -261,50 +298,139 @@ describe("LogsTable", () => {
     });
   });
 
-  describe("Duration Formatting", () => {
-    it("renders milliseconds for durations under 1 second", () => {
-      render(<LogsTable logs={[{ ...mockLog, duration_ms: 500 }]} />);
+  describe("Lifecycle Track Timing Display", () => {
+    it("renders stage timing in milliseconds when under 1 second", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              stage_timings_ms: {
+                total_ms: 600,
+                decision_ms: 50,
+                upstream_response_ms: 500,
+                first_token_ms: null,
+                generation_ms: null,
+                gateway_processing_ms: null,
+              },
+            },
+          ]}
+        />
+      );
 
-      expect(screen.getByText("500ms")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+      expect(screen.getAllByText(/600ms \(\+500ms\)/).length).toBeGreaterThan(0);
     });
 
-    it("renders seconds for durations over 1 second", () => {
-      render(<LogsTable logs={[{ ...mockLog, duration_ms: 1500 }]} />);
+    it("renders stage timing in seconds when over 1 second", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              stage_timings_ms: {
+                total_ms: 1600,
+                decision_ms: 100,
+                upstream_response_ms: 1500,
+                first_token_ms: null,
+                generation_ms: null,
+                gateway_processing_ms: null,
+              },
+            },
+          ]}
+        />
+      );
 
-      expect(screen.getByText("1.50s")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+      expect(screen.getAllByText(/1\.6s \(\+1\.5s\)/).length).toBeGreaterThan(0);
     });
 
-    it("renders dash for null duration", () => {
+    it("renders stage labels without timing values when no stage_timings_ms provided", () => {
       render(<LogsTable logs={[{ ...mockLog, duration_ms: null }]} />);
 
-      const dashes = screen.getAllByText("-");
-      expect(dashes.length).toBeGreaterThan(0);
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+      expect(screen.getByRole("button", { name: "lifecycleDecision" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "lifecycleComplete" })).toBeInTheDocument();
     });
   });
 
   describe("TTFT Formatting", () => {
-    it("renders seconds with three decimals for TTFT over 1000ms", () => {
-      render(<LogsTable logs={[{ ...mockLog, ttft_ms: 1222 }]} />);
+    it("renders TTFT in lifecycle track response segment for streaming requests", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              is_stream: true,
+              stage_timings_ms: {
+                total_ms: 1500,
+                decision_ms: 100,
+                upstream_response_ms: 1300,
+                first_token_ms: 650,
+                generation_ms: 650,
+                gateway_processing_ms: null,
+              },
+            },
+          ]}
+        />
+      );
 
-      const ttft = screen.getByText("1.222s");
-      expect(ttft).toBeInTheDocument();
-      expect(ttft.className).toContain("text-status-error");
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+
+      // Expanded timing details contain TTFT and generation timing.
+      expect(screen.getAllByText(/650ms/).length).toBeGreaterThan(0);
     });
 
-    it("renders milliseconds for TTFT under 1000ms", () => {
-      render(<LogsTable logs={[{ ...mockLog, ttft_ms: 650 }]} />);
+    it("renders TTFT over 1 second in compact seconds format", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              is_stream: true,
+              stage_timings_ms: {
+                total_ms: 2500,
+                decision_ms: 100,
+                upstream_response_ms: 2300,
+                first_token_ms: 1222,
+                generation_ms: 1078,
+                gateway_processing_ms: null,
+              },
+            },
+          ]}
+        />
+      );
 
-      const ttft = screen.getByText("650ms");
-      expect(ttft).toBeInTheDocument();
-      expect(ttft.className).toContain("text-status-warning");
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+
+      // fmtMs(1222) → "1.2s"
+      expect(screen.getAllByText(/1\.2s/).length).toBeGreaterThan(0);
     });
 
-    it("uses success color for fast TTFT", () => {
-      render(<LogsTable logs={[{ ...mockLog, ttft_ms: 220 }]} />);
+    it("shows streaming TTFT sub-timing in response segment", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              is_stream: true,
+              stage_timings_ms: {
+                total_ms: 1000,
+                decision_ms: 50,
+                upstream_response_ms: 900,
+                first_token_ms: 220,
+                generation_ms: 680,
+                gateway_processing_ms: null,
+              },
+            },
+          ]}
+        />
+      );
 
-      const ttft = screen.getByText("220ms");
-      expect(ttft).toBeInTheDocument();
-      expect(ttft.className).toContain("text-status-success");
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+
+      // Expanded timing details contain TTFT sub-timing.
+      expect(screen.getAllByText(/220ms/).length).toBeGreaterThan(0);
     });
 
     it("does not render short-sample hint in row performance line", () => {
@@ -333,8 +459,8 @@ describe("LogsTable", () => {
       render(<LogsTable logs={[streamLog]} />);
 
       fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
-      expect(screen.queryAllByText(/perfGen/).length).toBeGreaterThan(0);
-      expect(screen.queryAllByText("450ms").length).toBeGreaterThan(0);
+      expect(screen.getByText("journeyGenerationFinished")).toBeInTheDocument();
+      expect(screen.getAllByText(/450ms/).length).toBeGreaterThan(0);
     });
 
     it("does not show TPS when completion tokens are below threshold", () => {
@@ -405,10 +531,12 @@ describe("LogsTable", () => {
         path: "/v1/messages",
       };
 
-      rerender(<LogsTable logs={[newLog, mockLog]} />);
+      await act(async () => {
+        rerender(<LogsTable logs={[newLog, mockLog]} />);
+      });
 
-      const row = screen.getByText("/v1/messages").closest("tr");
-      await waitFor(() => expect(row?.className).toContain("bg-status-info-muted/25"));
+      const row = screen.getAllByRole("row")[1];
+      await waitFor(() => expect(row.className).toContain("bg-status-info-muted/25"));
     });
   });
 
@@ -882,11 +1010,25 @@ describe("LogsTable", () => {
       candidate_count: 3,
       final_candidate_count: 2,
       selected_upstream_id: "upstream-1",
+      final_selection_reason: {
+        code: "single_candidate_remaining",
+        selected_upstream_id: "upstream-1",
+        selected_tier: 0,
+        selected_circuit_state: "closed",
+        candidate_count: 3,
+        final_candidate_count: 2,
+        retry_reason: {
+          previous_upstream_id: "upstream-9",
+          previous_upstream_name: "failed-upstream",
+          previous_error_type: "timeout",
+          previous_error_message: "Request timed out",
+        },
+      },
       candidates: [
         { id: "upstream-1", name: "openai-1", weight: 100, circuit_state: "closed" },
-        { id: "upstream-2", name: "openai-2", weight: 50, circuit_state: "closed" },
+        { id: "upstream-2", name: "openai-2", weight: 50, circuit_state: "half_open" },
       ],
-      excluded: [],
+      excluded: [{ id: "upstream-3", name: "openai-3", reason: "concurrency_full" }],
     };
 
     const attemptedAt = "2026-02-02T00:00:00.000Z";
@@ -900,6 +1042,15 @@ describe("LogsTable", () => {
           error_type: "timeout",
           error_message: "Request timed out",
           attempted_at: attemptedAt,
+          selection_reason: {
+            code: "weighted_selection",
+            selected_upstream_id: "upstream-1",
+            selected_tier: 0,
+            selected_circuit_state: "closed",
+            candidate_count: 3,
+            final_candidate_count: 2,
+            retry_reason: null,
+          },
         },
       ],
     };
@@ -986,21 +1137,85 @@ describe("LogsTable", () => {
       expect(screen.getByText(/10 \* \$3\.00 \/ 1M \* 1\.2 =/)).toBeInTheDocument();
     });
 
-    it("shows routing decision timeline in expanded view when available", () => {
+    it("shows sequential lifecycle flow in expanded view when available", () => {
       const logWithRouting: RequestLog = {
         ...logWithFailoverBase,
         routing_decision: mockRoutingDecision,
+        is_stream: true,
+        duration_ms: 1650,
+        routing_duration_ms: 300,
+        ttft_ms: 900,
+        completion_tokens: 120,
+        stage_timings_ms: {
+          total_ms: 1650,
+          decision_ms: 300,
+          upstream_response_ms: 950,
+          first_token_ms: 900,
+          generation_ms: 400,
+          gateway_processing_ms: null,
+        },
       };
 
       render(<LogsTable logs={[logWithRouting]} />);
 
-      // Click expand button
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
       fireEvent.click(expandButton);
 
-      // Both token details and timeline stages should be visible
       expect(screen.getByText("tokenDetails")).toBeInTheDocument();
-      expect(screen.getByText("timelineModelResolution")).toBeInTheDocument();
+      expect(screen.getByText("lifecycleTimeline")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "journeyRequestArrived" })).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: "lifecycleDecision" }).length).toBeGreaterThan(
+        0
+      );
+      expect(screen.queryByText("timelineUpstreamSelection")).not.toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: "lifecycleRequest" }).length).toBeGreaterThan(0);
+      expect(screen.getAllByRole("button", { name: "lifecycleResponse" }).length).toBeGreaterThan(
+        0
+      );
+      expect(screen.getAllByRole("button", { name: "lifecycleComplete" }).length).toBeGreaterThan(
+        0
+      );
+
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleDecision" })[0]);
+      expect(screen.getByText("journeySelectionBasis")).toBeInTheDocument();
+      expect(screen.getByText("journeyDecisionResult")).toBeInTheDocument();
+
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleRequest" })[0]);
+      expect(screen.getByText(/journeyRequestAction/)).toBeInTheDocument();
+
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleResponse" })[0]);
+      expect(screen.getAllByText(/1\.20s \(\+900ms\)/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/1\.65s \(\+400ms\)/).length).toBeGreaterThan(0);
+    });
+
+    it("restores structured session and candidate upstream diagnostics in expanded view", () => {
+      const sessionId = "session-1234567890abcdef";
+      const logWithRouting: RequestLog = {
+        ...logWithFailoverBase,
+        routing_decision: mockRoutingDecision,
+        session_id: sessionId,
+        affinity_hit: true,
+        session_id_compensated: true,
+      };
+
+      render(<LogsTable logs={[logWithRouting]} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleDecision" })[0]);
+
+      expect(screen.getByText("timelineSessionAffinity")).toBeInTheDocument();
+      expect(screen.getByTitle(sessionId)).toBeInTheDocument();
+      expect(screen.getByText("compensationBadge")).toBeInTheDocument();
+      expect(screen.getByText(/weighted_random/)).toBeInTheDocument();
+      expect(screen.getAllByText("journeySelectionReasonWeighted").length).toBeGreaterThan(0);
+      expect(screen.getByText("openai-1")).toBeInTheDocument();
+      expect(screen.getByText("openai-3")).toBeInTheDocument();
+      expect(screen.getByText("w:100")).toBeInTheDocument();
+      expect(screen.getByText("circuitState.half_open")).toBeInTheDocument();
+      expect(screen.getByText("exclusionReason.concurrency_full")).toBeInTheDocument();
+
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleRequest" })[0]);
+      expect(screen.getAllByText("journeyRetryReasonText").length).toBeGreaterThan(0);
     });
 
     it("shows session affinity stage when routing decision is null", () => {
@@ -1010,8 +1225,11 @@ describe("LogsTable", () => {
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
       fireEvent.click(expandButton);
 
-      // Timeline still renders session affinity and execution stages even without routing decision
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleDecision" })[0]);
       expect(screen.getByText("timelineSessionAffinity")).toBeInTheDocument();
+      expect(screen.getByText("journeySelectionBasis")).toBeInTheDocument();
+
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleRequest" })[0]);
       expect(screen.getByText("timelineExecutionRetries")).toBeInTheDocument();
     });
 
@@ -1036,11 +1254,36 @@ describe("LogsTable", () => {
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
       fireEvent.click(expandButton);
 
-      // Retry timeline should show attempt with upstream name and error message
+      // Retry timeline should show attempt with upstream name, reason, and error message
       expect(screen.getAllByText(/retryAttempt/).length).toBeGreaterThan(0);
-      expect(screen.getByText(/failed-upstream/)).toBeInTheDocument();
+      expect(screen.getAllByText(/failed-upstream/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText("journeySelectionReasonWeighted").length).toBeGreaterThan(0);
       expect(screen.getByText(/Request timed out/)).toBeInTheDocument();
-      expect(screen.getByText(/retryTotalDuration/)).toBeInTheDocument();
+      expect(screen.getAllByText(/retryTotalDuration/).length).toBeGreaterThan(0);
+    });
+
+    it("uses the same failover duration text in request header and details", () => {
+      const requestStart = new Date();
+      const failoverAt = new Date(requestStart.getTime() + 580);
+      const logWithStableFailoverDuration: RequestLog = {
+        ...logWithFailoverBase,
+        created_at: requestStart.toISOString(),
+        duration_ms: 1000,
+        failover_history: [
+          {
+            ...logWithFailoverBase.failover_history![0],
+            attempted_at: failoverAt.toISOString(),
+          },
+        ],
+      };
+
+      render(<LogsTable logs={[logWithStableFailoverDuration]} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+
+      expect(screen.getByText(/retryTotalDuration 420ms \(\+420ms\)/)).toBeInTheDocument();
+      expect(screen.getByText("420ms (+420ms)")).toBeInTheDocument();
+      expect(screen.getAllByText(/retryTotalDuration/).length).toBeGreaterThan(0);
     });
 
     it("shows cache TTL split rows in expanded token details when values are present", () => {
@@ -1079,7 +1322,7 @@ describe("LogsTable", () => {
       expect(screen.queryByText("tokenCacheWrite1h")).not.toBeInTheDocument();
     });
 
-    it("displays three-column layout with decision, performance, and token details", () => {
+    it("displays sequential lifecycle flow alongside expanded token details", () => {
       const logWithRouting: RequestLog = {
         ...logWithFailoverBase,
         routing_decision: mockRoutingDecision,
@@ -1091,12 +1334,49 @@ describe("LogsTable", () => {
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
       fireEvent.click(expandButton);
 
-      expect(screen.getByText("timelineModelResolution")).toBeInTheDocument();
-      expect(screen.getByText("performanceStats")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "journeyRequestArrived" })).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: "lifecycleDecision" }).length).toBeGreaterThan(
+        0
+      );
+      expect(screen.queryByText("timelineUpstreamSelection")).not.toBeInTheDocument();
+      expect(screen.getByText("lifecycleTimeline")).toBeInTheDocument();
       expect(screen.getByText("tokenDetails")).toBeInTheDocument();
 
-      const gridContainer = container.querySelector("[class*='xl:grid-cols-']");
-      expect(gridContainer).toBeInTheDocument();
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleDecision" })[0]);
+      expect(screen.getByText("journeyDecisionResult")).toBeInTheDocument();
+
+      const focusRail = container.querySelector("[class*='xl:grid-cols-5']");
+      expect(focusRail).toBeInTheDocument();
+    });
+
+    it("supports switching lifecycle details to sequential full view", () => {
+      const logWithRouting: RequestLog = {
+        ...logWithFailoverBase,
+        routing_decision: mockRoutingDecision,
+        is_stream: true,
+        duration_ms: 1650,
+        routing_duration_ms: 300,
+        ttft_ms: 900,
+        completion_tokens: 120,
+        stage_timings_ms: {
+          total_ms: 1650,
+          decision_ms: 300,
+          upstream_response_ms: 950,
+          first_token_ms: 900,
+          generation_ms: 400,
+          gateway_processing_ms: null,
+        },
+      };
+
+      render(<LogsTable logs={[logWithRouting]} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+      fireEvent.click(screen.getByRole("button", { name: "journeyViewSequential" }));
+
+      expect(screen.getByText("journeyDecisionResult")).toBeInTheDocument();
+      expect(screen.getByText("timelineExecutionRetries")).toBeInTheDocument();
+      expect(screen.getAllByText(/1\.65s \(\+400ms\)/).length).toBeGreaterThan(0);
+      expect(screen.getByRole("button", { name: "journeyViewFocused" })).toBeInTheDocument();
     });
 
     it("shows error details in terminal style for error rows", () => {
@@ -1109,6 +1389,41 @@ describe("LogsTable", () => {
       // Should show terminal-style error details
       expect(screen.getByText(/ERROR_TYPE:/)).toBeInTheDocument();
       expect(screen.getByText(/STATUS:/)).toBeInTheDocument();
+    });
+
+    it("keeps header diff collapsed by default and expands on demand", () => {
+      const logWithHeaderDiff: RequestLog = {
+        ...logWithFailoverBase,
+        header_diff: {
+          inbound_count: 3,
+          outbound_count: 2,
+          dropped: [{ header: "x-forwarded-for", value: "127.0.0.1" }],
+          auth_replaced: {
+            header: "authorization",
+            inbound_value: "Bearer sk-old-token",
+            outbound_value: "Bearer sk-new-token",
+          },
+          compensated: [],
+          unchanged: [],
+        },
+      };
+
+      render(<LogsTable logs={[logWithHeaderDiff]} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+
+      expect(screen.getByText("headerDiffTitle")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Expand diff" })).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "headerDiffShowValues" })
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText("authorization")).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Expand diff" }));
+
+      expect(screen.getByRole("button", { name: "Collapse diff" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "headerDiffShowValues" })).toBeInTheDocument();
+      expect(screen.getByText("authorization")).toBeInTheDocument();
     });
   });
 });

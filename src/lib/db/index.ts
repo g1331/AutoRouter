@@ -1,7 +1,10 @@
 import { drizzle as drizzlePg, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import postgres, { type Sql } from "postgres";
+import { createRequire } from "module";
 import * as schema from "./schema";
 import { config } from "../utils/config";
+
+const require = createRequire(import.meta.url);
 
 type DbType = "postgres" | "sqlite";
 
@@ -43,7 +46,6 @@ function getSqliteClient() {
   if (!sqliteClient) {
     // Dynamic require to avoid bundling in production builds.
     // @libsql/client is a devDependency (pure JS, no native compilation needed).
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { createClient } = require("@libsql/client");
     sqliteClient = createClient({ url: `file:${config.sqliteDbPath}` });
   }
@@ -57,7 +59,6 @@ function getDb(): DatabaseInstance {
       // with PG at runtime for standard CRUD operations (select/insert/update/
       // delete/query/transaction). Raw SQL via db.execute() may use PG-specific
       // syntax that won't work on SQLite (e.g. PERCENTILE_CONT).
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { drizzle: drizzleLibsql } = require("drizzle-orm/libsql");
       dbInstance = drizzleLibsql(getSqliteClient(), { schema }) as DatabaseInstance;
     } else {

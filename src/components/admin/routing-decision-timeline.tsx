@@ -120,6 +120,7 @@ export function RoutingDecisionTimeline({
         tiered: t("routingTiered"),
         group: t("routingGroup"),
         default: t("routingDefault"),
+        path_capability: t("routingPathCapability"),
       };
       return labels[routingType] || routingType;
     }
@@ -131,6 +132,10 @@ export function RoutingDecisionTimeline({
     };
     return labels[routingDecision.routing_type] || routingDecision.routing_type;
   }, [routingDecision, routingType, t]);
+
+  const showRoutingTypeBadge =
+    (routingDecision?.routing_type ?? routingType) !== "path_capability" &&
+    routingTypeLabel != null;
 
   const didSendUpstream = routingDecision?.did_send_upstream;
   const finalUpstreamLabel =
@@ -148,7 +153,7 @@ export function RoutingDecisionTimeline({
           <span className="font-mono text-xs">{finalUpstreamLabel}</span>
         </div>
         <div className="flex min-w-0 items-center gap-1 flex-wrap">
-          {routingTypeLabel && (
+          {showRoutingTypeBadge && (
             <Badge
               variant="success"
               title={routingTypeLabel}
@@ -212,7 +217,7 @@ export function RoutingDecisionTimeline({
   const isError =
     statusCode !== null && statusCode !== undefined && (statusCode < 200 || statusCode >= 300);
   return (
-    <div className="space-y-0 font-mono text-xs">
+    <div className="space-y-0 text-xs">
       {/* Stage 1: Model Resolution */}
       {routingDecision && (
         <TimelineStage
@@ -245,7 +250,10 @@ export function RoutingDecisionTimeline({
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-foreground">
               <span className="text-muted-foreground">{t("timelineSessionId")}:</span>
-              <span title={sessionId!} className="cursor-help">
+              <span
+                title={sessionId!}
+                className="inline-flex max-w-full cursor-help items-center rounded-cf-sm border border-divider bg-surface-300 px-1.5 py-0.5 font-mono text-[11px] text-foreground"
+              >
                 {truncateId(sessionId)}
               </span>
               {sessionIdCompensated && (
@@ -323,8 +331,8 @@ export function RoutingDecisionTimeline({
                 <div
                   key={c.id}
                   className={cn(
-                    "flex items-center gap-2 p-1 rounded",
-                    isSelected && "bg-surface-300"
+                    "flex flex-wrap items-center gap-2 rounded-cf-sm border border-divider bg-surface-300/40 px-2 py-1.5",
+                    isSelected && "border-emerald-500/40 bg-emerald-500/10"
                   )}
                 >
                   {isSelected ? (
@@ -333,12 +341,16 @@ export function RoutingDecisionTimeline({
                     <span className="text-muted-foreground">○</span>
                   )}
                   <CircuitStateIcon state={c.circuit_state} />
-                  <span className={cn("text-foreground", isSelected && "font-medium")}>
+                  <span
+                    className={cn("min-w-0 flex-1 text-foreground", isSelected && "font-medium")}
+                  >
                     {c.name}
                   </span>
-                  <span className="ml-auto text-muted-foreground">w:{c.weight}</span>
-                  <span className="text-[11px] text-muted-foreground">
+                  <Badge variant="neutral" className="text-[10px] px-1.5 py-0">
                     {t(`circuitState.${c.circuit_state}`)}
+                  </Badge>
+                  <span className="rounded-cf-sm border border-divider bg-surface-300 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                    w:{c.weight}
                   </span>
                   {isSelected && (
                     <Badge variant="success" className="text-[11px] px-1 py-0">
@@ -354,11 +366,14 @@ export function RoutingDecisionTimeline({
                   {t("tooltipExcluded")} ({routingDecision.excluded.length})
                 </div>
                 {routingDecision.excluded.map((e) => (
-                  <div key={e.id} className="flex items-center gap-2 p-1">
+                  <div
+                    key={e.id}
+                    className="flex flex-wrap items-center gap-2 rounded-cf-sm border border-red-500/20 bg-red-500/5 px-2 py-1.5"
+                  >
                     <span className="text-red-500">&#x2717;</span>
                     <Lock className="w-3 h-3 text-red-500" />
-                    <span className="text-foreground">{e.name}</span>
-                    <Badge variant="error" className="text-[11px] px-1 py-0 ml-auto">
+                    <span className="min-w-0 flex-1 text-foreground">{e.name}</span>
+                    <Badge variant="error" className="text-[11px] px-1.5 py-0">
                       {t(`exclusionReason.${e.reason}`)}
                     </Badge>
                   </div>

@@ -18,6 +18,9 @@ function formatNumberRegex(num: number): RegExp {
   const pattern = str.replace(/(\d)(?=(\d{3})+$)/g, "$1[,.\\s\\u00a0\\u202f]?");
   return new RegExp(pattern);
 }
+function hasExactTextContent(expected: string) {
+  return (_content: string, element: Element | null) => element?.textContent === expected;
+}
 
 /**
  * TokenDisplay Component Tests
@@ -71,7 +74,7 @@ describe("TokenDisplay", () => {
         />
       );
 
-      expect(screen.getByText("100 / 200")).toBeInTheDocument();
+      expect(screen.getByText(hasExactTextContent("↑100/↓200"))).toBeInTheDocument();
     });
   });
 
@@ -107,9 +110,8 @@ describe("TokenDisplay", () => {
         />
       );
 
-      // Only total and breakdown should be present
-      const textElements = screen.getAllByText(/\d+/);
-      expect(textElements.length).toBe(2); // 300 and "100 / 200"
+      expect(screen.queryByText("tokenCacheHitShort")).not.toBeInTheDocument();
+      expect(screen.queryByText("tokenCacheWriteShort")).not.toBeInTheDocument();
     });
   });
 
@@ -185,7 +187,7 @@ describe("TokenDisplay", () => {
         />
       );
 
-      expect(screen.getByText("50 / 200")).toBeInTheDocument();
+      expect(screen.getByText(hasExactTextContent("↑50/↓200"))).toBeInTheDocument();
     });
 
     it("shows cache write badge when cacheCreationTokens > 0", () => {
@@ -219,7 +221,7 @@ describe("TokenDisplay", () => {
         />
       );
 
-      expect(screen.getByText("14 / 758")).toBeInTheDocument();
+      expect(screen.getByText(hasExactTextContent("↑14/↓758"))).toBeInTheDocument();
 
       const cacheHitBadge = screen.getByText("tokenCacheHitShort").closest("div");
       expect(cacheHitBadge).not.toBeNull();
@@ -254,6 +256,8 @@ describe("TokenDetailContent", () => {
       expect(screen.getByText("tokenInput")).toBeInTheDocument();
       expect(screen.getByText("tokenOutput")).toBeInTheDocument();
       expect(screen.getByText("tokenTotal")).toBeInTheDocument();
+      expect(screen.getAllByText("↑").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("↓").length).toBeGreaterThan(0);
     });
 
     it("renders formatted token values", () => {
