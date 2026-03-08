@@ -12,6 +12,8 @@ import {
   type RouteCapabilityDefinition,
 } from "@/lib/route-capabilities";
 
+import Image from "next/image";
+
 interface BrandIconProps {
   className?: string;
 }
@@ -53,14 +55,14 @@ function AnthropicLogo({ className }: BrandIconProps) {
 
 function GeminiLogo({ className }: BrandIconProps) {
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
+    <Image
       src="https://www.gstatic.com/marketing-cms/assets/images/7e/a4/253561a944f4a8f5e6dec4f5f26f/gemini.webp=s48-fcrop64=1,00000000ffffffff-rw"
       aria-label="Gemini"
       alt="Gemini"
       className={className}
-      loading="lazy"
-      decoding="async"
+      width={14}
+      height={14}
+      unoptimized
     />
   );
 }

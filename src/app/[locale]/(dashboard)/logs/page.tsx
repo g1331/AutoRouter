@@ -10,6 +10,15 @@ import { Topbar } from "@/components/admin/topbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { useRequestLogLive } from "@/hooks/use-request-log-live";
 import { useRequestLogs } from "@/hooks/use-request-logs";
@@ -18,66 +27,87 @@ interface LogsLoadingSkeletonProps {
   loadingLabel: string;
 }
 
-const LOGS_LOADING_BLOCK_CLASS =
-  "rounded-cf-sm motion-safe:animate-pulse motion-reduce:animate-none";
 const LOGS_SECTION_ENTER_CLASS = "animate-log-section-enter motion-reduce:animate-none";
 
 function LogsLoadingSkeleton({ loadingLabel }: LogsLoadingSkeletonProps) {
   return (
-    <Card variant="outlined" className="border-divider bg-surface-200/70">
-      <CardContent className="p-0">
-        <div
-          role="status"
-          aria-label={loadingLabel}
-          className="overflow-hidden rounded-cf-md border border-divider/85 bg-surface-200/55"
-        >
-          <div className="border-b border-divider bg-surface-200 px-4 py-2.5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className={cn(LOGS_LOADING_BLOCK_CLASS, "h-4 w-44 bg-surface-400/70")} />
-              <div className="flex items-center gap-2">
-                <div className={cn(LOGS_LOADING_BLOCK_CLASS, "h-4 w-20 bg-surface-400/60")} />
-                <div className={cn(LOGS_LOADING_BLOCK_CLASS, "h-4 w-16 bg-surface-400/60")} />
-              </div>
-            </div>
-          </div>
-
-          <div className="border-b border-divider bg-surface-200 px-4 py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className={cn(LOGS_LOADING_BLOCK_CLASS, "h-8 w-28 bg-surface-300/75")} />
-              <div className={cn(LOGS_LOADING_BLOCK_CLASS, "h-8 w-32 bg-surface-300/75")} />
-              <div className={cn(LOGS_LOADING_BLOCK_CLASS, "h-8 w-24 bg-surface-300/75")} />
-            </div>
-          </div>
-
-          <div className="border-b border-divider bg-surface-300/70 px-4 py-2.5">
-            <div className="grid grid-cols-12 gap-3">
-              <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-2 h-3 bg-surface-400/70")} />
-              <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-2 h-3 bg-surface-400/70")} />
-              <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-3 h-3 bg-surface-400/70")} />
-              <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-2 h-3 bg-surface-400/70")} />
-              <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-1 h-3 bg-surface-400/70")} />
-              <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-2 h-3 bg-surface-400/70")} />
-            </div>
-          </div>
-
-          <div className="divide-y divide-divider/70">
-            {Array.from({ length: 8 }).map((_, index) => (
-              <div
-                key={`logs-loading-row-${index}`}
-                className="grid grid-cols-12 items-center gap-3 px-4 py-3"
-              >
-                <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-1 h-3 bg-surface-300/80")} />
-                <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-2 h-3 bg-surface-300/80")} />
-                <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-2 h-3 bg-surface-300/80")} />
-                <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-3 h-3 bg-surface-300/80")} />
-                <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-2 h-3 bg-surface-300/80")} />
-                <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-1 h-3 bg-surface-300/80")} />
-                <div className={cn(LOGS_LOADING_BLOCK_CLASS, "col-span-1 h-3 bg-surface-300/80")} />
-              </div>
-            ))}
-          </div>
-        </div>
-      </CardContent>
+    <Card
+      role="status"
+      aria-label={loadingLabel}
+      variant="outlined"
+      className="border-divider bg-surface-200/70 overflow-hidden"
+    >
+      <span className="sr-only">{loadingLabel}</span>
+      <Table aria-hidden="true">
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-10 px-2"></TableHead>
+            <TableHead className="w-[110px] px-2">
+              <Skeleton className="h-3 w-12" />
+            </TableHead>
+            <TableHead className="hidden lg:table-cell px-2">
+              <Skeleton className="h-3 w-16" />
+            </TableHead>
+            <TableHead className="w-[72px] px-2">
+              <Skeleton className="h-3 w-8" />
+            </TableHead>
+            <TableHead className="hidden lg:table-cell w-[84px] px-2">
+              <Skeleton className="h-3 w-12" />
+            </TableHead>
+            <TableHead className="hidden xl:table-cell px-2 pl-1">
+              <Skeleton className="h-3 w-12" />
+            </TableHead>
+            <TableHead className="hidden md:table-cell px-2">
+              <Skeleton className="h-3 w-12" />
+            </TableHead>
+            <TableHead className="w-[120px] px-2 text-right">
+              <Skeleton className="h-3 w-12 ml-auto" />
+            </TableHead>
+            <TableHead className="w-[84px] px-2">
+              <Skeleton className="h-3 w-12" />
+            </TableHead>
+            <TableHead className="w-[170px] px-2">
+              <Skeleton className="h-3 w-12" />
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {Array.from({ length: 10 }).map((_, i) => (
+            <TableRow key={i}>
+              <TableCell className="px-2 py-1.5">
+                <Skeleton className="h-2 w-4" />
+              </TableCell>
+              <TableCell className="font-mono text-[8px] whitespace-nowrap px-2 py-1.5">
+                <Skeleton className="h-2 w-16" />
+              </TableCell>
+              <TableCell className="hidden lg:table-cell px-2 py-1.5 min-w-0 overflow-hidden text-[10px]">
+                <Skeleton className="h-2 w-full max-w-[80px]" />
+              </TableCell>
+              <TableCell className="px-2 py-1">
+                <Skeleton className="h-2 w-8" />
+              </TableCell>
+              <TableCell className="hidden text-[10px] lg:table-cell w-[84px] px-2 py-1 pr-1 min-w-0">
+                <Skeleton className="h-2 w-10" />
+              </TableCell>
+              <TableCell className="hidden font-mono text-[10px] xl:table-cell px-2 py-1 pl-1 min-w-0">
+                <Skeleton className="h-2 w-14" />
+              </TableCell>
+              <TableCell className="hidden md:table-cell px-2 py-1 min-w-0 overflow-hidden text-[10px]">
+                <Skeleton className="h-2 w-16" />
+              </TableCell>
+              <TableCell className="px-2 py-1 text-right">
+                <Skeleton className="h-2 w-10 ml-auto" />
+              </TableCell>
+              <TableCell className="px-2 py-1">
+                <Skeleton className="h-2 w-10" />
+              </TableCell>
+              <TableCell className="px-2 py-1 font-mono text-[10px] leading-tight">
+                <Skeleton className="h-2 w-full max-w-[60px]" />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </Card>
   );
 }

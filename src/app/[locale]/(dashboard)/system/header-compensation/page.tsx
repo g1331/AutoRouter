@@ -29,6 +29,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import {
   useCompensationRules,
@@ -457,70 +465,68 @@ function CapabilityMatrix({ rules }: { rules: CompensationRule[] }) {
         </span>
         <p className="mt-0.5 text-[11px] text-muted-foreground/70">{t("capabilityMatrixDesc")}</p>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-[11px]">
-          <thead>
-            <tr className="border-b border-divider/60">
-              <th className="px-3 py-2 text-left font-normal text-muted-foreground">
-                {t("ruleName")}
-              </th>
-              {ROUTE_CAPABILITY_DEFINITIONS.map((def) => {
-                const iconMeta =
-                  ROUTE_CAPABILITY_ICON_META[def.iconKey] ?? ROUTE_CAPABILITY_ICON_META.circle_help;
-                const label = tUp(def.labelKey as Parameters<typeof tUp>[0]);
-                return (
-                  <th
-                    key={def.value}
-                    className="px-2 py-2 text-center font-normal text-muted-foreground"
-                  >
-                    <div
-                      className="mx-auto inline-flex min-w-0 flex-col items-center justify-center gap-1"
-                      title={label}
-                    >
-                      <span
-                        className={cn(
-                          "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-cf-sm border",
-                          iconMeta.iconContainerClass
-                        )}
-                      >
-                        {iconMeta.render(cn("h-3.5 w-3.5", iconMeta.iconColorClass))}
-                      </span>
-                      <span className="max-w-[7.25rem] truncate">{label}</span>
-                    </div>
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-divider/40">
-            {enabledRules.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={ROUTE_CAPABILITY_DEFINITIONS.length + 1}
-                  className="px-3 py-4 text-center text-muted-foreground"
+      <Table frame="none" className="text-[11px]">
+        <TableHeader>
+          <TableRow className="border-b border-divider/60 hover:bg-transparent">
+            <TableHead className="px-3 py-2 h-auto text-left font-normal text-muted-foreground">
+              {t("ruleName")}
+            </TableHead>
+            {ROUTE_CAPABILITY_DEFINITIONS.map((def) => {
+              const iconMeta =
+                ROUTE_CAPABILITY_ICON_META[def.iconKey] ?? ROUTE_CAPABILITY_ICON_META.circle_help;
+              const label = tUp(def.labelKey as Parameters<typeof tUp>[0]);
+              return (
+                <TableHead
+                  key={def.value}
+                  className="px-2 py-2 h-auto text-center font-normal text-muted-foreground"
                 >
-                  {t("noRules")}
-                </td>
-              </tr>
-            ) : (
-              enabledRules.map((rule) => (
-                <tr key={rule.id} className="hover:bg-surface-300/30">
-                  <td className="px-3 py-2 font-medium text-foreground">{rule.name}</td>
-                  {ROUTE_CAPABILITY_DEFINITIONS.map((def) => (
-                    <td key={def.value} className="px-2 py-2 text-center">
-                      {rule.capabilities.includes(def.value) ? (
-                        <Check className="mx-auto h-3 w-3 text-amber-500" />
-                      ) : (
-                        <span className="text-divider">—</span>
+                  <div
+                    className="mx-auto inline-flex min-w-0 flex-col items-center justify-center gap-1"
+                    title={label}
+                  >
+                    <span
+                      className={cn(
+                        "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-cf-sm border",
+                        iconMeta.iconContainerClass
                       )}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+                    >
+                      {iconMeta.render(cn("h-3.5 w-3.5", iconMeta.iconColorClass))}
+                    </span>
+                    <span className="max-w-[7.25rem] truncate">{label}</span>
+                  </div>
+                </TableHead>
+              );
+            })}
+          </TableRow>
+        </TableHeader>
+        <TableBody className="divide-y divide-divider/40">
+          {enabledRules.length === 0 ? (
+            <TableRow>
+              <TableCell
+                colSpan={ROUTE_CAPABILITY_DEFINITIONS.length + 1}
+                className="px-3 py-4 text-center text-muted-foreground"
+              >
+                {t("noRules")}
+              </TableCell>
+            </TableRow>
+          ) : (
+            enabledRules.map((rule) => (
+              <TableRow key={rule.id} className="hover:bg-surface-300/30">
+                <TableCell className="px-3 py-2 font-medium text-foreground">{rule.name}</TableCell>
+                {ROUTE_CAPABILITY_DEFINITIONS.map((def) => (
+                  <TableCell key={def.value} className="px-2 py-2 text-center">
+                    {rule.capabilities.includes(def.value) ? (
+                      <Check className="mx-auto h-3 w-3 text-amber-500" />
+                    ) : (
+                      <span className="text-divider">—</span>
+                    )}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 }

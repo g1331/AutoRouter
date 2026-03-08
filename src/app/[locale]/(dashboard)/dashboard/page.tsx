@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { ArrowRight, BarChart3, Cpu, Key, Server, Zap } from "lucide-react";
+import { ArrowRight, BarChart3, CheckCircle, Cpu, Key, Server, Zap } from "lucide-react";
 
 import { Topbar } from "@/components/admin/topbar";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   LeaderboardSection,
   StatsCards,
@@ -23,7 +24,6 @@ import type { TimeseriesMetric } from "@/hooks/use-dashboard-stats";
 
 export default function DashboardPage() {
   const t = useTranslations("dashboard");
-  const tCommon = useTranslations("common");
 
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
   const [metric, setMetric] = useState<TimeseriesMetric>("requests");
@@ -126,18 +126,13 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <Card variant="filled" className="border border-divider">
-          <CardContent className="space-y-1 p-4">
-            <div className="flex items-center gap-2 type-body-small text-muted-foreground">
-              <span className="text-status-success">[{tCommon("sysOk").split("::")[0]}]</span>
-              <span>{t("systemInitialized")}</span>
-            </div>
-            <div className="flex items-center gap-2 type-body-small text-muted-foreground">
-              <span className="text-status-success">[{tCommon("sysOk").split("::")[0]}]</span>
-              <span>{t("allServicesOnline")}</span>
-            </div>
-          </CardContent>
-        </Card>
+        <Alert variant="default" className="border-divider">
+          <CheckCircle className="h-4 w-4 text-status-success" />
+          <AlertTitle>{t("systemInitialized")}</AlertTitle>
+          <AlertDescription className="text-muted-foreground">
+            {t("allServicesOnline")}
+          </AlertDescription>
+        </Alert>
       </div>
     </>
   );

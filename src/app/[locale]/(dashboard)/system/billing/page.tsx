@@ -28,6 +28,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Link } from "@/i18n/navigation";
 import {
   useBillingOverview,
@@ -1034,10 +1042,10 @@ export default function BillingPage() {
                 </div>
 
                 <div className="hidden w-full lg:block">
-                  <table className="w-full table-fixed text-sm">
-                    <thead>
-                      <tr className="border-b border-divider text-left text-xs uppercase tracking-wide text-muted-foreground">
-                        <th className="w-10 px-3 py-2">
+                  <Table className="w-full table-fixed text-sm">
+                    <TableHeader>
+                      <TableRow className="border-b border-divider text-left text-xs uppercase tracking-wide text-muted-foreground hover:bg-transparent">
+                        <TableHead className="w-10 px-3 py-2 h-auto">
                           <Checkbox
                             checked={priceCatalogHeaderSelectionState}
                             onCheckedChange={(value) =>
@@ -1046,36 +1054,46 @@ export default function BillingPage() {
                             aria-label={t("priceCatalogSelectAll")}
                             disabled={priceCatalogSelectableModels.length === 0}
                           />
-                        </th>
-                        <th className="px-3 py-2">{t("priceCatalogModel")}</th>
-                        <th className="hidden w-[88px] px-3 py-2 lg:table-cell">
+                        </TableHead>
+                        <TableHead className="px-3 py-2 h-auto text-left">
+                          {t("priceCatalogModel")}
+                        </TableHead>
+                        <TableHead className="hidden w-[88px] px-3 py-2 h-auto lg:table-cell text-left">
                           {t("priceCatalogSource")}
-                        </th>
-                        <th className="w-[104px] px-3 py-2">{t("priceCatalogEffective")}</th>
-                        <th className="w-[140px] px-3 py-2">{t("priceCatalogInputPrice")}</th>
-                        <th className="w-[140px] px-3 py-2">{t("priceCatalogOutputPrice")}</th>
-                        <th className="hidden w-[160px] px-3 py-2 xl:table-cell">
+                        </TableHead>
+                        <TableHead className="w-[104px] px-3 py-2 h-auto text-left">
+                          {t("priceCatalogEffective")}
+                        </TableHead>
+                        <TableHead className="w-[140px] px-3 py-2 h-auto text-left">
+                          {t("priceCatalogInputPrice")}
+                        </TableHead>
+                        <TableHead className="w-[140px] px-3 py-2 h-auto text-left">
+                          {t("priceCatalogOutputPrice")}
+                        </TableHead>
+                        <TableHead className="hidden w-[160px] px-3 py-2 h-auto xl:table-cell text-left">
                           {t("priceCatalogCacheReadPrice")}
-                        </th>
-                        <th className="hidden w-[160px] px-3 py-2 xl:table-cell">
+                        </TableHead>
+                        <TableHead className="hidden w-[160px] px-3 py-2 h-auto xl:table-cell text-left">
                           {t("priceCatalogCacheWritePrice")}
-                        </th>
-                        <th className="hidden w-[170px] px-3 py-2 lg:table-cell">
+                        </TableHead>
+                        <TableHead className="hidden w-[170px] px-3 py-2 h-auto lg:table-cell text-left">
                           {t("priceCatalogSyncedAt")}
-                        </th>
-                        <th className="w-14 px-3 py-2">{t("priceCatalogActions")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                        </TableHead>
+                        <TableHead className="w-14 px-3 py-2 h-auto text-left">
+                          {t("priceCatalogActions")}
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {priceCatalogExtraOverrides.map((override) => (
-                        <tr
+                        <TableRow
                           key={override.id}
                           className={[
                             "border-b border-divider/60 align-top bg-surface-300/20",
                             recentlySavedModel === override.model ? "bg-amber-500/10" : "",
                           ].join(" ")}
                         >
-                          <td className="px-3 py-2">
+                          <TableCell className="px-3 py-2">
                             <Checkbox
                               checked={selectedResetModels.includes(override.model)}
                               onCheckedChange={(value) =>
@@ -1083,38 +1101,38 @@ export default function BillingPage() {
                               }
                               aria-label={t("priceCatalogSelectModel", { model: override.model })}
                             />
-                          </td>
-                          <td className="px-3 py-2 font-mono">
+                          </TableCell>
+                          <TableCell className="px-3 py-2 font-mono">
                             <span className="block whitespace-normal break-all leading-5">
                               {override.model}
                             </span>
-                          </td>
-                          <td className="hidden px-3 py-2 lg:table-cell">
+                          </TableCell>
+                          <TableCell className="hidden px-3 py-2 lg:table-cell">
                             {t("priceCatalogSourceManual")}
-                          </td>
-                          <td className="px-3 py-2">
+                          </TableCell>
+                          <TableCell className="px-3 py-2">
                             <Badge variant="success">{t("priceCatalogEffectiveManual")}</Badge>
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums">
+                          </TableCell>
+                          <TableCell className="px-3 py-2 text-right tabular-nums">
                             {override.input_price_per_million.toFixed(4)}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums">
+                          </TableCell>
+                          <TableCell className="px-3 py-2 text-right tabular-nums">
                             {override.output_price_per_million.toFixed(4)}
-                          </td>
-                          <td className="hidden px-3 py-2 text-right tabular-nums xl:table-cell">
+                          </TableCell>
+                          <TableCell className="hidden px-3 py-2 text-right tabular-nums xl:table-cell">
                             {override.cache_read_input_price_per_million == null
                               ? "-"
                               : override.cache_read_input_price_per_million.toFixed(4)}
-                          </td>
-                          <td className="hidden px-3 py-2 text-right tabular-nums xl:table-cell">
+                          </TableCell>
+                          <TableCell className="hidden px-3 py-2 text-right tabular-nums xl:table-cell">
                             {override.cache_write_input_price_per_million == null
                               ? "-"
                               : override.cache_write_input_price_per_million.toFixed(4)}
-                          </td>
-                          <td className="hidden px-3 py-2 text-xs text-muted-foreground lg:table-cell">
+                          </TableCell>
+                          <TableCell className="hidden px-3 py-2 text-xs text-muted-foreground lg:table-cell">
                             {new Date(override.updated_at).toLocaleString(locale)}
-                          </td>
-                          <td className="px-3 py-2">
+                          </TableCell>
+                          <TableCell className="px-3 py-2">
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1134,8 +1152,8 @@ export default function BillingPage() {
                                   : t("priceCatalogResetToOfficial")}
                               </span>
                             </Button>
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       ))}
 
                       {priceCatalogVisibleSyncedItems.map((item: BillingModelPrice) => {
@@ -1186,14 +1204,14 @@ export default function BillingPage() {
                         };
 
                         return (
-                          <tr
+                          <TableRow
                             key={item.id}
                             className={[
                               "border-b border-divider/60 align-top",
                               recentlySavedModel === item.model ? "bg-amber-500/10" : "",
                             ].join(" ")}
                           >
-                            <td className="px-3 py-2">
+                            <TableCell className="px-3 py-2">
                               {override ? (
                                 <Checkbox
                                   checked={selectedResetModels.includes(item.model)}
@@ -1207,48 +1225,50 @@ export default function BillingPage() {
                               ) : (
                                 <span className="sr-only">-</span>
                               )}
-                            </td>
-                            <td className="px-3 py-2 font-mono">
+                            </TableCell>
+                            <TableCell className="px-3 py-2 font-mono">
                               <span className="block whitespace-normal break-all leading-5">
                                 {item.model}
                               </span>
-                            </td>
-                            <td className="hidden px-3 py-2 lg:table-cell">{item.source}</td>
-                            <td className="px-3 py-2">
+                            </TableCell>
+                            <TableCell className="hidden px-3 py-2 lg:table-cell">
+                              {item.source}
+                            </TableCell>
+                            <TableCell className="px-3 py-2">
                               <Badge variant={override ? "success" : "neutral"}>
                                 {override
                                   ? t("priceCatalogEffectiveManual")
                                   : t("priceCatalogEffectiveSynced")}
                               </Badge>
-                            </td>
-                            <td className="px-3 py-2">
+                            </TableCell>
+                            <TableCell className="px-3 py-2">
                               {renderEffectiveNumber({
                                 effectiveValue: effective.input,
                                 syncedValue: item.input_price_per_million,
                               })}
-                            </td>
-                            <td className="px-3 py-2">
+                            </TableCell>
+                            <TableCell className="px-3 py-2">
                               {renderEffectiveNumber({
                                 effectiveValue: effective.output,
                                 syncedValue: item.output_price_per_million,
                               })}
-                            </td>
-                            <td className="hidden px-3 py-2 xl:table-cell">
+                            </TableCell>
+                            <TableCell className="hidden px-3 py-2 xl:table-cell">
                               {renderEffectiveNumber({
                                 effectiveValue: effective.cacheRead,
                                 syncedValue: item.cache_read_input_price_per_million,
                               })}
-                            </td>
-                            <td className="hidden px-3 py-2 xl:table-cell">
+                            </TableCell>
+                            <TableCell className="hidden px-3 py-2 xl:table-cell">
                               {renderEffectiveNumber({
                                 effectiveValue: effective.cacheWrite,
                                 syncedValue: item.cache_write_input_price_per_million,
                               })}
-                            </td>
-                            <td className="hidden px-3 py-2 text-xs text-muted-foreground lg:table-cell">
+                            </TableCell>
+                            <TableCell className="hidden px-3 py-2 text-xs text-muted-foreground lg:table-cell">
                               {new Date(item.synced_at).toLocaleString(locale)}
-                            </td>
-                            <td className="px-3 py-2">
+                            </TableCell>
+                            <TableCell className="px-3 py-2">
                               {override ? (
                                 <Button
                                   variant="ghost"
@@ -1266,12 +1286,12 @@ export default function BillingPage() {
                               ) : (
                                 <span className="sr-only">-</span>
                               )}
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         );
                       })}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
 
                 {modelPrices.data && modelPrices.data.total_pages > 1 && (

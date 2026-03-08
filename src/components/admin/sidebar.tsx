@@ -83,7 +83,7 @@ function isPathActive(pathname: string, href: string): boolean {
 
 function baseControlItemClass(collapsed: boolean): string {
   return cn(
-    "group flex w-full items-center rounded-cf-sm border border-transparent transition-all duration-cf-normal ease-cf-standard",
+    "group flex w-full h-auto font-normal items-center justify-start rounded-cf-sm border border-transparent transition-all duration-cf-normal ease-cf-standard",
     "text-muted-foreground hover:border-border hover:bg-surface-300 hover:text-foreground",
     collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5"
   );
@@ -108,14 +108,15 @@ function LanguageItem({ collapsed }: { collapsed: boolean }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           className={baseControlItemClass(collapsed)}
           title={tLanguage("switch")}
         >
           <Globe className="h-4 w-4 flex-shrink-0" />
           {!collapsed && <span className="type-body-small truncate">{tLanguage("current")}</span>}
-        </button>
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-36">
         <DropdownMenuRadioGroup
@@ -149,14 +150,19 @@ function ThemeItem({ collapsed }: { collapsed: boolean }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" className={baseControlItemClass(collapsed)} title={tTheme("toggle")}>
+        <Button
+          type="button"
+          variant="ghost"
+          className={baseControlItemClass(collapsed)}
+          title={tTheme("toggle")}
+        >
           {resolvedTheme === "dark" ? (
             <Moon className="h-4 w-4 flex-shrink-0" />
           ) : (
             <Sun className="h-4 w-4 flex-shrink-0" />
           )}
           {!collapsed && <span className="type-body-small truncate">{tTheme("toggle")}</span>}
-        </button>
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[150px]">
         <DropdownMenuRadioGroup value={selectedTheme} onValueChange={setTheme}>
@@ -349,15 +355,16 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           <LanguageItem collapsed={collapsed} />
           <ThemeItem collapsed={collapsed} />
 
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={() => setShowLogoutDialog(true)}
             className={baseControlItemClass(collapsed)}
             title={tNav("logout")}
           >
             <LogOut className="h-4 w-4 flex-shrink-0" />
             {!collapsed && <span className="type-body-small truncate">{tNav("logout")}</span>}
-          </button>
+          </Button>
         </div>
       </aside>
 
