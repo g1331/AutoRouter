@@ -9,6 +9,9 @@ type RequestLogLiveUpdateListener = (event: RequestLogLiveUpdate) => void;
 
 const listeners = new Set<RequestLogLiveUpdateListener>();
 
+/**
+ * Subscribe to in-process request-log live updates and return an unsubscribe callback.
+ */
 export function subscribeRequestLogLiveUpdates(listener: RequestLogLiveUpdateListener): () => void {
   listeners.add(listener);
   return () => {
@@ -16,6 +19,9 @@ export function subscribeRequestLogLiveUpdates(listener: RequestLogLiveUpdateLis
   };
 }
 
+/**
+ * Publish a request-log live update to all active in-process listeners.
+ */
 export function publishRequestLogLiveUpdate(
   event: Omit<RequestLogLiveUpdate, "occurredAt"> & { occurredAt?: string }
 ): void {

@@ -3,6 +3,8 @@ import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 import tseslint from "@typescript-eslint/eslint-plugin";
 import tsParser from "@typescript-eslint/parser";
+import jsdoc from "eslint-plugin-jsdoc";
+import tsdoc from "eslint-plugin-tsdoc";
 
 export default defineConfig([
   ...nextVitals,
@@ -34,6 +36,44 @@ export default defineConfig([
         {
           argsIgnorePattern: "^_",
           varsIgnorePattern: "^_",
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/**/*.ts"],
+    ignores: ["src/components/**", "src/hooks/**"],
+    name: "documentation-syntax",
+    plugins: {
+      tsdoc,
+    },
+    rules: {
+      "tsdoc/syntax": "warn",
+    },
+  },
+  {
+    files: ["src/lib/services/**/*.ts", "src/app/api/**/*.ts"],
+    name: "documentation-coverage",
+    plugins: {
+      jsdoc,
+    },
+    rules: {
+      "jsdoc/require-jsdoc": [
+        "warn",
+        {
+          enableFixer: false,
+          publicOnly: {
+            ancestorsOnly: true,
+            esm: true,
+          },
+          require: {
+            ArrowFunctionExpression: false,
+            ClassDeclaration: true,
+            ClassExpression: false,
+            FunctionDeclaration: true,
+            FunctionExpression: false,
+            MethodDefinition: false,
+          },
         },
       ],
     },

@@ -49,6 +49,9 @@ let builtinEnsureState: BuiltinEnsureState = "unknown";
 let builtinEnsureRetryAt = 0;
 const BUILTIN_ENSURE_RETRY_MS = 60_000;
 
+/**
+ * Ensure built-in compensation rules exist and stay aligned with the hard-coded defaults.
+ */
 export async function ensureBuiltinCompensationRulesExist(): Promise<void> {
   if (builtinEnsureState === "ok") return;
   const now = Date.now();
@@ -136,6 +139,9 @@ async function loadRules(): Promise<CompensationRule[]> {
   return rules;
 }
 
+/**
+ * Clear the in-memory compensation rule cache so the next lookup reloads from storage.
+ */
 export function invalidateCache(): void {
   cache = null;
 }

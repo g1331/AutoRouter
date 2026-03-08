@@ -123,6 +123,9 @@ export async function getBillingOverviewStats(): Promise<BillingOverviewStats> {
   };
 }
 
+/**
+ * List billing multipliers configured for each upstream.
+ */
 export async function listUpstreamBillingMultipliers(): Promise<UpstreamBillingMultiplierItem[]> {
   const rows = await db.query.upstreams.findMany({
     columns: {
@@ -144,6 +147,9 @@ export async function listUpstreamBillingMultipliers(): Promise<UpstreamBillingM
   }));
 }
 
+/**
+ * Update the billing multipliers for a single upstream.
+ */
 export async function updateUpstreamBillingMultipliers(
   upstreamId: string,
   input: {
@@ -207,6 +213,9 @@ function toRecentBillingDetailItem(
   };
 }
 
+/**
+ * List recent billing snapshot details with pagination for the admin billing view.
+ */
 export async function listRecentBillingDetails(
   page: number = 1,
   pageSize: number = 20

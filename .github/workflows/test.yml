@@ -6,8 +6,11 @@ on:
     paths:
       - "src/**"
       - "tests/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
       - "*.json"
       - "*.ts"
+      - "*.mjs"
       - ".github/workflows/**"
       - ".github/workflows/test.yml"
   pull_request:
@@ -15,8 +18,11 @@ on:
     paths:
       - "src/**"
       - "tests/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
       - "*.json"
       - "*.ts"
+      - "*.mjs"
       - ".github/workflows/**"
       - ".github/workflows/test.yml"
 

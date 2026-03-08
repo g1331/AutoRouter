@@ -442,6 +442,9 @@ export async function logRequest(input: LogRequestInput): Promise<RequestLog> {
   return logEntry;
 }
 
+/**
+ * Mark stale non-streaming request logs as failed when they never reached a terminal state.
+ */
 export async function reconcileStaleInProgressRequestLogs(options?: {
   now?: Date;
   limit?: number;

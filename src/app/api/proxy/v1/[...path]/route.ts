@@ -1343,12 +1343,11 @@ function wrapStreamWithDownstreamSettlement(
 }
 
 /**
- * Compute total input tokens for affinity tracking, avoiding double-count.
+ * Compute total input tokens for affinity tracking without double counting cached tokens.
  *
- * OpenAI: promptTokens already includes cached tokens (subset of prompt_tokens).
- * Anthropic: when input_tokens > 0, total = input_tokens + cache tokens;
- * when input_tokens === 0 (fallback), promptTokens already equals cache tokens.
- * Use rawInputTokens to distinguish these cases precisely.
+ * OpenAI already reports cached tokens inside `promptTokens`. Anthropic should add cache tokens
+ * only when `input_tokens` is greater than zero; otherwise the fallback `promptTokens` value already
+ * equals the cache-token total. `rawInputTokens` lets us distinguish these cases precisely.
  */
 function computeAffinityTokens(
   routeCapability: RouteCapability,
@@ -2607,22 +2606,37 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   }
 }
 
+/**
+ * Handle proxied GET requests through the unified proxy pipeline.
+ */
 export async function GET(request: NextRequest, context: RouteContext) {
   return handleProxy(request, context);
 }
 
+/**
+ * Handle proxied POST requests through the unified proxy pipeline.
+ */
 export async function POST(request: NextRequest, context: RouteContext) {
   return handleProxy(request, context);
 }
 
+/**
+ * Handle proxied PUT requests through the unified proxy pipeline.
+ */
 export async function PUT(request: NextRequest, context: RouteContext) {
   return handleProxy(request, context);
 }
 
+/**
+ * Handle proxied DELETE requests through the unified proxy pipeline.
+ */
 export async function DELETE(request: NextRequest, context: RouteContext) {
   return handleProxy(request, context);
 }
 
+/**
+ * Handle proxied PATCH requests through the unified proxy pipeline.
+ */
 export async function PATCH(request: NextRequest, context: RouteContext) {
   return handleProxy(request, context);
 }

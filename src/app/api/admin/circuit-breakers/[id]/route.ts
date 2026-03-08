@@ -13,7 +13,7 @@ interface RouteContext {
 }
 
 /**
- * GET /api/admin/circuit-breakers/{upstreamId} - Get circuit breaker state for a specific upstream
+ * Handle GET /api/admin/circuit-breakers/[id] and return the upstream circuit breaker state.
  */
 export async function GET(request: NextRequest, context: RouteContext): Promise<Response> {
   const authHeader = request.headers.get("authorization");

@@ -24,8 +24,10 @@ export const logger = pino({
  * Create a child logger with a module name bound to the `module` field.
  *
  * @example
+ * ```ts
  * const log = createLogger("proxy-client");
- * log.info({ requestId }, "upstream request");
+ * log.info({ requestId: "abc123" }, "upstream request");
+ * ```
  */
 export function createLogger(name: string) {
   return logger.child({ module: name });

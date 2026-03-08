@@ -72,6 +72,9 @@ function extractGeminiModelFromNormalizedPath(path: string): string | null {
   }
 }
 
+/**
+ * Extract a Gemini model identifier from a normalized proxy path when possible.
+ */
 export function extractGeminiModelFromPath(path: string): string | null {
   const normalizedPath = normalizeProxyPath(path);
   if (hasDotSegments(normalizedPath)) {
@@ -81,6 +84,9 @@ export function extractGeminiModelFromPath(path: string): string | null {
   return extractGeminiModelFromNormalizedPath(normalizedPath);
 }
 
+/**
+ * Match an incoming proxy request to a supported route capability.
+ */
 export function matchRouteCapability(method: string, path: string): RouteCapability | null {
   if (method.toUpperCase() !== "POST") {
     return null;
