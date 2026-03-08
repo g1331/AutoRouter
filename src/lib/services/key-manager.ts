@@ -7,6 +7,9 @@ import { createLogger } from "../utils/logger";
 
 const log = createLogger("key-manager");
 
+/**
+ * Raised when an API key lookup cannot find a persisted key record.
+ */
 export class ApiKeyNotFoundError extends Error {
   constructor(message: string) {
     super(message);
@@ -14,6 +17,9 @@ export class ApiKeyNotFoundError extends Error {
   }
 }
 
+/**
+ * Raised when an operation encounters a legacy API key without recoverable plaintext.
+ */
 export class LegacyApiKeyError extends Error {
   constructor(message: string) {
     super(message);
@@ -77,7 +83,7 @@ export interface ApiKeyUpdateInput {
 }
 
 /**
- * Generate a random API key with format: sk-auto-{base64-random}
+ * Generate a random API key using the `sk-auto-[base64-random]` format.
  */
 export function generateApiKey(): string {
   const randomPart = randomBytes(32).toString("base64url");

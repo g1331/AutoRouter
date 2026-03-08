@@ -112,6 +112,9 @@ export interface ProxyResult {
   headerDiff?: HeaderDiff;
 }
 
+/**
+ * Apply resolved compensation headers to an outbound request header map.
+ */
 export function applyCompensationHeaders(
   headers: Record<string, string>,
   compensationHeaders?: CompensationHeader[]
@@ -419,6 +422,9 @@ function extractFromGeminiUsageMetadata(
   };
 }
 
+/**
+ * Extract normalized token-usage fields from provider response payloads.
+ */
 export function extractNormalizedUsage(data: Record<string, unknown>): NormalizedTokenUsage | null {
   // Check top-level usage field (OpenAI Chat Completions, Anthropic, Responses API non-streaming)
   if (typeof data.usage === "object" && data.usage !== null) {

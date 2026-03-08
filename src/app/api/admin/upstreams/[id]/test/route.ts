@@ -80,9 +80,10 @@ type RouteContext = { params: Promise<{ id: string }> };
  * - Diagnose connectivity issues with saved upstreams
  *
  * @param request - Next.js request object (no body required)
- * @param context - Route context containing path parameters
- * @param context.params - Promise resolving to path parameters
- * @param context.params.id - UUID of the upstream to test
+ * @param context - Route context containing the upstream identifier in `context.params`
+ *
+ * Path parameters:
+ * - `id`: UUID of the upstream to test
  *
  * @returns JSON response with test results and HTTP 200 (check `success` field for test outcome)
  *

@@ -89,22 +89,37 @@ async function handleMock(request: NextRequest, context: RouteContext): Promise<
   return new Response(null, { status, headers });
 }
 
+/**
+ * Handle mock GET requests by delegating to the shared mock responder.
+ */
 export async function GET(request: NextRequest, context: RouteContext) {
   return handleMock(request, context);
 }
 
+/**
+ * Handle mock POST requests by delegating to the shared mock responder.
+ */
 export async function POST(request: NextRequest, context: RouteContext) {
   return handleMock(request, context);
 }
 
+/**
+ * Handle mock PUT requests by delegating to the shared mock responder.
+ */
 export async function PUT(request: NextRequest, context: RouteContext) {
   return handleMock(request, context);
 }
 
+/**
+ * Handle mock DELETE requests by delegating to the shared mock responder.
+ */
 export async function DELETE(request: NextRequest, context: RouteContext) {
   return handleMock(request, context);
 }
 
+/**
+ * Handle mock PATCH requests by delegating to the shared mock responder.
+ */
 export async function PATCH(request: NextRequest, context: RouteContext) {
   return handleMock(request, context);
 }

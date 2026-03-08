@@ -287,7 +287,7 @@ export async function syncBillingModelPrices(): Promise<BillingSyncSummary> {
 }
 
 /**
- * Resolve model price with priority: manual override > synced prices.
+ * Resolve a model price by checking manual overrides before synced prices.
  */
 export async function resolveBillingModelPrice(
   model: string | null
@@ -354,6 +354,9 @@ export async function getLatestBillingSyncStatus(): Promise<BillingSyncSummary |
   };
 }
 
+/**
+ * List manual billing price overrides together with official-price availability metadata.
+ */
 export async function listBillingManualPriceOverrides(): Promise<
   BillingManualPriceOverrideRecord[]
 > {
@@ -389,6 +392,9 @@ export async function listBillingManualPriceOverrides(): Promise<
   }));
 }
 
+/**
+ * Delete manual billing price overrides by model and report models without official pricing.
+ */
 export async function deleteBillingManualPriceOverridesByModels(
   models: string[]
 ): Promise<{ deletedCount: number; missingOfficialModels: string[] }> {
@@ -419,6 +425,9 @@ export async function deleteBillingManualPriceOverridesByModels(
   };
 }
 
+/**
+ * Create a manual billing price override for a single model.
+ */
 export async function createBillingManualPriceOverride(
   input: ManualOverrideInput
 ): Promise<BillingManualPriceOverrideRecord> {
@@ -461,6 +470,9 @@ export async function createBillingManualPriceOverride(
   };
 }
 
+/**
+ * Update a manual billing price override by identifier.
+ */
 export async function updateBillingManualPriceOverride(
   id: string,
   input: UpdateManualOverrideInput
@@ -508,6 +520,9 @@ export async function updateBillingManualPriceOverride(
   };
 }
 
+/**
+ * Delete a manual billing price override by identifier.
+ */
 export async function deleteBillingManualPriceOverride(id: string): Promise<boolean> {
   const rows = await db
     .delete(billingManualPriceOverrides)
@@ -516,6 +531,9 @@ export async function deleteBillingManualPriceOverride(id: string): Promise<bool
   return rows.length > 0;
 }
 
+/**
+ * List models that still cannot be priced from either synced prices or manual overrides.
+ */
 export async function listBillingUnresolvedModels(): Promise<BillingUnresolvedModel[]> {
   const rows = await db.query.requestBillingSnapshots.findMany({
     where: and(
@@ -584,6 +602,9 @@ export async function listBillingUnresolvedModels(): Promise<BillingUnresolvedMo
   return [...grouped.values()];
 }
 
+/**
+ * List synced billing model prices with optional filters and pagination.
+ */
 export async function listBillingModelPrices(
   input: ListBillingModelPricesInput = {}
 ): Promise<PaginatedBillingModelPrices> {

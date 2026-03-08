@@ -131,10 +131,16 @@ const SENSITIVE_HEADER_NAMES = new Set([
 export type RecorderMode = "all" | "success" | "failure";
 export type RecorderOutcome = "success" | "failure";
 
+/**
+ * Determine whether traffic recording is enabled by environment configuration.
+ */
 export function isRecorderEnabled(): boolean {
   return process.env.RECORDER_ENABLED === "true" || process.env.RECORDER_ENABLED === "1";
 }
 
+/**
+ * Resolve the configured traffic-recording mode.
+ */
 export function getRecorderMode(): RecorderMode {
   const value = process.env.RECORDER_MODE?.trim().toLowerCase();
   if (value === "success" || value === "failure" || value === "all") {
@@ -143,6 +149,9 @@ export function getRecorderMode(): RecorderMode {
   return "all";
 }
 
+/**
+ * Decide whether a fixture should be recorded for the given request outcome.
+ */
 export function shouldRecordFixture(outcome: RecorderOutcome): boolean {
   if (!isRecorderEnabled()) {
     return false;
@@ -151,16 +160,25 @@ export function shouldRecordFixture(outcome: RecorderOutcome): boolean {
   return mode === "all" || mode === outcome;
 }
 
+/**
+ * Return the root directory used to store recorded traffic fixtures.
+ */
 export function getFixtureRoot(): string {
   return process.env.RECORDER_FIXTURES_DIR || DEFAULT_FIXTURE_DIR;
 }
 
+/**
+ * Determine whether sensitive values should be redacted from recorded fixtures.
+ */
 export function isRecorderRedactionEnabled(): boolean {
   const value = process.env.RECORDER_REDACT_SENSITIVE;
   if (!value) return true;
   return value !== "false" && value !== "0";
 }
 
+/**
+ * Redact sensitive header values before a fixture is written to disk.
+ */
 export function redactHeaders(headers: Headers | Record<string, string>): Record<string, string> {
   const entries =
     headers instanceof Headers ? Array.from(headers.entries()) : Object.entries(headers);
@@ -222,6 +240,9 @@ function formatFailoverHistoryForFixture(history: FailoverAttempt[]): FailoverAt
   });
 }
 
+/**
+ * Build the output path for a recorded traffic fixture.
+ */
 export function buildFixturePath(provider: string, route: string, timestamp: string): string {
   const safeProvider = sanitizePathSegment(provider || "unknown");
   const safeRoute = sanitizePathSegment(route || "unknown");
@@ -249,9 +270,9 @@ export async function readRequestBody(request: Request): Promise<InboundBody> {
 }
 
 /**
- * Read all chunks from a stream, splitting by SSE event boundaries (\n\n)
- * instead of TCP frame boundaries. Each returned string is a complete SSE event.
- * Stops recording (but does not error) if total bytes exceed MAX_RECORDING_BYTES.
+ * Read all chunks from a stream, splitting on blank-line SSE event boundaries
+ * instead of raw TCP frame boundaries. Each returned string is a complete SSE event.
+ * Stops recording, without throwing, if total bytes exceed `MAX_RECORDING_BYTES`.
  */
 export async function readStreamChunks(stream: ReadableStream<Uint8Array>): Promise<string[]> {
   const reader = stream.getReader();
@@ -462,6 +483,9 @@ export function buildFixture(params: BuildFixtureParams): TrafficRecordFixture {
 // Fixture persistence
 // ---------------------------------------------------------------------------
 
+/**
+ * Persist a recorded traffic fixture to disk and return its file path.
+ */
 export async function recordTrafficFixture(fixture: TrafficRecordFixture): Promise<string> {
   const timestamp = fixture.meta.createdAt.replace(/[:.]/g, "-");
   const filePath = buildFixturePath(fixture.meta.providerType, fixture.meta.route, timestamp);
@@ -470,6 +494,9 @@ export async function recordTrafficFixture(fixture: TrafficRecordFixture): Promi
   return filePath;
 }
 
+/**
+ * Read the most recent recorded traffic fixture for a provider and route.
+ */
 export async function readLatestFixture(
   provider: string,
   route: string

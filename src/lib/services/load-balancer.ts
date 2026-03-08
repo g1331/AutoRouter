@@ -362,6 +362,9 @@ function tryReserveConnectionSlot(upstream: Upstream): {
   return { reserved: true, current, max };
 }
 
+/**
+ * Split upstream candidates into allowed and excluded groups based on concurrency capacity.
+ */
 export function filterByConcurrencyCapacity(
   upstreamList: UpstreamWithCircuitBreaker[],
   tier: number
@@ -583,6 +586,9 @@ export async function selectFromProviderType(
   );
 }
 
+/**
+ * Select an upstream from an explicit candidate list while preserving affinity behavior.
+ */
 export async function selectFromUpstreamCandidates(
   candidateUpstreamIds: string[],
   excludeIds?: string[],

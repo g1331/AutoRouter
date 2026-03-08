@@ -6,6 +6,8 @@ on:
     paths:
       - "src/**"
       - "tests/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
       - "*.json"
       - "*.ts"
       - "*.mjs"
@@ -16,6 +18,8 @@ on:
     paths:
       - "src/**"
       - "tests/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
       - "*.json"
       - "*.ts"
       - "*.mjs"

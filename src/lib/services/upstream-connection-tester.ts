@@ -228,10 +228,12 @@ export function formatTestUpstreamResponse(result: TestUpstreamResult) {
  * - **unknown**: Unsupported provider, malformed URL, or unexpected errors
  *
  * @param input - Upstream test configuration
- * @param input.providerType - Provider type, must be "openai", "anthropic", "google", or "custom"
- * @param input.baseUrl - Base URL of the upstream API (e.g., "https://api.openai.com")
- * @param input.apiKey - API key for authentication (plain text, not encrypted)
- * @param input.timeout - Optional timeout in seconds (defaults to 10, max recommended 300)
+ *
+ * Input fields:
+ * - `providerType`: Provider type, must be `openai`, `anthropic`, `google`, or `custom`
+ * - `baseUrl`: Base URL of the upstream API, for example `https://api.openai.com`
+ * - `apiKey`: API key for authentication in plain text before encryption
+ * - `timeout`: Optional timeout in seconds, defaulting to 10 and usually staying below 300
  *
  * @returns Test result object containing:
  * - `success`: Boolean indicating if the test passed (true for HTTP 200/201)

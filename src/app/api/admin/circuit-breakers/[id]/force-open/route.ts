@@ -13,7 +13,7 @@ interface RouteContext {
 }
 
 /**
- * POST /api/admin/circuit-breakers/{upstreamId}/force-open - Force circuit breaker to OPEN state
+ * Handle POST /api/admin/circuit-breakers/[id]/force-open and force the upstream circuit breaker to OPEN.
  */
 export async function POST(request: NextRequest, context: RouteContext): Promise<Response> {
   const authHeader = request.headers.get("authorization");

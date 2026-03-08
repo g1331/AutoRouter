@@ -14,6 +14,9 @@ function formatSseEvent(eventName: string, data: unknown): string {
   return `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
+/**
+ * Stream live request log updates over Server-Sent Events for authenticated admins.
+ */
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
   if (!validateAdminAuth(authHeader)) {

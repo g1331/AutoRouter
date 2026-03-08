@@ -45,6 +45,9 @@ const MAX_CACHE_ENTRIES = 10_000;
 // Session Affinity Store
 // ============================================================================
 
+/**
+ * Maintain in-memory session-affinity bindings between sessions and upstreams.
+ */
 export class SessionAffinityStore {
   private cache = new Map<string, AffinityEntry>();
   private cleanupTimer: NodeJS.Timeout | null = null;
@@ -273,7 +276,7 @@ export interface SessionIdResult {
 /**
  * Extract session ID from request based on route capability.
  *
- * Anthropic: Extracts UUID from body.metadata.user_id (format: "..._session_{uuid}")
+ * Anthropic: Extracts a UUID from `body.metadata.user_id`, for example `..._session_[uuid]`.
  * OpenAI compatible capabilities: Uses headers.session_id directly, with body fallbacks
  * Others: Returns null
  */

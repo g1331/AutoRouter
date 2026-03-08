@@ -23,7 +23,7 @@ interface UpdateRuleBody {
 }
 
 /**
- * PUT /api/admin/compensation-rules/{id} - Update a compensation rule
+ * Handle PUT /api/admin/compensation-rules/[id] and update the targeted compensation rule.
  */
 export async function PUT(request: NextRequest, context: RouteContext): Promise<Response> {
   const authHeader = request.headers.get("authorization");
@@ -126,7 +126,7 @@ export async function PUT(request: NextRequest, context: RouteContext): Promise<
 }
 
 /**
- * DELETE /api/admin/compensation-rules/{id} - Delete a compensation rule (built-in rules are protected)
+ * Handle DELETE /api/admin/compensation-rules/[id] and remove the targeted rule when deletion is allowed.
  */
 export async function DELETE(request: NextRequest, context: RouteContext): Promise<Response> {
   const authHeader = request.headers.get("authorization");

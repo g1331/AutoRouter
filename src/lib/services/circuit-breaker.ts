@@ -151,8 +151,8 @@ export async function canRequestPass(upstreamId: string): Promise<boolean> {
  * Acquire a circuit breaker permit for making a request.
  *
  * This function is intended to be called right before actually sending a request.
- * It performs state transitions (OPEN -> HALF_OPEN) and reserves probe slots
- * (HALF_OPEN probe interval) by updating timestamps in the database.
+ * It performs state transitions from OPEN to HALF_OPEN and reserves probe slots
+ * for the HALF_OPEN probe interval by updating timestamps in the database.
  *
  * Throws CircuitBreakerOpenError when the circuit should block the request.
  */

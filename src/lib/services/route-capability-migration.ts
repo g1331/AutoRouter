@@ -93,6 +93,9 @@ async function runMigrationInternal(): Promise<boolean> {
   return true;
 }
 
+/**
+ * Run the one-time route-capability migration exactly once per process.
+ */
 export async function ensureRouteCapabilityMigration(): Promise<void> {
   if (migrationCompleted) {
     return;

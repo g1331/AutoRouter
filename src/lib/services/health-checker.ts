@@ -150,7 +150,7 @@ export async function getHealthStatus(upstreamId: string): Promise<HealthStatus 
  * @param latencyMs - Response latency in milliseconds (null if check failed before timing)
  * @param errorMessage - Error message if unhealthy
  * @returns The updated health status
- * @throws {UpstreamNotFoundError} If the upstream does not exist
+ * @throws UpstreamNotFoundError if the upstream does not exist
  */
 export async function updateHealthStatus(
   upstreamId: string,
@@ -232,7 +232,7 @@ export async function updateHealthStatus(
  * @param upstreamId - The upstream ID to mark unhealthy
  * @param reason - The reason for marking unhealthy
  * @returns The updated health status
- * @throws {UpstreamNotFoundError} If the upstream does not exist
+ * @throws UpstreamNotFoundError if the upstream does not exist
  */
 export async function markUnhealthy(upstreamId: string, reason: string): Promise<HealthStatus> {
   return updateHealthStatus(upstreamId, false, null, reason);
@@ -244,7 +244,7 @@ export async function markUnhealthy(upstreamId: string, reason: string): Promise
  * @param upstreamId - The upstream ID to mark healthy
  * @param latencyMs - The response latency in milliseconds
  * @returns The updated health status
- * @throws {UpstreamNotFoundError} If the upstream does not exist
+ * @throws UpstreamNotFoundError if the upstream does not exist
  */
 export async function markHealthy(upstreamId: string, latencyMs: number): Promise<HealthStatus> {
   return updateHealthStatus(upstreamId, true, latencyMs, null);
@@ -259,7 +259,7 @@ export async function markHealthy(upstreamId: string, latencyMs: number): Promis
  * @param upstreamId - The upstream ID to check
  * @param timeout - Optional timeout in seconds (defaults to upstream's configured timeout)
  * @returns The health check result
- * @throws {UpstreamNotFoundError} If the upstream does not exist
+ * @throws UpstreamNotFoundError if the upstream does not exist
  */
 export async function checkUpstreamHealth(
   upstreamId: string,
