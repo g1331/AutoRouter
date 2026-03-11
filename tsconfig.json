@@ -30,5 +30,15 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "tests", "apps", "playwright.config.ts", "vitest.config.ts"]
+  "exclude": [
+    "node_modules",
+    "tests",
+    "apps",
+    "playwright.config.ts",
+    "vitest.config.ts",
+    "data/litellm-schema-check/**",
+    "%TEMP%/**",
+    "%TMP%/**",
+    "temp-litellm/**"
+  ]
 }
