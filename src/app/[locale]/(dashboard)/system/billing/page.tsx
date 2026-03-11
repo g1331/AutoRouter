@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
-import { ChevronLeft, ChevronRight, RotateCcw, Wallet } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, RotateCcw, Trash2, Wallet } from "lucide-react";
 
 import { Topbar } from "@/components/admin/topbar";
 import {
@@ -46,8 +46,17 @@ import {
   useResetBillingManualOverrides,
   useSyncBillingPrices,
   useBillingModelPrices,
+  useBillingTierRules,
+  useCreateBillingTierRule,
+  useDeleteBillingTierRule,
+  useUpdateBillingTierRule,
 } from "@/hooks/use-billing";
-import type { BillingModelPrice, BillingManualOverride, BillingUnresolvedModel } from "@/types/api";
+import type {
+  BillingModelPrice,
+  BillingManualOverride,
+  BillingTierRule,
+  BillingUnresolvedModel,
+} from "@/types/api";
 
 type BillingTranslate = (key: string, values?: Record<string, string | number>) => string;
 
@@ -96,6 +105,409 @@ function getSyncBadgeVariant(status: string | null): "success" | "warning" | "er
 function formatPriceNumber(value: number | null): string {
   if (value == null) return "-";
   return value.toFixed(4);
+}
+
+function parsePositiveInt(raw: string): number | null {
+  const value = Number(raw);
+  if (!raw.trim() || Number.isNaN(value) || value <= 0 || !Number.isInteger(value)) {
+    return null;
+  }
+  return value;
+}
+
+function TierRulesManager({ t }: { t: BillingTranslate }) {
+  const tCommon = useTranslations("common");
+  const { data: tierRulesData, isLoading } = useBillingTierRules();
+  const createTierRule = useCreateBillingTierRule();
+  const deleteTierRule = useDeleteBillingTierRule();
+  const updateTierRule = useUpdateBillingTierRule();
+
+  const [isCreating, setIsCreating] = useState(false);
+  const [createDraft, setCreateDraft] = useState({
+    model: "",
+    threshold: "",
+    inputPrice: "",
+    outputPrice: "",
+    cacheReadPrice: "",
+    cacheWritePrice: "",
+    note: "",
+  });
+
+  const tierRules = useMemo(() => tierRulesData?.items ?? [], [tierRulesData?.items]);
+  const manualRules = useMemo(() => tierRules.filter((r) => r.source === "manual"), [tierRules]);
+  const syncedRules = useMemo(
+    () => tierRules.filter((r) => r.source === "litellm" && r.is_active),
+    [tierRules]
+  );
+
+  const groupedSynced = useMemo(() => {
+    const map = new Map<string, BillingTierRule[]>();
+    for (const rule of syncedRules) {
+      const list = map.get(rule.model) ?? [];
+      list.push(rule);
+      map.set(rule.model, list);
+    }
+    return map;
+  }, [syncedRules]);
+
+  const handleCreate = async () => {
+    const model = createDraft.model.trim();
+    const threshold = parsePositiveInt(createDraft.threshold);
+    const inputPrice = parseRequiredPrice(createDraft.inputPrice);
+    const outputPrice = parseRequiredPrice(createDraft.outputPrice);
+    const cacheReadPrice = parseOptionalPrice(createDraft.cacheReadPrice);
+    const cacheWritePrice = parseOptionalPrice(createDraft.cacheWritePrice);
+
+    if (
+      !model ||
+      threshold === null ||
+      inputPrice === null ||
+      outputPrice === null ||
+      cacheReadPrice === "invalid" ||
+      cacheWritePrice === "invalid"
+    ) {
+      return;
+    }
+
+    try {
+      await createTierRule.mutateAsync({
+        model,
+        threshold_input_tokens: threshold,
+        input_price_per_million: inputPrice,
+        output_price_per_million: outputPrice,
+        cache_read_input_price_per_million: cacheReadPrice,
+        cache_write_input_price_per_million: cacheWritePrice,
+        note: createDraft.note.trim() || null,
+      });
+    } catch {
+      return;
+    }
+
+    setCreateDraft({
+      model: "",
+      threshold: "",
+      inputPrice: "",
+      outputPrice: "",
+      cacheReadPrice: "",
+      cacheWritePrice: "",
+      note: "",
+    });
+    setIsCreating(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Create new tier rule */}
+      <div className="rounded-cf-sm border border-divider bg-surface-300/45 p-3">
+        {!isCreating ? (
+          <Button variant="outline" size="sm" className="gap-1" onClick={() => setIsCreating(true)}>
+            <Plus className="h-4 w-4" />
+            {t("tierRulesAdd")}
+          </Button>
+        ) : (
+          <div className="space-y-3">
+            <p className="font-medium text-foreground">{t("tierRulesAdd")}</p>
+            <div className="grid gap-2 md:grid-cols-4">
+              <Input
+                placeholder={t("tierRulesModelPlaceholder")}
+                value={createDraft.model}
+                onChange={(e) => setCreateDraft((prev) => ({ ...prev, model: e.target.value }))}
+              />
+              <Input
+                placeholder={t("tierRulesThresholdPlaceholder")}
+                value={createDraft.threshold}
+                onChange={(e) => setCreateDraft((prev) => ({ ...prev, threshold: e.target.value }))}
+              />
+              <Input
+                placeholder={t("overrideInputPrice")}
+                value={createDraft.inputPrice}
+                onChange={(e) =>
+                  setCreateDraft((prev) => ({ ...prev, inputPrice: e.target.value }))
+                }
+              />
+              <Input
+                placeholder={t("overrideOutputPrice")}
+                value={createDraft.outputPrice}
+                onChange={(e) =>
+                  setCreateDraft((prev) => ({ ...prev, outputPrice: e.target.value }))
+                }
+              />
+            </div>
+            <div className="grid gap-2 md:grid-cols-4">
+              <Input
+                placeholder={t("overrideCacheReadPrice")}
+                value={createDraft.cacheReadPrice}
+                onChange={(e) =>
+                  setCreateDraft((prev) => ({ ...prev, cacheReadPrice: e.target.value }))
+                }
+              />
+              <Input
+                placeholder={t("overrideCacheWritePrice")}
+                value={createDraft.cacheWritePrice}
+                onChange={(e) =>
+                  setCreateDraft((prev) => ({ ...prev, cacheWritePrice: e.target.value }))
+                }
+              />
+              <Input
+                placeholder={t("overrideNote")}
+                value={createDraft.note}
+                onChange={(e) => setCreateDraft((prev) => ({ ...prev, note: e.target.value }))}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => void handleCreate()}
+                disabled={createTierRule.isPending}
+              >
+                {createTierRule.isPending ? t("tierRulesAdding") : t("overrideSave")}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setIsCreating(false);
+                  setCreateDraft({
+                    model: "",
+                    threshold: "",
+                    inputPrice: "",
+                    outputPrice: "",
+                    cacheReadPrice: "",
+                    cacheWritePrice: "",
+                    note: "",
+                  });
+                }}
+              >
+                {t("overrideCancel")}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">{tCommon("loading")}</p>
+      ) : tierRules.length === 0 ? (
+        <div className="rounded-cf-sm border border-dashed border-divider bg-surface-300/30 px-4 py-6 text-sm text-muted-foreground">
+          {t("tierRulesEmpty")}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Manual rules section */}
+          {manualRules.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                {t("tierRulesSourceManual")}
+              </p>
+              <div className="space-y-2 lg:hidden">
+                {manualRules.map((rule) => (
+                  <div
+                    key={rule.id}
+                    className="rounded-cf-sm border border-divider bg-surface-300/30 p-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="break-all font-mono text-sm text-foreground">{rule.model}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {t("tierRulesThreshold")}:{" "}
+                          {t("tierRulesThresholdTokens", {
+                            count: rule.threshold_input_tokens / 1000,
+                          })}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Switch
+                          checked={rule.is_active}
+                          onCheckedChange={(checked) =>
+                            updateTierRule.mutate({ id: rule.id, data: { is_active: checked } })
+                          }
+                          disabled={updateTierRule.isPending}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => deleteTierRule.mutate(rule.id)}
+                          disabled={deleteTierRule.isPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-cf-sm border border-divider bg-surface-200/40 px-2 py-1.5">
+                        <p className="text-muted-foreground">{t("tierRulesInputPrice")}</p>
+                        <p className="mt-0.5 text-right font-medium tabular-nums text-foreground">
+                          {formatPriceNumber(rule.input_price_per_million)}
+                        </p>
+                      </div>
+                      <div className="rounded-cf-sm border border-divider bg-surface-200/40 px-2 py-1.5">
+                        <p className="text-muted-foreground">{t("tierRulesOutputPrice")}</p>
+                        <p className="mt-0.5 text-right font-medium tabular-nums text-foreground">
+                          {formatPriceNumber(rule.output_price_per_million)}
+                        </p>
+                      </div>
+                    </div>
+                    {rule.note && (
+                      <p className="mt-2 text-[11px] text-muted-foreground">{rule.note}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="hidden w-full overflow-x-auto lg:block">
+                <Table className="w-full min-w-[900px] text-sm">
+                  <TableHeader>
+                    <TableRow className="border-b border-divider text-left text-xs uppercase tracking-wide text-muted-foreground hover:bg-transparent">
+                      <TableHead className="w-[200px] px-3 py-2 h-auto">
+                        {t("tierRulesModel")}
+                      </TableHead>
+                      <TableHead className="w-[120px] px-3 py-2 h-auto">
+                        {t("tierRulesThreshold")}
+                      </TableHead>
+                      <TableHead className="w-[120px] px-3 py-2 h-auto">
+                        {t("tierRulesInputPrice")}
+                      </TableHead>
+                      <TableHead className="w-[120px] px-3 py-2 h-auto">
+                        {t("tierRulesOutputPrice")}
+                      </TableHead>
+                      <TableHead className="w-[100px] px-3 py-2 h-auto">
+                        {t("tierRulesActive")}
+                      </TableHead>
+                      <TableHead className="w-14 px-3 py-2 h-auto"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {manualRules.map((rule) => (
+                      <TableRow
+                        key={rule.id}
+                        className="border-b border-divider/60 align-top bg-surface-300/20"
+                      >
+                        <TableCell className="px-3 py-2 font-mono">{rule.model}</TableCell>
+                        <TableCell className="px-3 py-2 text-xs">
+                          {t("tierRulesThresholdTokens", {
+                            count: rule.threshold_input_tokens / 1000,
+                          })}
+                        </TableCell>
+                        <TableCell className="px-3 py-2 tabular-nums">
+                          {formatPriceNumber(rule.input_price_per_million)}
+                        </TableCell>
+                        <TableCell className="px-3 py-2 tabular-nums">
+                          {formatPriceNumber(rule.output_price_per_million)}
+                        </TableCell>
+                        <TableCell className="px-3 py-2">
+                          <Switch
+                            checked={rule.is_active}
+                            onCheckedChange={(checked) =>
+                              updateTierRule.mutate({ id: rule.id, data: { is_active: checked } })
+                            }
+                            disabled={updateTierRule.isPending}
+                          />
+                        </TableCell>
+                        <TableCell className="px-3 py-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => deleteTierRule.mutate(rule.id)}
+                            disabled={deleteTierRule.isPending}
+                            title={t("tierRulesDelete")}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+
+          {/* Synced rules section */}
+          {syncedRules.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                {t("tierRulesSourceLitellm")}
+              </p>
+              <div className="space-y-2 lg:hidden">
+                {Array.from(groupedSynced.entries()).map(([model, rules]) => {
+                  const sortedRules = [...rules].sort(
+                    (a, b) => a.threshold_input_tokens - b.threshold_input_tokens
+                  );
+                  return (
+                    <div
+                      key={model}
+                      className="rounded-cf-sm border border-divider bg-surface-300/30 p-3"
+                    >
+                      <p className="break-all font-mono text-sm text-foreground">{model}</p>
+                      <div className="mt-2 space-y-1">
+                        {sortedRules.map((rule) => (
+                          <div key={rule.id} className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">
+                              {t("tierRulesThresholdTokens", {
+                                count: rule.threshold_input_tokens / 1000,
+                              })}
+                            </span>
+                            <span className="tabular-nums">
+                              {formatPriceNumber(rule.input_price_per_million)} /{" "}
+                              {formatPriceNumber(rule.output_price_per_million)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="hidden w-full overflow-x-auto lg:block">
+                <Table className="w-full min-w-[900px] text-sm">
+                  <TableHeader>
+                    <TableRow className="border-b border-divider text-left text-xs uppercase tracking-wide text-muted-foreground hover:bg-transparent">
+                      <TableHead className="w-[200px] px-3 py-2 h-auto">
+                        {t("tierRulesModel")}
+                      </TableHead>
+                      <TableHead className="w-[120px] px-3 py-2 h-auto">
+                        {t("tierRulesThreshold")}
+                      </TableHead>
+                      <TableHead className="w-[120px] px-3 py-2 h-auto">
+                        {t("tierRulesInputPrice")}
+                      </TableHead>
+                      <TableHead className="w-[120px] px-3 py-2 h-auto">
+                        {t("tierRulesOutputPrice")}
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {syncedRules
+                      .sort((a, b) => {
+                        if (a.model !== b.model) return a.model.localeCompare(b.model);
+                        return a.threshold_input_tokens - b.threshold_input_tokens;
+                      })
+                      .map((rule) => (
+                        <TableRow key={rule.id} className="border-b border-divider/60 align-top">
+                          <TableCell className="px-3 py-2 font-mono">{rule.model}</TableCell>
+                          <TableCell className="px-3 py-2 text-xs">
+                            {t("tierRulesThresholdTokens", {
+                              count: rule.threshold_input_tokens / 1000,
+                            })}
+                          </TableCell>
+                          <TableCell className="px-3 py-2 tabular-nums">
+                            {formatPriceNumber(rule.input_price_per_million)}
+                          </TableCell>
+                          <TableCell className="px-3 py-2 tabular-nums">
+                            {formatPriceNumber(rule.output_price_per_million)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function UnresolvedRepairTable({
@@ -427,6 +839,7 @@ export default function BillingPage() {
   const [resetDialogTargets, setResetDialogTargets] = useState<string[] | null>(null);
   const [recentlySavedModel, setRecentlySavedModel] = useState<string | null>(null);
   const modelPrices = useBillingModelPrices(modelPricePage, modelPricePageSize, modelPriceQuery);
+  const tierRules = useBillingTierRules();
   const syncPrices = useSyncBillingPrices();
   const resetOverrides = useResetBillingManualOverrides();
   const searchDebounceRef = useRef<number | null>(null);
@@ -465,6 +878,70 @@ export default function BillingPage() {
   }, [manualOverrideMatches, priceCatalogSyncedItems]);
   const priceCatalogHasRows =
     priceCatalogVisibleSyncedItems.length > 0 || priceCatalogExtraOverrides.length > 0;
+
+  const tierRuleThresholdMap = useMemo(() => {
+    const grouped = new Map<string, number[]>();
+    // Use synced_tier_rules from catalog for synced rules (source of truth)
+    for (const item of priceCatalogVisibleSyncedItems) {
+      for (const rule of item.synced_tier_rules ?? []) {
+        if (!rule.is_active) continue;
+        const list = grouped.get(item.model) ?? [];
+        list.push(rule.threshold_input_tokens);
+        grouped.set(item.model, list);
+      }
+    }
+    // Add manual rules from tierRules query
+    for (const rule of tierRules.data?.items ?? []) {
+      if (rule.source !== "manual" || !rule.is_active) continue;
+      const list = grouped.get(rule.model) ?? [];
+      list.push(rule.threshold_input_tokens);
+      grouped.set(rule.model, list);
+    }
+
+    const result = new Map<string, string>();
+    for (const [model, thresholds] of grouped.entries()) {
+      const normalized = [...new Set(thresholds)].sort((a, b) => a - b);
+      const label = normalized
+        .map((tokens) => t("tierRulesThresholdTokens", { count: tokens / 1000 }))
+        .join(" / ");
+      result.set(model, label);
+    }
+    return result;
+  }, [t, tierRules.data, priceCatalogVisibleSyncedItems]);
+
+  const tierRulePreviewMap = useMemo(() => {
+    const grouped = new Map<string, BillingTierRule[]>();
+    // Use synced_tier_rules from catalog for synced rules (source of truth)
+    for (const item of priceCatalogVisibleSyncedItems) {
+      for (const rule of item.synced_tier_rules ?? []) {
+        if (!rule.is_active) continue;
+        const list = grouped.get(item.model) ?? [];
+        list.push(rule);
+        grouped.set(item.model, list);
+      }
+    }
+    // Add manual rules from tierRules query
+    for (const rule of tierRules.data?.items ?? []) {
+      if (rule.source !== "manual" || !rule.is_active) continue;
+      const list = grouped.get(rule.model) ?? [];
+      list.push(rule);
+      grouped.set(rule.model, list);
+    }
+
+    const result = new Map<string, BillingTierRule>();
+    for (const [model, rules] of grouped.entries()) {
+      const sorted = [...rules].sort((a, b) => {
+        if (a.threshold_input_tokens !== b.threshold_input_tokens) {
+          return a.threshold_input_tokens - b.threshold_input_tokens;
+        }
+        // At same threshold, synced (litellm) beats manual
+        if (a.source === b.source) return 0;
+        return a.source === "litellm" ? -1 : 1;
+      });
+      result.set(model, sorted[0]);
+    }
+    return result;
+  }, [tierRules.data, priceCatalogVisibleSyncedItems]);
 
   const priceCatalogSelectableModels = useMemo(() => {
     const models = new Set<string>();
@@ -648,7 +1125,7 @@ export default function BillingPage() {
               <p className="text-sm text-muted-foreground">{t("unresolvedDesc")}</p>
             </div>
             {unresolved.isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading...</p>
+              <p className="text-sm text-muted-foreground">{tCommon("loading")}</p>
             ) : unresolved.isError ? (
               <p className="text-sm text-status-error">{String(unresolved.error)}</p>
             ) : (
@@ -758,7 +1235,7 @@ export default function BillingPage() {
               )}
             </div>
             {modelPrices.isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading...</p>
+              <p className="text-sm text-muted-foreground">{tCommon("loading")}</p>
             ) : modelPrices.isError ? (
               <p className="text-sm text-status-error">{String(modelPrices.error)}</p>
             ) : !priceCatalogHasRows ? (
@@ -816,12 +1293,21 @@ export default function BillingPage() {
                               </p>
                               <div className="mt-1 flex flex-wrap items-center gap-2">
                                 <Badge variant="success">{t("priceCatalogEffectiveManual")}</Badge>
+                                {tierRuleThresholdMap.has(override.model) && (
+                                  <Badge variant="neutral">{t("tierRulesTitle")}</Badge>
+                                )}
                                 {override.has_official_price === false && (
                                   <Badge variant="warning">
                                     {t("priceCatalogNoOfficialPrice")}
                                   </Badge>
                                 )}
                               </div>
+                              {tierRuleThresholdMap.has(override.model) && (
+                                <p className="mt-1 text-[11px] text-muted-foreground">
+                                  {t("tierRulesThreshold")}:{" "}
+                                  {tierRuleThresholdMap.get(override.model)}
+                                </p>
+                              )}
                             </div>
                             <Button
                               variant="ghost"
@@ -960,7 +1446,25 @@ export default function BillingPage() {
                                       ? t("priceCatalogEffectiveManual")
                                       : t("priceCatalogEffectiveSynced")}
                                   </Badge>
+                                  {tierRuleThresholdMap.has(item.model) && (
+                                    <Badge variant="neutral">{t("tierRulesTitle")}</Badge>
+                                  )}
                                 </div>
+                                {tierRuleThresholdMap.has(item.model) && (
+                                  <p className="mt-1 text-[11px] text-muted-foreground">
+                                    {t("tierRulesThreshold")}:{" "}
+                                    {tierRuleThresholdMap.get(item.model)}
+                                  </p>
+                                )}
+                                {(item.max_input_tokens != null ||
+                                  item.max_output_tokens != null) && (
+                                  <p className="mt-1 text-[11px] text-muted-foreground">
+                                    {item.max_input_tokens != null &&
+                                      `${t("priceCatalogMaxInput")}: ${item.max_input_tokens.toLocaleString()} · `}
+                                    {item.max_output_tokens != null &&
+                                      `${t("priceCatalogMaxOutput")}: ${item.max_output_tokens.toLocaleString()}`}
+                                  </p>
+                                )}
                               </div>
                               {override ? (
                                 <Button
@@ -1041,8 +1545,8 @@ export default function BillingPage() {
                   })}
                 </div>
 
-                <div className="hidden w-full lg:block">
-                  <Table className="w-full table-fixed text-sm">
+                <div className="hidden w-full overflow-x-auto lg:block">
+                  <Table className="w-full min-w-[1360px] text-sm">
                     <TableHeader>
                       <TableRow className="border-b border-divider text-left text-xs uppercase tracking-wide text-muted-foreground hover:bg-transparent">
                         <TableHead className="w-10 px-3 py-2 h-auto">
@@ -1055,26 +1559,26 @@ export default function BillingPage() {
                             disabled={priceCatalogSelectableModels.length === 0}
                           />
                         </TableHead>
-                        <TableHead className="px-3 py-2 h-auto text-left">
+                        <TableHead className="w-[280px] px-3 py-2 h-auto text-left">
                           {t("priceCatalogModel")}
                         </TableHead>
-                        <TableHead className="hidden w-[88px] px-3 py-2 h-auto lg:table-cell text-left">
+                        <TableHead className="hidden w-[88px] px-3 py-2 h-auto text-left lg:table-cell whitespace-nowrap">
                           {t("priceCatalogSource")}
+                        </TableHead>
+                        <TableHead className="hidden w-[170px] px-3 py-2 h-auto text-left lg:table-cell whitespace-nowrap">
+                          {t("tierRulesThreshold")}
+                        </TableHead>
+                        <TableHead className="hidden w-[120px] px-3 py-2 h-auto text-left lg:table-cell whitespace-nowrap">
+                          {t("priceCatalogMaxInput")} / {t("priceCatalogMaxOutput")}
                         </TableHead>
                         <TableHead className="w-[104px] px-3 py-2 h-auto text-left">
                           {t("priceCatalogEffective")}
                         </TableHead>
-                        <TableHead className="w-[140px] px-3 py-2 h-auto text-left">
-                          {t("priceCatalogInputPrice")}
+                        <TableHead className="w-[230px] px-3 py-2 h-auto text-left">
+                          {t("priceCatalogInputOutputPrice")}
                         </TableHead>
-                        <TableHead className="w-[140px] px-3 py-2 h-auto text-left">
-                          {t("priceCatalogOutputPrice")}
-                        </TableHead>
-                        <TableHead className="hidden w-[160px] px-3 py-2 h-auto xl:table-cell text-left">
-                          {t("priceCatalogCacheReadPrice")}
-                        </TableHead>
-                        <TableHead className="hidden w-[160px] px-3 py-2 h-auto xl:table-cell text-left">
-                          {t("priceCatalogCacheWritePrice")}
+                        <TableHead className="w-[230px] px-3 py-2 h-auto text-left">
+                          {t("priceCatalogCacheReadWritePrice")}
                         </TableHead>
                         <TableHead className="hidden w-[170px] px-3 py-2 h-auto lg:table-cell text-left">
                           {t("priceCatalogSyncedAt")}
@@ -1085,79 +1589,156 @@ export default function BillingPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {priceCatalogExtraOverrides.map((override) => (
-                        <TableRow
-                          key={override.id}
-                          className={[
-                            "border-b border-divider/60 align-top bg-surface-300/20",
-                            recentlySavedModel === override.model ? "bg-amber-500/10" : "",
-                          ].join(" ")}
-                        >
-                          <TableCell className="px-3 py-2">
-                            <Checkbox
-                              checked={selectedResetModels.includes(override.model)}
-                              onCheckedChange={(value) =>
-                                toggleSelectedResetModel(override.model, value === true)
-                              }
-                              aria-label={t("priceCatalogSelectModel", { model: override.model })}
-                            />
-                          </TableCell>
-                          <TableCell className="px-3 py-2 font-mono">
-                            <span className="block whitespace-normal break-all leading-5">
-                              {override.model}
-                            </span>
-                          </TableCell>
-                          <TableCell className="hidden px-3 py-2 lg:table-cell">
-                            {t("priceCatalogSourceManual")}
-                          </TableCell>
-                          <TableCell className="px-3 py-2">
-                            <Badge variant="success">{t("priceCatalogEffectiveManual")}</Badge>
-                          </TableCell>
-                          <TableCell className="px-3 py-2 text-right tabular-nums">
-                            {override.input_price_per_million.toFixed(4)}
-                          </TableCell>
-                          <TableCell className="px-3 py-2 text-right tabular-nums">
-                            {override.output_price_per_million.toFixed(4)}
-                          </TableCell>
-                          <TableCell className="hidden px-3 py-2 text-right tabular-nums xl:table-cell">
-                            {override.cache_read_input_price_per_million == null
-                              ? "-"
-                              : override.cache_read_input_price_per_million.toFixed(4)}
-                          </TableCell>
-                          <TableCell className="hidden px-3 py-2 text-right tabular-nums xl:table-cell">
-                            {override.cache_write_input_price_per_million == null
-                              ? "-"
-                              : override.cache_write_input_price_per_million.toFixed(4)}
-                          </TableCell>
-                          <TableCell className="hidden px-3 py-2 text-xs text-muted-foreground lg:table-cell">
-                            {new Date(override.updated_at).toLocaleString(locale)}
-                          </TableCell>
-                          <TableCell className="px-3 py-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => openResetDialog([override.model])}
-                              disabled={resetOverrides.isPending}
-                              title={
-                                override.has_official_price === false
-                                  ? t("priceCatalogDeleteManualPrice")
-                                  : t("priceCatalogResetToOfficial")
-                              }
-                            >
-                              <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                              <span className="sr-only">
-                                {override.has_official_price === false
-                                  ? t("priceCatalogDeleteManualPrice")
-                                  : t("priceCatalogResetToOfficial")}
+                      {priceCatalogExtraOverrides.map((override) => {
+                        const tierPreview = tierRulePreviewMap.get(override.model);
+                        const tierPreviewLabel = tierPreview
+                          ? `>${t("tierRulesThresholdTokens", {
+                              count: tierPreview.threshold_input_tokens / 1000,
+                            })}`
+                          : null;
+
+                        return (
+                          <TableRow
+                            key={override.id}
+                            className={[
+                              "border-b border-divider/60 align-top bg-surface-300/20",
+                              recentlySavedModel === override.model ? "bg-amber-500/10" : "",
+                            ].join(" ")}
+                          >
+                            <TableCell className="px-3 py-2">
+                              <Checkbox
+                                checked={selectedResetModels.includes(override.model)}
+                                onCheckedChange={(value) =>
+                                  toggleSelectedResetModel(override.model, value === true)
+                                }
+                                aria-label={t("priceCatalogSelectModel", { model: override.model })}
+                              />
+                            </TableCell>
+                            <TableCell className="px-3 py-2 font-mono">
+                              <span className="block whitespace-normal break-words leading-5">
+                                {override.model}
                               </span>
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                            </TableCell>
+                            <TableCell className="hidden px-3 py-2 lg:table-cell whitespace-nowrap">
+                              {t("priceCatalogSourceManual")}
+                            </TableCell>
+                            <TableCell className="hidden px-3 py-2 text-xs text-muted-foreground lg:table-cell whitespace-nowrap">
+                              {tierRuleThresholdMap.get(override.model) ?? "-"}
+                            </TableCell>
+                            <TableCell className="hidden px-3 py-2 text-xs text-muted-foreground lg:table-cell whitespace-nowrap">
+                              -
+                            </TableCell>
+                            <TableCell className="px-3 py-2">
+                              <Badge variant="success">{t("priceCatalogEffectiveManual")}</Badge>
+                            </TableCell>
+                            <TableCell className="px-3 py-2 tabular-nums">
+                              <div className="space-y-1">
+                                <div className="grid grid-cols-[24px_auto] items-center justify-start gap-2">
+                                  <span className="text-[11px] text-muted-foreground">IN</span>
+                                  <div>
+                                    <div>{override.input_price_per_million.toFixed(4)}</div>
+                                    {tierPreviewLabel ? (
+                                      <div className="text-[11px] text-muted-foreground">
+                                        {tierPreviewLabel}:{" "}
+                                        {formatPriceNumber(
+                                          tierPreview?.input_price_per_million ?? null
+                                        )}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-[24px_auto] items-center justify-start gap-2">
+                                  <span className="text-[11px] text-muted-foreground">OUT</span>
+                                  <div>
+                                    <div>{override.output_price_per_million.toFixed(4)}</div>
+                                    {tierPreviewLabel ? (
+                                      <div className="text-[11px] text-muted-foreground">
+                                        {tierPreviewLabel}:{" "}
+                                        {formatPriceNumber(
+                                          tierPreview?.output_price_per_million ?? null
+                                        )}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="px-3 py-2 tabular-nums">
+                              <div className="space-y-1">
+                                <div className="grid grid-cols-[24px_auto] items-center justify-start gap-2">
+                                  <span className="text-[11px] text-muted-foreground">CR</span>
+                                  <div>
+                                    <div>
+                                      {override.cache_read_input_price_per_million == null
+                                        ? "-"
+                                        : override.cache_read_input_price_per_million.toFixed(4)}
+                                    </div>
+                                    {tierPreviewLabel ? (
+                                      <div className="text-[11px] text-muted-foreground">
+                                        {tierPreviewLabel}:{" "}
+                                        {formatPriceNumber(
+                                          tierPreview?.cache_read_input_price_per_million ?? null
+                                        )}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-[24px_auto] items-center justify-start gap-2">
+                                  <span className="text-[11px] text-muted-foreground">CW</span>
+                                  <div>
+                                    <div>
+                                      {override.cache_write_input_price_per_million == null
+                                        ? "-"
+                                        : override.cache_write_input_price_per_million.toFixed(4)}
+                                    </div>
+                                    {tierPreviewLabel ? (
+                                      <div className="text-[11px] text-muted-foreground">
+                                        {tierPreviewLabel}:{" "}
+                                        {formatPriceNumber(
+                                          tierPreview?.cache_write_input_price_per_million ?? null
+                                        )}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="hidden px-3 py-2 text-xs text-muted-foreground lg:table-cell">
+                              {new Date(override.updated_at).toLocaleString(locale)}
+                            </TableCell>
+                            <TableCell className="px-3 py-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => openResetDialog([override.model])}
+                                disabled={resetOverrides.isPending}
+                                title={
+                                  override.has_official_price === false
+                                    ? t("priceCatalogDeleteManualPrice")
+                                    : t("priceCatalogResetToOfficial")
+                                }
+                              >
+                                <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                                <span className="sr-only">
+                                  {override.has_official_price === false
+                                    ? t("priceCatalogDeleteManualPrice")
+                                    : t("priceCatalogResetToOfficial")}
+                                </span>
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
 
                       {priceCatalogVisibleSyncedItems.map((item: BillingModelPrice) => {
                         const override = manualOverrideMap.get(item.model);
+                        const tierPreview = tierRulePreviewMap.get(item.model);
+                        const tierPreviewLabel = tierPreview
+                          ? `>${t("tierRulesThresholdTokens", {
+                              count: tierPreview.threshold_input_tokens / 1000,
+                            })}`
+                          : null;
                         const effective = override
                           ? {
                               input: override.input_price_per_million,
@@ -1227,12 +1808,24 @@ export default function BillingPage() {
                               )}
                             </TableCell>
                             <TableCell className="px-3 py-2 font-mono">
-                              <span className="block whitespace-normal break-all leading-5">
+                              <span className="block whitespace-normal break-words leading-5">
                                 {item.model}
                               </span>
                             </TableCell>
-                            <TableCell className="hidden px-3 py-2 lg:table-cell">
+                            <TableCell className="hidden px-3 py-2 lg:table-cell whitespace-nowrap">
                               {item.source}
+                            </TableCell>
+                            <TableCell className="hidden px-3 py-2 text-xs text-muted-foreground lg:table-cell whitespace-nowrap">
+                              {tierRuleThresholdMap.get(item.model) ?? "-"}
+                            </TableCell>
+                            <TableCell className="hidden px-3 py-2 text-xs text-muted-foreground lg:table-cell whitespace-nowrap">
+                              {item.max_input_tokens != null
+                                ? item.max_input_tokens.toLocaleString()
+                                : "-"}{" "}
+                              /{" "}
+                              {item.max_output_tokens != null
+                                ? item.max_output_tokens.toLocaleString()
+                                : "-"}
                             </TableCell>
                             <TableCell className="px-3 py-2">
                               <Badge variant={override ? "success" : "neutral"}>
@@ -1242,28 +1835,88 @@ export default function BillingPage() {
                               </Badge>
                             </TableCell>
                             <TableCell className="px-3 py-2">
-                              {renderEffectiveNumber({
-                                effectiveValue: effective.input,
-                                syncedValue: item.input_price_per_million,
-                              })}
+                              <div className="space-y-1">
+                                <div className="grid grid-cols-[24px_auto] items-start justify-start gap-2">
+                                  <span className="pt-0.5 text-[11px] text-muted-foreground">
+                                    IN
+                                  </span>
+                                  <div>
+                                    {renderEffectiveNumber({
+                                      effectiveValue: effective.input,
+                                      syncedValue: item.input_price_per_million,
+                                    })}
+                                    {tierPreviewLabel ? (
+                                      <div className="text-[11px] tabular-nums text-muted-foreground">
+                                        {tierPreviewLabel}:{" "}
+                                        {formatPriceNumber(
+                                          tierPreview?.input_price_per_million ?? null
+                                        )}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-[24px_auto] items-start justify-start gap-2">
+                                  <span className="pt-0.5 text-[11px] text-muted-foreground">
+                                    OUT
+                                  </span>
+                                  <div>
+                                    {renderEffectiveNumber({
+                                      effectiveValue: effective.output,
+                                      syncedValue: item.output_price_per_million,
+                                    })}
+                                    {tierPreviewLabel ? (
+                                      <div className="text-[11px] tabular-nums text-muted-foreground">
+                                        {tierPreviewLabel}:{" "}
+                                        {formatPriceNumber(
+                                          tierPreview?.output_price_per_million ?? null
+                                        )}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </div>
                             </TableCell>
                             <TableCell className="px-3 py-2">
-                              {renderEffectiveNumber({
-                                effectiveValue: effective.output,
-                                syncedValue: item.output_price_per_million,
-                              })}
-                            </TableCell>
-                            <TableCell className="hidden px-3 py-2 xl:table-cell">
-                              {renderEffectiveNumber({
-                                effectiveValue: effective.cacheRead,
-                                syncedValue: item.cache_read_input_price_per_million,
-                              })}
-                            </TableCell>
-                            <TableCell className="hidden px-3 py-2 xl:table-cell">
-                              {renderEffectiveNumber({
-                                effectiveValue: effective.cacheWrite,
-                                syncedValue: item.cache_write_input_price_per_million,
-                              })}
+                              <div className="space-y-1">
+                                <div className="grid grid-cols-[24px_auto] items-start justify-start gap-2">
+                                  <span className="pt-0.5 text-[11px] text-muted-foreground">
+                                    CR
+                                  </span>
+                                  <div>
+                                    {renderEffectiveNumber({
+                                      effectiveValue: effective.cacheRead,
+                                      syncedValue: item.cache_read_input_price_per_million,
+                                    })}
+                                    {tierPreviewLabel ? (
+                                      <div className="text-[11px] tabular-nums text-muted-foreground">
+                                        {tierPreviewLabel}:{" "}
+                                        {formatPriceNumber(
+                                          tierPreview?.cache_read_input_price_per_million ?? null
+                                        )}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-[24px_auto] items-start justify-start gap-2">
+                                  <span className="pt-0.5 text-[11px] text-muted-foreground">
+                                    CW
+                                  </span>
+                                  <div>
+                                    {renderEffectiveNumber({
+                                      effectiveValue: effective.cacheWrite,
+                                      syncedValue: item.cache_write_input_price_per_million,
+                                    })}
+                                    {tierPreviewLabel ? (
+                                      <div className="text-[11px] tabular-nums text-muted-foreground">
+                                        {tierPreviewLabel}:{" "}
+                                        {formatPriceNumber(
+                                          tierPreview?.cache_write_input_price_per_million ?? null
+                                        )}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </div>
                             </TableCell>
                             <TableCell className="hidden px-3 py-2 text-xs text-muted-foreground lg:table-cell">
                               {new Date(item.synced_at).toLocaleString(locale)}
@@ -1367,6 +2020,16 @@ export default function BillingPage() {
                 )}
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card variant="outlined" className="border-divider bg-surface-200/70">
+          <CardContent className="space-y-3 p-5 sm:p-6">
+            <div>
+              <h3 className="type-label-medium text-foreground">{t("tierRulesTitle")}</h3>
+              <p className="text-sm text-muted-foreground">{t("tierRulesDesc")}</p>
+            </div>
+            <TierRulesManager t={t} />
           </CardContent>
         </Card>
 

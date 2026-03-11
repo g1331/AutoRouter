@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { useAuth } from "@/providers/auth-provider";
 import { toast } from "sonner";
 import type {
@@ -15,7 +16,25 @@ import type {
   UpstreamBillingMultipliersResponse,
   UpdateUpstreamBillingMultiplier,
   PaginatedRecentBillingDetailsResponse,
+  BillingTierRule,
+  BillingTierRulesResponse,
+  BillingCreateTierRule,
+  BillingUpdateTierRule,
 } from "@/types/api";
+
+type BillingTranslator = (key: string, values?: Record<string, string | number | null>) => string;
+
+function getBillingErrorMessage(error: Error): string {
+  return error.message;
+}
+
+function formatBillingError(t: BillingTranslator, key: string, error: Error): string {
+  return t(key, { message: getBillingErrorMessage(error) });
+}
+
+function isTierRuleConflict(error: Error): boolean {
+  return typeof error === "object" && error !== null && "status" in error && error.status === 409;
+}
 
 export function useBillingOverview() {
   const { apiClient } = useAuth();
@@ -73,6 +92,7 @@ export function useBillingModelPrices(
 export function useCreateBillingManualOverride() {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
+  const t = useTranslations("billing") as BillingTranslator;
 
   return useMutation({
     mutationFn: (data: BillingCreateManualOverride) =>
@@ -81,10 +101,10 @@ export function useCreateBillingManualOverride() {
       queryClient.invalidateQueries({ queryKey: ["billing", "manual-overrides"] });
       queryClient.invalidateQueries({ queryKey: ["billing", "unresolved-models"] });
       queryClient.invalidateQueries({ queryKey: ["billing", "model-prices"] });
-      toast.success("手动价格已保存");
+      toast.success(t("manualOverrideSaveSuccess"));
     },
     onError: (error: Error) => {
-      toast.error(`保存失败: ${error.message}`);
+      toast.error(formatBillingError(t, "manualOverrideSaveError", error));
     },
   });
 }
@@ -92,6 +112,7 @@ export function useCreateBillingManualOverride() {
 export function useUpdateBillingManualOverride() {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
+  const t = useTranslations("billing") as BillingTranslator;
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: BillingUpdateManualOverride }) =>
@@ -100,10 +121,10 @@ export function useUpdateBillingManualOverride() {
       queryClient.invalidateQueries({ queryKey: ["billing", "manual-overrides"] });
       queryClient.invalidateQueries({ queryKey: ["billing", "unresolved-models"] });
       queryClient.invalidateQueries({ queryKey: ["billing", "model-prices"] });
-      toast.success("手动价格已更新");
+      toast.success(t("manualOverrideUpdateSuccess"));
     },
     onError: (error: Error) => {
-      toast.error(`更新失败: ${error.message}`);
+      toast.error(formatBillingError(t, "manualOverrideUpdateError", error));
     },
   });
 }
@@ -111,6 +132,7 @@ export function useUpdateBillingManualOverride() {
 export function useDeleteBillingManualOverride() {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
+  const t = useTranslations("billing") as BillingTranslator;
 
   return useMutation({
     mutationFn: (id: string) => apiClient.delete<void>(`/admin/billing/overrides/${id}`),
@@ -118,10 +140,10 @@ export function useDeleteBillingManualOverride() {
       queryClient.invalidateQueries({ queryKey: ["billing", "manual-overrides"] });
       queryClient.invalidateQueries({ queryKey: ["billing", "unresolved-models"] });
       queryClient.invalidateQueries({ queryKey: ["billing", "model-prices"] });
-      toast.success("手动价格已删除");
+      toast.success(t("manualOverrideDeleteSuccess"));
     },
     onError: (error: Error) => {
-      toast.error(`删除失败: ${error.message}`);
+      toast.error(formatBillingError(t, "manualOverrideDeleteError", error));
     },
   });
 }
@@ -129,6 +151,7 @@ export function useDeleteBillingManualOverride() {
 export function useResetBillingManualOverrides() {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
+  const t = useTranslations("billing") as BillingTranslator;
 
   return useMutation({
     mutationFn: (models: string[]) =>
@@ -141,19 +164,21 @@ export function useResetBillingManualOverrides() {
       queryClient.invalidateQueries({ queryKey: ["billing", "model-prices"] });
 
       if (result.deleted_count > 0) {
-        toast.success(`已重置 ${result.deleted_count} 个手动覆盖`);
+        toast.success(t("manualOverrideResetSuccess", { count: result.deleted_count }));
       } else {
-        toast.message("没有需要重置的手动覆盖");
+        toast.message(t("manualOverrideResetEmpty"));
       }
 
       if (result.missing_official_models.length > 0) {
         toast.warning(
-          `其中 ${result.missing_official_models.length} 个模型目前没有官方价格，删除手动定价后将无法计费`
+          t("manualOverrideResetWarningNoOfficial", {
+            count: result.missing_official_models.length,
+          })
         );
       }
     },
     onError: (error: Error) => {
-      toast.error(`重置失败: ${error.message}`);
+      toast.error(formatBillingError(t, "manualOverrideResetError", error));
     },
   });
 }
@@ -161,6 +186,7 @@ export function useResetBillingManualOverrides() {
 export function useSyncBillingPrices() {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
+  const t = useTranslations("billing") as BillingTranslator;
 
   return useMutation({
     mutationFn: () => apiClient.post<BillingSyncResponse>("/admin/billing/prices/sync"),
@@ -168,10 +194,10 @@ export function useSyncBillingPrices() {
       queryClient.invalidateQueries({ queryKey: ["billing", "overview"] });
       queryClient.invalidateQueries({ queryKey: ["billing", "unresolved-models"] });
       queryClient.invalidateQueries({ queryKey: ["billing", "model-prices"] });
-      toast.success("价格同步已完成");
+      toast.success(t("syncCompleteSuccess"));
     },
     onError: (error: Error) => {
-      toast.error(`同步失败: ${error.message}`);
+      toast.error(formatBillingError(t, "syncFailedError", error));
     },
   });
 }
@@ -189,6 +215,7 @@ export function useUpstreamBillingMultipliers() {
 export function useUpdateUpstreamBillingMultiplier() {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
+  const t = useTranslations("billing") as BillingTranslator;
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateUpstreamBillingMultiplier }) =>
@@ -197,10 +224,10 @@ export function useUpdateUpstreamBillingMultiplier() {
       queryClient.invalidateQueries({ queryKey: ["billing", "upstream-multipliers"] });
       queryClient.invalidateQueries({ queryKey: ["billing", "overview"] });
       queryClient.invalidateQueries({ queryKey: ["upstreams"] });
-      toast.success("倍率更新成功");
+      toast.success(t("upstreamMultiplierUpdateSuccess"));
     },
     onError: (error: Error) => {
-      toast.error(`倍率更新失败: ${error.message}`);
+      toast.error(formatBillingError(t, "upstreamMultiplierUpdateError", error));
     },
   });
 }
@@ -214,5 +241,95 @@ export function useRecentBillingDetails(page: number = 1, pageSize: number = 20)
       apiClient.get<PaginatedRecentBillingDetailsResponse>(
         `/admin/billing/recent?page=${page}&page_size=${pageSize}`
       ),
+  });
+}
+
+export function useBillingTierRules(model?: string, source?: "litellm" | "manual") {
+  const { apiClient } = useAuth();
+
+  return useQuery({
+    queryKey: ["billing", "tier-rules", model, source],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (model) params.set("model", model);
+      if (source) params.set("source", source);
+      const query = params.toString();
+      return apiClient.get<BillingTierRulesResponse>(
+        query ? `/admin/billing/tier-rules?${query}` : "/admin/billing/tier-rules"
+      );
+    },
+  });
+}
+
+export function useBillingTierRulesForModel(model: string) {
+  const { apiClient } = useAuth();
+
+  return useQuery({
+    queryKey: ["billing", "tier-rules", model],
+    queryFn: () =>
+      apiClient.get<BillingTierRulesResponse>(
+        `/admin/billing/tier-rules?model=${encodeURIComponent(model)}`
+      ),
+    enabled: !!model,
+  });
+}
+
+export function useCreateBillingTierRule() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  const t = useTranslations("billing") as BillingTranslator;
+
+  return useMutation({
+    mutationFn: (data: BillingCreateTierRule) =>
+      apiClient.post<BillingTierRule>("/admin/billing/tier-rules", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["billing", "tier-rules"] });
+      queryClient.invalidateQueries({ queryKey: ["billing", "model-prices"] });
+      toast.success(t("tierRulesAddSuccess"));
+    },
+    onError: (error: Error) => {
+      if (isTierRuleConflict(error)) {
+        toast.error(t("tierRulesDuplicateThresholdError"));
+        return;
+      }
+      toast.error(formatBillingError(t, "tierRulesCreateError", error));
+    },
+  });
+}
+
+export function useUpdateBillingTierRule() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  const t = useTranslations("billing") as BillingTranslator;
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: BillingUpdateTierRule }) =>
+      apiClient.put<BillingTierRule>(`/admin/billing/tier-rules/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["billing", "tier-rules"] });
+      queryClient.invalidateQueries({ queryKey: ["billing", "model-prices"] });
+      toast.success(t("tierRulesToggleSuccess"));
+    },
+    onError: (error: Error) => {
+      toast.error(formatBillingError(t, "tierRulesUpdateError", error));
+    },
+  });
+}
+
+export function useDeleteBillingTierRule() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  const t = useTranslations("billing") as BillingTranslator;
+
+  return useMutation({
+    mutationFn: (id: string) => apiClient.delete<void>(`/admin/billing/tier-rules/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["billing", "tier-rules"] });
+      queryClient.invalidateQueries({ queryKey: ["billing", "model-prices"] });
+      toast.success(t("tierRulesDeleteSuccess"));
+    },
+    onError: (error: Error) => {
+      toast.error(formatBillingError(t, "tierRulesDeleteError", error));
+    },
   });
 }
