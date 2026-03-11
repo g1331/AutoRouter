@@ -1719,6 +1719,20 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                 cacheReadTokens={log.cache_read_tokens}
                 showHeader={false}
               />
+              {(log.model_max_input_tokens != null || log.model_max_output_tokens != null) && (
+                <div className="mt-3 border-t border-divider/50 pt-2">
+                  <p className="text-[11px] text-muted-foreground">
+                    {t("modelWindow")}:{" "}
+                    {log.model_max_input_tokens != null &&
+                      `Max Input: ${log.model_max_input_tokens.toLocaleString()}`}
+                    {log.model_max_input_tokens != null &&
+                      log.model_max_output_tokens != null &&
+                      " · "}
+                    {log.model_max_output_tokens != null &&
+                      `Max Output: ${log.model_max_output_tokens.toLocaleString()}`}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1784,6 +1798,10 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                     return `${tokensLabel} * ${priceLabel} / 1M * ${multiplierLabel} = ${costLabel}`;
                   };
 
+                  const hasTierRule =
+                    log.matched_rule_type === "tiered" || log.applied_tier_threshold != null;
+                  const tierRuleSource = log.price_source ?? "litellm";
+
                   return (
                     <>
                       <div className="flex items-center gap-2">
@@ -1791,6 +1809,47 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                         <span className="ml-auto tabular-nums text-foreground">
                           {formatBillingCost(log)}
                         </span>
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                        <span className="text-muted-foreground">{t("billingRuleType")}:</span>
+                        {hasTierRule ? (
+                          <>
+                            <Badge variant="info" className="px-1.5 py-0 text-[10px]">
+                              {t("billingRuleTier")}
+                            </Badge>
+                            {log.matched_rule_display_label && (
+                              <>
+                                <span className="text-muted-foreground">·</span>
+                                <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+                                  {log.matched_rule_display_label}
+                                </Badge>
+                              </>
+                            )}
+                            {log.applied_tier_threshold != null && (
+                              <>
+                                <span className="text-muted-foreground">·</span>
+                                <span className="text-muted-foreground">
+                                  {t("billingThreshold")}:
+                                </span>
+                                <Badge variant="info" className="px-1.5 py-0 text-[10px]">
+                                  {log.applied_tier_threshold?.toLocaleString()}
+                                </Badge>
+                              </>
+                            )}
+                          </>
+                        ) : (
+                          <Badge variant="neutral" className="px-1.5 py-0 text-[10px]">
+                            {t("billingRuleFlat")}
+                          </Badge>
+                        )}
+                        <span className="text-muted-foreground">·</span>
+                        <span className="text-muted-foreground">{t("billingPriceSource")}:</span>
+                        <Badge variant="neutral" className="px-1.5 py-0 text-[10px]">
+                          {tierRuleSource === "manual"
+                            ? t("billingSourceManual")
+                            : t("billingSourceSynced")}
+                        </Badge>
                       </div>
 
                       <div className="mt-2 space-y-1">

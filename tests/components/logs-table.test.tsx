@@ -1376,6 +1376,221 @@ describe("LogsTable", () => {
       expect(screen.getByText(/10 \* \$3\.00 \/ 1M \* 1\.2 =/)).toBeInTheDocument();
     });
 
+    it("shows matched-rule summary with tier rule when applied_tier_threshold is present", () => {
+      const billedLogWithTier: RequestLog = {
+        ...logWithFailoverBase,
+        billing_status: "billed",
+        currency: "USD",
+        final_cost: 0.002,
+        billed_input_tokens: 150000,
+        base_input_price_per_million: 5,
+        base_output_price_per_million: 15,
+        input_multiplier: 1,
+        output_multiplier: 1,
+        price_source: "litellm",
+        applied_tier_threshold: 128000,
+        completion_tokens: 50,
+      };
+
+      render(<LogsTable logs={[billedLogWithTier]} />);
+
+      const expandButton = screen.getByRole("button", { name: "expandDetails" });
+      fireEvent.click(expandButton);
+
+      expect(screen.getByText("billingDetails")).toBeInTheDocument();
+      // Should show tiered rule type
+      expect(screen.getByText(/billingRuleType/)).toBeInTheDocument();
+      expect(screen.getByText(/billingRuleTier/)).toBeInTheDocument();
+      // Should show threshold label and value
+      expect(screen.getByText(/billingThreshold/)).toBeInTheDocument();
+      // The literal threshold number should be visible (formatted with locale)
+      expect(screen.getByText(/128,?000/)).toBeInTheDocument();
+      // Should also show price source
+      expect(screen.getByText(/billingPriceSource/)).toBeInTheDocument();
+      expect(screen.getByText(/billingSourceSynced/)).toBeInTheDocument();
+    });
+
+    it("shows matched-rule summary with manual source when price_source is manual", () => {
+      const billedLogManual: RequestLog = {
+        ...logWithFailoverBase,
+        billing_status: "billed",
+        currency: "USD",
+        final_cost: 0.001,
+        billed_input_tokens: 100,
+        base_input_price_per_million: 3,
+        base_output_price_per_million: 9,
+        input_multiplier: 1,
+        output_multiplier: 1,
+        price_source: "manual",
+        applied_tier_threshold: null,
+        completion_tokens: 50,
+      };
+
+      render(<LogsTable logs={[billedLogManual]} />);
+
+      const expandButton = screen.getByRole("button", { name: "expandDetails" });
+      fireEvent.click(expandButton);
+
+      expect(screen.getByText("billingDetails")).toBeInTheDocument();
+      // Should show flat rule type (not tiered)
+      expect(screen.getByText(/billingRuleType/)).toBeInTheDocument();
+      expect(screen.getByText(/billingRuleFlat/)).toBeInTheDocument();
+      // Should not show tier rule or threshold
+      expect(screen.queryByText(/billingRuleTier/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/billingThreshold/)).not.toBeInTheDocument();
+      // Should show manual price source
+      expect(screen.getByText(/billingPriceSource/)).toBeInTheDocument();
+      expect(screen.getByText(/billingSourceManual/)).toBeInTheDocument();
+    });
+
+    it("shows flat fallback summary with synced source when no tier threshold matched", () => {
+      const billedLogFlatFallback: RequestLog = {
+        ...logWithFailoverBase,
+        billing_status: "billed",
+        currency: "USD",
+        final_cost: 0.0015,
+        billed_input_tokens: 100,
+        base_input_price_per_million: 3,
+        base_output_price_per_million: 9,
+        input_multiplier: 1,
+        output_multiplier: 1,
+        price_source: "litellm",
+        applied_tier_threshold: null,
+        completion_tokens: 50,
+      };
+
+      render(<LogsTable logs={[billedLogFlatFallback]} />);
+
+      const expandButton = screen.getByRole("button", { name: "expandDetails" });
+      fireEvent.click(expandButton);
+
+      expect(screen.getByText(/billingRuleType/)).toBeInTheDocument();
+      expect(screen.getByText(/billingRuleFlat/)).toBeInTheDocument();
+      expect(screen.getByText(/billingPriceSource/)).toBeInTheDocument();
+      expect(screen.getByText(/billingSourceSynced/)).toBeInTheDocument();
+      expect(screen.queryByText(/billingThreshold/)).not.toBeInTheDocument();
+    });
+
+    it("preserves unbilled state display without matched-rule summary", () => {
+      const unbilledLog: RequestLog = {
+        ...logWithFailoverBase,
+        billing_status: "unbilled",
+        unbillable_reason: "price_not_found",
+        final_cost: null,
+      };
+
+      render(<LogsTable logs={[unbilledLog]} />);
+
+      const expandButton = screen.getByRole("button", { name: "expandDetails" });
+      fireEvent.click(expandButton);
+
+      expect(screen.getByText("billingDetails")).toBeInTheDocument();
+      // Unbilled status and reason should be shown in the billing panel
+      expect(screen.getByText(/billingStatusUnbilled/)).toBeInTheDocument();
+      // Use getAllByText since the reason may appear in multiple places (row + expanded)
+      expect(screen.getAllByText(/billingReasonPriceNotFound/).length).toBeGreaterThan(0);
+      // Rule type and price source should NOT be shown for unbilled logs
+      expect(screen.queryByText(/billingRuleType/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/billingRuleTier/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/billingRuleFlat/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/billingPriceSource/)).not.toBeInTheDocument();
+    });
+
+    it("shows matched_rule_type and matched_rule_display_label when available", () => {
+      const billedLogWithMatchedRule: RequestLog = {
+        ...logWithFailoverBase,
+        billing_status: "billed",
+        currency: "USD",
+        final_cost: 0.002,
+        billed_input_tokens: 150000,
+        base_input_price_per_million: 5,
+        base_output_price_per_million: 15,
+        input_multiplier: 1,
+        output_multiplier: 1,
+        price_source: "litellm",
+        matched_rule_type: "tiered",
+        matched_rule_display_label: ">128K",
+        applied_tier_threshold: 128000,
+        completion_tokens: 50,
+      };
+
+      render(<LogsTable logs={[billedLogWithMatchedRule]} />);
+
+      const expandButton = screen.getByRole("button", { name: "expandDetails" });
+      fireEvent.click(expandButton);
+
+      expect(screen.getByText("billingDetails")).toBeInTheDocument();
+      // Should show tiered rule type
+      expect(screen.getByText(/billingRuleType/)).toBeInTheDocument();
+      expect(screen.getByText(/billingRuleTier/)).toBeInTheDocument();
+      // Should show display label from matched_rule_display_label
+      expect(screen.getByText(">128K")).toBeInTheDocument();
+      // Should show threshold
+      expect(screen.getByText(/billingThreshold/)).toBeInTheDocument();
+      expect(screen.getByText(/128,?000/)).toBeInTheDocument();
+    });
+
+    it("shows model window metadata in token details when available", () => {
+      const billedLogWithWindowMetadata: RequestLog = {
+        ...logWithFailoverBase,
+        billing_status: "billed",
+        currency: "USD",
+        final_cost: 0.001,
+        billed_input_tokens: 100,
+        base_input_price_per_million: 3,
+        base_output_price_per_million: 9,
+        input_multiplier: 1,
+        output_multiplier: 1,
+        price_source: "litellm",
+        matched_rule_type: "flat",
+        model_max_input_tokens: 128000,
+        model_max_output_tokens: 4096,
+        completion_tokens: 50,
+      };
+
+      render(<LogsTable logs={[billedLogWithWindowMetadata]} />);
+
+      const expandButton = screen.getByRole("button", { name: "expandDetails" });
+      fireEvent.click(expandButton);
+
+      expect(screen.getByText("tokenDetails")).toBeInTheDocument();
+      // Should show model window metadata
+      expect(screen.getByText(/modelWindow/)).toBeInTheDocument();
+      expect(screen.getByText(/Max Input: 128,?000/)).toBeInTheDocument();
+      expect(screen.getByText(/Max Output: 4,?096/)).toBeInTheDocument();
+    });
+
+    it("shows flat rule type when matched_rule_type is flat", () => {
+      const billedLogFlat: RequestLog = {
+        ...logWithFailoverBase,
+        billing_status: "billed",
+        currency: "USD",
+        final_cost: 0.001,
+        billed_input_tokens: 100,
+        base_input_price_per_million: 3,
+        base_output_price_per_million: 9,
+        input_multiplier: 1,
+        output_multiplier: 1,
+        price_source: "litellm",
+        matched_rule_type: "flat",
+        matched_rule_display_label: null,
+        applied_tier_threshold: null,
+        completion_tokens: 50,
+      };
+
+      render(<LogsTable logs={[billedLogFlat]} />);
+
+      const expandButton = screen.getByRole("button", { name: "expandDetails" });
+      fireEvent.click(expandButton);
+
+      expect(screen.getByText("billingDetails")).toBeInTheDocument();
+      expect(screen.getByText(/billingRuleType/)).toBeInTheDocument();
+      expect(screen.getByText(/billingRuleFlat/)).toBeInTheDocument();
+      // Should not show tier rule or threshold
+      expect(screen.queryByText(/billingRuleTier/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/billingThreshold/)).not.toBeInTheDocument();
+    });
+
     it("shows sequential lifecycle flow in expanded view when available", () => {
       const logWithRouting: RequestLog = {
         ...logWithFailoverBase,
