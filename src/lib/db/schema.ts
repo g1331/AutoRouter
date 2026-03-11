@@ -13,6 +13,7 @@ export const requestLogs = schema.requestLogs;
 export const compensationRules = schema.compensationRules;
 export const billingModelPrices = schema.billingModelPrices;
 export const billingManualPriceOverrides = schema.billingManualPriceOverrides;
+export const billingTierRules = schema.billingTierRules;
 export const billingPriceSyncHistory = schema.billingPriceSyncHistory;
 export const requestBillingSnapshots = schema.requestBillingSnapshots;
 
@@ -40,6 +41,8 @@ export type BillingModelPrice = typeof billingModelPrices.$inferSelect;
 export type NewBillingModelPrice = typeof billingModelPrices.$inferInsert;
 export type BillingManualPriceOverride = typeof billingManualPriceOverrides.$inferSelect;
 export type NewBillingManualPriceOverride = typeof billingManualPriceOverrides.$inferInsert;
+export type BillingTierRule = typeof billingTierRules.$inferSelect;
+export type NewBillingTierRule = typeof billingTierRules.$inferInsert;
 export type BillingPriceSyncHistory = typeof billingPriceSyncHistory.$inferSelect;
 export type NewBillingPriceSyncHistory = typeof billingPriceSyncHistory.$inferInsert;
 export type RequestBillingSnapshot = typeof requestBillingSnapshots.$inferSelect;

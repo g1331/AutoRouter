@@ -22,14 +22,14 @@ describe("GET /api/admin/billing/prices", () => {
   });
 
   it("should return 401 without valid auth", async () => {
-    const { GET } = await import("@/app/api/admin/billing/prices/route");
+    const { GET } = await import("../../../../../../src/app/api/admin/billing/prices/route");
     const req = new NextRequest("http://localhost/api/admin/billing/prices");
     const res = await GET(req);
     expect(res.status).toBe(401);
   });
 
   it("should return 400 for unsupported source", async () => {
-    const { GET } = await import("@/app/api/admin/billing/prices/route");
+    const { GET } = await import("../../../../../../src/app/api/admin/billing/prices/route");
     const req = new NextRequest("http://localhost/api/admin/billing/prices?source=openrouter", {
       headers: { authorization: AUTH_HEADER },
     });
@@ -40,7 +40,7 @@ describe("GET /api/admin/billing/prices", () => {
   });
 
   it("should return 400 for invalid active_only", async () => {
-    const { GET } = await import("@/app/api/admin/billing/prices/route");
+    const { GET } = await import("../../../../../../src/app/api/admin/billing/prices/route");
     const req = new NextRequest("http://localhost/api/admin/billing/prices?active_only=maybe", {
       headers: { authorization: AUTH_HEADER },
     });
@@ -51,7 +51,7 @@ describe("GET /api/admin/billing/prices", () => {
   });
 
   it("should list paginated model prices and pass normalized params to service", async () => {
-    const { GET } = await import("@/app/api/admin/billing/prices/route");
+    const { GET } = await import("../../../../../../src/app/api/admin/billing/prices/route");
 
     listBillingModelPricesMock.mockResolvedValueOnce({
       items: [
@@ -62,6 +62,25 @@ describe("GET /api/admin/billing/prices", () => {
           outputPricePerMillion: 9,
           cacheReadInputPricePerMillion: 0.8,
           cacheWriteInputPricePerMillion: null,
+          maxInputTokens: 200000,
+          maxOutputTokens: 8192,
+          syncedTierRules: [
+            {
+              id: "tier-1",
+              model: "gpt-4.1",
+              source: "litellm",
+              thresholdInputTokens: 128000,
+              displayLabel: ">128K context",
+              inputPricePerMillion: 5,
+              outputPricePerMillion: 15,
+              cacheReadInputPricePerMillion: null,
+              cacheWriteInputPricePerMillion: null,
+              note: null,
+              isActive: true,
+              createdAt: new Date("2026-02-28T00:00:00.000Z"),
+              updatedAt: new Date("2026-02-28T00:00:00.000Z"),
+            },
+          ],
           source: "litellm",
           isActive: true,
           syncedAt: new Date("2026-02-28T00:00:00.000Z"),
@@ -90,7 +109,17 @@ describe("GET /api/admin/billing/prices", () => {
     });
 
     const body = (await res.json()) as {
-      items: Array<{ model: string; source: string; synced_at: string }>;
+      items: Array<{
+        model: string;
+        source: string;
+        max_input_tokens: number | null;
+        synced_at: string;
+        synced_tier_rules: Array<{
+          threshold_input_tokens: number;
+          display_label: string | null;
+          source: string;
+        }>;
+      }>;
       total: number;
       page: number;
       page_size: number;
@@ -103,6 +132,13 @@ describe("GET /api/admin/billing/prices", () => {
     expect(body.total_pages).toBe(3);
     expect(body.items[0].model).toBe("gpt-4.1");
     expect(body.items[0].source).toBe("litellm");
+    expect(body.items[0].max_input_tokens).toBe(200000);
     expect(body.items[0].synced_at).toBe("2026-02-28T00:00:00.000Z");
+    expect(body.items[0].synced_tier_rules).toHaveLength(1);
+    expect(body.items[0].synced_tier_rules[0]).toMatchObject({
+      threshold_input_tokens: 128000,
+      display_label: ">128K context",
+      source: "litellm",
+    });
   });
 });

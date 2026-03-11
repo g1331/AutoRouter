@@ -19,7 +19,7 @@ import {
   transformLeaderboardUpstreamToApi,
   transformLeaderboardModelToApi,
   transformStatsLeaderboardToApi,
-} from "@/lib/utils/api-transformers";
+} from "../../../src/lib/utils/api-transformers";
 
 describe("api-transformers", () => {
   describe("toISOStringOrNull", () => {
@@ -956,6 +956,25 @@ describe("api-transformers", () => {
         outputPricePerMillion: 9.8,
         cacheReadInputPricePerMillion: 0.8,
         cacheWriteInputPricePerMillion: 3.2,
+        maxInputTokens: 200000,
+        maxOutputTokens: 8192,
+        syncedTierRules: [
+          {
+            id: "tier-1",
+            model: "gpt-4.1",
+            source: "litellm",
+            thresholdInputTokens: 128000,
+            displayLabel: ">128K context",
+            inputPricePerMillion: 5,
+            outputPricePerMillion: 15,
+            cacheReadInputPricePerMillion: null,
+            cacheWriteInputPricePerMillion: null,
+            note: null,
+            isActive: true,
+            createdAt: new Date("2026-02-28T08:00:00.000Z"),
+            updatedAt: new Date("2026-02-28T08:05:00.000Z"),
+          },
+        ],
         source: "litellm",
         isActive: true,
         syncedAt: new Date("2026-02-28T08:00:00.000Z"),
@@ -969,6 +988,25 @@ describe("api-transformers", () => {
         output_price_per_million: 9.8,
         cache_read_input_price_per_million: 0.8,
         cache_write_input_price_per_million: 3.2,
+        max_input_tokens: 200000,
+        max_output_tokens: 8192,
+        synced_tier_rules: [
+          {
+            id: "tier-1",
+            model: "gpt-4.1",
+            source: "litellm",
+            threshold_input_tokens: 128000,
+            display_label: ">128K context",
+            input_price_per_million: 5,
+            output_price_per_million: 15,
+            cache_read_input_price_per_million: null,
+            cache_write_input_price_per_million: null,
+            note: null,
+            is_active: true,
+            created_at: "2026-02-28T08:00:00.000Z",
+            updated_at: "2026-02-28T08:05:00.000Z",
+          },
+        ],
         source: "litellm",
         is_active: true,
         synced_at: "2026-02-28T08:00:00.000Z",
@@ -986,6 +1024,25 @@ describe("api-transformers", () => {
             outputPricePerMillion: 9.8,
             cacheReadInputPricePerMillion: null,
             cacheWriteInputPricePerMillion: null,
+            maxInputTokens: 200000,
+            maxOutputTokens: 8192,
+            syncedTierRules: [
+              {
+                id: "tier-2",
+                model: "gpt-4.1",
+                source: "litellm",
+                thresholdInputTokens: 200000,
+                displayLabel: ">200K context",
+                inputPricePerMillion: 7,
+                outputPricePerMillion: 21,
+                cacheReadInputPricePerMillion: null,
+                cacheWriteInputPricePerMillion: null,
+                note: null,
+                isActive: true,
+                createdAt: new Date("2026-02-28T08:00:00.000Z"),
+                updatedAt: new Date("2026-02-28T08:05:00.000Z"),
+              },
+            ],
             source: "litellm",
             isActive: true,
             syncedAt: new Date("2026-02-28T08:00:00.000Z"),
@@ -1003,6 +1060,7 @@ describe("api-transformers", () => {
       expect(result.page_size).toBe(50);
       expect(result.total_pages).toBe(1);
       expect(result.items[0].model).toBe("gpt-4.1");
+      expect(result.items[0].synced_tier_rules[0]?.threshold_input_tokens).toBe(200000);
     });
   });
 

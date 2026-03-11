@@ -22,14 +22,14 @@ describe("GET /api/admin/billing/recent", () => {
   });
 
   it("should return 401 without valid auth", async () => {
-    const { GET } = await import("@/app/api/admin/billing/recent/route");
+    const { GET } = await import("../../../../../../src/app/api/admin/billing/recent/route");
     const req = new NextRequest("http://localhost/api/admin/billing/recent");
     const res = await GET(req);
     expect(res.status).toBe(401);
   });
 
   it("should return paginated recent billing details", async () => {
-    const { GET } = await import("@/app/api/admin/billing/recent/route");
+    const { GET } = await import("../../../../../../src/app/api/admin/billing/recent/route");
 
     listRecentBillingDetailsMock.mockResolvedValueOnce({
       items: [
@@ -51,6 +51,11 @@ describe("GET /api/admin/billing/recent", () => {
           baseOutputPricePerMillion: 9,
           baseCacheReadInputPricePerMillion: 0.8,
           baseCacheWriteInputPricePerMillion: null,
+          matchedRuleType: "flat",
+          matchedRuleDisplayLabel: null,
+          appliedTierThreshold: null,
+          modelMaxInputTokens: 200000,
+          modelMaxOutputTokens: 8192,
           inputMultiplier: 1,
           outputMultiplier: 1,
           cacheReadCost: 0,
@@ -73,9 +78,84 @@ describe("GET /api/admin/billing/recent", () => {
 
     expect(listRecentBillingDetailsMock).toHaveBeenCalledWith(1, 20);
     const body = (await res.json()) as {
-      items: Array<{ request_log_id: string; final_cost: number }>;
+      items: Array<{
+        request_log_id: string;
+        final_cost: number;
+        matched_rule_type: "flat" | "tiered" | null;
+        applied_tier_threshold: number | null;
+        model_max_input_tokens: number | null;
+      }>;
     };
     expect(body.items[0].request_log_id).toBe("log-1");
     expect(body.items[0].final_cost).toBe(0.00021);
+    expect(body.items[0].matched_rule_type).toBe("flat");
+    expect(body.items[0].applied_tier_threshold).toBeNull();
+    expect(body.items[0].model_max_input_tokens).toBe(200000);
+  });
+
+  it("should expose applied_tier_threshold when tier rule is applied", async () => {
+    const { GET } = await import("../../../../../../src/app/api/admin/billing/recent/route");
+
+    listRecentBillingDetailsMock.mockResolvedValueOnce({
+      items: [
+        {
+          requestLogId: "log-2",
+          createdAt: new Date("2026-02-28T00:00:00.000Z"),
+          model: "gpt-4.1",
+          upstreamId: "upstream-1",
+          upstreamName: "OpenAI",
+          promptTokens: 150000,
+          completionTokens: 50,
+          totalTokens: 150050,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          priceSource: "litellm",
+          billingStatus: "billed",
+          unbillableReason: null,
+          baseInputPricePerMillion: 5,
+          baseOutputPricePerMillion: 15,
+          baseCacheReadInputPricePerMillion: null,
+          baseCacheWriteInputPricePerMillion: null,
+          matchedRuleType: "tiered",
+          matchedRuleDisplayLabel: ">128K context",
+          appliedTierThreshold: 128000,
+          modelMaxInputTokens: 200000,
+          modelMaxOutputTokens: 8192,
+          inputMultiplier: 1,
+          outputMultiplier: 1,
+          cacheReadCost: 0,
+          cacheWriteCost: 0,
+          finalCost: 0.75075,
+          currency: "USD",
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+    });
+
+    const req = new NextRequest("http://localhost/api/admin/billing/recent", {
+      headers: { authorization: AUTH_HEADER },
+    });
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as {
+      items: Array<{
+        request_log_id: string;
+        matched_rule_type: "flat" | "tiered" | null;
+        matched_rule_display_label: string | null;
+        applied_tier_threshold: number | null;
+        model_max_output_tokens: number | null;
+        price_source: string | null;
+      }>;
+    };
+    expect(body.items[0].request_log_id).toBe("log-2");
+    expect(body.items[0].matched_rule_type).toBe("tiered");
+    expect(body.items[0].matched_rule_display_label).toBe(">128K context");
+    expect(body.items[0].applied_tier_threshold).toBe(128000);
+    expect(body.items[0].model_max_output_tokens).toBe(8192);
+    expect(body.items[0].price_source).toBe("litellm");
   });
 });
