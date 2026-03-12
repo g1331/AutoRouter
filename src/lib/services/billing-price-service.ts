@@ -485,8 +485,8 @@ export async function syncBillingModelPrices(): Promise<BillingSyncSummary> {
  * if prompt tokens exceed the threshold, ALL tokens use the tier rate.
  *
  * Resolution priority:
- * 1. LiteLLM tier rules (highest matching threshold where billedInputTokens \> threshold)
- * 2. Manual tier rules (highest matching threshold)
+ * 1. Manual tier rules (highest matching threshold where billedInputTokens > threshold)
+ * 2. LiteLLM tier rules (highest matching threshold)
  * 3. Manual flat price override
  * 4. LiteLLM synced flat price
  */
@@ -509,7 +509,25 @@ export async function resolveBillingModelPrice(
   });
 
   // Check tier rules when billed input tokens are provided.
+  // Manual rules take priority over synced rules (consistent with flat price behavior).
   if (billedInputTokens !== undefined && billedInputTokens > 0) {
+    const manualTierRule = await findMatchingTierRule(normalizedModel, billedInputTokens, "manual");
+    if (manualTierRule) {
+      return {
+        model: normalizedModel,
+        source: manualTierRule.source as BillingPriceSource,
+        inputPricePerMillion: manualTierRule.inputPricePerMillion,
+        outputPricePerMillion: manualTierRule.outputPricePerMillion,
+        cacheReadInputPricePerMillion: manualTierRule.cacheReadInputPricePerMillion,
+        cacheWriteInputPricePerMillion: manualTierRule.cacheWriteInputPricePerMillion,
+        matchedRuleType: "tiered",
+        matchedRuleDisplayLabel: manualTierRule.displayLabel,
+        appliedTierThreshold: manualTierRule.thresholdInputTokens,
+        modelMaxInputTokens: syncedCatalogPrice?.maxInputTokens ?? null,
+        modelMaxOutputTokens: syncedCatalogPrice?.maxOutputTokens ?? null,
+      };
+    }
+
     const syncedTierRule = await findMatchingTierRule(
       normalizedModel,
       billedInputTokens,
@@ -526,23 +544,6 @@ export async function resolveBillingModelPrice(
         matchedRuleType: "tiered",
         matchedRuleDisplayLabel: syncedTierRule.displayLabel,
         appliedTierThreshold: syncedTierRule.thresholdInputTokens,
-        modelMaxInputTokens: syncedCatalogPrice?.maxInputTokens ?? null,
-        modelMaxOutputTokens: syncedCatalogPrice?.maxOutputTokens ?? null,
-      };
-    }
-
-    const manualTierRule = await findMatchingTierRule(normalizedModel, billedInputTokens, "manual");
-    if (manualTierRule) {
-      return {
-        model: normalizedModel,
-        source: manualTierRule.source as BillingPriceSource,
-        inputPricePerMillion: manualTierRule.inputPricePerMillion,
-        outputPricePerMillion: manualTierRule.outputPricePerMillion,
-        cacheReadInputPricePerMillion: manualTierRule.cacheReadInputPricePerMillion,
-        cacheWriteInputPricePerMillion: manualTierRule.cacheWriteInputPricePerMillion,
-        matchedRuleType: "tiered",
-        matchedRuleDisplayLabel: manualTierRule.displayLabel,
-        appliedTierThreshold: manualTierRule.thresholdInputTokens,
         modelMaxInputTokens: syncedCatalogPrice?.maxInputTokens ?? null,
         modelMaxOutputTokens: syncedCatalogPrice?.maxOutputTokens ?? null,
       };
