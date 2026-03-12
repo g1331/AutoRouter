@@ -1,8 +1,9 @@
-import { and, count, desc, eq, inArray, isNotNull, like } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNotNull, like } from "drizzle-orm";
 import {
   billingManualPriceOverrides,
   billingModelPrices,
   billingPriceSyncHistory,
+  billingTierRules,
   db,
   requestBillingSnapshots,
 } from "@/lib/db";
@@ -15,6 +16,22 @@ const LITELLM_PRICE_MAP_URL =
 
 const FETCH_TIMEOUT_MS = 12_000;
 
+export class BillingTierRuleConflictError extends Error {
+  constructor(message: string = "A manual tier rule with the same threshold already exists") {
+    super(message);
+    this.name = "BillingTierRuleConflictError";
+  }
+}
+
+export class BillingTierRuleValidationError extends Error {
+  constructor(message: string = "Model must not be empty") {
+    super(message);
+    this.name = "BillingTierRuleValidationError";
+  }
+}
+
+const BILLING_TIER_RULES_UNIQUE_CONSTRAINT = "uq_billing_tier_rules_model_source_threshold";
+
 export type BillingPriceSource = "manual" | "litellm";
 export type BillingSyncStatus = "success" | "partial" | "failed";
 
@@ -25,6 +42,11 @@ export interface BillingResolvedPrice {
   outputPricePerMillion: number;
   cacheReadInputPricePerMillion: number | null;
   cacheWriteInputPricePerMillion: number | null;
+  matchedRuleType: "flat" | "tiered";
+  matchedRuleDisplayLabel: string | null;
+  appliedTierThreshold: number | null;
+  modelMaxInputTokens: number | null;
+  modelMaxOutputTokens: number | null;
 }
 
 export interface BillingSyncSummary {
@@ -69,9 +91,28 @@ export interface BillingModelPriceCatalogItem {
   outputPricePerMillion: number;
   cacheReadInputPricePerMillion: number | null;
   cacheWriteInputPricePerMillion: number | null;
+  maxInputTokens: number | null;
+  maxOutputTokens: number | null;
+  syncedTierRules: BillingTierRuleRecord[];
   source: "litellm";
   isActive: boolean;
   syncedAt: Date;
+  updatedAt: Date;
+}
+
+export interface BillingTierRuleRecord {
+  id: string;
+  model: string;
+  source: "litellm" | "manual";
+  thresholdInputTokens: number;
+  displayLabel: string | null;
+  inputPricePerMillion: number;
+  outputPricePerMillion: number;
+  cacheReadInputPricePerMillion: number | null;
+  cacheWriteInputPricePerMillion: number | null;
+  note: string | null;
+  isActive: boolean;
+  createdAt: Date;
   updatedAt: Date;
 }
 
@@ -97,7 +138,42 @@ interface NormalizedSyncedPrice {
   outputPricePerMillion: number;
   cacheReadInputPricePerMillion: number | null;
   cacheWriteInputPricePerMillion: number | null;
+  maxInputTokens: number | null;
+  maxOutputTokens: number | null;
   source: "litellm";
+}
+
+interface NormalizedSyncedTierRule {
+  model: string;
+  thresholdInputTokens: number;
+  displayLabel: string | null;
+  inputPricePerMillion: number;
+  outputPricePerMillion: number;
+  cacheReadInputPricePerMillion: number | null;
+  cacheWriteInputPricePerMillion: number | null;
+  source: "litellm";
+}
+
+interface TierRuleInput {
+  model: string;
+  thresholdInputTokens: number;
+  displayLabel?: string | null;
+  inputPricePerMillion: number;
+  outputPricePerMillion: number;
+  cacheReadInputPricePerMillion?: number | null;
+  cacheWriteInputPricePerMillion?: number | null;
+  note?: string | null;
+}
+
+interface UpdateTierRuleInput {
+  thresholdInputTokens?: number;
+  displayLabel?: string | null;
+  inputPricePerMillion?: number;
+  outputPricePerMillion?: number;
+  cacheReadInputPricePerMillion?: number | null;
+  cacheWriteInputPricePerMillion?: number | null;
+  note?: string | null;
+  isActive?: boolean;
 }
 
 interface ManualOverrideInput {
@@ -125,6 +201,14 @@ function toNonNegativeNumber(value: unknown): number | null {
   return parsed;
 }
 
+function toNonNegativeInteger(value: unknown): number | null {
+  const parsed = typeof value === "string" ? Number(value) : value;
+  if (typeof parsed !== "number" || Number.isNaN(parsed) || parsed < 0) {
+    return null;
+  }
+  return Math.floor(parsed);
+}
+
 async function fetchJsonWithTimeout(url: string): Promise<unknown> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -140,36 +224,41 @@ async function fetchJsonWithTimeout(url: string): Promise<unknown> {
   }
 }
 
-function parseLiteLLMPrices(payload: unknown): NormalizedSyncedPrice[] {
+interface LiteLLMParseResult {
+  prices: NormalizedSyncedPrice[];
+  tierRules: NormalizedSyncedTierRule[];
+}
+
+const TIER_FIELD_PATTERN =
+  /^(input|output)_cost_per_token_above_(\d+)k_tokens$|^(cache_read_input_token|cache_creation_input_token)_cost_above_(\d+)k_tokens$/;
+
+function parseLiteLLMPrices(payload: unknown): LiteLLMParseResult {
   if (!payload || typeof payload !== "object") {
-    return [];
+    return { prices: [], tierRules: [] };
   }
 
   const entries = Object.entries(payload as Record<string, unknown>);
-  const results: NormalizedSyncedPrice[] = [];
+  const prices: NormalizedSyncedPrice[] = [];
+  const tierRuleMap = new Map<string, NormalizedSyncedTierRule>();
 
   for (const [model, rawValue] of entries) {
     if (!rawValue || typeof rawValue !== "object") {
       continue;
     }
 
-    const inputCostPerToken = toNonNegativeNumber(
-      (rawValue as { input_cost_per_token?: unknown }).input_cost_per_token
-    );
-    const outputCostPerToken = toNonNegativeNumber(
-      (rawValue as { output_cost_per_token?: unknown }).output_cost_per_token
-    );
+    const record = rawValue as Record<string, unknown>;
+
+    const inputCostPerToken = toNonNegativeNumber(record.input_cost_per_token);
+    const outputCostPerToken = toNonNegativeNumber(record.output_cost_per_token);
     if (inputCostPerToken === null || outputCostPerToken === null) {
       continue;
     }
-    const cacheReadCostPerToken = toNonNegativeNumber(
-      (rawValue as { cache_read_input_token_cost?: unknown }).cache_read_input_token_cost
-    );
-    const cacheWriteCostPerToken = toNonNegativeNumber(
-      (rawValue as { cache_creation_input_token_cost?: unknown }).cache_creation_input_token_cost
-    );
+    const cacheReadCostPerToken = toNonNegativeNumber(record.cache_read_input_token_cost);
+    const cacheWriteCostPerToken = toNonNegativeNumber(record.cache_creation_input_token_cost);
+    const maxInputTokens = toNonNegativeInteger(record.max_input_tokens);
+    const maxOutputTokens = toNonNegativeInteger(record.max_output_tokens);
 
-    results.push({
+    prices.push({
       model: model.trim(),
       inputPricePerMillion: inputCostPerToken * 1_000_000,
       outputPricePerMillion: outputCostPerToken * 1_000_000,
@@ -177,11 +266,60 @@ function parseLiteLLMPrices(payload: unknown): NormalizedSyncedPrice[] {
         cacheReadCostPerToken === null ? null : cacheReadCostPerToken * 1_000_000,
       cacheWriteInputPricePerMillion:
         cacheWriteCostPerToken === null ? null : cacheWriteCostPerToken * 1_000_000,
+      maxInputTokens,
+      maxOutputTokens,
       source: "litellm",
     });
+
+    // Extract tiered pricing fields (e.g. input_cost_per_token_above_128k_tokens)
+    for (const [field, value] of Object.entries(record)) {
+      const match = TIER_FIELD_PATTERN.exec(field);
+      if (!match) continue;
+
+      const costType = match[1] ?? match[3];
+      const thresholdRaw = match[2] ?? match[4];
+      if (!costType || !thresholdRaw) continue;
+
+      const thresholdK = parseInt(thresholdRaw, 10);
+      const thresholdTokens = thresholdK * 1_000;
+      const costPerToken = toNonNegativeNumber(value);
+      if (costPerToken === null) continue;
+
+      const key = `${model.trim()}::${thresholdTokens}`;
+      let rule = tierRuleMap.get(key);
+      if (!rule) {
+        rule = {
+          model: model.trim(),
+          thresholdInputTokens: thresholdTokens,
+          displayLabel: `>${thresholdK}K context`,
+          inputPricePerMillion: 0,
+          outputPricePerMillion: 0,
+          cacheReadInputPricePerMillion: null,
+          cacheWriteInputPricePerMillion: null,
+          source: "litellm",
+        };
+        tierRuleMap.set(key, rule);
+      }
+
+      const pricePerMillion = costPerToken * 1_000_000;
+      if (costType === "input") {
+        rule.inputPricePerMillion = pricePerMillion;
+      } else if (costType === "output") {
+        rule.outputPricePerMillion = pricePerMillion;
+      } else if (costType === "cache_read_input_token") {
+        rule.cacheReadInputPricePerMillion = pricePerMillion;
+      } else if (costType === "cache_creation_input_token") {
+        rule.cacheWriteInputPricePerMillion = pricePerMillion;
+      }
+    }
   }
 
-  return results;
+  // Filter tier rules: keep only those with at least one non-zero price
+  const tierRules = [...tierRuleMap.values()].filter(
+    (rule) => rule.inputPricePerMillion > 0 || rule.outputPricePerMillion > 0
+  );
+
+  return { prices, tierRules };
 }
 
 async function persistSyncedPrices(prices: NormalizedSyncedPrice[]): Promise<number> {
@@ -205,6 +343,8 @@ async function persistSyncedPrices(prices: NormalizedSyncedPrice[]): Promise<num
           outputPricePerMillion: price.outputPricePerMillion,
           cacheReadInputPricePerMillion: price.cacheReadInputPricePerMillion,
           cacheWriteInputPricePerMillion: price.cacheWriteInputPricePerMillion,
+          maxInputTokens: price.maxInputTokens,
+          maxOutputTokens: price.maxOutputTokens,
           source: "litellm",
           isActive: true,
           syncedAt: now,
@@ -218,6 +358,8 @@ async function persistSyncedPrices(prices: NormalizedSyncedPrice[]): Promise<num
             outputPricePerMillion: price.outputPricePerMillion,
             cacheReadInputPricePerMillion: price.cacheReadInputPricePerMillion,
             cacheWriteInputPricePerMillion: price.cacheWriteInputPricePerMillion,
+            maxInputTokens: price.maxInputTokens,
+            maxOutputTokens: price.maxOutputTokens,
             isActive: true,
             syncedAt: now,
             updatedAt: now,
@@ -246,6 +388,53 @@ async function saveSyncHistory(entry: {
   });
 }
 
+async function persistSyncedTierRules(tierRules: NormalizedSyncedTierRule[]): Promise<number> {
+  const now = new Date();
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(billingTierRules)
+      .set({ isActive: false, updatedAt: now })
+      .where(eq(billingTierRules.source, "litellm"));
+
+    for (const rule of tierRules) {
+      await tx
+        .insert(billingTierRules)
+        .values({
+          model: rule.model,
+          source: "litellm",
+          thresholdInputTokens: rule.thresholdInputTokens,
+          displayLabel: rule.displayLabel,
+          inputPricePerMillion: rule.inputPricePerMillion,
+          outputPricePerMillion: rule.outputPricePerMillion,
+          cacheReadInputPricePerMillion: rule.cacheReadInputPricePerMillion,
+          cacheWriteInputPricePerMillion: rule.cacheWriteInputPricePerMillion,
+          isActive: true,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: [
+            billingTierRules.model,
+            billingTierRules.source,
+            billingTierRules.thresholdInputTokens,
+          ],
+          set: {
+            displayLabel: rule.displayLabel,
+            inputPricePerMillion: rule.inputPricePerMillion,
+            outputPricePerMillion: rule.outputPricePerMillion,
+            cacheReadInputPricePerMillion: rule.cacheReadInputPricePerMillion,
+            cacheWriteInputPricePerMillion: rule.cacheWriteInputPricePerMillion,
+            isActive: true,
+            updatedAt: now,
+          },
+        });
+    }
+  });
+
+  return tierRules.length;
+}
+
 /**
  * Sync model prices from LiteLLM price map.
  */
@@ -254,16 +443,19 @@ export async function syncBillingModelPrices(): Promise<BillingSyncSummary> {
 
   try {
     const payload = await fetchJsonWithTimeout(LITELLM_PRICE_MAP_URL);
-    const prices = parseLiteLLMPrices(payload);
+    const { prices, tierRules } = parseLiteLLMPrices(payload);
     if (prices.length === 0) {
       throw new Error("LiteLLM returned no valid price rows");
     }
 
-    const successCount = await persistSyncedPrices(prices);
+    const priceCount = await persistSyncedPrices(prices);
+    const tierRuleCount = await persistSyncedTierRules(tierRules);
+    log.info({ priceCount, tierRuleCount }, "litellm price sync completed");
+
     const result: BillingSyncSummary = {
       status: "success",
       source: "litellm",
-      successCount,
+      successCount: priceCount + tierRuleCount,
       failureCount: 0,
       failureReason: null,
       syncedAt,
@@ -288,15 +480,77 @@ export async function syncBillingModelPrices(): Promise<BillingSyncSummary> {
 
 /**
  * Resolve a model price by checking manual overrides before synced prices.
+ * When promptTokens is provided, tier rules are checked and applied using
+ * full replacement semantics (official provider billing behavior):
+ * if prompt tokens exceed the threshold, ALL tokens use the tier rate.
+ *
+ * Resolution priority:
+ * 1. Manual tier rules (highest matching threshold where billedInputTokens > threshold)
+ * 2. LiteLLM tier rules (highest matching threshold)
+ * 3. Manual flat price override
+ * 4. LiteLLM synced flat price
  */
 export async function resolveBillingModelPrice(
-  model: string | null
+  model: string | null,
+  billedInputTokens?: number
 ): Promise<BillingResolvedPrice | null> {
   const normalizedModel = model?.trim();
   if (!normalizedModel) {
     return null;
   }
 
+  const syncedCatalogPrice = await db.query.billingModelPrices.findFirst({
+    where: and(
+      eq(billingModelPrices.model, normalizedModel),
+      eq(billingModelPrices.source, "litellm"),
+      eq(billingModelPrices.isActive, true)
+    ),
+    orderBy: [desc(billingModelPrices.syncedAt)],
+  });
+
+  // Check tier rules when billed input tokens are provided.
+  // Manual rules take priority over synced rules (consistent with flat price behavior).
+  if (billedInputTokens !== undefined && billedInputTokens > 0) {
+    const manualTierRule = await findMatchingTierRule(normalizedModel, billedInputTokens, "manual");
+    if (manualTierRule) {
+      return {
+        model: normalizedModel,
+        source: manualTierRule.source as BillingPriceSource,
+        inputPricePerMillion: manualTierRule.inputPricePerMillion,
+        outputPricePerMillion: manualTierRule.outputPricePerMillion,
+        cacheReadInputPricePerMillion: manualTierRule.cacheReadInputPricePerMillion,
+        cacheWriteInputPricePerMillion: manualTierRule.cacheWriteInputPricePerMillion,
+        matchedRuleType: "tiered",
+        matchedRuleDisplayLabel: manualTierRule.displayLabel,
+        appliedTierThreshold: manualTierRule.thresholdInputTokens,
+        modelMaxInputTokens: syncedCatalogPrice?.maxInputTokens ?? null,
+        modelMaxOutputTokens: syncedCatalogPrice?.maxOutputTokens ?? null,
+      };
+    }
+
+    const syncedTierRule = await findMatchingTierRule(
+      normalizedModel,
+      billedInputTokens,
+      "litellm"
+    );
+    if (syncedTierRule) {
+      return {
+        model: normalizedModel,
+        source: syncedTierRule.source as BillingPriceSource,
+        inputPricePerMillion: syncedTierRule.inputPricePerMillion,
+        outputPricePerMillion: syncedTierRule.outputPricePerMillion,
+        cacheReadInputPricePerMillion: syncedTierRule.cacheReadInputPricePerMillion,
+        cacheWriteInputPricePerMillion: syncedTierRule.cacheWriteInputPricePerMillion,
+        matchedRuleType: "tiered",
+        matchedRuleDisplayLabel: syncedTierRule.displayLabel,
+        appliedTierThreshold: syncedTierRule.thresholdInputTokens,
+        modelMaxInputTokens: syncedCatalogPrice?.maxInputTokens ?? null,
+        modelMaxOutputTokens: syncedCatalogPrice?.maxOutputTokens ?? null,
+      };
+    }
+  }
+
+  // Fall back to flat pricing
   const manual = await db.query.billingManualPriceOverrides.findFirst({
     where: eq(billingManualPriceOverrides.model, normalizedModel),
   });
@@ -308,28 +562,78 @@ export async function resolveBillingModelPrice(
       outputPricePerMillion: manual.outputPricePerMillion,
       cacheReadInputPricePerMillion: manual.cacheReadInputPricePerMillion,
       cacheWriteInputPricePerMillion: manual.cacheWriteInputPricePerMillion,
+      matchedRuleType: "flat",
+      matchedRuleDisplayLabel: null,
+      appliedTierThreshold: null,
+      modelMaxInputTokens: syncedCatalogPrice?.maxInputTokens ?? null,
+      modelMaxOutputTokens: syncedCatalogPrice?.maxOutputTokens ?? null,
     };
   }
 
-  const synced = await db.query.billingModelPrices.findFirst({
-    where: and(
-      eq(billingModelPrices.model, normalizedModel),
-      eq(billingModelPrices.source, "litellm"),
-      eq(billingModelPrices.isActive, true)
-    ),
-    orderBy: [desc(billingModelPrices.syncedAt)],
-  });
-  if (!synced) {
+  if (!syncedCatalogPrice) {
     return null;
   }
 
   return {
     model: normalizedModel,
     source: "litellm",
-    inputPricePerMillion: synced.inputPricePerMillion,
-    outputPricePerMillion: synced.outputPricePerMillion,
-    cacheReadInputPricePerMillion: synced.cacheReadInputPricePerMillion,
-    cacheWriteInputPricePerMillion: synced.cacheWriteInputPricePerMillion,
+    inputPricePerMillion: syncedCatalogPrice.inputPricePerMillion,
+    outputPricePerMillion: syncedCatalogPrice.outputPricePerMillion,
+    cacheReadInputPricePerMillion: syncedCatalogPrice.cacheReadInputPricePerMillion,
+    cacheWriteInputPricePerMillion: syncedCatalogPrice.cacheWriteInputPricePerMillion,
+    matchedRuleType: "flat",
+    matchedRuleDisplayLabel: null,
+    appliedTierThreshold: null,
+    modelMaxInputTokens: syncedCatalogPrice.maxInputTokens,
+    modelMaxOutputTokens: syncedCatalogPrice.maxOutputTokens,
+  };
+}
+
+/**
+ * Find the best matching tier rule for a model and billed input token count.
+ * Returns the highest threshold tier where billedInputTokens \> threshold.
+ */
+async function findMatchingTierRule(
+  model: string,
+  billedInputTokens: number,
+  source: "litellm" | "manual"
+): Promise<BillingTierRuleRecord | null> {
+  const rules = await db.query.billingTierRules.findMany({
+    where: and(
+      eq(billingTierRules.model, model),
+      eq(billingTierRules.source, source),
+      eq(billingTierRules.isActive, true)
+    ),
+    orderBy: [desc(billingTierRules.thresholdInputTokens)],
+  });
+
+  if (rules.length === 0) return null;
+
+  // Find the highest threshold that is exceeded by billed input tokens.
+  for (const rule of rules) {
+    if (billedInputTokens > rule.thresholdInputTokens) {
+      return toTierRuleRecord(rule);
+    }
+  }
+
+  return null;
+}
+
+function toTierRuleRecord(row: typeof billingTierRules.$inferSelect): BillingTierRuleRecord {
+  return {
+    id: row.id,
+    model: row.model,
+    source: row.source as "litellm" | "manual",
+    thresholdInputTokens: row.thresholdInputTokens,
+    displayLabel: row.displayLabel,
+    inputPricePerMillion: row.inputPricePerMillion,
+    outputPricePerMillion: row.outputPricePerMillion,
+    cacheReadInputPricePerMillion: row.cacheReadInputPricePerMillion,
+    cacheWriteInputPricePerMillion: row.cacheWriteInputPricePerMillion,
+    note: row.note,
+    isActive: row.isActive,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 
@@ -635,6 +939,32 @@ export async function listBillingModelPrices(
 
   const total = totalRows[0]?.value ?? 0;
   const totalPages = total > 0 ? Math.ceil(total / pageSize) : 1;
+  const models = [...new Set(rows.map((row) => row.model))];
+  const tierRuleConditions = [
+    inArray(billingTierRules.model, models),
+    eq(billingTierRules.source, "litellm"),
+  ];
+  if (input.activeOnly === true) {
+    tierRuleConditions.push(eq(billingTierRules.isActive, true));
+  }
+  const syncedTierRuleRows =
+    models.length > 0
+      ? ((await db.query.billingTierRules.findMany({
+          where: and(...tierRuleConditions),
+          orderBy: [
+            asc(billingTierRules.model),
+            desc(billingTierRules.thresholdInputTokens),
+            asc(billingTierRules.id),
+          ],
+        })) ?? [])
+      : [];
+
+  const syncedTierRulesByModel = new Map<string, BillingTierRuleRecord[]>();
+  for (const row of syncedTierRuleRows) {
+    const existing = syncedTierRulesByModel.get(row.model) ?? [];
+    existing.push(toTierRuleRecord(row));
+    syncedTierRulesByModel.set(row.model, existing);
+  }
 
   return {
     items: rows.map((row) => ({
@@ -644,6 +974,9 @@ export async function listBillingModelPrices(
       outputPricePerMillion: row.outputPricePerMillion,
       cacheReadInputPricePerMillion: row.cacheReadInputPricePerMillion,
       cacheWriteInputPricePerMillion: row.cacheWriteInputPricePerMillion,
+      maxInputTokens: row.maxInputTokens,
+      maxOutputTokens: row.maxOutputTokens,
+      syncedTierRules: syncedTierRulesByModel.get(row.model) ?? [],
       source: "litellm",
       isActive: row.isActive,
       syncedAt: row.syncedAt,
@@ -654,4 +987,188 @@ export async function listBillingModelPrices(
     pageSize,
     totalPages,
   };
+}
+
+// ========== Billing Tier Rule CRUD ==========
+
+/**
+ * List all billing tier rules, optionally filtered by model or source.
+ */
+export async function listBillingTierRules(options?: {
+  model?: string;
+  source?: "litellm" | "manual";
+  activeOnly?: boolean;
+}): Promise<BillingTierRuleRecord[]> {
+  const conditions = [];
+  if (options?.model) {
+    conditions.push(eq(billingTierRules.model, options.model));
+  }
+  if (options?.source) {
+    conditions.push(eq(billingTierRules.source, options.source));
+  }
+  if (options?.activeOnly) {
+    conditions.push(eq(billingTierRules.isActive, true));
+  }
+
+  const rows = await db.query.billingTierRules.findMany({
+    where: conditions.length > 0 ? and(...conditions) : undefined,
+    orderBy: [
+      asc(billingTierRules.model),
+      asc(billingTierRules.source),
+      desc(billingTierRules.thresholdInputTokens),
+      asc(billingTierRules.id),
+    ],
+  });
+
+  return rows.map(toTierRuleRecord);
+}
+
+/**
+ * Create a manual billing tier rule for a model.
+ * Upserts on (model, source=manual, thresholdInputTokens).
+ */
+export async function createBillingTierRule(input: TierRuleInput): Promise<BillingTierRuleRecord> {
+  const normalizedModel = input.model.trim();
+  if (!normalizedModel) {
+    throw new BillingTierRuleValidationError();
+  }
+
+  const existing = await db.query.billingTierRules.findFirst({
+    where: and(
+      eq(billingTierRules.model, normalizedModel),
+      eq(billingTierRules.source, "manual"),
+      eq(billingTierRules.thresholdInputTokens, input.thresholdInputTokens)
+    ),
+  });
+
+  if (existing) {
+    throw new BillingTierRuleConflictError();
+  }
+
+  const now = new Date();
+  const [row] = await db
+    .insert(billingTierRules)
+    .values({
+      model: normalizedModel,
+      source: "manual",
+      thresholdInputTokens: input.thresholdInputTokens,
+      displayLabel: input.displayLabel ?? null,
+      inputPricePerMillion: input.inputPricePerMillion,
+      outputPricePerMillion: input.outputPricePerMillion,
+      cacheReadInputPricePerMillion: input.cacheReadInputPricePerMillion ?? null,
+      cacheWriteInputPricePerMillion: input.cacheWriteInputPricePerMillion ?? null,
+      note: input.note ?? null,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning();
+
+  return toTierRuleRecord(row);
+}
+
+/**
+ * Update a billing tier rule by identifier.
+ */
+export async function updateBillingTierRule(
+  id: string,
+  input: UpdateTierRuleInput
+): Promise<BillingTierRuleRecord | null> {
+  const existing = await db.query.billingTierRules.findFirst({
+    where: and(eq(billingTierRules.id, id), eq(billingTierRules.source, "manual")),
+  });
+
+  if (!existing) {
+    return null;
+  }
+
+  if (
+    input.thresholdInputTokens !== undefined &&
+    input.thresholdInputTokens !== existing.thresholdInputTokens
+  ) {
+    const conflictingRule = await db.query.billingTierRules.findFirst({
+      where: and(
+        eq(billingTierRules.model, existing.model),
+        eq(billingTierRules.source, "manual"),
+        eq(billingTierRules.thresholdInputTokens, input.thresholdInputTokens)
+      ),
+    });
+
+    if (conflictingRule && conflictingRule.id !== id) {
+      throw new BillingTierRuleConflictError();
+    }
+  }
+
+  const updateValues: Partial<typeof billingTierRules.$inferInsert> = {
+    updatedAt: new Date(),
+  };
+
+  if (input.thresholdInputTokens !== undefined) {
+    updateValues.thresholdInputTokens = input.thresholdInputTokens;
+  }
+  if (input.displayLabel !== undefined) {
+    updateValues.displayLabel = input.displayLabel;
+  }
+  if (input.inputPricePerMillion !== undefined) {
+    updateValues.inputPricePerMillion = input.inputPricePerMillion;
+  }
+  if (input.outputPricePerMillion !== undefined) {
+    updateValues.outputPricePerMillion = input.outputPricePerMillion;
+  }
+  if (input.cacheReadInputPricePerMillion !== undefined) {
+    updateValues.cacheReadInputPricePerMillion = input.cacheReadInputPricePerMillion;
+  }
+  if (input.cacheWriteInputPricePerMillion !== undefined) {
+    updateValues.cacheWriteInputPricePerMillion = input.cacheWriteInputPricePerMillion;
+  }
+  if (input.note !== undefined) {
+    updateValues.note = input.note;
+  }
+  if (input.isActive !== undefined) {
+    updateValues.isActive = input.isActive;
+  }
+
+  let row: typeof billingTierRules.$inferSelect | undefined;
+
+  try {
+    [row] = await db
+      .update(billingTierRules)
+      .set(updateValues)
+      .where(eq(billingTierRules.id, id))
+      .returning();
+  } catch (error) {
+    if (isBillingTierRuleUniqueConstraintError(error)) {
+      throw new BillingTierRuleConflictError();
+    }
+    throw error;
+  }
+
+  if (!row) return null;
+  return toTierRuleRecord(row);
+}
+
+function isBillingTierRuleUniqueConstraintError(error: unknown): boolean {
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: unknown }).code)
+      : null;
+  const message = error instanceof Error ? error.message : String(error);
+
+  return (
+    code === "23505" ||
+    message.includes(BILLING_TIER_RULES_UNIQUE_CONSTRAINT) ||
+    message.includes("UNIQUE constraint failed")
+  );
+}
+
+/**
+ * Delete a billing tier rule by identifier.
+ * Only manual rules can be deleted; litellm rules are managed by sync.
+ */
+export async function deleteBillingTierRule(id: string): Promise<boolean> {
+  const rows = await db
+    .delete(billingTierRules)
+    .where(and(eq(billingTierRules.id, id), eq(billingTierRules.source, "manual")))
+    .returning({ id: billingTierRules.id });
+  return rows.length > 0;
 }

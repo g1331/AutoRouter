@@ -486,6 +486,11 @@ export interface RequestLogResponse {
   base_output_price_per_million?: number | null;
   base_cache_read_input_price_per_million?: number | null;
   base_cache_write_input_price_per_million?: number | null;
+  matched_rule_type?: "flat" | "tiered" | null;
+  matched_rule_display_label?: string | null;
+  applied_tier_threshold?: number | null;
+  model_max_input_tokens?: number | null;
+  model_max_output_tokens?: number | null;
   input_multiplier?: number | null;
   output_multiplier?: number | null;
   billed_input_tokens?: number | null;
@@ -593,6 +598,9 @@ export interface BillingModelPrice {
   output_price_per_million: number;
   cache_read_input_price_per_million: number | null;
   cache_write_input_price_per_million: number | null;
+  max_input_tokens: number | null;
+  max_output_tokens: number | null;
+  synced_tier_rules: BillingTierRule[];
   source: "litellm";
   is_active: boolean;
   synced_at: string;
@@ -600,6 +608,49 @@ export interface BillingModelPrice {
 }
 
 export type PaginatedBillingModelPricesResponse = PaginatedResponse<BillingModelPrice>;
+
+export interface BillingTierRule {
+  id: string;
+  model: string;
+  source: "litellm" | "manual";
+  threshold_input_tokens: number;
+  display_label: string | null;
+  input_price_per_million: number;
+  output_price_per_million: number;
+  cache_read_input_price_per_million: number | null;
+  cache_write_input_price_per_million: number | null;
+  note: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BillingTierRulesResponse {
+  items: BillingTierRule[];
+  total: number;
+}
+
+export interface BillingCreateTierRule {
+  model: string;
+  threshold_input_tokens: number;
+  display_label?: string | null;
+  input_price_per_million: number;
+  output_price_per_million: number;
+  cache_read_input_price_per_million?: number | null;
+  cache_write_input_price_per_million?: number | null;
+  note?: string | null;
+}
+
+export interface BillingUpdateTierRule {
+  threshold_input_tokens?: number;
+  display_label?: string | null;
+  input_price_per_million?: number;
+  output_price_per_million?: number;
+  cache_read_input_price_per_million?: number | null;
+  cache_write_input_price_per_million?: number | null;
+  note?: string | null;
+  is_active?: boolean;
+}
 
 export interface UpstreamBillingMultiplier {
   id: string;
@@ -637,6 +688,11 @@ export interface RecentBillingDetail {
   base_output_price_per_million: number | null;
   base_cache_read_input_price_per_million: number | null;
   base_cache_write_input_price_per_million: number | null;
+  matched_rule_type: "flat" | "tiered" | null;
+  matched_rule_display_label: string | null;
+  applied_tier_threshold: number | null;
+  model_max_input_tokens: number | null;
+  model_max_output_tokens: number | null;
   input_multiplier: number | null;
   output_multiplier: number | null;
   cache_read_cost: number | null;

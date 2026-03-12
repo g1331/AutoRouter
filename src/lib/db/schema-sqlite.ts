@@ -241,6 +241,8 @@ export const billingModelPrices = sqliteTable(
     outputPricePerMillion: real("output_price_per_million").notNull(),
     cacheReadInputPricePerMillion: real("cache_read_input_price_per_million"),
     cacheWriteInputPricePerMillion: real("cache_write_input_price_per_million"),
+    maxInputTokens: integer("max_input_tokens"),
+    maxOutputTokens: integer("max_output_tokens"),
     source: text("source").notNull(), // openrouter | litellm
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
     syncedAt: integer("synced_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
@@ -273,6 +275,41 @@ export const billingManualPriceOverrides = sqliteTable(
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },
   (table) => [index("billing_manual_price_overrides_model_idx").on(table.model)]
+);
+
+/**
+ * Tiered pricing rules for models with context-length-dependent pricing.
+ * When a request's prompt token count exceeds threshold_input_tokens,
+ * the tier's prices replace the base prices for cost calculation.
+ */
+export const billingTierRules = sqliteTable(
+  "billing_tier_rules",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    model: text("model").notNull(),
+    source: text("source").notNull(), // litellm | manual
+    thresholdInputTokens: integer("threshold_input_tokens").notNull(),
+    displayLabel: text("display_label"),
+    inputPricePerMillion: real("input_price_per_million").notNull(),
+    outputPricePerMillion: real("output_price_per_million").notNull(),
+    cacheReadInputPricePerMillion: real("cache_read_input_price_per_million"),
+    cacheWriteInputPricePerMillion: real("cache_write_input_price_per_million"),
+    note: text("note"),
+    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("billing_tier_rules_model_idx").on(table.model),
+    index("billing_tier_rules_source_idx").on(table.source),
+    unique("uq_billing_tier_rules_model_source_threshold").on(
+      table.model,
+      table.source,
+      table.thresholdInputTokens
+    ),
+  ]
 );
 
 /**
@@ -317,6 +354,11 @@ export const requestBillingSnapshots = sqliteTable(
     baseOutputPricePerMillion: real("base_output_price_per_million"),
     baseCacheReadInputPricePerMillion: real("base_cache_read_input_price_per_million"),
     baseCacheWriteInputPricePerMillion: real("base_cache_write_input_price_per_million"),
+    matchedRuleType: text("matched_rule_type"),
+    matchedRuleDisplayLabel: text("matched_rule_display_label"),
+    appliedTierThreshold: integer("applied_tier_threshold"),
+    modelMaxInputTokens: integer("model_max_input_tokens"),
+    modelMaxOutputTokens: integer("model_max_output_tokens"),
     inputMultiplier: real("input_multiplier"),
     outputMultiplier: real("output_multiplier"),
     promptTokens: integer("prompt_tokens").notNull().default(0),

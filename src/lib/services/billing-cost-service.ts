@@ -133,6 +133,11 @@ async function upsertUnbilledSnapshot(
       baseOutputPricePerMillion: null,
       baseCacheReadInputPricePerMillion: null,
       baseCacheWriteInputPricePerMillion: null,
+      matchedRuleType: null,
+      matchedRuleDisplayLabel: null,
+      appliedTierThreshold: null,
+      modelMaxInputTokens: null,
+      modelMaxOutputTokens: null,
       inputMultiplier: null,
       outputMultiplier: null,
       promptTokens: usage.promptTokens,
@@ -160,6 +165,11 @@ async function upsertUnbilledSnapshot(
         baseOutputPricePerMillion: null,
         baseCacheReadInputPricePerMillion: null,
         baseCacheWriteInputPricePerMillion: null,
+        matchedRuleType: null,
+        matchedRuleDisplayLabel: null,
+        appliedTierThreshold: null,
+        modelMaxInputTokens: null,
+        modelMaxOutputTokens: null,
         inputMultiplier: null,
         outputMultiplier: null,
         promptTokens: usage.promptTokens,
@@ -203,7 +213,7 @@ function resolveBilledInputTokens(
 function calculateCost(
   price: BillingResolvedPrice,
   usage: NormalizedBillingUsage,
-  upstreamProviderType: string | null,
+  billedInputTokens: number,
   inputMultiplier: number,
   outputMultiplier: number
 ): {
@@ -214,7 +224,6 @@ function calculateCost(
   cacheWriteCost: number;
   billedInputTokens: number;
 } {
-  const billedInputTokens = resolveBilledInputTokens(usage, upstreamProviderType);
   const cacheReadPricePerMillion =
     price.cacheReadInputPricePerMillion ?? price.inputPricePerMillion;
   const cacheWritePricePerMillion =
@@ -254,7 +263,9 @@ export async function calculateAndPersistRequestBillingSnapshot(
     return upsertUnbilledSnapshot(input, "usage_missing");
   }
 
-  const resolvedPrice = await resolveBillingModelPrice(model);
+  const providerType = getProviderTypeForModel(model);
+  const billedInputTokens = resolveBilledInputTokens(usage, providerType);
+  const resolvedPrice = await resolveBillingModelPrice(model, billedInputTokens);
   if (!resolvedPrice) {
     return upsertUnbilledSnapshot({ ...input, model }, "price_not_found");
   }
@@ -271,8 +282,13 @@ export async function calculateAndPersistRequestBillingSnapshot(
 
   const inputMultiplier = upstream?.billingInputMultiplier ?? 1;
   const outputMultiplier = upstream?.billingOutputMultiplier ?? 1;
-  const providerType = getProviderTypeForModel(model);
-  const cost = calculateCost(resolvedPrice, usage, providerType, inputMultiplier, outputMultiplier);
+  const cost = calculateCost(
+    resolvedPrice,
+    usage,
+    billedInputTokens,
+    inputMultiplier,
+    outputMultiplier
+  );
   const now = input.billedAt ?? new Date();
   const previousSnapshot = await db.query.requestBillingSnapshots.findFirst({
     where: eq(requestBillingSnapshots.requestLogId, input.requestLogId),
@@ -297,6 +313,11 @@ export async function calculateAndPersistRequestBillingSnapshot(
       baseOutputPricePerMillion: resolvedPrice.outputPricePerMillion,
       baseCacheReadInputPricePerMillion: resolvedPrice.cacheReadInputPricePerMillion,
       baseCacheWriteInputPricePerMillion: resolvedPrice.cacheWriteInputPricePerMillion,
+      matchedRuleType: resolvedPrice.matchedRuleType,
+      matchedRuleDisplayLabel: resolvedPrice.matchedRuleDisplayLabel,
+      appliedTierThreshold: resolvedPrice.appliedTierThreshold,
+      modelMaxInputTokens: resolvedPrice.modelMaxInputTokens,
+      modelMaxOutputTokens: resolvedPrice.modelMaxOutputTokens,
       inputMultiplier,
       outputMultiplier,
       promptTokens: cost.billedInputTokens,
@@ -324,6 +345,11 @@ export async function calculateAndPersistRequestBillingSnapshot(
         baseOutputPricePerMillion: resolvedPrice.outputPricePerMillion,
         baseCacheReadInputPricePerMillion: resolvedPrice.cacheReadInputPricePerMillion,
         baseCacheWriteInputPricePerMillion: resolvedPrice.cacheWriteInputPricePerMillion,
+        matchedRuleType: resolvedPrice.matchedRuleType,
+        matchedRuleDisplayLabel: resolvedPrice.matchedRuleDisplayLabel,
+        appliedTierThreshold: resolvedPrice.appliedTierThreshold,
+        modelMaxInputTokens: resolvedPrice.modelMaxInputTokens,
+        modelMaxOutputTokens: resolvedPrice.modelMaxOutputTokens,
         inputMultiplier,
         outputMultiplier,
         promptTokens: cost.billedInputTokens,

@@ -55,7 +55,7 @@ describe("billing-cost-service", () => {
 
   it("marks request as unbilled when model is missing", async () => {
     const { calculateAndPersistRequestBillingSnapshot } =
-      await import("@/lib/services/billing-cost-service");
+      await import("../../../src/lib/services/billing-cost-service");
 
     const result = await calculateAndPersistRequestBillingSnapshot({
       requestLogId: "log-1",
@@ -79,13 +79,18 @@ describe("billing-cost-service", () => {
       expect.objectContaining({
         billingStatus: "unbilled",
         unbillableReason: "model_missing",
+        matchedRuleType: null,
+        matchedRuleDisplayLabel: null,
+        appliedTierThreshold: null,
+        modelMaxInputTokens: null,
+        modelMaxOutputTokens: null,
       })
     );
   });
 
   it("marks request as unbilled when usage is missing", async () => {
     const { calculateAndPersistRequestBillingSnapshot } =
-      await import("@/lib/services/billing-cost-service");
+      await import("../../../src/lib/services/billing-cost-service");
 
     const result = await calculateAndPersistRequestBillingSnapshot({
       requestLogId: "log-2",
@@ -110,9 +115,10 @@ describe("billing-cost-service", () => {
   });
 
   it("marks request as unbilled when model price is unresolved", async () => {
-    const { resolveBillingModelPrice } = await import("@/lib/services/billing-price-service");
+    const { resolveBillingModelPrice } =
+      await import("../../../src/lib/services/billing-price-service");
     const { calculateAndPersistRequestBillingSnapshot } =
-      await import("@/lib/services/billing-cost-service");
+      await import("../../../src/lib/services/billing-cost-service");
     vi.mocked(resolveBillingModelPrice).mockResolvedValueOnce(null);
 
     const result = await calculateAndPersistRequestBillingSnapshot({
@@ -136,9 +142,10 @@ describe("billing-cost-service", () => {
   });
 
   it("calculates billed cost with upstream multipliers for stream final usage", async () => {
-    const { resolveBillingModelPrice } = await import("@/lib/services/billing-price-service");
+    const { resolveBillingModelPrice } =
+      await import("../../../src/lib/services/billing-price-service");
     const { calculateAndPersistRequestBillingSnapshot } =
-      await import("@/lib/services/billing-cost-service");
+      await import("../../../src/lib/services/billing-cost-service");
 
     vi.mocked(resolveBillingModelPrice).mockResolvedValueOnce({
       model: "gpt-4.1",
@@ -147,6 +154,11 @@ describe("billing-cost-service", () => {
       outputPricePerMillion: 8,
       cacheReadInputPricePerMillion: null,
       cacheWriteInputPricePerMillion: null,
+      matchedRuleType: "flat",
+      matchedRuleDisplayLabel: null,
+      appliedTierThreshold: null,
+      modelMaxInputTokens: 200000,
+      modelMaxOutputTokens: 8192,
     });
     upstreamFindFirstMock.mockResolvedValueOnce({
       billingInputMultiplier: 1.2,
@@ -181,9 +193,10 @@ describe("billing-cost-service", () => {
   });
 
   it("applies quota delta after successful billed upsert", async () => {
-    const { resolveBillingModelPrice } = await import("@/lib/services/billing-price-service");
+    const { resolveBillingModelPrice } =
+      await import("../../../src/lib/services/billing-price-service");
     const { calculateAndPersistRequestBillingSnapshot } =
-      await import("@/lib/services/billing-cost-service");
+      await import("../../../src/lib/services/billing-cost-service");
 
     vi.mocked(resolveBillingModelPrice).mockResolvedValueOnce({
       model: "gpt-4.1",
@@ -192,6 +205,11 @@ describe("billing-cost-service", () => {
       outputPricePerMillion: 30,
       cacheReadInputPricePerMillion: null,
       cacheWriteInputPricePerMillion: null,
+      matchedRuleType: "flat",
+      matchedRuleDisplayLabel: null,
+      appliedTierThreshold: null,
+      modelMaxInputTokens: 200000,
+      modelMaxOutputTokens: 8192,
     });
     upstreamFindFirstMock.mockResolvedValueOnce({
       billingInputMultiplier: 1,
@@ -212,7 +230,7 @@ describe("billing-cost-service", () => {
 
   it("does not apply quota delta for unbilled requests", async () => {
     const { calculateAndPersistRequestBillingSnapshot } =
-      await import("@/lib/services/billing-cost-service");
+      await import("../../../src/lib/services/billing-cost-service");
 
     await calculateAndPersistRequestBillingSnapshot({
       requestLogId: "log-unbilled",
@@ -227,7 +245,7 @@ describe("billing-cost-service", () => {
 
   it("rolls back previous billed cost when snapshot is overwritten as unbilled", async () => {
     const { calculateAndPersistRequestBillingSnapshot } =
-      await import("@/lib/services/billing-cost-service");
+      await import("../../../src/lib/services/billing-cost-service");
 
     snapshotFindFirstMock.mockResolvedValueOnce({
       upstreamId: "up-rollback",
@@ -247,9 +265,10 @@ describe("billing-cost-service", () => {
   });
 
   it("does not overcount quota on billed upsert retry", async () => {
-    const { resolveBillingModelPrice } = await import("@/lib/services/billing-price-service");
+    const { resolveBillingModelPrice } =
+      await import("../../../src/lib/services/billing-price-service");
     const { calculateAndPersistRequestBillingSnapshot } =
-      await import("@/lib/services/billing-cost-service");
+      await import("../../../src/lib/services/billing-cost-service");
 
     vi.mocked(resolveBillingModelPrice).mockResolvedValueOnce({
       model: "gpt-4.1",
@@ -258,6 +277,11 @@ describe("billing-cost-service", () => {
       outputPricePerMillion: 30,
       cacheReadInputPricePerMillion: null,
       cacheWriteInputPricePerMillion: null,
+      matchedRuleType: "flat",
+      matchedRuleDisplayLabel: null,
+      appliedTierThreshold: null,
+      modelMaxInputTokens: 200000,
+      modelMaxOutputTokens: 8192,
     });
     upstreamFindFirstMock.mockResolvedValueOnce({
       billingInputMultiplier: 1,
@@ -281,9 +305,10 @@ describe("billing-cost-service", () => {
   });
 
   it("keeps cache read/write billing mapping consistent", async () => {
-    const { resolveBillingModelPrice } = await import("@/lib/services/billing-price-service");
+    const { resolveBillingModelPrice } =
+      await import("../../../src/lib/services/billing-price-service");
     const { calculateAndPersistRequestBillingSnapshot } =
-      await import("@/lib/services/billing-cost-service");
+      await import("../../../src/lib/services/billing-cost-service");
 
     vi.mocked(resolveBillingModelPrice).mockResolvedValueOnce({
       model: "gpt-4.1",
@@ -292,6 +317,11 @@ describe("billing-cost-service", () => {
       outputPricePerMillion: 8,
       cacheReadInputPricePerMillion: 1,
       cacheWriteInputPricePerMillion: 3,
+      matchedRuleType: "flat",
+      matchedRuleDisplayLabel: null,
+      appliedTierThreshold: null,
+      modelMaxInputTokens: 200000,
+      modelMaxOutputTokens: 8192,
     });
     upstreamFindFirstMock.mockResolvedValueOnce({
       billingInputMultiplier: 1,
@@ -322,6 +352,102 @@ describe("billing-cost-service", () => {
         cacheWriteTokens: 300,
         cacheReadCost: expect.closeTo(0.0002, 8),
         cacheWriteCost: expect.closeTo(0.0009, 8),
+      })
+    );
+    expect(resolveBillingModelPrice).toHaveBeenCalledWith("gpt-4.1", 500);
+  });
+
+  it("uses provider-normalized billed input tokens for threshold resolution", async () => {
+    const { resolveBillingModelPrice } =
+      await import("../../../src/lib/services/billing-price-service");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("../../../src/lib/services/billing-cost-service");
+
+    vi.mocked(resolveBillingModelPrice).mockResolvedValueOnce({
+      model: "claude-3-5-sonnet",
+      source: "litellm",
+      inputPricePerMillion: 3,
+      outputPricePerMillion: 15,
+      cacheReadInputPricePerMillion: null,
+      cacheWriteInputPricePerMillion: null,
+      matchedRuleType: "flat",
+      matchedRuleDisplayLabel: null,
+      appliedTierThreshold: null,
+      modelMaxInputTokens: 200000,
+      modelMaxOutputTokens: 8192,
+    });
+    upstreamFindFirstMock.mockResolvedValueOnce({
+      billingInputMultiplier: 1,
+      billingOutputMultiplier: 1,
+    });
+
+    await calculateAndPersistRequestBillingSnapshot({
+      requestLogId: "log-anthropic-billed-input",
+      apiKeyId: "key-1",
+      upstreamId: "up-1",
+      model: "claude-3-5-sonnet",
+      usage: {
+        promptTokens: 500,
+        completionTokens: 100,
+        totalTokens: 600,
+        cacheReadTokens: 200,
+        cacheWriteTokens: 300,
+      },
+    });
+
+    expect(resolveBillingModelPrice).toHaveBeenCalledWith("claude-3-5-sonnet", 0);
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        promptTokens: 0,
+      })
+    );
+  });
+
+  it("persists the matched tier threshold when billing resolves from a tier rule", async () => {
+    const { resolveBillingModelPrice } =
+      await import("../../../src/lib/services/billing-price-service");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("../../../src/lib/services/billing-cost-service");
+
+    vi.mocked(resolveBillingModelPrice).mockResolvedValueOnce({
+      model: "gpt-4.1",
+      source: "litellm",
+      inputPricePerMillion: 5,
+      outputPricePerMillion: 15,
+      cacheReadInputPricePerMillion: null,
+      cacheWriteInputPricePerMillion: null,
+      matchedRuleType: "tiered",
+      matchedRuleDisplayLabel: ">128K context",
+      appliedTierThreshold: 128000,
+      modelMaxInputTokens: 200000,
+      modelMaxOutputTokens: 8192,
+    });
+    upstreamFindFirstMock.mockResolvedValueOnce({
+      billingInputMultiplier: 1,
+      billingOutputMultiplier: 1,
+    });
+
+    const result = await calculateAndPersistRequestBillingSnapshot({
+      requestLogId: "log-tier",
+      apiKeyId: "key-1",
+      upstreamId: "up-1",
+      model: "gpt-4.1",
+      usage: {
+        promptTokens: 150000,
+        completionTokens: 50,
+        totalTokens: 150050,
+      },
+    });
+
+    expect(result.status).toBe("billed");
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        priceSource: "litellm",
+        matchedRuleType: "tiered",
+        matchedRuleDisplayLabel: ">128K context",
+        appliedTierThreshold: 128000,
+        modelMaxInputTokens: 200000,
+        modelMaxOutputTokens: 8192,
       })
     );
   });

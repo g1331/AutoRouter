@@ -71,6 +71,9 @@ tests/fixtures/
 .security-key
 logs/security/
 
+# opencode
+.sisyphus/
+
 # Playwright artifacts
 playwright-report/
 test-results/

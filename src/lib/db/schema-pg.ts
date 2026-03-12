@@ -233,6 +233,8 @@ export const billingModelPrices = pgTable(
     outputPricePerMillion: doublePrecision("output_price_per_million").notNull(),
     cacheReadInputPricePerMillion: doublePrecision("cache_read_input_price_per_million"),
     cacheWriteInputPricePerMillion: doublePrecision("cache_write_input_price_per_million"),
+    maxInputTokens: integer("max_input_tokens"),
+    maxOutputTokens: integer("max_output_tokens"),
     source: varchar("source", { length: 32 }).notNull(), // openrouter | litellm
     isActive: boolean("is_active").notNull().default(true),
     syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
@@ -263,6 +265,39 @@ export const billingManualPriceOverrides = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index("billing_manual_price_overrides_model_idx").on(table.model)]
+);
+
+/**
+ * Tiered pricing rules for models with context-length-dependent pricing.
+ * When a request's prompt token count exceeds threshold_input_tokens,
+ * the tier's prices replace the base prices for cost calculation.
+ */
+export const billingTierRules = pgTable(
+  "billing_tier_rules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    model: varchar("model", { length: 255 }).notNull(),
+    source: varchar("source", { length: 32 }).notNull(), // litellm | manual
+    thresholdInputTokens: integer("threshold_input_tokens").notNull(),
+    displayLabel: varchar("display_label", { length: 255 }),
+    inputPricePerMillion: doublePrecision("input_price_per_million").notNull(),
+    outputPricePerMillion: doublePrecision("output_price_per_million").notNull(),
+    cacheReadInputPricePerMillion: doublePrecision("cache_read_input_price_per_million"),
+    cacheWriteInputPricePerMillion: doublePrecision("cache_write_input_price_per_million"),
+    note: text("note"),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("billing_tier_rules_model_idx").on(table.model),
+    index("billing_tier_rules_source_idx").on(table.source),
+    unique("uq_billing_tier_rules_model_source_threshold").on(
+      table.model,
+      table.source,
+      table.thresholdInputTokens
+    ),
+  ]
 );
 
 /**
@@ -303,6 +338,11 @@ export const requestBillingSnapshots = pgTable(
     baseOutputPricePerMillion: doublePrecision("base_output_price_per_million"),
     baseCacheReadInputPricePerMillion: doublePrecision("base_cache_read_input_price_per_million"),
     baseCacheWriteInputPricePerMillion: doublePrecision("base_cache_write_input_price_per_million"),
+    matchedRuleType: varchar("matched_rule_type", { length: 16 }),
+    matchedRuleDisplayLabel: varchar("matched_rule_display_label", { length: 255 }),
+    appliedTierThreshold: integer("applied_tier_threshold"),
+    modelMaxInputTokens: integer("model_max_input_tokens"),
+    modelMaxOutputTokens: integer("model_max_output_tokens"),
     inputMultiplier: doublePrecision("input_multiplier"),
     outputMultiplier: doublePrecision("output_multiplier"),
     promptTokens: integer("prompt_tokens").notNull().default(0),

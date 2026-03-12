@@ -174,6 +174,11 @@ export interface RequestLogResponse {
   baseOutputPricePerMillion?: number | null;
   baseCacheReadInputPricePerMillion?: number | null;
   baseCacheWriteInputPricePerMillion?: number | null;
+  matchedRuleType?: "flat" | "tiered" | null;
+  matchedRuleDisplayLabel?: string | null;
+  appliedTierThreshold?: number | null;
+  modelMaxInputTokens?: number | null;
+  modelMaxOutputTokens?: number | null;
   inputMultiplier?: number | null;
   outputMultiplier?: number | null;
   billedInputTokens?: number | null;
@@ -716,6 +721,15 @@ export async function listRequestLogs(
           baseCacheReadInputPricePerMillion: log.billingSnapshot.baseCacheReadInputPricePerMillion,
           baseCacheWriteInputPricePerMillion:
             log.billingSnapshot.baseCacheWriteInputPricePerMillion,
+          matchedRuleType:
+            log.billingSnapshot.matchedRuleType === "flat" ||
+            log.billingSnapshot.matchedRuleType === "tiered"
+              ? log.billingSnapshot.matchedRuleType
+              : null,
+          matchedRuleDisplayLabel: log.billingSnapshot.matchedRuleDisplayLabel,
+          appliedTierThreshold: log.billingSnapshot.appliedTierThreshold,
+          modelMaxInputTokens: log.billingSnapshot.modelMaxInputTokens,
+          modelMaxOutputTokens: log.billingSnapshot.modelMaxOutputTokens,
           inputMultiplier: log.billingSnapshot.inputMultiplier,
           outputMultiplier: log.billingSnapshot.outputMultiplier,
           billedInputTokens: log.billingSnapshot.promptTokens,

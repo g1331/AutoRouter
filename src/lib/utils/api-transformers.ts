@@ -42,6 +42,7 @@ import type {
   BillingUnresolvedModel,
   BillingModelPriceCatalogItem,
   PaginatedBillingModelPrices,
+  BillingTierRuleRecord,
 } from "@/lib/services/billing-price-service";
 
 // ========== Helper Utilities ==========
@@ -356,6 +357,11 @@ export interface RequestLogApiResponse {
   base_output_price_per_million?: number | null;
   base_cache_read_input_price_per_million?: number | null;
   base_cache_write_input_price_per_million?: number | null;
+  matched_rule_type?: "flat" | "tiered" | null;
+  matched_rule_display_label?: string | null;
+  applied_tier_threshold?: number | null;
+  model_max_input_tokens?: number | null;
+  model_max_output_tokens?: number | null;
   input_multiplier?: number | null;
   output_multiplier?: number | null;
   billed_input_tokens?: number | null;
@@ -641,6 +647,11 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
     log.baseOutputPricePerMillion !== undefined ||
     log.baseCacheReadInputPricePerMillion !== undefined ||
     log.baseCacheWriteInputPricePerMillion !== undefined ||
+    log.matchedRuleType !== undefined ||
+    log.matchedRuleDisplayLabel !== undefined ||
+    log.appliedTierThreshold !== undefined ||
+    log.modelMaxInputTokens !== undefined ||
+    log.modelMaxOutputTokens !== undefined ||
     log.inputMultiplier !== undefined ||
     log.outputMultiplier !== undefined ||
     log.billedInputTokens !== undefined ||
@@ -708,6 +719,11 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
           base_output_price_per_million: log.baseOutputPricePerMillion,
           base_cache_read_input_price_per_million: log.baseCacheReadInputPricePerMillion,
           base_cache_write_input_price_per_million: log.baseCacheWriteInputPricePerMillion,
+          matched_rule_type: log.matchedRuleType,
+          matched_rule_display_label: log.matchedRuleDisplayLabel,
+          applied_tier_threshold: log.appliedTierThreshold,
+          model_max_input_tokens: log.modelMaxInputTokens,
+          model_max_output_tokens: log.modelMaxOutputTokens,
           input_multiplier: log.inputMultiplier,
           output_multiplier: log.outputMultiplier,
           billed_input_tokens: log.billedInputTokens,
@@ -803,6 +819,11 @@ export interface RecentBillingDetailApiResponse {
   base_output_price_per_million: number | null;
   base_cache_read_input_price_per_million: number | null;
   base_cache_write_input_price_per_million: number | null;
+  matched_rule_type: "flat" | "tiered" | null;
+  matched_rule_display_label: string | null;
+  applied_tier_threshold: number | null;
+  model_max_input_tokens: number | null;
+  model_max_output_tokens: number | null;
   input_multiplier: number | null;
   output_multiplier: number | null;
   cache_read_cost: number | null;
@@ -818,10 +839,49 @@ export interface BillingModelPriceApiResponse {
   output_price_per_million: number;
   cache_read_input_price_per_million: number | null;
   cache_write_input_price_per_million: number | null;
+  max_input_tokens: number | null;
+  max_output_tokens: number | null;
+  synced_tier_rules: BillingTierRuleApiResponse[];
   source: "litellm";
   is_active: boolean;
   synced_at: string;
   updated_at: string;
+}
+
+export interface BillingTierRuleApiResponse {
+  id: string;
+  model: string;
+  source: "litellm" | "manual";
+  threshold_input_tokens: number;
+  display_label: string | null;
+  input_price_per_million: number;
+  output_price_per_million: number;
+  cache_read_input_price_per_million: number | null;
+  cache_write_input_price_per_million: number | null;
+  note: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export function transformBillingTierRuleToApi(
+  item: BillingTierRuleRecord
+): BillingTierRuleApiResponse {
+  return {
+    id: item.id,
+    model: item.model,
+    source: item.source,
+    threshold_input_tokens: item.thresholdInputTokens,
+    display_label: item.displayLabel,
+    input_price_per_million: item.inputPricePerMillion,
+    output_price_per_million: item.outputPricePerMillion,
+    cache_read_input_price_per_million: item.cacheReadInputPricePerMillion,
+    cache_write_input_price_per_million: item.cacheWriteInputPricePerMillion,
+    note: item.note,
+    is_active: item.isActive,
+    created_at: item.createdAt.toISOString(),
+    updated_at: item.updatedAt.toISOString(),
+  };
 }
 
 export function transformBillingSyncToApi(sync: BillingSyncSummary): BillingSyncApiResponse {
@@ -909,6 +969,11 @@ export function transformRecentBillingDetailToApi(
     base_output_price_per_million: item.baseOutputPricePerMillion,
     base_cache_read_input_price_per_million: item.baseCacheReadInputPricePerMillion,
     base_cache_write_input_price_per_million: item.baseCacheWriteInputPricePerMillion,
+    matched_rule_type: item.matchedRuleType,
+    matched_rule_display_label: item.matchedRuleDisplayLabel,
+    applied_tier_threshold: item.appliedTierThreshold,
+    model_max_input_tokens: item.modelMaxInputTokens,
+    model_max_output_tokens: item.modelMaxOutputTokens,
     input_multiplier: item.inputMultiplier,
     output_multiplier: item.outputMultiplier,
     cache_read_cost: item.cacheReadCost,
@@ -928,6 +993,9 @@ export function transformBillingModelPriceToApi(
     output_price_per_million: item.outputPricePerMillion,
     cache_read_input_price_per_million: item.cacheReadInputPricePerMillion,
     cache_write_input_price_per_million: item.cacheWriteInputPricePerMillion,
+    max_input_tokens: item.maxInputTokens,
+    max_output_tokens: item.maxOutputTokens,
+    synced_tier_rules: item.syncedTierRules.map(transformBillingTierRuleToApi),
     source: item.source,
     is_active: item.isActive,
     synced_at: item.syncedAt.toISOString(),

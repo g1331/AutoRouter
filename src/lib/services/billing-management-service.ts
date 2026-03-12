@@ -45,6 +45,11 @@ export interface RecentBillingDetailItem {
   baseOutputPricePerMillion: number | null;
   baseCacheReadInputPricePerMillion: number | null;
   baseCacheWriteInputPricePerMillion: number | null;
+  matchedRuleType: "flat" | "tiered" | null;
+  matchedRuleDisplayLabel: string | null;
+  appliedTierThreshold: number | null;
+  modelMaxInputTokens: number | null;
+  modelMaxOutputTokens: number | null;
   inputMultiplier: number | null;
   outputMultiplier: number | null;
   cacheReadCost: number | null;
@@ -204,6 +209,14 @@ function toRecentBillingDetailItem(
     baseOutputPricePerMillion: row.baseOutputPricePerMillion,
     baseCacheReadInputPricePerMillion: row.baseCacheReadInputPricePerMillion,
     baseCacheWriteInputPricePerMillion: row.baseCacheWriteInputPricePerMillion,
+    matchedRuleType:
+      row.matchedRuleType === "flat" || row.matchedRuleType === "tiered"
+        ? row.matchedRuleType
+        : null,
+    matchedRuleDisplayLabel: row.matchedRuleDisplayLabel,
+    appliedTierThreshold: row.appliedTierThreshold,
+    modelMaxInputTokens: row.modelMaxInputTokens,
+    modelMaxOutputTokens: row.modelMaxOutputTokens,
     inputMultiplier: row.inputMultiplier,
     outputMultiplier: row.outputMultiplier,
     cacheReadCost: row.cacheReadCost,
