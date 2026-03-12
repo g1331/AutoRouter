@@ -281,18 +281,18 @@ test.describe("Billing tier-aware verification", () => {
 
     await page.goto("/en/system/billing");
 
-    await expect(page.getByText("Tiered Billing Rules")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Model Price Catalog" })).toBeVisible();
     const gpt41Row = page.locator("tr").filter({ hasText: "gpt-4.1" }).first();
     await expect(gpt41Row).toContainText("128K tokens");
     // Assert window metadata is displayed (max_input_tokens / max_output_tokens)
     await expect(gpt41Row).toContainText("128,000 / 4,096");
 
-    await page.getByRole("button", { name: "Add Tier Rule" }).click();
-    await page.getByPlaceholder("e.g. gemini-2.0-flash").fill("gap-model");
-    await page.getByPlaceholder("e.g. 128000").fill("64000");
-    await page.getByPlaceholder("Input Price / 1M Tokens (USD)").last().fill("7.5");
-    await page.getByPlaceholder("Output Price / 1M Tokens (USD)").last().fill("21");
-    await page.getByRole("button", { name: "Save Override" }).last().click();
+    await page.getByTestId("billing-tier-rule-add-button").click();
+    await page.getByTestId("billing-tier-rule-model-input").fill("gap-model");
+    await page.getByTestId("billing-tier-rule-threshold-input").fill("64000");
+    await page.getByTestId("billing-tier-rule-input-price-input").fill("7.5");
+    await page.getByTestId("billing-tier-rule-output-price-input").fill("21");
+    await page.getByTestId("billing-tier-rule-save-button").click();
 
     await expect(page.getByText("Tier rule created")).toBeVisible();
     await expect(page.locator("tr").filter({ hasText: "gap-model" }).first()).toContainText(
@@ -328,30 +328,32 @@ test.describe("Billing tier-aware verification", () => {
 
     await page.goto("/zh-CN/system/billing");
 
-    await expect(page.getByText("阶梯计费规则")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "模型价格目录" })).toBeVisible();
     await expect(page.locator("tr").filter({ hasText: "gap-model" }).first()).toContainText(
       "64K Token"
     );
 
-    await page.getByRole("button", { name: "添加阶梯规则" }).click();
-    await page.getByPlaceholder("例如 gemini-2.0-flash").fill("gap-model");
-    await page.getByPlaceholder("例如 128000").fill("64000");
-    await page.getByPlaceholder("输入单价 / 百万 Tokens (USD)").last().fill("7.5");
-    await page.getByPlaceholder("输出单价 / 百万 Tokens (USD)").last().fill("21");
-    await page.getByRole("button", { name: "保存覆盖价格" }).last().click();
+    await page.getByTestId("billing-tier-rule-add-button").click();
+    await page.getByTestId("billing-tier-rule-model-input").fill("gap-model");
+    await page.getByTestId("billing-tier-rule-threshold-input").fill("64000");
+    await page.getByTestId("billing-tier-rule-input-price-input").fill("7.5");
+    await page.getByTestId("billing-tier-rule-output-price-input").fill("21");
+    await page.getByTestId("billing-tier-rule-save-button").click();
 
     await expect(page.getByText("该模型已存在相同阈值的手动阶梯规则")).toBeVisible();
-    await expect(
-      page
-        .locator("p")
-        .filter({ hasText: /^手动$/ })
-        .first()
-    ).toBeVisible();
-    await expect(
-      page
-        .locator("p")
-        .filter({ hasText: /^同步$/ })
-        .first()
-    ).toBeVisible();
+    await page
+      .locator("tr")
+      .filter({ hasText: "gap-model" })
+      .first()
+      .getByRole("button", { name: "展开阶梯规则" })
+      .click();
+    await page
+      .locator("tr")
+      .filter({ hasText: "gpt-4.1" })
+      .first()
+      .getByRole("button", { name: "展开阶梯规则" })
+      .click();
+    await expect(page.getByRole("cell", { name: "手动", exact: true })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "同步", exact: true })).toBeVisible();
   });
 });

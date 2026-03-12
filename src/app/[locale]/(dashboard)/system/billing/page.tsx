@@ -1099,6 +1099,7 @@ export default function BillingPage() {
             <div className="rounded-cf-sm border border-divider bg-surface-300/45 p-3">
               {!isTierRuleCreating ? (
                 <Button
+                  data-testid="billing-tier-rule-add-button"
                   variant="outline"
                   size="sm"
                   className="gap-1"
@@ -1108,10 +1109,11 @@ export default function BillingPage() {
                   {t("tierRulesAdd")}
                 </Button>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-3" data-testid="billing-tier-rule-create-form">
                   <p className="font-medium text-foreground">{t("tierRulesAdd")}</p>
                   <div className="grid gap-2 md:grid-cols-4">
                     <Input
+                      data-testid="billing-tier-rule-model-input"
                       placeholder={t("tierRulesModelPlaceholder")}
                       value={tierRuleCreateDraft.model}
                       onChange={(e) =>
@@ -1119,6 +1121,7 @@ export default function BillingPage() {
                       }
                     />
                     <Input
+                      data-testid="billing-tier-rule-threshold-input"
                       placeholder={t("tierRulesThresholdPlaceholder")}
                       value={tierRuleCreateDraft.threshold}
                       onChange={(e) =>
@@ -1126,6 +1129,7 @@ export default function BillingPage() {
                       }
                     />
                     <Input
+                      data-testid="billing-tier-rule-input-price-input"
                       placeholder={t("tierRulesInputPrice")}
                       value={tierRuleCreateDraft.inputPrice}
                       onChange={(e) =>
@@ -1133,6 +1137,7 @@ export default function BillingPage() {
                       }
                     />
                     <Input
+                      data-testid="billing-tier-rule-output-price-input"
                       placeholder={t("tierRulesOutputPrice")}
                       value={tierRuleCreateDraft.outputPrice}
                       onChange={(e) =>
@@ -1145,6 +1150,7 @@ export default function BillingPage() {
                   </div>
                   <div className="grid gap-2 md:grid-cols-4">
                     <Input
+                      data-testid="billing-tier-rule-cache-read-input"
                       placeholder={t("tierRulesCacheReadPrice")}
                       value={tierRuleCreateDraft.cacheReadPrice}
                       onChange={(e) =>
@@ -1155,6 +1161,7 @@ export default function BillingPage() {
                       }
                     />
                     <Input
+                      data-testid="billing-tier-rule-cache-write-input"
                       placeholder={t("tierRulesCacheWritePrice")}
                       value={tierRuleCreateDraft.cacheWritePrice}
                       onChange={(e) =>
@@ -1165,6 +1172,7 @@ export default function BillingPage() {
                       }
                     />
                     <Input
+                      data-testid="billing-tier-rule-note-input"
                       placeholder={t("overrideNote")}
                       value={tierRuleCreateDraft.note}
                       onChange={(e) =>
@@ -1174,6 +1182,7 @@ export default function BillingPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
+                      data-testid="billing-tier-rule-save-button"
                       size="sm"
                       onClick={() => void handleTierRuleCreate()}
                       disabled={createTierRule.isPending}
@@ -1181,6 +1190,7 @@ export default function BillingPage() {
                       {createTierRule.isPending ? t("tierRulesAdding") : t("overrideSave")}
                     </Button>
                     <Button
+                      data-testid="billing-tier-rule-cancel-button"
                       size="sm"
                       variant="ghost"
                       onClick={() => {
