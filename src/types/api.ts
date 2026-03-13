@@ -748,13 +748,25 @@ export interface ErrorDetail {
 
 export type TimeRange = "today" | "7d" | "30d";
 
+export interface DistributionItem {
+  name: string;
+  count: number;
+}
+
 export interface StatsOverviewResponse {
   today_requests: number;
   avg_response_time_ms: number;
   total_tokens_today: number;
+  total_cost_today: number;
   success_rate_today: number;
   avg_ttft_ms: number;
   cache_hit_rate: number;
+  yesterday_requests: number;
+  yesterday_total_tokens: number;
+  yesterday_cost_usd: number;
+  yesterday_avg_response_time_ms: number;
+  yesterday_avg_ttft_ms: number;
+  yesterday_cache_hit_rate: number;
 }
 
 export interface TimeseriesDataPoint {
@@ -764,6 +776,7 @@ export interface TimeseriesDataPoint {
   avg_duration_ms: number;
   avg_ttft_ms?: number;
   avg_tps?: number;
+  total_cost?: number;
 }
 
 export interface UpstreamTimeseriesData {
@@ -784,6 +797,8 @@ export interface LeaderboardAPIKeyItem {
   key_prefix: string;
   request_count: number;
   total_tokens: number;
+  total_cost_usd: number;
+  model_distribution: DistributionItem[];
 }
 
 export interface LeaderboardUpstreamItem {
@@ -794,12 +809,18 @@ export interface LeaderboardUpstreamItem {
   total_tokens: number;
   avg_ttft_ms: number;
   avg_tps: number;
+  cache_hit_rate: number;
+  total_cost_usd: number;
+  model_distribution: DistributionItem[];
 }
 
 export interface LeaderboardModelItem {
   model: string;
   request_count: number;
   total_tokens: number;
+  avg_ttft_ms: number;
+  avg_tps: number;
+  upstream_distribution: DistributionItem[];
 }
 
 export interface StatsLeaderboardResponse {

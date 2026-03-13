@@ -23,11 +23,11 @@ describe("TimeRangeSelector", () => {
       expect(screen.getByText("timeRange.30d")).toBeInTheDocument();
     });
 
-    it("renders three buttons", () => {
+    it("renders four buttons (three presets plus custom)", () => {
       render(<TimeRangeSelector value="7d" onChange={mockOnChange} />);
 
       const buttons = screen.getAllByRole("button");
-      expect(buttons).toHaveLength(3);
+      expect(buttons).toHaveLength(4);
     });
   });
 

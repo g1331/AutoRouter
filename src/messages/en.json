@@ -91,9 +91,11 @@
       "todayRequests": "TODAY REQUESTS",
       "avgResponseTime": "AVG RESPONSE",
       "totalTokens": "TOKENS TODAY",
+      "totalCost": "TODAY COST",
       "requests": "REQUESTS",
       "latency": "LATENCY",
       "tokens": "TOKENS",
+      "cost": "COST",
       "usageStatistics": "USAGE STATISTICS",
       "usageDescription": "Usage trends grouped by upstream provider",
       "totalRequests": "Total Requests",
@@ -105,6 +107,8 @@
       "upstreamRanking": "UPSTREAM RANKING",
       "upstreamAvgTtft": "Avg TTFT",
       "upstreamAvgTps": "Avg TPS",
+      "upstreamCacheHit": "Cache Hit",
+      "upstreamCost": "Cost",
       "modelRanking": "MODEL RANKING",
       "noApiKeys": "No API Key data",
       "noUpstreams": "No Upstream data",
@@ -115,13 +119,26 @@
       "chartTabRequests": "Requests",
       "chartTabTtft": "Avg TTFT",
       "chartTabTps": "Avg TPS",
+      "chartTabTokens": "Tokens",
+      "chartTabDuration": "Avg Duration",
+      "chartTabCost": "Cost",
       "ttftUnit": "ms",
-      "tpsUnit": "tok/s"
+      "tpsUnit": "tok/s",
+      "modelDistribution": "Model Distribution",
+      "upstreamDistribution": "Upstream Distribution",
+      "others": "Others",
+      "vsYesterday": "vs yesterday",
+      "noChange": "Same as yesterday"
     },
     "timeRange": {
       "today": "TODAY",
       "7d": "7 DAYS",
-      "30d": "30 DAYS"
+      "30d": "30 DAYS",
+      "custom": "CUSTOM",
+      "customRange": "Custom Range",
+      "startDate": "Start Date",
+      "endDate": "End Date",
+      "apply": "Apply"
     }
   },
   "keys": {

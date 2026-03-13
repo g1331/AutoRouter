@@ -2,10 +2,9 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { ArrowRight, BarChart3, CheckCircle, Cpu, Key, Server, Zap } from "lucide-react";
+import { ArrowRight, BarChart3, Key, Server, Zap } from "lucide-react";
 
 import { Topbar } from "@/components/admin/topbar";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   LeaderboardSection,
   StatsCards,
@@ -17,42 +16,52 @@ import {
   useStatsLeaderboard,
   useStatsOverview,
   useStatsTimeseries,
+  type CustomDateRange,
+  type TimeseriesMetric,
 } from "@/hooks/use-dashboard-stats";
 import { Link } from "@/i18n/navigation";
-import type { TimeRange } from "@/types/api";
-import type { TimeseriesMetric } from "@/hooks/use-dashboard-stats";
+import type { TimeRangeOrCustom } from "@/components/dashboard/time-range-selector";
 
 export default function DashboardPage() {
   const t = useTranslations("dashboard");
 
-  const [timeRange, setTimeRange] = useState<TimeRange>("7d");
+  const [timeRange, setTimeRange] = useState<TimeRangeOrCustom>("7d");
+  const [customRange, setCustomRange] = useState<CustomDateRange | undefined>();
   const [metric, setMetric] = useState<TimeseriesMetric>("requests");
 
   const { data: overview, isLoading: overviewLoading } = useStatsOverview();
-  const { data: timeseries, isLoading: timeseriesLoading } = useStatsTimeseries(timeRange, metric);
-  const { data: leaderboard, isLoading: leaderboardLoading } = useStatsLeaderboard(timeRange);
+  const { data: timeseries, isLoading: timeseriesLoading } = useStatsTimeseries(
+    timeRange,
+    metric,
+    customRange
+  );
+  const leaderboardRange = timeRange === "custom" ? "7d" : timeRange;
+  const { data: leaderboard, isLoading: leaderboardLoading } =
+    useStatsLeaderboard(leaderboardRange);
+
+  function handleTimeRangeChange(value: TimeRangeOrCustom, range?: CustomDateRange) {
+    setTimeRange(value);
+    setCustomRange(range);
+  }
 
   return (
     <>
       <Topbar title={t("pageTitle")} />
 
       <div className="mx-auto max-w-7xl space-y-8 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
-        <Card variant="outlined" className="border-divider bg-surface-200/70">
-          <CardContent className="p-5 sm:p-6">
-            <div className="flex items-center gap-2 text-amber-500">
-              <Cpu className="h-4 w-4" />
-              <span className="type-label-medium">{t("controlPanel")}</span>
-            </div>
-            <p className="type-body-medium mt-2 text-muted-foreground">{t("controlPanelDesc")}</p>
-          </CardContent>
-        </Card>
-
         <StatsCards
           todayRequests={overview?.today_requests ?? 0}
           avgResponseTimeMs={overview?.avg_response_time_ms ?? 0}
           totalTokensToday={overview?.total_tokens_today ?? 0}
+          totalCostToday={overview?.total_cost_today ?? 0}
           avgTtftMs={overview?.avg_ttft_ms ?? 0}
           cacheHitRate={overview?.cache_hit_rate ?? 0}
+          yesterdayRequests={overview?.yesterday_requests ?? 0}
+          yesterdayTotalTokens={overview?.yesterday_total_tokens ?? 0}
+          yesterdayCostUsd={overview?.yesterday_cost_usd ?? 0}
+          yesterdayAvgResponseTimeMs={overview?.yesterday_avg_response_time_ms ?? 0}
+          yesterdayAvgTtftMs={overview?.yesterday_avg_ttft_ms ?? 0}
+          yesterdayCacheHitRate={overview?.yesterday_cache_hit_rate ?? 0}
           isLoading={overviewLoading}
         />
 
@@ -62,7 +71,11 @@ export default function DashboardPage() {
               <BarChart3 className="h-4 w-4 text-amber-500" />
               <h2 className="type-title-medium text-foreground">{t("stats.usageStatistics")}</h2>
             </div>
-            <TimeRangeSelector value={timeRange} onChange={setTimeRange} />
+            <TimeRangeSelector
+              value={timeRange}
+              onChange={handleTimeRangeChange}
+              customRange={customRange}
+            />
           </div>
 
           <UsageChart
@@ -125,14 +138,6 @@ export default function DashboardPage() {
             </Link>
           </div>
         </section>
-
-        <Alert variant="default" className="border-divider">
-          <CheckCircle className="h-4 w-4 text-status-success" />
-          <AlertTitle>{t("systemInitialized")}</AlertTitle>
-          <AlertDescription className="text-muted-foreground">
-            {t("allServicesOnline")}
-          </AlertDescription>
-        </Alert>
       </div>
     </>
   );

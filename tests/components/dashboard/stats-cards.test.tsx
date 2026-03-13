@@ -14,14 +14,24 @@ vi.mock("lucide-react", () => ({
   Zap: () => <svg data-testid="zap-icon" />,
   Timer: () => <svg data-testid="timer-icon" />,
   Database: () => <svg data-testid="database-icon" />,
+  DollarSign: () => <svg data-testid="dollar-sign-icon" />,
+  TrendingUp: () => <svg data-testid="trending-up-icon" />,
+  TrendingDown: () => <svg data-testid="trending-down-icon" />,
 }));
 
 const defaultProps = {
   todayRequests: 0,
   avgResponseTimeMs: 0,
   totalTokensToday: 0,
+  totalCostToday: 0,
   avgTtftMs: 0,
   cacheHitRate: 0,
+  yesterdayRequests: 0,
+  yesterdayTotalTokens: 0,
+  yesterdayCostUsd: 0,
+  yesterdayAvgResponseTimeMs: 0,
+  yesterdayAvgTtftMs: 0,
+  yesterdayCacheHitRate: 0,
   isLoading: false,
 };
 
@@ -31,7 +41,7 @@ describe("StatsCards", () => {
       render(<StatsCards {...defaultProps} isLoading={true} />);
 
       const skeletons = screen.getAllByTestId("dashboard-stat-value-loading");
-      expect(skeletons.length).toBe(5);
+      expect(skeletons.length).toBe(6);
       expect(screen.queryByText("---")).not.toBeInTheDocument();
     });
 
@@ -232,6 +242,7 @@ describe("StatsCards", () => {
       expect(screen.getByText("stats.totalTokens")).toBeInTheDocument();
       expect(screen.getByText("stats.avgTtft")).toBeInTheDocument();
       expect(screen.getByText("stats.cacheHitRate")).toBeInTheDocument();
+      expect(screen.getByText("stats.totalCost")).toBeInTheDocument();
     });
   });
 });

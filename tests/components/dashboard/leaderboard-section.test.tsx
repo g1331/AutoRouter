@@ -21,32 +21,85 @@ vi.mock("lucide-react", () => ({
 describe("LeaderboardSection", () => {
   const mockData: StatsLeaderboardResponse = {
     api_keys: [
-      { name: "Production Key", key_prefix: "sk-prod", request_count: 15000, total_tokens: 500000 },
-      { name: "Dev Key", key_prefix: "sk-dev", request_count: 5000, total_tokens: 150000 },
-      { name: "Test Key", key_prefix: "sk-test", request_count: 1000, total_tokens: 30000 },
+      {
+        id: "key-1",
+        name: "Production Key",
+        key_prefix: "sk-prod",
+        request_count: 15000,
+        total_tokens: 500000,
+        total_cost_usd: 12.5,
+        model_distribution: [],
+      },
+      {
+        id: "key-2",
+        name: "Dev Key",
+        key_prefix: "sk-dev",
+        request_count: 5000,
+        total_tokens: 150000,
+        total_cost_usd: 3.2,
+        model_distribution: [],
+      },
+      {
+        id: "key-3",
+        name: "Test Key",
+        key_prefix: "sk-test",
+        request_count: 1000,
+        total_tokens: 30000,
+        total_cost_usd: 0.5,
+        model_distribution: [],
+      },
     ],
     upstreams: [
       {
+        id: "up-1",
         name: "OpenAI",
         provider_type: "openai",
         request_count: 12000,
         total_tokens: 400000,
         avg_ttft_ms: 1222,
         avg_tps: 45.3,
+        cache_hit_rate: 5.2,
+        total_cost_usd: 8.0,
+        model_distribution: [],
       },
       {
+        id: "up-2",
         name: "Anthropic",
         provider_type: "anthropic",
         request_count: 8000,
         total_tokens: 280000,
         avg_ttft_ms: 650,
         avg_tps: 52.1,
+        cache_hit_rate: 3.1,
+        total_cost_usd: 5.5,
+        model_distribution: [],
       },
     ],
     models: [
-      { model: "gpt-4", request_count: 10000, total_tokens: 350000 },
-      { model: "claude-3", request_count: 7000, total_tokens: 250000 },
-      { model: "gpt-3.5-turbo", request_count: 3000, total_tokens: 80000 },
+      {
+        model: "gpt-4",
+        request_count: 10000,
+        total_tokens: 350000,
+        avg_ttft_ms: 980,
+        avg_tps: 48.0,
+        upstream_distribution: [],
+      },
+      {
+        model: "claude-3",
+        request_count: 7000,
+        total_tokens: 250000,
+        avg_ttft_ms: 620,
+        avg_tps: 55.2,
+        upstream_distribution: [],
+      },
+      {
+        model: "gpt-3.5-turbo",
+        request_count: 3000,
+        total_tokens: 80000,
+        avg_ttft_ms: 310,
+        avg_tps: 62.0,
+        upstream_distribution: [],
+      },
     ],
   };
 
@@ -58,7 +111,7 @@ describe("LeaderboardSection", () => {
       expect(screen.getByText("stats.apiKeyRanking")).toBeInTheDocument();
       expect(screen.getByText("stats.upstreamRanking")).toBeInTheDocument();
       expect(screen.getByText("stats.modelRanking")).toBeInTheDocument();
-      expect(screen.getAllByTestId("leaderboard-loading-row")).toHaveLength(15);
+      expect(screen.getAllByTestId("leaderboard-loading-row")).toHaveLength(9);
     });
 
     it("renders section header when loading", () => {

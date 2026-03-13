@@ -58,7 +58,7 @@ describe("GET /api/admin/stats/timeseries", () => {
 
     const response = await GET(request);
     expect(response.status).toBe(200);
-    expect(getTimeseriesStats).toHaveBeenCalledWith("30d", "tps");
+    expect(getTimeseriesStats).toHaveBeenCalledWith("30d", "tps", undefined, undefined);
 
     const data = await response.json();
     expect(data.range).toBe("30d");

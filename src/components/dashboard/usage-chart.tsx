@@ -45,11 +45,14 @@ function formatTtft(ttftMs: number): string {
 }
 
 function formatMetricValue(value: number, metric: TimeseriesMetric): string {
-  if (metric === "ttft") {
+  if (metric === "ttft" || metric === "duration") {
     return formatTtft(value);
   }
   if (metric === "tps") {
     return `${formatNumber(value)} tok/s`;
+  }
+  if (metric === "cost") {
+    return `$${value.toFixed(4)}`;
   }
   return formatNumber(value);
 }
@@ -200,7 +203,17 @@ export function UsageChart({ data, isLoading, metric, onMetricChange }: UsageCha
   const theme = getChartTheme(mode);
 
   const valueKey: string =
-    metric === "ttft" ? "avg_ttft_ms" : metric === "tps" ? "avg_tps" : "request_count";
+    metric === "ttft"
+      ? "avg_ttft_ms"
+      : metric === "tps"
+        ? "avg_tps"
+        : metric === "tokens"
+          ? "total_tokens"
+          : metric === "duration"
+            ? "avg_duration_ms"
+            : metric === "cost"
+              ? "total_cost"
+              : "request_count";
 
   const { chartData, upstreamNames } = useMemo(() => {
     if (!data?.series?.length) {
@@ -306,21 +319,31 @@ export function UsageChart({ data, isLoading, metric, onMetricChange }: UsageCha
           </div>
         </div>
 
-        <div className="flex gap-1 rounded-cf-sm border border-divider bg-surface-200/50 p-0.5">
-          {(["requests", "ttft", "tps"] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => onMetricChange(m)}
-              className={cn(
-                "rounded-cf-sm px-3 py-1.5 type-label-medium transition-colors",
-                metric === m
-                  ? "bg-amber-500/15 text-amber-500"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {t(`stats.chartTab${m === "requests" ? "Requests" : m === "ttft" ? "Ttft" : "Tps"}`)}
-            </button>
-          ))}
+        <div className="flex flex-wrap gap-1 rounded-cf-sm border border-divider bg-surface-200/50 p-0.5">
+          {(["requests", "tokens", "cost", "ttft", "tps", "duration"] as const).map((m) => {
+            const labelMap: Record<string, string> = {
+              requests: t("stats.chartTabRequests"),
+              tokens: t("stats.chartTabTokens"),
+              cost: t("stats.chartTabCost"),
+              ttft: t("stats.chartTabTtft"),
+              tps: t("stats.chartTabTps"),
+              duration: t("stats.chartTabDuration"),
+            };
+            return (
+              <button
+                key={m}
+                onClick={() => onMetricChange(m)}
+                className={cn(
+                  "rounded-cf-sm px-3 py-1.5 type-label-medium transition-colors",
+                  metric === m
+                    ? "bg-amber-500/15 text-amber-500"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {labelMap[m]}
+              </button>
+            );
+          })}
         </div>
 
         <div className="h-[280px] sm:h-[320px]">
@@ -366,11 +389,13 @@ export function UsageChart({ data, isLoading, metric, onMetricChange }: UsageCha
                   axisLine={{ stroke: theme.colors.grid }}
                   domain={[0, "auto"]}
                   tickFormatter={(v: number) =>
-                    metric === "ttft"
+                    metric === "ttft" || metric === "duration"
                       ? formatTtft(v)
                       : metric === "tps"
                         ? `${formatNumber(v)}`
-                        : formatNumber(v)
+                        : metric === "cost"
+                          ? `$${v.toFixed(2)}`
+                          : formatNumber(v)
                   }
                   style={{ fontFamily: theme.fonts.mono }}
                   width={theme.spacing.yAxisWidth}
