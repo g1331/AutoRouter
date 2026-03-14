@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useTranslations } from "next-intl";
-import { CalendarIcon } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
+import { CalendarIcon, X } from "lucide-react";
 import { format } from "date-fns";
 import type { DateRange } from "react-day-picker";
 
@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { getDateLocale } from "@/lib/date-locale";
 import type { TimeRange } from "@/types/api";
 import type { CustomDateRange } from "@/hooks/use-dashboard-stats";
 
@@ -26,6 +27,8 @@ interface TimeRangeSelectorProps {
 export function TimeRangeSelector({ value, onChange, customRange }: TimeRangeSelectorProps) {
   const t = useTranslations("dashboard");
   const tCommon = useTranslations("common");
+  const locale = useLocale();
+  const dateLocale = getDateLocale(locale);
   const [open, setOpen] = useState(false);
   const [pendingRange, setPendingRange] = useState<DateRange | undefined>(
     customRange ? { from: customRange.start, to: customRange.end } : undefined
@@ -44,7 +47,7 @@ export function TimeRangeSelector({ value, onChange, customRange }: TimeRangeSel
 
   const customLabel =
     value === "custom" && customRange
-      ? `${format(customRange.start, "MM/dd")} – ${format(customRange.end, "MM/dd")}`
+      ? `${format(customRange.start, "MM/dd", { locale: dateLocale })} – ${format(customRange.end, "MM/dd", { locale: dateLocale })}`
       : t("timeRange.custom");
 
   function handleApply() {
@@ -55,7 +58,7 @@ export function TimeRangeSelector({ value, onChange, customRange }: TimeRangeSel
   }
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-stretch gap-1">
       <div className="inline-flex rounded-cf-sm border border-border bg-surface-200 p-1">
         {PRESET_RANGES.map((range) => (
           <button
@@ -75,6 +78,17 @@ export function TimeRangeSelector({ value, onChange, customRange }: TimeRangeSel
         ))}
       </div>
 
+      {value === "custom" && (
+        <button
+          type="button"
+          onClick={() => onChange("7d")}
+          className="inline-flex items-center justify-center rounded-cf-sm border border-border bg-surface-200 px-1.5 text-muted-foreground transition-colors hover:bg-surface-300 hover:text-foreground"
+          title={t("timeRange.resetToDefault")}
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
+
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button
@@ -92,15 +106,26 @@ export function TimeRangeSelector({ value, onChange, customRange }: TimeRangeSel
           </button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="end">
-          <div className="p-3">
-            <p className="type-label-medium mb-2 text-foreground">{t("timeRange.customRange")}</p>
+          <div className="p-4">
+            <p className="type-label-medium mb-3 border-b border-divider pb-2.5 text-foreground">
+              {t("timeRange.customRange")}
+            </p>
             <Calendar
+              locale={dateLocale}
               mode="range"
               selected={pendingRange}
               onSelect={setPendingRange}
               numberOfMonths={2}
               disabled={{ after: new Date() }}
             />
+            {pendingRange?.from && (
+              <p className="mt-2 text-center type-caption text-muted-foreground">
+                {format(pendingRange.from, "PPP", { locale: dateLocale })}
+                {pendingRange.to
+                  ? ` – ${format(pendingRange.to, "PPP", { locale: dateLocale })}`
+                  : ""}
+              </p>
+            )}
             <div className="mt-3 flex justify-end gap-2 border-t border-divider pt-3">
               <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
                 {tCommon("cancel")}

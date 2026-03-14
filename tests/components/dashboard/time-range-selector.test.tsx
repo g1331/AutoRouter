@@ -5,6 +5,11 @@ import { TimeRangeSelector } from "@/components/dashboard/time-range-selector";
 // Mock next-intl
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
+  useLocale: () => "en",
+}));
+
+vi.mock("@/lib/date-locale", () => ({
+  getDateLocale: () => undefined,
 }));
 
 describe("TimeRangeSelector", () => {

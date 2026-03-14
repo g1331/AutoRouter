@@ -138,7 +138,8 @@
       "customRange": "自定义时间范围",
       "startDate": "开始日期",
       "endDate": "结束日期",
-      "apply": "应用"
+      "apply": "应用",
+      "resetToDefault": "重置为默认时间范围"
     }
   },
   "keys": {

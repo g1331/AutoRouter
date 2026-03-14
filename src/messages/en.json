@@ -138,7 +138,8 @@
       "customRange": "Custom Range",
       "startDate": "Start Date",
       "endDate": "End Date",
-      "apply": "Apply"
+      "apply": "Apply",
+      "resetToDefault": "Reset to default time range"
     }
   },
   "keys": {

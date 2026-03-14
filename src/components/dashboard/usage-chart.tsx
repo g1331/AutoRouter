@@ -78,7 +78,7 @@ function CustomTooltip({
 
   return (
     <div
-      className="min-w-[180px] rounded-cf-sm border p-3 shadow-[var(--vr-shadow-sm)]"
+      className="min-w-[180px] rounded-cf-md border p-3 shadow-[var(--vr-shadow-md)]"
       style={{
         background: theme.colors.tooltip.background,
         borderColor: theme.colors.tooltip.border,

@@ -63,12 +63,12 @@ function RankBadge({ rank }: { rank: number }) {
 }
 
 function MiniPieChart({ data, label }: { data: DistributionItem[]; label: string }) {
-  if (!data.length) return null;
+  if (!data.length) return <div className="w-[120px] shrink-0" />;
 
   const total = data.reduce((s, d) => s + d.count, 0);
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex w-[120px] shrink-0 flex-col items-center">
       <p className="type-caption mb-1 text-muted-foreground">{label}</p>
       <div className="relative h-24 w-24">
         <ResponsiveContainer width="100%" height="100%">
@@ -96,25 +96,38 @@ function MiniPieChart({ data, label }: { data: DistributionItem[]; label: string
                 ];
               }}
               contentStyle={{
-                background: "var(--background)",
-                border: "1px solid var(--border)",
-                borderRadius: "6px",
-                fontSize: "11px",
-                padding: "6px 10px",
+                background: "var(--vr-surface-4)",
+                border: "1px solid var(--vr-surface-4)",
+                borderRadius: "8px",
+                fontSize: "12px",
+                padding: "8px 12px",
+                boxShadow: "var(--vr-shadow-md)",
+                lineHeight: "1.5",
               }}
+              itemStyle={{ color: "var(--vr-text)", padding: 0 }}
+              labelStyle={{ display: "none" }}
             />
           </PieChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-1.5 flex flex-wrap justify-center gap-x-2 gap-y-0.5">
+      <div className="mt-1.5 flex max-w-full flex-wrap justify-center gap-x-2 gap-y-0.5">
         {data.slice(0, 4).map((d, i) => (
-          <div key={d.name} className="flex items-center gap-1">
+          <div
+            key={d.name}
+            className="group/legend relative flex cursor-default items-center gap-1"
+          >
             <span
               className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
               style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}
             />
-            <span className="type-caption max-w-[80px] truncate text-muted-foreground">
+            <span className="type-caption max-w-[70px] truncate text-muted-foreground">
               {d.name}
+            </span>
+            <span
+              className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs shadow-[var(--vr-shadow-md)] group-hover/legend:block"
+              style={{ background: "var(--vr-surface-4)", color: "var(--vr-text)" }}
+            >
+              {d.name}: {formatNumber(d.count)} ({((d.count / total) * 100).toFixed(1)}%)
             </span>
           </div>
         ))}
@@ -198,7 +211,7 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
                 >
                   <RankBadge rank={index + 1} />
 
-                  <div className="min-w-[120px]">
+                  <div className="w-[120px] shrink-0">
                     <p className="type-body-small truncate text-foreground">{item.name}</p>
                     <p className="type-caption truncate text-muted-foreground">
                       {item.provider_type}
@@ -233,7 +246,7 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
                     />
                   </div>
 
-                  <div className="hidden sm:block">
+                  <div className="hidden shrink-0 sm:block">
                     <MiniPieChart
                       data={item.model_distribution}
                       label={t("stats.modelDistribution")}
@@ -275,7 +288,7 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
                 >
                   <RankBadge rank={index + 1} />
 
-                  <div className="min-w-[160px]">
+                  <div className="w-[160px] shrink-0">
                     <p className="type-body-small truncate text-foreground">{item.model}</p>
                   </div>
 
@@ -299,7 +312,7 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
                     />
                   </div>
 
-                  <div className="hidden sm:block">
+                  <div className="hidden shrink-0 sm:block">
                     <MiniPieChart
                       data={item.upstream_distribution}
                       label={t("stats.upstreamDistribution")}
@@ -341,9 +354,9 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
                 >
                   <RankBadge rank={index + 1} />
 
-                  <div className="min-w-[140px]">
+                  <div className="w-[140px] shrink-0">
                     <p className="type-body-small truncate text-foreground">{item.name}</p>
-                    <p className="type-caption truncate text-muted-foreground font-mono">
+                    <p className="type-caption truncate font-mono text-muted-foreground">
                       {item.key_prefix}
                     </p>
                   </div>
@@ -363,7 +376,7 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
                     />
                   </div>
 
-                  <div className="hidden sm:block">
+                  <div className="hidden shrink-0 sm:block">
                     <MiniPieChart
                       data={item.model_distribution}
                       label={t("stats.modelDistribution")}
