@@ -455,13 +455,19 @@ export async function getTimeseriesStats(
  */
 export async function getLeaderboardStats(
   rangeType: TimeRange = "7d",
-  limit: number = 5
+  limit: number = 5,
+  customStart?: Date,
+  customEnd?: Date
 ): Promise<StatsLeaderboard> {
   if (process.env.NODE_ENV !== "test") {
     await reconcileStaleInProgressRequestLogs().catch(() => undefined);
   }
 
-  const startTime = getTimeRangeStart(rangeType);
+  const startTime = customStart ?? getTimeRangeStart(rangeType);
+  const endTime = customEnd ?? null;
+  const timeFilter = endTime
+    ? and(gte(requestLogs.createdAt, startTime), lt(requestLogs.createdAt, endTime))
+    : gte(requestLogs.createdAt, startTime);
   limit = Math.min(50, Math.max(1, limit));
 
   // === API Keys Leaderboard ===
@@ -472,7 +478,7 @@ export async function getLeaderboardStats(
       totalTokens: sum(requestLogs.totalTokens),
     })
     .from(requestLogs)
-    .where(and(gte(requestLogs.createdAt, startTime), isNotNull(requestLogs.apiKeyId)))
+    .where(and(timeFilter, isNotNull(requestLogs.apiKeyId)))
     .groupBy(requestLogs.apiKeyId)
     .orderBy(sql`count(${requestLogs.id}) DESC`)
     .limit(limit);
@@ -502,7 +508,7 @@ export async function getLeaderboardStats(
       })
       .from(requestLogs)
       .leftJoin(requestBillingSnapshots, eq(requestLogs.id, requestBillingSnapshots.requestLogId))
-      .where(and(gte(requestLogs.createdAt, startTime), inArray(requestLogs.apiKeyId, apiKeyIds)))
+      .where(and(timeFilter, inArray(requestLogs.apiKeyId, apiKeyIds)))
       .groupBy(requestLogs.apiKeyId);
     for (const row of costRows) {
       if (row.apiKeyId) {
@@ -523,7 +529,7 @@ export async function getLeaderboardStats(
       .from(requestLogs)
       .where(
         and(
-          gte(requestLogs.createdAt, startTime),
+          timeFilter,
           inArray(requestLogs.apiKeyId, apiKeyIds),
           isNotNull(requestLogs.model),
           ne(requestLogs.model, "")
@@ -570,7 +576,7 @@ export async function getLeaderboardStats(
       `,
     })
     .from(requestLogs)
-    .where(and(gte(requestLogs.createdAt, startTime), isNotNull(requestLogs.upstreamId)))
+    .where(and(timeFilter, isNotNull(requestLogs.upstreamId)))
     .groupBy(requestLogs.upstreamId)
     .orderBy(sql`count(${requestLogs.id}) DESC`)
     .limit(limit);
@@ -603,9 +609,7 @@ export async function getLeaderboardStats(
       })
       .from(requestLogs)
       .leftJoin(requestBillingSnapshots, eq(requestLogs.id, requestBillingSnapshots.requestLogId))
-      .where(
-        and(gte(requestLogs.createdAt, startTime), inArray(requestLogs.upstreamId, upstreamIds))
-      )
+      .where(and(timeFilter, inArray(requestLogs.upstreamId, upstreamIds)))
       .groupBy(requestLogs.upstreamId);
     for (const row of costRows) {
       if (row.upstreamId) {
@@ -626,7 +630,7 @@ export async function getLeaderboardStats(
       .from(requestLogs)
       .where(
         and(
-          gte(requestLogs.createdAt, startTime),
+          timeFilter,
           inArray(requestLogs.upstreamId, upstreamIds),
           isNotNull(requestLogs.model),
           ne(requestLogs.model, "")
@@ -676,13 +680,7 @@ export async function getLeaderboardStats(
       totalDurationMs: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.durationMs} else 0 end)`,
     })
     .from(requestLogs)
-    .where(
-      and(
-        gte(requestLogs.createdAt, startTime),
-        isNotNull(requestLogs.model),
-        ne(requestLogs.model, "")
-      )
-    )
+    .where(and(timeFilter, isNotNull(requestLogs.model), ne(requestLogs.model, "")))
     .groupBy(requestLogs.model)
     .orderBy(sql`count(${requestLogs.id}) DESC`)
     .limit(limit);
@@ -700,11 +698,7 @@ export async function getLeaderboardStats(
       })
       .from(requestLogs)
       .where(
-        and(
-          gte(requestLogs.createdAt, startTime),
-          inArray(requestLogs.model, modelNames),
-          isNotNull(requestLogs.upstreamId)
-        )
+        and(timeFilter, inArray(requestLogs.model, modelNames), isNotNull(requestLogs.upstreamId))
       )
       .groupBy(requestLogs.model, requestLogs.upstreamId);
 

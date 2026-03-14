@@ -35,9 +35,11 @@ export default function DashboardPage() {
     metric,
     customRange
   );
-  const leaderboardRange = timeRange === "custom" ? "7d" : timeRange;
-  const { data: leaderboard, isLoading: leaderboardLoading } =
-    useStatsLeaderboard(leaderboardRange);
+  const { data: leaderboard, isLoading: leaderboardLoading } = useStatsLeaderboard(
+    timeRange,
+    5,
+    customRange
+  );
 
   function handleTimeRangeChange(value: TimeRangeOrCustom, range?: CustomDateRange) {
     setTimeRange(value);

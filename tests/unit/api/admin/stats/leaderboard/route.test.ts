@@ -65,7 +65,7 @@ describe("GET /api/admin/stats/leaderboard", () => {
 
     const response = await GET(request);
     expect(response.status).toBe(200);
-    expect(getLeaderboardStats).toHaveBeenCalledWith("7d", 5);
+    expect(getLeaderboardStats).toHaveBeenCalledWith("7d", 5, undefined, undefined);
 
     const data = await response.json();
     expect(data.upstreams[0]).toEqual({

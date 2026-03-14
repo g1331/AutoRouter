@@ -19,14 +19,14 @@ interface LeaderboardSectionProps {
 const RANK_COLORS = [
   "text-amber-500",
   "text-status-info",
-  "text-status-warning",
+  "text-status-success",
   "text-muted-foreground",
   "text-muted-foreground",
 ];
 
 const PIE_COLORS = [...UPSTREAM_COLORS_DARK];
 
-const RANK_LEFT_BORDERS = ["border-l-amber-500", "border-l-status-info", "border-l-status-warning"];
+const RANK_LEFT_BORDERS = ["border-l-amber-500", "border-l-status-info", "border-l-status-success"];
 
 function formatTtft(ttftMs: number): string {
   if (ttftMs >= 1000) return `${(ttftMs / 1000).toFixed(3)}s`;
@@ -46,13 +46,13 @@ function formatCost(usd: number): string {
 }
 
 const RANK_ROW_BASE =
-  "flex items-center gap-3 rounded-cf-sm border-l-2 px-2.5 py-1.5 transition-colors border border-divider-subtle/60 bg-surface-200/30 hover:bg-surface-300/65";
+  "flex items-center gap-3 rounded-cf-sm border-l-2 px-2.5 py-1.5 transition-colors border border-divider-subtle/60 bg-surface-300/50 hover:bg-surface-400/60";
 
 function getRankRowClass(index: number): string {
   if (index < RANK_LEFT_BORDERS.length) {
     return cn(RANK_ROW_BASE, RANK_LEFT_BORDERS[index]);
   }
-  return cn(RANK_ROW_BASE, "border-l-transparent");
+  return cn(RANK_ROW_BASE, "border-l-muted-foreground/30");
 }
 
 // rerender-memo-with-default-value: hoist static style objects to avoid re-creating on every render

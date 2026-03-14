@@ -49,15 +49,23 @@ export function useStatsTimeseries(
   });
 }
 
-export function useStatsLeaderboard(range: TimeRange = "7d", limit: number = 5) {
+export function useStatsLeaderboard(
+  range: TimeRange | "custom" = "7d",
+  limit: number = 5,
+  customRange?: CustomDateRange
+) {
   const { apiClient } = useAuth();
 
   return useQuery({
-    queryKey: ["stats", "leaderboard", range, limit],
-    queryFn: () =>
-      apiClient.get<StatsLeaderboardResponse>(
-        `/admin/stats/leaderboard?range=${range}&limit=${limit}`
-      ),
+    queryKey: ["stats", "leaderboard", range, limit, customRange?.start, customRange?.end],
+    queryFn: () => {
+      let url = `/admin/stats/leaderboard?range=${range}&limit=${limit}`;
+      if (range === "custom" && customRange) {
+        url += `&start_date=${customRange.start.toISOString()}&end_date=${customRange.end.toISOString()}`;
+      }
+      return apiClient.get<StatsLeaderboardResponse>(url);
+    },
+    enabled: range !== "custom" || (!!customRange?.start && !!customRange?.end),
     staleTime: 30_000,
     refetchInterval: 60_000,
   });

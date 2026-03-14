@@ -22,9 +22,15 @@ interface TimeRangeSelectorProps {
   value: TimeRangeOrCustom;
   onChange: (value: TimeRangeOrCustom, customRange?: CustomDateRange) => void;
   customRange?: CustomDateRange;
+  hideCustom?: boolean;
 }
 
-export function TimeRangeSelector({ value, onChange, customRange }: TimeRangeSelectorProps) {
+export function TimeRangeSelector({
+  value,
+  onChange,
+  customRange,
+  hideCustom,
+}: TimeRangeSelectorProps) {
   const t = useTranslations("dashboard");
   const tCommon = useTranslations("common");
   const locale = useLocale();
@@ -45,14 +51,21 @@ export function TimeRangeSelector({ value, onChange, customRange }: TimeRangeSel
     }
   };
 
-  const customLabel =
-    value === "custom" && customRange
-      ? `${format(customRange.start, "MM/dd", { locale: dateLocale })} – ${format(customRange.end, "MM/dd", { locale: dateLocale })}`
-      : t("timeRange.custom");
+  const customLabel = (() => {
+    if (value !== "custom" || !customRange) return t("timeRange.custom");
+    // customRange.end is exclusive (next day 00:00), display the actual last day
+    const displayEnd = new Date(customRange.end);
+    displayEnd.setDate(displayEnd.getDate() - 1);
+    return `${format(customRange.start, "MM/dd", { locale: dateLocale })} – ${format(displayEnd, "MM/dd", { locale: dateLocale })}`;
+  })();
 
   function handleApply() {
     if (pendingRange?.from && pendingRange?.to) {
-      onChange("custom", { start: pendingRange.from, end: pendingRange.to });
+      // Calendar returns midnight dates; backend treats end_date as exclusive upper bound.
+      // Extend end to next day 00:00 so the selected end day is fully included.
+      const endInclusive = new Date(pendingRange.to);
+      endInclusive.setDate(endInclusive.getDate() + 1);
+      onChange("custom", { start: pendingRange.from, end: endInclusive });
       setOpen(false);
     }
   }
@@ -78,7 +91,7 @@ export function TimeRangeSelector({ value, onChange, customRange }: TimeRangeSel
         ))}
       </div>
 
-      {value === "custom" && (
+      {value === "custom" && !hideCustom && (
         <button
           type="button"
           onClick={() => onChange("7d")}
@@ -89,59 +102,61 @@ export function TimeRangeSelector({ value, onChange, customRange }: TimeRangeSel
         </button>
       )}
 
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-cf-sm border px-3 py-1.5 type-label-medium transition-all",
-              "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
-              value === "custom"
-                ? "border-amber-500/50 bg-amber-500/10 text-amber-500"
-                : "border-border bg-surface-200 text-muted-foreground hover:bg-surface-300 hover:text-foreground"
-            )}
-          >
-            <CalendarIcon className="h-3.5 w-3.5" />
-            {customLabel}
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="end">
-          <div className="p-4">
-            <p className="type-label-medium mb-3 border-b border-divider pb-2.5 text-foreground">
-              {t("timeRange.customRange")}
-            </p>
-            <Calendar
-              locale={dateLocale}
-              mode="range"
-              selected={pendingRange}
-              onSelect={setPendingRange}
-              numberOfMonths={2}
-              disabled={{ after: new Date() }}
-            />
-            {pendingRange?.from && (
-              <p className="mt-2 text-center type-caption text-muted-foreground">
-                {format(pendingRange.from, "PPP", { locale: dateLocale })}
-                {pendingRange.to
-                  ? ` – ${format(pendingRange.to, "PPP", { locale: dateLocale })}`
-                  : ""}
+      {!hideCustom && (
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-cf-sm border px-3 py-1.5 type-label-medium transition-all",
+                "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+                value === "custom"
+                  ? "border-amber-500/50 bg-amber-500/10 text-amber-500"
+                  : "border-border bg-surface-200 text-muted-foreground hover:bg-surface-300 hover:text-foreground"
+              )}
+            >
+              <CalendarIcon className="h-3.5 w-3.5" />
+              {customLabel}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="end">
+            <div className="p-4">
+              <p className="type-label-medium mb-3 border-b border-divider pb-2.5 text-foreground">
+                {t("timeRange.customRange")}
               </p>
-            )}
-            <div className="mt-3 flex justify-end gap-2 border-t border-divider pt-3">
-              <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
-                {tCommon("cancel")}
-              </Button>
-              <Button
-                size="sm"
-                disabled={!pendingRange?.from || !pendingRange?.to}
-                onClick={handleApply}
-                className="bg-amber-500 text-primary-foreground hover:bg-amber-600"
-              >
-                {t("timeRange.apply")}
-              </Button>
+              <Calendar
+                locale={dateLocale}
+                mode="range"
+                selected={pendingRange}
+                onSelect={setPendingRange}
+                numberOfMonths={2}
+                disabled={{ after: new Date() }}
+              />
+              {pendingRange?.from && (
+                <p className="mt-2 text-center type-caption text-muted-foreground">
+                  {format(pendingRange.from, "PPP", { locale: dateLocale })}
+                  {pendingRange.to
+                    ? ` – ${format(pendingRange.to, "PPP", { locale: dateLocale })}`
+                    : ""}
+                </p>
+              )}
+              <div className="mt-3 flex justify-end gap-2 border-t border-divider pt-3">
+                <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+                  {tCommon("cancel")}
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!pendingRange?.from || !pendingRange?.to}
+                  onClick={handleApply}
+                  className="bg-amber-500 text-primary-foreground hover:bg-amber-600"
+                >
+                  {t("timeRange.apply")}
+                </Button>
+              </div>
             </div>
-          </div>
-        </PopoverContent>
-      </Popover>
+          </PopoverContent>
+        </Popover>
+      )}
     </div>
   );
 }

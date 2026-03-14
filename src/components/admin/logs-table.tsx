@@ -2091,9 +2091,8 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
           <div className="w-full sm:ml-auto sm:w-auto">
             <TimeRangeSelector
               value={timeRangeFilter}
-              onChange={(value) => {
-                if (value !== "custom") setTimeRangeFilter(value);
-              }}
+              onChange={(value) => setTimeRangeFilter(value as TimeRange)}
+              hideCustom
             />
           </div>
         </div>
