@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { StatsLeaderboardResponse, DistributionItem } from "@/types/api";
 
-import { formatNumber } from "./chart-theme";
+import { formatNumber, UPSTREAM_COLORS_DARK } from "./chart-theme";
 import { DashboardLoadingBlock, DashboardLoadingSurface } from "./dashboard-loading";
 
 interface LeaderboardSectionProps {
@@ -24,16 +24,9 @@ const RANK_COLORS = [
   "text-muted-foreground",
 ];
 
-const PIE_COLORS = [
-  "#f59e0b",
-  "#3b82f6",
-  "#10b981",
-  "#8b5cf6",
-  "#ef4444",
-  "#f97316",
-  "#06b6d4",
-  "#84cc16",
-];
+const PIE_COLORS = [...UPSTREAM_COLORS_DARK];
+
+const RANK_LEFT_BORDERS = ["border-l-amber-500", "border-l-status-info", "border-l-status-warning"];
 
 function formatTtft(ttftMs: number): string {
   if (ttftMs >= 1000) return `${(ttftMs / 1000).toFixed(3)}s`;
@@ -52,6 +45,33 @@ function formatCost(usd: number): string {
   return `$${usd.toFixed(4)}`;
 }
 
+const RANK_ROW_BASE =
+  "flex items-center gap-3 rounded-cf-sm border-l-2 px-2.5 py-1.5 transition-colors border border-divider-subtle/60 bg-surface-200/30 hover:bg-surface-300/65";
+
+function getRankRowClass(index: number): string {
+  if (index < RANK_LEFT_BORDERS.length) {
+    return cn(RANK_ROW_BASE, RANK_LEFT_BORDERS[index]);
+  }
+  return cn(RANK_ROW_BASE, "border-l-transparent");
+}
+
+// rerender-memo-with-default-value: hoist static style objects to avoid re-creating on every render
+const TOOLTIP_CONTENT_STYLE = {
+  background: "var(--vr-surface-4)",
+  border: "1px solid var(--vr-surface-4)",
+  borderRadius: "8px",
+  fontSize: "12px",
+  padding: "6px 10px",
+  boxShadow: "var(--vr-shadow-md)",
+  lineHeight: "1.4",
+} as const;
+const TOOLTIP_ITEM_STYLE = { color: "var(--vr-text)", padding: 0 } as const;
+const TOOLTIP_LABEL_STYLE = { display: "none" } as const;
+const LEGEND_TOOLTIP_STYLE = {
+  background: "var(--vr-surface-4)",
+  color: "var(--vr-text)",
+} as const;
+
 function RankBadge({ rank }: { rank: number }) {
   const colorClass = RANK_COLORS[Math.min(rank - 1, RANK_COLORS.length - 1)];
   return (
@@ -62,15 +82,17 @@ function RankBadge({ rank }: { rank: number }) {
   );
 }
 
+const PIE_CHART_WIDTH = "w-[150px]";
+
 function MiniPieChart({ data, label }: { data: DistributionItem[]; label: string }) {
-  if (!data.length) return <div className="w-[120px] shrink-0" />;
+  if (!data.length) return <div className={cn(PIE_CHART_WIDTH, "shrink-0")} />;
 
   const total = data.reduce((s, d) => s + d.count, 0);
 
   return (
-    <div className="flex w-[120px] shrink-0 flex-col items-center">
-      <p className="type-caption mb-1 text-muted-foreground">{label}</p>
-      <div className="relative h-24 w-24">
+    <div className={cn(PIE_CHART_WIDTH, "flex shrink-0 items-center gap-2")}>
+      {/* Donut */}
+      <div className="relative h-10 w-10 shrink-0">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
@@ -79,12 +101,13 @@ function MiniPieChart({ data, label }: { data: DistributionItem[]; label: string
               nameKey="name"
               cx="50%"
               cy="50%"
-              innerRadius={26}
-              outerRadius={42}
-              strokeWidth={0}
+              innerRadius={12}
+              outerRadius={19}
+              strokeWidth={1}
+              stroke="var(--vr-surface-2)"
             >
               {data.map((_, i) => (
-                <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} opacity={0.85} />
               ))}
             </Pie>
             <Tooltip
@@ -95,37 +118,31 @@ function MiniPieChart({ data, label }: { data: DistributionItem[]; label: string
                   name ?? "",
                 ];
               }}
-              contentStyle={{
-                background: "var(--vr-surface-4)",
-                border: "1px solid var(--vr-surface-4)",
-                borderRadius: "8px",
-                fontSize: "12px",
-                padding: "8px 12px",
-                boxShadow: "var(--vr-shadow-md)",
-                lineHeight: "1.5",
-              }}
-              itemStyle={{ color: "var(--vr-text)", padding: 0 }}
-              labelStyle={{ display: "none" }}
+              contentStyle={TOOLTIP_CONTENT_STYLE}
+              itemStyle={TOOLTIP_ITEM_STYLE}
+              labelStyle={TOOLTIP_LABEL_STYLE}
             />
           </PieChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-1.5 flex max-w-full flex-wrap justify-center gap-x-2 gap-y-0.5">
-        {data.slice(0, 4).map((d, i) => (
+      {/* Legend - vertical list beside the donut */}
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <p className="type-caption text-muted-foreground/60 leading-none">{label}</p>
+        {data.slice(0, 3).map((d, i) => (
           <div
             key={d.name}
             className="group/legend relative flex cursor-default items-center gap-1"
           >
             <span
-              className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
+              className="h-1.5 w-1.5 shrink-0 rounded-full"
               style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}
             />
-            <span className="type-caption max-w-[70px] truncate text-muted-foreground">
+            <span className="type-caption max-w-[72px] truncate text-muted-foreground/70 leading-tight">
               {d.name}
             </span>
             <span
               className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs shadow-[var(--vr-shadow-md)] group-hover/legend:block"
-              style={{ background: "var(--vr-surface-4)", color: "var(--vr-text)" }}
+              style={LEGEND_TOOLTIP_STYLE}
             >
               {d.name}: {formatNumber(d.count)} ({((d.count / total) * 100).toFixed(1)}%)
             </span>
@@ -159,14 +176,15 @@ function LeaderboardLoadingRow({ cols }: { cols: number }) {
   return (
     <div
       data-testid="leaderboard-loading-row"
-      className="flex items-center gap-4 rounded-cf-sm border border-divider/65 bg-surface-200/45 px-3 py-2.5"
+      className="flex items-center gap-4 rounded-cf-sm border border-divider/65 bg-surface-200/45 px-3 py-1.5"
     >
       <DashboardLoadingBlock tone="accent" className="h-4 w-8 flex-shrink-0" />
       <DashboardLoadingBlock className="h-3 w-32" />
       {Array.from({ length: cols }).map((_, i) => (
         <DashboardLoadingBlock key={i} tone="muted" className="h-3 flex-1" />
       ))}
-      <DashboardLoadingBlock tone="muted" className="h-20 w-20 flex-shrink-0 rounded-full" />
+      <DashboardLoadingBlock tone="muted" className="h-10 w-10 flex-shrink-0 rounded-full" />
+      <DashboardLoadingBlock tone="muted" className="h-8 w-16 flex-shrink-0" />
     </div>
   );
 }
@@ -203,12 +221,9 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
               {t("stats.noUpstreams")}
             </p>
           ) : (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {data.upstreams.map((item, index) => (
-                <div
-                  key={item.id}
-                  className="flex items-center gap-3 rounded-cf-sm border border-transparent px-2.5 py-2 transition-colors hover:border-divider hover:bg-surface-300/65"
-                >
+                <div key={item.id} className={getRankRowClass(index)}>
                   <RankBadge rank={index + 1} />
 
                   <div className="w-[120px] shrink-0">
@@ -280,12 +295,9 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
               {t("stats.noModels")}
             </p>
           ) : (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {data.models.map((item, index) => (
-                <div
-                  key={item.model}
-                  className="flex items-center gap-3 rounded-cf-sm border border-transparent px-2.5 py-2 transition-colors hover:border-divider hover:bg-surface-300/65"
-                >
+                <div key={item.model} className={getRankRowClass(index)}>
                   <RankBadge rank={index + 1} />
 
                   <div className="w-[160px] shrink-0">
@@ -346,12 +358,9 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
               {t("stats.noApiKeys")}
             </p>
           ) : (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {data.api_keys.map((item, index) => (
-                <div
-                  key={item.id}
-                  className="flex items-center gap-3 rounded-cf-sm border border-transparent px-2.5 py-2 transition-colors hover:border-divider hover:bg-surface-300/65"
-                >
+                <div key={item.id} className={getRankRowClass(index)}>
                   <RankBadge rank={index + 1} />
 
                   <div className="w-[140px] shrink-0">

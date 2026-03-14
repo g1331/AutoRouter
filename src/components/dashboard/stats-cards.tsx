@@ -162,24 +162,23 @@ function StatCard({
       style={{ animationDelay: `${delay}ms` }}
     >
       <CardContent className="p-5 sm:p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0 space-y-2">
-            <p className="type-label-medium text-muted-foreground">{title}</p>
-            <AnimatedCounter
-              value={value}
-              isLoading={isLoading}
-              valueClassName={valueClassName}
-              loadingLabel={loadingLabel}
-            />
-            <div className="flex items-center gap-2">
-              <p className="type-body-small text-muted-foreground">{subtitle}</p>
-              {!isLoading && delta}
-            </div>
+        <div className="flex items-center justify-between">
+          <p className="type-label-medium text-muted-foreground">{title}</p>
+          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-cf-sm border border-amber-500/35 bg-amber-500/10 text-amber-500">
+            <Icon className="h-3.5 w-3.5" />
           </div>
-
-          <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-cf-sm border border-amber-500/35 bg-amber-500/10 text-amber-500">
-            <Icon className="h-5 w-5" />
-          </div>
+        </div>
+        <div className="mt-2">
+          <AnimatedCounter
+            value={value}
+            isLoading={isLoading}
+            valueClassName={valueClassName}
+            loadingLabel={loadingLabel}
+          />
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <p className="type-body-small text-muted-foreground">{subtitle}</p>
+          {!isLoading && delta}
         </div>
       </CardContent>
     </Card>
