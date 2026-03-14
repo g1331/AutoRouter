@@ -5,6 +5,11 @@ import { TimeRangeSelector } from "@/components/dashboard/time-range-selector";
 // Mock next-intl
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
+  useLocale: () => "en",
+}));
+
+vi.mock("@/lib/date-locale", () => ({
+  getDateLocale: () => undefined,
 }));
 
 describe("TimeRangeSelector", () => {
@@ -23,11 +28,11 @@ describe("TimeRangeSelector", () => {
       expect(screen.getByText("timeRange.30d")).toBeInTheDocument();
     });
 
-    it("renders three buttons", () => {
+    it("renders four buttons (three presets plus custom)", () => {
       render(<TimeRangeSelector value="7d" onChange={mockOnChange} />);
 
       const buttons = screen.getAllByRole("button");
-      expect(buttons).toHaveLength(3);
+      expect(buttons).toHaveLength(4);
     });
   });
 

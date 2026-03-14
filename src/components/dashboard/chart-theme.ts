@@ -41,8 +41,8 @@ const CHART_THEME_BY_MODE = {
       textMuted: "rgba(184, 192, 200, 0.7)",
       background: "#1D2227",
       tooltip: {
-        background: "#1D2227",
-        border: "#3A424C",
+        background: "#2d343c",
+        border: "#2d343c",
       },
     },
     area: {
