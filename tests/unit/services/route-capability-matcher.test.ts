@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   extractGeminiModelFromPath,
   matchRouteCapability,
+  resolveRouteCapability,
 } from "@/lib/services/route-capability-matcher";
 
 describe("matchRouteCapability", () => {
@@ -13,11 +14,47 @@ describe("matchRouteCapability", () => {
     expect(matchRouteCapability("POST", "messages/batches")).toBe("anthropic_messages");
   });
 
-  it("should match codex responses route", () => {
-    expect(matchRouteCapability("POST", "/v1/responses")).toBe("codex_responses");
-    expect(matchRouteCapability("POST", "responses")).toBe("codex_responses");
-    expect(matchRouteCapability("POST", "/v1/responses/compact")).toBe("codex_responses");
-    expect(matchRouteCapability("POST", "responses/trace")).toBe("codex_responses");
+  it("should match generic openai responses route when no cli headers are present", () => {
+    expect(matchRouteCapability("POST", "/v1/responses")).toBe("openai_responses");
+    expect(matchRouteCapability("POST", "responses")).toBe("openai_responses");
+    expect(matchRouteCapability("POST", "/v1/responses/compact")).toBe("openai_responses");
+    expect(matchRouteCapability("POST", "responses/trace")).toBe("openai_responses");
+  });
+
+  it("should match codex cli responses when codex headers are present", () => {
+    expect(matchRouteCapability("POST", "/v1/responses", { originator: "codex_cli_rs" })).toBe(
+      "codex_cli_responses"
+    );
+    expect(
+      matchRouteCapability("POST", "/v1/responses", { "user-agent": "codex_cli_rs/0.0.1" })
+    ).toBe("codex_cli_responses");
+    expect(matchRouteCapability("POST", "/v1/responses", { "x-codex-session": "sess-1" })).toBe(
+      "codex_cli_responses"
+    );
+  });
+
+  it("should match claude code messages when cli headers are present", () => {
+    expect(
+      matchRouteCapability("POST", "/v1/messages", {
+        "anthropic-beta": "claude-code-20251001",
+      })
+    ).toBe("claude_code_messages");
+    expect(
+      matchRouteCapability("POST", "/v1/messages/count_tokens", {
+        "user-agent": "claude-cli/1.0.0",
+        "x-app": "cli",
+      })
+    ).toBe("claude_code_messages");
+  });
+
+  it("should expose path_header_profile route match source for cli-specific requests", () => {
+    expect(resolveRouteCapability("POST", "/v1/responses", { originator: "codex_cli_rs" })).toEqual(
+      {
+        capability: "codex_cli_responses",
+        routeMatchSource: "path_header_profile",
+        protocolFamily: "responses",
+      }
+    );
   });
 
   it("should match openai chat compatible route", () => {

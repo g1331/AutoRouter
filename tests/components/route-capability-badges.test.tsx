@@ -39,16 +39,16 @@ describe("RouteCapabilityMultiSelect", () => {
 
     render(<RouteCapabilityMultiSelect selected={[]} onChange={onChange} />);
 
-    fireEvent.click(screen.getByText("capabilityCodexResponses"));
-    expect(onChange).toHaveBeenCalledWith(["codex_responses"]);
+    fireEvent.click(screen.getByText("capabilityCodexCliResponses"));
+    expect(onChange).toHaveBeenCalledWith(["codex_cli_responses"]);
   });
 
   it("should remove capability on click when already selected", () => {
     const onChange = vi.fn();
 
-    render(<RouteCapabilityMultiSelect selected={["codex_responses"]} onChange={onChange} />);
+    render(<RouteCapabilityMultiSelect selected={["codex_cli_responses"]} onChange={onChange} />);
 
-    fireEvent.click(screen.getByText("capabilityCodexResponses"));
+    fireEvent.click(screen.getByText("capabilityCodexCliResponses"));
     expect(onChange).toHaveBeenCalledWith([]);
   });
 });

@@ -174,15 +174,19 @@ type UpstreamFormValues = z.input<typeof editUpstreamFormSchema>;
 type UpstreamFormData = z.output<typeof editUpstreamFormSchema>;
 
 const V1_AUTO_APPEND_CAPABILITIES = new Set<RouteCapability>([
+  "openai_responses",
+  "codex_cli_responses",
   "anthropic_messages",
-  "codex_responses",
+  "claude_code_messages",
   "openai_chat_compatible",
   "openai_extended",
 ]);
 
 const CAPABILITY_PREVIEW_PATHS: Record<RouteCapability, string> = {
+  openai_responses: "responses",
+  codex_cli_responses: "responses",
   anthropic_messages: "messages",
-  codex_responses: "responses",
+  claude_code_messages: "messages",
   openai_chat_compatible: "chat/completions",
   openai_extended: "completions",
   gemini_native_generate: "v1beta/models/{model}:generateContent",

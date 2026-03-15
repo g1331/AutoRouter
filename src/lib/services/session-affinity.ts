@@ -286,11 +286,13 @@ export function extractSessionId(
   bodyJson: Record<string, unknown> | null
 ): SessionIdResult {
   switch (capability) {
-    case "anthropic_messages": {
+    case "anthropic_messages":
+    case "claude_code_messages": {
       const sessionId = extractAnthropicSessionId(bodyJson);
       return { sessionId, source: sessionId ? "body" : null };
     }
-    case "codex_responses":
+    case "openai_responses":
+    case "codex_cli_responses":
     case "openai_chat_compatible":
     case "openai_extended":
       return extractOpenAISessionId(headers, bodyJson);

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, CircleHelp } from "lucide-react";
+import { Check, CircleHelp, SquareTerminal } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -118,6 +118,11 @@ export const ROUTE_CAPABILITY_ICON_META: Record<
   terminal: {
     render: (className) => <CodexCliLogo className={className} />,
     iconColorClass: "text-foreground",
+    iconContainerClass: "border-divider bg-surface-300",
+  },
+  terminal_anthropic: {
+    render: (className) => <SquareTerminal className={className} />,
+    iconColorClass: "text-[#141413] dark:text-[#FAF9F5]",
     iconContainerClass: "border-divider bg-surface-300",
   },
   message_circle: {

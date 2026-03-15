@@ -194,17 +194,17 @@ describe("SessionAffinityStore", () => {
     });
 
     it("should keep cumulative tokens isolated by route capability scope", () => {
-      store.set("key1", "codex_responses", "session-abc", "upstream-codex", 1024);
+      store.set("key1", "codex_cli_responses", "session-abc", "upstream-codex", 1024);
       store.set("key1", "openai_chat_compatible", "session-abc", "upstream-openai-chat", 1024);
 
-      store.updateCumulativeTokens("key1", "codex_responses", "session-abc", {
+      store.updateCumulativeTokens("key1", "codex_cli_responses", "session-abc", {
         totalInputTokens: 100,
       });
       store.updateCumulativeTokens("key1", "openai_chat_compatible", "session-abc", {
         totalInputTokens: 250,
       });
 
-      const codexEntry = store.get("key1", "codex_responses", "session-abc");
+      const codexEntry = store.get("key1", "codex_cli_responses", "session-abc");
       const chatEntry = store.get("key1", "openai_chat_compatible", "session-abc");
 
       expect(codexEntry?.cumulativeTokens).toBe(100);
@@ -222,10 +222,12 @@ describe("SessionAffinityStore", () => {
     });
 
     it("should isolate entries by route capability scope", () => {
-      store.set("key1", "codex_responses", "session-abc", "upstream-1", 1024);
+      store.set("key1", "codex_cli_responses", "session-abc", "upstream-1", 1024);
       store.set("key1", "openai_chat_compatible", "session-abc", "upstream-2", 2048);
 
-      expect(store.get("key1", "codex_responses", "session-abc")?.upstreamId).toBe("upstream-1");
+      expect(store.get("key1", "codex_cli_responses", "session-abc")?.upstreamId).toBe(
+        "upstream-1"
+      );
       expect(store.get("key1", "openai_chat_compatible", "session-abc")?.upstreamId).toBe(
         "upstream-2"
       );
@@ -258,12 +260,16 @@ describe("extractSessionId", () => {
       });
     });
 
-    it("should extract session_id for codex/openai capabilities", () => {
+    it("should extract session_id for responses and openai-compatible capabilities", () => {
       const headers = {
         session_id: "sess_route_scope_001",
       };
 
-      expect(extractSessionId("codex_responses", headers, {})).toEqual({
+      expect(extractSessionId("openai_responses", headers, {})).toEqual({
+        sessionId: "sess_route_scope_001",
+        source: "header",
+      });
+      expect(extractSessionId("codex_cli_responses", headers, {})).toEqual({
         sessionId: "sess_route_scope_001",
         source: "header",
       });

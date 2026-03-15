@@ -3,6 +3,9 @@
  * Keep consistent with backend Pydantic schemas
  */
 
+export type { RouteCapability, RouteMatchSource } from "@/lib/route-capabilities";
+import type { RouteCapability, RouteMatchSource } from "@/lib/route-capabilities";
+
 // ========== API Key Types ==========
 
 export interface APIKeyCreate {
@@ -52,14 +55,6 @@ export interface APIKeyRevealResponse {
  * Provider type for routing and authentication
  */
 export type ProviderType = "anthropic" | "openai" | "google" | "custom";
-export type RouteCapability =
-  | "anthropic_messages"
-  | "codex_responses"
-  | "openai_chat_compatible"
-  | "openai_extended"
-  | "gemini_native_generate"
-  | "gemini_code_assist_internal";
-export type RouteMatchSource = "path";
 
 // ========== Upstream Health Types ==========
 
@@ -710,7 +705,7 @@ export interface CompensationRule {
   name: string;
   is_builtin: boolean;
   enabled: boolean;
-  capabilities: string[];
+  capabilities: RouteCapability[];
   target_header: string;
   sources: string[];
   mode: string;
@@ -721,7 +716,7 @@ export interface CompensationRule {
 export interface CompensationRuleCreate {
   name: string;
   enabled?: boolean;
-  capabilities: string[];
+  capabilities: RouteCapability[];
   target_header: string;
   sources: string[];
   mode?: string;
@@ -730,7 +725,7 @@ export interface CompensationRuleCreate {
 export interface CompensationRuleUpdate {
   name?: string;
   enabled?: boolean;
-  capabilities?: string[];
+  capabilities?: RouteCapability[];
   target_header?: string;
   sources?: string[];
   mode?: string;

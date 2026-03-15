@@ -697,21 +697,21 @@ describe("load-balancer", () => {
         const tier1 = makeUpstream({ id: "u-tier1", priority: 1 });
         mockFindMany.mockResolvedValue([tier0, tier1]);
 
-        affinityStore.set("key1", "codex_responses", "session-abc", "u-tier1", 1024);
+        affinityStore.set("key1", "codex_cli_responses", "session-abc", "u-tier1", 1024);
 
         const result = await selectFromProviderType("openai", undefined, undefined, {
           apiKeyId: "key1",
           sessionId: "session-abc",
-          affinityScope: "openai_chat_compatible",
+          affinityScope: "openai_responses",
           contentLength: 2048,
         });
 
         expect(result.upstream.id).toBe("u-tier0");
         expect(result.affinityHit).toBe(false);
-        expect(affinityStore.get("key1", "codex_responses", "session-abc")?.upstreamId).toBe(
+        expect(affinityStore.get("key1", "codex_cli_responses", "session-abc")?.upstreamId).toBe(
           "u-tier1"
         );
-        expect(affinityStore.get("key1", "openai_chat_compatible", "session-abc")).toBeNull();
+        expect(affinityStore.get("key1", "openai_responses", "session-abc")).toBeNull();
       });
 
       it("should use affinity binding when session exists and upstream is available", async () => {

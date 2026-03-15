@@ -45,6 +45,7 @@ import {
   useDeleteCompensationRule,
 } from "@/hooks/use-compensation-rules";
 import { ROUTE_CAPABILITY_DEFINITIONS } from "@/lib/route-capabilities";
+import type { RouteCapability } from "@/lib/route-capabilities";
 import type { CompensationRule, CompensationRuleCreate, CompensationRuleUpdate } from "@/types/api";
 
 // ---- Source list with drag-sort (no external lib) ----
@@ -138,14 +139,14 @@ function SourceList({ sources, onChange }: SourceListProps) {
 // ---- Capability checkboxes ----
 
 interface CapabilityPickerProps {
-  selected: string[];
-  onChange: (caps: string[]) => void;
+  selected: RouteCapability[];
+  onChange: (caps: RouteCapability[]) => void;
 }
 
 function CapabilityPicker({ selected, onChange }: CapabilityPickerProps) {
   const t = useTranslations("upstreams");
 
-  const toggle = (value: string) => {
+  const toggle = (value: RouteCapability) => {
     onChange(selected.includes(value) ? selected.filter((c) => c !== value) : [...selected, value]);
   };
 
@@ -199,7 +200,7 @@ function RuleFormDialog({ open, onClose, initial }: RuleFormDialogProps) {
 
   const [name, setName] = useState(initial?.name ?? "");
   const [targetHeader, setTargetHeader] = useState(initial?.target_header ?? "");
-  const [capabilities, setCapabilities] = useState<string[]>(initial?.capabilities ?? []);
+  const [capabilities, setCapabilities] = useState<RouteCapability[]>(initial?.capabilities ?? []);
   const [sources, setSources] = useState<string[]>(initial?.sources ?? []);
   const [errors, setErrors] = useState<Record<string, string>>({});
 

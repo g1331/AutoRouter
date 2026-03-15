@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getPrimaryProviderByCapabilities,
+  normalizeCompensationRuleCapabilities,
   normalizeRouteCapabilities,
   resolveRouteCapabilities,
   areSingleProviderCapabilities,
@@ -17,6 +18,17 @@ describe("route-capabilities", () => {
     ]);
 
     expect(result).toEqual(["openai_chat_compatible", "openai_extended"]);
+  });
+
+  it("normalizes legacy upstream codex_responses capability to openai_responses", () => {
+    expect(normalizeRouteCapabilities(["codex_responses"])).toEqual(["openai_responses"]);
+  });
+
+  it("normalizes legacy compensation codex_responses capability to generic and cli responses", () => {
+    expect(normalizeCompensationRuleCapabilities(["codex_responses"])).toEqual([
+      "openai_responses",
+      "codex_cli_responses",
+    ]);
   });
 
   it("returns null primary provider when normalized capabilities are empty", () => {
@@ -43,9 +55,10 @@ describe("route-capabilities", () => {
     it("returns true for multiple capabilities from the same provider", () => {
       expect(
         areSingleProviderCapabilities([
+          "openai_responses",
+          "codex_cli_responses",
           "openai_chat_compatible",
           "openai_extended",
-          "codex_responses",
         ])
       ).toBe(true);
     });
