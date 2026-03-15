@@ -4,6 +4,11 @@ import { validateAdminAuth } from "@/lib/utils/auth";
 import { errorResponse } from "@/lib/utils/api-auth";
 import { db, compensationRules } from "@/lib/db";
 import {
+  normalizeCompensationRuleCapabilities,
+  type RouteCapability,
+} from "@/lib/route-capabilities";
+import {
+  ensureCompensationRuleCapabilityMigration,
   ensureBuiltinCompensationRulesExist,
   invalidateCache,
 } from "@/lib/services/compensation-service";
@@ -16,7 +21,7 @@ export interface CompensationRuleResponse {
   name: string;
   is_builtin: boolean;
   enabled: boolean;
-  capabilities: string[];
+  capabilities: RouteCapability[];
   target_header: string;
   sources: string[];
   mode: string;
@@ -41,7 +46,7 @@ function toResponse(rule: {
     name: rule.name,
     is_builtin: rule.isBuiltin,
     enabled: rule.enabled,
-    capabilities: rule.capabilities,
+    capabilities: normalizeCompensationRuleCapabilities(rule.capabilities),
     target_header: rule.targetHeader,
     sources: rule.sources,
     mode: rule.mode,
@@ -61,6 +66,7 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   try {
     await ensureBuiltinCompensationRulesExist();
+    await ensureCompensationRuleCapabilityMigration();
     const rules = await db.select().from(compensationRules);
     return NextResponse.json({ data: rules.map(toResponse) });
   } catch (err) {
@@ -117,6 +123,14 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 
   try {
+    const normalizedCapabilities = normalizeCompensationRuleCapabilities(capabilities);
+    if (normalizedCapabilities.length === 0) {
+      return errorResponse(
+        "capabilities must include at least one supported route capability",
+        400
+      );
+    }
+
     // Check for name collision
     const existing = await db
       .select({ id: compensationRules.id })
@@ -132,7 +146,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         name: name.trim(),
         isBuiltin: false,
         enabled,
-        capabilities,
+        capabilities: normalizedCapabilities,
         targetHeader: target_header,
         sources,
         mode,

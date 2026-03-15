@@ -327,7 +327,9 @@ export function RoutingDecisionTimeline({
                     ({t("routeMatchSource")}:{" "}
                     {routingDecision.route_match_source === "path"
                       ? t("routeMatchSourcePath")
-                      : t("routeMatchSourceModelFallback")}
+                      : routingDecision.route_match_source === "path_header_profile"
+                        ? t("routeMatchSourcePathHeaderProfile")
+                        : t("routeMatchSourceModelFallback")}
                     )
                   </span>
                 )}

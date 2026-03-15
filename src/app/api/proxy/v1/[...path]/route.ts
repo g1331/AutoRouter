@@ -42,15 +42,17 @@ import {
 import { randomUUID } from "crypto";
 import {
   type CapabilityProvider,
+  getFallbackRouteCapability,
   getPrimaryProviderByCapabilities,
   getProviderByRouteCapability,
+  isCliRouteCapability,
   resolveRouteCapabilities,
   type RouteCapability,
   type RouteMatchSource,
 } from "@/lib/route-capabilities";
 import {
   extractGeminiModelFromPath,
-  matchRouteCapability,
+  resolveRouteCapability,
 } from "@/lib/services/route-capability-matcher";
 import { resolveModelWithRedirects } from "@/lib/services/model-router";
 import { ensureRouteCapabilityMigration } from "@/lib/services/route-capability-migration";
@@ -301,6 +303,80 @@ function mergeExcludedCandidates(
   return [...merged.values()];
 }
 
+interface RouteCapabilityCandidatePool {
+  requestedCapability: RouteCapability;
+  candidateCapability: RouteCapability;
+  capabilityCandidates: Upstream[];
+  authorizedCapabilityCandidates: Upstream[];
+  candidateUpstreamIds: string[];
+}
+
+function resolveRouteCapabilityCandidatePool(
+  activeUpstreams: Upstream[],
+  allowedUpstreamIdSet: Set<string>,
+  requestedCapability: RouteCapability,
+  candidateCapability: RouteCapability
+): RouteCapabilityCandidatePool {
+  const capabilityCandidates = activeUpstreams.filter((upstream) =>
+    resolveRouteCapabilities(upstream.routeCapabilities).includes(candidateCapability)
+  );
+  const authorizedCapabilityCandidates = capabilityCandidates.filter((upstream) =>
+    allowedUpstreamIdSet.has(upstream.id)
+  );
+
+  return {
+    requestedCapability,
+    candidateCapability,
+    capabilityCandidates,
+    authorizedCapabilityCandidates,
+    candidateUpstreamIds: authorizedCapabilityCandidates.map((upstream) => upstream.id),
+  };
+}
+
+function shouldPreferGenericFallbackPool(
+  primaryPool: RouteCapabilityCandidatePool,
+  fallbackPool: RouteCapabilityCandidatePool | null
+): boolean {
+  if (!fallbackPool) {
+    return false;
+  }
+
+  if (
+    primaryPool.capabilityCandidates.length === 0 &&
+    fallbackPool.capabilityCandidates.length > 0
+  ) {
+    return true;
+  }
+
+  if (
+    primaryPool.authorizedCapabilityCandidates.length === 0 &&
+    fallbackPool.authorizedCapabilityCandidates.length > 0
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function shouldRetryWithGenericFallback(
+  error: unknown,
+  fallbackPool: RouteCapabilityCandidatePool | null
+): boolean {
+  if (!fallbackPool || fallbackPool.authorizedCapabilityCandidates.length === 0) {
+    return false;
+  }
+
+  if (
+    !(
+      error instanceof NoHealthyUpstreamsError || error instanceof AllCandidatesConcurrencyFullError
+    )
+  ) {
+    return false;
+  }
+
+  return (error as FailoverErrorWithHistory).didSendUpstream !== true;
+}
+
 /**
  * Routing decision information for logging.
  */
@@ -519,10 +595,12 @@ function getUserHint(
 ): string {
   if (errorCode === "NO_AUTHORIZED_UPSTREAMS") {
     const capabilityLabel: Record<RouteCapability, string> = {
-      anthropic_messages: "Anthropic Messages",
-      codex_responses: "Codex Responses",
+      openai_responses: "OpenAI Responses",
+      codex_cli_responses: "Codex CLI Responses",
       openai_chat_compatible: "OpenAI Chat Completions",
       openai_extended: "OpenAI Extended APIs",
+      anthropic_messages: "Anthropic Messages",
+      claude_code_messages: "Claude Code Messages",
       gemini_native_generate: "Gemini Native Generate",
       gemini_code_assist_internal: "Gemini Code Assist Internal",
     };
@@ -1360,7 +1438,7 @@ function computeAffinityTokens(
 ): number {
   const prompt = usage.promptTokens || 0;
 
-  if (routeCapability !== "anthropic_messages") {
+  if (routeCapability !== "anthropic_messages" && routeCapability !== "claude_code_messages") {
     return prompt;
   }
 
@@ -1497,7 +1575,12 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   const model = tempContext.model;
   const bodyJson: Record<string, unknown> | null = tempContext.bodyJson;
   const requestedStream = tempContext.isStream;
-  const matchedRouteCapability = matchRouteCapability(request.method, path);
+  const matchedRouteCapabilityDetails = resolveRouteCapability(
+    request.method,
+    path,
+    request.headers
+  );
+  const matchedRouteCapability = matchedRouteCapabilityDetails?.capability ?? null;
 
   if (!matchedRouteCapability) {
     const unsupportedDurationMs = Date.now() - startTime;
@@ -1590,7 +1673,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   let priorityTier: number | null = null;
   let resolvedModel: string | null = model;
   let modelRedirectApplied = false;
-  const routeMatchSource: RouteMatchSource = "path";
+  const routeMatchSource: RouteMatchSource =
+    matchedRouteCapabilityDetails?.routeMatchSource ?? "path";
   let candidateUpstreamIds: string[] = [];
   let capabilityCandidates: Upstream[] = [];
   let finalCapabilityCandidates: Upstream[] = [];
@@ -1602,9 +1686,51 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     where: eq(upstreams.isActive, true),
   });
 
-  capabilityCandidates = activeUpstreams.filter((upstream) =>
-    resolveRouteCapabilities(upstream.routeCapabilities).includes(matchedRouteCapability)
+  const primaryCandidatePool = resolveRouteCapabilityCandidatePool(
+    activeUpstreams,
+    allowedUpstreamIdSet,
+    matchedRouteCapability,
+    matchedRouteCapability
   );
+  const fallbackCapability = getFallbackRouteCapability(matchedRouteCapability);
+  const fallbackCandidatePool = fallbackCapability
+    ? resolveRouteCapabilityCandidatePool(
+        activeUpstreams,
+        allowedUpstreamIdSet,
+        matchedRouteCapability,
+        fallbackCapability
+      )
+    : null;
+  let activeCandidatePool = shouldPreferGenericFallbackPool(
+    primaryCandidatePool,
+    fallbackCandidatePool
+  )
+    ? fallbackCandidatePool!
+    : primaryCandidatePool;
+
+  if (
+    activeCandidatePool.candidateCapability !== matchedRouteCapability &&
+    fallbackCapability != null
+  ) {
+    log.warn(
+      {
+        requestId,
+        path,
+        matchedRouteCapability,
+        fallbackCapability,
+        routeMatchSource,
+        fallbackReason:
+          primaryCandidatePool.capabilityCandidates.length === 0
+            ? "no_exact_capability_candidates"
+            : "no_exact_authorized_candidates",
+      },
+      "cli request is using generic capability fallback before upstream selection"
+    );
+  }
+
+  capabilityCandidates = activeCandidatePool.capabilityCandidates;
+  finalCapabilityCandidates = activeCandidatePool.authorizedCapabilityCandidates;
+  candidateUpstreamIds = activeCandidatePool.candidateUpstreamIds;
 
   if (capabilityCandidates.length === 0) {
     log.warn(
@@ -1612,6 +1738,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         requestId,
         path,
         matchedRouteCapability,
+        fallbackCapability,
         activeUpstreamCount: activeUpstreams.length,
         capabilityCandidatesCount: capabilityCandidates.length,
       },
@@ -1621,23 +1748,23 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       reason: "NO_HEALTHY_CANDIDATES",
       did_send_upstream: false,
       request_id: requestId,
-      user_hint: `未找到支持路径能力 ${matchedRouteCapability} 的上游，请先检查上游能力配置`,
+      user_hint:
+        isCliRouteCapability(matchedRouteCapability) && fallbackCapability
+          ? `未找到支持路径能力 ${matchedRouteCapability} 或回退能力 ${fallbackCapability} 的上游，请先检查上游能力配置`
+          : `未找到支持路径能力 ${matchedRouteCapability} 的上游，请先检查上游能力配置`,
     });
   }
 
-  const authorizedCapabilityCandidates = capabilityCandidates.filter((upstream) =>
-    allowedUpstreamIdSet.has(upstream.id)
-  );
-
-  if (authorizedCapabilityCandidates.length === 0) {
+  if (finalCapabilityCandidates.length === 0) {
     log.warn(
       {
         requestId,
         path,
         matchedRouteCapability,
         capabilityCandidatesCount: capabilityCandidates.length,
-        authorizedCapabilityCandidatesCount: authorizedCapabilityCandidates.length,
+        authorizedCapabilityCandidatesCount: finalCapabilityCandidates.length,
         allowedUpstreamCount: allowedUpstreamIds.length,
+        fallbackCapability,
       },
       "no authorized upstream for matched route capability"
     );
@@ -1649,12 +1776,10 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     });
   }
 
-  finalCapabilityCandidates = authorizedCapabilityCandidates;
   excludedCapabilityCandidates = [];
   candidateCircuitStates = await buildCandidateCircuitStateMap(capabilityCandidates, requestId);
 
-  const selectedCandidate = finalCapabilityCandidates[0];
-  candidateUpstreamIds = finalCapabilityCandidates.map((upstream) => upstream.id);
+  let selectedCandidate = finalCapabilityCandidates[0];
   ({ resolvedModel, redirectApplied: modelRedirectApplied } = resolvePathRoutingModelForUpstream(
     model,
     selectedCandidate
@@ -1665,8 +1790,10 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       requestId,
       path,
       matchedRouteCapability,
+      candidatePoolCapability: activeCandidatePool.candidateCapability,
+      routeMatchSource,
       candidateCount: capabilityCandidates.length,
-      authorizedCount: authorizedCapabilityCandidates.length,
+      authorizedCount: finalCapabilityCandidates.length,
       selectableCount: finalCapabilityCandidates.length,
     },
     "path-based capability routing decision"
@@ -1761,6 +1888,62 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       bodyJson
     );
 
+    let proxySelection: Awaited<ReturnType<typeof forwardWithFailover>>;
+    try {
+      proxySelection = await forwardWithFailover(
+        request,
+        matchedRouteCapability,
+        path,
+        requestId,
+        candidateUpstreamIds,
+        affinityContext,
+        compensationHeaders
+      );
+    } catch (error) {
+      if (
+        activeCandidatePool.candidateCapability === matchedRouteCapability &&
+        shouldRetryWithGenericFallback(error, fallbackCandidatePool)
+      ) {
+        activeCandidatePool = fallbackCandidatePool!;
+        capabilityCandidates = activeCandidatePool.capabilityCandidates;
+        finalCapabilityCandidates = activeCandidatePool.authorizedCapabilityCandidates;
+        candidateUpstreamIds = activeCandidatePool.candidateUpstreamIds;
+        candidateCircuitStates = await buildCandidateCircuitStateMap(
+          capabilityCandidates,
+          requestId
+        );
+
+        const fallbackSelectedCandidate = finalCapabilityCandidates[0];
+        selectedCandidate = fallbackSelectedCandidate;
+        ({ resolvedModel, redirectApplied: modelRedirectApplied } =
+          resolvePathRoutingModelForUpstream(model, fallbackSelectedCandidate));
+
+        log.warn(
+          {
+            requestId,
+            path,
+            matchedRouteCapability,
+            fallbackCapability: activeCandidatePool.candidateCapability,
+            routeMatchSource,
+            fallbackReason: "no_exact_selectable_candidates",
+          },
+          "cli-only capability pool unavailable, retrying with generic capability fallback"
+        );
+
+        proxySelection = await forwardWithFailover(
+          request,
+          matchedRouteCapability,
+          path,
+          requestId,
+          candidateUpstreamIds,
+          affinityContext,
+          compensationHeaders
+        );
+      } else {
+        throw error;
+      }
+    }
+
     const {
       result: proxyResult,
       selectedUpstream: selected,
@@ -1769,15 +1952,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       affinityHit: afHit,
       affinityMigrated: afMigrated,
       finalSelectionReason,
-    } = await forwardWithFailover(
-      request,
-      matchedRouteCapability,
-      path,
-      requestId,
-      candidateUpstreamIds,
-      affinityContext,
-      compensationHeaders
-    );
+    } = proxySelection;
     const result: ProxyResult = proxyResult;
     const upstreamForLogging: Upstream = selected;
     failoverHistory = history;

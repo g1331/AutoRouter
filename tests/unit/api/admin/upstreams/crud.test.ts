@@ -216,7 +216,7 @@ describe("Admin Upstreams API with new fields", () => {
         weight: 1,
         priority: 0,
         providerType: "openai",
-        routeCapabilities: ["codex_responses", "openai_chat_compatible"],
+        routeCapabilities: ["openai_responses", "codex_cli_responses", "openai_chat_compatible"],
         allowedModels: null,
         modelRedirects: null,
         createdAt: new Date(),
@@ -234,7 +234,12 @@ describe("Admin Upstreams API with new fields", () => {
           base_url: "https://api.openai.com",
           api_key: "sk-test-key-12345678",
           provider_type: "openai",
-          route_capabilities: ["openai_chat_compatible", "codex_responses", "codex_responses"],
+          route_capabilities: [
+            "openai_chat_compatible",
+            "codex_cli_responses",
+            "openai_responses",
+            "codex_cli_responses",
+          ],
         }),
       });
 
@@ -242,10 +247,14 @@ describe("Admin Upstreams API with new fields", () => {
       const data = await response.json();
 
       expect(response.status).toBe(201);
-      expect(data.route_capabilities).toEqual(["codex_responses", "openai_chat_compatible"]);
+      expect(data.route_capabilities).toEqual([
+        "openai_responses",
+        "codex_cli_responses",
+        "openai_chat_compatible",
+      ]);
       expect(mockCreateUpstream).toHaveBeenCalledWith(
         expect.objectContaining({
-          routeCapabilities: ["codex_responses", "openai_chat_compatible"],
+          routeCapabilities: ["openai_responses", "codex_cli_responses", "openai_chat_compatible"],
         })
       );
     });
@@ -599,7 +608,7 @@ describe("Admin Upstreams API with new fields", () => {
         weight: 1,
         priority: 0,
         providerType: "openai",
-        routeCapabilities: ["codex_responses", "openai_chat_compatible"],
+        routeCapabilities: ["openai_responses", "codex_cli_responses", "openai_chat_compatible"],
         allowedModels: null,
         modelRedirects: null,
         createdAt: new Date(),
@@ -613,7 +622,12 @@ describe("Admin Upstreams API with new fields", () => {
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          route_capabilities: ["openai_chat_compatible", "codex_responses", "codex_responses"],
+          route_capabilities: [
+            "openai_chat_compatible",
+            "codex_cli_responses",
+            "openai_responses",
+            "codex_cli_responses",
+          ],
         }),
       });
 
@@ -621,11 +635,15 @@ describe("Admin Upstreams API with new fields", () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.route_capabilities).toEqual(["codex_responses", "openai_chat_compatible"]);
+      expect(data.route_capabilities).toEqual([
+        "openai_responses",
+        "codex_cli_responses",
+        "openai_chat_compatible",
+      ]);
       expect(mockUpdateUpstream).toHaveBeenCalledWith(
         "upstream-1",
         expect.objectContaining({
-          routeCapabilities: ["codex_responses", "openai_chat_compatible"],
+          routeCapabilities: ["openai_responses", "codex_cli_responses", "openai_chat_compatible"],
         })
       );
     });

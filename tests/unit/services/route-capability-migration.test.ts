@@ -135,6 +135,37 @@ describe("route-capability-migration", () => {
     );
   });
 
+  it("migrates legacy codex_responses capability to openai_responses and logs operator guidance", async () => {
+    mocks.findMany.mockResolvedValueOnce([
+      {
+        id: "upstream-legacy",
+        name: "legacy-codex-upstream",
+        routeCapabilities: ["codex_responses"],
+        updatedAt: new Date(),
+      },
+    ]);
+
+    const { ensureRouteCapabilityMigration } =
+      await import("@/lib/services/route-capability-migration");
+
+    await expect(ensureRouteCapabilityMigration()).resolves.toBeUndefined();
+
+    expect(mocks.update).toHaveBeenCalledTimes(1);
+    expect(mocks.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        routeCapabilities: ["openai_responses"],
+      })
+    );
+    expect(mocks.logWarn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        upstreamId: "upstream-legacy",
+        upstreamName: "legacy-codex-upstream",
+        routeCapabilities: ["openai_responses"],
+      }),
+      "migrated legacy codex_responses upstream capability to openai_responses; if this upstream should be CLI-only, reconfigure it to codex_cli_responses"
+    );
+  });
+
   it("does not write when persisted capabilities are already normalized", async () => {
     mocks.findMany.mockResolvedValueOnce([
       {

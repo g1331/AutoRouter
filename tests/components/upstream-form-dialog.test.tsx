@@ -161,7 +161,8 @@ describe("UpstreamFormDialog", () => {
         wrapper: Wrapper,
       });
 
-      expect(screen.getByText("capabilityCodexResponses")).toBeInTheDocument();
+      expect(screen.getByText("capabilityCodexCliResponses")).toBeInTheDocument();
+      expect(screen.getByText("capabilityOpenAIResponses")).toBeInTheDocument();
       expect(screen.getByText("capabilityOpenAIChatCompatible")).toBeInTheDocument();
     });
 
@@ -266,14 +267,14 @@ describe("UpstreamFormDialog", () => {
         target: { value: "sk-test-key" },
       });
 
-      fireEvent.click(screen.getByText("capabilityCodexResponses"));
+      fireEvent.click(screen.getByText("capabilityCodexCliResponses"));
       fireEvent.click(screen.getByText("capabilityOpenAIChatCompatible"));
       fireEvent.click(screen.getByText("create"));
 
       await waitFor(() => {
         expect(mockCreateMutateAsync).toHaveBeenCalledWith(
           expect.objectContaining({
-            route_capabilities: ["codex_responses", "openai_chat_compatible"],
+            route_capabilities: ["codex_cli_responses", "openai_chat_compatible"],
           })
         );
       });
@@ -295,7 +296,7 @@ describe("UpstreamFormDialog", () => {
       fireEvent.change(screen.getByPlaceholderText("apiKeyPlaceholder"), {
         target: { value: "sk-test-key" },
       });
-      fireEvent.click(screen.getByText("capabilityCodexResponses"));
+      fireEvent.click(screen.getByText("capabilityCodexCliResponses"));
 
       expect(screen.getByText("baseUrlAutoAppendV1Hint")).toBeInTheDocument();
       expect(screen.getByText("https://www.right.codes/codex/v1/responses")).toBeInTheDocument();
@@ -307,7 +308,7 @@ describe("UpstreamFormDialog", () => {
         expect(mockCreateMutateAsync).toHaveBeenCalledWith(
           expect.objectContaining({
             base_url: "https://www.right.codes/codex/v1",
-            route_capabilities: ["codex_responses"],
+            route_capabilities: ["codex_cli_responses"],
           })
         );
       });
@@ -321,7 +322,7 @@ describe("UpstreamFormDialog", () => {
       fireEvent.change(screen.getByPlaceholderText("baseUrlPlaceholder"), {
         target: { value: "https://www.right.codes/codex/v1" },
       });
-      fireEvent.click(screen.getByText("capabilityCodexResponses"));
+      fireEvent.click(screen.getByText("capabilityCodexCliResponses"));
 
       expect(screen.getByText("baseUrlDuplicateV1Warning")).toBeInTheDocument();
       expect(screen.getByText("https://www.right.codes/codex/v1/responses")).toBeInTheDocument();
@@ -391,7 +392,7 @@ describe("UpstreamFormDialog", () => {
     it("echoes selected route capabilities in edit mode", () => {
       const capabilityUpstream: Upstream = {
         ...mockUpstream,
-        route_capabilities: ["codex_responses", "openai_chat_compatible"],
+        route_capabilities: ["codex_cli_responses", "openai_chat_compatible"],
       };
 
       render(
@@ -403,7 +404,7 @@ describe("UpstreamFormDialog", () => {
         { wrapper: Wrapper }
       );
 
-      expect(screen.getByText("capabilityCodexResponses")).toBeInTheDocument();
+      expect(screen.getByText("capabilityCodexCliResponses")).toBeInTheDocument();
       expect(screen.getByText("capabilityOpenAIChatCompatible")).toBeInTheDocument();
       expect(screen.getAllByText("selected").length).toBeGreaterThanOrEqual(2);
     });

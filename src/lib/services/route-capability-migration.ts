@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db, upstreams } from "@/lib/db";
-import { normalizeRouteCapabilities } from "@/lib/route-capabilities";
+import { normalizeRouteCapabilitiesWithMeta } from "@/lib/route-capabilities";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("route-capability-migration");
@@ -50,7 +50,8 @@ async function runMigrationInternal(): Promise<boolean> {
 
   for (const upstream of allUpstreams) {
     const persistedCapabilities = upstream.routeCapabilities ?? [];
-    const normalizedCapabilities = normalizeRouteCapabilities(persistedCapabilities);
+    const normalizedResult = normalizeRouteCapabilitiesWithMeta(persistedCapabilities);
+    const normalizedCapabilities = normalizedResult.capabilities;
 
     const shouldUpdate =
       upstream.routeCapabilities == null ||
@@ -78,6 +79,31 @@ async function runMigrationInternal(): Promise<boolean> {
         "skip route capability migration due to update failure"
       );
       return false;
+    }
+
+    if (normalizedResult.remappedValues.includes("codex_responses")) {
+      log.warn(
+        {
+          upstreamId: upstream.id,
+          upstreamName: upstream.name,
+          routeCapabilities: normalizedCapabilities,
+        },
+        "migrated legacy codex_responses upstream capability to openai_responses; if this upstream should be CLI-only, reconfigure it to codex_cli_responses"
+      );
+      continue;
+    }
+
+    if (normalizedResult.invalidValues.length > 0) {
+      log.warn(
+        {
+          upstreamId: upstream.id,
+          upstreamName: upstream.name,
+          invalidValues: normalizedResult.invalidValues,
+          routeCapabilities: normalizedCapabilities,
+        },
+        "removed invalid upstream route capabilities during startup migration"
+      );
+      continue;
     }
 
     log.info(

@@ -10,6 +10,7 @@ vi.mock("drizzle-orm", () => ({
 }));
 
 vi.mock("@/lib/services/compensation-service", () => ({
+  ensureCompensationRuleCapabilityMigration: vi.fn(async () => undefined),
   ensureBuiltinCompensationRulesExist: vi.fn(async () => undefined),
   invalidateCache: vi.fn(),
 }));
@@ -49,7 +50,7 @@ const BUILTIN_RULE = {
   name: "Session ID Recovery",
   isBuiltin: true,
   enabled: true,
-  capabilities: ["codex_responses"],
+  capabilities: ["openai_responses", "codex_cli_responses"],
   targetHeader: "session_id",
   sources: ["headers.session_id"],
   mode: "missing_only",
@@ -129,7 +130,7 @@ describe("POST /api/admin/compensation-rules", () => {
       method: "POST",
       body: JSON.stringify({
         name: "test",
-        capabilities: ["codex_responses"],
+        capabilities: ["openai_responses"],
         target_header: "x",
         sources: ["headers.x"],
       }),
@@ -199,7 +200,7 @@ describe("POST /api/admin/compensation-rules", () => {
       headers: { authorization: AUTH_HEADER, "content-type": "application/json" },
       body: JSON.stringify({
         name: "Session ID Recovery",
-        capabilities: ["codex_responses"],
+        capabilities: ["openai_responses"],
         target_header: "session_id",
         sources: ["headers.session_id"],
       }),

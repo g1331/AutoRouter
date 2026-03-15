@@ -295,7 +295,7 @@ describe("proxy route upstream selection", () => {
     id,
     name: id,
     providerType: "openai",
-    routeCapabilities: ["anthropic_messages", "openai_chat_compatible", "codex_responses"],
+    routeCapabilities: ["anthropic_messages", "openai_chat_compatible", "openai_responses"],
     baseUrl: `https://${id}.example.com`,
     isDefault: false,
     isActive: true,
@@ -553,7 +553,7 @@ describe("proxy route upstream selection", () => {
         timeout: 60,
         priority: 0,
         weight: 1,
-        routeCapabilities: ["codex_responses"],
+        routeCapabilities: ["openai_responses"],
       },
     ]);
     vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
@@ -605,6 +605,208 @@ describe("proxy route upstream selection", () => {
     expect(routeByModel).not.toHaveBeenCalled();
     expect(selectFromProviderType).toHaveBeenCalledWith(["up-codex"], undefined, undefined);
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(codexUpstream);
+  });
+
+  it("should prefer codex cli upstreams when codex cli headers are present", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const __mockLogger = (
+      (await import("@/lib/utils/logger")) as unknown as {
+        __mockLogger: { debug: ReturnType<typeof vi.fn> };
+      }
+    ).__mockLogger;
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-codex-cli" },
+      { upstreamId: "up-openai" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-codex-cli",
+        name: "codex-cli-upstream",
+        providerType: "openai",
+        baseUrl: "https://codex-cli.example.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["codex_cli_responses"],
+      },
+      {
+        id: "up-openai",
+        name: "generic-responses-upstream",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["openai_responses"],
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+    const codexCliUpstream = {
+      id: "up-codex-cli",
+      name: "codex-cli-upstream",
+      providerType: "openai",
+      baseUrl: "https://codex-cli.example.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: codexCliUpstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: null,
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/responses", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+        originator: "codex_cli_rs",
+      },
+      body: JSON.stringify({
+        input: "hello",
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["responses"] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(selectFromProviderType).toHaveBeenCalledWith(["up-codex-cli"], undefined, undefined);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(codexCliUpstream);
+    expect(__mockLogger.debug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "responses",
+        matchedRouteCapability: "codex_cli_responses",
+        candidatePoolCapability: "codex_cli_responses",
+        routeMatchSource: "path_header_profile",
+      }),
+      "path-based capability routing decision"
+    );
+  });
+
+  it("should fallback codex cli requests to generic responses upstreams when no cli-only upstream is available", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const __mockLogger = (
+      (await import("@/lib/utils/logger")) as unknown as {
+        __mockLogger: { warn: ReturnType<typeof vi.fn>; debug: ReturnType<typeof vi.fn> };
+      }
+    ).__mockLogger;
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-openai" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-openai",
+        name: "generic-responses-upstream",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["openai_responses"],
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+    const genericResponsesUpstream = {
+      id: "up-openai",
+      name: "generic-responses-upstream",
+      providerType: "openai",
+      baseUrl: "https://api.openai.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: genericResponsesUpstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: null,
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/responses", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+        originator: "codex_cli_rs",
+      },
+      body: JSON.stringify({
+        input: "hello",
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["responses"] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(selectFromProviderType).toHaveBeenCalledWith(["up-openai"], undefined, undefined);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(genericResponsesUpstream);
+    expect(__mockLogger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "responses",
+        matchedRouteCapability: "codex_cli_responses",
+        fallbackCapability: "openai_responses",
+        routeMatchSource: "path_header_profile",
+      }),
+      "cli request is using generic capability fallback before upstream selection"
+    );
+    expect(__mockLogger.debug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "responses",
+        matchedRouteCapability: "codex_cli_responses",
+        candidatePoolCapability: "openai_responses",
+        routeMatchSource: "path_header_profile",
+      }),
+      "path-based capability routing decision"
+    );
   });
 
   it("should extract model from gemini native path when request body omits model", async () => {
@@ -1115,14 +1317,14 @@ describe("proxy route upstream selection", () => {
     expect(__mockLogger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
         path: "responses",
-        matchedRouteCapability: "codex_responses",
+        matchedRouteCapability: "openai_responses",
         capabilityCandidatesCount: 0,
       }),
       "no upstream supports matched route capability"
     );
   });
 
-  it("should treat responses subpath as codex route capability", async () => {
+  it("should treat responses subpath as generic responses route capability", async () => {
     const { db } = await import("@/lib/db");
     const { routeByModel } = await import("@/lib/services/model-router");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
@@ -1183,7 +1385,7 @@ describe("proxy route upstream selection", () => {
     expect(__mockLogger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
         path: "responses/compact",
-        matchedRouteCapability: "codex_responses",
+        matchedRouteCapability: "openai_responses",
         capabilityCandidatesCount: 0,
       }),
       "no upstream supports matched route capability"

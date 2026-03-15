@@ -1,7 +1,11 @@
 import { eq } from "drizzle-orm";
 import { db, compensationRules } from "@/lib/db";
 import { createLogger } from "@/lib/utils/logger";
-import type { RouteCapability } from "@/lib/route-capabilities";
+import {
+  normalizeCompensationRuleCapabilities,
+  normalizeRouteCapabilitiesWithMeta,
+  type RouteCapability,
+} from "@/lib/route-capabilities";
 import type { CompensationHeader } from "./proxy-client";
 
 const log = createLogger("compensation-service");
@@ -13,7 +17,7 @@ const BUILTIN_RULES = [
     name: "Session ID Recovery",
     isBuiltin: true,
     enabled: true,
-    capabilities: ["codex_responses"],
+    capabilities: ["openai_responses", "codex_cli_responses"],
     targetHeader: "session_id",
     sources: [
       "headers.session_id",
@@ -37,7 +41,7 @@ export interface CompensationRule {
   name: string;
   isBuiltin: boolean;
   enabled: boolean;
-  capabilities: string[];
+  capabilities: RouteCapability[];
   targetHeader: string;
   sources: string[];
   mode: string;
@@ -48,6 +52,110 @@ type BuiltinEnsureState = "unknown" | "ok" | "blocked";
 let builtinEnsureState: BuiltinEnsureState = "unknown";
 let builtinEnsureRetryAt = 0;
 const BUILTIN_ENSURE_RETRY_MS = 60_000;
+let capabilityMigrationCompleted = false;
+let capabilityMigrationInFlight: Promise<void> | null = null;
+
+function arraysEqual(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  for (let index = 0; index < a.length; index += 1) {
+    if (a[index] !== b[index]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+async function runCompensationRuleCapabilityMigration(): Promise<void> {
+  const rules = await db.query.compensationRules.findMany({
+    columns: {
+      id: true,
+      name: true,
+      capabilities: true,
+    },
+  });
+
+  for (const rule of rules) {
+    const persistedCapabilities = rule.capabilities ?? [];
+    const normalizedResult = normalizeRouteCapabilitiesWithMeta(persistedCapabilities, {
+      aliases: {
+        codex_responses: ["openai_responses", "codex_cli_responses"],
+      },
+    });
+    const normalizedCapabilities = normalizedResult.capabilities;
+    const shouldUpdate =
+      rule.capabilities == null || !arraysEqual(persistedCapabilities, normalizedCapabilities);
+
+    if (!shouldUpdate) {
+      continue;
+    }
+
+    await db
+      .update(compensationRules)
+      .set({
+        capabilities: normalizedCapabilities,
+        updatedAt: new Date(),
+      })
+      .where(eq(compensationRules.id, rule.id));
+
+    if (normalizedResult.remappedValues.includes("codex_responses")) {
+      log.warn(
+        {
+          ruleId: rule.id,
+          ruleName: rule.name,
+          routeCapabilities: normalizedCapabilities,
+        },
+        "compensation-service: migrated legacy codex_responses rule to openai_responses + codex_cli_responses"
+      );
+    } else if (normalizedResult.invalidValues.length > 0) {
+      log.warn(
+        {
+          ruleId: rule.id,
+          ruleName: rule.name,
+          invalidValues: normalizedResult.invalidValues,
+          routeCapabilities: normalizedCapabilities,
+        },
+        "compensation-service: removed invalid route capabilities from compensation rule"
+      );
+    } else {
+      log.info(
+        {
+          ruleId: rule.id,
+          ruleName: rule.name,
+          routeCapabilities: normalizedCapabilities,
+        },
+        "compensation-service: normalized compensation rule capabilities"
+      );
+    }
+  }
+}
+
+export async function ensureCompensationRuleCapabilityMigration(): Promise<void> {
+  if (capabilityMigrationCompleted) {
+    return;
+  }
+
+  if (capabilityMigrationInFlight) {
+    await capabilityMigrationInFlight;
+    return;
+  }
+
+  capabilityMigrationInFlight = runCompensationRuleCapabilityMigration()
+    .then(() => {
+      capabilityMigrationCompleted = true;
+    })
+    .catch((err) => {
+      log.error({ err }, "compensation-service: failed to migrate compensation rule capabilities");
+    })
+    .finally(() => {
+      capabilityMigrationInFlight = null;
+    });
+
+  await capabilityMigrationInFlight;
+}
 
 /**
  * Ensure built-in compensation rules exist and stay aligned with the hard-coded defaults.
@@ -122,6 +230,7 @@ async function loadRules(): Promise<CompensationRule[]> {
   }
 
   await ensureBuiltinCompensationRulesExist();
+  await ensureCompensationRuleCapabilityMigration();
 
   const rows = await db.select().from(compensationRules).where(eq(compensationRules.enabled, true));
   const rules: CompensationRule[] = rows.map((r) => ({
@@ -129,7 +238,7 @@ async function loadRules(): Promise<CompensationRule[]> {
     name: r.name,
     isBuiltin: r.isBuiltin,
     enabled: r.enabled,
-    capabilities: r.capabilities as string[],
+    capabilities: normalizeCompensationRuleCapabilities(r.capabilities),
     targetHeader: r.targetHeader,
     sources: r.sources as string[],
     mode: r.mode,

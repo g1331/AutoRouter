@@ -35,7 +35,7 @@ function makeRule(overrides: {
     name: "Test Rule",
     isBuiltin: false,
     enabled: true,
-    capabilities: overrides.capabilities ?? ["codex_responses"],
+    capabilities: overrides.capabilities ?? ["openai_responses"],
     targetHeader: overrides.targetHeader ?? "session_id",
     sources: overrides.sources ?? ["headers.session_id"],
     mode: overrides.mode ?? "missing_only",
@@ -120,7 +120,7 @@ describe("compensation-service", () => {
       expect(mockUpdate).toHaveBeenCalledTimes(1);
       expect(updateChain.set).toHaveBeenCalledWith(
         expect.objectContaining({
-          capabilities: ["codex_responses"],
+          capabilities: ["openai_responses", "codex_cli_responses"],
           mode: "missing_only",
           targetHeader: "session_id",
         })
@@ -164,7 +164,7 @@ describe("compensation-service", () => {
       ]);
 
       const result = await buildCompensations(
-        "codex_responses",
+        "openai_responses",
         { "content-type": "application/json" },
         null
       );
@@ -175,14 +175,14 @@ describe("compensation-service", () => {
     it("should resolve header source correctly", async () => {
       setupDbWithRules([
         makeRule({
-          capabilities: ["codex_responses"],
+          capabilities: ["openai_responses"],
           targetHeader: "session_id",
           sources: ["headers.session_id"],
         }),
       ]);
 
       const result = await buildCompensations(
-        "codex_responses",
+        "openai_responses",
         { session_id: "sess_abc123" },
         null
       );
@@ -198,14 +198,14 @@ describe("compensation-service", () => {
     it("should resolve body source correctly", async () => {
       setupDbWithRules([
         makeRule({
-          capabilities: ["codex_responses"],
+          capabilities: ["openai_responses"],
           targetHeader: "session_id",
           sources: ["body.prompt_cache_key"],
         }),
       ]);
 
       const result = await buildCompensations(
-        "codex_responses",
+        "openai_responses",
         {},
         { prompt_cache_key: "cache_key_value" }
       );
@@ -226,7 +226,7 @@ describe("compensation-service", () => {
       ]);
 
       const result = await buildCompensations(
-        "codex_responses",
+        "openai_responses",
         {},
         { metadata: { session_id: "nested_value" } }
       );
@@ -243,7 +243,7 @@ describe("compensation-service", () => {
       ]);
 
       const result = await buildCompensations(
-        "codex_responses",
+        "openai_responses",
         { "x-session-id": "from_x_header" },
         { prompt_cache_key: "from_body" }
       );
@@ -260,7 +260,7 @@ describe("compensation-service", () => {
         }),
       ]);
 
-      const result = await buildCompensations("codex_responses", {}, null);
+      const result = await buildCompensations("openai_responses", {}, null);
 
       expect(result).toHaveLength(0);
     });
@@ -272,7 +272,7 @@ describe("compensation-service", () => {
         }),
       ]);
 
-      const result = await buildCompensations("codex_responses", { session_id: "valid" }, null);
+      const result = await buildCompensations("openai_responses", { session_id: "valid" }, null);
 
       // "invalid_path" is skipped, "headers.session_id" resolves
       expect(result).toHaveLength(1);
@@ -282,7 +282,7 @@ describe("compensation-service", () => {
     it("should handle multiple rules and return one entry per rule", async () => {
       setupDbWithRules([
         makeRule({
-          capabilities: ["codex_responses"],
+          capabilities: ["openai_responses"],
           targetHeader: "session_id",
           sources: ["headers.session_id"],
         }),
@@ -291,7 +291,7 @@ describe("compensation-service", () => {
           name: "Another Rule",
           isBuiltin: false,
           enabled: true,
-          capabilities: ["codex_responses"],
+          capabilities: ["openai_responses"],
           targetHeader: "x-custom",
           sources: ["headers.x-custom"],
           mode: "missing_only",
@@ -299,7 +299,7 @@ describe("compensation-service", () => {
       ]);
 
       const result = await buildCompensations(
-        "codex_responses",
+        "openai_responses",
         { session_id: "sess1", "x-custom": "custom1" },
         null
       );
@@ -316,7 +316,7 @@ describe("compensation-service", () => {
         }),
       });
 
-      const result = await buildCompensations("codex_responses", {}, null);
+      const result = await buildCompensations("openai_responses", {}, null);
 
       expect(result).toHaveLength(0);
     });
@@ -324,8 +324,8 @@ describe("compensation-service", () => {
     it("should use cached rules on subsequent calls", async () => {
       setupDbWithRules([makeRule({ sources: ["headers.session_id"] })]);
 
-      await buildCompensations("codex_responses", { session_id: "s1" }, null);
-      await buildCompensations("codex_responses", { session_id: "s2" }, null);
+      await buildCompensations("openai_responses", { session_id: "s1" }, null);
+      await buildCompensations("openai_responses", { session_id: "s2" }, null);
 
       // DB should only be queried once (the second call uses cache)
       // One select for builtin ensure + one select for initial rule load
@@ -335,9 +335,9 @@ describe("compensation-service", () => {
     it("should reload rules after cache is invalidated", async () => {
       setupDbWithRules([makeRule({ sources: ["headers.session_id"] })]);
 
-      await buildCompensations("codex_responses", { session_id: "s1" }, null);
+      await buildCompensations("openai_responses", { session_id: "s1" }, null);
       invalidateCache();
-      await buildCompensations("codex_responses", { session_id: "s2" }, null);
+      await buildCompensations("openai_responses", { session_id: "s2" }, null);
 
       // Two selects for the first call (ensure + load) and one select for reload after invalidation
       expect(mockSelect).toHaveBeenCalledTimes(3);
@@ -350,7 +350,7 @@ describe("compensation-service", () => {
         }),
       ]);
 
-      const result = await buildCompensations("codex_responses", {}, null);
+      const result = await buildCompensations("openai_responses", {}, null);
 
       expect(result).toHaveLength(0);
     });
@@ -362,7 +362,7 @@ describe("compensation-service", () => {
         }),
       ]);
 
-      const result = await buildCompensations("codex_responses", { session_id: "   " }, null);
+      const result = await buildCompensations("openai_responses", { session_id: "   " }, null);
 
       expect(result).toHaveLength(0);
     });

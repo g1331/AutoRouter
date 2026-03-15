@@ -3,6 +3,10 @@ import { eq } from "drizzle-orm";
 import { validateAdminAuth } from "@/lib/utils/auth";
 import { errorResponse } from "@/lib/utils/api-auth";
 import { db, compensationRules } from "@/lib/db";
+import {
+  normalizeCompensationRuleCapabilities,
+  type RouteCapability,
+} from "@/lib/route-capabilities";
 import { invalidateCache } from "@/lib/services/compensation-service";
 import type { CompensationRuleResponse } from "../route";
 import { createLogger } from "@/lib/utils/logger";
@@ -16,7 +20,7 @@ interface RouteContext {
 interface UpdateRuleBody {
   name?: string;
   enabled?: boolean;
-  capabilities?: string[];
+  capabilities?: RouteCapability[] | string[];
   target_header?: string;
   sources?: string[];
   mode?: string;
@@ -81,7 +85,14 @@ export async function PUT(request: NextRequest, context: RouteContext): Promise<
       if (!Array.isArray(body.capabilities) || body.capabilities.length === 0) {
         return errorResponse("capabilities must be a non-empty array", 400);
       }
-      updateData.capabilities = body.capabilities;
+      const normalizedCapabilities = normalizeCompensationRuleCapabilities(body.capabilities);
+      if (normalizedCapabilities.length === 0) {
+        return errorResponse(
+          "capabilities must include at least one supported route capability",
+          400
+        );
+      }
+      updateData.capabilities = normalizedCapabilities;
     }
     if (body.target_header !== undefined) {
       if (typeof body.target_header !== "string" || body.target_header.trim() === "") {
@@ -110,7 +121,7 @@ export async function PUT(request: NextRequest, context: RouteContext): Promise<
       name: updated.name,
       is_builtin: updated.isBuiltin,
       enabled: updated.enabled,
-      capabilities: updated.capabilities,
+      capabilities: normalizeCompensationRuleCapabilities(updated.capabilities),
       target_header: updated.targetHeader,
       sources: updated.sources,
       mode: updated.mode,
