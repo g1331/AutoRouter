@@ -15,6 +15,7 @@ import type {
 } from "@/lib/services/request-logger";
 import type {
   RequestThinkingConfig,
+  ReasoningEffort,
   RouteCapability,
   RoutingDecisionLog,
   RoutingFailureStage,
@@ -292,6 +293,7 @@ export interface RequestLogApiResponse {
   method: string | null;
   path: string | null;
   model: string | null;
+  reasoning_effort?: ReasoningEffort | null;
   prompt_tokens: number;
   completion_tokens: number;
   total_tokens: number;
@@ -679,6 +681,7 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
     method: log.method,
     path: log.path,
     model: log.model,
+    reasoning_effort: log.reasoningEffort ?? null,
     prompt_tokens: log.promptTokens,
     completion_tokens: log.completionTokens,
     total_tokens: log.totalTokens,

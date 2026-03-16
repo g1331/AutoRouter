@@ -108,27 +108,27 @@ describe("LogsTable", () => {
       expect(screen.getByText("gpt-4")).toBeInTheDocument();
     });
 
-    it("renders thinking badge after the model name without adding a new column", () => {
-      render(
-        <LogsTable
-          logs={[
-            {
-              ...mockLog,
-              thinking_config: {
-                provider: "openai",
-                protocol: "openai_chat",
-                mode: "reasoning",
-                level: "high",
-                budget_tokens: null,
-                include_thoughts: null,
-                source_paths: ["reasoning_effort"],
-              },
-            },
-          ]}
-        />
-      );
+    it("renders reasoning effort and thinking badges next to the model name", () => {
+      const logWithThinkingBadges = {
+        ...mockLog,
+        reasoning_effort: "high",
+        thinking_config: {
+          provider: "openai",
+          protocol: "openai_chat",
+          mode: "reasoning",
+          level: "high",
+          budget_tokens: null,
+          include_thoughts: null,
+          source_paths: ["reasoning_effort"],
+        },
+      } as RequestLog;
 
-      expect(screen.getByText("[high]")).toBeInTheDocument();
+      render(<LogsTable logs={[logWithThinkingBadges]} />);
+
+      const modelCell = screen.getByText("gpt-4").closest("td");
+      expect(modelCell).not.toBeNull();
+      expect(within(modelCell as HTMLElement).getByText("High")).toBeInTheDocument();
+      expect(within(modelCell as HTMLElement).getByText("[high]")).toBeInTheDocument();
       expect(screen.getAllByText("tableModel")).toHaveLength(1);
     });
 

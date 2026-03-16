@@ -71,6 +71,7 @@ import {
   type UnifiedErrorReason,
 } from "@/lib/services/unified-error";
 import type {
+  ReasoningEffort,
   RoutingDecisionLog,
   RoutingCandidate,
   RoutingExcluded,
@@ -1464,6 +1465,7 @@ interface RequestContext {
   sessionId: string | null;
   bodyJson: Record<string, unknown> | null;
   isStream: boolean;
+  reasoningEffort: ReasoningEffort | null;
 }
 
 type AuthSource = "authorization" | "x-api-key" | "x-goog-api-key" | "none";
@@ -1494,6 +1496,78 @@ function extractProxyApiKey(request: NextRequest): {
  * Extract request context (model, sessionId) from request body and headers.
  * Single-pass extraction to avoid parsing body multiple times.
  */
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function normalizeReasoningEffort(value: unknown): ReasoningEffort | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return normalized === "none" ||
+    normalized === "minimal" ||
+    normalized === "low" ||
+    normalized === "medium" ||
+    normalized === "high" ||
+    normalized === "xhigh" ||
+    normalized === "enabled"
+    ? normalized
+    : null;
+}
+
+function extractReasoningEffortFromBody(
+  bodyJson: Record<string, unknown> | null
+): ReasoningEffort | null {
+  if (!bodyJson) {
+    return null;
+  }
+
+  const directReasoningEffort = normalizeReasoningEffort(bodyJson.reasoning_effort);
+  if (directReasoningEffort) {
+    return directReasoningEffort;
+  }
+
+  const reasoningConfig = asRecord(bodyJson.reasoning);
+  const reasoningEffort = normalizeReasoningEffort(reasoningConfig?.effort);
+  if (reasoningEffort) {
+    return reasoningEffort;
+  }
+
+  const thinkingConfig = asRecord(bodyJson.thinking);
+  if (thinkingConfig?.type === "enabled") {
+    return "enabled";
+  }
+
+  const extraBody = asRecord(bodyJson.extra_body);
+  if (!extraBody) {
+    return null;
+  }
+
+  const nestedReasoningEffort = normalizeReasoningEffort(extraBody.reasoning_effort);
+  if (nestedReasoningEffort) {
+    return nestedReasoningEffort;
+  }
+
+  const nestedReasoningConfig = asRecord(extraBody.reasoning);
+  const nestedReasoningValue = normalizeReasoningEffort(nestedReasoningConfig?.effort);
+  if (nestedReasoningValue) {
+    return nestedReasoningValue;
+  }
+
+  const nestedThinkingConfig = asRecord(extraBody.thinking);
+  if (nestedThinkingConfig?.type === "enabled") {
+    return "enabled";
+  }
+
+  return null;
+}
+
 async function extractRequestContext(request: NextRequest, path: string): Promise<RequestContext> {
   const modelFromPath = extractGeminiModelFromPath(path);
 
@@ -1502,17 +1576,36 @@ async function extractRequestContext(request: NextRequest, path: string): Promis
     const bodyText = await clonedRequest.text();
 
     if (!bodyText) {
-      return { model: modelFromPath, sessionId: null, bodyJson: null, isStream: false };
+      return {
+        model: modelFromPath,
+        sessionId: null,
+        bodyJson: null,
+        isStream: false,
+        reasoningEffort: null,
+      };
     }
 
     const bodyJson = JSON.parse(bodyText) as Record<string, unknown>;
     const modelFromBody = typeof bodyJson.model === "string" ? bodyJson.model || null : null;
     const isStream = bodyJson.stream === true;
+    const reasoningEffort = extractReasoningEffortFromBody(bodyJson);
 
-    return { model: modelFromBody ?? modelFromPath, sessionId: null, bodyJson, isStream };
+    return {
+      model: modelFromBody ?? modelFromPath,
+      sessionId: null,
+      bodyJson,
+      isStream,
+      reasoningEffort,
+    };
   } catch {
     // Not JSON or empty body
-    return { model: modelFromPath, sessionId: null, bodyJson: null, isStream: false };
+    return {
+      model: modelFromPath,
+      sessionId: null,
+      bodyJson: null,
+      isStream: false,
+      reasoningEffort: null,
+    };
   }
 }
 
@@ -1576,6 +1669,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   const model = tempContext.model;
   const bodyJson: Record<string, unknown> | null = tempContext.bodyJson;
   const requestedStream = tempContext.isStream;
+  const reasoningEffort = tempContext.reasoningEffort;
   const matchedRouteCapabilityDetails = resolveRouteCapability(
     request.method,
     path,
@@ -1625,6 +1719,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         method: request.method,
         path,
         model,
+        reasoningEffort,
         promptTokens: 0,
         completionTokens: 0,
         totalTokens: 0,
@@ -1855,6 +1950,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       method: request.method,
       path,
       model: resolvedModel,
+      reasoningEffort,
       isStream: requestedStream,
       routingType,
       priorityTier: null,
@@ -2177,6 +2273,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             const updatedLog = await updateRequestLog(requestLogId, {
               upstreamId: upstreamForLogging.id,
               model: resolvedModel,
+              reasoningEffort,
               promptTokens: usageForBilling.promptTokens,
               completionTokens: usageForBilling.completionTokens,
               totalTokens: usageForBilling.totalTokens,
@@ -2212,6 +2309,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               method: request.method,
               path,
               model: resolvedModel,
+              reasoningEffort,
               promptTokens: usageForBilling.promptTokens,
               completionTokens: usageForBilling.completionTokens,
               totalTokens: usageForBilling.totalTokens,
@@ -2367,6 +2465,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         const updatedLog = await updateRequestLog(requestLogId, {
           upstreamId: upstreamForLogging.id,
           model: resolvedModel,
+          reasoningEffort,
           promptTokens: usageForBilling.promptTokens,
           completionTokens: usageForBilling.completionTokens,
           totalTokens: usageForBilling.totalTokens,
@@ -2401,6 +2500,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           method: request.method,
           path,
           model: resolvedModel,
+          reasoningEffort,
           promptTokens: usageForBilling.promptTokens,
           completionTokens: usageForBilling.completionTokens,
           totalTokens: usageForBilling.totalTokens,
@@ -2720,6 +2820,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       const updatedLog = await updateRequestLog(requestLogId, {
         upstreamId: actualUpstreamId,
         model: resolvedModel,
+        reasoningEffort,
         promptTokens: 0,
         completionTokens: 0,
         totalTokens: 0,
@@ -2744,6 +2845,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         method: request.method,
         path,
         model: resolvedModel,
+        reasoningEffort,
         promptTokens: 0,
         completionTokens: 0,
         totalTokens: 0,

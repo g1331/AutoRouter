@@ -78,6 +78,7 @@ describe("request-logger (db flows)", () => {
       totalTokens: 30,
       cachedTokens: 1,
       reasoningTokens: 2,
+      reasoningEffort: "high",
       cacheCreationTokens: 3,
       cacheReadTokens: 4,
       statusCode: 200,
@@ -131,6 +132,7 @@ describe("request-logger (db flows)", () => {
         totalTokens: 30,
         cachedTokens: 1,
         reasoningTokens: 2,
+        reasoningEffort: "high",
         cacheCreationTokens: 3,
         cacheReadTokens: 4,
         statusCode: 200,
@@ -166,6 +168,7 @@ describe("request-logger (db flows)", () => {
       path: "/v1/chat/completions",
       model: "gpt-4.1",
       isStream: true,
+      reasoningEffort: "enabled",
       routingType: "tiered",
       sessionId: "sid-1",
     });
@@ -177,6 +180,7 @@ describe("request-logger (db flows)", () => {
         path: "/v1/chat/completions",
         model: "gpt-4.1",
         isStream: true,
+        reasoningEffort: "enabled",
         statusCode: null,
         durationMs: null,
       })
@@ -207,6 +211,7 @@ describe("request-logger (db flows)", () => {
       expect.objectContaining({
         cachedTokens: 0,
         reasoningTokens: 0,
+        reasoningEffort: null,
         cacheCreationTokens: 0,
         cacheReadTokens: 0,
         routingDurationMs: null,
@@ -249,6 +254,7 @@ describe("request-logger (db flows)", () => {
         totalTokens: 3,
         cachedTokens: 0,
         reasoningTokens: 0,
+        reasoningEffort: "medium",
         cacheCreationTokens: 0,
         cacheReadTokens: 0,
         statusCode: 200,
@@ -310,6 +316,7 @@ describe("request-logger (db flows)", () => {
         totalTokens: 0,
         cachedTokens: 0,
         reasoningTokens: 0,
+        reasoningEffort: null,
         cacheCreationTokens: 0,
         cacheReadTokens: 0,
         statusCode: null,
@@ -347,6 +354,7 @@ describe("request-logger (db flows)", () => {
     expect(result.total).toBe(2);
     expect(result.items).toHaveLength(2);
     expect(result.items[0].upstreamName).toBe("U1");
+    expect(result.items[0].reasoningEffort).toBe("medium");
     expect(result.items[0].failoverHistory).toEqual([{ upstream_id: "u2" }]);
     expect(result.items[0].routingDecision).toEqual({ chosen_upstream_id: "u1" });
     expect(result.items[0].thinkingConfig).toEqual({
@@ -360,6 +368,7 @@ describe("request-logger (db flows)", () => {
     });
     expect(result.items[0].billingStatus).toBeNull();
     expect(result.items[0].priceSource).toBeNull();
+    expect(result.items[1].reasoningEffort).toBeNull();
     expect(result.items[1].failoverHistory).toBeNull();
     expect(result.items[1].routingDecision).toBeNull();
     expect(result.items[1].thinkingConfig).toBeNull();

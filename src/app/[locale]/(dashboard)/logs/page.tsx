@@ -41,32 +41,32 @@ function LogsLoadingSkeleton({ loadingLabel }: LogsLoadingSkeletonProps) {
       <Table aria-hidden="true">
         <TableHeader>
           <TableRow>
-            <TableHead className="w-10 px-2"></TableHead>
-            <TableHead className="w-[110px] px-2">
+            <TableHead className="w-9 px-1.5"></TableHead>
+            <TableHead className="w-[92px] px-1.5">
               <Skeleton className="h-3 w-12" />
             </TableHead>
-            <TableHead className="hidden lg:table-cell px-2">
+            <TableHead className="hidden lg:table-cell w-[120px] px-1.5">
               <Skeleton className="h-3 w-16" />
             </TableHead>
-            <TableHead className="w-[72px] px-2">
+            <TableHead className="w-[60px] px-1.5">
               <Skeleton className="h-3 w-8" />
             </TableHead>
-            <TableHead className="hidden lg:table-cell w-[84px] px-2">
+            <TableHead className="hidden lg:table-cell w-[60px] px-1.5">
               <Skeleton className="h-3 w-12" />
             </TableHead>
-            <TableHead className="hidden xl:table-cell px-2 pl-1">
+            <TableHead className="hidden xl:table-cell w-[272px] px-1.5 pl-1">
               <Skeleton className="h-3 w-12" />
             </TableHead>
-            <TableHead className="hidden md:table-cell px-2">
+            <TableHead className="hidden md:table-cell w-[140px] px-1.5">
               <Skeleton className="h-3 w-12" />
             </TableHead>
-            <TableHead className="w-[120px] px-2 text-right">
+            <TableHead className="w-[100px] px-1.5 text-right">
               <Skeleton className="h-3 w-12 ml-auto" />
             </TableHead>
-            <TableHead className="w-[84px] px-2">
+            <TableHead className="w-[68px] px-1.5">
               <Skeleton className="h-3 w-12" />
             </TableHead>
-            <TableHead className="w-[170px] px-2">
+            <TableHead className="w-[148px] px-1.5">
               <Skeleton className="h-3 w-12" />
             </TableHead>
           </TableRow>
@@ -74,34 +74,34 @@ function LogsLoadingSkeleton({ loadingLabel }: LogsLoadingSkeletonProps) {
         <TableBody>
           {Array.from({ length: 10 }).map((_, i) => (
             <TableRow key={i}>
-              <TableCell className="px-2 py-1.5">
+              <TableCell className="px-1.5 py-1.5">
                 <Skeleton className="h-2 w-4" />
               </TableCell>
-              <TableCell className="font-mono text-[8px] whitespace-nowrap px-2 py-1.5">
+              <TableCell className="w-[92px] font-mono text-[8px] whitespace-nowrap px-1.5 py-1.5">
                 <Skeleton className="h-2 w-16" />
               </TableCell>
-              <TableCell className="hidden lg:table-cell px-2 py-1.5 min-w-0 overflow-hidden text-[10px]">
+              <TableCell className="hidden lg:table-cell w-[120px] px-1.5 py-1.5 min-w-0 overflow-hidden text-[10px]">
                 <Skeleton className="h-2 w-full max-w-[80px]" />
               </TableCell>
-              <TableCell className="px-2 py-1">
+              <TableCell className="w-[60px] px-1.5 py-1">
                 <Skeleton className="h-2 w-8" />
               </TableCell>
-              <TableCell className="hidden text-[10px] lg:table-cell w-[84px] px-2 py-1 pr-1 min-w-0">
+              <TableCell className="hidden text-[10px] lg:table-cell w-[60px] px-1.5 py-1 pr-1 min-w-0">
                 <Skeleton className="h-2 w-10" />
               </TableCell>
-              <TableCell className="hidden font-mono text-[10px] xl:table-cell px-2 py-1 pl-1 min-w-0">
-                <Skeleton className="h-2 w-14" />
+              <TableCell className="hidden font-mono text-[10px] xl:table-cell w-[272px] px-1.5 py-1 pl-1 min-w-0">
+                <Skeleton className="h-2 w-24" />
               </TableCell>
-              <TableCell className="hidden md:table-cell px-2 py-1 min-w-0 overflow-hidden text-[10px]">
+              <TableCell className="hidden md:table-cell w-[140px] px-1.5 py-1 min-w-0 overflow-hidden text-[10px]">
                 <Skeleton className="h-2 w-16" />
               </TableCell>
-              <TableCell className="px-2 py-1 text-right">
+              <TableCell className="w-[100px] px-1.5 py-1 text-right">
                 <Skeleton className="h-2 w-10 ml-auto" />
               </TableCell>
-              <TableCell className="px-2 py-1">
+              <TableCell className="w-[68px] px-1.5 py-1">
                 <Skeleton className="h-2 w-10" />
               </TableCell>
-              <TableCell className="px-2 py-1 font-mono text-[10px] leading-tight">
+              <TableCell className="w-[148px] px-1.5 py-1 font-mono text-[10px] leading-tight">
                 <Skeleton className="h-2 w-full max-w-[60px]" />
               </TableCell>
             </TableRow>

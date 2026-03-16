@@ -169,6 +169,7 @@ export const requestLogs = pgTable(
     method: varchar("method", { length: 10 }),
     path: text("path"),
     model: varchar("model", { length: 128 }),
+    reasoningEffort: varchar("reasoning_effort", { length: 16 }),
     promptTokens: integer("prompt_tokens").notNull().default(0),
     completionTokens: integer("completion_tokens").notNull().default(0),
     totalTokens: integer("total_tokens").notNull().default(0),

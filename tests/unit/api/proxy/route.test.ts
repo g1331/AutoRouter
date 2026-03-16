@@ -535,6 +535,7 @@ describe("proxy route upstream selection", () => {
     const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
     const { routeByModel } = await import("@/lib/services/model-router");
     const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { logRequestStart, updateRequestLog } = await import("@/lib/services/request-logger");
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
@@ -594,6 +595,7 @@ describe("proxy route upstream selection", () => {
       },
       body: JSON.stringify({
         input: "hello",
+        reasoning: { effort: "high" },
       }),
     });
 
@@ -605,6 +607,17 @@ describe("proxy route upstream selection", () => {
     expect(routeByModel).not.toHaveBeenCalled();
     expect(selectFromProviderType).toHaveBeenCalledWith(["up-codex"], undefined, undefined);
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(codexUpstream);
+    expect(logRequestStart).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reasoningEffort: "high",
+      })
+    );
+    expect(updateRequestLog).toHaveBeenCalledWith(
+      "log-id",
+      expect.objectContaining({
+        reasoningEffort: "high",
+      })
+    );
   });
 
   it("should prefer codex cli upstreams when codex cli headers are present", async () => {
@@ -4347,6 +4360,7 @@ describe("proxy route upstream selection", () => {
       expect.objectContaining({
         model: "gpt-4o-mini",
         isStream: true,
+        reasoningEffort: "high",
         thinkingConfig: {
           provider: "openai",
           protocol: "openai_chat",
@@ -4378,6 +4392,7 @@ describe("proxy route upstream selection", () => {
 
     const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
     expect(updateLogPayload?.isStream).toBe(true);
+    expect(updateLogPayload?.reasoningEffort).toBe("high");
     expect(updateLogPayload?.ttftMs).toBe(321);
     expect(updateLogPayload?.promptTokens).toBe(10);
     expect(updateLogPayload?.completionTokens).toBe(20);

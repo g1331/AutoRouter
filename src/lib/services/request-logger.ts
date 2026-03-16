@@ -3,6 +3,7 @@ import { db, requestLogs, type RequestLog } from "../db";
 import type {
   FailoverErrorType,
   RequestThinkingConfig,
+  ReasoningEffort,
   RoutingDecisionLog,
   RoutingSelectionReason,
 } from "@/types/api";
@@ -25,6 +26,7 @@ export interface LogRequestInput {
   method: string | null;
   path: string | null;
   model: string | null;
+  reasoningEffort?: ReasoningEffort | null;
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
@@ -67,6 +69,7 @@ export interface StartRequestLogInput {
   method: string | null;
   path: string | null;
   model: string | null;
+  reasoningEffort?: ReasoningEffort | null;
   isStream?: boolean;
   // Routing decision fields
   routingType?: "tiered" | "direct" | "provider_type" | null;
@@ -86,6 +89,7 @@ export interface UpdateRequestLogInput {
   method?: string | null;
   path?: string | null;
   model?: string | null;
+  reasoningEffort?: ReasoningEffort | null;
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
@@ -145,6 +149,7 @@ export interface RequestLogResponse {
   method: string | null;
   path: string | null;
   model: string | null;
+  reasoningEffort?: ReasoningEffort | null;
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
@@ -290,6 +295,21 @@ function normalizeBillingPriceSource(
   return null;
 }
 
+function normalizeReasoningEffort(value: string | null | undefined): ReasoningEffort | null {
+  if (
+    value === "none" ||
+    value === "minimal" ||
+    value === "low" ||
+    value === "medium" ||
+    value === "high" ||
+    value === "xhigh" ||
+    value === "enabled"
+  ) {
+    return value;
+  }
+  return null;
+}
+
 /**
  * Create a request log entry at request start (in-progress).
  * The entry should be completed via updateRequestLog(...).
@@ -303,6 +323,7 @@ export async function logRequestStart(input: StartRequestLogInput): Promise<Requ
       method: input.method,
       path: input.path,
       model: input.model,
+      reasoningEffort: input.reasoningEffort ?? null,
       // Keep token fields at 0 until completion.
       promptTokens: 0,
       completionTokens: 0,
@@ -350,6 +371,7 @@ export async function updateRequestLog(
   if (input.method !== undefined) updateValues.method = input.method;
   if (input.path !== undefined) updateValues.path = input.path;
   if (input.model !== undefined) updateValues.model = input.model;
+  if (input.reasoningEffort !== undefined) updateValues.reasoningEffort = input.reasoningEffort;
 
   if (input.promptTokens !== undefined) updateValues.promptTokens = input.promptTokens;
   if (input.completionTokens !== undefined) updateValues.completionTokens = input.completionTokens;
@@ -426,6 +448,7 @@ export async function logRequest(input: LogRequestInput): Promise<RequestLog> {
       method: input.method,
       path: input.path,
       model: input.model,
+      reasoningEffort: input.reasoningEffort ?? null,
       promptTokens: input.promptTokens,
       completionTokens: input.completionTokens,
       totalTokens: input.totalTokens,
@@ -709,6 +732,7 @@ export async function listRequestLogs(
     method: log.method,
     path: log.path,
     model: log.model,
+    reasoningEffort: normalizeReasoningEffort(log.reasoningEffort),
     promptTokens: log.promptTokens,
     completionTokens: log.completionTokens,
     totalTokens: log.totalTokens,

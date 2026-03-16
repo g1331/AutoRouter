@@ -93,11 +93,40 @@ function ExpandChevron({ expanded, className }: { expanded: boolean; className?:
   );
 }
 
-function TruncatedTextTooltip({ text }: { text: string }) {
+type ReasoningEffortLevel = NonNullable<RequestLog["reasoning_effort"]>;
+
+type RequestLogReasoningMeta = RequestLog & {
+  reasoning_effort?: unknown;
+  reasoningEffort?: unknown;
+  thinking_level?: unknown;
+  thinkingLevel?: unknown;
+};
+
+const REASONING_EFFORT_LABELS: Record<ReasoningEffortLevel, string> = {
+  none: "None",
+  enabled: "Think",
+  minimal: "Minimal",
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  xhigh: "XHigh",
+};
+
+const REASONING_EFFORT_BADGE_CLASSES: Record<ReasoningEffortLevel, string> = {
+  none: "border-divider/70 bg-surface-300/65 text-muted-foreground/85",
+  enabled: "border-status-info/25 bg-status-info-muted/25 text-status-info",
+  minimal: "border-divider/70 bg-surface-300/70 text-muted-foreground",
+  low: "border-divider bg-surface-300/85 text-foreground/85",
+  medium: "border-status-info/30 bg-status-info-muted/35 text-status-info",
+  high: "border-amber-500/35 bg-amber-500/10 text-amber-300",
+  xhigh: "border-status-warning/40 bg-status-warning-muted/25 text-status-warning",
+};
+
+function TruncatedTextTooltip({ text, className }: { text: string; className?: string }) {
   return (
     <Tooltip delayDuration={200}>
       <TooltipTrigger asChild>
-        <span className="block min-w-0 truncate">{text}</span>
+        <span className={cn("block min-w-0 truncate", className)}>{text}</span>
       </TooltipTrigger>
       <TooltipContent
         side="top"
@@ -114,6 +143,73 @@ function TruncatedTextTooltip({ text }: { text: string }) {
         </div>
       </TooltipContent>
     </Tooltip>
+  );
+}
+
+function getReasoningEffortLevel(log: RequestLog): ReasoningEffortLevel | null {
+  const requestLogWithMeta = log as RequestLogReasoningMeta;
+  const rawValue =
+    requestLogWithMeta.reasoning_effort ??
+    requestLogWithMeta.reasoningEffort ??
+    requestLogWithMeta.thinking_level ??
+    requestLogWithMeta.thinkingLevel;
+
+  if (typeof rawValue !== "string") {
+    return null;
+  }
+
+  const normalizedValue = rawValue.trim().toLowerCase();
+  return normalizedValue === "none" ||
+    normalizedValue === "enabled" ||
+    normalizedValue === "minimal" ||
+    normalizedValue === "low" ||
+    normalizedValue === "medium" ||
+    normalizedValue === "high" ||
+    normalizedValue === "xhigh"
+    ? normalizedValue
+    : null;
+}
+
+function ReasoningEffortBadge({ level }: { level: ReasoningEffortLevel }) {
+  const label = REASONING_EFFORT_LABELS[level];
+
+  return (
+    <Badge
+      variant="neutral"
+      className={cn(
+        "h-5 shrink-0 rounded-full px-1.5 py-0 font-mono text-[9px] font-medium leading-none tracking-[0.12em] shadow-none",
+        REASONING_EFFORT_BADGE_CLASSES[level]
+      )}
+      aria-label={label}
+      title={label}
+    >
+      <span>{label}</span>
+    </Badge>
+  );
+}
+
+function ModelIdentity({
+  label,
+  reasoningEffort,
+  className,
+  textClassName,
+}: {
+  label: string | null | undefined;
+  reasoningEffort?: ReasoningEffortLevel | null;
+  className?: string;
+  textClassName?: string;
+}) {
+  if (!label) {
+    return <span className="text-muted-foreground">-</span>;
+  }
+
+  return (
+    <div className={cn("flex min-w-0 items-center gap-0.5", className)}>
+      <div className="min-w-0 flex-1">
+        <TruncatedTextTooltip text={label} className={textClassName} />
+      </div>
+      {reasoningEffort ? <ReasoningEffortBadge level={reasoningEffort} /> : null}
+    </div>
   );
 }
 
@@ -825,6 +921,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
         ? routingDecision.original_model + " → " + routingDecision.resolved_model
         : routingDecision.resolved_model || routingDecision.original_model
       : null;
+    const reasoningEffort = getReasoningEffortLevel(log);
 
     const didSendUpstream = routingDecision?.did_send_upstream;
     const finalUpstreamLabel =
@@ -1111,7 +1208,12 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
         content: (
           <>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="font-medium text-foreground">{modelDisplay ?? log.model ?? "-"}</div>
+              <ModelIdentity
+                label={modelDisplay ?? log.model}
+                reasoningEffort={reasoningEffort}
+                className="min-w-0"
+                textClassName="font-medium text-foreground"
+              />
               <ThinkingConfigBadge thinkingConfig={log.thinking_config} />
             </div>
             <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
@@ -1159,7 +1261,11 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
               </div>
               {routingDecision ? (
                 <div className="space-y-2">
-                  <div className="font-medium text-foreground">{modelDisplay}</div>
+                  <ModelIdentity
+                    label={modelDisplay}
+                    reasoningEffort={reasoningEffort}
+                    textClassName="font-medium text-foreground"
+                  />
                   <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
                     {groupName ? <span>{groupName}</span> : null}
                     <span>
@@ -2551,24 +2657,26 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                 >
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-10 px-2"></TableHead>
-                      <TableHead className="w-[110px] px-2">{t("tableTime")}</TableHead>
-                      <TableHead className="hidden lg:table-cell px-2">
+                      <TableHead className="w-9 px-1.5"></TableHead>
+                      <TableHead className="w-[92px] px-1.5">{t("tableTime")}</TableHead>
+                      <TableHead className="hidden lg:table-cell w-[120px] px-1.5">
                         {t("tableUpstream")}
                       </TableHead>
-                      <TableHead className="w-[72px] px-2">{t("tableMethod")}</TableHead>
-                      <TableHead className="hidden lg:table-cell w-[84px] px-2 text-left">
+                      <TableHead className="w-[60px] px-1.5">{t("tableMethod")}</TableHead>
+                      <TableHead className="hidden lg:table-cell w-[60px] px-1.5 text-left">
                         {t("tableInterfaceType")}
                       </TableHead>
-                      <TableHead className="hidden xl:table-cell px-2 pl-1">
+                      <TableHead className="hidden xl:table-cell w-[272px] px-1.5 pl-1">
                         {t("tableModel")}
                       </TableHead>
-                      <TableHead className="hidden md:table-cell px-2">
+                      <TableHead className="hidden md:table-cell w-[140px] px-1.5">
                         {t("tableTokens")}
                       </TableHead>
-                      <TableHead className="w-[120px] px-2 text-right">{t("tableCost")}</TableHead>
-                      <TableHead className="w-[84px] px-2">{t("tableStatus")}</TableHead>
-                      <TableHead className="w-[170px] px-2">{t("tableDuration")}</TableHead>
+                      <TableHead className="w-[100px] px-1.5 text-right">
+                        {t("tableCost")}
+                      </TableHead>
+                      <TableHead className="w-[68px] px-1.5">{t("tableStatus")}</TableHead>
+                      <TableHead className="w-[148px] px-1.5">{t("tableDuration")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -2606,7 +2714,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                             style={{ animationDelay: entryAnimationDelay }}
                             onClick={() => canExpand && toggleRow(log.id)}
                           >
-                            <TableCell className="px-2 py-1.5">
+                            <TableCell className="px-1.5 py-1.5">
                               {canExpand && (
                                 <button
                                   type="button"
@@ -2629,13 +2737,13 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                 </button>
                               )}
                             </TableCell>
-                            <TableCell className="font-mono text-[8px] whitespace-nowrap px-2 py-1.5">
+                            <TableCell className="w-[92px] font-mono text-[8px] whitespace-nowrap px-1.5 py-1.5">
                               {formatDistanceToNow(new Date(log.created_at), {
                                 addSuffix: true,
                                 locale: dateLocale,
                               })}
                             </TableCell>
-                            <TableCell className="hidden lg:table-cell px-2 py-1.5 min-w-0 overflow-hidden text-[10px]">
+                            <TableCell className="hidden lg:table-cell w-[120px] px-1.5 py-1.5 min-w-0 overflow-hidden text-[10px]">
                               <RoutingDecisionTimeline
                                 routingDecision={log.routing_decision}
                                 upstreamName={upstreamDisplayName}
@@ -2649,7 +2757,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                 compact={true}
                               />
                             </TableCell>
-                            <TableCell className="px-2 py-1">
+                            <TableCell className="w-[60px] px-1.5 py-1">
                               <div className="flex flex-col items-start gap-0.5">
                                 <code className="rounded-cf-sm border border-divider bg-surface-300 px-1 py-0.5 font-mono text-[10px] text-foreground whitespace-nowrap">
                                   {log.method || "-"}
@@ -2657,21 +2765,22 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                 <RequestModeBadge isStream={log.is_stream} compact />
                               </div>
                             </TableCell>
-                            <TableCell className="hidden text-[10px] lg:table-cell w-[84px] px-2 py-1 pr-1 min-w-0">
+                            <TableCell className="hidden text-[10px] lg:table-cell w-[60px] px-1.5 py-1 pr-1 min-w-0">
                               <InterfaceTypeCell
                                 method={log.method}
                                 path={log.path}
                                 matchedCapability={log.routing_decision?.matched_route_capability}
                                 variant="desktop"
-                                className="ml-auto"
                               />
                             </TableCell>
-                            <TableCell className="hidden font-mono text-[10px] xl:table-cell px-2 py-1 pl-1 min-w-0">
+                            <TableCell className="hidden font-mono text-[10px] xl:table-cell w-[272px] px-1.5 py-1 pl-1 min-w-0">
                               {log.model ? (
                                 <div className="flex min-w-0 items-center gap-1">
-                                  <div className="min-w-0 flex-1">
-                                    <TruncatedTextTooltip text={log.model} />
-                                  </div>
+                                  <ModelIdentity
+                                    label={log.model}
+                                    reasoningEffort={getReasoningEffortLevel(log)}
+                                    className="min-w-0 flex-1"
+                                  />
                                   <ThinkingConfigBadge
                                     thinkingConfig={log.thinking_config}
                                     compact
@@ -2681,7 +2790,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                 <span className="text-muted-foreground">-</span>
                               )}
                             </TableCell>
-                            <TableCell className="hidden md:table-cell px-2 py-1 min-w-0 overflow-hidden text-[10px]">
+                            <TableCell className="hidden md:table-cell w-[140px] px-1.5 py-1 min-w-0 overflow-hidden text-[10px]">
                               <TokenDisplay
                                 promptTokens={log.prompt_tokens}
                                 completionTokens={log.completion_tokens}
@@ -2694,7 +2803,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                 cacheReadTokens={log.cache_read_tokens}
                               />
                             </TableCell>
-                            <TableCell className="px-2 py-1 text-right">
+                            <TableCell className="w-[100px] px-1.5 py-1 text-right">
                               <div className="flex flex-col items-end gap-0">
                                 {shouldShowBillingCost(log) ? (
                                   <span className="font-mono text-[11px] tabular-nums whitespace-nowrap">
@@ -2715,7 +2824,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                 )}
                               </div>
                             </TableCell>
-                            <TableCell className="px-2 py-1">
+                            <TableCell className="w-[68px] px-1.5 py-1">
                               <div className="flex flex-col items-start gap-1">
                                 <Badge
                                   variant={getStatusBadgeVariant(log.status_code)}
@@ -2738,7 +2847,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                 </Badge>
                               </div>
                             </TableCell>
-                            <TableCell className="px-2 py-1 font-mono text-[10px] leading-tight">
+                            <TableCell className="w-[156px] px-1.5 py-1 font-mono text-[10px] leading-tight">
                               <div className="flex flex-col gap-0">
                                 <span className="tabular-nums whitespace-nowrap">
                                   {formatDuration(log.duration_ms)}

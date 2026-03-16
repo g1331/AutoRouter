@@ -260,6 +260,11 @@ describe("lib/db/schema", () => {
       expect(requestLogs.reasoningTokens.default).toBe(0);
     });
 
+    it("has reasoningEffort column", () => {
+      expect(requestLogs.reasoningEffort).toBeDefined();
+      expect(requestLogs.reasoningEffort.name).toBe("reasoning_effort");
+    });
+
     it("has cacheCreationTokens column with default 0", () => {
       expect(requestLogs.cacheCreationTokens).toBeDefined();
       expect(requestLogs.cacheCreationTokens.name).toBe("cache_creation_tokens");

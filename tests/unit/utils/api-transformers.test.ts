@@ -368,6 +368,7 @@ describe("api-transformers", () => {
         totalTokens: 300,
         cachedTokens: 10,
         reasoningTokens: 20,
+        reasoningEffort: "high",
         cacheCreationTokens: 5,
         cacheReadTokens: 8,
         statusCode: 200,
@@ -414,6 +415,7 @@ describe("api-transformers", () => {
         total_tokens: 300,
         cached_tokens: 10,
         reasoning_tokens: 20,
+        reasoning_effort: "high",
         cache_creation_tokens: 5,
         cache_creation_5m_tokens: 0,
         cache_creation_1h_tokens: 0,
@@ -580,6 +582,7 @@ describe("api-transformers", () => {
       expect(result.lb_strategy).toBeNull();
       expect(result.failover_attempts).toBe(0);
       expect(result.failover_history).toBeNull();
+      expect(result.reasoning_effort).toBeNull();
       expect(result.lifecycle_status).toBe("unknown");
       expect(result.upstream_error).toBeNull();
       expect(result.stage_timings_ms).toEqual({

@@ -303,6 +303,8 @@ export interface FailoverAttempt {
  */
 export type RoutingType = "direct" | "provider_type" | "tiered";
 
+export type ReasoningEffort = "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "enabled";
+
 /**
  * Circuit breaker state for routing decision log
  */
@@ -445,6 +447,7 @@ export interface RequestLogResponse {
   method: string | null;
   path: string | null;
   model: string | null;
+  reasoning_effort?: ReasoningEffort | null;
   prompt_tokens: number;
   completion_tokens: number;
   total_tokens: number;

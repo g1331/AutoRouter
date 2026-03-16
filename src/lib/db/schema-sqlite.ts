@@ -173,6 +173,7 @@ export const requestLogs = sqliteTable(
     method: text("method"),
     path: text("path"),
     model: text("model"),
+    reasoningEffort: text("reasoning_effort"),
     promptTokens: integer("prompt_tokens").notNull().default(0),
     completionTokens: integer("completion_tokens").notNull().default(0),
     totalTokens: integer("total_tokens").notNull().default(0),
