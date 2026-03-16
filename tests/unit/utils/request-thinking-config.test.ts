@@ -92,7 +92,9 @@ describe("request-thinking-config", () => {
   it("returns null for unsupported or missing payloads", () => {
     expect(extractRequestThinkingConfig("openai_chat_compatible", null)).toBeNull();
     expect(extractRequestThinkingConfig("openai_chat_compatible", { model: "gpt-5.4" })).toBeNull();
-    expect(extractRequestThinkingConfig("openai_extended", { reasoning_effort: "high" })).toBeNull();
+    expect(
+      extractRequestThinkingConfig("openai_extended", { reasoning_effort: "high" })
+    ).toBeNull();
   });
 
   it("builds compact badge labels from normalized config", () => {

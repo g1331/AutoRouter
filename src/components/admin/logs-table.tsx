@@ -2672,7 +2672,10 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                   <div className="min-w-0 flex-1">
                                     <TruncatedTextTooltip text={log.model} />
                                   </div>
-                                  <ThinkingConfigBadge thinkingConfig={log.thinking_config} compact />
+                                  <ThinkingConfigBadge
+                                    thinkingConfig={log.thinking_config}
+                                    compact
+                                  />
                                 </div>
                               ) : (
                                 <span className="text-muted-foreground">-</span>

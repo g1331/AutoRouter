@@ -141,7 +141,7 @@ describe("request-logger (db flows)", () => {
         failoverAttempts: 2,
         failoverHistory: expect.stringContaining("upstream_id"),
         routingDecision: expect.stringContaining("chosen_upstream_id"),
-        thinkingConfig: expect.stringContaining("\"provider\":\"openai\""),
+        thinkingConfig: expect.stringContaining('"provider":"openai"'),
         sessionId: "sid",
         affinityHit: true,
         affinityMigrated: false,

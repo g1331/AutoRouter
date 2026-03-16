@@ -140,9 +140,10 @@ function extractGeminiThinkingConfig(
   bodyJson: Record<string, unknown>
 ): RequestThinkingConfig | null {
   const generationConfig = isRecord(bodyJson.generationConfig) ? bodyJson.generationConfig : null;
-  const thinkingConfig = generationConfig && isRecord(generationConfig.thinkingConfig)
-    ? generationConfig.thinkingConfig
-    : null;
+  const thinkingConfig =
+    generationConfig && isRecord(generationConfig.thinkingConfig)
+      ? generationConfig.thinkingConfig
+      : null;
 
   if (!thinkingConfig) {
     return null;
@@ -183,7 +184,10 @@ export function extractRequestThinkingConfig(
     return null;
   }
 
-  if (OPENAI_RESPONSE_CAPABILITIES.has(routeCapability) || routeCapability === "openai_chat_compatible") {
+  if (
+    OPENAI_RESPONSE_CAPABILITIES.has(routeCapability) ||
+    routeCapability === "openai_chat_compatible"
+  ) {
     return extractOpenAiThinkingConfig(routeCapability, bodyJson);
   }
 
@@ -205,8 +209,7 @@ export function isRequestThinkingConfig(value: unknown): value is RequestThinkin
 
   const { provider, protocol, mode, level, budget_tokens, include_thoughts, source_paths } = value;
 
-  const isProvider =
-    provider === "openai" || provider === "anthropic" || provider === "google";
+  const isProvider = provider === "openai" || provider === "anthropic" || provider === "google";
   const isProtocol =
     protocol === "openai_responses" ||
     protocol === "openai_chat" ||
@@ -227,7 +230,9 @@ export function isRequestThinkingConfig(value: unknown): value is RequestThinkin
   );
 }
 
-export function getRequestThinkingBadgeLabel(config: RequestThinkingConfig | null | undefined): string | null {
+export function getRequestThinkingBadgeLabel(
+  config: RequestThinkingConfig | null | undefined
+): string | null {
   if (!config) {
     return null;
   }

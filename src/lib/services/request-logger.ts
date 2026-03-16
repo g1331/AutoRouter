@@ -385,7 +385,9 @@ export async function updateRequestLog(
       : null;
   }
   if (input.thinkingConfig !== undefined) {
-    updateValues.thinkingConfig = input.thinkingConfig ? JSON.stringify(input.thinkingConfig) : null;
+    updateValues.thinkingConfig = input.thinkingConfig
+      ? JSON.stringify(input.thinkingConfig)
+      : null;
   }
 
   if (input.sessionId !== undefined) updateValues.sessionId = input.sessionId;
