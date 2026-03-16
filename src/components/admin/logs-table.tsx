@@ -44,6 +44,7 @@ import { LifecycleTrack } from "@/components/admin/lifecycle-track";
 import { HeaderDiffPanel } from "@/components/logs/header-diff-panel";
 import { matchRouteCapability } from "@/lib/services/route-capability-matcher";
 import { ROUTE_CAPABILITY_DEFINITIONS } from "@/lib/route-capabilities";
+import { getRequestThinkingBadgeLabel } from "@/lib/utils/request-thinking-config";
 
 interface LogsTableProps {
   logs: RequestLog[];
@@ -133,6 +134,122 @@ function RequestModeBadge({ isStream, compact = false }: { isStream: boolean; co
     >
       <span>{compact ? shortLabel : label}</span>
     </Badge>
+  );
+}
+
+function ThinkingConfigBadge({
+  thinkingConfig,
+  compact = false,
+}: {
+  thinkingConfig: RequestLog["thinking_config"] | null | undefined;
+  compact?: boolean;
+}) {
+  const t = useTranslations("logs");
+  const badgeLabel = getRequestThinkingBadgeLabel(thinkingConfig ?? null);
+
+  if (!badgeLabel) {
+    return null;
+  }
+
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "shrink-0 border-divider px-1.5 py-0 font-mono text-[10px] leading-4 text-muted-foreground",
+        compact && "px-1 py-0 text-[9px]"
+      )}
+      aria-label={t("thinkingBadgeAria", { value: badgeLabel })}
+      title={t("thinkingBadgeAria", { value: badgeLabel })}
+    >
+      [{badgeLabel}]
+    </Badge>
+  );
+}
+
+function ThinkingConfigPanel({
+  thinkingConfig,
+}: {
+  thinkingConfig: RequestLog["thinking_config"] | null | undefined;
+}) {
+  const t = useTranslations("logs");
+  const locale = useLocale();
+  const badgeLabel = getRequestThinkingBadgeLabel(thinkingConfig ?? null);
+
+  if (!thinkingConfig) {
+    return (
+      <div className={DETAIL_PANEL_CLASS}>
+        <div className={DETAIL_PANEL_HEADER_CLASS}>{t("thinkingConfig")}</div>
+        <div className={cn(DETAIL_PANEL_BODY_CLASS, "text-[12px] text-muted-foreground")}>
+          {t("thinkingNotExplicitlySpecified")}
+        </div>
+      </div>
+    );
+  }
+
+  const detailRows = [
+    {
+      label: t("thinkingProvider"),
+      value: t(`thinkingProviderValue.${thinkingConfig.provider}`),
+    },
+    {
+      label: t("thinkingProtocol"),
+      value: t(`thinkingProtocolValue.${thinkingConfig.protocol}`),
+    },
+    {
+      label: t("thinkingMode"),
+      value: t(`thinkingModeValue.${thinkingConfig.mode}`),
+    },
+    {
+      label: t("thinkingLevel"),
+      value: thinkingConfig.level ?? t("thinkingValueUnset"),
+    },
+    {
+      label: t("thinkingBudgetTokens"),
+      value:
+        thinkingConfig.budget_tokens != null
+          ? thinkingConfig.budget_tokens.toLocaleString(locale)
+          : t("thinkingValueUnset"),
+    },
+    {
+      label: t("thinkingIncludeThoughts"),
+      value:
+        thinkingConfig.include_thoughts == null
+          ? t("thinkingValueUnset")
+          : thinkingConfig.include_thoughts
+            ? t("thinkingBooleanEnabled")
+            : t("thinkingBooleanDisabled"),
+    },
+    {
+      label: t("thinkingSourcePaths"),
+      value:
+        thinkingConfig.source_paths.length > 0
+          ? thinkingConfig.source_paths.join(" · ")
+          : t("thinkingValueUnset"),
+    },
+  ];
+
+  return (
+    <div className={DETAIL_PANEL_CLASS}>
+      <div className={DETAIL_PANEL_HEADER_CLASS}>{t("thinkingConfig")}</div>
+      <div className={cn(DETAIL_PANEL_BODY_CLASS, "space-y-2")}>
+        {badgeLabel ? (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-muted-foreground">{t("thinkingListLabel")}:</span>
+            <ThinkingConfigBadge thinkingConfig={thinkingConfig} />
+          </div>
+        ) : null}
+        <div className="space-y-1.5 text-[12px]">
+          {detailRows.map((row) => (
+            <div key={row.label} className="flex items-start gap-2">
+              <span className="min-w-0 shrink-0 text-muted-foreground">{row.label}:</span>
+              <span className="ml-auto min-w-0 text-right text-foreground break-all">
+                {row.value}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -993,7 +1110,10 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
         ),
         content: (
           <>
-            <div className="font-medium text-foreground">{modelDisplay ?? log.model ?? "-"}</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="font-medium text-foreground">{modelDisplay ?? log.model ?? "-"}</div>
+              <ThinkingConfigBadge thinkingConfig={log.thinking_config} />
+            </div>
             <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
               {log.method ? <span>{log.method}</span> : null}
               {log.path ? <span className="break-all">{log.path}</span> : null}
@@ -1704,8 +1824,8 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
           </section>
         )}
 
-        {/* Token & Billing Details (2-column grid) */}
-        <div className="grid gap-4 xl:grid-cols-2">
+        {/* Token, Billing & Thinking Details */}
+        <div className="grid gap-4 xl:grid-cols-3">
           <div className={DETAIL_PANEL_CLASS}>
             <div className={DETAIL_PANEL_HEADER_CLASS}>{t("tokenDetails")}</div>
             <div className={DETAIL_PANEL_BODY_CLASS}>
@@ -1737,6 +1857,8 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
               )}
             </div>
           </div>
+
+          <ThinkingConfigPanel thinkingConfig={log.thinking_config} />
 
           <div className={DETAIL_PANEL_CLASS}>
             <div className={DETAIL_PANEL_HEADER_CLASS}>{t("billingDetails")}</div>
@@ -1962,6 +2084,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
     const hasRoutingDecision = !!log.routing_decision;
     const hasSessionDiagnostics = !!log.session_id || !!log.session_id_compensated;
     const hasHeaderDiff = !!log.header_diff;
+    const hasThinkingConfig = !!log.thinking_config;
     const { displayTotalTokens } = getDisplayTokenMetrics({
       promptTokens: log.prompt_tokens,
       completionTokens: log.completion_tokens,
@@ -1978,6 +2101,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
       hasFailover ||
       hasRoutingDecision ||
       hasSessionDiagnostics ||
+      hasThinkingConfig ||
       hasHeaderDiff ||
       displayTotalTokens > 0;
     const isNew = newLogIds.has(log.id);
@@ -2279,8 +2403,9 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                             </span>
                           )}
                           {log.model && (
-                            <span className="min-w-0 text-muted-foreground break-all">
-                              • {log.model}
+                            <span className="inline-flex min-w-0 items-center gap-1 text-muted-foreground break-all">
+                              <span>• {log.model}</span>
+                              <ThinkingConfigBadge thinkingConfig={log.thinking_config} compact />
                             </span>
                           )}
                         </div>
@@ -2543,7 +2668,12 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                             </TableCell>
                             <TableCell className="hidden font-mono text-[10px] xl:table-cell px-2 py-1 pl-1 min-w-0">
                               {log.model ? (
-                                <TruncatedTextTooltip text={log.model} />
+                                <div className="flex min-w-0 items-center gap-1">
+                                  <div className="min-w-0 flex-1">
+                                    <TruncatedTextTooltip text={log.model} />
+                                  </div>
+                                  <ThinkingConfigBadge thinkingConfig={log.thinking_config} compact />
+                                </div>
                               ) : (
                                 <span className="text-muted-foreground">-</span>
                               )}

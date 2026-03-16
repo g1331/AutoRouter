@@ -389,6 +389,37 @@
     "headerDiffNoChanges": "无请求头变更",
     "compensationBadge": "已补偿",
     "compensationBadgeTooltip": "session_id 从请求体中恢复（原始请求头缺失）",
+    "thinkingConfig": "Thinking 配置",
+    "thinkingListLabel": "摘要",
+    "thinkingBadgeAria": "Thinking 标记 {value}",
+    "thinkingProvider": "Provider",
+    "thinkingProtocol": "协议",
+    "thinkingMode": "模式",
+    "thinkingLevel": "等级",
+    "thinkingBudgetTokens": "预算 Token",
+    "thinkingIncludeThoughts": "包含思考内容",
+    "thinkingSourcePaths": "来源路径",
+    "thinkingNotExplicitlySpecified": "未显式指定",
+    "thinkingValueUnset": "-",
+    "thinkingBooleanEnabled": "开启",
+    "thinkingBooleanDisabled": "关闭",
+    "thinkingProviderValue": {
+      "openai": "OpenAI",
+      "anthropic": "Anthropic",
+      "google": "Google"
+    },
+    "thinkingProtocolValue": {
+      "openai_responses": "OpenAI Responses",
+      "openai_chat": "OpenAI Chat",
+      "anthropic_messages": "Anthropic Messages",
+      "gemini_generate": "Gemini Generate"
+    },
+    "thinkingModeValue": {
+      "reasoning": "推理",
+      "thinking": "思考",
+      "adaptive": "自适应",
+      "manual": "手动"
+    },
     "billingDetails": "计费明细",
     "billingTotal": "总费用",
     "billingStatusLabel": "计费状态",

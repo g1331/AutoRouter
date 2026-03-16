@@ -387,6 +387,15 @@ describe("api-transformers", () => {
             status_code: 502,
           },
         ],
+        thinkingConfig: {
+          provider: "openai",
+          protocol: "openai_chat",
+          mode: "reasoning",
+          level: "high",
+          budget_tokens: null,
+          include_thoughts: null,
+          source_paths: ["reasoning_effort"],
+        },
         createdAt: new Date("2024-01-15T10:30:00.000Z"),
       };
 
@@ -426,6 +435,15 @@ describe("api-transformers", () => {
             status_code: 502,
           },
         ],
+        thinking_config: {
+          provider: "openai",
+          protocol: "openai_chat",
+          mode: "reasoning",
+          level: "high",
+          budget_tokens: null,
+          include_thoughts: null,
+          source_paths: ["reasoning_effort"],
+        },
         created_at: "2024-01-15T10:30:00.000Z",
         routing_decision: undefined,
         routing_duration_ms: undefined,
@@ -558,6 +576,7 @@ describe("api-transformers", () => {
       expect(result.error_message).toBe("Connection timeout");
       expect(result.routing_type).toBeNull();
       expect(result.group_name).toBeNull();
+      expect(result.thinking_config).toBeNull();
       expect(result.lb_strategy).toBeNull();
       expect(result.failover_attempts).toBe(0);
       expect(result.failover_history).toBeNull();
@@ -927,6 +946,15 @@ describe("api-transformers", () => {
             lbStrategy: null,
             failoverAttempts: 0,
             failoverHistory: null,
+            thinkingConfig: {
+              provider: "google",
+              protocol: "gemini_generate",
+              mode: "thinking",
+              level: "HIGH",
+              budget_tokens: 4096,
+              include_thoughts: true,
+              source_paths: ["generationConfig.thinkingConfig.thinkingLevel"],
+            },
             createdAt: new Date("2024-01-15T10:00:00.000Z"),
           },
         ],
@@ -944,6 +972,15 @@ describe("api-transformers", () => {
       expect(result.page_size).toBe(50);
       expect(result.total_pages).toBe(20);
       expect(result.items[0].prompt_tokens).toBe(50);
+      expect(result.items[0].thinking_config).toEqual({
+        provider: "google",
+        protocol: "gemini_generate",
+        mode: "thinking",
+        level: "HIGH",
+        budget_tokens: 4096,
+        include_thoughts: true,
+        source_paths: ["generationConfig.thinkingConfig.thinkingLevel"],
+      });
     });
   });
 

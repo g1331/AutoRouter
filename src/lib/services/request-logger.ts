@@ -1,10 +1,16 @@
 import { eq, desc, count, and, gte, lte, asc, isNull } from "drizzle-orm";
 import { db, requestLogs, type RequestLog } from "../db";
-import type { FailoverErrorType, RoutingDecisionLog, RoutingSelectionReason } from "@/types/api";
+import type {
+  FailoverErrorType,
+  RequestThinkingConfig,
+  RoutingDecisionLog,
+  RoutingSelectionReason,
+} from "@/types/api";
 import { extractNormalizedUsage, type HeaderDiff } from "./proxy-client";
 import { publishRequestLogLiveUpdate } from "./request-log-live-updates";
 import { calculateAndPersistRequestBillingSnapshot } from "./billing-cost-service";
 import { createLogger } from "@/lib/utils/logger";
+import { isRequestThinkingConfig } from "@/lib/utils/request-thinking-config";
 
 const log = createLogger("request-logger");
 const REQUEST_LOG_STALE_MINUTES = 15;
@@ -38,6 +44,7 @@ export interface LogRequestInput {
   failoverAttempts?: number;
   failoverHistory?: FailoverAttempt[] | null;
   routingDecision?: RoutingDecisionLog | null;
+  thinkingConfig?: RequestThinkingConfig | null;
   // Session affinity fields
   sessionId?: string | null;
   affinityHit?: boolean;
@@ -65,6 +72,7 @@ export interface StartRequestLogInput {
   routingType?: "tiered" | "direct" | "provider_type" | null;
   priorityTier?: number | null;
   routingDecision?: RoutingDecisionLog | null;
+  thinkingConfig?: RequestThinkingConfig | null;
   sessionId?: string | null;
 }
 
@@ -97,6 +105,7 @@ export interface UpdateRequestLogInput {
   failoverAttempts?: number;
   failoverHistory?: FailoverAttempt[] | null;
   routingDecision?: RoutingDecisionLog | null;
+  thinkingConfig?: RequestThinkingConfig | null;
   // Session affinity fields
   sessionId?: string | null;
   affinityHit?: boolean;
@@ -157,6 +166,7 @@ export interface RequestLogResponse {
   failoverAttempts: number;
   failoverHistory: FailoverAttempt[] | null;
   routingDecision: RoutingDecisionLog | null;
+  thinkingConfig: RequestThinkingConfig | null;
   // Session affinity fields
   sessionId: string | null;
   affinityHit: boolean;
@@ -314,6 +324,7 @@ export async function logRequestStart(input: StartRequestLogInput): Promise<Requ
       failoverAttempts: 0,
       failoverHistory: null,
       routingDecision: input.routingDecision ? JSON.stringify(input.routingDecision) : null,
+      thinkingConfig: input.thinkingConfig ? JSON.stringify(input.thinkingConfig) : null,
       sessionId: input.sessionId ?? null,
       createdAt: new Date(),
     })
@@ -373,6 +384,9 @@ export async function updateRequestLog(
       ? JSON.stringify(input.routingDecision)
       : null;
   }
+  if (input.thinkingConfig !== undefined) {
+    updateValues.thinkingConfig = input.thinkingConfig ? JSON.stringify(input.thinkingConfig) : null;
+  }
 
   if (input.sessionId !== undefined) updateValues.sessionId = input.sessionId;
   if (input.affinityHit !== undefined) updateValues.affinityHit = input.affinityHit;
@@ -429,6 +443,7 @@ export async function logRequest(input: LogRequestInput): Promise<RequestLog> {
       failoverAttempts: input.failoverAttempts ?? 0,
       failoverHistory: input.failoverHistory ? JSON.stringify(input.failoverHistory) : null,
       routingDecision: input.routingDecision ? JSON.stringify(input.routingDecision) : null,
+      thinkingConfig: input.thinkingConfig ? JSON.stringify(input.thinkingConfig) : null,
       sessionId: input.sessionId ?? null,
       affinityHit: input.affinityHit ?? false,
       affinityMigrated: input.affinityMigrated ?? false,
@@ -522,6 +537,15 @@ function parseRoutingDecision(json: string): RoutingDecisionLog | null {
       return parsed as RoutingDecisionLog;
     }
     return null;
+  } catch {
+    return null;
+  }
+}
+
+function parseThinkingConfig(json: string): RequestThinkingConfig | null {
+  try {
+    const parsed = JSON.parse(json);
+    return isRequestThinkingConfig(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -704,6 +728,7 @@ export async function listRequestLogs(
     failoverAttempts: log.failoverAttempts,
     failoverHistory: log.failoverHistory ? parseFailoverHistory(log.failoverHistory) : null,
     routingDecision: log.routingDecision ? parseRoutingDecision(log.routingDecision) : null,
+    thinkingConfig: log.thinkingConfig ? parseThinkingConfig(log.thinkingConfig) : null,
     sessionId: log.sessionId ?? null,
     affinityHit: log.affinityHit,
     affinityMigrated: log.affinityMigrated,

@@ -313,6 +313,11 @@ describe("lib/db/schema", () => {
       expect(requestLogs.failoverHistory.name).toBe("failover_history");
     });
 
+    it("has thinkingConfig column", () => {
+      expect(requestLogs.thinkingConfig).toBeDefined();
+      expect(requestLogs.thinkingConfig.name).toBe("thinking_config");
+    });
+
     it("has createdAt timestamp", () => {
       expect(requestLogs.createdAt).toBeDefined();
       expect(requestLogs.createdAt.name).toBe("created_at");

@@ -419,6 +419,24 @@ export interface RoutingDecisionLog {
   selection_strategy: string; // lb_strategy
 }
 
+export type RequestThinkingProvider = "openai" | "anthropic" | "google";
+export type RequestThinkingProtocol =
+  | "openai_responses"
+  | "openai_chat"
+  | "anthropic_messages"
+  | "gemini_generate";
+export type RequestThinkingMode = "reasoning" | "thinking" | "adaptive" | "manual";
+
+export interface RequestThinkingConfig {
+  provider: RequestThinkingProvider;
+  protocol: RequestThinkingProtocol;
+  mode: RequestThinkingMode;
+  level: string | null;
+  budget_tokens: number | null;
+  include_thoughts: boolean | null;
+  source_paths: string[];
+}
+
 export interface RequestLogResponse {
   id: string; // UUID
   api_key_id: string | null; // UUID
@@ -448,6 +466,7 @@ export interface RequestLogResponse {
   failover_attempts: number;
   failover_history: FailoverAttempt[] | null;
   routing_decision: RoutingDecisionLog | null; // Complete routing decision info
+  thinking_config?: RequestThinkingConfig | null;
   // Session affinity fields
   session_id: string | null;
   affinity_hit: boolean;

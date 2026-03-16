@@ -98,6 +98,15 @@ describe("request-logger (db flows)", () => {
         },
       ],
       routingDecision: { chosen_upstream_id: "u1" },
+      thinkingConfig: {
+        provider: "openai",
+        protocol: "openai_chat",
+        mode: "reasoning",
+        level: "high",
+        budget_tokens: null,
+        include_thoughts: null,
+        source_paths: ["reasoning_effort"],
+      },
       sessionId: "sid",
       affinityHit: true,
       affinityMigrated: false,
@@ -132,6 +141,7 @@ describe("request-logger (db flows)", () => {
         failoverAttempts: 2,
         failoverHistory: expect.stringContaining("upstream_id"),
         routingDecision: expect.stringContaining("chosen_upstream_id"),
+        thinkingConfig: expect.stringContaining("\"provider\":\"openai\""),
         sessionId: "sid",
         affinityHit: true,
         affinityMigrated: false,
@@ -206,6 +216,7 @@ describe("request-logger (db flows)", () => {
         failoverAttempts: 0,
         failoverHistory: null,
         routingDecision: null,
+        thinkingConfig: null,
         affinityHit: false,
         affinityMigrated: false,
         ttftMs: null,
@@ -251,6 +262,15 @@ describe("request-logger (db flows)", () => {
         failoverAttempts: 1,
         failoverHistory: JSON.stringify([{ upstream_id: "u2" }]),
         routingDecision: JSON.stringify({ chosen_upstream_id: "u1" }),
+        thinkingConfig: JSON.stringify({
+          provider: "openai",
+          protocol: "openai_chat",
+          mode: "reasoning",
+          level: "high",
+          budget_tokens: null,
+          include_thoughts: null,
+          source_paths: ["reasoning_effort"],
+        }),
         sessionId: null,
         affinityHit: false,
         affinityMigrated: false,
@@ -303,6 +323,7 @@ describe("request-logger (db flows)", () => {
         failoverAttempts: 0,
         failoverHistory: "not-json",
         routingDecision: "not-json",
+        thinkingConfig: "not-json",
         sessionId: null,
         affinityHit: false,
         affinityMigrated: false,
@@ -328,10 +349,20 @@ describe("request-logger (db flows)", () => {
     expect(result.items[0].upstreamName).toBe("U1");
     expect(result.items[0].failoverHistory).toEqual([{ upstream_id: "u2" }]);
     expect(result.items[0].routingDecision).toEqual({ chosen_upstream_id: "u1" });
+    expect(result.items[0].thinkingConfig).toEqual({
+      provider: "openai",
+      protocol: "openai_chat",
+      mode: "reasoning",
+      level: "high",
+      budget_tokens: null,
+      include_thoughts: null,
+      source_paths: ["reasoning_effort"],
+    });
     expect(result.items[0].billingStatus).toBeNull();
     expect(result.items[0].priceSource).toBeNull();
     expect(result.items[1].failoverHistory).toBeNull();
     expect(result.items[1].routingDecision).toBeNull();
+    expect(result.items[1].thinkingConfig).toBeNull();
   });
 
   it("reconcileStaleInProgressRequestLogs skips streams and persists billing snapshots", async () => {

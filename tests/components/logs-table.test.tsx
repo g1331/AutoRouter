@@ -45,6 +45,7 @@ describe("LogsTable", () => {
     failover_attempts: 0,
     failover_history: null,
     routing_decision: null,
+    thinking_config: null,
     priority_tier: null,
     session_id: null,
     affinity_hit: false,
@@ -105,6 +106,30 @@ describe("LogsTable", () => {
         screen.getByLabelText("capabilityOpenAIChatCompatible: POST /v1/chat/completions")
       ).toBeInTheDocument();
       expect(screen.getByText("gpt-4")).toBeInTheDocument();
+    });
+
+    it("renders thinking badge after the model name without adding a new column", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              thinking_config: {
+                provider: "openai",
+                protocol: "openai_chat",
+                mode: "reasoning",
+                level: "high",
+                budget_tokens: null,
+                include_thoughts: null,
+                source_paths: ["reasoning_effort"],
+              },
+            },
+          ]}
+        />
+      );
+
+      expect(screen.getByText("[high]")).toBeInTheDocument();
+      expect(screen.getAllByText("tableModel")).toHaveLength(1);
     });
 
     it("applies entry motion class to desktop rows on first render", () => {
@@ -848,6 +873,12 @@ describe("LogsTable", () => {
       const dashes = screen.getAllByText("-");
       expect(dashes.length).toBeGreaterThan(0);
     });
+
+    it("does not render a thinking badge when thinking config is null", () => {
+      render(<LogsTable logs={[{ ...mockLog, thinking_config: null }]} />);
+
+      expect(screen.queryByText("[high]")).not.toBeInTheDocument();
+    });
   });
 
   describe("Filter Logic", () => {
@@ -1319,6 +1350,35 @@ describe("LogsTable", () => {
       expect(screen.getByText("50")).toBeInTheDocument();
     });
 
+    it("shows expand indicator when only thinking config is available", () => {
+      const thinkingOnlyLog: RequestLog = {
+        ...mockLog,
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        total_tokens: 0,
+        cached_tokens: 0,
+        cache_creation_tokens: 0,
+        cache_read_tokens: 0,
+        reasoning_tokens: 0,
+        routing_decision: null,
+        failover_attempts: 0,
+        failover_history: null,
+        thinking_config: {
+          provider: "openai",
+          protocol: "openai_chat",
+          mode: "reasoning",
+          level: "high",
+          budget_tokens: null,
+          include_thoughts: null,
+          source_paths: ["reasoning_effort"],
+        },
+      };
+
+      render(<LogsTable logs={[thinkingOnlyLog]} />);
+
+      expect(screen.getByRole("button", { name: "expandDetails" })).toBeInTheDocument();
+    });
+
     it("expands row on click to show token details", () => {
       render(<LogsTable logs={[logWithFailoverBase]} />);
 
@@ -1331,6 +1391,45 @@ describe("LogsTable", () => {
       expect(screen.getByText("tokenInput")).toBeInTheDocument();
       expect(screen.getByText("tokenOutput")).toBeInTheDocument();
       expect(screen.getByText("tokenTotal")).toBeInTheDocument();
+    });
+
+    it("shows a dedicated thinking config panel with request-side fields", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...logWithFailoverBase,
+              thinking_config: {
+                provider: "openai",
+                protocol: "openai_chat",
+                mode: "reasoning",
+                level: "xhigh",
+                budget_tokens: null,
+                include_thoughts: null,
+                source_paths: ["reasoning_effort"],
+              },
+            },
+          ]}
+        />
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+
+      expect(screen.getByText("thinkingConfig")).toBeInTheDocument();
+      expect(screen.getAllByText(/thinkingProvider/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/thinkingProtocol/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/thinkingLevel/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/thinkingSourcePaths/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText("[xhigh]").length).toBeGreaterThan(0);
+    });
+
+    it("shows an explicit empty state for missing thinking config", () => {
+      render(<LogsTable logs={[mockLog]} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+
+      expect(screen.getByText("thinkingConfig")).toBeInTheDocument();
+      expect(screen.getByText("thinkingNotExplicitlySpecified")).toBeInTheDocument();
     });
 
     it("applies detail enter animation when expanded content opens", () => {

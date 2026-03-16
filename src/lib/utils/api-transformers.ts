@@ -14,6 +14,7 @@ import type {
   FailoverAttempt,
 } from "@/lib/services/request-logger";
 import type {
+  RequestThinkingConfig,
   RouteCapability,
   RoutingDecisionLog,
   RoutingFailureStage,
@@ -312,6 +313,7 @@ export interface RequestLogApiResponse {
   failover_attempts: number;
   failover_history: FailoverAttempt[] | null;
   routing_decision: RoutingDecisionLog | null;
+  thinking_config: RequestThinkingConfig | null;
   // Session affinity fields
   session_id: string | null;
   affinity_hit: boolean;
@@ -698,6 +700,7 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
     failover_attempts: log.failoverAttempts,
     failover_history: log.failoverHistory,
     routing_decision: log.routingDecision,
+    thinking_config: log.thinkingConfig ?? null,
     session_id: log.sessionId,
     affinity_hit: log.affinityHit,
     affinity_migrated: log.affinityMigrated,

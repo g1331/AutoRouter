@@ -882,6 +882,13 @@ describe("proxy route upstream selection", () => {
         },
         body: JSON.stringify({
           contents: [{ role: "user", parts: [{ text: "hello" }] }],
+          generationConfig: {
+            thinkingConfig: {
+              thinkingLevel: "HIGH",
+              thinkingBudget: 4096,
+              includeThoughts: true,
+            },
+          },
         }),
       }
     );
@@ -900,6 +907,19 @@ describe("proxy route upstream selection", () => {
       expect.objectContaining({
         path: "v1beta/models/gemini-2.5-flash-lite:generateContent",
         model: "gemini-2.5-flash-lite",
+        thinkingConfig: {
+          provider: "google",
+          protocol: "gemini_generate",
+          mode: "thinking",
+          level: "HIGH",
+          budget_tokens: 4096,
+          include_thoughts: true,
+          source_paths: [
+            "generationConfig.thinkingConfig.thinkingLevel",
+            "generationConfig.thinkingConfig.thinkingBudget",
+            "generationConfig.thinkingConfig.includeThoughts",
+          ],
+        },
       })
     );
     expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
@@ -4313,6 +4333,7 @@ describe("proxy route upstream selection", () => {
       body: JSON.stringify({
         model: "gpt-4o-mini",
         messages: [{ role: "user", content: "hello" }],
+        reasoning_effort: "high",
         stream: true,
       }),
     });
@@ -4326,6 +4347,15 @@ describe("proxy route upstream selection", () => {
       expect.objectContaining({
         model: "gpt-4o-mini",
         isStream: true,
+        thinkingConfig: {
+          provider: "openai",
+          protocol: "openai_chat",
+          mode: "reasoning",
+          level: "high",
+          budget_tokens: null,
+          include_thoughts: null,
+          source_paths: ["reasoning_effort"],
+        },
       })
     );
     expect(updateRequestLog).toHaveBeenCalled();
@@ -4351,6 +4381,15 @@ describe("proxy route upstream selection", () => {
     expect(updateLogPayload?.ttftMs).toBe(321);
     expect(updateLogPayload?.promptTokens).toBe(10);
     expect(updateLogPayload?.completionTokens).toBe(20);
+    expect(updateLogPayload?.thinkingConfig).toEqual({
+      provider: "openai",
+      protocol: "openai_chat",
+      mode: "reasoning",
+      level: "high",
+      budget_tokens: null,
+      include_thoughts: null,
+      source_paths: ["reasoning_effort"],
+    });
   });
 
   it.skip("should handle streaming response failover with circuit breaker", async () => {
@@ -4989,6 +5028,7 @@ describe("proxy route upstream selection", () => {
         body: JSON.stringify({
           model: "gpt-4.1",
           messages: [{ role: "user", content: "hello" }],
+          reasoning_effort: "high",
         }),
       });
 
@@ -5083,6 +5123,7 @@ describe("proxy route upstream selection", () => {
         body: JSON.stringify({
           model: "gpt-4.1",
           messages: [{ role: "user", content: "hello" }],
+          reasoning_effort: "high",
         }),
       });
 
@@ -5174,6 +5215,7 @@ describe("proxy route upstream selection", () => {
         body: JSON.stringify({
           model: "gpt-4.1",
           messages: [{ role: "user", content: "hello" }],
+          reasoning_effort: "high",
         }),
       });
 
@@ -5188,6 +5230,15 @@ describe("proxy route upstream selection", () => {
           cacheCreation5mTokens: 200,
           cacheCreation1hTokens: 50,
           cacheReadTokens: 300,
+          thinkingConfig: {
+            provider: "openai",
+            protocol: "openai_chat",
+            mode: "reasoning",
+            level: "high",
+            budget_tokens: null,
+            include_thoughts: null,
+            source_paths: ["reasoning_effort"],
+          },
         })
       );
     });
@@ -5272,6 +5323,7 @@ describe("proxy route upstream selection", () => {
         body: JSON.stringify({
           model: "gpt-4.1",
           messages: [{ role: "user", content: "hello" }],
+          reasoning_effort: "high",
           stream: true,
         }),
       });
@@ -5299,6 +5351,15 @@ describe("proxy route upstream selection", () => {
           cacheCreation5mTokens: 200,
           cacheCreation1hTokens: 50,
           cacheReadTokens: 300,
+          thinkingConfig: {
+            provider: "openai",
+            protocol: "openai_chat",
+            mode: "reasoning",
+            level: "high",
+            budget_tokens: null,
+            include_thoughts: null,
+            source_paths: ["reasoning_effort"],
+          },
         })
       );
     });

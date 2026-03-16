@@ -92,6 +92,7 @@ import {
 } from "@/lib/services/session-affinity";
 import { buildCompensations } from "@/lib/services/compensation-service";
 import { createLogger } from "@/lib/utils/logger";
+import { extractRequestThinkingConfig } from "@/lib/utils/request-thinking-config";
 
 const log = createLogger("proxy-route");
 
@@ -1581,6 +1582,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     request.headers
   );
   const matchedRouteCapability = matchedRouteCapabilityDetails?.capability ?? null;
+  const thinkingConfig = extractRequestThinkingConfig(matchedRouteCapability, bodyJson);
 
   if (!matchedRouteCapability) {
     const unsupportedDurationMs = Date.now() - startTime;
@@ -1857,6 +1859,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       routingType,
       priorityTier: null,
       routingDecision: initialRoutingDecisionLog,
+      thinkingConfig,
       sessionId,
     });
     requestLogId = startLog.id;
@@ -2018,6 +2021,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         upstreamId: upstreamForLogging.id,
         isStream: result.isStream,
         routingDecision: finalRoutingDecisionLog,
+        thinkingConfig,
       }).catch((e) => log.error({ err: e, requestId }, "failed to update request log upstream"));
     }
 
@@ -2075,6 +2079,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
             failoverHistory:
               routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
             routingDecision: disconnectRoutingDecisionLog,
+            thinkingConfig,
             affinityHit: isAffinityHit,
             affinityMigrated: isAffinityMigrated,
             isStream: true,
@@ -2112,6 +2117,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           failoverHistory:
             routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
           routingDecision: disconnectRoutingDecisionLog,
+          thinkingConfig,
           sessionId,
           affinityHit: isAffinityHit,
           affinityMigrated: isAffinityMigrated,
@@ -2190,6 +2196,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               failoverHistory:
                 routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
               routingDecision: finalRoutingDecisionLog,
+              thinkingConfig,
               affinityHit: isAffinityHit,
               affinityMigrated: isAffinityMigrated,
               ttftMs: ttftMs ?? null,
@@ -2223,6 +2230,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               failoverHistory:
                 routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
               routingDecision: finalRoutingDecisionLog,
+              thinkingConfig,
               sessionId,
               affinityHit: isAffinityHit,
               affinityMigrated: isAffinityMigrated,
@@ -2378,6 +2386,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           failoverHistory:
             routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
           routingDecision: finalRoutingDecisionLog,
+          thinkingConfig,
           affinityHit: isAffinityHit,
           affinityMigrated: isAffinityMigrated,
           isStream: false,
@@ -2410,6 +2419,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           failoverHistory:
             routingDecision.failoverHistory.length > 0 ? routingDecision.failoverHistory : null,
           routingDecision: finalRoutingDecisionLog,
+          thinkingConfig,
           sessionId,
           affinityHit: isAffinityHit,
           affinityMigrated: isAffinityMigrated,
@@ -2722,6 +2732,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         failoverAttempts: failoverHistory.length,
         failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
         routingDecision: failureRoutingDecisionLog,
+        thinkingConfig,
         sessionIdCompensated,
         headerDiff: failureHeaderDiff,
       });
@@ -2745,6 +2756,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         failoverAttempts: failoverHistory.length,
         failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
         routingDecision: failureRoutingDecisionLog,
+        thinkingConfig,
         sessionIdCompensated,
         headerDiff: failureHeaderDiff,
       });

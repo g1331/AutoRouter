@@ -389,6 +389,37 @@
     "headerDiffNoChanges": "No header changes",
     "compensationBadge": "Compensated",
     "compensationBadgeTooltip": "session_id recovered from request body (header was missing)",
+    "thinkingConfig": "Thinking Config",
+    "thinkingListLabel": "Badge",
+    "thinkingBadgeAria": "Thinking badge {value}",
+    "thinkingProvider": "Provider",
+    "thinkingProtocol": "Protocol",
+    "thinkingMode": "Mode",
+    "thinkingLevel": "Level",
+    "thinkingBudgetTokens": "Budget Tokens",
+    "thinkingIncludeThoughts": "Include Thoughts",
+    "thinkingSourcePaths": "Source Paths",
+    "thinkingNotExplicitlySpecified": "Not explicitly specified",
+    "thinkingValueUnset": "-",
+    "thinkingBooleanEnabled": "Enabled",
+    "thinkingBooleanDisabled": "Disabled",
+    "thinkingProviderValue": {
+      "openai": "OpenAI",
+      "anthropic": "Anthropic",
+      "google": "Google"
+    },
+    "thinkingProtocolValue": {
+      "openai_responses": "OpenAI Responses",
+      "openai_chat": "OpenAI Chat",
+      "anthropic_messages": "Anthropic Messages",
+      "gemini_generate": "Gemini Generate"
+    },
+    "thinkingModeValue": {
+      "reasoning": "Reasoning",
+      "thinking": "Thinking",
+      "adaptive": "Adaptive",
+      "manual": "Manual"
+    },
     "billingDetails": "Billing",
     "billingTotal": "Total",
     "billingStatusLabel": "Status",
