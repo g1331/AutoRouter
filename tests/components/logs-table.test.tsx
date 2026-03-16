@@ -108,7 +108,7 @@ describe("LogsTable", () => {
       expect(screen.getByText("gpt-4")).toBeInTheDocument();
     });
 
-    it("renders reasoning effort and thinking badges next to the model name", () => {
+    it("deduplicates the inline thinking badge when it mirrors reasoning effort", () => {
       const logWithThinkingBadges = {
         ...mockLog,
         reasoning_effort: "high",
@@ -128,8 +128,27 @@ describe("LogsTable", () => {
       const modelCell = screen.getByText("gpt-4").closest("td");
       expect(modelCell).not.toBeNull();
       expect(within(modelCell as HTMLElement).getByText("High")).toBeInTheDocument();
-      expect(within(modelCell as HTMLElement).getByText("[high]")).toBeInTheDocument();
+      expect(within(modelCell as HTMLElement).queryByText("[high]")).not.toBeInTheDocument();
       expect(screen.getAllByText("tableModel")).toHaveLength(1);
+    });
+
+    it("keeps the inline thinking badge when there is no reasoning effort badge", () => {
+      const logWithThinkingOnly = {
+        ...mockLog,
+        thinking_config: {
+          provider: "openai",
+          protocol: "openai_chat",
+          mode: "reasoning",
+          level: "high",
+          budget_tokens: null,
+          include_thoughts: null,
+          source_paths: ["reasoning_effort"],
+        },
+      } as RequestLog;
+
+      render(<LogsTable logs={[logWithThinkingOnly]} />);
+
+      expect(screen.getByText("[high]")).toBeInTheDocument();
     });
 
     it("applies entry motion class to desktop rows on first render", () => {

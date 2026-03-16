@@ -188,6 +188,22 @@ function ReasoningEffortBadge({ level }: { level: ReasoningEffortLevel }) {
   );
 }
 
+function isThinkingBadgeDuplicatedByReasoningEffort(
+  thinkingConfig: RequestLog["thinking_config"] | null | undefined,
+  reasoningEffort: ReasoningEffortLevel | null | undefined
+): boolean {
+  if (!thinkingConfig || !reasoningEffort) {
+    return false;
+  }
+
+  const badgeLabel = getRequestThinkingBadgeLabel(thinkingConfig);
+  if (!badgeLabel) {
+    return false;
+  }
+
+  return badgeLabel.trim().toLowerCase() === reasoningEffort;
+}
+
 function ModelIdentity({
   label,
   reasoningEffort,
@@ -235,15 +251,20 @@ function RequestModeBadge({ isStream, compact = false }: { isStream: boolean; co
 
 function ThinkingConfigBadge({
   thinkingConfig,
+  dedupeWithReasoningEffort,
   compact = false,
 }: {
   thinkingConfig: RequestLog["thinking_config"] | null | undefined;
+  dedupeWithReasoningEffort?: ReasoningEffortLevel | null;
   compact?: boolean;
 }) {
   const t = useTranslations("logs");
   const badgeLabel = getRequestThinkingBadgeLabel(thinkingConfig ?? null);
 
-  if (!badgeLabel) {
+  if (
+    !badgeLabel ||
+    isThinkingBadgeDuplicatedByReasoningEffort(thinkingConfig, dedupeWithReasoningEffort)
+  ) {
     return null;
   }
 
@@ -1214,7 +1235,10 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                 className="min-w-0"
                 textClassName="font-medium text-foreground"
               />
-              <ThinkingConfigBadge thinkingConfig={log.thinking_config} />
+              <ThinkingConfigBadge
+                thinkingConfig={log.thinking_config}
+                dedupeWithReasoningEffort={reasoningEffort}
+              />
             </div>
             <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
               {log.method ? <span>{log.method}</span> : null}
@@ -2783,6 +2807,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                   />
                                   <ThinkingConfigBadge
                                     thinkingConfig={log.thinking_config}
+                                    dedupeWithReasoningEffort={getReasoningEffortLevel(log)}
                                     compact
                                   />
                                 </div>
