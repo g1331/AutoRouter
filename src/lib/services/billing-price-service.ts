@@ -16,6 +16,9 @@ const LITELLM_PRICE_MAP_URL =
 
 const FETCH_TIMEOUT_MS = 12_000;
 
+/**
+ * Raised when a manual billing tier rule uses a threshold that already exists for the same model.
+ */
 export class BillingTierRuleConflictError extends Error {
   constructor(message: string = "A manual tier rule with the same threshold already exists") {
     super(message);
@@ -23,6 +26,9 @@ export class BillingTierRuleConflictError extends Error {
   }
 }
 
+/**
+ * Raised when a manual billing tier rule payload fails validation before persistence.
+ */
 export class BillingTierRuleValidationError extends Error {
   constructor(message: string = "Model must not be empty") {
     super(message);
@@ -485,7 +491,7 @@ export async function syncBillingModelPrices(): Promise<BillingSyncSummary> {
  * if prompt tokens exceed the threshold, ALL tokens use the tier rate.
  *
  * Resolution priority:
- * 1. Manual tier rules (highest matching threshold where billedInputTokens > threshold)
+ * 1. Manual tier rules (highest matching threshold where billedInputTokens \> threshold)
  * 2. LiteLLM tier rules (highest matching threshold)
  * 3. Manual flat price override
  * 4. LiteLLM synced flat price

@@ -292,6 +292,9 @@ export function resolveRouteCapability(
   return resolveFinalCapability(protocolFamily, headers);
 }
 
+/**
+ * Match an incoming proxy request to a supported route capability and return detailed match metadata.
+ */
 export function matchRouteCapabilityDetails(
   method: string,
   path: string,

@@ -133,6 +133,9 @@ async function runCompensationRuleCapabilityMigration(): Promise<void> {
   }
 }
 
+/**
+ * Ensures legacy persisted compensation rule capabilities are normalized before rule loading.
+ */
 export async function ensureCompensationRuleCapabilityMigration(): Promise<void> {
   if (capabilityMigrationCompleted) {
     return;

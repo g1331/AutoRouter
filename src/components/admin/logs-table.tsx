@@ -12,13 +12,7 @@ import type {
   RoutingSelectionReason,
   TimeRange,
 } from "@/types/api";
-import {
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -2291,12 +2285,10 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
       index: number;
       derived: ReturnType<typeof getLogDerived>;
     }>;
-    expanded:
-      | {
-          log: RequestLog;
-          derived: ReturnType<typeof getLogDerived>;
-        }
-      | null;
+    expanded: {
+      log: RequestLog;
+      derived: ReturnType<typeof getLogDerived>;
+    } | null;
   }> = [];
 
   if (!isMobileLayout) {
