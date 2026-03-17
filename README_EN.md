@@ -4,7 +4,7 @@
 <img src="docs/images/banner.svg" alt="AutoRouter Banner" width="100%">
 
 <h3>AI API Gateway</h3>
-<p>A minimalist multi-upstream AI API proxy</p>
+<p>An AI API Gateway for multi-upstream routing and operations</p>
 
 <!-- Badges: Status -->
 
@@ -56,8 +56,8 @@
 
 - **OpenAI-Compatible Proxy** - Forward requests via `/api/proxy/v1/*` with regular responses and SSE streaming
 - **API Key Lifecycle Management** - Create, update, disable and revoke keys with upstream bindings and expiration control
-- **Intelligent Multi-Upstream Routing** - Route by model prefix with `allowed_models`, `model_redirects`, weight, and priority
-- **Observable Request Logs** - Persist routing decisions, failover history, session-affinity hit status, and token metrics
+- **Multi-Upstream Capability Routing** - Build candidate upstream pools from request path capability and API key authorization, then apply `model_redirects`, priority, weight, circuit breaking, concurrency, quota, and failover
+- **Observable Request Logs** - Persist candidate pools, routing decisions, failover history, session-affinity hits, token usage, and billing snapshots
 
 </td>
 <td width="50%">
@@ -162,10 +162,50 @@ cp .env.example .env
 # 3. Start services
 docker compose up -d
 
-# 4. Visit http://localhost:${PORT:-3000}
+# 4. Visit http://localhost:3331 by default
+# If you changed PORT in .env, use that port instead
 ```
 
+### CI/CD Deployment
+
+The repository includes a GitHub Actions workflow that builds the image and deploys it to a server over SSH.
+
+**1. Configure GitHub Secrets**
+
+Add these secrets in Settings → Secrets and variables → Actions:
+
+| Secret            | Description                                                    |
+| ----------------- | -------------------------------------------------------------- |
+| `SERVER_HOST`     | Server IP or domain                                            |
+| `SERVER_USER`     | SSH username                                                   |
+| `SSH_PRIVATE_KEY` | SSH private key content                                        |
+| `SERVER_PORT`     | SSH port, optional, default `22`                               |
+| `DEPLOY_DIR`      | Deploy directory, optional, default `/opt/autorouter`          |
+| `ADMIN_TOKEN`     | Admin console token written to the server `.env` during deploy |
+
+**2. Initialize the server**
+
+```bash
+mkdir -p /opt/autorouter && cd /opt/autorouter
+curl -O https://raw.githubusercontent.com/g1331/AutoRouter/master/docker-compose.yml
+nano .env
+docker compose up -d
+```
+
+**3. Trigger deployment**
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+You can also trigger the `Build and Deploy` workflow manually from GitHub Actions.
+
 ### Local Development
+
+Do not copy `.env.example` and run it unchanged. The repository supports two local runtime modes, and the database setup differs between them.
+
+#### Option 1: Local PostgreSQL
 
 ```bash
 # 1. Clone the repository
@@ -175,20 +215,48 @@ cd AutoRouter
 # 2. Copy environment variables
 cp .env.example .env.local
 
-# 3. Generate encryption key (add to .env.local)
+# 3. Change DATABASE_URL in .env.local to a host-local address
+# For example:
+# DATABASE_URL=postgresql://autorouter:password@localhost:5432/autorouter
+
+# 4. Generate encryption key (add to .env.local)
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+
+# 5. Install dependencies
+pnpm install
+
+# 6. Push PostgreSQL schema
+pnpm db:push
+
+# 7. Start development server
+pnpm dev
+```
+
+After starting, visit http://localhost:3000 and login with `ADMIN_TOKEN`.
+
+#### Option 2: Local SQLite
+
+The runtime supports SQLite for local sandboxing:
+
+```bash
+# 1. Copy environment variables
+cp .env.example .env.local
+
+# 2. Set these values in .env.local
+# DB_TYPE=sqlite
+# SQLITE_DB_PATH=./data/dev.sqlite
+
+# 3. Generate encryption key
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 
 # 4. Install dependencies
 pnpm install
 
-# 5. Database migration
-pnpm db:push
-
-# 6. Start development server
+# 5. Start development server
 pnpm dev
 ```
 
-After starting, visit http://localhost:3000 and login with `ADMIN_TOKEN`.
+Note: the packaged Drizzle CLI scripts currently target PostgreSQL by default. SQLite is supported at runtime, but this README no longer claims that `pnpm db:push` is a general SQLite initialization flow.
 
 ---
 
@@ -196,54 +264,42 @@ After starting, visit http://localhost:3000 and login with `ADMIN_TOKEN`.
 
 ### Environment Variables (`.env` or `.env.local`)
 
-| Variable                    | Required | Description                                                 |
-| --------------------------- | :------: | ----------------------------------------------------------- |
-| `DATABASE_URL`              |   Yes    | PostgreSQL URL (used when `DB_TYPE=postgres`)               |
-| `DB_TYPE`                   |          | Database backend: `postgres` (default) or `sqlite`          |
-| `SQLITE_DB_PATH`            |          | SQLite file path (used when `DB_TYPE=sqlite`)               |
-| `ENCRYPTION_KEY`            |  Yes\*   | Fernet key (either this or `ENCRYPTION_KEY_FILE`)           |
-| `ENCRYPTION_KEY_FILE`       |  Yes\*   | Load Fernet key from file (either this or `ENCRYPTION_KEY`) |
-| `ADMIN_TOKEN`               |   Yes    | Admin console login token                                   |
-| `ALLOW_KEY_REVEAL`          |          | Allow revealing full API keys, default `false`              |
-| `LOG_RETENTION_DAYS`        |          | Request log retention days, default `90`                    |
-| `LOG_LEVEL`                 |          | Log level: `fatal`/`error`/`warn`/`info`/`debug`/`trace`    |
-| `DEBUG_LOG_HEADERS`         |          | Debug header logging switch, default `false`                |
-| `HEALTH_CHECK_INTERVAL`     |          | Upstream health check interval in seconds, default `30`     |
-| `HEALTH_CHECK_TIMEOUT`      |          | Upstream health check timeout in seconds, default `10`      |
-| `CORS_ORIGINS`              |          | CORS allowlist, comma-separated                             |
-| `PORT`                      |          | Service port, default `3000`                                |
-| `RECORDER_ENABLED`          |          | Enable traffic recorder (recommended only in development)   |
-| `RECORDER_MODE`             |          | Recorder mode: `all` / `success` / `failure`                |
-| `RECORDER_FIXTURES_DIR`     |          | Fixture output directory, default `tests/fixtures`          |
-| `RECORDER_REDACT_SENSITIVE` |          | Redact sensitive fields in fixtures, default `true`         |
+| Variable                    |  Required   | Description                                                                                                                     |
+| --------------------------- | :---------: | ------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`              | Conditional | Required in PostgreSQL mode; when `DB_TYPE` is unset, providing this value makes the app choose PostgreSQL automatically        |
+| `DB_TYPE`                   |             | Database backend: `postgres` or `sqlite`; when unset, the app auto-detects based on whether `DATABASE_URL` exists               |
+| `SQLITE_DB_PATH`            |             | SQLite file path (used when `DB_TYPE=sqlite`)                                                                                   |
+| `ENCRYPTION_KEY`            |    Yes\*    | Fernet key (either this or `ENCRYPTION_KEY_FILE`)                                                                               |
+| `ENCRYPTION_KEY_FILE`       |    Yes\*    | Load Fernet key from file (either this or `ENCRYPTION_KEY`)                                                                     |
+| `ADMIN_TOKEN`               |     Yes     | Admin console login token                                                                                                       |
+| `ALLOW_KEY_REVEAL`          |             | Allow revealing full API keys, default `false`                                                                                  |
+| `LOG_RETENTION_DAYS`        |             | Request log retention days, default `90`                                                                                        |
+| `LOG_LEVEL`                 |             | Log level: `fatal`/`error`/`warn`/`info`/`debug`/`trace`                                                                        |
+| `DEBUG_LOG_HEADERS`         |             | Debug header logging switch, default `false`                                                                                    |
+| `HEALTH_CHECK_INTERVAL`     |             | Upstream health check interval in seconds, default `30`                                                                         |
+| `HEALTH_CHECK_TIMEOUT`      |             | Upstream health check timeout in seconds, default `10`                                                                          |
+| `CORS_ORIGINS`              |             | CORS allowlist, comma-separated                                                                                                 |
+| `PORT`                      |             | Service port, default `3000`                                                                                                    |
+| `RECORDER_ENABLED`          |             | Enable traffic recording. Code defaults to off, but the repository's production compose / deploy workflow enables it by default |
+| `RECORDER_MODE`             |             | Recorder mode: `all` / `success` / `failure`                                                                                    |
+| `RECORDER_FIXTURES_DIR`     |             | Fixture output directory, default `tests/fixtures`                                                                              |
+| `RECORDER_REDACT_SENSITIVE` |             | Redact sensitive fields in fixtures. Code default is `true`, but the repository's production deployment template writes `false` |
 
 ---
 
 ## Project Structure
 
-```
-AutoRouter/
-├── src/
-│   ├── app/                 # Next.js App Router
-│   │   ├── [locale]/        # Internationalized page routes
-│   │   └── api/             # API Routes
-│   │       ├── admin/       # Admin API
-│   │       ├── mock/        # Fixture replay mock API (development)
-│   │       ├── proxy/       # Proxy API
-│   │       └── health/      # Health check
-│   ├── components/          # React components
-│   ├── hooks/               # Custom Hooks
-│   ├── lib/
-│   │   ├── db/              # Drizzle ORM config
-│   │   ├── services/        # Business logic services
-│   │   └── utils/           # Utility functions
-│   ├── messages/            # Translation files
-│   └── i18n/                # i18n configuration
-├── tests/                   # Test cases
-├── drizzle/                 # Database migrations
-├── docs/                    # Documentation
-└── openspec/                # Design specifications
-```
+| Path                           | Purpose                                                                                                                           |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `src/app/api/proxy`            | Proxy entrypoint handling path-capability matching, candidate construction, failover, and request logging                         |
+| `src/app/api/admin`            | Admin APIs for keys, upstreams, stats, logs, billing, compensation, health, and circuit breakers                                  |
+| `src/app/[locale]/(dashboard)` | Admin console pages including dashboard, keys, logs, upstreams, settings, `system/billing`, and `system/header-compensation`      |
+| `src/lib/services`             | Core services such as load balancing, circuit breaker, health checking, billing, logging, traffic recording, and session affinity |
+| `src/lib/db`                   | Database access and schema definitions with PostgreSQL / SQLite runtime support                                                   |
+| `src/components`               | Admin console components and shared UI primitives                                                                                 |
+| `tests`                        | Unit, component, E2E, accessibility, and visual regression tests                                                                  |
+| `drizzle` / `drizzle-sqlite`   | PostgreSQL / SQLite migration outputs                                                                                             |
+| `docs` / `openspec`            | Supporting documentation and change specifications                                                                                |
 
 ---
 

@@ -4,7 +4,7 @@
 <img src="docs/images/banner.svg" alt="AutoRouter Banner" width="100%">
 
 <h3>AI API Gateway</h3>
-<p>一个极简的多上游 AI API 代理</p>
+<p>一个面向多上游治理的 AI API Gateway</p>
 
 <!-- Badges: Status -->
 
@@ -56,8 +56,8 @@
 
 - **OpenAI 兼容代理** - 通过 `/api/proxy/v1/*` 转发请求，支持普通响应与 SSE 流式输出
 - **API Key 生命周期管理** - 创建、更新、停用、撤销密钥，并绑定可访问上游与过期时间
-- **智能多上游路由** - 按模型前缀自动分组，支持 `allowed_models`、`model_redirects`、权重与优先级
-- **可观测请求日志** - 记录路由决策、故障转移历史、会话亲和命中与 Token 统计
+- **多上游能力路由** - 按请求路径能力与密钥授权筛选候选上游，并结合 `model_redirects`、优先级、权重、熔断、并发、配额与故障转移完成选路
+- **可观测请求日志** - 记录候选集、路由决策、故障转移历史、会话亲和命中与 Token、计费快照
 
 </td>
 <td width="50%">
@@ -162,25 +162,26 @@ cp .env.example .env
 # 3. 启动服务
 docker compose up -d
 
-# 4. 访问 http://localhost:${PORT:-3000}
+# 4. 默认访问 http://localhost:3331
+# 如果你修改了 .env 中的 PORT，请改用对应端口访问
 ```
 
 ### 生产环境 CI/CD 部署
 
-项目支持通过 GitHub Actions 自动构建并部署到云服务器。
+项目支持通过 GitHub Actions 自动构建镜像并部署到云服务器。
 
 **1. 配置 GitHub Secrets**
 
 在仓库 Settings → Secrets and variables → Actions 中添加：
 
-| Secret            | 说明                                  |
-| ----------------- | ------------------------------------- |
-| `SERVER_HOST`     | 服务器 IP 或域名                      |
-| `SERVER_USER`     | SSH 用户名                            |
-| `SSH_PRIVATE_KEY` | SSH 私钥内容                          |
-| `SERVER_PORT`     | SSH 端口 (可选，默认 22)              |
-| `DEPLOY_DIR`      | 部署目录 (可选，默认 /opt/autorouter) |
-| `GHCR_TOKEN`      | GitHub PAT (私有仓库需要)             |
+| Secret            | 说明                                      |
+| ----------------- | ----------------------------------------- |
+| `SERVER_HOST`     | 服务器 IP 或域名                          |
+| `SERVER_USER`     | SSH 用户名                                |
+| `SSH_PRIVATE_KEY` | SSH 私钥内容                              |
+| `SERVER_PORT`     | SSH 端口 (可选，默认 22)                  |
+| `DEPLOY_DIR`      | 部署目录 (可选，默认 /opt/autorouter)     |
+| `ADMIN_TOKEN`     | 管理后台令牌，会在部署时写入服务器 `.env` |
 
 **2. 服务器初始化**
 
@@ -210,6 +211,10 @@ git push origin v1.0.0
 
 ### 本地开发
 
+README 当前提供两种运行模式，但数据库准备方式不同，请不要直接复制 `.env.example` 后原样执行。
+
+#### 方案一：本地 PostgreSQL
+
 ```bash
 # 1. 克隆项目
 git clone https://github.com/g1331/AutoRouter.git
@@ -218,20 +223,48 @@ cd AutoRouter
 # 2. 复制环境变量
 cp .env.example .env.local
 
+# 3. 把 .env.local 中的 DATABASE_URL 改成宿主机地址
+# 例如：
+# DATABASE_URL=postgresql://autorouter:password@localhost:5432/autorouter
+
+# 4. 生成加密密钥 (填入 .env.local)
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+
+# 5. 安装依赖
+pnpm install
+
+# 6. 推送 PostgreSQL Schema
+pnpm db:push
+
+# 7. 启动开发服务器
+pnpm dev
+```
+
+启动后访问 <http://localhost:3000>，使用 `ADMIN_TOKEN` 登录。
+
+#### 方案二：本地 SQLite
+
+运行时代码支持 SQLite，本地快速试跑时可以这样配置：
+
+```bash
+# 1. 复制环境变量
+cp .env.example .env.local
+
+# 2. 在 .env.local 中设置
+# DB_TYPE=sqlite
+# SQLITE_DB_PATH=./data/dev.sqlite
+
 # 3. 生成加密密钥 (填入 .env.local)
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 
 # 4. 安装依赖
 pnpm install
 
-# 5. 数据库迁移
-pnpm db:push
-
-# 6. 启动开发服务器
+# 5. 启动开发服务器
 pnpm dev
 ```
 
-启动后访问 <http://localhost:3000>，使用 `ADMIN_TOKEN` 登录。
+注意：仓库当前封装的 Drizzle CLI 脚本默认面向 PostgreSQL。SQLite 运行时是受支持的，但 README 不再把 `pnpm db:push` 宣传为 SQLite 的通用初始化命令。
 
 ---
 
@@ -239,54 +272,42 @@ pnpm dev
 
 ### 环境变量 (`.env` 或 `.env.local`)
 
-| 变量                        | 必填 | 说明                                                              |
-| --------------------------- | :--: | ----------------------------------------------------------------- |
-| `DATABASE_URL`              |  ✓   | PostgreSQL 连接串（`DB_TYPE=postgres` 时使用）                    |
-| `DB_TYPE`                   |      | 数据库类型，`postgres`（默认）或 `sqlite`                         |
-| `SQLITE_DB_PATH`            |      | SQLite 文件路径（`DB_TYPE=sqlite` 时使用）                        |
-| `ENCRYPTION_KEY`            | ✓\*  | Fernet 加密密钥（与 `ENCRYPTION_KEY_FILE` 二选一）                |
-| `ENCRYPTION_KEY_FILE`       | ✓\*  | 从文件读取加密密钥（与 `ENCRYPTION_KEY` 二选一）                  |
-| `ADMIN_TOKEN`               |  ✓   | 管理后台登录令牌                                                  |
-| `ALLOW_KEY_REVEAL`          |      | 是否允许展示完整 API Key，默认 `false`                            |
-| `LOG_RETENTION_DAYS`        |      | 日志保留天数，默认 `90`                                           |
-| `LOG_LEVEL`                 |      | 日志级别：`fatal` / `error` / `warn` / `info` / `debug` / `trace` |
-| `DEBUG_LOG_HEADERS`         |      | 是否输出请求头调试日志，默认 `false`                              |
-| `HEALTH_CHECK_INTERVAL`     |      | 上游健康检查间隔（秒），默认 `30`                                 |
-| `HEALTH_CHECK_TIMEOUT`      |      | 上游健康检查超时（秒），默认 `10`                                 |
-| `CORS_ORIGINS`              |      | CORS 白名单，逗号分隔                                             |
-| `PORT`                      |      | 服务端口，默认 `3000`                                             |
-| `RECORDER_ENABLED`          |      | 开启流量录制（仅开发环境建议使用）                                |
-| `RECORDER_MODE`             |      | 录制模式：`all` / `success` / `failure`                           |
-| `RECORDER_FIXTURES_DIR`     |      | 录制文件目录，默认 `tests/fixtures`                               |
-| `RECORDER_REDACT_SENSITIVE` |      | 是否脱敏录制内容，默认 `true`                                     |
+| 变量                        |   必填   | 说明                                                                                  |
+| --------------------------- | :------: | ------------------------------------------------------------------------------------- |
+| `DATABASE_URL`              | 条件必填 | PostgreSQL 模式下必填；未设置 `DB_TYPE` 时，只要提供它就会自动选择 PostgreSQL         |
+| `DB_TYPE`                   |          | 数据库类型，支持 `postgres` 或 `sqlite`；未设置时会按 `DATABASE_URL` 是否存在自动判断 |
+| `SQLITE_DB_PATH`            |          | SQLite 文件路径（`DB_TYPE=sqlite` 时使用）                                            |
+| `ENCRYPTION_KEY`            |   ✓\*    | Fernet 加密密钥（与 `ENCRYPTION_KEY_FILE` 二选一）                                    |
+| `ENCRYPTION_KEY_FILE`       |   ✓\*    | 从文件读取加密密钥（与 `ENCRYPTION_KEY` 二选一）                                      |
+| `ADMIN_TOKEN`               |    ✓     | 管理后台登录令牌                                                                      |
+| `ALLOW_KEY_REVEAL`          |          | 是否允许展示完整 API Key，默认 `false`                                                |
+| `LOG_RETENTION_DAYS`        |          | 日志保留天数，默认 `90`                                                               |
+| `LOG_LEVEL`                 |          | 日志级别：`fatal` / `error` / `warn` / `info` / `debug` / `trace`                     |
+| `DEBUG_LOG_HEADERS`         |          | 是否输出请求头调试日志，默认 `false`                                                  |
+| `HEALTH_CHECK_INTERVAL`     |          | 上游健康检查间隔（秒），默认 `30`                                                     |
+| `HEALTH_CHECK_TIMEOUT`      |          | 上游健康检查超时（秒），默认 `10`                                                     |
+| `CORS_ORIGINS`              |          | CORS 白名单，逗号分隔                                                                 |
+| `PORT`                      |          | 服务端口，默认 `3000`                                                                 |
+| `RECORDER_ENABLED`          |          | 是否开启流量录制。代码默认关闭，但仓库提供的生产 compose / deploy workflow 默认开启   |
+| `RECORDER_MODE`             |          | 录制模式：`all` / `success` / `failure`                                               |
+| `RECORDER_FIXTURES_DIR`     |          | 录制文件目录，默认 `tests/fixtures`                                                   |
+| `RECORDER_REDACT_SENSITIVE` |          | 是否脱敏录制内容。代码默认 `true`，但仓库提供的生产部署模板默认写入 `false`           |
 
 ---
 
 ## 项目结构
 
-```
-AutoRouter/
-├── src/
-│   ├── app/                 # Next.js App Router
-│   │   ├── [locale]/        # 国际化页面路由
-│   │   └── api/             # API Routes
-│   │       ├── admin/       # 管理 API
-│   │       ├── mock/        # 录制回放 Mock API（开发环境）
-│   │       ├── proxy/       # 代理 API
-│   │       └── health/      # 健康检查
-│   ├── components/          # React 组件
-│   ├── hooks/               # 自定义 Hooks
-│   ├── lib/
-│   │   ├── db/              # Drizzle ORM 配置
-│   │   ├── services/        # 业务逻辑服务
-│   │   └── utils/           # 工具函数
-│   ├── messages/            # 翻译文件
-│   └── i18n/                # 国际化配置
-├── tests/                   # 测试用例
-├── drizzle/                 # 数据库迁移
-├── docs/                    # 文档资源
-└── openspec/                # 设计规范
-```
+| 目录                           | 说明                                                                                                    |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `src/app/api/proxy`            | 代理入口，负责路径能力判定、候选集构建、故障转移和日志记录                                              |
+| `src/app/api/admin`            | 管理 API，包含 keys、upstreams、stats、logs、billing、compensation、health、circuit-breakers            |
+| `src/app/[locale]/(dashboard)` | 管理台页面，包含 dashboard、keys、logs、upstreams、settings、system/billing、system/header-compensation |
+| `src/lib/services`             | 核心业务服务，如负载均衡、熔断、健康检查、计费、日志、流量录制、会话亲和                                |
+| `src/lib/db`                   | 数据库访问与 schema，运行时支持 PostgreSQL / SQLite                                                     |
+| `src/components`               | 管理台组件与通用 UI 组件                                                                                |
+| `tests`                        | 单元测试、组件测试、E2E、可访问性和视觉回归测试                                                         |
+| `drizzle` / `drizzle-sqlite`   | PostgreSQL / SQLite 迁移产物                                                                            |
+| `docs` / `openspec`            | 补充文档与变更规格                                                                                      |
 
 ---
 
