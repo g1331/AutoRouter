@@ -97,6 +97,51 @@ describe("LogsTable", () => {
       expect(screen.getByText("tableDuration")).toBeInTheDocument();
     });
 
+    it("keeps the interface type header on one line and renders expanded desktop details outside cells", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              routing_decision: {
+                original_model: "gpt-4",
+                resolved_model: "gpt-4",
+                model_redirect_applied: false,
+                provider_type: "openai",
+                routing_type: "direct",
+                candidates: [],
+                excluded: [],
+                candidate_count: 1,
+                final_candidate_count: 1,
+                selected_upstream_id: "upstream-1",
+                selected_upstream_name: "upstream-1",
+                selected_upstream_provider_type: "openai",
+                selection_reason: "direct_match",
+                selection_strategy: "direct",
+                attempted_upstream_ids: ["upstream-1"],
+              } as RoutingDecisionLog,
+            },
+          ]}
+        />
+      );
+
+      const interfaceTypeHeader = screen.getByText("tableInterfaceType").closest("th");
+      expect(interfaceTypeHeader).not.toBeNull();
+      expect(interfaceTypeHeader?.className).toContain("whitespace-nowrap");
+      expect(interfaceTypeHeader?.className).toContain("w-[84px]");
+
+      const modelHeader = screen.getByText("tableModel").closest("th");
+      expect(modelHeader?.className).toContain("w-[264px]");
+
+      const tokenHeader = screen.getByText("tableTokens").closest("th");
+      expect(tokenHeader?.className).toContain("w-[104px]");
+
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+
+      const tokenDetails = screen.getByText("tokenDetails");
+      expect(tokenDetails.closest("td")).toBeNull();
+    });
+
     it("renders log data correctly", () => {
       render(<LogsTable logs={[mockLog]} />);
 
