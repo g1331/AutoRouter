@@ -203,6 +203,41 @@ describe("LogsTable", () => {
       expect(row.className).toContain("animate-log-row-enter");
     });
 
+    it("does not replay desktop row entry animation after expanding details", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              routing_decision: {
+                original_model: "gpt-4",
+                resolved_model: "gpt-4",
+                model_redirect_applied: false,
+                provider_type: "openai",
+                routing_type: "direct",
+                candidates: [],
+                excluded: [],
+                candidate_count: 1,
+                final_candidate_count: 1,
+                selected_upstream_id: "upstream-1",
+                selected_upstream_name: "upstream-1",
+                selected_upstream_provider_type: "openai",
+                selection_reason: "direct_match",
+                selection_strategy: "direct",
+                attempted_upstream_ids: ["upstream-1"],
+              } as RoutingDecisionLog,
+            },
+          ]}
+        />
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+
+      const dataRow = screen.getAllByRole("row").find((row) => row.querySelector("td"));
+      expect(dataRow).toBeDefined();
+      expect(dataRow?.className).not.toContain("animate-log-row-enter");
+    });
+
     it("renders streaming mode indicator for stream requests", () => {
       render(<LogsTable logs={[{ ...mockLog, id: "test-id-stream", is_stream: true }]} />);
 
@@ -1526,7 +1561,10 @@ describe("LogsTable", () => {
       expect(screen.getAllByText(/thinkingProtocol/).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/thinkingLevel/).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/thinkingSourcePaths/).length).toBeGreaterThan(0);
-      expect(screen.getAllByText("[xhigh]").length).toBeGreaterThan(0);
+
+      const thinkingPanel = screen.getByText("thinkingConfig").closest("div");
+      expect(thinkingPanel).not.toBeNull();
+      expect(within(thinkingPanel as HTMLElement).queryByText("[xhigh]")).not.toBeInTheDocument();
     });
 
     it("shows an explicit empty state for missing thinking config", () => {

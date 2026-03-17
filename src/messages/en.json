@@ -390,7 +390,6 @@
     "compensationBadge": "Compensated",
     "compensationBadgeTooltip": "session_id recovered from request body (header was missing)",
     "thinkingConfig": "Thinking Config",
-    "thinkingListLabel": "Badge",
     "thinkingBadgeAria": "Thinking badge {value}",
     "thinkingProvider": "Provider",
     "thinkingProtocol": "Protocol",

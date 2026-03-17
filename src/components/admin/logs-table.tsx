@@ -290,7 +290,6 @@ function ThinkingConfigPanel({
 }) {
   const t = useTranslations("logs");
   const locale = useLocale();
-  const badgeLabel = getRequestThinkingBadgeLabel(thinkingConfig ?? null);
 
   if (!thinkingConfig) {
     return (
@@ -348,13 +347,7 @@ function ThinkingConfigPanel({
   return (
     <div className={DETAIL_PANEL_CLASS}>
       <div className={DETAIL_PANEL_HEADER_CLASS}>{t("thinkingConfig")}</div>
-      <div className={cn(DETAIL_PANEL_BODY_CLASS, "space-y-2")}>
-        {badgeLabel ? (
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-muted-foreground">{t("thinkingListLabel")}:</span>
-            <ThinkingConfigBadge thinkingConfig={thinkingConfig} />
-          </div>
-        ) : null}
+      <div className={DETAIL_PANEL_BODY_CLASS}>
         <div className="space-y-1.5 text-[12px]">
           {detailRows.map((row) => (
             <div key={row.label} className="flex items-start gap-2">
@@ -571,6 +564,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
 
   // Expanded rows state for failover details
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [hasExpansionInteraction, setHasExpansionInteraction] = useState(false);
   const [focusedJourneySteps, setFocusedJourneySteps] = useState<Record<string, number>>({});
   const [journeyViewMode, setJourneyViewMode] = useState<"focused" | "sequential">("focused");
 
@@ -663,6 +657,10 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
   const hasLiveActivity = newLogIds.size > 0 || changedLogIds.size > 0;
 
   const toggleRow = (logId: string) => {
+    if (!hasExpansionInteraction) {
+      setHasExpansionInteraction(true);
+    }
+
     const newExpanded = new Set(expandedRows);
     if (newExpanded.has(logId)) {
       newExpanded.delete(logId);
@@ -2773,7 +2771,11 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                           } = derived;
                           const entryAnimationDelay = getLogEntryAnimationDelay(index);
                           const rowEntryMotionClass =
-                            isNew || isChanged ? LOGS_ROW_EMPHASIS_CLASS : LOGS_ROW_ENTER_CLASS;
+                            isNew || isChanged
+                              ? LOGS_ROW_EMPHASIS_CLASS
+                              : hasExpansionInteraction
+                                ? ""
+                                : LOGS_ROW_ENTER_CLASS;
 
                           return (
                             <TableRow

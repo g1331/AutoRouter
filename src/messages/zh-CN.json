@@ -390,7 +390,6 @@
     "compensationBadge": "已补偿",
     "compensationBadgeTooltip": "session_id 从请求体中恢复（原始请求头缺失）",
     "thinkingConfig": "Thinking 配置",
-    "thinkingListLabel": "摘要",
     "thinkingBadgeAria": "Thinking 标记 {value}",
     "thinkingProvider": "Provider",
     "thinkingProtocol": "协议",
