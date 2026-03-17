@@ -284,6 +284,48 @@ describe("LogsTable", () => {
       }
     });
 
+    it("renders thinking level in mobile model summary as a badge", () => {
+      const originalMatchMedia = window.matchMedia;
+
+      window.matchMedia = ((query: string) => ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      })) as unknown as typeof window.matchMedia;
+
+      try {
+        render(
+          <LogsTable
+            logs={[
+              {
+                ...mockLog,
+                thinking_config: {
+                  provider: "openai",
+                  protocol: "openai_chat",
+                  mode: "reasoning",
+                  level: "xhigh",
+                  budget_tokens: null,
+                  include_thoughts: null,
+                  source_paths: ["reasoning_effort"],
+                },
+              },
+            ]}
+          />
+        );
+
+        const thinkingBadge = screen.getByText("[xhigh]");
+        expect(thinkingBadge.closest("div")?.className).toContain("font-mono");
+        expect(thinkingBadge.closest("div")?.className).toContain("border-divider");
+      } finally {
+        window.matchMedia = originalMatchMedia;
+      }
+    });
+
     it("does not show dash together with unbillable usage-missing reason in mobile cards", async () => {
       const originalMatchMedia = window.matchMedia;
 

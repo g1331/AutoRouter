@@ -207,11 +207,15 @@ function isThinkingBadgeDuplicatedByReasoningEffort(
 function ModelIdentity({
   label,
   reasoningEffort,
+  thinkingConfig,
+  compactBadges = false,
   className,
   textClassName,
 }: {
   label: string | null | undefined;
   reasoningEffort?: ReasoningEffortLevel | null;
+  thinkingConfig?: RequestLog["thinking_config"] | null;
+  compactBadges?: boolean;
   className?: string;
   textClassName?: string;
 }) {
@@ -220,11 +224,14 @@ function ModelIdentity({
   }
 
   return (
-    <div className={cn("flex min-w-0 items-center gap-0.5", className)}>
-      <div className="min-w-0 flex-1">
-        <TruncatedTextTooltip text={label} className={textClassName} />
-      </div>
+    <div className={cn("flex min-w-0 max-w-full items-center gap-1", className)}>
+      <TruncatedTextTooltip text={label} className={cn("shrink", textClassName)} />
       {reasoningEffort ? <ReasoningEffortBadge level={reasoningEffort} /> : null}
+      <ThinkingConfigBadge
+        thinkingConfig={thinkingConfig}
+        dedupeWithReasoningEffort={reasoningEffort}
+        compact={compactBadges}
+      />
     </div>
   );
 }
@@ -1232,12 +1239,9 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
               <ModelIdentity
                 label={modelDisplay ?? log.model}
                 reasoningEffort={reasoningEffort}
+                thinkingConfig={log.thinking_config}
                 className="min-w-0"
                 textClassName="font-medium text-foreground"
-              />
-              <ThinkingConfigBadge
-                thinkingConfig={log.thinking_config}
-                dedupeWithReasoningEffort={reasoningEffort}
               />
             </div>
             <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
@@ -1288,6 +1292,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                   <ModelIdentity
                     label={modelDisplay}
                     reasoningEffort={reasoningEffort}
+                    thinkingConfig={log.thinking_config}
                     textClassName="font-medium text-foreground"
                   />
                   <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
@@ -2237,6 +2242,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
     const isNew = newLogIds.has(log.id);
     const isChanged = changedLogIds.has(log.id);
     const isError = hasErrorState(log);
+    const reasoningEffort = getReasoningEffortLevel(log);
     const upstreamDisplayName =
       log.upstream_id === null ? null : (log.upstream_name ?? t("upstreamUnknown"));
     const firstFailoverAttemptAt =
@@ -2271,6 +2277,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
       isNew,
       isChanged,
       isError,
+      reasoningEffort,
       upstreamDisplayName,
       failoverDurationMs,
       requestTps,
@@ -2489,188 +2496,201 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
       ) : (
         <>
           {isMobileLayout ? (
-            <div className="space-y-3 p-3">
-              {filteredLogs.map((log, index) => {
-                const {
-                  isExpanded,
-                  canExpand,
-                  isNew,
-                  isChanged,
-                  isError,
-                  upstreamDisplayName,
-                  failoverDurationMs,
-                  requestTps,
-                  displayTotalTokens,
-                } = getLogDerived(log);
-                const entryAnimationDelay = getLogEntryAnimationDelay(index);
-                const mobileEntryMotionClass =
-                  isNew || isChanged ? LOGS_CARD_EMPHASIS_CLASS : LOGS_CARD_ENTER_CLASS;
+            <TooltipProvider>
+              <div className="space-y-3 p-3">
+                {filteredLogs.map((log, index) => {
+                  const {
+                    isExpanded,
+                    canExpand,
+                    isNew,
+                    isChanged,
+                    isError,
+                    reasoningEffort,
+                    upstreamDisplayName,
+                    failoverDurationMs,
+                    requestTps,
+                    displayTotalTokens,
+                  } = getLogDerived(log);
+                  const entryAnimationDelay = getLogEntryAnimationDelay(index);
+                  const mobileEntryMotionClass =
+                    isNew || isChanged ? LOGS_CARD_EMPHASIS_CLASS : LOGS_CARD_ENTER_CLASS;
 
-                return (
-                  <div
-                    key={log.id}
-                    className={cn(
-                      "rounded-cf-md border border-divider bg-surface-200/70 p-3 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0",
-                      LOGS_SURFACE_TRANSITION_CLASS,
-                      mobileEntryMotionClass,
-                      isError && "border-l-2 border-l-status-error/45",
-                      (isNew || isChanged) && "bg-status-info-muted/25"
-                    )}
-                    style={{ animationDelay: entryAnimationDelay }}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1 space-y-2">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-                          <span className="font-mono text-muted-foreground whitespace-nowrap">
-                            {formatDistanceToNow(new Date(log.created_at), {
-                              addSuffix: true,
-                              locale: dateLocale,
-                            })}
-                          </span>
-                          {upstreamDisplayName && (
-                            <span className="min-w-0 text-muted-foreground break-all">
-                              • {upstreamDisplayName}
+                  return (
+                    <div
+                      key={log.id}
+                      className={cn(
+                        "rounded-cf-md border border-divider bg-surface-200/70 p-3 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0",
+                        LOGS_SURFACE_TRANSITION_CLASS,
+                        mobileEntryMotionClass,
+                        isError && "border-l-2 border-l-status-error/45",
+                        (isNew || isChanged) && "bg-status-info-muted/25"
+                      )}
+                      style={{ animationDelay: entryAnimationDelay }}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                            <span className="font-mono text-muted-foreground whitespace-nowrap">
+                              {formatDistanceToNow(new Date(log.created_at), {
+                                addSuffix: true,
+                                locale: dateLocale,
+                              })}
                             </span>
-                          )}
-                          {log.model && (
-                            <span className="inline-flex min-w-0 items-center gap-1 text-muted-foreground break-all">
-                              <span>• {log.model}</span>
-                              <ThinkingConfigBadge thinkingConfig={log.thinking_config} compact />
-                            </span>
-                          )}
-                        </div>
+                            {upstreamDisplayName && (
+                              <span className="min-w-0 text-muted-foreground break-all">
+                                • {upstreamDisplayName}
+                              </span>
+                            )}
+                            {log.model && (
+                              <div className="inline-flex min-w-0 items-center text-muted-foreground">
+                                <span className="mr-1 shrink-0">•</span>
+                                <ModelIdentity
+                                  label={log.model}
+                                  reasoningEffort={reasoningEffort}
+                                  thinkingConfig={log.thinking_config}
+                                  compactBadges
+                                  className="min-w-0 max-w-full"
+                                  textClassName="text-muted-foreground"
+                                />
+                              </div>
+                            )}
+                          </div>
 
-                        <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
-                          <code className="shrink-0 rounded-cf-sm border border-divider bg-surface-300 px-1.5 py-0.5 font-mono text-xs text-foreground">
-                            {log.method || "-"}
-                          </code>
-                          <RequestModeBadge isStream={log.is_stream} />
-                          <InterfaceTypeCell
-                            method={log.method}
-                            path={log.path}
-                            matchedCapability={log.routing_decision?.matched_route_capability}
-                            className="text-xs"
-                            variant="mobile"
-                          />
-                          {hasConcurrencyFullSignal(log) && (
-                            <Badge variant="warning" className="px-1.5 py-0 text-[10px] leading-4">
-                              {t("exclusionReason.concurrency_full")}
-                            </Badge>
-                          )}
-                        </div>
-
-                        {displayTotalTokens > 0 && (
-                          <div className="pt-1">
-                            <TokenDisplay
-                              promptTokens={log.prompt_tokens}
-                              completionTokens={log.completion_tokens}
-                              totalTokens={log.total_tokens}
-                              cachedTokens={log.cached_tokens}
-                              reasoningTokens={log.reasoning_tokens}
-                              cacheCreationTokens={log.cache_creation_tokens}
-                              cacheCreation5mTokens={log.cache_creation_5m_tokens}
-                              cacheCreation1hTokens={log.cache_creation_1h_tokens}
-                              cacheReadTokens={log.cache_read_tokens}
+                          <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
+                            <code className="shrink-0 rounded-cf-sm border border-divider bg-surface-300 px-1.5 py-0.5 font-mono text-xs text-foreground">
+                              {log.method || "-"}
+                            </code>
+                            <RequestModeBadge isStream={log.is_stream} />
+                            <InterfaceTypeCell
+                              method={log.method}
+                              path={log.path}
+                              matchedCapability={log.routing_decision?.matched_route_capability}
+                              className="text-xs"
+                              variant="mobile"
                             />
+                            {hasConcurrencyFullSignal(log) && (
+                              <Badge
+                                variant="warning"
+                                className="px-1.5 py-0 text-[10px] leading-4"
+                              >
+                                {t("exclusionReason.concurrency_full")}
+                              </Badge>
+                            )}
                           </div>
-                        )}
-                      </div>
 
-                      <div className="shrink-0 text-right font-mono text-xs leading-tight">
-                        <div className="flex flex-col items-end gap-1">
-                          <Badge
-                            variant={getStatusBadgeVariant(log.status_code)}
-                            className={cn(
-                              "flex min-h-6 min-w-6 items-center justify-center px-2 py-0.5 text-[11px] leading-none font-mono tabular-nums",
-                              isLogInProgress(log) &&
-                                (isLive
-                                  ? "border-status-info/30 bg-status-info-muted/25 text-status-info"
-                                  : "text-muted-foreground")
-                            )}
-                            aria-label={
-                              isLogInProgress(log) ? t("displayStatusInProgress") : undefined
-                            }
-                          >
-                            {isLogInProgress(log) ? (
-                              <Loader2 className="h-3 w-3 motion-safe:animate-spin motion-reduce:animate-none" />
-                            ) : (
-                              log.status_code
-                            )}
-                          </Badge>
+                          {displayTotalTokens > 0 && (
+                            <div className="pt-1">
+                              <TokenDisplay
+                                promptTokens={log.prompt_tokens}
+                                completionTokens={log.completion_tokens}
+                                totalTokens={log.total_tokens}
+                                cachedTokens={log.cached_tokens}
+                                reasoningTokens={log.reasoning_tokens}
+                                cacheCreationTokens={log.cache_creation_tokens}
+                                cacheCreation5mTokens={log.cache_creation_5m_tokens}
+                                cacheCreation1hTokens={log.cache_creation_1h_tokens}
+                                cacheReadTokens={log.cache_read_tokens}
+                              />
+                            </div>
+                          )}
                         </div>
-                        <div className="mt-1 tabular-nums">{formatDuration(log.duration_ms)}</div>
-                        {shouldShowBillingCost(log) ? (
-                          <div className="mt-1 tabular-nums text-foreground">
-                            {formatBillingCost(log)}
+
+                        <div className="shrink-0 text-right font-mono text-xs leading-tight">
+                          <div className="flex flex-col items-end gap-1">
+                            <Badge
+                              variant={getStatusBadgeVariant(log.status_code)}
+                              className={cn(
+                                "flex min-h-6 min-w-6 items-center justify-center px-2 py-0.5 text-[11px] leading-none font-mono tabular-nums",
+                                isLogInProgress(log) &&
+                                  (isLive
+                                    ? "border-status-info/30 bg-status-info-muted/25 text-status-info"
+                                    : "text-muted-foreground")
+                              )}
+                              aria-label={
+                                isLogInProgress(log) ? t("displayStatusInProgress") : undefined
+                              }
+                            >
+                              {isLogInProgress(log) ? (
+                                <Loader2 className="h-3 w-3 motion-safe:animate-spin motion-reduce:animate-none" />
+                              ) : (
+                                log.status_code
+                              )}
+                            </Badge>
                           </div>
-                        ) : null}
-                        {log.billing_status === "unbilled" && log.unbillable_reason && (
-                          <div className="mt-0.5 max-w-[160px] text-[11px] text-status-warning">
-                            {resolveBillingReasonLabel(log.unbillable_reason)}
-                          </div>
-                        )}
-                        {log.billing_status == null && (
-                          <div className="mt-0.5 text-[11px] text-muted-foreground">
-                            {t("billingStatusPending")}
-                          </div>
-                        )}
-                        {(log.ttft_ms != null || requestTps != null) && (
-                          <div className="mt-0.5 flex flex-wrap justify-end gap-x-1.5 gap-y-0 text-[11px] text-muted-foreground">
-                            {log.ttft_ms != null && (
-                              <span className="whitespace-nowrap">
-                                {t("perfTtft")}{" "}
-                                <span
-                                  className={cn(
-                                    "tabular-nums",
-                                    getTtftPerformanceClass(log.ttft_ms)
-                                  )}
-                                >
-                                  {formatTtft(log.ttft_ms)}
+                          <div className="mt-1 tabular-nums">{formatDuration(log.duration_ms)}</div>
+                          {shouldShowBillingCost(log) ? (
+                            <div className="mt-1 tabular-nums text-foreground">
+                              {formatBillingCost(log)}
+                            </div>
+                          ) : null}
+                          {log.billing_status === "unbilled" && log.unbillable_reason && (
+                            <div className="mt-0.5 max-w-[160px] text-[11px] text-status-warning">
+                              {resolveBillingReasonLabel(log.unbillable_reason)}
+                            </div>
+                          )}
+                          {log.billing_status == null && (
+                            <div className="mt-0.5 text-[11px] text-muted-foreground">
+                              {t("billingStatusPending")}
+                            </div>
+                          )}
+                          {(log.ttft_ms != null || requestTps != null) && (
+                            <div className="mt-0.5 flex flex-wrap justify-end gap-x-1.5 gap-y-0 text-[11px] text-muted-foreground">
+                              {log.ttft_ms != null && (
+                                <span className="whitespace-nowrap">
+                                  {t("perfTtft")}{" "}
+                                  <span
+                                    className={cn(
+                                      "tabular-nums",
+                                      getTtftPerformanceClass(log.ttft_ms)
+                                    )}
+                                  >
+                                    {formatTtft(log.ttft_ms)}
+                                  </span>
                                 </span>
-                              </span>
-                            )}
-                            {requestTps != null && (
-                              <span className="whitespace-nowrap">
-                                {t("perfTps")} {requestTps} tok/s
-                              </span>
-                            )}
-                          </div>
-                        )}
+                              )}
+                              {requestTps != null && (
+                                <span className="whitespace-nowrap">
+                                  {t("perfTps")} {requestTps} tok/s
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
+
+                      {canExpand && (
+                        <button
+                          type="button"
+                          onClick={() => toggleRow(log.id)}
+                          className={cn(
+                            "mt-3 inline-flex w-full items-center justify-between rounded-cf-sm border border-divider bg-surface-300/70 px-3 py-2 text-left text-xs text-muted-foreground hover:bg-surface-300",
+                            LOGS_COLOR_TRANSITION_CLASS
+                          )}
+                          aria-expanded={isExpanded}
+                          aria-label={isExpanded ? t("collapseDetails") : t("expandDetails")}
+                        >
+                          <span>{isExpanded ? t("collapseDetails") : t("expandDetails")}</span>
+                          <ExpandChevron expanded={isExpanded} />
+                        </button>
+                      )}
+
+                      {isExpanded && canExpand && (
+                        <div className={LOGS_DETAIL_ENTER_CLASS}>
+                          {renderExpandedDetails({
+                            log,
+                            upstreamDisplayName,
+                            failoverDurationMs,
+                            requestTps,
+                            isError,
+                            className: "mt-3 border-t border-dashed border-divider pt-3",
+                          })}
+                        </div>
+                      )}
                     </div>
-
-                    {canExpand && (
-                      <button
-                        type="button"
-                        onClick={() => toggleRow(log.id)}
-                        className={cn(
-                          "mt-3 inline-flex w-full items-center justify-between rounded-cf-sm border border-divider bg-surface-300/70 px-3 py-2 text-left text-xs text-muted-foreground hover:bg-surface-300",
-                          LOGS_COLOR_TRANSITION_CLASS
-                        )}
-                        aria-expanded={isExpanded}
-                        aria-label={isExpanded ? t("collapseDetails") : t("expandDetails")}
-                      >
-                        <span>{isExpanded ? t("collapseDetails") : t("expandDetails")}</span>
-                        <ExpandChevron expanded={isExpanded} />
-                      </button>
-                    )}
-
-                    {isExpanded && canExpand && (
-                      <div className={LOGS_DETAIL_ENTER_CLASS}>
-                        {renderExpandedDetails({
-                          log,
-                          upstreamDisplayName,
-                          failoverDurationMs,
-                          requestTps,
-                          isError,
-                          className: "mt-3 border-t border-dashed border-divider pt-3",
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            </TooltipProvider>
           ) : (
             <div className="overflow-hidden">
               <TooltipProvider>
@@ -2711,6 +2731,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                         isNew,
                         isChanged,
                         isError,
+                        reasoningEffort,
                         upstreamDisplayName,
                         failoverDurationMs,
                         requestTps,
@@ -2799,18 +2820,13 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                             </TableCell>
                             <TableCell className="hidden font-mono text-[10px] xl:table-cell w-[272px] px-1.5 py-1 pl-1 min-w-0">
                               {log.model ? (
-                                <div className="flex min-w-0 items-center gap-1">
-                                  <ModelIdentity
-                                    label={log.model}
-                                    reasoningEffort={getReasoningEffortLevel(log)}
-                                    className="min-w-0 flex-1"
-                                  />
-                                  <ThinkingConfigBadge
-                                    thinkingConfig={log.thinking_config}
-                                    dedupeWithReasoningEffort={getReasoningEffortLevel(log)}
-                                    compact
-                                  />
-                                </div>
+                                <ModelIdentity
+                                  label={log.model}
+                                  reasoningEffort={reasoningEffort}
+                                  thinkingConfig={log.thinking_config}
+                                  compactBadges
+                                  className="min-w-0 w-full"
+                                />
                               ) : (
                                 <span className="text-muted-foreground">-</span>
                               )}
