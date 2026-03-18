@@ -115,6 +115,13 @@ const REASONING_EFFORT_BADGE_CLASSES: Record<ReasoningEffortLevel, string> = {
   xhigh: "border-status-warning/40 bg-status-warning-muted/25 text-status-warning",
 };
 
+const THINKING_BADGE_BASE_CLASS =
+  "h-5 shrink-0 rounded-full px-1.5 py-0 font-mono text-[9px] font-medium leading-none tracking-[0.12em] shadow-none";
+
+function extractThinkingBudgetBadgeValue(label: string): string | null {
+  return label.startsWith("budget:") ? label.slice("budget:".length).trim() : null;
+}
+
 function TruncatedTextTooltip({ text, className }: { text: string; className?: string }) {
   return (
     <Tooltip delayDuration={200}>
@@ -260,12 +267,38 @@ function ThinkingConfigBadge({
 }) {
   const t = useTranslations("logs");
   const badgeLabel = getRequestThinkingBadgeLabel(thinkingConfig ?? null);
+  const budgetValue = badgeLabel ? extractThinkingBudgetBadgeValue(badgeLabel) : null;
 
   if (
     !badgeLabel ||
     isThinkingBadgeDuplicatedByReasoningEffort(thinkingConfig, dedupeWithReasoningEffort)
   ) {
     return null;
+  }
+
+  if (budgetValue) {
+    return (
+      <Badge
+        variant="success"
+        className={cn(
+          THINKING_BADGE_BASE_CLASS,
+          "gap-1 border-status-success/30 bg-status-success-muted/35 text-status-success",
+          compact && "gap-0.5 px-1 py-0 text-[8px]"
+        )}
+        aria-label={t("thinkingBadgeAria", { value: badgeLabel })}
+        title={t("thinkingBadgeAria", { value: badgeLabel })}
+      >
+        <span className="uppercase tracking-[0.16em]">Budget</span>
+        <span
+          className={cn(
+            "rounded-full bg-background/65 px-1 py-[1px] text-[8px] leading-none tracking-[0.08em] text-foreground/85",
+            compact && "px-0.5 text-[7px]"
+          )}
+        >
+          {budgetValue}
+        </span>
+      </Badge>
+    );
   }
 
   return (

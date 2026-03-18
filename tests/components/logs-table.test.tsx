@@ -196,6 +196,29 @@ describe("LogsTable", () => {
       expect(screen.getByText("[high]")).toBeInTheDocument();
     });
 
+    it("renders budget thinking config as a budget badge instead of bracketed text", () => {
+      const logWithBudgetThinking = {
+        ...mockLog,
+        thinking_config: {
+          provider: "google",
+          protocol: "gemini_generate",
+          mode: "thinking",
+          level: null,
+          budget_tokens: 512,
+          include_thoughts: null,
+          source_paths: ["generationConfig.thinkingConfig.thinkingBudget"],
+        },
+      } as RequestLog;
+
+      render(<LogsTable logs={[logWithBudgetThinking]} />);
+
+      const modelCell = screen.getByText("gpt-4").closest("td");
+      expect(modelCell).not.toBeNull();
+      expect(within(modelCell as HTMLElement).getByText("Budget")).toBeInTheDocument();
+      expect(within(modelCell as HTMLElement).getByText("512")).toBeInTheDocument();
+      expect(within(modelCell as HTMLElement).queryByText("[budget:512]")).not.toBeInTheDocument();
+    });
+
     it("applies entry motion class to desktop rows on first render", () => {
       render(<LogsTable logs={[mockLog]} />);
 
