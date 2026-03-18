@@ -1521,6 +1521,17 @@ function normalizeReasoningEffort(value: unknown): ReasoningEffort | null {
     : null;
 }
 
+function extractReasoningEffortFromOutputConfig(
+  payload: Record<string, unknown> | null
+): ReasoningEffort | null {
+  if (!payload) {
+    return null;
+  }
+
+  const outputConfig = asRecord(payload.output_config);
+  return normalizeReasoningEffort(outputConfig?.effort);
+}
+
 function extractReasoningEffortFromBody(
   bodyJson: Record<string, unknown> | null
 ): ReasoningEffort | null {
@@ -1537,6 +1548,11 @@ function extractReasoningEffortFromBody(
   const reasoningEffort = normalizeReasoningEffort(reasoningConfig?.effort);
   if (reasoningEffort) {
     return reasoningEffort;
+  }
+
+  const outputConfigEffort = extractReasoningEffortFromOutputConfig(bodyJson);
+  if (outputConfigEffort) {
+    return outputConfigEffort;
   }
 
   const thinkingConfig = asRecord(bodyJson.thinking);
@@ -1558,6 +1574,11 @@ function extractReasoningEffortFromBody(
   const nestedReasoningValue = normalizeReasoningEffort(nestedReasoningConfig?.effort);
   if (nestedReasoningValue) {
     return nestedReasoningValue;
+  }
+
+  const nestedOutputConfigEffort = extractReasoningEffortFromOutputConfig(extraBody);
+  if (nestedOutputConfigEffort) {
+    return nestedOutputConfigEffort;
   }
 
   const nestedThinkingConfig = asRecord(extraBody.thinking);

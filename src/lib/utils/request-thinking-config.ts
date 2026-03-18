@@ -52,6 +52,18 @@ function readOwnBoolean(target: Record<string, unknown>, key: string): boolean |
   return target[key];
 }
 
+function readOwnRecord(
+  target: Record<string, unknown>,
+  key: string
+): Record<string, unknown> | null {
+  if (!hasOwn(target, key) || typeof target[key] !== "object" || target[key] === null) {
+    return null;
+  }
+
+  const value = target[key];
+  return Array.isArray(value) ? null : (value as Record<string, unknown>);
+}
+
 function buildThinkingConfig(input: {
   provider: RequestThinkingProvider;
   protocol: RequestThinkingProtocol;
@@ -110,12 +122,7 @@ function extractAnthropicThinkingConfig(
   bodyJson: Record<string, unknown>
 ): RequestThinkingConfig | null {
   const sourcePaths: string[] = [];
-  const effort = readOwnString(bodyJson, "effort");
-  if (effort) {
-    sourcePaths.push("effort");
-  }
-
-  const thinking = isRecord(bodyJson.thinking) ? bodyJson.thinking : null;
+  const thinking = readOwnRecord(bodyJson, "thinking");
   const thinkingType = thinking ? readOwnString(thinking, "type") : null;
   if (thinkingType) {
     sourcePaths.push("thinking.type");
@@ -126,10 +133,25 @@ function extractAnthropicThinkingConfig(
     sourcePaths.push("thinking.budget_tokens");
   }
 
+  const outputConfig = readOwnRecord(bodyJson, "output_config");
+  const outputConfigEffort = outputConfig ? readOwnString(outputConfig, "effort") : null;
+  if (outputConfigEffort) {
+    sourcePaths.push("output_config.effort");
+  }
+
+  const legacyEffort = readOwnString(bodyJson, "effort");
+  if (legacyEffort) {
+    sourcePaths.push("effort");
+  }
+
+  const effort = outputConfigEffort ?? legacyEffort;
+  const isManualThinking = thinkingType === "enabled";
+  const isAdaptiveThinking = thinkingType === "adaptive";
+
   return buildThinkingConfig({
     provider: "anthropic",
     protocol: "anthropic_messages",
-    mode: thinkingType === "enabled" ? "manual" : effort ? "adaptive" : "thinking",
+    mode: isManualThinking ? "manual" : isAdaptiveThinking || effort ? "adaptive" : "thinking",
     level: effort,
     budgetTokens,
     sourcePaths,

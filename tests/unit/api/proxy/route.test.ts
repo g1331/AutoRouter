@@ -942,6 +942,120 @@ describe("proxy route upstream selection", () => {
     );
   });
 
+  it("should extract Anthropic adaptive effort from output_config into logs", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { logRequestStart, updateRequestLog } = await import("@/lib/services/request-logger");
+
+    const anthropicUpstream = {
+      id: "up-anthropic",
+      name: "anthropic-main",
+      providerType: "anthropic",
+      routeCapabilities: ["anthropic_messages"],
+      baseUrl: "https://api.anthropic.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 0,
+      weight: 1,
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-anthropic" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([anthropicUpstream]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: anthropicUpstream,
+      providerType: "anthropic",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      body: new TextEncoder().encode(
+        JSON.stringify({
+          id: "msg_1",
+          model: "claude-sonnet-4-5",
+          content: [],
+        })
+      ),
+      isStream: false,
+      usage: {
+        promptTokens: 12,
+        completionTokens: 6,
+        totalTokens: 18,
+      },
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        messages: [{ role: "user", content: "hello" }],
+        thinking: {
+          type: "adaptive",
+        },
+        output_config: {
+          effort: "medium",
+        },
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["v1", "messages"] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(selectFromProviderType).toHaveBeenCalledWith(["up-anthropic"], undefined, undefined);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(anthropicUpstream);
+    expect(logRequestStart).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "v1/messages",
+        model: "claude-sonnet-4-5",
+        reasoningEffort: "medium",
+        thinkingConfig: {
+          provider: "anthropic",
+          protocol: "anthropic_messages",
+          mode: "adaptive",
+          level: "medium",
+          budget_tokens: null,
+          include_thoughts: null,
+          source_paths: ["thinking.type", "output_config.effort"],
+        },
+      })
+    );
+    expect(updateRequestLog).toHaveBeenCalledWith(
+      "log-id",
+      expect.objectContaining({
+        reasoningEffort: "medium",
+        thinkingConfig: {
+          provider: "anthropic",
+          protocol: "anthropic_messages",
+          mode: "adaptive",
+          level: "medium",
+          budget_tokens: null,
+          include_thoughts: null,
+          source_paths: ["thinking.type", "output_config.effort"],
+        },
+      })
+    );
+  });
+
   it("should prioritize body model over gemini path fallback model", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");

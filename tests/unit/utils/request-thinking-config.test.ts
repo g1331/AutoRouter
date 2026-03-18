@@ -42,11 +42,32 @@ describe("request-thinking-config", () => {
     });
   });
 
-  it("extracts Anthropic effort and thinking budget", () => {
+  it("extracts Anthropic adaptive effort from output_config", () => {
     expect(
       extractRequestThinkingConfig("anthropic_messages", {
         model: "claude-sonnet",
-        effort: "medium",
+        thinking: {
+          type: "adaptive",
+        },
+        output_config: {
+          effort: "medium",
+        },
+      })
+    ).toEqual({
+      provider: "anthropic",
+      protocol: "anthropic_messages",
+      mode: "adaptive",
+      level: "medium",
+      budget_tokens: null,
+      include_thoughts: null,
+      source_paths: ["thinking.type", "output_config.effort"],
+    });
+  });
+
+  it("extracts Anthropic manual thinking budget", () => {
+    expect(
+      extractRequestThinkingConfig("anthropic_messages", {
+        model: "claude-sonnet",
         thinking: {
           type: "enabled",
           budget_tokens: 8000,
@@ -56,10 +77,27 @@ describe("request-thinking-config", () => {
       provider: "anthropic",
       protocol: "anthropic_messages",
       mode: "manual",
-      level: "medium",
+      level: null,
       budget_tokens: 8000,
       include_thoughts: null,
-      source_paths: ["effort", "thinking.type", "thinking.budget_tokens"],
+      source_paths: ["thinking.type", "thinking.budget_tokens"],
+    });
+  });
+
+  it("falls back to legacy Anthropic top-level effort", () => {
+    expect(
+      extractRequestThinkingConfig("anthropic_messages", {
+        model: "claude-sonnet",
+        effort: "medium",
+      })
+    ).toEqual({
+      provider: "anthropic",
+      protocol: "anthropic_messages",
+      mode: "adaptive",
+      level: "medium",
+      budget_tokens: null,
+      include_thoughts: null,
+      source_paths: ["effort"],
     });
   });
 
