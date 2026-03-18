@@ -1532,6 +1532,18 @@ function extractReasoningEffortFromOutputConfig(
   return normalizeReasoningEffort(outputConfig?.effort);
 }
 
+function extractReasoningEffortFromGeminiThinkingConfig(
+  payload: Record<string, unknown> | null
+): ReasoningEffort | null {
+  if (!payload) {
+    return null;
+  }
+
+  const generationConfig = asRecord(payload.generationConfig);
+  const thinkingConfig = asRecord(generationConfig?.thinkingConfig);
+  return normalizeReasoningEffort(thinkingConfig?.thinkingLevel);
+}
+
 function extractReasoningEffortFromBody(
   bodyJson: Record<string, unknown> | null
 ): ReasoningEffort | null {
@@ -1553,6 +1565,11 @@ function extractReasoningEffortFromBody(
   const outputConfigEffort = extractReasoningEffortFromOutputConfig(bodyJson);
   if (outputConfigEffort) {
     return outputConfigEffort;
+  }
+
+  const geminiThinkingLevel = extractReasoningEffortFromGeminiThinkingConfig(bodyJson);
+  if (geminiThinkingLevel) {
+    return geminiThinkingLevel;
   }
 
   const thinkingConfig = asRecord(bodyJson.thinking);
@@ -1579,6 +1596,11 @@ function extractReasoningEffortFromBody(
   const nestedOutputConfigEffort = extractReasoningEffortFromOutputConfig(extraBody);
   if (nestedOutputConfigEffort) {
     return nestedOutputConfigEffort;
+  }
+
+  const nestedGeminiThinkingLevel = extractReasoningEffortFromGeminiThinkingConfig(extraBody);
+  if (nestedGeminiThinkingLevel) {
+    return nestedGeminiThinkingLevel;
   }
 
   const nestedThinkingConfig = asRecord(extraBody.thinking);

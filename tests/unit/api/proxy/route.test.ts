@@ -827,7 +827,7 @@ describe("proxy route upstream selection", () => {
     const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
     const { routeByModel } = await import("@/lib/services/model-router");
     const { selectFromProviderType } = await import("@/lib/services/load-balancer");
-    const { logRequestStart } = await import("@/lib/services/request-logger");
+    const { logRequestStart, updateRequestLog } = await import("@/lib/services/request-logger");
     const { calculateAndPersistRequestBillingSnapshot } =
       await import("@/lib/services/billing-cost-service");
 
@@ -920,6 +920,7 @@ describe("proxy route upstream selection", () => {
       expect.objectContaining({
         path: "v1beta/models/gemini-2.5-flash-lite:generateContent",
         model: "gemini-2.5-flash-lite",
+        reasoningEffort: "high",
         thinkingConfig: {
           provider: "google",
           protocol: "gemini_generate",
@@ -938,6 +939,25 @@ describe("proxy route upstream selection", () => {
     expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({
         model: "gemini-2.5-flash-lite",
+      })
+    );
+    expect(updateRequestLog).toHaveBeenCalledWith(
+      "log-id",
+      expect.objectContaining({
+        reasoningEffort: "high",
+        thinkingConfig: {
+          provider: "google",
+          protocol: "gemini_generate",
+          mode: "thinking",
+          level: "HIGH",
+          budget_tokens: 4096,
+          include_thoughts: true,
+          source_paths: [
+            "generationConfig.thinkingConfig.thinkingLevel",
+            "generationConfig.thinkingConfig.thinkingBudget",
+            "generationConfig.thinkingConfig.includeThoughts",
+          ],
+        },
       })
     );
   });
