@@ -56,6 +56,11 @@ describe("lib/db/schema", () => {
       expect(apiKeys.userId.name).toBe("user_id");
     });
 
+    it("has accessMode column", () => {
+      expect(apiKeys.accessMode).toBeDefined();
+      expect(apiKeys.accessMode.name).toBe("access_mode");
+    });
+
     it("has isActive column", () => {
       expect(apiKeys.isActive).toBeDefined();
       expect(apiKeys.isActive.name).toBe("is_active");

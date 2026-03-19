@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Search } from "lucide-react";
 import { format } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
@@ -48,6 +48,7 @@ interface EditKeyDialogProps {
  */
 export function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps) {
   const updateMutation = useUpdateAPIKey();
+  const [upstreamSearchQuery, setUpstreamSearchQuery] = useState("");
   const t = useTranslations("keys");
   const tCommon = useTranslations("common");
   const locale = useLocale();
@@ -55,13 +56,24 @@ export function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps
 
   const { data: upstreams, isLoading: upstreamsLoading } = useAllUpstreams();
 
-  const editKeySchema = z.object({
-    name: z.string().min(1, t("keyNameRequired")).max(100),
-    description: z.string().max(500).optional(),
-    is_active: z.boolean(),
-    upstream_ids: z.array(z.string()).min(1, t("selectUpstreamsRequired")),
-    expires_at: z.date().nullable().optional(),
-  });
+  const editKeySchema = z
+    .object({
+      name: z.string().min(1, t("keyNameRequired")).max(100),
+      description: z.string().max(500).optional(),
+      is_active: z.boolean(),
+      access_mode: z.enum(["unrestricted", "restricted"]),
+      upstream_ids: z.array(z.string()),
+      expires_at: z.date().nullable().optional(),
+    })
+    .superRefine((data, ctx) => {
+      if (data.access_mode === "restricted" && data.upstream_ids.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["upstream_ids"],
+          message: t("selectUpstreamsRequired"),
+        });
+      }
+    });
 
   type EditKeyForm = z.infer<typeof editKeySchema>;
 
@@ -71,10 +83,30 @@ export function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps
       name: apiKey.name,
       description: apiKey.description || "",
       is_active: apiKey.is_active,
+      access_mode: apiKey.access_mode,
       upstream_ids: apiKey.upstream_ids,
       expires_at: apiKey.expires_at ? new Date(apiKey.expires_at) : null,
     },
   });
+
+  const accessMode = form.watch("access_mode");
+  const selectedUpstreamIds = form.watch("upstream_ids");
+  const normalizedUpstreamSearchQuery = upstreamSearchQuery.trim().toLowerCase();
+  const filteredUpstreams = (upstreams ?? []).filter((upstream) => {
+    if (!normalizedUpstreamSearchQuery) {
+      return true;
+    }
+
+    const searchableText = [upstream.name, upstream.description ?? ""].join(" ").toLowerCase();
+
+    return searchableText.includes(normalizedUpstreamSearchQuery);
+  });
+  const filteredUpstreamIds = filteredUpstreams.map((upstream) => upstream.id);
+  const selectedFilteredCount = filteredUpstreamIds.filter((id) =>
+    selectedUpstreamIds.includes(id)
+  ).length;
+  const allFilteredUpstreamsSelected =
+    filteredUpstreamIds.length > 0 && selectedFilteredCount === filteredUpstreamIds.length;
 
   // Reset form when apiKey changes
   useEffect(() => {
@@ -82,10 +114,18 @@ export function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps
       name: apiKey.name,
       description: apiKey.description || "",
       is_active: apiKey.is_active,
+      access_mode: apiKey.access_mode,
       upstream_ids: apiKey.upstream_ids,
       expires_at: apiKey.expires_at ? new Date(apiKey.expires_at) : null,
     });
+    setUpstreamSearchQuery("");
   }, [apiKey, form]);
+
+  useEffect(() => {
+    if (!open) {
+      setUpstreamSearchQuery("");
+    }
+  }, [open]);
 
   const onSubmit = async (data: EditKeyForm) => {
     try {
@@ -95,7 +135,8 @@ export function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps
           name: data.name,
           description: data.description || null,
           is_active: data.is_active,
-          upstream_ids: data.upstream_ids,
+          access_mode: data.access_mode,
+          upstream_ids: data.access_mode === "restricted" ? data.upstream_ids : [],
           expires_at: data.expires_at ? data.expires_at.toISOString() : null,
         },
       });
@@ -112,168 +153,275 @@ export function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-2xl flex-col overflow-hidden p-0">
+        <DialogHeader className="shrink-0 px-6 pb-0 pr-12 pt-6">
           <DialogTitle>{t("editKeyTitle")}</DialogTitle>
           <DialogDescription>{t("editKeyDesc")}</DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit, onInvalidSubmit)} className="space-y-6">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("keyName")} *</FormLabel>
-                  <FormControl>
-                    <Input placeholder={t("keyNamePlaceholder")} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <form
+            onSubmit={form.handleSubmit(onSubmit, onInvalidSubmit)}
+            className="flex min-h-0 flex-1 flex-col"
+          >
+            <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-6">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("keyName")} *</FormLabel>
+                    <FormControl>
+                      <Input placeholder={t("keyNamePlaceholder")} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("keyDescription")}</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder={t("keyDescriptionPlaceholder")} rows={3} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("keyDescription")}</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder={t("keyDescriptionPlaceholder")} rows={3} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <FormField
-              control={form.control}
-              name="is_active"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-lg border p-4">
-                  <FormControl>
-                    <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-base">{t("keyActive")}</FormLabel>
-                    <FormDescription>{t("keyActiveDesc")}</FormDescription>
-                  </div>
-                </FormItem>
-              )}
-            />
+              <FormField
+                control={form.control}
+                name="is_active"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-lg border p-4">
+                    <FormControl>
+                      <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">{t("keyActive")}</FormLabel>
+                      <FormDescription>{t("keyActiveDesc")}</FormDescription>
+                    </div>
+                  </FormItem>
+                )}
+              />
 
-            <FormField
-              control={form.control}
-              name="upstream_ids"
-              render={() => (
-                <FormItem>
-                  <FormLabel>{t("selectUpstreams")} *</FormLabel>
-                  <FormDescription>{t("selectUpstreamsDesc")}</FormDescription>
-                  <div className="space-y-2 mt-2 max-h-48 overflow-y-auto bg-[rgb(var(--md-sys-color-surface-container-low))] rounded-[var(--shape-corner-medium)] p-3 border border-[rgb(var(--md-sys-color-outline-variant))]">
-                    {upstreamsLoading ? (
-                      <div className="type-body-medium text-[rgb(var(--md-sys-color-on-surface-variant))] text-center py-4">
-                        {tCommon("loading")}
-                      </div>
-                    ) : !upstreams || upstreams.length === 0 ? (
-                      <div className="type-body-medium text-[rgb(var(--md-sys-color-on-surface-variant))] text-center py-4">
-                        {tCommon("noData")}
-                      </div>
-                    ) : (
-                      upstreams.map((upstream) => (
-                        <FormField
-                          key={upstream.id}
-                          control={form.control}
-                          name="upstream_ids"
-                          render={({ field }) => (
-                            <FormItem className="flex items-start space-x-3 space-y-0 p-2 rounded-[var(--shape-corner-small)] hover:bg-[rgb(var(--md-sys-color-on-surface)_/_0.08)] transition-colors">
-                              <FormControl>
-                                <Checkbox
-                                  checked={field.value?.includes(upstream.id)}
-                                  onCheckedChange={(checked) => {
-                                    const updated = checked
-                                      ? [...(field.value || []), upstream.id]
-                                      : field.value?.filter((id) => id !== upstream.id);
-                                    field.onChange(updated);
-                                  }}
-                                />
-                              </FormControl>
-                              <div className="space-y-1 leading-none flex-1">
-                                <label className="type-body-medium text-[rgb(var(--md-sys-color-on-surface))] cursor-pointer">
-                                  {upstream.name}
-                                </label>
-                                {upstream.description && (
-                                  <p className="type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
-                                    {upstream.description}
-                                  </p>
-                                )}
-                              </div>
-                            </FormItem>
-                          )}
-                        />
-                      ))
-                    )}
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="expires_at"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>{t("expirationDate")}</FormLabel>
-                  <FormDescription>{t("expirationDateDesc")}</FormDescription>
-                  <div className="flex gap-2">
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "pl-3 text-left font-normal justify-start flex-1",
-                              !field.value && "text-[rgb(var(--md-sys-color-on-surface-variant))]"
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "PPP", { locale: dateLocale })
-                            ) : (
-                              <span>{t("selectDate")}</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value || undefined}
-                          onSelect={field.onChange}
-                          disabled={(date) => date < new Date()}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    {field.value && (
-                      <Button
+              <FormField
+                control={form.control}
+                name="access_mode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("upstreamAccessMode")}</FormLabel>
+                    <FormDescription>{t("upstreamAccessModeDesc")}</FormDescription>
+                    <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <button
                         type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => field.onChange(null)}
+                        className={cn(
+                          "rounded-[var(--shape-corner-medium)] border p-4 text-left transition-colors",
+                          field.value === "unrestricted"
+                            ? "border-primary bg-primary/5"
+                            : "border-[rgb(var(--md-sys-color-outline-variant))] bg-[rgb(var(--md-sys-color-surface-container-low))]"
+                        )}
+                        onClick={() => field.onChange("unrestricted")}
                       >
-                        {tCommon("cancel")}
-                      </Button>
-                    )}
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                        <div className="type-body-medium text-[rgb(var(--md-sys-color-on-surface))]">
+                          {t("unrestrictedAccess")}
+                        </div>
+                        <p className="mt-1 type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                          {t("unrestrictedAccessDesc")}
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        className={cn(
+                          "rounded-[var(--shape-corner-medium)] border p-4 text-left transition-colors",
+                          field.value === "restricted"
+                            ? "border-primary bg-primary/5"
+                            : "border-[rgb(var(--md-sys-color-outline-variant))] bg-[rgb(var(--md-sys-color-surface-container-low))]"
+                        )}
+                        onClick={() => field.onChange("restricted")}
+                      >
+                        <div className="type-body-medium text-[rgb(var(--md-sys-color-on-surface))]">
+                          {t("restrictedAccess")}
+                        </div>
+                        <p className="mt-1 type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                          {t("restrictedAccessDesc")}
+                        </p>
+                      </button>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <DialogFooter>
+              {accessMode === "restricted" && (
+                <FormField
+                  control={form.control}
+                  name="upstream_ids"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("selectUpstreams")} *</FormLabel>
+                      <FormDescription>{t("selectUpstreamsDesc")}</FormDescription>
+                      <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <div className="relative flex-1">
+                          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            value={upstreamSearchQuery}
+                            onChange={(event) => setUpstreamSearchQuery(event.target.value)}
+                            placeholder={t("searchUpstreams")}
+                            aria-label={t("searchUpstreams")}
+                            className="border-surface-400/70 bg-surface-200/70 pl-9 transition-colors duration-cf-fast hover:border-surface-400 focus-visible:border-amber-400/45 focus-visible:ring-amber-400/20"
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0"
+                          disabled={filteredUpstreamIds.length === 0}
+                          onClick={() => {
+                            if (allFilteredUpstreamsSelected) {
+                              field.onChange(
+                                (field.value ?? []).filter(
+                                  (id) => !filteredUpstreamIds.includes(id)
+                                )
+                              );
+                              return;
+                            }
+
+                            field.onChange(
+                              Array.from(new Set([...(field.value ?? []), ...filteredUpstreamIds]))
+                            );
+                          }}
+                        >
+                          {t(
+                            allFilteredUpstreamsSelected
+                              ? "deselectFilteredUpstreams"
+                              : "selectFilteredUpstreams"
+                          )}
+                        </Button>
+                      </div>
+                      {!upstreamsLoading && !!upstreams?.length && (
+                        <p className="mt-2 type-body-small text-muted-foreground">
+                          {t("filteredUpstreamsSelected", {
+                            selected: selectedFilteredCount,
+                            total: filteredUpstreamIds.length,
+                          })}
+                        </p>
+                      )}
+                      <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-[var(--shape-corner-medium)] border border-[rgb(var(--md-sys-color-outline-variant))] bg-[rgb(var(--md-sys-color-surface-container-low))] p-3">
+                        {upstreamsLoading ? (
+                          <div className="py-4 text-center type-body-medium text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                            {tCommon("loading")}
+                          </div>
+                        ) : !upstreams || upstreams.length === 0 ? (
+                          <div className="py-4 text-center type-body-medium text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                            {tCommon("noData")}
+                          </div>
+                        ) : filteredUpstreams.length === 0 ? (
+                          <div className="py-4 text-center type-body-medium text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                            {t("noMatchingUpstreams")}
+                          </div>
+                        ) : (
+                          filteredUpstreams.map((upstream) => (
+                            <FormField
+                              key={upstream.id}
+                              control={form.control}
+                              name="upstream_ids"
+                              render={({ field }) => (
+                                <FormItem className="flex items-start space-x-3 space-y-0 rounded-[var(--shape-corner-small)] p-2 transition-colors hover:bg-[rgb(var(--md-sys-color-on-surface)_/_0.08)]">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value?.includes(upstream.id)}
+                                      onCheckedChange={(checked) => {
+                                        const updated = checked
+                                          ? [...(field.value || []), upstream.id]
+                                          : field.value?.filter((id) => id !== upstream.id);
+                                        field.onChange(updated);
+                                      }}
+                                    />
+                                  </FormControl>
+                                  <div className="flex-1 space-y-1 leading-none">
+                                    <label className="cursor-pointer type-body-medium text-[rgb(var(--md-sys-color-on-surface))]">
+                                      {upstream.name}
+                                    </label>
+                                    {upstream.description && (
+                                      <p className="type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                                        {upstream.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                </FormItem>
+                              )}
+                            />
+                          ))
+                        )}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              <FormField
+                control={form.control}
+                name="expires_at"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>{t("expirationDate")}</FormLabel>
+                    <FormDescription>{t("expirationDateDesc")}</FormDescription>
+                    <div className="flex gap-2">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "h-11 flex-1 justify-between rounded-cf-sm border-border bg-surface-200 px-3 text-left font-normal hover:bg-surface-300",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              {field.value ? (
+                                format(field.value, "PPP", { locale: dateLocale })
+                              ) : (
+                                <span>{t("selectDate")}</span>
+                              )}
+                              <CalendarIcon className="h-4 w-4 shrink-0 opacity-60" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            locale={dateLocale}
+                            mode="single"
+                            selected={field.value || undefined}
+                            onSelect={field.onChange}
+                            disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      {field.value && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => field.onChange(null)}
+                        >
+                          {tCommon("cancel")}
+                        </Button>
+                      )}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <DialogFooter className="shrink-0 border-t border-divider px-6 py-4">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 {tCommon("cancel")}
               </Button>

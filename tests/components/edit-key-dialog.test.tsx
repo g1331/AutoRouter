@@ -71,6 +71,7 @@ describe("EditKeyDialog", () => {
     key_prefix: "sk-auto-abc123",
     name: "Test API Key",
     description: "Test description",
+    access_mode: "restricted",
     upstream_ids: ["upstream-1", "upstream-2"],
     is_active: true,
     expires_at: null,
@@ -135,6 +136,8 @@ describe("EditKeyDialog", () => {
 
       expect(screen.getByText("keyActive")).toBeInTheDocument();
       expect(screen.getByText("keyActiveDesc")).toBeInTheDocument();
+      expect(screen.getByText("unrestrictedAccess")).toBeInTheDocument();
+      expect(screen.getByText("restrictedAccess")).toBeInTheDocument();
     });
 
     it("renders upstream checkboxes", () => {
@@ -145,6 +148,53 @@ describe("EditKeyDialog", () => {
       expect(screen.getByText("OpenAI")).toBeInTheDocument();
       expect(screen.getByText("Anthropic")).toBeInTheDocument();
       expect(screen.getByText("Google")).toBeInTheDocument();
+    });
+
+    it("filters upstreams with the search input", async () => {
+      render(<EditKeyDialog apiKey={mockApiKey} open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("searchUpstreams"), {
+        target: { value: "Google" },
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText("Google")).toBeInTheDocument();
+        expect(screen.queryByText("OpenAI")).not.toBeInTheDocument();
+        expect(screen.queryByText("Anthropic")).not.toBeInTheDocument();
+      });
+    });
+
+    it("toggles all visible upstreams from the current search", async () => {
+      mockUpdateMutateAsync.mockResolvedValueOnce({});
+
+      render(<EditKeyDialog apiKey={mockApiKey} open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("searchUpstreams"), {
+        target: { value: "Google" },
+      });
+      fireEvent.click(screen.getByText("selectFilteredUpstreams"));
+
+      await waitFor(() => {
+        expect(screen.getByText("deselectFilteredUpstreams")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText("deselectFilteredUpstreams"));
+      fireEvent.click(screen.getByText("selectFilteredUpstreams"));
+      fireEvent.click(screen.getByText("save"));
+
+      await waitFor(() => {
+        expect(mockUpdateMutateAsync).toHaveBeenCalledWith({
+          id: "key-123",
+          data: expect.objectContaining({
+            access_mode: "restricted",
+            upstream_ids: ["upstream-1", "upstream-2", "upstream-3"],
+          }),
+        });
+      });
     });
 
     it("checks selected upstreams", () => {
@@ -196,7 +246,7 @@ describe("EditKeyDialog", () => {
       expect(mockToastError).toHaveBeenCalledWith("formValidationFailed");
     });
 
-    it("shows validation error when all upstreams are deselected", async () => {
+    it("shows validation error when all upstreams are deselected in restricted mode", async () => {
       render(<EditKeyDialog apiKey={mockApiKey} open={true} onOpenChange={mockOnOpenChange} />, {
         wrapper: Wrapper,
       });
@@ -212,6 +262,27 @@ describe("EditKeyDialog", () => {
 
       await waitFor(() => {
         expect(screen.getByText("selectUpstreamsRequired")).toBeInTheDocument();
+      });
+    });
+
+    it("allows submission without upstreams in unrestricted mode", async () => {
+      mockUpdateMutateAsync.mockResolvedValueOnce({});
+
+      render(<EditKeyDialog apiKey={mockApiKey} open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      fireEvent.click(screen.getByText("unrestrictedAccess"));
+      fireEvent.click(screen.getByText("save"));
+
+      await waitFor(() => {
+        expect(mockUpdateMutateAsync).toHaveBeenCalledWith({
+          id: "key-123",
+          data: expect.objectContaining({
+            access_mode: "unrestricted",
+            upstream_ids: [],
+          }),
+        });
       });
     });
   });
@@ -238,10 +309,35 @@ describe("EditKeyDialog", () => {
             name: "Updated Key Name",
             description: "Test description",
             is_active: true,
+            access_mode: "restricted",
             upstream_ids: ["upstream-1", "upstream-2"],
           }),
         });
       });
+    });
+
+    it("selects all visible upstreams from the filtered results", async () => {
+      mockUpdateMutateAsync.mockResolvedValueOnce({});
+
+      render(<EditKeyDialog apiKey={mockApiKey} open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("searchUpstreams"), {
+        target: { value: "Google" },
+      });
+      fireEvent.click(screen.getByText("selectFilteredUpstreams"));
+      fireEvent.click(screen.getByText("save"));
+
+      await waitFor(() => {
+        expect(mockUpdateMutateAsync).toHaveBeenCalled();
+      });
+
+      const submittedData = mockUpdateMutateAsync.mock.calls[0][0];
+      expect(submittedData.data.upstream_ids).toEqual(
+        expect.arrayContaining(["upstream-1", "upstream-2", "upstream-3"])
+      );
+      expect(submittedData.data.upstream_ids).toHaveLength(3);
     });
 
     it("closes dialog after successful submission", async () => {

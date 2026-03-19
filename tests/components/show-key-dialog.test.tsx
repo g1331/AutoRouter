@@ -31,6 +31,7 @@ describe("ShowKeyDialog", () => {
     key_prefix: "sk-auto-full",
     name: "New API Key",
     description: "This is a test key",
+    access_mode: "restricted",
     upstream_ids: ["upstream-1"],
     is_active: true,
     expires_at: null,

@@ -67,10 +67,23 @@ const updateApiKeySchema = z
     name: z.string().min(1).max(255).optional(),
     description: z.string().nullable().optional(),
     is_active: z.boolean().optional(),
+    access_mode: z.enum(["unrestricted", "restricted"]).optional(),
     expires_at: z.string().datetime().nullable().optional(),
-    upstream_ids: z.array(z.string().uuid()).min(1).optional(),
+    upstream_ids: z.array(z.string().uuid()).optional(),
   })
   .strict()
+  .superRefine((data, ctx) => {
+    const effectiveMode =
+      data.access_mode ?? (data.upstream_ids !== undefined ? "restricted" : undefined);
+
+    if (effectiveMode === "restricted" && (!data.upstream_ids || data.upstream_ids.length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["upstream_ids"],
+        message: "At least one upstream must be provided when access_mode is restricted",
+      });
+    }
+  })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided",
   });
@@ -106,6 +119,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
     if (validated.is_active !== undefined) {
       input.isActive = validated.is_active;
+    }
+    if (validated.access_mode !== undefined) {
+      input.accessMode = validated.access_mode;
     }
     if (validated.expires_at !== undefined) {
       input.expiresAt = validated.expires_at ? new Date(validated.expires_at) : null;

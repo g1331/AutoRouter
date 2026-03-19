@@ -103,13 +103,19 @@ describe("CreateKeyDialog", () => {
         expect(screen.getByPlaceholderText("keyNamePlaceholder")).toBeInTheDocument();
         expect(screen.getByPlaceholderText("keyDescriptionPlaceholder")).toBeInTheDocument();
         expect(screen.getByText("expirationDate")).toBeInTheDocument();
+        expect(screen.getByText("unrestrictedAccess")).toBeInTheDocument();
+        expect(screen.getByText("restrictedAccess")).toBeInTheDocument();
       });
     });
 
-    it("renders upstream checkboxes", async () => {
+    it("renders upstream checkboxes only in restricted mode", async () => {
       render(<CreateKeyDialog />, { wrapper: Wrapper });
 
       fireEvent.click(screen.getByText("createKey"));
+
+      expect(screen.queryByText("OpenAI")).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByText("restrictedAccess"));
 
       await waitFor(() => {
         expect(screen.getByText("OpenAI")).toBeInTheDocument();
@@ -121,9 +127,76 @@ describe("CreateKeyDialog", () => {
       render(<CreateKeyDialog />, { wrapper: Wrapper });
 
       fireEvent.click(screen.getByText("createKey"));
+      fireEvent.click(screen.getByText("restrictedAccess"));
 
       await waitFor(() => {
         expect(screen.getByText("OpenAI API")).toBeInTheDocument();
+      });
+    });
+
+    it("filters upstreams with the search input", async () => {
+      render(<CreateKeyDialog />, { wrapper: Wrapper });
+
+      fireEvent.click(screen.getByText("createKey"));
+      fireEvent.click(screen.getByText("restrictedAccess"));
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText("searchUpstreams")).toBeInTheDocument();
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("searchUpstreams"), {
+        target: { value: "Anthro" },
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText("Anthropic")).toBeInTheDocument();
+        expect(screen.queryByText("OpenAI")).not.toBeInTheDocument();
+      });
+    });
+
+    it("toggles all visible upstreams from the current search", async () => {
+      mockCreateMutateAsync.mockResolvedValueOnce({
+        id: "key-1",
+        key_value: "sk-auto-test",
+        key_prefix: "sk-auto-test",
+        name: "Filtered Key",
+        description: null,
+        access_mode: "restricted",
+        upstream_ids: ["upstream-2"],
+        is_active: true,
+        expires_at: null,
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-01T00:00:00Z",
+      });
+
+      render(<CreateKeyDialog />, { wrapper: Wrapper });
+
+      fireEvent.click(screen.getByText("createKey"));
+      fireEvent.click(screen.getByText("restrictedAccess"));
+      fireEvent.change(screen.getByPlaceholderText("searchUpstreams"), {
+        target: { value: "Anthro" },
+      });
+      fireEvent.click(screen.getByText("selectFilteredUpstreams"));
+
+      await waitFor(() => {
+        expect(screen.getByText("deselectFilteredUpstreams")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText("deselectFilteredUpstreams"));
+      fireEvent.click(screen.getByText("selectFilteredUpstreams"));
+      fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
+        target: { value: "Filtered Key" },
+      });
+      fireEvent.click(screen.getByText("create"));
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalledWith({
+          name: "Filtered Key",
+          description: null,
+          access_mode: "restricted",
+          upstream_ids: ["upstream-2"],
+          expires_at: null,
+        });
       });
     });
 
@@ -159,7 +232,46 @@ describe("CreateKeyDialog", () => {
       expect(mockToastError).toHaveBeenCalledWith("formValidationFailed");
     });
 
-    it("shows validation error when no upstream selected", async () => {
+    it("allows submit without selecting upstreams in unrestricted mode", async () => {
+      mockCreateMutateAsync.mockResolvedValueOnce({
+        id: "key-1",
+        key_value: "sk-auto-test",
+        key_prefix: "sk-auto-test",
+        name: "Test Key",
+        description: null,
+        access_mode: "unrestricted",
+        upstream_ids: [],
+        is_active: true,
+        expires_at: null,
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-01T00:00:00Z",
+      });
+
+      render(<CreateKeyDialog />, { wrapper: Wrapper });
+
+      fireEvent.click(screen.getByText("createKey"));
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText("keyNamePlaceholder")).toBeInTheDocument();
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
+        target: { value: "Test Key" },
+      });
+      fireEvent.click(screen.getByText("create"));
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalledWith({
+          name: "Test Key",
+          description: null,
+          access_mode: "unrestricted",
+          upstream_ids: [],
+          expires_at: null,
+        });
+      });
+    });
+
+    it("shows validation error when no upstream selected in restricted mode", async () => {
       render(<CreateKeyDialog />, { wrapper: Wrapper });
 
       fireEvent.click(screen.getByText("createKey"));
@@ -171,11 +283,56 @@ describe("CreateKeyDialog", () => {
       // Fill name but no upstream
       const nameInput = screen.getByPlaceholderText("keyNamePlaceholder");
       fireEvent.change(nameInput, { target: { value: "Test Key" } });
+      fireEvent.click(screen.getByText("restrictedAccess"));
 
       fireEvent.click(screen.getByText("create"));
 
       await waitFor(() => {
         expect(screen.getByText("selectUpstreamsRequired")).toBeInTheDocument();
+      });
+    });
+
+    it("selects all visible upstreams from the filtered results", async () => {
+      mockCreateMutateAsync.mockResolvedValueOnce({
+        id: "key-1",
+        key_value: "sk-auto-test",
+        key_prefix: "sk-auto-test",
+        name: "Filtered Key",
+        description: null,
+        access_mode: "restricted",
+        upstream_ids: ["upstream-1"],
+        is_active: true,
+        expires_at: null,
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-01T00:00:00Z",
+      });
+
+      render(<CreateKeyDialog />, { wrapper: Wrapper });
+
+      fireEvent.click(screen.getByText("createKey"));
+      fireEvent.click(screen.getByText("restrictedAccess"));
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText("searchUpstreams")).toBeInTheDocument();
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
+        target: { value: "Filtered Key" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("searchUpstreams"), {
+        target: { value: "Open" },
+      });
+      fireEvent.click(screen.getByText("selectFilteredUpstreams"));
+      fireEvent.click(screen.getByText("create"));
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalledWith({
+          name: "Filtered Key",
+          description: null,
+          access_mode: "restricted",
+          upstream_ids: ["upstream-1"],
+          expires_at: null,
+        });
       });
     });
   });

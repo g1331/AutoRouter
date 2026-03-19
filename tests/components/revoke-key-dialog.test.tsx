@@ -23,6 +23,7 @@ describe("RevokeKeyDialog", () => {
     key_prefix: "sk-auto-abc123def456",
     name: "Test API Key",
     description: "Test description",
+    access_mode: "restricted",
     upstream_ids: ["upstream-1"],
     is_active: true,
     expires_at: null,

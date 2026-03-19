@@ -146,15 +146,49 @@ describe("key-manager", () => {
   });
 
   describe("createApiKey", () => {
-    it("should throw error when no upstreams specified", async () => {
+    it("should throw error when restricted access has no upstreams", async () => {
       const { createApiKey } = await import("@/lib/services/key-manager");
 
       await expect(
         createApiKey({
           name: "Test Key",
+          accessMode: "restricted",
           upstreamIds: [],
         })
       ).rejects.toThrow("At least one upstream must be specified");
+    });
+
+    it("should allow unrestricted key without upstreams", async () => {
+      const { db } = await import("@/lib/db");
+      const { createApiKey } = await import("@/lib/services/key-manager");
+
+      const mockApiKey = {
+        id: "key-1",
+        keyHash: "hashed-key",
+        keyValueEncrypted: "encrypted:sk-auto-test123",
+        keyPrefix: "sk-auto-test",
+        name: "Test Key",
+        description: null,
+        accessMode: "unrestricted",
+        isActive: true,
+        expiresAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      vi.mocked(db.insert).mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([mockApiKey]),
+        }),
+      } as unknown as ReturnType<typeof db.insert>);
+
+      const result = await createApiKey({
+        name: "Test Key",
+        upstreamIds: [],
+      });
+
+      expect(result.accessMode).toBe("unrestricted");
+      expect(result.upstreamIds).toEqual([]);
     });
 
     it("should throw error when upstream IDs are invalid", async () => {
@@ -759,6 +793,56 @@ describe("key-manager", () => {
 
       expect(result.name).toBe("New Name");
       expect(db.update).toHaveBeenCalled();
+    });
+
+    it("should persist inferred restricted access mode when only upstreamIds are provided", async () => {
+      const { db } = await import("@/lib/db");
+      const { updateApiKey } = await import("@/lib/services/key-manager");
+
+      const mockExistingKey = {
+        id: "key-1",
+        keyPrefix: "sk-auto-test",
+        name: "Test Key",
+        description: null,
+        accessMode: "unrestricted",
+        isActive: true,
+        expiresAt: null,
+        createdAt: new Date("2024-01-01"),
+        updatedAt: new Date("2024-01-01"),
+      };
+
+      const mockUpdatedKey = {
+        ...mockExistingKey,
+        accessMode: "restricted",
+        updatedAt: new Date(),
+      };
+
+      vi.mocked(db.query.apiKeys.findFirst).mockResolvedValueOnce(mockExistingKey as never);
+      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([] as never);
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([{ id: "upstream-1" }] as never);
+
+      const mockReturning = vi.fn().mockResolvedValue([mockUpdatedKey]);
+      const mockWhere = vi.fn(() => ({ returning: mockReturning }));
+      const mockSet = vi.fn(() => ({ where: mockWhere }));
+      vi.mocked(db.update).mockReturnValue({ set: mockSet } as unknown as ReturnType<
+        typeof db.update
+      >);
+      vi.mocked(db.delete).mockReturnValue({ where: vi.fn() } as unknown as ReturnType<
+        typeof db.delete
+      >);
+      vi.mocked(db.insert).mockReturnValue({
+        values: vi.fn().mockResolvedValue(undefined),
+      } as unknown as ReturnType<typeof db.insert>);
+
+      const result = await updateApiKey("key-1", { upstreamIds: ["upstream-1"] });
+
+      expect(mockSet).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accessMode: "restricted",
+        })
+      );
+      expect(result.accessMode).toBe("restricted");
+      expect(result.upstreamIds).toEqual(["upstream-1"]);
     });
 
     it("should update key description", async () => {

@@ -4304,6 +4304,86 @@ describe("proxy route upstream selection", () => {
     expect(forwardRequest).not.toHaveBeenCalled();
   });
 
+  it("should authorize unrestricted keys across all active upstreams", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest, prepareUpstreamForProxy } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      {
+        id: "key-1",
+        keyHash: "hash-1",
+        expiresAt: null,
+        isActive: true,
+        accessMode: "unrestricted",
+      },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-openai",
+        name: "generic-responses-upstream",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["openai_responses"],
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+    const genericResponsesUpstream = {
+      id: "up-openai",
+      name: "generic-responses-upstream",
+      providerType: "openai",
+      baseUrl: "https://api.openai.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: genericResponsesUpstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: null,
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/responses", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+        originator: "codex_cli_rs",
+      },
+      body: JSON.stringify({
+        input: "hello",
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["responses"] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(selectFromProviderType).toHaveBeenCalledWith(["up-openai"], undefined, undefined);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(genericResponsesUpstream);
+  });
+
   it("should reject when API key not authorized for selected upstream", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");

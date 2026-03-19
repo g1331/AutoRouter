@@ -55,6 +55,7 @@ describe("KeysTable", () => {
     key_prefix: "sk-auto-abc123def456",
     name: "Test API Key",
     description: "Test description",
+    access_mode: "restricted",
     upstream_ids: ["upstream-1", "upstream-2"],
     is_active: true,
     expires_at: null,
@@ -109,8 +110,8 @@ describe("KeysTable", () => {
       render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       const keyPrefixHeader = screen.getByText("tableKeyPrefix").closest("th");
-      expect(keyPrefixHeader?.className).toContain("w-[30rem]");
-      expect(keyPrefixHeader?.className).toContain("min-w-[30rem]");
+      expect(keyPrefixHeader?.className).toContain("w-[22rem]");
+      expect(keyPrefixHeader?.className).toContain("max-w-[22rem]");
     });
 
     it("renders key data correctly", () => {
@@ -133,10 +134,22 @@ describe("KeysTable", () => {
       expect(screen.getByText("sk-auto-***f456")).toBeInTheDocument();
     });
 
-    it("shows upstream count badge", () => {
+    it("shows restricted access badge", () => {
       render(<KeysTable keys={[mockKey]} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
-      expect(screen.getByText("2")).toBeInTheDocument();
+      expect(screen.getByText("restrictedAccessCount")).toBeInTheDocument();
+    });
+
+    it("shows unrestricted badge when key can access all upstreams", () => {
+      render(
+        <KeysTable
+          keys={[{ ...mockKey, access_mode: "unrestricted", upstream_ids: [] }]}
+          onRevoke={mockOnRevoke}
+          onEdit={mockOnEdit}
+        />
+      );
+
+      expect(screen.getByText("unrestrictedAccess")).toBeInTheDocument();
     });
   });
 
@@ -361,6 +374,7 @@ describe("KeysTable", () => {
         key_prefix: "sk-auto-abc123def456",
         name: "Production API Key",
         description: "Production environment",
+        access_mode: "restricted",
         upstream_ids: ["upstream-1"],
         is_active: true,
         expires_at: null,
@@ -372,6 +386,7 @@ describe("KeysTable", () => {
         key_prefix: "sk-auto-xyz789ghi012",
         name: "Development API Key",
         description: "Development environment",
+        access_mode: "restricted",
         upstream_ids: ["upstream-2"],
         is_active: true,
         expires_at: null,
@@ -383,6 +398,7 @@ describe("KeysTable", () => {
         key_prefix: "sk-auto-jkl345mno678",
         name: "Testing Key",
         description: "For testing purposes",
+        access_mode: "restricted",
         upstream_ids: ["upstream-3"],
         is_active: true,
         expires_at: null,

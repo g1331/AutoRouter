@@ -8,9 +8,12 @@ import type { RouteCapability, RouteMatchSource } from "@/lib/route-capabilities
 
 // ========== API Key Types ==========
 
+export type APIKeyAccessMode = "unrestricted" | "restricted";
+
 export interface APIKeyCreate {
   name: string;
   description?: string | null;
+  access_mode?: APIKeyAccessMode;
   upstream_ids: string[]; // UUID[]
   expires_at?: string | null; // ISO 8601 date string
 }
@@ -19,6 +22,7 @@ export interface APIKeyUpdate {
   name?: string;
   description?: string | null;
   is_active?: boolean;
+  access_mode?: APIKeyAccessMode;
   expires_at?: string | null; // ISO 8601 date string
   upstream_ids?: string[]; // UUID[]
 }
@@ -28,6 +32,7 @@ export interface APIKeyResponse {
   key_prefix: string;
   name: string;
   description: string | null;
+  access_mode: APIKeyAccessMode;
   upstream_ids: string[]; // UUID[]
   is_active: boolean;
   expires_at: string | null; // ISO 8601 date string

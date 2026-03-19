@@ -26,6 +26,7 @@ export const apiKeys = pgTable(
     name: varchar("name", { length: 255 }).notNull(),
     description: text("description"),
     userId: uuid("user_id"), // Reserved for future user system
+    accessMode: varchar("access_mode", { length: 16 }).notNull().default("unrestricted"),
     isActive: boolean("is_active").notNull().default(true),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

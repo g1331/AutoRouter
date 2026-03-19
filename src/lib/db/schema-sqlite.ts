@@ -17,6 +17,7 @@ export const apiKeys = sqliteTable(
     name: text("name").notNull(),
     description: text("description"),
     userId: text("user_id"), // Reserved for future user system
+    accessMode: text("access_mode").notNull().default("unrestricted"),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),

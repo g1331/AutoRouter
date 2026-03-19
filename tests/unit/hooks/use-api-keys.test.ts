@@ -84,6 +84,7 @@ describe("use-api-keys hooks", () => {
       key_prefix: "sk-auto-test",
       name: "Test Key",
       description: null,
+      access_mode: "restricted",
       upstream_ids: ["upstream-1"],
       is_active: true,
       expires_at: null,
@@ -159,6 +160,7 @@ describe("use-api-keys hooks", () => {
         key_value: "sk-auto-newkey123",
         key_prefix: "sk-auto-newk",
         name: "New Key",
+        access_mode: "restricted",
       };
       mockPost.mockResolvedValueOnce(mockResponse);
 
@@ -307,6 +309,7 @@ describe("use-api-keys hooks", () => {
         key_prefix: "sk-auto-test",
         name: "Updated Key",
         description: "Updated description",
+        access_mode: "restricted",
         is_active: true,
         upstream_ids: ["upstream-1"],
         expires_at: null,
@@ -355,6 +358,7 @@ describe("use-api-keys hooks", () => {
         id: "key-1",
         key_prefix: "sk-auto-test",
         name: "Test Key",
+        access_mode: "restricted",
         is_active: false,
         upstream_ids: ["upstream-1"],
       };
@@ -379,6 +383,7 @@ describe("use-api-keys hooks", () => {
         id: "key-1",
         key_prefix: "sk-auto-test",
         name: "Test Key",
+        access_mode: "restricted",
         upstream_ids: ["upstream-2", "upstream-3"],
       };
       mockPut.mockResolvedValueOnce(mockResponse);

@@ -15,6 +15,13 @@
       "when": 1772603027057,
       "tag": "0001_known_prima",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1773927435295,
+      "tag": "0002_api_keys_access_mode",
+      "breakpoints": true
     }
   ]
 }

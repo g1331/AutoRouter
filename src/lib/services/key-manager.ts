@@ -7,6 +7,8 @@ import { createLogger } from "../utils/logger";
 
 const log = createLogger("key-manager");
 
+export type ApiKeyAccessMode = "unrestricted" | "restricted";
+
 /**
  * Raised when an API key lookup cannot find a persisted key record.
  */
@@ -30,6 +32,7 @@ export class LegacyApiKeyError extends Error {
 export interface ApiKeyCreateInput {
   name: string;
   upstreamIds: string[];
+  accessMode?: ApiKeyAccessMode;
   description?: string | null;
   expiresAt?: Date | null;
 }
@@ -40,6 +43,7 @@ export interface ApiKeyCreateResult {
   keyPrefix: string;
   name: string;
   description: string | null;
+  accessMode: ApiKeyAccessMode;
   upstreamIds: string[];
   isActive: boolean;
   expiresAt: Date | null;
@@ -52,6 +56,7 @@ export interface ApiKeyListItem {
   keyPrefix: string;
   name: string;
   description: string | null;
+  accessMode: ApiKeyAccessMode;
   upstreamIds: string[];
   isActive: boolean;
   expiresAt: Date | null;
@@ -78,8 +83,20 @@ export interface ApiKeyUpdateInput {
   name?: string;
   description?: string | null;
   isActive?: boolean;
+  accessMode?: ApiKeyAccessMode;
   expiresAt?: Date | null;
   upstreamIds?: string[];
+}
+
+function normalizeAccessMode(
+  accessMode: string | null | undefined,
+  upstreamIds: string[]
+): ApiKeyAccessMode {
+  if (accessMode === "restricted" || accessMode === "unrestricted") {
+    return accessMode;
+  }
+
+  return upstreamIds.length > 0 ? "restricted" : "unrestricted";
 }
 
 /**
@@ -94,21 +111,24 @@ export function generateApiKey(): string {
  * Create a new API key with permissions for specified upstreams.
  */
 export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCreateResult> {
-  const { name, upstreamIds, description, expiresAt } = input;
+  const { name, upstreamIds, accessMode, description, expiresAt } = input;
+  const normalizedUpstreamIds = Array.from(new Set(upstreamIds));
+  const normalizedAccessMode = normalizeAccessMode(accessMode, normalizedUpstreamIds);
 
-  if (!upstreamIds.length) {
+  if (normalizedAccessMode === "restricted" && normalizedUpstreamIds.length === 0) {
     throw new Error("At least one upstream must be specified");
   }
 
-  // Validate all upstreams exist
-  const validUpstreams = await db.query.upstreams.findMany({
-    where: inArray(upstreams.id, upstreamIds),
-  });
+  if (normalizedAccessMode === "restricted") {
+    const validUpstreams = await db.query.upstreams.findMany({
+      where: inArray(upstreams.id, normalizedUpstreamIds),
+    });
 
-  if (validUpstreams.length !== upstreamIds.length) {
-    const validIds = new Set(validUpstreams.map((u) => u.id));
-    const invalidIds = upstreamIds.filter((id) => !validIds.has(id));
-    throw new Error(`Invalid upstream IDs: ${invalidIds.join(", ")}`);
+    if (validUpstreams.length !== normalizedUpstreamIds.length) {
+      const validIds = new Set(validUpstreams.map((u) => u.id));
+      const invalidIds = normalizedUpstreamIds.filter((id) => !validIds.has(id));
+      throw new Error(`Invalid upstream IDs: ${invalidIds.join(", ")}`);
+    }
   }
 
   // Generate API key
@@ -132,6 +152,7 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
       keyPrefix,
       name,
       description: description ?? null,
+      accessMode: normalizedAccessMode,
       isActive: true,
       expiresAt: expiresAt ?? null,
       createdAt: now,
@@ -140,9 +161,9 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
     .returning();
 
   // Create permission entries in join table
-  if (upstreamIds.length > 0) {
+  if (normalizedAccessMode === "restricted" && normalizedUpstreamIds.length > 0) {
     await db.insert(apiKeyUpstreams).values(
-      upstreamIds.map((upstreamId) => ({
+      normalizedUpstreamIds.map((upstreamId) => ({
         apiKeyId: newKey.id,
         upstreamId,
         createdAt: now,
@@ -150,7 +171,10 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
     );
   }
 
-  log.info({ keyPrefix, name, upstreams: upstreamIds.length }, "created API key");
+  log.info(
+    { keyPrefix, name, accessMode: normalizedAccessMode, upstreams: normalizedUpstreamIds.length },
+    "created API key"
+  );
 
   return {
     id: newKey.id,
@@ -158,7 +182,8 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
     keyPrefix: newKey.keyPrefix,
     name: newKey.name,
     description: newKey.description,
-    upstreamIds,
+    accessMode: normalizeAccessMode(newKey.accessMode, normalizedUpstreamIds),
+    upstreamIds: normalizedAccessMode === "restricted" ? normalizedUpstreamIds : [],
     isActive: newKey.isActive,
     expiresAt: newKey.expiresAt,
     createdAt: newKey.createdAt,
@@ -212,13 +237,15 @@ export async function listApiKeys(
         where: eq(apiKeyUpstreams.apiKeyId, key.id),
       });
       const upstreamIds = upstreamLinks.map((link) => link.upstreamId);
+      const accessMode = normalizeAccessMode(key.accessMode, upstreamIds);
 
       return {
         id: key.id,
         keyPrefix: key.keyPrefix,
         name: key.name,
         description: key.description,
-        upstreamIds,
+        accessMode,
+        upstreamIds: accessMode === "restricted" ? upstreamIds : [],
         isActive: key.isActive,
         expiresAt: key.expiresAt,
         createdAt: key.createdAt,
@@ -291,13 +318,15 @@ export async function getApiKeyById(keyId: string): Promise<ApiKeyListItem | nul
     where: eq(apiKeyUpstreams.apiKeyId, apiKey.id),
   });
   const upstreamIds = upstreamLinks.map((link) => link.upstreamId);
+  const accessMode = normalizeAccessMode(apiKey.accessMode, upstreamIds);
 
   return {
     id: apiKey.id,
     keyPrefix: apiKey.keyPrefix,
     name: apiKey.name,
     description: apiKey.description,
-    upstreamIds,
+    accessMode,
+    upstreamIds: accessMode === "restricted" ? upstreamIds : [],
     isActive: apiKey.isActive,
     expiresAt: apiKey.expiresAt,
     createdAt: apiKey.createdAt,
@@ -343,7 +372,7 @@ export async function updateApiKey(
   keyId: string,
   input: ApiKeyUpdateInput
 ): Promise<ApiKeyListItem> {
-  const { name, description, isActive, expiresAt, upstreamIds } = input;
+  const { name, description, isActive, accessMode, expiresAt, upstreamIds } = input;
   const now = new Date();
 
   return db.transaction(async (tx) => {
@@ -356,25 +385,43 @@ export async function updateApiKey(
       throw new ApiKeyNotFoundError(`API key not found: ${keyId}`);
     }
 
+    const existingLinks =
+      (await tx.query.apiKeyUpstreams.findMany({
+        where: eq(apiKeyUpstreams.apiKeyId, keyId),
+      })) ?? [];
+    const existingUpstreamIds = existingLinks.map((link) => link.upstreamId);
+    const currentAccessMode = normalizeAccessMode(existing.accessMode, existingUpstreamIds);
+    const shouldUpdateAccess = upstreamIds !== undefined || accessMode !== undefined;
+    const nextAccessMode =
+      accessMode !== undefined
+        ? accessMode
+        : upstreamIds !== undefined
+          ? "restricted"
+          : currentAccessMode;
     let normalizedUpstreamIds: string[] | undefined;
 
-    // If upstreamIds provided, validate them (and guard against duplicates)
-    if (upstreamIds !== undefined) {
+    if (shouldUpdateAccess && upstreamIds !== undefined) {
       normalizedUpstreamIds = Array.from(new Set(upstreamIds));
+    }
 
-      if (normalizedUpstreamIds.length === 0) {
+    if (shouldUpdateAccess && nextAccessMode === "restricted") {
+      const idsToValidate = normalizedUpstreamIds ?? existingUpstreamIds;
+
+      if (idsToValidate.length === 0) {
         throw new Error("At least one upstream must be specified");
       }
 
       const validUpstreams = await tx.query.upstreams.findMany({
-        where: inArray(upstreams.id, normalizedUpstreamIds),
+        where: inArray(upstreams.id, idsToValidate),
       });
 
-      if (validUpstreams.length !== normalizedUpstreamIds.length) {
+      if (validUpstreams.length !== idsToValidate.length) {
         const validIds = new Set(validUpstreams.map((u) => u.id));
-        const invalidIds = normalizedUpstreamIds.filter((id) => !validIds.has(id));
+        const invalidIds = idsToValidate.filter((id) => !validIds.has(id));
         throw new Error(`Invalid upstream IDs: ${invalidIds.join(", ")}`);
       }
+
+      normalizedUpstreamIds = idsToValidate;
     }
 
     // Build update object with only provided fields
@@ -382,6 +429,7 @@ export async function updateApiKey(
       name: string;
       description: string | null;
       isActive: boolean;
+      accessMode: ApiKeyAccessMode;
       expiresAt: Date | null;
       updatedAt: Date;
     }> = { updatedAt: now };
@@ -394,6 +442,9 @@ export async function updateApiKey(
     }
     if (isActive !== undefined) {
       updateData.isActive = isActive;
+    }
+    if (shouldUpdateAccess) {
+      updateData.accessMode = nextAccessMode;
     }
     if (expiresAt !== undefined) {
       updateData.expiresAt = expiresAt;
@@ -411,49 +462,47 @@ export async function updateApiKey(
       throw new ApiKeyNotFoundError(`API key not found: ${keyId}`);
     }
 
-    let currentUpstreamIds: string[];
+    let currentUpstreamIds = currentAccessMode === "restricted" ? existingUpstreamIds : [];
 
-    if (normalizedUpstreamIds !== undefined) {
-      // Avoid churning join-table rows (and their createdAt) if upstreamIds didn't actually change.
-      const existingLinks = await tx.query.apiKeyUpstreams.findMany({
-        where: eq(apiKeyUpstreams.apiKeyId, keyId),
-      });
-      const existingIds = existingLinks.map((link) => link.upstreamId);
-      const existingSet = new Set(existingIds);
-      const isSame =
-        existingIds.length === normalizedUpstreamIds.length &&
-        normalizedUpstreamIds.every((id) => existingSet.has(id));
+    if (shouldUpdateAccess) {
+      if (nextAccessMode === "unrestricted") {
+        if (existingUpstreamIds.length > 0) {
+          await tx.delete(apiKeyUpstreams).where(eq(apiKeyUpstreams.apiKeyId, keyId));
+        }
+        currentUpstreamIds = [];
+      } else if (normalizedUpstreamIds) {
+        const existingSet = new Set(existingUpstreamIds);
+        const isSame =
+          existingUpstreamIds.length === normalizedUpstreamIds.length &&
+          normalizedUpstreamIds.every((id) => existingSet.has(id));
 
-      if (!isSame) {
-        await tx.delete(apiKeyUpstreams).where(eq(apiKeyUpstreams.apiKeyId, keyId));
+        if (!isSame) {
+          await tx.delete(apiKeyUpstreams).where(eq(apiKeyUpstreams.apiKeyId, keyId));
 
-        await tx.insert(apiKeyUpstreams).values(
-          normalizedUpstreamIds.map((upstreamId) => ({
-            apiKeyId: keyId,
-            upstreamId,
-            createdAt: now,
-          }))
-        );
+          await tx.insert(apiKeyUpstreams).values(
+            normalizedUpstreamIds.map((upstreamId) => ({
+              apiKeyId: keyId,
+              upstreamId,
+              createdAt: now,
+            }))
+          );
+        }
 
         currentUpstreamIds = normalizedUpstreamIds;
-      } else {
-        currentUpstreamIds = existingIds;
       }
-    } else {
-      const upstreamLinks = await tx.query.apiKeyUpstreams.findMany({
-        where: eq(apiKeyUpstreams.apiKeyId, keyId),
-      });
-      currentUpstreamIds = upstreamLinks.map((link) => link.upstreamId);
     }
 
     log.info({ keyPrefix: updatedKey.keyPrefix, name: updatedKey.name }, "updated API key");
+
+    const resolvedAccessMode = normalizeAccessMode(updatedKey.accessMode, currentUpstreamIds);
 
     return {
       id: updatedKey.id,
       keyPrefix: updatedKey.keyPrefix,
       name: updatedKey.name,
       description: updatedKey.description,
-      upstreamIds: currentUpstreamIds,
+      accessMode: resolvedAccessMode,
+      upstreamIds: resolvedAccessMode === "restricted" ? currentUpstreamIds : [],
       isActive: updatedKey.isActive,
       expiresAt: updatedKey.expiresAt,
       createdAt: updatedKey.createdAt,

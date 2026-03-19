@@ -29,6 +29,14 @@ interface KeysTableProps {
   onEdit: (key: APIKey) => void;
 }
 
+function formatAccessModeLabel(key: APIKey, t: ReturnType<typeof useTranslations>): string {
+  if (key.access_mode === "unrestricted") {
+    return t("unrestrictedAccess");
+  }
+
+  return t("restrictedAccessCount", { count: key.upstream_ids.length });
+}
+
 export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [visibleKeyIds, setVisibleKeyIds] = useState<Set<string>>(new Set());
@@ -266,7 +274,12 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
               <div className="grid grid-cols-2 gap-2 border-t border-divider pt-2">
                 <div className="space-y-1">
                   <p className="type-caption text-muted-foreground">{t("tableUpstreams")}</p>
-                  <Badge variant="info">{key.upstream_ids.length}</Badge>
+                  <Badge
+                    variant={key.access_mode === "unrestricted" ? "success" : "info"}
+                    className="shrink-0 whitespace-nowrap"
+                  >
+                    {formatAccessModeLabel(key, t)}
+                  </Badge>
                 </div>
                 <div className="space-y-1">
                   <p className="type-caption text-muted-foreground">{t("tableExpires")}</p>
@@ -338,7 +351,7 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
             <TableHeader>
               <TableRow>
                 <TableHead>{tCommon("name")}</TableHead>
-                <TableHead className="w-[30rem] min-w-[30rem] whitespace-nowrap">
+                <TableHead className="w-[22rem] max-w-[22rem] whitespace-nowrap">
                   {t("tableKeyPrefix")}
                 </TableHead>
                 <TableHead className="hidden xl:table-cell">{tCommon("description")}</TableHead>
@@ -354,18 +367,21 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
               {filteredKeys.map((key) => (
                 <TableRow key={key.id}>
                   <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      <span>{key.name}</span>
-                      <Badge variant={key.is_active ? "success" : "neutral"}>
+                    <div className="flex min-w-0 flex-nowrap items-center gap-2">
+                      <span className="truncate">{key.name}</span>
+                      <Badge
+                        variant={key.is_active ? "success" : "neutral"}
+                        className="shrink-0 whitespace-nowrap"
+                      >
                         {key.is_active ? t("enabled") : t("disabled")}
                       </Badge>
                     </div>
                   </TableCell>
-                  <TableCell className="w-[30rem] min-w-[30rem]">
-                    <div className="flex min-w-0 items-start gap-2">
+                  <TableCell className="w-[22rem] max-w-[22rem]">
+                    <div className="flex min-w-0 items-center gap-2">
                       <code
                         className={cn(
-                          "block min-w-0 flex-1 rounded-cf-sm border border-divider bg-surface-300 px-2 py-1 align-middle font-mono text-xs text-foreground",
+                          "block min-w-0 flex-1 rounded-cf-sm border border-divider bg-surface-300 px-2 py-1 align-middle font-mono text-[11px] text-foreground",
                           visibleKeyIds.has(key.id)
                             ? "overflow-x-auto overflow-y-hidden whitespace-nowrap"
                             : "truncate whitespace-nowrap"
@@ -409,8 +425,13 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
                   <TableCell className="hidden max-w-[180px] truncate xl:table-cell">
                     {key.description || <span className="text-muted-foreground">-</span>}
                   </TableCell>
-                  <TableCell>
-                    <Badge variant="info">{key.upstream_ids.length}</Badge>
+                  <TableCell className="whitespace-nowrap">
+                    <Badge
+                      variant={key.access_mode === "unrestricted" ? "success" : "info"}
+                      className="shrink-0 whitespace-nowrap"
+                    >
+                      {formatAccessModeLabel(key, t)}
+                    </Badge>
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     {formatExpiry(key.expires_at)}

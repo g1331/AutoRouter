@@ -11,12 +11,26 @@ import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("admin-keys");
 
-const createApiKeySchema = z.object({
-  name: z.string().min(1).max(255),
-  upstream_ids: z.array(z.string().uuid()).min(1),
-  description: z.string().nullable().optional(),
-  expires_at: z.string().datetime().nullable().optional(),
-});
+const createApiKeySchema = z
+  .object({
+    name: z.string().min(1).max(255),
+    access_mode: z.enum(["unrestricted", "restricted"]).optional(),
+    upstream_ids: z.array(z.string().uuid()).optional().default([]),
+    description: z.string().nullable().optional(),
+    expires_at: z.string().datetime().nullable().optional(),
+  })
+  .superRefine((data, ctx) => {
+    const effectiveMode =
+      data.access_mode ?? (data.upstream_ids.length > 0 ? "restricted" : "unrestricted");
+
+    if (effectiveMode === "restricted" && data.upstream_ids.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["upstream_ids"],
+        message: "At least one upstream must be specified",
+      });
+    }
+  });
 
 /**
  * GET /api/admin/keys - List all API keys
@@ -53,6 +67,7 @@ export async function POST(request: NextRequest) {
 
     const input: ApiKeyCreateInput = {
       name: validated.name,
+      accessMode: validated.access_mode,
       upstreamIds: validated.upstream_ids,
       description: validated.description ?? null,
       expiresAt: validated.expires_at ? new Date(validated.expires_at) : null,

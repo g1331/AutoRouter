@@ -186,6 +186,7 @@ export interface ApiKeyApiResponse {
   key_prefix: string;
   name: string;
   description: string | null;
+  access_mode: "unrestricted" | "restricted";
   upstream_ids: string[];
   is_active: boolean;
   expires_at: string | null;
@@ -224,6 +225,7 @@ export function transformApiKeyToApi(apiKey: ApiKeyListItem): ApiKeyApiResponse 
     key_prefix: apiKey.keyPrefix,
     name: apiKey.name,
     description: apiKey.description,
+    access_mode: apiKey.accessMode,
     upstream_ids: apiKey.upstreamIds,
     is_active: apiKey.isActive,
     expires_at: toISOStringOrNull(apiKey.expiresAt),
@@ -243,6 +245,7 @@ export function transformApiKeyCreateToApi(result: ApiKeyCreateResult): ApiKeyCr
     key_prefix: result.keyPrefix,
     name: result.name,
     description: result.description,
+    access_mode: result.accessMode,
     upstream_ids: result.upstreamIds,
     is_active: result.isActive,
     expires_at: toISOStringOrNull(result.expiresAt),

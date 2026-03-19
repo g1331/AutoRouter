@@ -1804,10 +1804,10 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   const upstreamPermissions = await db.query.apiKeyUpstreams.findMany({
     where: eq(apiKeyUpstreams.apiKeyId, validApiKey.id),
   });
-  const allowedUpstreamIds = Array.isArray(upstreamPermissions)
+  const storedAllowedUpstreamIds = Array.isArray(upstreamPermissions)
     ? upstreamPermissions.map((p) => p.upstreamId)
     : [];
-  const allowedUpstreamIdSet = new Set(allowedUpstreamIds);
+  const accessMode = validApiKey.accessMode ?? "restricted";
 
   // Route context
   let priorityTier: number | null = null;
@@ -1825,6 +1825,11 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   const activeUpstreams = await db.query.upstreams.findMany({
     where: eq(upstreams.isActive, true),
   });
+  const allowedUpstreamIds =
+    accessMode === "restricted"
+      ? storedAllowedUpstreamIds
+      : activeUpstreams.map((upstream) => upstream.id);
+  const allowedUpstreamIdSet = new Set(allowedUpstreamIds);
 
   const primaryCandidatePool = resolveRouteCapabilityCandidatePool(
     activeUpstreams,

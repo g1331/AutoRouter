@@ -204,6 +204,7 @@ describe("api-transformers", () => {
         keyPrefix: "ar_live_",
         name: "Production Key",
         description: "Main production API key",
+        accessMode: "restricted",
         upstreamIds: ["upstream-1", "upstream-2"],
         isActive: true,
         expiresAt: new Date("2025-01-15T00:00:00.000Z"),
@@ -218,6 +219,7 @@ describe("api-transformers", () => {
         key_prefix: "ar_live_",
         name: "Production Key",
         description: "Main production API key",
+        access_mode: "restricted",
         upstream_ids: ["upstream-1", "upstream-2"],
         is_active: true,
         expires_at: "2025-01-15T00:00:00.000Z",
@@ -232,6 +234,7 @@ describe("api-transformers", () => {
         keyPrefix: "ar_test_",
         name: "Test Key",
         description: null,
+        accessMode: "unrestricted",
         upstreamIds: [],
         isActive: false,
         expiresAt: null,
@@ -243,6 +246,7 @@ describe("api-transformers", () => {
 
       expect(result.expires_at).toBeNull();
       expect(result.description).toBeNull();
+      expect(result.access_mode).toBe("unrestricted");
       expect(result.upstream_ids).toEqual([]);
       expect(result.is_active).toBe(false);
     });
@@ -256,6 +260,7 @@ describe("api-transformers", () => {
         keyPrefix: "ar_live_",
         name: "New Key",
         description: "Newly created key",
+        accessMode: "restricted",
         upstreamIds: ["upstream-1"],
         isActive: true,
         expiresAt: new Date("2025-06-01T00:00:00.000Z"),
@@ -271,6 +276,7 @@ describe("api-transformers", () => {
         key_prefix: "ar_live_",
         name: "New Key",
         description: "Newly created key",
+        access_mode: "restricted",
         upstream_ids: ["upstream-1"],
         is_active: true,
         expires_at: "2025-06-01T00:00:00.000Z",
@@ -286,6 +292,7 @@ describe("api-transformers", () => {
         keyPrefix: "ar_test_",
         name: "No Expiry Key",
         description: null,
+        accessMode: "unrestricted",
         upstreamIds: [],
         isActive: true,
         expiresAt: null,
@@ -295,6 +302,7 @@ describe("api-transformers", () => {
 
       const result = transformApiKeyCreateToApi(createResult);
 
+      expect(result.access_mode).toBe("unrestricted");
       expect(result.expires_at).toBeNull();
       expect(result.key_value).toBe("ar_test_xyz");
     });
