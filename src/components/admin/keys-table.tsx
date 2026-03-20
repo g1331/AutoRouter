@@ -37,6 +37,17 @@ function formatAccessModeLabel(key: APIKey, t: ReturnType<typeof useTranslations
   return t("restrictedAccessCount", { count: key.upstream_ids.length });
 }
 
+function formatQuotaPeriodLabel(
+  rule: APIKey["spending_rule_statuses"][number],
+  t: ReturnType<typeof useTranslations>
+): string {
+  if (rule.period_type === "rolling") {
+    return t("quotaPeriodRollingWithHours", { hours: rule.period_hours ?? 24 });
+  }
+
+  return t(`quotaPeriodType_${rule.period_type}`);
+}
+
 export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [visibleKeyIds, setVisibleKeyIds] = useState<Set<string>>(new Set());
@@ -49,6 +60,12 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
   const tCommon = useTranslations("common");
   const locale = useLocale();
   const dateLocale = getDateLocale(locale);
+  const currencyFormatter = new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  });
 
   const filteredKeys = keys.filter((key) =>
     key.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -170,6 +187,93 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
     }
   };
 
+  const formatQuotaAmount = (value: number) => currencyFormatter.format(value);
+
+  const renderQuotaRules = (key: APIKey) => {
+    if (!key.spending_rules || key.spending_rules.length === 0) {
+      return null;
+    }
+
+    if (key.spending_rule_statuses.length === 0) {
+      return (
+        <div className="rounded-cf-sm border border-divider/80 bg-surface-300/70 px-3 py-2">
+          <p className="type-body-small text-muted-foreground">{t("quotaStatusPending")}</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-2">
+        {key.spending_rule_statuses.map((rule, index) => {
+          const timeText =
+            rule.period_type === "rolling"
+              ? rule.estimated_recovery_at
+                ? t("quotaRecoveryTime", {
+                    time: formatDistanceToNow(new Date(rule.estimated_recovery_at), {
+                      addSuffix: true,
+                      locale: dateLocale,
+                    }),
+                  })
+                : t("quotaRecoveryPending")
+              : rule.resets_at
+                ? t("quotaResetTime", {
+                    time: formatDistanceToNow(new Date(rule.resets_at), {
+                      addSuffix: true,
+                      locale: dateLocale,
+                    }),
+                  })
+                : null;
+
+          return (
+            <div
+              key={`${key.id}-quota-${index}`}
+              className={cn(
+                "rounded-cf-sm border px-3 py-2",
+                rule.is_exceeded
+                  ? "border-status-error/40 bg-status-error-muted/60"
+                  : "border-divider/80 bg-surface-300/70"
+              )}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="type-body-medium text-foreground">
+                    {formatQuotaPeriodLabel(rule, t)}
+                  </p>
+                  <p className="type-body-small text-muted-foreground">
+                    {formatQuotaAmount(rule.current_spending)} /{" "}
+                    {formatQuotaAmount(rule.spending_limit)}
+                  </p>
+                </div>
+                <Badge variant={rule.is_exceeded ? "error" : "info"} className="whitespace-nowrap">
+                  {t("quotaPercentUsed", { percent: rule.percent_used.toFixed(1) })}
+                </Badge>
+              </div>
+
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-400/70">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all",
+                    rule.is_exceeded ? "bg-status-error" : "bg-primary"
+                  )}
+                  style={{ width: `${Math.min(rule.percent_used, 100)}%` }}
+                />
+              </div>
+
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Badge variant={rule.is_exceeded ? "error" : "success"}>
+                  {rule.is_exceeded ? t("quotaExceeded") : t("quotaWithinLimit")}
+                </Badge>
+                {timeText ? (
+                  <span className="type-body-small text-muted-foreground">{timeText}</span>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   if (keys.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -224,9 +328,16 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
                   <p className="type-title-medium truncate text-foreground">{key.name}</p>
                   <p className="type-body-small text-muted-foreground">{key.description || "-"}</p>
                 </div>
-                <Badge variant={key.is_active ? "success" : "neutral"} className="shrink-0">
-                  {key.is_active ? t("enabled") : t("disabled")}
-                </Badge>
+                <div className="flex flex-col items-end gap-1">
+                  <Badge variant={key.is_active ? "success" : "neutral"} className="shrink-0">
+                    {key.is_active ? t("enabled") : t("disabled")}
+                  </Badge>
+                  {key.is_quota_exceeded ? (
+                    <Badge variant="error" className="shrink-0">
+                      {t("quotaExceeded")}
+                    </Badge>
+                  ) : null}
+                </div>
               </div>
 
               <div className="flex items-center gap-2">
@@ -295,6 +406,13 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
                   </p>
                 </div>
               </div>
+
+              {key.spending_rules && key.spending_rules.length > 0 ? (
+                <div className="space-y-2 border-t border-divider pt-2">
+                  <p className="type-caption text-muted-foreground">{t("spendingRules")}</p>
+                  {renderQuotaRules(key)}
+                </div>
+              ) : null}
 
               <div className="flex items-center justify-between border-t border-divider pt-2">
                 <div className="inline-flex items-center gap-2">
@@ -375,7 +493,15 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
                       >
                         {key.is_active ? t("enabled") : t("disabled")}
                       </Badge>
+                      {key.is_quota_exceeded ? (
+                        <Badge variant="error" className="shrink-0 whitespace-nowrap">
+                          {t("quotaExceeded")}
+                        </Badge>
+                      ) : null}
                     </div>
+                    {key.spending_rules && key.spending_rules.length > 0 ? (
+                      <div className="mt-3">{renderQuotaRules(key)}</div>
+                    ) : null}
                   </TableCell>
                   <TableCell className="w-[22rem] max-w-[22rem]">
                     <div className="flex min-w-0 items-center gap-2">

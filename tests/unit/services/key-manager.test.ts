@@ -1,6 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { generateApiKey, ApiKeyNotFoundError, LegacyApiKeyError } from "@/lib/services/key-manager";
 
+const { mockApiKeyQuotaTracker } = vi.hoisted(() => ({
+  mockApiKeyQuotaTracker: {
+    initialize: vi.fn(async () => {}),
+    getQuotaStatus: vi.fn(() => null),
+    estimateRecoveryTime: vi.fn(async () => null),
+    syncApiKeyFromDb: vi.fn(async () => {}),
+    reset: vi.fn(),
+  },
+}));
+
 // Mock the database module
 vi.mock("@/lib/db", () => {
   // Create db methods that can be reused for both db and transaction
@@ -53,6 +63,10 @@ vi.mock("@/lib/db", () => {
     upstreams: { id: "id" },
   };
 });
+
+vi.mock("@/lib/services/api-key-quota-tracker", () => ({
+  apiKeyQuotaTracker: mockApiKeyQuotaTracker,
+}));
 
 // Mock auth utilities
 vi.mock("@/lib/utils/auth", () => ({

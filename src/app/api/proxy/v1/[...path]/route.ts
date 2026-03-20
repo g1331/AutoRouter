@@ -94,6 +94,7 @@ import {
 import { buildCompensations } from "@/lib/services/compensation-service";
 import { createLogger } from "@/lib/utils/logger";
 import { extractRequestThinkingConfig } from "@/lib/utils/request-thinking-config";
+import { apiKeyQuotaTracker } from "@/lib/services/api-key-quota-tracker";
 
 const log = createLogger("proxy-route");
 
@@ -128,6 +129,89 @@ async function persistBillingSnapshotSafely(input: {
   } catch (error) {
     log.error({ err: error, requestId: input.requestId }, "failed to persist billing snapshot");
   }
+}
+
+function buildApiKeyQuotaExceededErrorMessage(
+  apiKeyId: string,
+  exceededRules: Array<{
+    periodType: "daily" | "monthly" | "rolling";
+    periodHours: number | null;
+    currentSpending: number;
+    spendingLimit: number;
+  }>
+): string {
+  const rulesSummary = exceededRules
+    .map((rule) => {
+      if (rule.periodType === "rolling") {
+        return `rolling-${rule.periodHours ?? 24}h ${rule.currentSpending}/${rule.spendingLimit}`;
+      }
+      return `${rule.periodType} ${rule.currentSpending}/${rule.spendingLimit}`;
+    })
+    .join("; ");
+
+  return `API key spending quota exceeded (api_key_id=${apiKeyId}; rules=${rulesSummary})`;
+}
+
+async function logApiKeyQuotaRejectedRequest(input: {
+  apiKeyId: string;
+  request: NextRequest;
+  path: string;
+  model: string | null;
+  reasoningEffort: ReasoningEffort | null;
+  thinkingConfig: import("@/types/api").RequestThinkingConfig | null;
+  requestId: string;
+  startTime: number;
+  sessionId: string | null;
+  matchedRouteCapability: RouteCapability | null;
+  routeMatchSource: RouteMatchSource | null;
+  errorMessage: string;
+}): Promise<void> {
+  const routingDecision: RoutingDecisionLog = {
+    original_model: input.model ?? "(path-based)",
+    resolved_model: input.model ?? "(path-based)",
+    model_redirect_applied: false,
+    provider_type: null,
+    routing_type: "none",
+    matched_route_capability: input.matchedRouteCapability,
+    route_match_source: input.routeMatchSource,
+    capability_candidates_count: 0,
+    candidates: [],
+    excluded: [],
+    candidate_count: 0,
+    final_candidate_count: 0,
+    selected_upstream_id: null,
+    candidate_upstream_id: null,
+    actual_upstream_id: null,
+    did_send_upstream: false,
+    failure_stage: "candidate_selection",
+    selection_strategy: "weighted",
+  };
+
+  await logRequest({
+    apiKeyId: input.apiKeyId,
+    upstreamId: null,
+    method: input.request.method,
+    path: input.path,
+    model: input.model,
+    reasoningEffort: input.reasoningEffort,
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+    statusCode: getHttpStatusForError("API_KEY_QUOTA_EXCEEDED"),
+    durationMs: Date.now() - input.startTime,
+    routingDurationMs: null,
+    errorMessage: input.errorMessage,
+    routingType: null,
+    priorityTier: null,
+    failoverAttempts: 0,
+    failoverHistory: null,
+    routingDecision,
+    thinkingConfig: input.thinkingConfig,
+    sessionId: input.sessionId,
+    affinityHit: false,
+    affinityMigrated: false,
+    isStream: false,
+  });
 }
 
 /**
@@ -610,6 +694,9 @@ function getUserHint(
   }
   if (reason === "CONCURRENCY_FULL") {
     return "当前所有可选上游均已达到并发上限，请提高上游并发配置或增加可用上游后重试";
+  }
+  if (reason === "API_KEY_QUOTA_EXCEEDED") {
+    return "当前密钥已达到消费限额，请等待额度窗口恢复或联系管理员调整额度规则";
   }
   if (reason === "NO_HEALTHY_CANDIDATES") {
     return "当前没有可用上游候选，请检查上游启用状态、熔断状态与路径能力配置";
@@ -1719,7 +1806,47 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     request.headers
   );
   const matchedRouteCapability = matchedRouteCapabilityDetails?.capability ?? null;
+  const matchedRouteMatchSource = matchedRouteCapabilityDetails?.routeMatchSource ?? null;
   const thinkingConfig = extractRequestThinkingConfig(matchedRouteCapability, bodyJson);
+
+  await apiKeyQuotaTracker.initialize();
+  const apiKeyQuotaStatus = apiKeyQuotaTracker.getQuotaStatus(validApiKey.id);
+  if (apiKeyQuotaStatus?.isExceeded) {
+    const errorCode: UnifiedErrorCode = "API_KEY_QUOTA_EXCEEDED";
+    const errorReason: UnifiedErrorReason = "API_KEY_QUOTA_EXCEEDED";
+    const exceededRules = apiKeyQuotaStatus.rules.filter((rule) => rule.isExceeded);
+    const errorMessage = buildApiKeyQuotaExceededErrorMessage(validApiKey.id, exceededRules);
+    const errorDetails = {
+      reason: errorReason,
+      did_send_upstream: false,
+      request_id: requestId,
+      user_hint: getUserHint(errorCode, errorReason, matchedRouteCapability ?? "openai_responses"),
+    } as const;
+
+    try {
+      await logApiKeyQuotaRejectedRequest({
+        apiKeyId: validApiKey.id,
+        request,
+        path,
+        model,
+        reasoningEffort,
+        thinkingConfig,
+        requestId,
+        startTime,
+        sessionId: null,
+        matchedRouteCapability,
+        routeMatchSource: matchedRouteMatchSource,
+        errorMessage,
+      });
+    } catch (error) {
+      log.error(
+        { err: error, requestId, apiKeyId: validApiKey.id },
+        "failed to log API key quota rejection"
+      );
+    }
+
+    return createUnifiedErrorResponse(errorCode, errorDetails);
+  }
 
   if (!matchedRouteCapability) {
     const unsupportedDurationMs = Date.now() - startTime;
@@ -1813,8 +1940,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   let priorityTier: number | null = null;
   let resolvedModel: string | null = model;
   let modelRedirectApplied = false;
-  const routeMatchSource: RouteMatchSource =
-    matchedRouteCapabilityDetails?.routeMatchSource ?? "path";
+  const routeMatchSource: RouteMatchSource = matchedRouteMatchSource ?? "path";
   let candidateUpstreamIds: string[] = [];
   let capabilityCandidates: Upstream[] = [];
   let finalCapabilityCandidates: Upstream[] = [];

@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
+const { mockApiKeyQuotaTracker } = vi.hoisted(() => ({
+  mockApiKeyQuotaTracker: {
+    initialize: vi.fn(async () => {}),
+    getQuotaStatus: vi.fn(() => null),
+  },
+}));
+
 vi.mock("@/lib/utils/auth", () => ({
   extractApiKey: vi.fn((authHeader: string | null) => {
     if (!authHeader) return null;
@@ -100,6 +107,10 @@ vi.mock("@/lib/services/billing-cost-service", () => ({
     finalCost: 0.001,
     source: "manual",
   })),
+}));
+
+vi.mock("@/lib/services/api-key-quota-tracker", () => ({
+  apiKeyQuotaTracker: mockApiKeyQuotaTracker,
 }));
 
 // Mock load-balancer module
@@ -312,6 +323,8 @@ describe("proxy route upstream selection", () => {
   beforeEach(async () => {
     vi.resetAllMocks();
     vi.resetModules();
+    mockApiKeyQuotaTracker.initialize.mockResolvedValue(undefined);
+    mockApiKeyQuotaTracker.getQuotaStatus.mockReturnValue(null);
     delete process.env.RECORDER_ENABLED;
     delete process.env.RECORDER_MODE;
     const routeModule = await import("@/app/api/proxy/v1/[...path]/route");
@@ -528,6 +541,77 @@ describe("proxy route upstream selection", () => {
       expect(response.status).toBe(401);
       expect(data).toEqual({ error: "API key has expired" });
     });
+  });
+
+  it("should reject requests before upstream routing when API key quota is exceeded", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { logRequest } = await import("@/lib/services/request-logger");
+    const { routeByModel } = await import("@/lib/services/model-router");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    mockApiKeyQuotaTracker.getQuotaStatus.mockReturnValueOnce({
+      apiKeyId: "key-1",
+      apiKeyName: "Quota Key",
+      isExceeded: true,
+      rules: [
+        {
+          periodType: "daily",
+          periodHours: null,
+          currentSpending: 25,
+          spendingLimit: 25,
+          percentUsed: 100,
+          isExceeded: true,
+          resetsAt: new Date("2024-01-02T00:00:00Z"),
+          estimatedRecoveryAt: null,
+        },
+      ],
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/responses", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.2",
+        input: "hello",
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["responses"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(429);
+    expect(data).toEqual({
+      error: expect.objectContaining({
+        code: "API_KEY_QUOTA_EXCEEDED",
+        reason: "API_KEY_QUOTA_EXCEEDED",
+        did_send_upstream: false,
+      }),
+    });
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(forwardRequest).not.toHaveBeenCalled();
+    expect(logRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKeyId: "key-1",
+        upstreamId: null,
+        path: "responses",
+        model: "gpt-5.2",
+        statusCode: 429,
+        errorMessage: expect.stringContaining("API key spending quota exceeded"),
+        routingDecision: expect.objectContaining({
+          matched_route_capability: "openai_responses",
+          did_send_upstream: false,
+          actual_upstream_id: null,
+        }),
+      })
+    );
   });
 
   it("should route path capability request without model when route is matched", async () => {

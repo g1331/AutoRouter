@@ -4,6 +4,9 @@ import { db, apiKeys, apiKeyUpstreams, upstreams, type ApiKey } from "../db";
 import { hashApiKey, verifyApiKey } from "../utils/auth";
 import { encrypt, decrypt, EncryptionError } from "../utils/encryption";
 import { createLogger } from "../utils/logger";
+import { apiKeyQuotaTracker } from "@/lib/services/api-key-quota-tracker";
+import { parseSpendingRules } from "@/lib/services/spending-rules";
+import type { SpendingRule } from "@/lib/services/upstream-quota-tracker";
 
 const log = createLogger("key-manager");
 
@@ -35,6 +38,18 @@ export interface ApiKeyCreateInput {
   accessMode?: ApiKeyAccessMode;
   description?: string | null;
   expiresAt?: Date | null;
+  spendingRules?: SpendingRule[] | null;
+}
+
+export interface ApiKeySpendingRuleStatus {
+  periodType: SpendingRule["period_type"];
+  periodHours: number | null;
+  currentSpending: number;
+  spendingLimit: number;
+  percentUsed: number;
+  isExceeded: boolean;
+  resetsAt: Date | null;
+  estimatedRecoveryAt: Date | null;
 }
 
 export interface ApiKeyCreateResult {
@@ -45,6 +60,9 @@ export interface ApiKeyCreateResult {
   description: string | null;
   accessMode: ApiKeyAccessMode;
   upstreamIds: string[];
+  spendingRules: SpendingRule[] | null;
+  spendingRuleStatuses: ApiKeySpendingRuleStatus[];
+  isQuotaExceeded: boolean;
   isActive: boolean;
   expiresAt: Date | null;
   createdAt: Date;
@@ -58,6 +76,9 @@ export interface ApiKeyListItem {
   description: string | null;
   accessMode: ApiKeyAccessMode;
   upstreamIds: string[];
+  spendingRules: SpendingRule[] | null;
+  spendingRuleStatuses: ApiKeySpendingRuleStatus[];
+  isQuotaExceeded: boolean;
   isActive: boolean;
   expiresAt: Date | null;
   createdAt: Date;
@@ -86,6 +107,7 @@ export interface ApiKeyUpdateInput {
   accessMode?: ApiKeyAccessMode;
   expiresAt?: Date | null;
   upstreamIds?: string[];
+  spendingRules?: SpendingRule[] | null;
 }
 
 function normalizeAccessMode(
@@ -97,6 +119,101 @@ function normalizeAccessMode(
   }
 
   return upstreamIds.length > 0 ? "restricted" : "unrestricted";
+}
+
+async function resolveSpendingRuleStatuses(
+  apiKeyId: string,
+  spendingRules: SpendingRule[] | null
+): Promise<{
+  spendingRuleStatuses: ApiKeySpendingRuleStatus[];
+  isQuotaExceeded: boolean;
+}> {
+  if (!spendingRules || spendingRules.length === 0) {
+    return {
+      spendingRuleStatuses: [],
+      isQuotaExceeded: false,
+    };
+  }
+
+  await apiKeyQuotaTracker.initialize();
+  const status = apiKeyQuotaTracker.getQuotaStatus(apiKeyId);
+  if (!status) {
+    return {
+      spendingRuleStatuses: spendingRules.map((rule) => ({
+        periodType: rule.period_type,
+        periodHours: rule.period_hours ?? null,
+        currentSpending: 0,
+        spendingLimit: rule.limit,
+        percentUsed: 0,
+        isExceeded: false,
+        resetsAt: null,
+        estimatedRecoveryAt: null,
+      })),
+      isQuotaExceeded: false,
+    };
+  }
+
+  const spendingRuleStatuses = await Promise.all(
+    status.rules.map(async (rule) => ({
+      periodType: rule.periodType,
+      periodHours: rule.periodHours,
+      currentSpending: rule.currentSpending,
+      spendingLimit: rule.spendingLimit,
+      percentUsed: rule.percentUsed,
+      isExceeded: rule.isExceeded,
+      resetsAt: rule.resetsAt,
+      estimatedRecoveryAt:
+        rule.periodType === "rolling" && rule.isExceeded
+          ? await apiKeyQuotaTracker.estimateRecoveryTime(apiKeyId, {
+              period_type: "rolling",
+              limit: rule.spendingLimit,
+              ...(rule.periodHours != null ? { period_hours: rule.periodHours } : {}),
+            })
+          : null,
+    }))
+  );
+
+  return {
+    spendingRuleStatuses,
+    isQuotaExceeded: status.isExceeded,
+  };
+}
+
+async function buildApiKeyListItem(
+  key: Pick<
+    ApiKey,
+    | "id"
+    | "keyPrefix"
+    | "name"
+    | "description"
+    | "accessMode"
+    | "spendingRules"
+    | "isActive"
+    | "expiresAt"
+    | "createdAt"
+    | "updatedAt"
+  >,
+  upstreamIds: string[]
+): Promise<ApiKeyListItem> {
+  const accessMode = normalizeAccessMode(key.accessMode, upstreamIds);
+  const spendingRules = parseSpendingRules(key.spendingRules);
+  const quotaState = await resolveSpendingRuleStatuses(key.id, spendingRules);
+
+  return {
+    id: key.id,
+    keyPrefix: key.keyPrefix,
+    name: key.name,
+    description: key.description,
+    accessMode,
+    upstreamIds: accessMode === "restricted" ? upstreamIds : [],
+    spendingRules,
+    spendingRuleStatuses: quotaState.spendingRuleStatuses,
+    isQuotaExceeded: quotaState.isQuotaExceeded,
+    isActive: key.isActive,
+    expiresAt: key.expiresAt,
+    createdAt: key.createdAt,
+    updatedAt: key.updatedAt,
+  };
 }
 
 /**
@@ -114,6 +231,7 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
   const { name, upstreamIds, accessMode, description, expiresAt } = input;
   const normalizedUpstreamIds = Array.from(new Set(upstreamIds));
   const normalizedAccessMode = normalizeAccessMode(accessMode, normalizedUpstreamIds);
+  const spendingRules = parseSpendingRules(input.spendingRules);
 
   if (normalizedAccessMode === "restricted" && normalizedUpstreamIds.length === 0) {
     throw new Error("At least one upstream must be specified");
@@ -153,6 +271,7 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
       name,
       description: description ?? null,
       accessMode: normalizedAccessMode,
+      spendingRules,
       isActive: true,
       expiresAt: expiresAt ?? null,
       createdAt: now,
@@ -172,9 +291,18 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
   }
 
   log.info(
-    { keyPrefix, name, accessMode: normalizedAccessMode, upstreams: normalizedUpstreamIds.length },
+    {
+      keyPrefix,
+      name,
+      accessMode: normalizedAccessMode,
+      upstreams: normalizedUpstreamIds.length,
+      spendingRules: spendingRules?.length ?? 0,
+    },
     "created API key"
   );
+
+  await apiKeyQuotaTracker.syncApiKeyFromDb(newKey.id, newKey.name, spendingRules);
+  const quotaState = await resolveSpendingRuleStatuses(newKey.id, spendingRules);
 
   return {
     id: newKey.id,
@@ -184,6 +312,9 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
     description: newKey.description,
     accessMode: normalizeAccessMode(newKey.accessMode, normalizedUpstreamIds),
     upstreamIds: normalizedAccessMode === "restricted" ? normalizedUpstreamIds : [],
+    spendingRules,
+    spendingRuleStatuses: quotaState.spendingRuleStatuses,
+    isQuotaExceeded: quotaState.isQuotaExceeded,
     isActive: newKey.isActive,
     expiresAt: newKey.expiresAt,
     createdAt: newKey.createdAt,
@@ -204,6 +335,7 @@ export async function deleteApiKey(keyId: string): Promise<void> {
   }
 
   await db.delete(apiKeys).where(eq(apiKeys.id, keyId));
+  await apiKeyQuotaTracker.syncApiKeyFromDb(keyId, existing.name, null);
 
   log.info({ keyPrefix: existing.keyPrefix, name: existing.name }, "deleted API key");
 }
@@ -229,6 +361,7 @@ export async function listApiKeys(
     limit: pageSize,
     offset,
   });
+  await apiKeyQuotaTracker.initialize();
 
   // For each API key, fetch authorized upstream IDs
   const items: ApiKeyListItem[] = await Promise.all(
@@ -237,20 +370,7 @@ export async function listApiKeys(
         where: eq(apiKeyUpstreams.apiKeyId, key.id),
       });
       const upstreamIds = upstreamLinks.map((link) => link.upstreamId);
-      const accessMode = normalizeAccessMode(key.accessMode, upstreamIds);
-
-      return {
-        id: key.id,
-        keyPrefix: key.keyPrefix,
-        name: key.name,
-        description: key.description,
-        accessMode,
-        upstreamIds: accessMode === "restricted" ? upstreamIds : [],
-        isActive: key.isActive,
-        expiresAt: key.expiresAt,
-        createdAt: key.createdAt,
-        updatedAt: key.updatedAt,
-      };
+      return buildApiKeyListItem(key, upstreamIds);
     })
   );
 
@@ -318,20 +438,8 @@ export async function getApiKeyById(keyId: string): Promise<ApiKeyListItem | nul
     where: eq(apiKeyUpstreams.apiKeyId, apiKey.id),
   });
   const upstreamIds = upstreamLinks.map((link) => link.upstreamId);
-  const accessMode = normalizeAccessMode(apiKey.accessMode, upstreamIds);
-
-  return {
-    id: apiKey.id,
-    keyPrefix: apiKey.keyPrefix,
-    name: apiKey.name,
-    description: apiKey.description,
-    accessMode,
-    upstreamIds: accessMode === "restricted" ? upstreamIds : [],
-    isActive: apiKey.isActive,
-    expiresAt: apiKey.expiresAt,
-    createdAt: apiKey.createdAt,
-    updatedAt: apiKey.updatedAt,
-  };
+  await apiKeyQuotaTracker.initialize();
+  return buildApiKeyListItem(apiKey, upstreamIds);
 }
 
 /**
@@ -374,8 +482,10 @@ export async function updateApiKey(
 ): Promise<ApiKeyListItem> {
   const { name, description, isActive, accessMode, expiresAt, upstreamIds } = input;
   const now = new Date();
+  const parsedSpendingRules =
+    input.spendingRules !== undefined ? parseSpendingRules(input.spendingRules) : undefined;
 
-  return db.transaction(async (tx) => {
+  const updatedResult = await db.transaction(async (tx) => {
     // Check if key exists
     const existing = await tx.query.apiKeys.findFirst({
       where: eq(apiKeys.id, keyId),
@@ -431,6 +541,9 @@ export async function updateApiKey(
       isActive: boolean;
       accessMode: ApiKeyAccessMode;
       expiresAt: Date | null;
+      spendingRules:
+        | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
+        | null;
       updatedAt: Date;
     }> = { updatedAt: now };
 
@@ -448,6 +561,9 @@ export async function updateApiKey(
     }
     if (expiresAt !== undefined) {
       updateData.expiresAt = expiresAt;
+    }
+    if (parsedSpendingRules !== undefined) {
+      updateData.spendingRules = parsedSpendingRules;
     }
 
     // Update the API key record
@@ -492,7 +608,17 @@ export async function updateApiKey(
       }
     }
 
-    log.info({ keyPrefix: updatedKey.keyPrefix, name: updatedKey.name }, "updated API key");
+    log.info(
+      {
+        keyPrefix: updatedKey.keyPrefix,
+        name: updatedKey.name,
+        spendingRules:
+          parsedSpendingRules !== undefined
+            ? (parsedSpendingRules?.length ?? 0)
+            : (existing.spendingRules?.length ?? 0),
+      },
+      "updated API key"
+    );
 
     const resolvedAccessMode = normalizeAccessMode(updatedKey.accessMode, currentUpstreamIds);
 
@@ -503,10 +629,33 @@ export async function updateApiKey(
       description: updatedKey.description,
       accessMode: resolvedAccessMode,
       upstreamIds: resolvedAccessMode === "restricted" ? currentUpstreamIds : [],
+      spendingRules: parseSpendingRules(updatedKey.spendingRules),
       isActive: updatedKey.isActive,
       expiresAt: updatedKey.expiresAt,
       createdAt: updatedKey.createdAt,
       updatedAt: updatedKey.updatedAt,
     };
   });
+
+  await apiKeyQuotaTracker.syncApiKeyFromDb(
+    updatedResult.id,
+    updatedResult.name,
+    updatedResult.spendingRules
+  );
+
+  return buildApiKeyListItem(
+    {
+      id: updatedResult.id,
+      keyPrefix: updatedResult.keyPrefix,
+      name: updatedResult.name,
+      description: updatedResult.description,
+      accessMode: updatedResult.accessMode,
+      spendingRules: updatedResult.spendingRules,
+      isActive: updatedResult.isActive,
+      expiresAt: updatedResult.expiresAt,
+      createdAt: updatedResult.createdAt,
+      updatedAt: updatedResult.updatedAt,
+    },
+    updatedResult.upstreamIds
+  );
 }

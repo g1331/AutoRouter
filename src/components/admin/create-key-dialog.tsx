@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Plus, CalendarIcon, Search } from "lucide-react";
@@ -61,6 +61,23 @@ export function CreateKeyDialog() {
       access_mode: z.enum(["unrestricted", "restricted"]),
       upstream_ids: z.array(z.string()),
       expires_at: z.date().optional(),
+      spending_rules: z.array(
+        z
+          .object({
+            period_type: z.enum(["daily", "monthly", "rolling"]),
+            limit: z.number().positive(t("quotaLimitPositive")),
+            period_hours: z.number().int().min(1).max(8760).optional(),
+          })
+          .superRefine((rule, ctx) => {
+            if (rule.period_type === "rolling" && rule.period_hours == null) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["period_hours"],
+                message: t("quotaPeriodHoursRequired"),
+              });
+            }
+          })
+      ),
     })
     .superRefine((data, ctx) => {
       if (data.access_mode === "restricted" && data.upstream_ids.length === 0) {
@@ -82,11 +99,26 @@ export function CreateKeyDialog() {
       access_mode: "unrestricted",
       upstream_ids: [],
       expires_at: undefined,
+      spending_rules: [],
     },
   });
-
-  const accessMode = form.watch("access_mode");
-  const selectedUpstreamIds = form.watch("upstream_ids");
+  const spendingRulesFieldArray = useFieldArray({
+    control: form.control,
+    name: "spending_rules",
+  });
+  const spendingRules = useWatch({
+    control: form.control,
+    name: "spending_rules",
+  });
+  const accessMode = useWatch({
+    control: form.control,
+    name: "access_mode",
+  });
+  const selectedUpstreamIds =
+    useWatch({
+      control: form.control,
+      name: "upstream_ids",
+    }) ?? [];
   const normalizedUpstreamSearchQuery = upstreamSearchQuery.trim().toLowerCase();
   const filteredUpstreams = (upstreams ?? []).filter((upstream) => {
     if (!normalizedUpstreamSearchQuery) {
@@ -112,6 +144,7 @@ export function CreateKeyDialog() {
         access_mode: data.access_mode,
         upstream_ids: data.access_mode === "restricted" ? data.upstream_ids : [],
         expires_at: data.expires_at ? data.expires_at.toISOString() : null,
+        spending_rules: data.spending_rules.length > 0 ? data.spending_rules : null,
       });
 
       setCreatedKey(result);
@@ -346,6 +379,157 @@ export function CreateKeyDialog() {
                     )}
                   />
                 )}
+
+                <div className="space-y-3 rounded-[var(--shape-corner-medium)] border border-[rgb(var(--md-sys-color-outline-variant))] bg-[rgb(var(--md-sys-color-surface-container-low))] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="type-body-medium text-[rgb(var(--md-sys-color-on-surface))]">
+                        {t("spendingRules")}
+                      </p>
+                      <p className="mt-1 type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                        {t("spendingRulesDesc")}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() =>
+                        spendingRulesFieldArray.append({
+                          period_type: "daily",
+                          limit: 0,
+                        })
+                      }
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      {t("addSpendingRule")}
+                    </Button>
+                  </div>
+
+                  {spendingRulesFieldArray.fields.length === 0 ? (
+                    <p className="type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                      {t("spendingRulesEmpty")}
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {spendingRulesFieldArray.fields.map((field, index) => {
+                        const rulePeriodType = spendingRules?.[index]?.period_type;
+                        return (
+                          <div
+                            key={field.id}
+                            className="space-y-3 rounded-[var(--shape-corner-small)] border border-[rgb(var(--md-sys-color-outline-variant))] bg-background/70 p-3"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="type-body-medium text-foreground">
+                                {t("spendingRuleLabel", { index: index + 1 })}
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => spendingRulesFieldArray.remove(index)}
+                              >
+                                {tCommon("delete")}
+                              </Button>
+                            </div>
+
+                            <FormField
+                              control={form.control}
+                              name={`spending_rules.${index}.period_type`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>{t("quotaPeriodType")}</FormLabel>
+                                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                    {(["daily", "monthly", "rolling"] as const).map((value) => (
+                                      <Button
+                                        key={value}
+                                        type="button"
+                                        variant={field.value === value ? "default" : "outline"}
+                                        className="justify-start"
+                                        onClick={() => {
+                                          field.onChange(value);
+                                          if (value !== "rolling") {
+                                            form.setValue(
+                                              `spending_rules.${index}.period_hours`,
+                                              undefined
+                                            );
+                                          }
+                                        }}
+                                      >
+                                        {t(`quotaPeriodType_${value}`)}
+                                      </Button>
+                                    ))}
+                                  </div>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                              <FormField
+                                control={form.control}
+                                name={`spending_rules.${index}.limit`}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>{t("quotaLimitUsd")}</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={field.value || ""}
+                                        onChange={(event) =>
+                                          field.onChange(
+                                            event.target.value === ""
+                                              ? undefined
+                                              : Number(event.target.value)
+                                          )
+                                        }
+                                        placeholder={t("quotaLimitPlaceholder")}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+
+                              {rulePeriodType === "rolling" && (
+                                <FormField
+                                  control={form.control}
+                                  name={`spending_rules.${index}.period_hours`}
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>{t("quotaPeriodHours")}</FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          type="number"
+                                          min="1"
+                                          max="8760"
+                                          step="1"
+                                          value={field.value || ""}
+                                          onChange={(event) =>
+                                            field.onChange(
+                                              event.target.value === ""
+                                                ? undefined
+                                                : Number(event.target.value)
+                                            )
+                                          }
+                                          placeholder={t("quotaPeriodHoursPlaceholder")}
+                                        />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
 
                 <FormField
                   control={form.control}
