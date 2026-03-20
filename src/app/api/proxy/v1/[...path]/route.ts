@@ -95,6 +95,7 @@ import { buildCompensations } from "@/lib/services/compensation-service";
 import { createLogger } from "@/lib/utils/logger";
 import { extractRequestThinkingConfig } from "@/lib/utils/request-thinking-config";
 import { apiKeyQuotaTracker } from "@/lib/services/api-key-quota-tracker";
+import { resolveBillingModelPrice } from "@/lib/services/billing-price-service";
 
 const log = createLogger("proxy-route");
 
@@ -128,6 +129,38 @@ async function persistBillingSnapshotSafely(input: {
     });
   } catch (error) {
     log.error({ err: error, requestId: input.requestId }, "failed to persist billing snapshot");
+  }
+}
+
+async function shouldRejectExceededApiKeyQuotaBeforeProxy(input: {
+  quotaStatus: ReturnType<typeof apiKeyQuotaTracker.getQuotaStatus>;
+  model: string | null;
+  requestedStream: boolean;
+  requestId: string;
+}): Promise<boolean> {
+  if (!input.quotaStatus?.isExceeded) {
+    return false;
+  }
+
+  // Requests whose billability is only known after proxying must still reach snapshot persistence.
+  if (!input.requestedStream) {
+    return false;
+  }
+
+  const normalizedModel = input.model?.trim() ?? "";
+  if (!normalizedModel) {
+    return false;
+  }
+
+  try {
+    const resolvedPrice = await resolveBillingModelPrice(normalizedModel);
+    return resolvedPrice !== null;
+  } catch (error) {
+    log.error(
+      { err: error, requestId: input.requestId, model: normalizedModel },
+      "failed to resolve billing price before API key quota check"
+    );
+    return false;
   }
 }
 
@@ -1811,42 +1844,6 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
   await apiKeyQuotaTracker.initialize();
   const apiKeyQuotaStatus = apiKeyQuotaTracker.getQuotaStatus(validApiKey.id);
-  if (apiKeyQuotaStatus?.isExceeded) {
-    const errorCode: UnifiedErrorCode = "API_KEY_QUOTA_EXCEEDED";
-    const errorReason: UnifiedErrorReason = "API_KEY_QUOTA_EXCEEDED";
-    const exceededRules = apiKeyQuotaStatus.rules.filter((rule) => rule.isExceeded);
-    const errorMessage = buildApiKeyQuotaExceededErrorMessage(validApiKey.id, exceededRules);
-    const errorDetails = {
-      reason: errorReason,
-      did_send_upstream: false,
-      request_id: requestId,
-      user_hint: getUserHint(errorCode, errorReason, matchedRouteCapability ?? "openai_responses"),
-    } as const;
-
-    try {
-      await logApiKeyQuotaRejectedRequest({
-        apiKeyId: validApiKey.id,
-        request,
-        path,
-        model,
-        reasoningEffort,
-        thinkingConfig,
-        requestId,
-        startTime,
-        sessionId: null,
-        matchedRouteCapability,
-        routeMatchSource: matchedRouteMatchSource,
-        errorMessage,
-      });
-    } catch (error) {
-      log.error(
-        { err: error, requestId, apiKeyId: validApiKey.id },
-        "failed to log API key quota rejection"
-      );
-    }
-
-    return createUnifiedErrorResponse(errorCode, errorDetails);
-  }
 
   if (!matchedRouteCapability) {
     const unsupportedDurationMs = Date.now() - startTime;
@@ -2055,6 +2052,49 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     model,
     selectedCandidate
   ));
+
+  const shouldRejectApiKeyQuotaBeforeProxy = await shouldRejectExceededApiKeyQuotaBeforeProxy({
+    quotaStatus: apiKeyQuotaStatus,
+    model: resolvedModel,
+    requestedStream,
+    requestId,
+  });
+  if (shouldRejectApiKeyQuotaBeforeProxy) {
+    const errorCode: UnifiedErrorCode = "API_KEY_QUOTA_EXCEEDED";
+    const errorReason: UnifiedErrorReason = "API_KEY_QUOTA_EXCEEDED";
+    const exceededRules = apiKeyQuotaStatus!.rules.filter((rule) => rule.isExceeded);
+    const errorMessage = buildApiKeyQuotaExceededErrorMessage(validApiKey.id, exceededRules);
+    const errorDetails = {
+      reason: errorReason,
+      did_send_upstream: false,
+      request_id: requestId,
+      user_hint: getUserHint(errorCode, errorReason, matchedRouteCapability),
+    } as const;
+
+    try {
+      await logApiKeyQuotaRejectedRequest({
+        apiKeyId: validApiKey.id,
+        request,
+        path,
+        model: resolvedModel,
+        reasoningEffort,
+        thinkingConfig,
+        requestId,
+        startTime,
+        sessionId: null,
+        matchedRouteCapability,
+        routeMatchSource: matchedRouteMatchSource,
+        errorMessage,
+      });
+    } catch (error) {
+      log.error(
+        { err: error, requestId, apiKeyId: validApiKey.id },
+        "failed to log API key quota rejection"
+      );
+    }
+
+    return createUnifiedErrorResponse(errorCode, errorDetails);
+  }
 
   log.debug(
     {

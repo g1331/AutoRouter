@@ -121,25 +121,13 @@ function normalizeAccessMode(
   return upstreamIds.length > 0 ? "restricted" : "unrestricted";
 }
 
-async function resolveSpendingRuleStatuses(
-  apiKeyId: string,
-  spendingRules: SpendingRule[] | null
-): Promise<{
+function buildFallbackQuotaState(spendingRules: SpendingRule[] | null): {
   spendingRuleStatuses: ApiKeySpendingRuleStatus[];
   isQuotaExceeded: boolean;
-}> {
-  if (!spendingRules || spendingRules.length === 0) {
-    return {
-      spendingRuleStatuses: [],
-      isQuotaExceeded: false,
-    };
-  }
-
-  await apiKeyQuotaTracker.initialize();
-  const status = apiKeyQuotaTracker.getQuotaStatus(apiKeyId);
-  if (!status) {
-    return {
-      spendingRuleStatuses: spendingRules.map((rule) => ({
+} {
+  return {
+    spendingRuleStatuses:
+      spendingRules?.map((rule) => ({
         periodType: rule.period_type,
         periodHours: rule.period_hours ?? null,
         currentSpending: 0,
@@ -148,35 +136,72 @@ async function resolveSpendingRuleStatuses(
         isExceeded: false,
         resetsAt: null,
         estimatedRecoveryAt: null,
-      })),
-      isQuotaExceeded: false,
-    };
+      })) ?? [],
+    isQuotaExceeded: false,
+  };
+}
+
+async function syncApiKeyQuotaStateBestEffort(
+  apiKeyId: string,
+  apiKeyName: string,
+  spendingRules: SpendingRule[] | null
+): Promise<void> {
+  try {
+    await apiKeyQuotaTracker.syncApiKeyFromDb(apiKeyId, apiKeyName, spendingRules);
+  } catch (error) {
+    log.error(
+      { err: error, apiKeyId, apiKeyName },
+      "failed to sync API key quota tracker after persisted mutation"
+    );
+  }
+}
+
+async function resolveSpendingRuleStatuses(
+  apiKeyId: string,
+  spendingRules: SpendingRule[] | null
+): Promise<{
+  spendingRuleStatuses: ApiKeySpendingRuleStatus[];
+  isQuotaExceeded: boolean;
+}> {
+  if (!spendingRules || spendingRules.length === 0) {
+    return buildFallbackQuotaState(spendingRules);
   }
 
-  const spendingRuleStatuses = await Promise.all(
-    status.rules.map(async (rule) => ({
-      periodType: rule.periodType,
-      periodHours: rule.periodHours,
-      currentSpending: rule.currentSpending,
-      spendingLimit: rule.spendingLimit,
-      percentUsed: rule.percentUsed,
-      isExceeded: rule.isExceeded,
-      resetsAt: rule.resetsAt,
-      estimatedRecoveryAt:
-        rule.periodType === "rolling" && rule.isExceeded
-          ? await apiKeyQuotaTracker.estimateRecoveryTime(apiKeyId, {
-              period_type: "rolling",
-              limit: rule.spendingLimit,
-              ...(rule.periodHours != null ? { period_hours: rule.periodHours } : {}),
-            })
-          : null,
-    }))
-  );
+  try {
+    await apiKeyQuotaTracker.initialize();
+    const status = apiKeyQuotaTracker.getQuotaStatus(apiKeyId);
+    if (!status) {
+      return buildFallbackQuotaState(spendingRules);
+    }
 
-  return {
-    spendingRuleStatuses,
-    isQuotaExceeded: status.isExceeded,
-  };
+    const spendingRuleStatuses = await Promise.all(
+      status.rules.map(async (rule) => ({
+        periodType: rule.periodType,
+        periodHours: rule.periodHours,
+        currentSpending: rule.currentSpending,
+        spendingLimit: rule.spendingLimit,
+        percentUsed: rule.percentUsed,
+        isExceeded: rule.isExceeded,
+        resetsAt: rule.resetsAt,
+        estimatedRecoveryAt:
+          rule.periodType === "rolling" && rule.isExceeded
+            ? await apiKeyQuotaTracker.estimateRecoveryTime(apiKeyId, {
+                period_type: "rolling",
+                limit: rule.spendingLimit,
+                ...(rule.periodHours != null ? { period_hours: rule.periodHours } : {}),
+              })
+            : null,
+      }))
+    );
+
+    return {
+      spendingRuleStatuses,
+      isQuotaExceeded: status.isExceeded,
+    };
+  } catch (error) {
+    log.error({ err: error, apiKeyId }, "failed to resolve API key quota statuses");
+    return buildFallbackQuotaState(spendingRules);
+  }
 }
 
 async function buildApiKeyListItem(
@@ -301,7 +326,7 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
     "created API key"
   );
 
-  await apiKeyQuotaTracker.syncApiKeyFromDb(newKey.id, newKey.name, spendingRules);
+  await syncApiKeyQuotaStateBestEffort(newKey.id, newKey.name, spendingRules);
   const quotaState = await resolveSpendingRuleStatuses(newKey.id, spendingRules);
 
   return {
@@ -335,7 +360,7 @@ export async function deleteApiKey(keyId: string): Promise<void> {
   }
 
   await db.delete(apiKeys).where(eq(apiKeys.id, keyId));
-  await apiKeyQuotaTracker.syncApiKeyFromDb(keyId, existing.name, null);
+  await syncApiKeyQuotaStateBestEffort(keyId, existing.name, null);
 
   log.info({ keyPrefix: existing.keyPrefix, name: existing.name }, "deleted API key");
 }
@@ -637,7 +662,7 @@ export async function updateApiKey(
     };
   });
 
-  await apiKeyQuotaTracker.syncApiKeyFromDb(
+  await syncApiKeyQuotaStateBestEffort(
     updatedResult.id,
     updatedResult.name,
     updatedResult.spendingRules

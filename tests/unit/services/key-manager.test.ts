@@ -260,6 +260,84 @@ describe("key-manager", () => {
       expect(result.upstreamIds).toEqual(["upstream-1"]);
     });
 
+    it("should still return the created key when quota tracker sync fails after persistence", async () => {
+      const { db } = await import("@/lib/db");
+      const { createApiKey } = await import("@/lib/services/key-manager");
+
+      const mockApiKey = {
+        id: "key-1",
+        keyHash: "hashed-key",
+        keyValueEncrypted: "encrypted:sk-auto-test123",
+        keyPrefix: "sk-auto-test",
+        name: "Test Key",
+        description: "Test description",
+        accessMode: "restricted",
+        spendingRules: null,
+        isActive: true,
+        expiresAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        { id: "upstream-1", name: "OpenAI" },
+      ] as never);
+      vi.mocked(db.insert).mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([mockApiKey]),
+        }),
+      } as unknown as ReturnType<typeof db.insert>);
+      mockApiKeyQuotaTracker.syncApiKeyFromDb.mockRejectedValueOnce(new Error("sync failed"));
+
+      const result = await createApiKey({
+        name: "Test Key",
+        upstreamIds: ["upstream-1"],
+        description: "Test description",
+      });
+
+      expect(result.name).toBe("Test Key");
+      expect(result.upstreamIds).toEqual(["upstream-1"]);
+      expect(result.spendingRuleStatuses).toEqual([]);
+      expect(result.isQuotaExceeded).toBe(false);
+    });
+
+    it("should still return created key when quota tracker sync fails after persistence", async () => {
+      const { db } = await import("@/lib/db");
+      const { createApiKey } = await import("@/lib/services/key-manager");
+
+      const mockApiKey = {
+        id: "key-1",
+        keyHash: "hashed-key",
+        keyValueEncrypted: "encrypted:sk-auto-test123",
+        keyPrefix: "sk-auto-test",
+        name: "Test Key",
+        description: null,
+        accessMode: "unrestricted",
+        spendingRules: null,
+        isActive: true,
+        expiresAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      vi.mocked(db.insert).mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([mockApiKey]),
+        }),
+      } as unknown as ReturnType<typeof db.insert>);
+      mockApiKeyQuotaTracker.syncApiKeyFromDb.mockRejectedValueOnce(new Error("sync failed"));
+
+      const result = await createApiKey({
+        name: "Test Key",
+        upstreamIds: [],
+        accessMode: "unrestricted",
+      });
+
+      expect(result.id).toBe("key-1");
+      expect(result.spendingRuleStatuses).toEqual([]);
+      expect(result.isQuotaExceeded).toBe(false);
+    });
+
     it("should create API key with expiration date", async () => {
       const { db } = await import("@/lib/db");
       const { createApiKey } = await import("@/lib/services/key-manager");
@@ -344,6 +422,26 @@ describe("key-manager", () => {
       vi.mocked(db.delete).mockReturnValue({
         where: mockWhere,
       } as unknown as ReturnType<typeof db.delete>);
+
+      await expect(deleteApiKey("key-1")).resolves.toBeUndefined();
+      expect(db.delete).toHaveBeenCalled();
+    });
+
+    it("should still resolve delete when quota tracker sync fails after deletion", async () => {
+      const { db } = await import("@/lib/db");
+      const { deleteApiKey } = await import("@/lib/services/key-manager");
+
+      vi.mocked(db.query.apiKeys.findFirst).mockResolvedValueOnce({
+        id: "key-1",
+        keyPrefix: "sk-auto-test",
+        name: "Test Key",
+      } as never);
+
+      const mockWhere = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(db.delete).mockReturnValue({
+        where: mockWhere,
+      } as unknown as ReturnType<typeof db.delete>);
+      mockApiKeyQuotaTracker.syncApiKeyFromDb.mockRejectedValueOnce(new Error("sync failed"));
 
       await expect(deleteApiKey("key-1")).resolves.toBeUndefined();
       expect(db.delete).toHaveBeenCalled();
@@ -896,6 +994,61 @@ describe("key-manager", () => {
       const result = await updateApiKey("key-1", { description: "New description" });
 
       expect(result.description).toBe("New description");
+    });
+
+    it("should still return updated key when quota status hydration fails after update", async () => {
+      const { db } = await import("@/lib/db");
+      const { updateApiKey } = await import("@/lib/services/key-manager");
+
+      const mockExistingKey = {
+        id: "key-1",
+        keyPrefix: "sk-auto-test",
+        name: "Test Key",
+        description: null,
+        accessMode: "restricted",
+        spendingRules: [{ period_type: "daily", limit: 50 }],
+        isActive: true,
+        expiresAt: null,
+        createdAt: new Date("2024-01-01"),
+        updatedAt: new Date("2024-01-01"),
+      };
+
+      const mockUpdatedKey = {
+        ...mockExistingKey,
+        name: "Updated Key",
+        updatedAt: new Date(),
+      };
+
+      vi.mocked(db.query.apiKeys.findFirst).mockResolvedValueOnce(mockExistingKey as never);
+
+      const mockReturning = vi.fn().mockResolvedValue([mockUpdatedKey]);
+      const mockWhere = vi.fn(() => ({ returning: mockReturning }));
+      const mockSet = vi.fn(() => ({ where: mockWhere }));
+      vi.mocked(db.update).mockReturnValue({ set: mockSet } as unknown as ReturnType<
+        typeof db.update
+      >);
+
+      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+        { apiKeyId: "key-1", upstreamId: "upstream-1" },
+      ] as never);
+      mockApiKeyQuotaTracker.initialize.mockRejectedValueOnce(new Error("quota init failed"));
+
+      const result = await updateApiKey("key-1", { name: "Updated Key" });
+
+      expect(result.name).toBe("Updated Key");
+      expect(result.isQuotaExceeded).toBe(false);
+      expect(result.spendingRuleStatuses).toEqual([
+        {
+          periodType: "daily",
+          periodHours: null,
+          currentSpending: 0,
+          spendingLimit: 50,
+          percentUsed: 0,
+          isExceeded: false,
+          resetsAt: null,
+          estimatedRecoveryAt: null,
+        },
+      ]);
     });
 
     it("should update isActive status", async () => {

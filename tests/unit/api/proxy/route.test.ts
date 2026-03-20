@@ -1,11 +1,24 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
-const { mockApiKeyQuotaTracker } = vi.hoisted(() => ({
+const { mockApiKeyQuotaTracker, mockResolveBillingModelPrice } = vi.hoisted(() => ({
   mockApiKeyQuotaTracker: {
     initialize: vi.fn(async () => {}),
     getQuotaStatus: vi.fn(() => null),
   },
+  mockResolveBillingModelPrice: vi.fn(async () => ({
+    model: "gpt-5.2",
+    source: "manual",
+    inputPricePerMillion: 1,
+    outputPricePerMillion: 1,
+    cacheReadInputPricePerMillion: null,
+    cacheWriteInputPricePerMillion: null,
+    matchedRuleType: "flat",
+    matchedRuleDisplayLabel: null,
+    appliedTierThreshold: null,
+    modelMaxInputTokens: null,
+    modelMaxOutputTokens: null,
+  })),
 }));
 
 vi.mock("@/lib/utils/auth", () => ({
@@ -107,6 +120,10 @@ vi.mock("@/lib/services/billing-cost-service", () => ({
     finalCost: 0.001,
     source: "manual",
   })),
+}));
+
+vi.mock("@/lib/services/billing-price-service", () => ({
+  resolveBillingModelPrice: mockResolveBillingModelPrice,
 }));
 
 vi.mock("@/lib/services/api-key-quota-tracker", () => ({
@@ -325,6 +342,19 @@ describe("proxy route upstream selection", () => {
     vi.resetModules();
     mockApiKeyQuotaTracker.initialize.mockResolvedValue(undefined);
     mockApiKeyQuotaTracker.getQuotaStatus.mockReturnValue(null);
+    mockResolveBillingModelPrice.mockResolvedValue({
+      model: "gpt-5.2",
+      source: "manual",
+      inputPricePerMillion: 1,
+      outputPricePerMillion: 1,
+      cacheReadInputPricePerMillion: null,
+      cacheWriteInputPricePerMillion: null,
+      matchedRuleType: "flat",
+      matchedRuleDisplayLabel: null,
+      appliedTierThreshold: null,
+      modelMaxInputTokens: null,
+      modelMaxOutputTokens: null,
+    });
     delete process.env.RECORDER_ENABLED;
     delete process.env.RECORDER_MODE;
     const routeModule = await import("@/app/api/proxy/v1/[...path]/route");
@@ -543,11 +573,133 @@ describe("proxy route upstream selection", () => {
     });
   });
 
-  it("should reject requests before upstream routing when API key quota is exceeded", async () => {
+  it("should reject streaming requests before upstream routing when API key quota is exceeded", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
     const { logRequest } = await import("@/lib/services/request-logger");
     const { routeByModel } = await import("@/lib/services/model-router");
+    mockResolveBillingModelPrice.mockResolvedValueOnce({
+      model: "gpt-5.2",
+      source: "manual",
+      inputPricePerMillion: 1,
+      outputPricePerMillion: 1,
+      cacheReadInputPricePerMillion: null,
+      cacheWriteInputPricePerMillion: null,
+      matchedRuleType: "flat",
+      matchedRuleDisplayLabel: null,
+      appliedTierThreshold: null,
+      modelMaxInputTokens: null,
+      modelMaxOutputTokens: null,
+    });
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-openai" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-openai",
+        name: "openai-main",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["openai_chat_compatible"],
+      },
+    ]);
+    mockApiKeyQuotaTracker.getQuotaStatus.mockReturnValue({
+      apiKeyId: "key-1",
+      apiKeyName: "Quota Key",
+      isExceeded: true,
+      rules: [
+        {
+          periodType: "daily",
+          periodHours: null,
+          currentSpending: 25,
+          spendingLimit: 25,
+          percentUsed: 100,
+          isExceeded: true,
+          resetsAt: new Date("2024-01-02T00:00:00Z"),
+          estimatedRecoveryAt: null,
+        },
+      ],
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.2",
+        messages: [{ role: "user", content: "hello" }],
+        stream: true,
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["chat", "completions"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(429);
+    expect(data).toEqual({
+      error: expect.objectContaining({
+        code: "API_KEY_QUOTA_EXCEEDED",
+        reason: "API_KEY_QUOTA_EXCEEDED",
+        did_send_upstream: false,
+      }),
+    });
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(forwardRequest).not.toHaveBeenCalled();
+    expect(logRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKeyId: "key-1",
+        upstreamId: null,
+        path: "chat/completions",
+        model: "gpt-5.2",
+        statusCode: 429,
+        errorMessage: expect.stringContaining("API key spending quota exceeded"),
+        routingDecision: expect.objectContaining({
+          matched_route_capability: "openai_chat_compatible",
+          did_send_upstream: false,
+          actual_upstream_id: null,
+        }),
+      })
+    );
+  });
+
+  it("should allow over-quota requests to proceed when billing later resolves as usage_missing", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("@/lib/services/billing-cost-service");
+
+    vi.mocked(calculateAndPersistRequestBillingSnapshot).mockResolvedValueOnce({
+      status: "unbilled",
+      unbillableReason: "usage_missing",
+      finalCost: null,
+      source: null,
+    });
+
+    const openaiUpstream = {
+      id: "up-openai",
+      name: "openai-main",
+      providerType: "openai",
+      baseUrl: "https://api.openai.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 0,
+      weight: 1,
+    };
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
       { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
@@ -569,8 +721,36 @@ describe("proxy route upstream selection", () => {
         },
       ],
     });
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-openai" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        ...openaiUpstream,
+        routeCapabilities: ["openai_chat_compatible"],
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: openaiUpstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: {
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+      },
+    });
 
-    const request = new NextRequest("http://localhost/api/proxy/v1/responses", {
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
       method: "POST",
       headers: {
         authorization: "Bearer sk-test",
@@ -578,40 +758,122 @@ describe("proxy route upstream selection", () => {
       },
       body: JSON.stringify({
         model: "gpt-5.2",
-        input: "hello",
+        messages: [{ role: "user", content: "hello" }],
       }),
     });
 
     const response = await POST(request, {
-      params: Promise.resolve({ path: ["responses"] }),
+      params: Promise.resolve({ path: ["chat", "completions"] }),
     });
-    const data = await response.json();
 
-    expect(response.status).toBe(429);
-    expect(data).toEqual({
-      error: expect.objectContaining({
-        code: "API_KEY_QUOTA_EXCEEDED",
-        reason: "API_KEY_QUOTA_EXCEEDED",
-        did_send_upstream: false,
-      }),
-    });
-    expect(routeByModel).not.toHaveBeenCalled();
-    expect(forwardRequest).not.toHaveBeenCalled();
-    expect(logRequest).toHaveBeenCalledWith(
+    expect(response.status).toBe(200);
+    expect(forwardRequest).toHaveBeenCalledTimes(1);
+    expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({
         apiKeyId: "key-1",
-        upstreamId: null,
-        path: "responses",
-        model: "gpt-5.2",
-        statusCode: 429,
-        errorMessage: expect.stringContaining("API key spending quota exceeded"),
-        routingDecision: expect.objectContaining({
-          matched_route_capability: "openai_responses",
-          did_send_upstream: false,
-          actual_upstream_id: null,
-        }),
+        upstreamId: "up-openai",
+        usage: {
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+        },
       })
     );
+  });
+
+  it("should allow over-quota streaming requests when the resolved model has no billing price", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { resolveBillingModelPrice } = await import("@/lib/services/billing-price-service");
+
+    const openaiUpstream = {
+      id: "up-openai",
+      name: "openai-main",
+      providerType: "openai",
+      baseUrl: "https://api.openai.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 0,
+      weight: 1,
+      modelRedirects: {
+        "gpt-5.2": "gpt-unpriced",
+      },
+    };
+
+    vi.mocked(resolveBillingModelPrice).mockResolvedValueOnce(null);
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    mockApiKeyQuotaTracker.getQuotaStatus.mockReturnValueOnce({
+      apiKeyId: "key-1",
+      apiKeyName: "Quota Key",
+      isExceeded: true,
+      rules: [
+        {
+          periodType: "daily",
+          periodHours: null,
+          currentSpending: 25,
+          spendingLimit: 25,
+          percentUsed: 100,
+          isExceeded: true,
+          resetsAt: new Date("2024-01-02T00:00:00Z"),
+          estimatedRecoveryAt: null,
+        },
+      ],
+    });
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-openai" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        ...openaiUpstream,
+        routeCapabilities: ["openai_chat_compatible"],
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: openaiUpstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: {
+        promptTokens: 32,
+        completionTokens: 16,
+        totalTokens: 48,
+      },
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.2",
+        messages: [{ role: "user", content: "hello" }],
+        stream: true,
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["chat", "completions"] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(resolveBillingModelPrice).toHaveBeenCalledWith("gpt-unpriced");
+    expect(forwardRequest).toHaveBeenCalledTimes(1);
   });
 
   it("should route path capability request without model when route is matched", async () => {
