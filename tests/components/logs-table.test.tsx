@@ -23,6 +23,8 @@ describe("LogsTable", () => {
   const mockLog: RequestLog = {
     id: "test-id-1",
     api_key_id: "key-1",
+    api_key_name: "Primary Key",
+    api_key_prefix: "sk-primary",
     upstream_id: "upstream-1",
     upstream_name: "upstream-1",
     method: "POST",
@@ -88,6 +90,7 @@ describe("LogsTable", () => {
       render(<LogsTable logs={[mockLog]} />);
 
       expect(screen.getByText("tableTime")).toBeInTheDocument();
+      expect(screen.getByText("tableKey")).toBeInTheDocument();
       expect(screen.getByText("tableMethod")).toBeInTheDocument();
       expect(screen.getByText("tableInterfaceType")).toBeInTheDocument();
       expect(screen.getByText("tableModel")).toBeInTheDocument();
@@ -506,8 +509,26 @@ describe("LogsTable", () => {
     it("shows dash when upstream_id is null", () => {
       render(<LogsTable logs={[{ ...mockLog, upstream_id: null, upstream_name: null }]} />);
 
-      const cells = screen.getAllByRole("cell");
-      const upstreamCell = cells[2]; // expand | time | upstream
+      const dataRow = screen
+        .getAllByRole("row")
+        .find((row) => row.querySelector("td") && within(row).queryByText("POST"));
+
+      expect(dataRow).toBeDefined();
+      const headerRow = screen
+        .getAllByRole("row")
+        .find((row) => within(row).queryByText("tableUpstream"));
+      expect(headerRow).toBeDefined();
+
+      const headerCells = within(headerRow as HTMLElement).getAllByRole("columnheader");
+      const upstreamColumnIndex = headerCells.findIndex((cell) =>
+        within(cell).queryByText("tableUpstream")
+      );
+      expect(upstreamColumnIndex).toBeGreaterThanOrEqual(0);
+
+      const cells = within(dataRow as HTMLElement).getAllByRole("cell");
+      const upstreamCell = cells[upstreamColumnIndex];
+
+      expect(upstreamCell).toBeDefined();
       expect(upstreamCell).toHaveTextContent("-");
     });
   });
@@ -1469,6 +1490,8 @@ describe("LogsTable", () => {
     it("does not show expand indicator when no details are available", () => {
       const logWithoutDetails: RequestLog = {
         ...mockLog,
+        api_key_name: null,
+        api_key_prefix: null,
         prompt_tokens: 0,
         completion_tokens: 0,
         total_tokens: 0,

@@ -218,6 +218,16 @@ describe("lib/db/schema", () => {
       expect(requestLogs.apiKeyId.name).toBe("api_key_id");
     });
 
+    it("has apiKeyName snapshot column", () => {
+      expect(requestLogs.apiKeyName).toBeDefined();
+      expect(requestLogs.apiKeyName.name).toBe("api_key_name");
+    });
+
+    it("has apiKeyPrefix snapshot column", () => {
+      expect(requestLogs.apiKeyPrefix).toBeDefined();
+      expect(requestLogs.apiKeyPrefix.name).toBe("api_key_prefix");
+    });
+
     it("has upstreamId reference", () => {
       expect(requestLogs.upstreamId).toBeDefined();
       expect(requestLogs.upstreamId.name).toBe("upstream_id");

@@ -469,6 +469,8 @@ export interface RequestThinkingConfig {
 export interface RequestLogResponse {
   id: string; // UUID
   api_key_id: string | null; // UUID
+  api_key_name: string | null;
+  api_key_prefix: string | null;
   upstream_id: string | null; // UUID
   upstream_name: string | null; // Upstream display name
   method: string | null;

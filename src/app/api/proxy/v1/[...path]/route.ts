@@ -187,6 +187,8 @@ function buildApiKeyQuotaExceededErrorMessage(
 
 async function logApiKeyQuotaRejectedRequest(input: {
   apiKeyId: string;
+  apiKeyName: string | null;
+  apiKeyPrefix: string | null;
   request: NextRequest;
   path: string;
   model: string | null;
@@ -222,6 +224,8 @@ async function logApiKeyQuotaRejectedRequest(input: {
 
   await logRequest({
     apiKeyId: input.apiKeyId,
+    apiKeyName: input.apiKeyName,
+    apiKeyPrefix: input.apiKeyPrefix,
     upstreamId: null,
     method: input.request.method,
     path: input.path,
@@ -1816,6 +1820,11 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
   }
 
+  const apiKeySnapshot = {
+    apiKeyName: validApiKey.name ?? null,
+    apiKeyPrefix: validApiKey.keyPrefix ?? null,
+  };
+
   // Recorder setup
   const shouldRecordSuccess = shouldRecordFixture("success");
   const shouldRecordFailure = shouldRecordFixture("failure");
@@ -1882,6 +1891,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     try {
       const createdLog = await logRequest({
         apiKeyId: validApiKey.id,
+        ...apiKeySnapshot,
         upstreamId: null,
         method: request.method,
         path,
@@ -2074,6 +2084,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     try {
       await logApiKeyQuotaRejectedRequest({
         apiKeyId: validApiKey.id,
+        apiKeyName: apiKeySnapshot.apiKeyName,
+        apiKeyPrefix: apiKeySnapshot.apiKeyPrefix,
         request,
         path,
         model: resolvedModel,
@@ -2160,6 +2172,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   try {
     const startLog = await logRequestStart({
       apiKeyId: validApiKey.id,
+      ...apiKeySnapshot,
       upstreamId: null,
       method: request.method,
       path,
@@ -2328,6 +2341,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     // Update the in-progress log with the actual upstream
     if (requestLogId) {
       void updateRequestLog(requestLogId, {
+        ...apiKeySnapshot,
         upstreamId: upstreamForLogging.id,
         isStream: result.isStream,
         routingDecision: finalRoutingDecisionLog,
@@ -2377,6 +2391,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
         if (requestLogId) {
           const updatedLog = await updateRequestLog(requestLogId, {
+            ...apiKeySnapshot,
             upstreamId: upstreamForLogging.id,
             model: resolvedModel,
             statusCode: disconnectStatusCode,
@@ -2410,6 +2425,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
         const createdLog = await logRequest({
           apiKeyId: validApiKey.id,
+          ...apiKeySnapshot,
           upstreamId: upstreamForLogging.id,
           method: request.method,
           path,
@@ -2485,6 +2501,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           let persistedLogId: string | null = requestLogId;
           if (requestLogId) {
             const updatedLog = await updateRequestLog(requestLogId, {
+              ...apiKeySnapshot,
               upstreamId: upstreamForLogging.id,
               model: resolvedModel,
               reasoningEffort,
@@ -2519,6 +2536,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           } else {
             const createdLog = await logRequest({
               apiKeyId: validApiKey.id,
+              ...apiKeySnapshot,
               upstreamId: upstreamForLogging.id,
               method: request.method,
               path,
@@ -2677,6 +2695,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       let persistedLogId: string | null = requestLogId;
       if (requestLogId) {
         const updatedLog = await updateRequestLog(requestLogId, {
+          ...apiKeySnapshot,
           upstreamId: upstreamForLogging.id,
           model: resolvedModel,
           reasoningEffort,
@@ -2710,6 +2729,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       } else {
         const createdLog = await logRequest({
           apiKeyId: validApiKey.id,
+          ...apiKeySnapshot,
           upstreamId: upstreamForLogging.id,
           method: request.method,
           path,
@@ -3032,6 +3052,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     let persistedLogId: string | null = requestLogId;
     if (requestLogId) {
       const updatedLog = await updateRequestLog(requestLogId, {
+        ...apiKeySnapshot,
         upstreamId: actualUpstreamId,
         model: resolvedModel,
         reasoningEffort,
@@ -3055,6 +3076,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     } else {
       const createdLog = await logRequest({
         apiKeyId: validApiKey.id,
+        ...apiKeySnapshot,
         upstreamId: actualUpstreamId,
         method: request.method,
         path,

@@ -69,6 +69,8 @@ describe("request-logger (db flows)", () => {
 
     const result = await updateRequestLog("log-1", {
       apiKeyId: "key-1",
+      apiKeyName: "Production Key",
+      apiKeyPrefix: "sk-prod",
       upstreamId: "upstream-1",
       method: "POST",
       path: "/v1/chat/completions",
@@ -123,6 +125,8 @@ describe("request-logger (db flows)", () => {
     expect(setMock).toHaveBeenCalledWith(
       expect.objectContaining({
         apiKeyId: "key-1",
+        apiKeyName: "Production Key",
+        apiKeyPrefix: "sk-prod",
         upstreamId: "upstream-1",
         method: "POST",
         path: "/v1/chat/completions",
@@ -163,6 +167,8 @@ describe("request-logger (db flows)", () => {
 
     await logRequestStart({
       apiKeyId: "key-1",
+      apiKeyName: "Production Key",
+      apiKeyPrefix: "sk-prod",
       upstreamId: null,
       method: "POST",
       path: "/v1/chat/completions",
@@ -176,6 +182,8 @@ describe("request-logger (db flows)", () => {
     expect(valuesMock).toHaveBeenCalledWith(
       expect.objectContaining({
         apiKeyId: "key-1",
+        apiKeyName: "Production Key",
+        apiKeyPrefix: "sk-prod",
         method: "POST",
         path: "/v1/chat/completions",
         model: "gpt-4.1",
@@ -196,6 +204,8 @@ describe("request-logger (db flows)", () => {
 
     await logRequest({
       apiKeyId: null,
+      apiKeyName: "Transient Key",
+      apiKeyPrefix: "sk-temp",
       upstreamId: "upstream-1",
       method: "POST",
       path: "/v1/chat/completions",
@@ -209,6 +219,8 @@ describe("request-logger (db flows)", () => {
 
     expect(valuesMock).toHaveBeenCalledWith(
       expect.objectContaining({
+        apiKeyName: "Transient Key",
+        apiKeyPrefix: "sk-temp",
         cachedTokens: 0,
         reasoningTokens: 0,
         reasoningEffort: null,

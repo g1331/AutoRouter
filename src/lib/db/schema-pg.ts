@@ -170,6 +170,8 @@ export const requestLogs = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     apiKeyId: uuid("api_key_id").references(() => apiKeys.id, { onDelete: "set null" }),
+    apiKeyName: varchar("api_key_name", { length: 255 }),
+    apiKeyPrefix: varchar("api_key_prefix", { length: 16 }),
     upstreamId: uuid("upstream_id").references(() => upstreams.id, { onDelete: "set null" }),
     method: varchar("method", { length: 10 }),
     path: text("path"),

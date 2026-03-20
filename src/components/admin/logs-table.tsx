@@ -146,6 +146,91 @@ function TruncatedTextTooltip({ text, className }: { text: string; className?: s
   );
 }
 
+function getRequestKeyDisplayMeta(options: {
+  keyName: string | null | undefined;
+  keyPrefix: string | null | undefined;
+  fallbackLabel: string;
+}) {
+  const keyName = options.keyName?.trim() ? options.keyName.trim() : null;
+  const keyPrefix = options.keyPrefix?.trim() ? options.keyPrefix.trim() : null;
+
+  if (keyName && keyPrefix) {
+    return {
+      primaryLabel: keyName,
+      secondaryLabel: keyPrefix,
+      tooltipLabel: `${keyName} · ${keyPrefix}`,
+      hasKeyData: true,
+    };
+  }
+
+  if (keyName) {
+    return {
+      primaryLabel: keyName,
+      secondaryLabel: null,
+      tooltipLabel: keyName,
+      hasKeyData: true,
+    };
+  }
+
+  if (keyPrefix) {
+    return {
+      primaryLabel: keyPrefix,
+      secondaryLabel: null,
+      tooltipLabel: keyPrefix,
+      hasKeyData: true,
+    };
+  }
+
+  return {
+    primaryLabel: options.fallbackLabel,
+    secondaryLabel: null,
+    tooltipLabel: options.fallbackLabel,
+    hasKeyData: false,
+  };
+}
+
+function RequestKeyIdentity({
+  keyName,
+  keyPrefix,
+  className,
+  textClassName,
+  compact = false,
+}: {
+  keyName: RequestLog["api_key_name"] | null | undefined;
+  keyPrefix: RequestLog["api_key_prefix"] | null | undefined;
+  className?: string;
+  textClassName?: string;
+  compact?: boolean;
+}) {
+  const t = useTranslations("logs");
+  const keyMeta = getRequestKeyDisplayMeta({
+    keyName,
+    keyPrefix,
+    fallbackLabel: t("unknownKey"),
+  });
+
+  if (!keyMeta.hasKeyData) {
+    return <span className="text-muted-foreground">{keyMeta.primaryLabel}</span>;
+  }
+
+  return (
+    <div className={cn("flex min-w-0 max-w-full items-center gap-1.5", className)}>
+      <TruncatedTextTooltip text={keyMeta.primaryLabel} className={cn("shrink", textClassName)} />
+      {keyMeta.secondaryLabel ? (
+        <span
+          className={cn(
+            "shrink-0 rounded-cf-sm border border-divider bg-surface-300 px-1.5 py-0.5 font-mono text-[10px] leading-none text-muted-foreground",
+            compact && "px-1 py-0 text-[9px]"
+          )}
+          title={keyMeta.secondaryLabel}
+        >
+          {keyMeta.secondaryLabel}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function getReasoningEffortLevel(log: RequestLog): ReasoningEffortLevel | null {
   const requestLogWithMeta = log as RequestLogReasoningMeta;
   const rawValue =
@@ -978,6 +1063,11 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
     const didSendUpstream = routingDecision?.did_send_upstream;
     const finalUpstreamLabel =
       didSendUpstream === false ? t("timelineNoUpstreamSent") : (upstreamDisplayName ?? "-");
+    const requestKeyMeta = getRequestKeyDisplayMeta({
+      keyName: log.api_key_name,
+      keyPrefix: log.api_key_prefix,
+      fallbackLabel: t("unknownKey"),
+    });
 
     const selectedCandidateId =
       didSendUpstream === false
@@ -1277,6 +1367,14 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                   {t("timelineModelResolution")}
                 </Badge>
               ) : null}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+              <span>{t("requestKey")}:</span>
+              <RequestKeyIdentity
+                keyName={log.api_key_name}
+                keyPrefix={log.api_key_prefix}
+                textClassName="text-foreground"
+              />
             </div>
           </>
         ),
@@ -1984,7 +2082,33 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
         )}
 
         {/* Token, Billing & Thinking Details */}
-        <div className="grid gap-4 xl:grid-cols-3">
+        <div className="grid gap-4 xl:grid-cols-4">
+          <div className={DETAIL_PANEL_CLASS}>
+            <div className={DETAIL_PANEL_HEADER_CLASS}>{t("requestKey")}</div>
+            <div className={cn(DETAIL_PANEL_BODY_CLASS, "space-y-2")}>
+              <div className="flex items-start gap-2">
+                <span className="text-muted-foreground">{t("requestKey")}:</span>
+                <div className="ml-auto min-w-0 max-w-[70%] text-right">
+                  <TruncatedTextTooltip
+                    text={requestKeyMeta.primaryLabel}
+                    className={cn(
+                      "text-right",
+                      requestKeyMeta.hasKeyData ? "text-foreground" : "text-muted-foreground"
+                    )}
+                  />
+                </div>
+              </div>
+              {requestKeyMeta.secondaryLabel ? (
+                <div className="flex items-start gap-2">
+                  <span className="text-muted-foreground">{t("keyPrefix")}:</span>
+                  <span className="ml-auto font-mono text-foreground break-all">
+                    {requestKeyMeta.secondaryLabel}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
           <div className={DETAIL_PANEL_CLASS}>
             <div className={DETAIL_PANEL_HEADER_CLASS}>{t("tokenDetails")}</div>
             <div className={DETAIL_PANEL_BODY_CLASS}>
@@ -2244,6 +2368,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
     const hasSessionDiagnostics = !!log.session_id || !!log.session_id_compensated;
     const hasHeaderDiff = !!log.header_diff;
     const hasThinkingConfig = !!log.thinking_config;
+    const hasKeyIdentity = !!log.api_key_name || !!log.api_key_prefix;
     const { displayTotalTokens } = getDisplayTokenMetrics({
       promptTokens: log.prompt_tokens,
       completionTokens: log.completion_tokens,
@@ -2260,6 +2385,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
       hasFailover ||
       hasRoutingDecision ||
       hasSessionDiagnostics ||
+      hasKeyIdentity ||
       hasThinkingConfig ||
       hasHeaderDiff ||
       displayTotalTokens > 0;
@@ -2603,6 +2729,16 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                 locale: dateLocale,
                               })}
                             </span>
+                            <div className="inline-flex min-w-0 items-center text-muted-foreground">
+                              <span className="mr-1 shrink-0">•</span>
+                              <RequestKeyIdentity
+                                keyName={log.api_key_name}
+                                keyPrefix={log.api_key_prefix}
+                                compact
+                                className="min-w-0 max-w-full"
+                                textClassName="text-muted-foreground"
+                              />
+                            </div>
                             {upstreamDisplayName && (
                               <span className="min-w-0 text-muted-foreground break-all">
                                 • {upstreamDisplayName}
@@ -2769,6 +2905,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                           <TableRow>
                             <TableHead className="w-9 px-1.5"></TableHead>
                             <TableHead className="w-[92px] px-1.5">{t("tableTime")}</TableHead>
+                            <TableHead className="w-[148px] px-1.5">{t("tableKey")}</TableHead>
                             <TableHead className="hidden lg:table-cell w-[96px] px-1.5">
                               {t("tableUpstream")}
                             </TableHead>
@@ -2855,6 +2992,14 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                   addSuffix: true,
                                   locale: dateLocale,
                                 })}
+                              </TableCell>
+                              <TableCell className="w-[148px] px-1.5 py-1.5 text-[10px] min-w-0">
+                                <RequestKeyIdentity
+                                  keyName={log.api_key_name}
+                                  keyPrefix={log.api_key_prefix}
+                                  compact
+                                  className="min-w-0 w-full"
+                                />
                               </TableCell>
                               <TableCell className="hidden lg:table-cell w-[96px] px-1.5 py-1.5 min-w-0 overflow-hidden text-[10px]">
                                 <RoutingDecisionTimeline

@@ -22,6 +22,8 @@ const STALE_REQUEST_LOG_ERROR_MESSAGE =
 
 export interface LogRequestInput {
   apiKeyId: string | null;
+  apiKeyName?: string | null;
+  apiKeyPrefix?: string | null;
   upstreamId: string | null;
   method: string | null;
   path: string | null;
@@ -65,6 +67,8 @@ export interface LogRequestInput {
  */
 export interface StartRequestLogInput {
   apiKeyId: string | null;
+  apiKeyName?: string | null;
+  apiKeyPrefix?: string | null;
   upstreamId: string | null;
   method: string | null;
   path: string | null;
@@ -85,6 +89,8 @@ export interface StartRequestLogInput {
  */
 export interface UpdateRequestLogInput {
   apiKeyId?: string | null;
+  apiKeyName?: string | null;
+  apiKeyPrefix?: string | null;
   upstreamId?: string | null;
   method?: string | null;
   path?: string | null;
@@ -144,6 +150,8 @@ export interface FailoverAttempt {
 export interface RequestLogResponse {
   id: string;
   apiKeyId: string | null;
+  apiKeyName: string | null;
+  apiKeyPrefix: string | null;
   upstreamId: string | null;
   upstreamName: string | null;
   method: string | null;
@@ -319,6 +327,8 @@ export async function logRequestStart(input: StartRequestLogInput): Promise<Requ
     .insert(requestLogs)
     .values({
       apiKeyId: input.apiKeyId,
+      apiKeyName: input.apiKeyName ?? null,
+      apiKeyPrefix: input.apiKeyPrefix ?? null,
       upstreamId: input.upstreamId,
       method: input.method,
       path: input.path,
@@ -367,6 +377,8 @@ export async function updateRequestLog(
   const updateValues: Partial<typeof requestLogs.$inferInsert> = {};
 
   if (input.apiKeyId !== undefined) updateValues.apiKeyId = input.apiKeyId;
+  if (input.apiKeyName !== undefined) updateValues.apiKeyName = input.apiKeyName;
+  if (input.apiKeyPrefix !== undefined) updateValues.apiKeyPrefix = input.apiKeyPrefix;
   if (input.upstreamId !== undefined) updateValues.upstreamId = input.upstreamId;
   if (input.method !== undefined) updateValues.method = input.method;
   if (input.path !== undefined) updateValues.path = input.path;
@@ -444,6 +456,8 @@ export async function logRequest(input: LogRequestInput): Promise<RequestLog> {
     .insert(requestLogs)
     .values({
       apiKeyId: input.apiKeyId,
+      apiKeyName: input.apiKeyName ?? null,
+      apiKeyPrefix: input.apiKeyPrefix ?? null,
       upstreamId: input.upstreamId,
       method: input.method,
       path: input.path,
@@ -719,6 +733,7 @@ export async function listRequestLogs(
     limit: pageSize,
     offset,
     with: {
+      apiKey: true,
       upstream: true,
       billingSnapshot: true,
     },
@@ -727,6 +742,8 @@ export async function listRequestLogs(
   const items: RequestLogResponse[] = logs.map((log) => ({
     id: log.id,
     apiKeyId: log.apiKeyId,
+    apiKeyName: log.apiKeyName ?? log.apiKey?.name ?? null,
+    apiKeyPrefix: log.apiKeyPrefix ?? log.apiKey?.keyPrefix ?? null,
     upstreamId: log.upstreamId,
     upstreamName: log.upstream?.name ?? null,
     method: log.method,

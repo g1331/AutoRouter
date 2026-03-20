@@ -174,6 +174,8 @@ export const requestLogs = sqliteTable(
       .primaryKey()
       .$defaultFn(() => randomUUID()),
     apiKeyId: text("api_key_id").references(() => apiKeys.id, { onDelete: "set null" }),
+    apiKeyName: text("api_key_name"),
+    apiKeyPrefix: text("api_key_prefix"),
     upstreamId: text("upstream_id").references(() => upstreams.id, { onDelete: "set null" }),
     method: text("method"),
     path: text("path"),

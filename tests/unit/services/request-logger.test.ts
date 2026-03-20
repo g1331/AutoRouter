@@ -1001,6 +1001,8 @@ describe("request-logger", () => {
       expect(result.page).toBe(1);
       expect(result.pageSize).toBe(20);
       expect(result.totalPages).toBe(1);
+      expect(result.items[0].apiKeyName).toBeNull();
+      expect(result.items[0].apiKeyPrefix).toBeNull();
     });
 
     it("should return logs with routing decision fields", async () => {
@@ -1011,6 +1013,12 @@ describe("request-logger", () => {
         {
           id: "log-1",
           apiKeyId: "key-1",
+          apiKeyName: "Snapshot Key",
+          apiKeyPrefix: "sk-snap",
+          apiKey: {
+            name: "Renamed Key",
+            keyPrefix: "sk-live",
+          },
           upstreamId: "upstream-1",
           upstream: { name: "openai-primary" },
           method: "POST",
@@ -1055,6 +1063,8 @@ describe("request-logger", () => {
       const result = await listRequestLogs(1, 20);
 
       expect(result.items).toHaveLength(1);
+      expect(result.items[0].apiKeyName).toBe("Snapshot Key");
+      expect(result.items[0].apiKeyPrefix).toBe("sk-snap");
       expect(result.items[0].upstreamName).toBe("openai-primary");
       expect(result.items[0].routingType).toBe("group");
       expect(result.items[0].groupName).toBe("openai-group");

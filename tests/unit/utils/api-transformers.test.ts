@@ -445,6 +445,8 @@ describe("api-transformers", () => {
       const log = {
         id: "log-123",
         apiKeyId: "key-456",
+        apiKeyName: "Production Key",
+        apiKeyPrefix: "sk-prod",
         upstreamId: "upstream-789",
         upstreamName: "openai-primary",
         method: "POST",
@@ -492,6 +494,8 @@ describe("api-transformers", () => {
       expect(result).toEqual({
         id: "log-123",
         api_key_id: "key-456",
+        api_key_name: "Production Key",
+        api_key_prefix: "sk-prod",
         upstream_id: "upstream-789",
         upstream_name: "openai-primary",
         method: "POST",
@@ -629,6 +633,8 @@ describe("api-transformers", () => {
       const log = {
         id: "log-456",
         apiKeyId: null,
+        apiKeyName: null,
+        apiKeyPrefix: null,
         upstreamId: null,
         upstreamName: null,
         method: null,
@@ -655,6 +661,8 @@ describe("api-transformers", () => {
       const result = transformRequestLogToApi(log as never);
 
       expect(result.api_key_id).toBeNull();
+      expect(result.api_key_name).toBeNull();
+      expect(result.api_key_prefix).toBeNull();
       expect(result.upstream_id).toBeNull();
       expect(result.upstream_name).toBeNull();
       expect(result.method).toBeNull();
@@ -1016,6 +1024,8 @@ describe("api-transformers", () => {
           {
             id: "log-1",
             apiKeyId: "key-1",
+            apiKeyName: "Production Key",
+            apiKeyPrefix: "sk-prod",
             upstreamId: "upstream-1",
             upstreamName: "openai-primary",
             method: "POST",
@@ -1061,6 +1071,8 @@ describe("api-transformers", () => {
       expect(result.page).toBe(5);
       expect(result.page_size).toBe(50);
       expect(result.total_pages).toBe(20);
+      expect(result.items[0].api_key_name).toBe("Production Key");
+      expect(result.items[0].api_key_prefix).toBe("sk-prod");
       expect(result.items[0].prompt_tokens).toBe(50);
       expect(result.items[0].thinking_config).toEqual({
         provider: "google",

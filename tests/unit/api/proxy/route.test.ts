@@ -593,7 +593,14 @@ describe("proxy route upstream selection", () => {
     });
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
-      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      {
+        id: "key-1",
+        keyHash: "hash-1",
+        keyPrefix: "sk-prod",
+        name: "Quota Key",
+        expiresAt: null,
+        isActive: true,
+      },
     ]);
     vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
       { upstreamId: "up-openai" },
@@ -661,6 +668,8 @@ describe("proxy route upstream selection", () => {
     expect(logRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         apiKeyId: "key-1",
+        apiKeyName: "Quota Key",
+        apiKeyPrefix: "sk-prod",
         upstreamId: null,
         path: "chat/completions",
         model: "gpt-5.2",
@@ -702,7 +711,14 @@ describe("proxy route upstream selection", () => {
     };
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
-      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      {
+        id: "key-1",
+        keyHash: "hash-1",
+        keyPrefix: "sk-test",
+        name: "Responses Key",
+        expiresAt: null,
+        isActive: true,
+      },
     ]);
     mockApiKeyQuotaTracker.getQuotaStatus.mockReturnValueOnce({
       apiKeyId: "key-1",
@@ -806,7 +822,14 @@ describe("proxy route upstream selection", () => {
 
     vi.mocked(resolveBillingModelPrice).mockResolvedValueOnce(null);
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
-      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      {
+        id: "key-1",
+        keyHash: "hash-1",
+        keyPrefix: "sk-test",
+        name: "Responses Key",
+        expiresAt: null,
+        isActive: true,
+      },
     ]);
     mockApiKeyQuotaTracker.getQuotaStatus.mockReturnValueOnce({
       apiKeyId: "key-1",
@@ -884,7 +907,14 @@ describe("proxy route upstream selection", () => {
     const { logRequestStart, updateRequestLog } = await import("@/lib/services/request-logger");
 
     vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
-      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      {
+        id: "key-1",
+        keyHash: "hash-1",
+        keyPrefix: "sk-test",
+        name: "Responses Key",
+        expiresAt: null,
+        isActive: true,
+      },
     ]);
     vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
       { upstreamId: "up-codex" },
@@ -955,6 +985,8 @@ describe("proxy route upstream selection", () => {
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(codexUpstream);
     expect(logRequestStart).toHaveBeenCalledWith(
       expect.objectContaining({
+        apiKeyName: "Responses Key",
+        apiKeyPrefix: "sk-test",
         reasoningEffort: "high",
       })
     );

@@ -329,6 +329,8 @@ export function transformPaginatedApiKeys(
 export interface RequestLogApiResponse {
   id: string;
   api_key_id: string | null;
+  api_key_name: string | null;
+  api_key_prefix: string | null;
   upstream_id: string | null;
   upstream_name: string | null;
   method: string | null;
@@ -717,6 +719,8 @@ export function transformRequestLogToApi(log: RequestLogResponse): RequestLogApi
   return {
     id: log.id,
     api_key_id: log.apiKeyId,
+    api_key_name: log.apiKeyName,
+    api_key_prefix: log.apiKeyPrefix,
     upstream_id: log.upstreamId,
     upstream_name: log.upstreamName,
     method: log.method,
