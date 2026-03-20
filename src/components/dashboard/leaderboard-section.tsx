@@ -111,11 +111,12 @@ function MiniPieChart({ data, label }: { data: DistributionItem[]; label: string
               ))}
             </Pie>
             <Tooltip
-              formatter={(value: number | undefined, name: string | undefined) => {
-                if (value == null) return ["-", name ?? ""];
+              formatter={(value, name) => {
+                const numericValue = typeof value === "number" ? value : Number(value);
+                if (!Number.isFinite(numericValue) || total <= 0) return ["-", String(name ?? "")];
                 return [
-                  `${formatNumber(value)} (${((value / total) * 100).toFixed(1)}%)`,
-                  name ?? "",
+                  `${formatNumber(numericValue)} (${((numericValue / total) * 100).toFixed(1)}%)`,
+                  String(name ?? ""),
                 ];
               }}
               contentStyle={TOOLTIP_CONTENT_STYLE}
