@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile } from "fs/promises";
+import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 import type { FailoverAttempt } from "./request-logger";
 
@@ -489,8 +489,11 @@ export function buildFixture(params: BuildFixtureParams): TrafficRecordFixture {
 export async function recordTrafficFixture(fixture: TrafficRecordFixture): Promise<string> {
   const timestamp = fixture.meta.createdAt.replace(/[:.]/g, "-");
   const filePath = buildFixturePath(fixture.meta.providerType, fixture.meta.route, timestamp);
+  const latestPath = path.join(path.dirname(filePath), "latest.json");
+  const payload = JSON.stringify(fixture, null, 2);
   await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, JSON.stringify(fixture, null, 2), "utf-8");
+  await writeFile(filePath, payload, "utf-8");
+  await writeFile(latestPath, payload, "utf-8");
   return filePath;
 }
 
@@ -502,16 +505,12 @@ export async function readLatestFixture(
   route: string
 ): Promise<TrafficRecordFixture | null> {
   const dir = path.join(
-    getFixtureRoot(),
+    DEFAULT_FIXTURE_DIR,
     sanitizePathSegment(provider),
     sanitizePathSegment(route)
   );
   try {
-    const entries = await readdir(dir);
-    const candidates = entries.filter((entry) => entry.endsWith(".json")).sort();
-    const latest = candidates[candidates.length - 1];
-    if (!latest) return null;
-    const data = await readFile(path.join(dir, latest), "utf-8");
+    const data = await readFile(path.join(dir, "latest.json"), "utf-8");
     return JSON.parse(data) as TrafficRecordFixture;
   } catch {
     return null;
