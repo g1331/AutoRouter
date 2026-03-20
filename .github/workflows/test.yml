@@ -11,6 +11,7 @@ on:
       - "*.json"
       - "*.ts"
       - "*.mjs"
+      - ".github/code-argus/**"
       - ".github/workflows/**"
       - ".github/workflows/test.yml"
   pull_request:
@@ -23,6 +24,7 @@ on:
       - "*.json"
       - "*.ts"
       - "*.mjs"
+      - ".github/code-argus/**"
       - ".github/workflows/**"
       - ".github/workflows/test.yml"
 
