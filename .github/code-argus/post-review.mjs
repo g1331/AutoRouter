@@ -163,12 +163,22 @@ export default async function postReview({ github, context }) {
   try {
     output = fs.readFileSync("/tmp/review-results/review_output.json", "utf8");
   } catch {
-    await postIssueComment(github, context, prNumber, createRetryBody("❌ No output received from review service."));
+    await postIssueComment(
+      github,
+      context,
+      prNumber,
+      createRetryBody("❌ No output received from review service.")
+    );
     return;
   }
 
   if (!output || output.trim() === "") {
-    await postIssueComment(github, context, prNumber, createRetryBody("❌ Empty output from review service."));
+    await postIssueComment(
+      github,
+      context,
+      prNumber,
+      createRetryBody("❌ Empty output from review service.")
+    );
     return;
   }
 
@@ -176,7 +186,12 @@ export default async function postReview({ github, context }) {
   try {
     review = parseReviewOutput(output);
   } catch {
-    await postIssueComment(github, context, prNumber, createRetryBody("❌ Failed to parse review output."));
+    await postIssueComment(
+      github,
+      context,
+      prNumber,
+      createRetryBody("❌ Failed to parse review output.")
+    );
     return;
   }
 
@@ -231,7 +246,9 @@ export default async function postReview({ github, context }) {
             body: comment.body,
           });
         } catch (error) {
-          console.log(`Failed to post comment on ${comment.path}:${comment.line}: ${error.message}`);
+          console.log(
+            `Failed to post comment on ${comment.path}:${comment.line}: ${error.message}`
+          );
         }
       }
     }
