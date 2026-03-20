@@ -277,5 +277,5 @@ jobs:
           REVIEW_RESULT: ${{ needs.review.result }}
         with:
           script: |
-            const postReview = require('./.github/code-argus/post-review.cjs');
+            const { default: postReview } = await import(`file://${process.env.GITHUB_WORKSPACE}/.github/code-argus/post-review.mjs`);
             await postReview({ github, context });

@@ -1,4 +1,4 @@
-const fs = require("node:fs");
+import fs from "node:fs";
 
 function createRetryBody(message) {
   return `## Code-Argus Review\n\n${message}\n\nComment \`code-argus review\` to retry.`;
@@ -7,7 +7,7 @@ function createRetryBody(message) {
 function parseReviewOutput(output) {
   try {
     return JSON.parse(output.trim());
-  } catch (directParseError) {
+  } catch {
     const jsonMatch = output.match(/\{[\s\S]*"summary"[\s\S]*"comments"[\s\S]*\}(?=[^}]*$)/);
     if (!jsonMatch) {
       throw new Error("No JSON object found");
@@ -137,7 +137,7 @@ async function postIssueComment(github, context, issueNumber, body) {
   });
 }
 
-module.exports = async ({ github, context }) => {
+export default async function postReview({ github, context }) {
   const prNumber = Number.parseInt(process.env.PR_NUMBER ?? "", 10);
   const headSha = process.env.HEAD_SHA ?? "";
   const reviewResult = process.env.REVIEW_RESULT ?? "";
@@ -162,7 +162,7 @@ module.exports = async ({ github, context }) => {
   let output;
   try {
     output = fs.readFileSync("/tmp/review-results/review_output.json", "utf8");
-  } catch (error) {
+  } catch {
     await postIssueComment(github, context, prNumber, createRetryBody("❌ No output received from review service."));
     return;
   }
@@ -175,7 +175,7 @@ module.exports = async ({ github, context }) => {
   let review;
   try {
     review = parseReviewOutput(output);
-  } catch (error) {
+  } catch {
     await postIssueComment(github, context, prNumber, createRetryBody("❌ Failed to parse review output."));
     return;
   }
@@ -242,4 +242,4 @@ module.exports = async ({ github, context }) => {
   }
 
   console.log("Review published successfully");
-};
+}
