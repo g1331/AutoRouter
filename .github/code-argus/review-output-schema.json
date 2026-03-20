@@ -1,0 +1,93 @@
+{
+  "type": "object",
+  "properties": {
+    "summary": {
+      "type": "object",
+      "properties": {
+        "total_issues": {
+          "type": "integer"
+        },
+        "high": {
+          "type": "integer"
+        },
+        "medium": {
+          "type": "integer"
+        },
+        "low": {
+          "type": "integer"
+        },
+        "focus_areas": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "pr_summary": {
+          "type": "string"
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "technical_notes": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "total_issues",
+        "high",
+        "medium",
+        "low",
+        "focus_areas",
+        "pr_summary",
+        "changes",
+        "technical_notes"
+      ],
+      "additionalProperties": false
+    },
+    "comments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "line_start": {
+            "type": "integer"
+          },
+          "line_end": {
+            "type": "integer"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["high", "medium", "low"]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "suggestion": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "line_start",
+          "line_end",
+          "severity",
+          "title",
+          "description",
+          "suggestion"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["summary", "comments"],
+  "additionalProperties": false
+}

@@ -184,138 +184,23 @@ jobs:
             fs.writeFileSync('/tmp/pr_body.txt', pr.body || '', 'utf8');
 
       - name: Prepare prompt file
+        env:
+          BASE_REF: ${{ steps.context.outputs.base_ref }}
+          MAX_COMMENTS: ${{ steps.config.outputs.max_comments }}
+          MIN_SEVERITY: ${{ steps.config.outputs.min_severity }}
+          LANGUAGE: ${{ steps.config.outputs.language }}
         run: |
-          mkdir -p .github/codex/prompts
+          git diff origin/$BASE_REF...HEAD > /tmp/pr_diff.txt
+          python .github/code-argus/prepare_prompt.py
 
-          # Generate diff (HEAD is the pinned PR SHA)
-          git diff origin/${{ steps.context.outputs.base_ref }}...HEAD > /tmp/pr_diff.txt
-
-          # Generate prompt file
-          cat > .github/codex/prompts/review.md << 'PROMPT_EOF'
-          # Code-Argus Review Instructions
-
-          You are Code-Argus, an expert code reviewer focused on high-impact issues.
-
-          ## Core Principles
-
-          1. **High signal-to-noise**: Only comment if it would likely change a merge decision
-          2. **No style nits**: Never comment on formatting, naming conventions, or subjective preferences
-          3. **Actionable feedback**: Every comment must include a concrete fix
-
-          ## Review Focus Areas
-
-          - **Correctness**: Logic errors, edge cases, null handling, race conditions
-          - **Security**: XSS, injection, auth bypass, sensitive data exposure
-          - **Architecture**: Breaking changes, API compatibility, cross-system impact
-          - **Testing**: Missing tests for critical paths, inadequate coverage
-
-          Do NOT comment on:
-          - Code style, formatting, or naming conventions
-          - Minor optimizations that don't affect functionality
-          - Personal preferences or "nice to have" suggestions
-
-          ## Configuration
-
-          PROMPT_EOF
-
-          echo "- Maximum comments: ${{ steps.config.outputs.max_comments }}" >> .github/codex/prompts/review.md
-          echo "- Minimum severity: ${{ steps.config.outputs.min_severity }}" >> .github/codex/prompts/review.md
-          echo "- Language: ${{ steps.config.outputs.language }} (if 'auto', use the same language as the PR)" >> .github/codex/prompts/review.md
-          echo "" >> .github/codex/prompts/review.md
-
-          cat >> .github/codex/prompts/review.md << 'PROMPT_EOF'
-          ## Output Format
-
-          Return a JSON object with this exact structure:
-
-          ```json
+      - name: Load output schema
+        id: schema
+        run: |
           {
-            "summary": {
-              "total_issues": 0,
-              "high": 0,
-              "medium": 0,
-              "low": 0,
-              "focus_areas": [],
-              "pr_summary": "One-sentence summary of what this PR does",
-              "changes": [
-                "First major change or feature added",
-                "Second major change or feature added"
-              ],
-              "technical_notes": "Optional technical notes about implementation details, trade-offs, or important considerations (can be empty string if none)"
-            },
-            "comments": []
-          }
-          ```
-
-          ### Summary Fields (REQUIRED)
-          - `pr_summary`: A concise one-sentence summary of the PR's purpose and impact
-          - `changes`: Array of 2-6 bullet points describing the main changes (use imperative mood: "Add...", "Update...", "Fix...")
-          - `technical_notes`: Any important technical details reviewers should know (leave empty string if none)
-
-          Each comment in the array should have:
-          - `file`: path to the file (e.g., "src/api/routes.ts")
-          - `line_start`: starting line number
-          - `line_end`: ending line number (same as line_start if single line)
-          - `severity`: "high", "medium", or "low"
-          - `title`: brief issue title
-          - `description`: why this is a problem
-          - `suggestion`: the fixed code (will be shown as GitHub suggested change)
-
-          ### CRITICAL: GitHub API Constraints for Inline Comments
-
-          GitHub only allows review comments on lines that are **actually part of the PR diff**. Your comments will FAIL if they violate these rules:
-
-          1. **`file` MUST be a file that appears in the PR diff** (listed in "## PR Diff" section below)
-             - Files not modified by this PR cannot receive comments
-             - Example: If `.env.example` is not in the diff, you CANNOT comment on it
-
-          2. **`line_start` and `line_end` MUST point to lines with `+` prefix in the diff**
-             - These are the NEW/MODIFIED lines in the PR
-             - Lines with `-` prefix (deleted lines) or unchanged context lines CANNOT receive comments
-             - The line number should be the actual line number in the NEW version of the file
-
-          3. **`suggestion` MUST be valid replacement code for the exact lines specified**
-             - It replaces the content from `line_start` to `line_end`
-             - Must maintain proper indentation matching the original code
-
-          **If you find an issue in code NOT in the diff:**
-          - Do NOT create a comment for it
-          - Instead, mention it in `summary.technical_notes` field
-          - Example: "Note: Related code in `config.py:45` may also need updating but is outside this PR's scope"
-
-          ## Instructions
-
-          1. You MAY read any file in the repository and run searches to understand context
-          2. **IMPORTANT: Use codebase-retrieval for code understanding**
-             - Prioritize using `codebase-retrieval` tool to retrieve and understand code context
-             - Before analyzing code, use `codebase-retrieval` to get detailed information about:
-               - Related classes, methods, and functions
-               - Dependencies and imports
-               - Usage patterns and call sites
-             - Request all relevant symbols in a single call for efficiency
-             - Only fall back to file reading if `codebase-retrieval` is unavailable
-          3. Review ONLY the changes in this PR (diff provided below); comments MUST target lines within the diff
-          4. Sort issues by severity (high first), then limit to max_comments
-          5. If language is 'auto', respond in the same language as the PR title/description
-          6. If no significant issues found, return empty comments array
-          7. Output ONLY the JSON object, no other text
-          8. VERIFY each comment's file and line are in the diff before including it
-
-          ## PR Information
-
-          PROMPT_EOF
-
-          echo -n "**Title**: " >> .github/codex/prompts/review.md
-          cat /tmp/pr_title.txt >> .github/codex/prompts/review.md
-          echo "" >> .github/codex/prompts/review.md
-          echo "**Description**:" >> .github/codex/prompts/review.md
-          cat /tmp/pr_body.txt >> .github/codex/prompts/review.md
-          echo "" >> .github/codex/prompts/review.md
-          echo "## PR Diff" >> .github/codex/prompts/review.md
-          echo "" >> .github/codex/prompts/review.md
-          echo '```diff' >> .github/codex/prompts/review.md
-          cat /tmp/pr_diff.txt >> .github/codex/prompts/review.md
-          echo '```' >> .github/codex/prompts/review.md
+            echo 'json<<EOF'
+            cat .github/code-argus/review-output-schema.json
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
 
       # ============================================================
       # Step 4: Run Code-Argus Review
@@ -333,46 +218,7 @@ jobs:
           # Allow bots for repository_dispatch (triggered by comment workflow as github-actions[bot])
           allow-bots: ${{ github.event_name == 'repository_dispatch' }}
           # MCP server is configured via ~/.codex/config.toml (see "Configure Codex MCP servers" step)
-          output-schema: |
-            {
-              "type": "object",
-              "properties": {
-                "summary": {
-                  "type": "object",
-                  "properties": {
-                    "total_issues": { "type": "integer" },
-                    "high": { "type": "integer" },
-                    "medium": { "type": "integer" },
-                    "low": { "type": "integer" },
-                    "focus_areas": { "type": "array", "items": { "type": "string" } },
-                    "pr_summary": { "type": "string" },
-                    "changes": { "type": "array", "items": { "type": "string" } },
-                    "technical_notes": { "type": "string" }
-                  },
-                  "required": ["total_issues", "high", "medium", "low", "focus_areas", "pr_summary", "changes", "technical_notes"],
-                  "additionalProperties": false
-                },
-                "comments": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "file": { "type": "string" },
-                      "line_start": { "type": "integer" },
-                      "line_end": { "type": "integer" },
-                      "severity": { "type": "string", "enum": ["high", "medium", "low"] },
-                      "title": { "type": "string" },
-                      "description": { "type": "string" },
-                      "suggestion": { "type": "string" }
-                    },
-                    "required": ["file", "line_start", "line_end", "severity", "title", "description", "suggestion"],
-                    "additionalProperties": false
-                  }
-                }
-              },
-              "required": ["summary", "comments"],
-              "additionalProperties": false
-            }
+          output-schema: ${{ steps.schema.outputs.json }}
 
       # ============================================================
       # Step 5: Save results as artifact for publish workflow
@@ -404,6 +250,11 @@ jobs:
     needs: review
     if: always() && needs.review.result == 'success'
     steps:
+      - name: Checkout repository scripts
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
       - name: Download review artifact
         uses: actions/download-artifact@v8
         with:
@@ -426,226 +277,5 @@ jobs:
           REVIEW_RESULT: ${{ needs.review.result }}
         with:
           script: |
-            const fs = require('fs');
-            const prNumber = parseInt(process.env.PR_NUMBER, 10);
-            const headSha = process.env.HEAD_SHA;
-            const reviewResult = process.env.REVIEW_RESULT;
-
-            if (!prNumber || Number.isNaN(prNumber)) {
-              console.log('Invalid PR number');
-              return;
-            }
-
-            // Handle failed review
-            if (reviewResult !== 'success') {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: prNumber,
-                body: `## Code-Argus Review\n\n❌ Review failed. Please check the [workflow logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n\nComment \`code-argus review\` to retry.`
-              });
-              return;
-            }
-
-            // Read review output
-            let output;
-            try {
-              output = fs.readFileSync('/tmp/review-results/review_output.json', 'utf8');
-            } catch (e) {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: prNumber,
-                body: `## Code-Argus Review\n\n❌ No output received from review service.\n\nComment \`code-argus review\` to retry.`
-              });
-              return;
-            }
-
-            if (!output || output.trim() === '') {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: prNumber,
-                body: `## Code-Argus Review\n\n❌ Empty output from review service.\n\nComment \`code-argus review\` to retry.`
-              });
-              return;
-            }
-
-            // Parse review output
-            let review;
-            try {
-              review = JSON.parse(output.trim());
-            } catch (directParseError) {
-              try {
-                const jsonMatch = output.match(/\{[\s\S]*"summary"[\s\S]*"comments"[\s\S]*\}(?=[^}]*$)/);
-                if (!jsonMatch) {
-                  throw new Error('No JSON object found');
-                }
-                review = JSON.parse(jsonMatch[0]);
-              } catch (extractError) {
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: prNumber,
-                  body: `## Code-Argus Review\n\n❌ Failed to parse review output.\n\nComment \`code-argus review\` to retry.`
-                });
-                return;
-              }
-            }
-
-            const severityEmoji = { high: '🔴', medium: '🟡', low: '🟢' };
-
-            // Generate PR Summary section
-            let prSummarySection = '';
-            if (review.summary) {
-              const s = review.summary;
-              prSummarySection = `<details open>\n<summary>🤖 <strong>Code-Argus PR Summary</strong></summary>\n\n`;
-
-              if (s.pr_summary) {
-                prSummarySection += `**Summary**: ${s.pr_summary}\n\n`;
-              }
-
-              if (s.changes && s.changes.length > 0) {
-                prSummarySection += `**Changes**:\n`;
-                for (const change of s.changes) {
-                  prSummarySection += `- ${change}\n`;
-                }
-                prSummarySection += `\n`;
-              }
-
-              if (s.technical_notes && s.technical_notes.trim() !== '') {
-                prSummarySection += `**Technical Notes**: ${s.technical_notes}\n\n`;
-              }
-
-              prSummarySection += `🤖 Was this summary useful? React with 👍 or 👎\n`;
-              prSummarySection += `</details>\n\n---\n\n`;
-            }
-
-            // Prepare review comments
-            const reviewComments = [];
-            if (review.comments && review.comments.length > 0) {
-              for (const comment of review.comments) {
-                const emoji = severityEmoji[comment.severity] || '🟡';
-                let body = `## ${emoji} [${comment.severity.toUpperCase()}] ${comment.title}\n\n`;
-                body += `${comment.description}\n\n`;
-
-                if (comment.suggestion) {
-                  body += '```suggestion\n';
-                  body += comment.suggestion;
-                  if (!comment.suggestion.endsWith('\n')) body += '\n';
-                  body += '```\n';
-                }
-
-                const lineEnd = comment.line_end || comment.line_start;
-                const reviewComment = {
-                  path: comment.file,
-                  line: lineEnd,
-                  side: 'RIGHT',
-                  body
-                };
-
-                if (comment.line_start && comment.line_end && comment.line_start !== comment.line_end) {
-                  reviewComment.start_line = comment.line_start;
-                  reviewComment.start_side = 'RIGHT';
-                }
-
-                reviewComments.push(reviewComment);
-              }
-            }
-
-            // Generate summary
-            const summary = review.summary || { total_issues: 0, high: 0, medium: 0, low: 0, focus_areas: [] };
-            let summaryBody = prSummarySection;
-            summaryBody += `## Code-Argus Review\n\n`;
-
-            if (summary.total_issues === 0) {
-              summaryBody += `✅ Review completed. **No significant issues found.**\n\n`;
-              summaryBody += `The changes look good from a correctness, security, and architecture perspective.\n`;
-            } else {
-              summaryBody += `Review completed. **${summary.total_issues}** issue(s) found.\n\n`;
-              summaryBody += `| Severity | Count |\n`;
-              summaryBody += `|----------|-------|\n`;
-              if (summary.high > 0) summaryBody += `| 🔴 High | ${summary.high} |\n`;
-              if (summary.medium > 0) summaryBody += `| 🟡 Medium | ${summary.medium} |\n`;
-              if (summary.low > 0) summaryBody += `| 🟢 Low | ${summary.low} |\n`;
-
-              if (summary.focus_areas && summary.focus_areas.length > 0) {
-                summaryBody += `\n**Focus areas**: ${summary.focus_areas.join(', ')}\n`;
-              }
-
-              summaryBody += `\n---\n`;
-              summaryBody += `💡 **Tip**: Comment the following to trigger auto-fix:\n`;
-              summaryBody += `\`\`\`\n@autorouter-bot 请根据上方 Code-Argus review 反馈修复代码问题\n\`\`\`\n`;
-            }
-
-            summaryBody += `\n---\n`;
-            summaryBody += `Comment \`code-argus review\` to re-trigger review.`;
-
-            // Post the review
-            let reviewCreated = false;
-
-            try {
-              await github.rest.pulls.createReview({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: prNumber,
-                commit_id: headSha,
-                event: 'COMMENT',
-                body: summaryBody,
-                comments: reviewComments.length > 0 ? reviewComments : undefined
-              });
-              reviewCreated = true;
-            } catch (e) {
-              console.log(`Failed to create review with inline comments: ${e.message}`);
-            }
-
-            // Fallback: post summary and comments separately
-            if (!reviewCreated) {
-              try {
-                await github.rest.pulls.createReview({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  pull_number: prNumber,
-                  commit_id: headSha,
-                  event: 'COMMENT',
-                  body: summaryBody
-                });
-                reviewCreated = true;
-              } catch (e) {
-                console.log(`Failed to create summary review: ${e.message}`);
-              }
-
-              // Post inline comments individually
-              if (reviewComments.length > 0) {
-                for (const comment of reviewComments) {
-                  try {
-                    await github.rest.pulls.createReviewComment({
-                      owner: context.repo.owner,
-                      repo: context.repo.repo,
-                      pull_number: prNumber,
-                      commit_id: headSha,
-                      path: comment.path,
-                      line: comment.line,
-                      side: comment.side,
-                      start_line: comment.start_line,
-                      start_side: comment.start_side,
-                      body: comment.body
-                    });
-                  } catch (e) {
-                    console.log(`Failed to post comment on ${comment.path}:${comment.line}: ${e.message}`);
-                  }
-                }
-              }
-
-              // Last resort: post as issue comment
-              if (!reviewCreated) {
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: prNumber,
-                  body: summaryBody
-                });
-              }
-            }
-
-            console.log('Review published successfully');
+            const postReview = require('./.github/code-argus/post-review.cjs');
+            await postReview({ github, context });
