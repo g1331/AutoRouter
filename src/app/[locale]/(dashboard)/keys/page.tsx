@@ -73,33 +73,20 @@ export default function KeysPage() {
     <>
       <Topbar title={t("pageTitle")} />
 
-      <div className="mx-auto max-w-7xl space-y-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
-        <Card variant="outlined" className="border-divider bg-surface-200/70">
-          <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2 text-amber-500">
-                <Key className="h-4 w-4" aria-hidden="true" />
-                <span className="type-label-medium">{t("management")}</span>
-              </div>
-              <p className="type-body-medium text-muted-foreground">{t("managementDesc")}</p>
-            </div>
-            <CreateKeyDialog />
-          </CardContent>
-        </Card>
+      <div className="mx-auto max-w-7xl space-y-4 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <Key className="h-4 w-4 text-amber-500" aria-hidden="true" />
+            <span className="type-body-medium text-muted-foreground">{t("managementDesc")}</span>
+          </div>
+          <CreateKeyDialog />
+        </div>
 
         {isLoading ? (
           <KeysLoadingSkeleton loadingLabel={tCommon("loading")} />
         ) : (
           <>
-            <Card variant="outlined" className="border-divider bg-surface-200/70">
-              <CardContent className="p-4 sm:p-5">
-                <KeysTable
-                  keys={data?.items || []}
-                  onRevoke={setRevokeKey}
-                  onEdit={setEditingKey}
-                />
-              </CardContent>
-            </Card>
+            <KeysTable keys={data?.items || []} onRevoke={setRevokeKey} onEdit={setEditingKey} />
 
             {data && data.total_pages > 1 && (
               <Card variant="filled" className="border border-divider">

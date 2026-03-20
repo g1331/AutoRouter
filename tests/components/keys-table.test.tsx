@@ -182,9 +182,14 @@ describe("KeysTable", () => {
         />
       );
 
-      expect(screen.getByText("quotaPeriodRollingWithHours")).toBeInTheDocument();
+      // quotaExceeded badge shown in collapsed row
       expect(screen.getAllByText("quotaExceeded").length).toBeGreaterThan(0);
-      expect(screen.getByText("quotaPercentUsed")).toBeInTheDocument();
+
+      // Click to expand the quota details
+      const nameCell = screen.getByText("Test API Key").closest("td")!;
+      fireEvent.click(nameCell);
+
+      expect(screen.getByText("110.0%")).toBeInTheDocument();
       expect(screen.getByText("quotaRecoveryTime")).toBeInTheDocument();
     });
   });
@@ -560,7 +565,7 @@ describe("KeysTable", () => {
       render(<KeysTable keys={mockKeys} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       const searchInput = screen.getByPlaceholderText("searchKeys");
-      expect(searchInput).toHaveClass("max-w-md");
+      expect(searchInput).toHaveClass("max-w-sm");
     });
   });
 

@@ -291,114 +291,123 @@ export function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps
                 )}
               />
 
-              {accessMode === "restricted" && (
-                <FormField
-                  control={form.control}
-                  name="upstream_ids"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("selectUpstreams")} *</FormLabel>
-                      <FormDescription>{t("selectUpstreamsDesc")}</FormDescription>
-                      <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
-                        <div className="relative flex-1">
-                          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                          <Input
-                            value={upstreamSearchQuery}
-                            onChange={(event) => setUpstreamSearchQuery(event.target.value)}
-                            placeholder={t("searchUpstreams")}
-                            aria-label={t("searchUpstreams")}
-                            className="border-surface-400/70 bg-surface-200/70 pl-9 transition-colors duration-cf-fast hover:border-surface-400 focus-visible:border-amber-400/45 focus-visible:ring-amber-400/20"
-                          />
-                        </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="shrink-0"
-                          disabled={filteredUpstreamIds.length === 0}
-                          onClick={() => {
-                            if (allFilteredUpstreamsSelected) {
+              <div
+                className={cn(
+                  "grid transition-[grid-template-rows] duration-200 ease-out",
+                  accessMode === "restricted" ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                )}
+              >
+                <div className="overflow-hidden">
+                  <FormField
+                    control={form.control}
+                    name="upstream_ids"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("selectUpstreams")} *</FormLabel>
+                        <FormDescription>{t("selectUpstreamsDesc")}</FormDescription>
+                        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+                          <div className="relative flex-1">
+                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              value={upstreamSearchQuery}
+                              onChange={(event) => setUpstreamSearchQuery(event.target.value)}
+                              placeholder={t("searchUpstreams")}
+                              aria-label={t("searchUpstreams")}
+                              className="border-surface-400/70 bg-surface-200/70 pl-9 transition-colors duration-cf-fast hover:border-surface-400 focus-visible:border-amber-400/45 focus-visible:ring-amber-400/20"
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0"
+                            disabled={filteredUpstreamIds.length === 0}
+                            onClick={() => {
+                              if (allFilteredUpstreamsSelected) {
+                                field.onChange(
+                                  (field.value ?? []).filter(
+                                    (id) => !filteredUpstreamIds.includes(id)
+                                  )
+                                );
+                                return;
+                              }
+
                               field.onChange(
-                                (field.value ?? []).filter(
-                                  (id) => !filteredUpstreamIds.includes(id)
+                                Array.from(
+                                  new Set([...(field.value ?? []), ...filteredUpstreamIds])
                                 )
                               );
-                              return;
-                            }
-
-                            field.onChange(
-                              Array.from(new Set([...(field.value ?? []), ...filteredUpstreamIds]))
-                            );
-                          }}
-                        >
-                          {t(
-                            allFilteredUpstreamsSelected
-                              ? "deselectFilteredUpstreams"
-                              : "selectFilteredUpstreams"
-                          )}
-                        </Button>
-                      </div>
-                      {!upstreamsLoading && !!upstreams?.length && (
-                        <p className="mt-2 type-body-small text-muted-foreground">
-                          {t("filteredUpstreamsSelected", {
-                            selected: selectedFilteredCount,
-                            total: filteredUpstreamIds.length,
-                          })}
-                        </p>
-                      )}
-                      <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-[var(--shape-corner-medium)] border border-[rgb(var(--md-sys-color-outline-variant))] bg-[rgb(var(--md-sys-color-surface-container-low))] p-3">
-                        {upstreamsLoading ? (
-                          <div className="py-4 text-center type-body-medium text-[rgb(var(--md-sys-color-on-surface-variant))]">
-                            {tCommon("loading")}
-                          </div>
-                        ) : !upstreams || upstreams.length === 0 ? (
-                          <div className="py-4 text-center type-body-medium text-[rgb(var(--md-sys-color-on-surface-variant))]">
-                            {tCommon("noData")}
-                          </div>
-                        ) : filteredUpstreams.length === 0 ? (
-                          <div className="py-4 text-center type-body-medium text-[rgb(var(--md-sys-color-on-surface-variant))]">
-                            {t("noMatchingUpstreams")}
-                          </div>
-                        ) : (
-                          filteredUpstreams.map((upstream) => (
-                            <FormField
-                              key={upstream.id}
-                              control={form.control}
-                              name="upstream_ids"
-                              render={({ field }) => (
-                                <FormItem className="flex items-start space-x-3 space-y-0 rounded-[var(--shape-corner-small)] p-2 transition-colors hover:bg-[rgb(var(--md-sys-color-on-surface)_/_0.08)]">
-                                  <FormControl>
-                                    <Checkbox
-                                      checked={field.value?.includes(upstream.id)}
-                                      onCheckedChange={(checked) => {
-                                        const updated = checked
-                                          ? [...(field.value || []), upstream.id]
-                                          : field.value?.filter((id) => id !== upstream.id);
-                                        field.onChange(updated);
-                                      }}
-                                    />
-                                  </FormControl>
-                                  <div className="flex-1 space-y-1 leading-none">
-                                    <label className="cursor-pointer type-body-medium text-[rgb(var(--md-sys-color-on-surface))]">
-                                      {upstream.name}
-                                    </label>
-                                    {upstream.description && (
-                                      <p className="type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
-                                        {upstream.description}
-                                      </p>
-                                    )}
-                                  </div>
-                                </FormItem>
-                              )}
-                            />
-                          ))
+                            }}
+                          >
+                            {t(
+                              allFilteredUpstreamsSelected
+                                ? "deselectFilteredUpstreams"
+                                : "selectFilteredUpstreams"
+                            )}
+                          </Button>
+                        </div>
+                        {!upstreamsLoading && !!upstreams?.length && (
+                          <p className="mt-2 type-body-small text-muted-foreground">
+                            {t("filteredUpstreamsSelected", {
+                              selected: selectedFilteredCount,
+                              total: filteredUpstreamIds.length,
+                            })}
+                          </p>
                         )}
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
+                        <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-[var(--shape-corner-medium)] border border-[rgb(var(--md-sys-color-outline-variant))] bg-[rgb(var(--md-sys-color-surface-container-low))] p-3">
+                          {upstreamsLoading ? (
+                            <div className="py-4 text-center type-body-medium text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                              {tCommon("loading")}
+                            </div>
+                          ) : !upstreams || upstreams.length === 0 ? (
+                            <div className="py-4 text-center type-body-medium text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                              {tCommon("noData")}
+                            </div>
+                          ) : filteredUpstreams.length === 0 ? (
+                            <div className="py-4 text-center type-body-medium text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                              {t("noMatchingUpstreams")}
+                            </div>
+                          ) : (
+                            filteredUpstreams.map((upstream) => (
+                              <FormField
+                                key={upstream.id}
+                                control={form.control}
+                                name="upstream_ids"
+                                render={({ field }) => (
+                                  <FormItem className="flex items-start space-x-3 space-y-0 rounded-[var(--shape-corner-small)] p-2 transition-colors hover:bg-[rgb(var(--md-sys-color-on-surface)_/_0.08)]">
+                                    <FormControl>
+                                      <Checkbox
+                                        checked={field.value?.includes(upstream.id)}
+                                        onCheckedChange={(checked) => {
+                                          const updated = checked
+                                            ? [...(field.value || []), upstream.id]
+                                            : field.value?.filter((id) => id !== upstream.id);
+                                          field.onChange(updated);
+                                        }}
+                                      />
+                                    </FormControl>
+                                    <div className="flex-1 space-y-1 leading-none">
+                                      <label className="cursor-pointer type-body-medium text-[rgb(var(--md-sys-color-on-surface))]">
+                                        {upstream.name}
+                                      </label>
+                                      {upstream.description && (
+                                        <p className="type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                                          {upstream.description}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </FormItem>
+                                )}
+                              />
+                            ))
+                          )}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
 
               <div className="space-y-3 rounded-[var(--shape-corner-medium)] border border-[rgb(var(--md-sys-color-outline-variant))] bg-[rgb(var(--md-sys-color-surface-container-low))] p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -486,40 +495,45 @@ export function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps
                             )}
                           />
 
-                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <FormField
-                              control={form.control}
-                              name={`spending_rules.${index}.limit`}
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>{t("quotaLimitUsd")}</FormLabel>
-                                  <FormControl>
-                                    <Input
-                                      type="number"
-                                      min="0"
-                                      step="0.01"
-                                      value={field.value || ""}
-                                      onChange={(event) =>
-                                        field.onChange(
-                                          event.target.value === ""
-                                            ? undefined
-                                            : Number(event.target.value)
-                                        )
-                                      }
-                                      placeholder={t("quotaLimitPlaceholder")}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
+                          <FormField
+                            control={form.control}
+                            name={`spending_rules.${index}.limit`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>{t("quotaLimitUsd")}</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={field.value || ""}
+                                    onChange={(event) =>
+                                      field.onChange(
+                                        event.target.value === ""
+                                          ? undefined
+                                          : Number(event.target.value)
+                                      )
+                                    }
+                                    placeholder={t("quotaLimitPlaceholder")}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
 
-                            {rulePeriodType === "rolling" && (
+                          <div
+                            className={cn(
+                              "grid transition-[grid-template-rows] duration-200 ease-out",
+                              rulePeriodType === "rolling" ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                            )}
+                          >
+                            <div className="overflow-hidden">
                               <FormField
                                 control={form.control}
                                 name={`spending_rules.${index}.period_hours`}
                                 render={({ field }) => (
-                                  <FormItem>
+                                  <FormItem className="pt-3">
                                     <FormLabel>{t("quotaPeriodHours")}</FormLabel>
                                     <FormControl>
                                       <Input
@@ -542,7 +556,7 @@ export function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps
                                   </FormItem>
                                 )}
                               />
-                            )}
+                            </div>
                           </div>
                         </div>
                       );
