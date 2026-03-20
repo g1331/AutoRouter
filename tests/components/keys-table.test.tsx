@@ -57,6 +57,9 @@ describe("KeysTable", () => {
     description: "Test description",
     access_mode: "restricted",
     upstream_ids: ["upstream-1", "upstream-2"],
+    spending_rules: null,
+    spending_rule_statuses: [],
+    is_quota_exceeded: false,
     is_active: true,
     expires_at: null,
     created_at: "2024-06-01T10:00:00Z",
@@ -150,6 +153,44 @@ describe("KeysTable", () => {
       );
 
       expect(screen.getByText("unrestrictedAccess")).toBeInTheDocument();
+    });
+
+    it("renders rule-level quota status when spending data is present", () => {
+      render(
+        <KeysTable
+          keys={[
+            {
+              ...mockKey,
+              spending_rules: [{ period_type: "rolling", limit: 20, period_hours: 6 }],
+              spending_rule_statuses: [
+                {
+                  period_type: "rolling",
+                  period_hours: 6,
+                  current_spending: 22,
+                  spending_limit: 20,
+                  percent_used: 110,
+                  is_exceeded: true,
+                  resets_at: null,
+                  estimated_recovery_at: "2024-06-15T18:00:00Z",
+                },
+              ],
+              is_quota_exceeded: true,
+            },
+          ]}
+          onRevoke={mockOnRevoke}
+          onEdit={mockOnEdit}
+        />
+      );
+
+      // quotaExceeded badge shown in collapsed row
+      expect(screen.getAllByText("quotaExceeded").length).toBeGreaterThan(0);
+
+      // Click to expand the quota details
+      const nameCell = screen.getByText("Test API Key").closest("td")!;
+      fireEvent.click(nameCell);
+
+      expect(screen.getByText("110.0%")).toBeInTheDocument();
+      expect(screen.getByText("quotaRecoveryTime")).toBeInTheDocument();
     });
   });
 
@@ -524,7 +565,7 @@ describe("KeysTable", () => {
       render(<KeysTable keys={mockKeys} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       const searchInput = screen.getByPlaceholderText("searchKeys");
-      expect(searchInput).toHaveClass("max-w-md");
+      expect(searchInput).toHaveClass("max-w-sm");
     });
   });
 

@@ -8,6 +8,7 @@ import {
 } from "@/lib/utils/api-transformers";
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
+import { nullableSpendingRulesSchema } from "@/lib/services/spending-rules";
 
 const log = createLogger("admin-keys");
 
@@ -18,6 +19,7 @@ const createApiKeySchema = z
     upstream_ids: z.array(z.string().uuid()).optional().default([]),
     description: z.string().nullable().optional(),
     expires_at: z.string().datetime().nullable().optional(),
+    spending_rules: nullableSpendingRulesSchema,
   })
   .superRefine((data, ctx) => {
     const effectiveMode =
@@ -71,6 +73,7 @@ export async function POST(request: NextRequest) {
       upstreamIds: validated.upstream_ids,
       description: validated.description ?? null,
       expiresAt: validated.expires_at ? new Date(validated.expires_at) : null,
+      spendingRules: validated.spending_rules ?? null,
     };
 
     const result = await createApiKey(input);

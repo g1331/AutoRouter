@@ -163,6 +163,9 @@ describe("CreateKeyDialog", () => {
         description: null,
         access_mode: "restricted",
         upstream_ids: ["upstream-2"],
+        spending_rules: null,
+        spending_rule_statuses: [],
+        is_quota_exceeded: false,
         is_active: true,
         expires_at: null,
         created_at: "2024-01-01T00:00:00Z",
@@ -196,6 +199,7 @@ describe("CreateKeyDialog", () => {
           access_mode: "restricted",
           upstream_ids: ["upstream-2"],
           expires_at: null,
+          spending_rules: null,
         });
       });
     });
@@ -208,6 +212,48 @@ describe("CreateKeyDialog", () => {
       await waitFor(() => {
         expect(screen.getByText("cancel")).toBeInTheDocument();
         expect(screen.getByText("create")).toBeInTheDocument();
+      });
+    });
+
+    it("allows adding a spending rule and submits it", async () => {
+      mockCreateMutateAsync.mockResolvedValueOnce({
+        id: "key-2",
+        key_value: "sk-auto-quota",
+        key_prefix: "sk-auto-quota",
+        name: "Quota Key",
+        description: null,
+        access_mode: "unrestricted",
+        upstream_ids: [],
+        spending_rules: [{ period_type: "daily", limit: 12.5 }],
+        spending_rule_statuses: [],
+        is_quota_exceeded: false,
+        is_active: true,
+        expires_at: null,
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-01T00:00:00Z",
+      });
+
+      render(<CreateKeyDialog />, { wrapper: Wrapper });
+
+      fireEvent.click(screen.getByText("createKey"));
+      fireEvent.click(screen.getByText("addSpendingRule"));
+      fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
+        target: { value: "Quota Key" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("quotaLimitPlaceholder"), {
+        target: { value: "12.5" },
+      });
+      fireEvent.click(screen.getByText("create"));
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalledWith({
+          name: "Quota Key",
+          description: null,
+          access_mode: "unrestricted",
+          upstream_ids: [],
+          expires_at: null,
+          spending_rules: [{ period_type: "daily", limit: 12.5 }],
+        });
       });
     });
   });
@@ -241,6 +287,9 @@ describe("CreateKeyDialog", () => {
         description: null,
         access_mode: "unrestricted",
         upstream_ids: [],
+        spending_rules: null,
+        spending_rule_statuses: [],
+        is_quota_exceeded: false,
         is_active: true,
         expires_at: null,
         created_at: "2024-01-01T00:00:00Z",
@@ -267,6 +316,7 @@ describe("CreateKeyDialog", () => {
           access_mode: "unrestricted",
           upstream_ids: [],
           expires_at: null,
+          spending_rules: null,
         });
       });
     });
@@ -301,6 +351,9 @@ describe("CreateKeyDialog", () => {
         description: null,
         access_mode: "restricted",
         upstream_ids: ["upstream-1"],
+        spending_rules: null,
+        spending_rule_statuses: [],
+        is_quota_exceeded: false,
         is_active: true,
         expires_at: null,
         created_at: "2024-01-01T00:00:00Z",
@@ -332,6 +385,7 @@ describe("CreateKeyDialog", () => {
           access_mode: "restricted",
           upstream_ids: ["upstream-1"],
           expires_at: null,
+          spending_rules: null,
         });
       });
     });

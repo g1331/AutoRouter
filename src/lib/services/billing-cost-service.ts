@@ -7,6 +7,7 @@ import {
 } from "@/lib/services/billing-price-service";
 import { getProviderTypeForModel } from "@/lib/services/model-router";
 import { quotaTracker } from "@/lib/services/upstream-quota-tracker";
+import { apiKeyQuotaTracker } from "@/lib/services/api-key-quota-tracker";
 
 export type UnbillableReason =
   | "model_missing"
@@ -47,6 +48,7 @@ interface NormalizedBillingUsage {
 }
 
 interface ExistingBillingSnapshot {
+  apiKeyId: string | null;
   upstreamId: string | null;
   billingStatus: string;
   finalCost: number | null;
@@ -60,10 +62,12 @@ function parseSnapshotCost(value: number | null): number {
 function applyQuotaDeltaAfterSnapshotUpsert(
   previousSnapshot: ExistingBillingSnapshot | null,
   nextBillingStatus: "billed" | "unbilled",
+  nextApiKeyId: string | null,
   nextUpstreamId: string | null,
   nextFinalCost: number | null
 ): void {
   const deltaByUpstream = new Map<string, number>();
+  const deltaByApiKey = new Map<string, number>();
 
   if (previousSnapshot?.billingStatus === "billed" && previousSnapshot.upstreamId) {
     const previousCost = parseSnapshotCost(previousSnapshot.finalCost);
@@ -71,6 +75,15 @@ function applyQuotaDeltaAfterSnapshotUpsert(
       deltaByUpstream.set(
         previousSnapshot.upstreamId,
         (deltaByUpstream.get(previousSnapshot.upstreamId) ?? 0) - previousCost
+      );
+    }
+  }
+  if (previousSnapshot?.billingStatus === "billed" && previousSnapshot.apiKeyId) {
+    const previousCost = parseSnapshotCost(previousSnapshot.finalCost);
+    if (previousCost > 0) {
+      deltaByApiKey.set(
+        previousSnapshot.apiKeyId,
+        (deltaByApiKey.get(previousSnapshot.apiKeyId) ?? 0) - previousCost
       );
     }
   }
@@ -82,11 +95,20 @@ function applyQuotaDeltaAfterSnapshotUpsert(
       (deltaByUpstream.get(nextUpstreamId) ?? 0) + normalizedFinalCost
     );
   }
+  if (nextBillingStatus === "billed" && nextApiKeyId && normalizedFinalCost > 0) {
+    deltaByApiKey.set(nextApiKeyId, (deltaByApiKey.get(nextApiKeyId) ?? 0) + normalizedFinalCost);
+  }
 
   for (const [upstreamId, delta] of deltaByUpstream) {
     const normalizedDelta = Number(delta.toFixed(10));
     if (normalizedDelta !== 0) {
       quotaTracker.adjustSpending(upstreamId, normalizedDelta);
+    }
+  }
+  for (const [apiKeyId, delta] of deltaByApiKey) {
+    const normalizedDelta = Number(delta.toFixed(10));
+    if (normalizedDelta !== 0) {
+      apiKeyQuotaTracker.adjustSpending(apiKeyId, normalizedDelta);
     }
   }
 }
@@ -113,6 +135,7 @@ async function upsertUnbilledSnapshot(
   const previousSnapshot = await db.query.requestBillingSnapshots.findFirst({
     where: eq(requestBillingSnapshots.requestLogId, input.requestLogId),
     columns: {
+      apiKeyId: true,
       upstreamId: true,
       billingStatus: true,
       finalCost: true,
@@ -185,7 +208,13 @@ async function upsertUnbilledSnapshot(
       },
     });
 
-  applyQuotaDeltaAfterSnapshotUpsert(previousSnapshot ?? null, "unbilled", input.upstreamId, null);
+  applyQuotaDeltaAfterSnapshotUpsert(
+    previousSnapshot ?? null,
+    "unbilled",
+    input.apiKeyId,
+    input.upstreamId,
+    null
+  );
 
   return {
     status: "unbilled",
@@ -293,6 +322,7 @@ export async function calculateAndPersistRequestBillingSnapshot(
   const previousSnapshot = await db.query.requestBillingSnapshots.findFirst({
     where: eq(requestBillingSnapshots.requestLogId, input.requestLogId),
     columns: {
+      apiKeyId: true,
       upstreamId: true,
       billingStatus: true,
       finalCost: true,
@@ -368,6 +398,7 @@ export async function calculateAndPersistRequestBillingSnapshot(
   applyQuotaDeltaAfterSnapshotUpsert(
     previousSnapshot ?? null,
     "billed",
+    input.apiKeyId,
     input.upstreamId,
     cost.finalCost
   );

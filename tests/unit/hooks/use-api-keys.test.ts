@@ -86,6 +86,9 @@ describe("use-api-keys hooks", () => {
       description: null,
       access_mode: "restricted",
       upstream_ids: ["upstream-1"],
+      spending_rules: null,
+      spending_rule_statuses: [],
+      is_quota_exceeded: false,
       is_active: true,
       expires_at: null,
       created_at: "2024-01-01T00:00:00Z",
@@ -193,6 +196,64 @@ describe("use-api-keys hooks", () => {
       await waitFor(() => expect(result.current.isError).toBe(true));
 
       expect(mockToastError).toHaveBeenCalledWith("createFailed: Creation failed");
+    });
+
+    it("preserves spending quota fields in create payload and response", async () => {
+      const spendingRules = [
+        { period_type: "daily" as const, limit: 25 },
+        { period_type: "rolling" as const, limit: 10, period_hours: 6 },
+      ];
+      const spendingRuleStatuses = [
+        {
+          period_type: "daily" as const,
+          period_hours: null,
+          current_spending: 12.5,
+          spending_limit: 25,
+          percent_used: 50,
+          is_exceeded: false,
+          resets_at: "2024-01-02T00:00:00Z",
+          estimated_recovery_at: null,
+        },
+        {
+          period_type: "rolling" as const,
+          period_hours: 6,
+          current_spending: 10,
+          spending_limit: 10,
+          percent_used: 100,
+          is_exceeded: true,
+          resets_at: null,
+          estimated_recovery_at: "2024-01-01T06:30:00Z",
+        },
+      ];
+      const mockResponse = {
+        ...makeApiKey({
+          id: "new-key-id",
+          key_prefix: "sk-auto-newk",
+          name: "New Key",
+          spending_rules: spendingRules,
+          spending_rule_statuses: spendingRuleStatuses,
+          is_quota_exceeded: true,
+        }),
+        key_value: "sk-auto-newkey123",
+      };
+      mockPost.mockResolvedValueOnce(mockResponse);
+
+      const { result } = renderHook(() => useCreateAPIKey(), { wrapper });
+
+      result.current.mutate({
+        name: "New Key",
+        upstream_ids: ["upstream-1"],
+        spending_rules: spendingRules,
+      });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      expect(mockPost).toHaveBeenCalledWith("/admin/keys", {
+        name: "New Key",
+        upstream_ids: ["upstream-1"],
+        spending_rules: spendingRules,
+      });
+      expect(result.current.data).toEqual(mockResponse);
     });
   });
 
@@ -400,6 +461,61 @@ describe("use-api-keys hooks", () => {
       expect(mockPut).toHaveBeenCalledWith("/admin/keys/key-1", {
         upstream_ids: ["upstream-2", "upstream-3"],
       });
+    });
+
+    it("preserves spending quota fields in update payload and response", async () => {
+      const spendingRules = [
+        { period_type: "monthly" as const, limit: 200 },
+        { period_type: "rolling" as const, limit: 40, period_hours: 12 },
+      ];
+      const spendingRuleStatuses = [
+        {
+          period_type: "monthly" as const,
+          period_hours: null,
+          current_spending: 120,
+          spending_limit: 200,
+          percent_used: 60,
+          is_exceeded: false,
+          resets_at: "2024-02-01T00:00:00Z",
+          estimated_recovery_at: null,
+        },
+        {
+          period_type: "rolling" as const,
+          period_hours: 12,
+          current_spending: 45,
+          spending_limit: 40,
+          percent_used: 112.5,
+          is_exceeded: true,
+          resets_at: null,
+          estimated_recovery_at: "2024-01-02T03:00:00Z",
+        },
+      ];
+      const mockResponse = makeApiKey({
+        id: "key-1",
+        name: "Updated Key",
+        description: "Updated description",
+        updated_at: "2024-01-02T00:00:00Z",
+        spending_rules: spendingRules,
+        spending_rule_statuses: spendingRuleStatuses,
+        is_quota_exceeded: true,
+      });
+      mockPut.mockResolvedValueOnce(mockResponse);
+
+      const { result } = renderHook(() => useUpdateAPIKey(), { wrapper });
+
+      result.current.mutate({
+        id: "key-1",
+        data: {
+          spending_rules: spendingRules,
+        },
+      });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      expect(mockPut).toHaveBeenCalledWith("/admin/keys/key-1", {
+        spending_rules: spendingRules,
+      });
+      expect(result.current.data).toEqual(mockResponse);
     });
   });
 

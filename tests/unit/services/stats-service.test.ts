@@ -895,6 +895,130 @@ describe("stats-service", () => {
       expect(result.apiKeys[0].totalTokens).toBe(0);
     });
 
+    it("should include quota-rejected requests for api keys but exclude them from upstreams", async () => {
+      const { db } = await import("@/lib/db");
+      const { getLeaderboardStats } = await import("@/lib/services/stats-service");
+
+      const emptyMainQuery = {
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            groupBy: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue([]),
+              }),
+            }),
+          }),
+        }),
+      } as unknown as ReturnType<typeof db.select>;
+
+      vi.mocked(db.select)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              groupBy: vi.fn().mockReturnValue({
+                orderBy: vi.fn().mockReturnValue({
+                  limit: vi
+                    .fn()
+                    .mockResolvedValue([
+                      { apiKeyId: "key-1", requestCount: 3, totalTokens: "100" },
+                    ]),
+                }),
+              }),
+            }),
+          }),
+        } as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValue({
+            leftJoin: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                groupBy: vi.fn().mockResolvedValue([{ apiKeyId: "key-1", totalCost: "1.25" }]),
+              }),
+            }),
+          }),
+        } as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              groupBy: vi.fn().mockResolvedValue([{ groupKey: "key-1", name: "gpt-4o", cnt: 2 }]),
+            }),
+          }),
+        } as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              groupBy: vi.fn().mockReturnValue({
+                orderBy: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue([
+                    {
+                      upstreamId: "upstream-1",
+                      requestCount: 2,
+                      totalTokens: "80",
+                      avgTtft: null,
+                      totalCompletionTokens: 0,
+                      totalDurationMs: 0,
+                      totalCacheReadTokens: null,
+                      totalEffectivePromptTokens: 0,
+                    },
+                  ]),
+                }),
+              }),
+            }),
+          }),
+        } as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValue({
+            leftJoin: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                groupBy: vi
+                  .fn()
+                  .mockResolvedValue([{ upstreamId: "upstream-1", totalCost: "1.25" }]),
+              }),
+            }),
+          }),
+        } as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              groupBy: vi
+                .fn()
+                .mockResolvedValue([{ groupKey: "upstream-1", name: "gpt-4o", cnt: 2 }]),
+            }),
+          }),
+        } as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce(emptyMainQuery);
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        { id: "key-1", name: "Quota Key", keyPrefix: "sk-quota-" },
+      ]);
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        {
+          id: "upstream-1",
+          name: "Primary Upstream",
+          routeCapabilities: ["openai_chat_compatible"],
+        },
+      ]);
+
+      const result = await getLeaderboardStats("7d", 5);
+
+      expect(result.apiKeys).toHaveLength(1);
+      expect(result.apiKeys[0]).toMatchObject({
+        id: "key-1",
+        requestCount: 3,
+        totalTokens: 100,
+        totalCostUsd: 1.25,
+        modelDistribution: [{ name: "gpt-4o", count: 2 }],
+      });
+
+      expect(result.upstreams).toHaveLength(1);
+      expect(result.upstreams[0]).toMatchObject({
+        id: "upstream-1",
+        requestCount: 2,
+        totalTokens: 80,
+        totalCostUsd: 1.25,
+        modelDistribution: [{ name: "gpt-4o", count: 2 }],
+      });
+    });
+
     it("should calculate upstream avgTps from aggregated stream fields", async () => {
       const { db } = await import("@/lib/db");
       const { getLeaderboardStats } = await import("@/lib/services/stats-service");

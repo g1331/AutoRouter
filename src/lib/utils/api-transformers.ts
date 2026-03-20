@@ -188,6 +188,20 @@ export interface ApiKeyApiResponse {
   description: string | null;
   access_mode: "unrestricted" | "restricted";
   upstream_ids: string[];
+  spending_rules:
+    | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
+    | null;
+  spending_rule_statuses: {
+    period_type: "daily" | "monthly" | "rolling";
+    period_hours: number | null;
+    current_spending: number;
+    spending_limit: number;
+    percent_used: number;
+    is_exceeded: boolean;
+    resets_at: string | null;
+    estimated_recovery_at: string | null;
+  }[];
+  is_quota_exceeded: boolean;
   is_active: boolean;
   expires_at: string | null;
   created_at: string;
@@ -227,6 +241,18 @@ export function transformApiKeyToApi(apiKey: ApiKeyListItem): ApiKeyApiResponse 
     description: apiKey.description,
     access_mode: apiKey.accessMode,
     upstream_ids: apiKey.upstreamIds,
+    spending_rules: apiKey.spendingRules,
+    spending_rule_statuses: apiKey.spendingRuleStatuses.map((rule) => ({
+      period_type: rule.periodType,
+      period_hours: rule.periodHours,
+      current_spending: rule.currentSpending,
+      spending_limit: rule.spendingLimit,
+      percent_used: rule.percentUsed,
+      is_exceeded: rule.isExceeded,
+      resets_at: toISOStringOrNull(rule.resetsAt),
+      estimated_recovery_at: toISOStringOrNull(rule.estimatedRecoveryAt),
+    })),
+    is_quota_exceeded: apiKey.isQuotaExceeded,
     is_active: apiKey.isActive,
     expires_at: toISOStringOrNull(apiKey.expiresAt),
     created_at: apiKey.createdAt.toISOString(),
@@ -247,6 +273,18 @@ export function transformApiKeyCreateToApi(result: ApiKeyCreateResult): ApiKeyCr
     description: result.description,
     access_mode: result.accessMode,
     upstream_ids: result.upstreamIds,
+    spending_rules: result.spendingRules,
+    spending_rule_statuses: result.spendingRuleStatuses.map((rule) => ({
+      period_type: rule.periodType,
+      period_hours: rule.periodHours,
+      current_spending: rule.currentSpending,
+      spending_limit: rule.spendingLimit,
+      percent_used: rule.percentUsed,
+      is_exceeded: rule.isExceeded,
+      resets_at: toISOStringOrNull(rule.resetsAt),
+      estimated_recovery_at: toISOStringOrNull(rule.estimatedRecoveryAt),
+    })),
+    is_quota_exceeded: result.isQuotaExceeded,
     is_active: result.isActive,
     expires_at: toISOStringOrNull(result.expiresAt),
     created_at: result.createdAt.toISOString(),

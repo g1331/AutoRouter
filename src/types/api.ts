@@ -10,12 +10,30 @@ import type { RouteCapability, RouteMatchSource } from "@/lib/route-capabilities
 
 export type APIKeyAccessMode = "unrestricted" | "restricted";
 
+export interface APIKeySpendingRule {
+  period_type: "daily" | "monthly" | "rolling";
+  limit: number;
+  period_hours?: number;
+}
+
+export interface APIKeySpendingRuleStatus {
+  period_type: "daily" | "monthly" | "rolling";
+  period_hours: number | null;
+  current_spending: number;
+  spending_limit: number;
+  percent_used: number;
+  is_exceeded: boolean;
+  resets_at: string | null;
+  estimated_recovery_at: string | null;
+}
+
 export interface APIKeyCreate {
   name: string;
   description?: string | null;
   access_mode?: APIKeyAccessMode;
   upstream_ids: string[]; // UUID[]
   expires_at?: string | null; // ISO 8601 date string
+  spending_rules?: APIKeySpendingRule[] | null;
 }
 
 export interface APIKeyUpdate {
@@ -25,6 +43,7 @@ export interface APIKeyUpdate {
   access_mode?: APIKeyAccessMode;
   expires_at?: string | null; // ISO 8601 date string
   upstream_ids?: string[]; // UUID[]
+  spending_rules?: APIKeySpendingRule[] | null;
 }
 
 export interface APIKeyResponse {
@@ -34,6 +53,9 @@ export interface APIKeyResponse {
   description: string | null;
   access_mode: APIKeyAccessMode;
   upstream_ids: string[]; // UUID[]
+  spending_rules: APIKeySpendingRule[] | null;
+  spending_rule_statuses: APIKeySpendingRuleStatus[];
+  is_quota_exceeded: boolean;
   is_active: boolean;
   expires_at: string | null; // ISO 8601 date string
   created_at: string; // ISO 8601 date string

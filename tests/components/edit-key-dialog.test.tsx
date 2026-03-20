@@ -73,6 +73,9 @@ describe("EditKeyDialog", () => {
     description: "Test description",
     access_mode: "restricted",
     upstream_ids: ["upstream-1", "upstream-2"],
+    spending_rules: null,
+    spending_rule_statuses: [],
+    is_quota_exceeded: false,
     is_active: true,
     expires_at: null,
     created_at: "2024-01-01T00:00:00Z",
@@ -192,6 +195,7 @@ describe("EditKeyDialog", () => {
           data: expect.objectContaining({
             access_mode: "restricted",
             upstream_ids: ["upstream-1", "upstream-2", "upstream-3"],
+            spending_rules: null,
           }),
         });
       });
@@ -225,6 +229,46 @@ describe("EditKeyDialog", () => {
 
       expect(screen.getByText("cancel")).toBeInTheDocument();
       expect(screen.getByText("save")).toBeInTheDocument();
+    });
+
+    it("renders existing spending rules and preserves them on submit", async () => {
+      mockUpdateMutateAsync.mockResolvedValueOnce({});
+
+      const quotaApiKey: APIKeyResponse = {
+        ...mockApiKey,
+        spending_rules: [{ period_type: "rolling", limit: 15, period_hours: 6 }],
+        spending_rule_statuses: [
+          {
+            period_type: "rolling",
+            period_hours: 6,
+            current_spending: 8,
+            spending_limit: 15,
+            percent_used: 53.3,
+            is_exceeded: false,
+            resets_at: null,
+            estimated_recovery_at: null,
+          },
+        ],
+      };
+
+      render(<EditKeyDialog apiKey={quotaApiKey} open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      expect(screen.getByText("spendingRuleLabel")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("15")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("6")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText("save"));
+
+      await waitFor(() => {
+        expect(mockUpdateMutateAsync).toHaveBeenCalledWith({
+          id: "key-123",
+          data: expect.objectContaining({
+            spending_rules: [{ period_type: "rolling", limit: 15, period_hours: 6 }],
+          }),
+        });
+      });
     });
   });
 
@@ -281,6 +325,7 @@ describe("EditKeyDialog", () => {
           data: expect.objectContaining({
             access_mode: "unrestricted",
             upstream_ids: [],
+            spending_rules: null,
           }),
         });
       });
@@ -311,6 +356,7 @@ describe("EditKeyDialog", () => {
             is_active: true,
             access_mode: "restricted",
             upstream_ids: ["upstream-1", "upstream-2"],
+            spending_rules: null,
           }),
         });
       });
