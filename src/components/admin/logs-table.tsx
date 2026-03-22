@@ -418,7 +418,7 @@ function ThinkingConfigPanel({
   const locale = useLocale();
   const [isExpanded, setIsExpanded] = useState(false);
   const isZh = locale === "zh-CN" || locale === "zh";
-  const panelTitle = "思考信息";
+  const panelTitle = t("thinkingConfig");
   const expandLabel = isZh ? "展开思考信息" : "Expand thinking details";
   const collapseLabel = isZh ? "收起思考信息" : "Collapse thinking details";
 
@@ -1295,6 +1295,16 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
 
     type JourneyTone = "neutral" | "info" | "warning" | "success" | "error";
     type JourneyProgressState = "done" | "active" | "failed" | "pending";
+    type JourneyStep = {
+      index: number;
+      title: string;
+      summary: string;
+      meta: string | null;
+      tone: JourneyTone;
+      metrics: ReactNode;
+      content: ReactNode;
+      focusedContent?: ReactNode | null;
+    };
 
     const JOURNEY_TONE_STYLES: Record<
       JourneyTone,
@@ -1551,7 +1561,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
       );
     };
 
-    const journeySteps = [
+    const journeySteps: JourneyStep[] = [
       {
         index: 1,
         title: t("journeyRequestArrived"),
@@ -2037,7 +2047,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
       journeySteps.find((step) => step.index === activeJourneyStepIndex) ?? journeySteps[0];
     const activeJourneyTone = JOURNEY_TONE_STYLES[activeJourneyStep.tone];
     const activeJourneyDetail =
-      activeJourneyStep.focusedContent !== undefined
+      activeJourneyStep.focusedContent != null
         ? activeJourneyStep.focusedContent
         : activeJourneyStep.content;
     const journeyViewOptions = [

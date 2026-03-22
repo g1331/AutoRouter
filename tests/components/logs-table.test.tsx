@@ -1629,7 +1629,7 @@ describe("LogsTable", () => {
 
       fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
 
-      expect(screen.getByText("思考信息")).toBeInTheDocument();
+      expect(screen.getByText("thinkingConfig")).toBeInTheDocument();
       expect(screen.queryByText(/thinkingProtocol/)).not.toBeInTheDocument();
       expect(screen.queryByText(/thinkingSourcePaths/)).not.toBeInTheDocument();
 
@@ -1640,7 +1640,7 @@ describe("LogsTable", () => {
       expect(screen.getAllByText(/thinkingLevel/).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/thinkingSourcePaths/).length).toBeGreaterThan(0);
 
-      const thinkingPanel = screen.getByText("思考信息").closest("div");
+      const thinkingPanel = screen.getByText("thinkingConfig").closest("div");
       expect(thinkingPanel).not.toBeNull();
       expect(within(thinkingPanel as HTMLElement).queryByText("[xhigh]")).not.toBeInTheDocument();
     });
@@ -1650,7 +1650,7 @@ describe("LogsTable", () => {
 
       fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
 
-      expect(screen.getByText("思考信息")).toBeInTheDocument();
+      expect(screen.getByText("thinkingConfig")).toBeInTheDocument();
       expect(screen.getAllByText("thinkingNotExplicitlySpecified")).toHaveLength(1);
 
       fireEvent.click(screen.getByRole("button", { name: "Expand thinking details" }));
@@ -2222,6 +2222,22 @@ describe("LogsTable", () => {
       expect(screen.getByText("timelineExecutionRetries")).toBeInTheDocument();
       expect(screen.getAllByText(/1\.65s \(\+400ms\)/).length).toBeGreaterThan(0);
       expect(screen.getByRole("button", { name: "journeyViewFocused" })).toBeInTheDocument();
+    });
+
+    it("falls back to request-arrived content in focused view when no focused detail exists", () => {
+      const logWithRouting: RequestLog = {
+        ...logWithFailoverBase,
+        routing_decision: mockRoutingDecision,
+      };
+
+      render(<LogsTable logs={[logWithRouting]} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+      fireEvent.click(screen.getByRole("button", { name: "journeyRequestArrived" }));
+
+      expect(screen.getByText("requestKey")).toBeInTheDocument();
+      expect(screen.getAllByText("Primary Key").length).toBeGreaterThan(0);
+      expect(screen.getByText("/v1/chat/completions")).toBeInTheDocument();
     });
 
     it("shows error details in terminal style for error rows", () => {
