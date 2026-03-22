@@ -307,14 +307,11 @@ test.describe("Billing tier-aware verification", () => {
     await page.getByRole("button", { name: "Expand failover details" }).first().click();
 
     await expect(page.getByText("TOKEN DETAILS", { exact: true })).toBeVisible();
-    await expect(page.getByText("Rule:", { exact: true })).toBeVisible();
-    await expect(page.getByText("Tiered", { exact: true })).toBeVisible();
+    await expect(page.getByText(/^Rule:\s*Tiered$/)).toBeVisible();
     // Assert matched_rule_display_label is shown
-    await expect(page.getByText(">64K", { exact: true })).toBeVisible();
-    await expect(page.getByText("Threshold:", { exact: true })).toBeVisible();
-    await expect(page.getByText("64,000", { exact: true })).toBeVisible();
-    await expect(page.getByText("Source:", { exact: true })).toBeVisible();
-    await expect(page.getByText("Manual", { exact: true })).toBeVisible();
+    await expect(page.getByText(/^Rule Label:\s*>64K$/)).toBeVisible();
+    await expect(page.getByText(/^Threshold:\s*64,000$/)).toBeVisible();
+    await expect(page.getByText(/^Source:\s*Manual$/)).toBeVisible();
     // Assert model window metadata is displayed in the expanded row
     await expect(page.getByText(/Max Input: 128,?000/)).toBeVisible();
     await expect(page.getByText(/Max Output: 4,?096/)).toBeVisible();
