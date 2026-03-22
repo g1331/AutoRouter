@@ -313,8 +313,11 @@ test.describe("Billing tier-aware verification", () => {
     await expect(page.getByText(/^Threshold:\s*64,000$/)).toBeVisible();
     await expect(page.getByText(/^Source:\s*Manual$/)).toBeVisible();
     // Assert model window metadata is displayed in the expanded row
-    await expect(page.getByText(/Max Input: 128,?000/)).toBeVisible();
-    await expect(page.getByText(/Max Output: 4,?096/)).toBeVisible();
+    await expect(page.getByText("Context Window", { exact: true })).toBeVisible();
+    await expect(page.getByText("Max Input", { exact: true })).toBeVisible();
+    await expect(page.getByText("Max Output", { exact: true })).toBeVisible();
+    await expect(page.getByText("128,000", { exact: true })).toBeVisible();
+    await expect(page.getByText("4,096", { exact: true })).toBeVisible();
   });
 
   test("zh-CN billing flow keeps tier labels localized when duplicate threshold validation fires", async ({
