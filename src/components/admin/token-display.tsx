@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Upload } from "lucide-react";
+import { Database, DatabaseZap } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -365,7 +365,7 @@ export function TokenDetailContent({
  * Follows the neutral dashboard style:
  * - Total uses foreground for primary emphasis
  * - Input/Output breakdown uses muted foreground
- * - Cache indicators use clearer upload/download icons for write vs read
+ * - Cache indicators use database icons with color-coded variants for write vs read
  */
 export function TokenDisplay({
   promptTokens,
@@ -413,23 +413,21 @@ export function TokenDisplay({
         <div className="mt-0.5 flex flex-wrap gap-1">
           {cacheCreationTokens > 0 && (
             <Badge
-              variant="info"
+              variant="warning"
               className="w-fit gap-1 px-1.5 py-0 text-[9px]"
               aria-label={`${t("tokenCacheWrite")} ${cacheCreationTokens.toLocaleString()}`}
             >
-              <Upload className="h-2.5 w-2.5" aria-hidden="true" />
-              <span className="font-semibold">W</span>
+              <DatabaseZap className="h-2.5 w-2.5" aria-hidden="true" />
               <span>{cacheCreationTokens.toLocaleString()}</span>
             </Badge>
           )}
           {effectiveCacheRead > 0 && (
             <Badge
-              variant="info"
+              variant="success"
               className="w-fit gap-1 px-1.5 py-0 text-[9px]"
               aria-label={`${t("tokenCacheHit")} ${effectiveCacheRead.toLocaleString()}`}
             >
-              <Download className="h-2.5 w-2.5" aria-hidden="true" />
-              <span className="font-semibold">R</span>
+              <Database className="h-2.5 w-2.5" aria-hidden="true" />
               <span>{effectiveCacheRead.toLocaleString()}</span>
             </Badge>
           )}

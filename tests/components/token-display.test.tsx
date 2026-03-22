@@ -264,9 +264,7 @@ describe("TokenDisplay", () => {
       const cacheWriteBadge = screen.getByLabelText("tokenCacheWrite 100");
       const cacheReadBadge = screen.getByLabelText("tokenCacheHit 800");
 
-      expect(cacheWriteBadge).toHaveTextContent("W");
       expect(cacheWriteBadge).toHaveTextContent("100");
-      expect(cacheReadBadge).toHaveTextContent("R");
       expect(cacheReadBadge).toHaveTextContent("800");
       expect(
         cacheWriteBadge.compareDocumentPosition(cacheReadBadge) & Node.DOCUMENT_POSITION_FOLLOWING
