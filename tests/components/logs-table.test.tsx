@@ -1602,13 +1602,18 @@ describe("LogsTable", () => {
 
       fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
 
-      expect(screen.getByText("thinkingConfig")).toBeInTheDocument();
+      expect(screen.getByText("思考信息")).toBeInTheDocument();
+      expect(screen.queryByText(/thinkingProtocol/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/thinkingSourcePaths/)).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Expand thinking details" }));
+
       expect(screen.getAllByText(/thinkingProvider/).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/thinkingProtocol/).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/thinkingLevel/).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/thinkingSourcePaths/).length).toBeGreaterThan(0);
 
-      const thinkingPanel = screen.getByText("thinkingConfig").closest("div");
+      const thinkingPanel = screen.getByText("思考信息").closest("div");
       expect(thinkingPanel).not.toBeNull();
       expect(within(thinkingPanel as HTMLElement).queryByText("[xhigh]")).not.toBeInTheDocument();
     });
@@ -1618,8 +1623,12 @@ describe("LogsTable", () => {
 
       fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
 
-      expect(screen.getByText("thinkingConfig")).toBeInTheDocument();
-      expect(screen.getByText("thinkingNotExplicitlySpecified")).toBeInTheDocument();
+      expect(screen.getByText("思考信息")).toBeInTheDocument();
+      expect(screen.getAllByText("thinkingNotExplicitlySpecified")).toHaveLength(1);
+
+      fireEvent.click(screen.getByRole("button", { name: "Expand thinking details" }));
+
+      expect(screen.getAllByText("thinkingNotExplicitlySpecified")).toHaveLength(2);
     });
 
     it("applies detail enter animation when expanded content opens", () => {
@@ -1658,11 +1667,11 @@ describe("LogsTable", () => {
       expect(screen.getByText("tokenDetails")).toBeInTheDocument();
       expect(screen.getByText("billingDetails")).toBeInTheDocument();
 
-      expect(screen.getByText(/billingTotal/)).toBeInTheDocument();
-      expect(screen.getByText(/100 \* \$3\.00 \/ 1M \* 1\.2 =/)).toBeInTheDocument();
-      expect(screen.getByText(/50 \* \$15\.00 \/ 1M \* 1\.1 =/)).toBeInTheDocument();
-      expect(screen.getByText(/20 \* \$0\.30 \/ 1M \* 1\.2 =/)).toBeInTheDocument();
-      expect(screen.getByText(/10 \* \$3\.00 \/ 1M \* 1\.2 =/)).toBeInTheDocument();
+      expect(screen.getAllByText(/billingTotal/).length).toBeGreaterThan(0);
+      expect(document.body).toHaveTextContent(/100\*\$3\.00\/ 1M\*1\.2=/);
+      expect(document.body).toHaveTextContent(/50\*\$15\.00\/ 1M\*1\.1=/);
+      expect(document.body).toHaveTextContent(/20\*\$0\.30\/ 1M\*1\.2=/);
+      expect(document.body).toHaveTextContent(/10\*\$3\.00\/ 1M\*1\.2=/);
     });
 
     it("shows matched-rule summary with tier rule when applied_tier_threshold is present", () => {
@@ -1844,9 +1853,11 @@ describe("LogsTable", () => {
 
       expect(screen.getByText("tokenDetails")).toBeInTheDocument();
       // Should show model window metadata
-      expect(screen.getByText(/modelWindow/)).toBeInTheDocument();
-      expect(screen.getByText(/Max Input: 128,?000/)).toBeInTheDocument();
-      expect(screen.getByText(/Max Output: 4,?096/)).toBeInTheDocument();
+      expect(screen.getAllByText(/modelWindow/).length).toBeGreaterThan(0);
+      expect(screen.getByText(/modelWindowMaxInput/)).toBeInTheDocument();
+      expect(screen.getByText(/128,?000/)).toBeInTheDocument();
+      expect(screen.getByText(/modelWindowMaxOutput/)).toBeInTheDocument();
+      expect(screen.getByText(/4,?096/)).toBeInTheDocument();
     });
 
     it("shows flat rule type when matched_rule_type is flat", () => {

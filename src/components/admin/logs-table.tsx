@@ -53,10 +53,19 @@ const MIN_TPS_COMPLETION_TOKENS = 10;
 const MIN_TPS_DURATION_MS = 100;
 
 const DETAIL_PANEL_CLASS =
-  "rounded-cf-sm border border-divider bg-surface-300/55 shadow-[var(--vr-shadow-xs)]";
+  "overflow-hidden rounded-cf-md border border-divider/80 bg-surface-200/82 shadow-[var(--vr-shadow-xs)]";
 const DETAIL_PANEL_HEADER_CLASS =
-  "border-b border-divider/80 bg-surface-200/70 px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground";
-const DETAIL_PANEL_BODY_CLASS = "px-3 py-2.5";
+  "border-b border-divider/70 bg-surface-300/72 px-4 py-2 text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground";
+const DETAIL_PANEL_BODY_CLASS = "px-4 py-3";
+const DETAIL_PANEL_STACK_CLASS = "space-y-3 text-[12px]";
+const DETAIL_PANEL_ROW_CLASS =
+  "flex items-start gap-3 border-b border-divider/35 py-2 first:pt-0 last:border-b-0 last:pb-0";
+const DETAIL_PANEL_LABEL_CLASS =
+  "min-w-0 shrink-0 text-[10px] uppercase tracking-[0.14em] text-muted-foreground/82";
+const DETAIL_PANEL_VALUE_CLASS = "ml-auto min-w-0 text-right text-foreground break-all";
+const DETAIL_PANEL_MUTED_TEXT_CLASS = "text-[12px] text-muted-foreground";
+const DETAIL_SUMMARY_BANNER_CLASS =
+  "relative overflow-hidden rounded-cf-md border px-4 py-3 shadow-[var(--vr-shadow-xs)]";
 const LOGS_COLOR_TRANSITION_CLASS =
   "transition-[background-color,border-color,color,opacity] duration-cf-fast ease-cf-standard motion-reduce:transition-none";
 const LOGS_SURFACE_TRANSITION_CLASS =
@@ -408,13 +417,50 @@ function ThinkingConfigPanel({
 }) {
   const t = useTranslations("logs");
   const locale = useLocale();
+  const [isExpanded, setIsExpanded] = useState(false);
+  const isZh = locale === "zh-CN" || locale === "zh";
+  const panelTitle = "思考信息";
+  const expandLabel = isZh ? "展开思考信息" : "Expand thinking details";
+  const collapseLabel = isZh ? "收起思考信息" : "Collapse thinking details";
+
+  const summaryText = thinkingConfig
+    ? [
+        t(`thinkingProviderValue.${thinkingConfig.provider}`),
+        t(`thinkingModeValue.${thinkingConfig.mode}`),
+        getRequestThinkingBadgeLabel(thinkingConfig),
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : t("thinkingNotExplicitlySpecified");
 
   if (!thinkingConfig) {
     return (
       <div className={DETAIL_PANEL_CLASS}>
-        <div className={DETAIL_PANEL_HEADER_CLASS}>{t("thinkingConfig")}</div>
-        <div className={cn(DETAIL_PANEL_BODY_CLASS, "text-[12px] text-muted-foreground")}>
-          {t("thinkingNotExplicitlySpecified")}
+        <div className={DETAIL_PANEL_HEADER_CLASS}>{panelTitle}</div>
+        <div className={DETAIL_PANEL_BODY_CLASS}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className={cn(DETAIL_PANEL_MUTED_TEXT_CLASS, "min-w-0 flex-1")}>{summaryText}</div>
+            <button
+              type="button"
+              onClick={() => setIsExpanded((prev) => !prev)}
+              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded border border-divider px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+              aria-expanded={isExpanded}
+              aria-label={isExpanded ? collapseLabel : expandLabel}
+            >
+              <ChevronDown
+                className={cn("h-3 w-3", LOGS_ICON_TRANSFORM_CLASS, isExpanded && "rotate-180")}
+                aria-hidden="true"
+              />
+              <span>{isExpanded ? collapseLabel : expandLabel}</span>
+            </button>
+          </div>
+          {isExpanded ? (
+            <div
+              className={cn("mt-3 border-t border-divider/40 pt-3", DETAIL_PANEL_MUTED_TEXT_CLASS)}
+            >
+              {t("thinkingNotExplicitlySpecified")}
+            </div>
+          ) : null}
         </div>
       </div>
     );
@@ -464,18 +510,34 @@ function ThinkingConfigPanel({
 
   return (
     <div className={DETAIL_PANEL_CLASS}>
-      <div className={DETAIL_PANEL_HEADER_CLASS}>{t("thinkingConfig")}</div>
+      <div className={DETAIL_PANEL_HEADER_CLASS}>{panelTitle}</div>
       <div className={DETAIL_PANEL_BODY_CLASS}>
-        <div className="space-y-1.5 text-[12px]">
-          {detailRows.map((row) => (
-            <div key={row.label} className="flex items-start gap-2">
-              <span className="min-w-0 shrink-0 text-muted-foreground">{row.label}:</span>
-              <span className="ml-auto min-w-0 text-right text-foreground break-all">
-                {row.value}
-              </span>
-            </div>
-          ))}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0 flex-1 text-[12px] text-muted-foreground">{summaryText}</div>
+          <button
+            type="button"
+            onClick={() => setIsExpanded((prev) => !prev)}
+            className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded border border-divider px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+            aria-expanded={isExpanded}
+            aria-label={isExpanded ? collapseLabel : expandLabel}
+          >
+            <ChevronDown
+              className={cn("h-3 w-3", LOGS_ICON_TRANSFORM_CLASS, isExpanded && "rotate-180")}
+              aria-hidden="true"
+            />
+            <span>{isExpanded ? collapseLabel : expandLabel}</span>
+          </button>
         </div>
+        {isExpanded ? (
+          <div className={cn("mt-3 border-t border-divider/40 pt-3", DETAIL_PANEL_STACK_CLASS)}>
+            {detailRows.map((row) => (
+              <div key={row.label} className={DETAIL_PANEL_ROW_CLASS}>
+                <span className={DETAIL_PANEL_LABEL_CLASS}>{row.label}</span>
+                <span className={DETAIL_PANEL_VALUE_CLASS}>{row.value}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -1202,6 +1264,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
     };
 
     type JourneyTone = "neutral" | "info" | "warning" | "success" | "error";
+    type JourneyProgressState = "done" | "active" | "failed" | "pending";
 
     const JOURNEY_TONE_STYLES: Record<
       JourneyTone,
@@ -1214,48 +1277,42 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
       }
     > = {
       neutral: {
-        tab: "border-divider bg-surface-200/70 hover:border-foreground/10 hover:bg-surface-200",
-        tabActive:
-          "border-foreground/15 bg-surface-200 text-foreground shadow-[0_12px_30px_rgba(15,23,42,0.08)]",
+        tab: "border-divider/80 bg-surface-200/78 text-foreground hover:border-divider hover:bg-surface-200",
+        tabActive: "border-divider bg-surface-200 text-foreground shadow-[var(--vr-shadow-xs)]",
         number: "border-divider bg-surface-300 text-muted-foreground",
-        accent: "bg-[linear-gradient(90deg,rgba(148,163,184,0.65),rgba(148,163,184,0.15))]",
-        panel: "border-divider bg-surface-200/75",
+        accent: "bg-foreground/12",
+        panel: "border-divider/80 bg-surface-200/82",
       },
       info: {
-        tab: "border-divider bg-surface-200/70 hover:border-sky-500/20 hover:bg-sky-500/5",
-        tabActive:
-          "border-sky-500/25 bg-[linear-gradient(180deg,rgba(14,165,233,0.08),rgba(15,23,42,0.02))] text-foreground shadow-[0_12px_30px_rgba(2,132,199,0.12)]",
-        number: "border-sky-500/20 bg-sky-500/10 text-sky-600",
-        accent: "bg-[linear-gradient(90deg,rgba(14,165,233,0.85),rgba(14,165,233,0.2))]",
-        panel:
-          "border-sky-500/20 bg-[linear-gradient(180deg,rgba(14,165,233,0.07),rgba(15,23,42,0.02))]",
+        tab: "border-divider/80 bg-surface-200/78 text-foreground hover:border-divider hover:bg-surface-200",
+        tabActive: "border-divider bg-surface-200 text-foreground shadow-[var(--vr-shadow-xs)]",
+        number: "border-divider bg-surface-300 text-muted-foreground",
+        accent: "bg-foreground/12",
+        panel: "border-divider/80 bg-surface-200/82",
       },
       warning: {
-        tab: "border-divider bg-surface-200/70 hover:border-amber-500/20 hover:bg-amber-500/5",
+        tab: "border-divider/80 bg-surface-200/78 text-foreground hover:border-amber-400/20 hover:bg-surface-200",
         tabActive:
-          "border-amber-500/25 bg-[linear-gradient(180deg,rgba(245,158,11,0.08),rgba(15,23,42,0.02))] text-foreground shadow-[0_12px_30px_rgba(217,119,6,0.12)]",
-        number: "border-amber-500/20 bg-amber-500/10 text-amber-600",
-        accent: "bg-[linear-gradient(90deg,rgba(245,158,11,0.85),rgba(245,158,11,0.18))]",
-        panel:
-          "border-amber-500/20 bg-[linear-gradient(180deg,rgba(245,158,11,0.07),rgba(15,23,42,0.02))]",
+          "border-amber-400/25 bg-surface-200 text-foreground shadow-[var(--vr-shadow-glow-subtle)]",
+        number: "border-amber-400/20 bg-amber-500/10 text-amber-300",
+        accent: "bg-amber-400/75",
+        panel: "border-amber-400/22 bg-surface-200/82",
       },
       success: {
-        tab: "border-divider bg-surface-200/70 hover:border-emerald-500/20 hover:bg-emerald-500/5",
+        tab: "border-divider/80 bg-surface-200/78 text-foreground hover:border-status-success/20 hover:bg-surface-200",
         tabActive:
-          "border-emerald-500/25 bg-[linear-gradient(180deg,rgba(16,185,129,0.08),rgba(15,23,42,0.02))] text-foreground shadow-[0_12px_30px_rgba(5,150,105,0.12)]",
-        number: "border-emerald-500/20 bg-emerald-500/10 text-emerald-600",
-        accent: "bg-[linear-gradient(90deg,rgba(16,185,129,0.85),rgba(16,185,129,0.18))]",
-        panel:
-          "border-emerald-500/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.07),rgba(15,23,42,0.02))]",
+          "border-status-success/25 bg-surface-200 text-foreground shadow-[var(--vr-shadow-xs)]",
+        number: "border-status-success/20 bg-status-success-muted/18 text-status-success",
+        accent: "bg-status-success/80",
+        panel: "border-status-success/22 bg-surface-200/82",
       },
       error: {
-        tab: "border-divider bg-surface-200/70 hover:border-status-error/20 hover:bg-status-error-muted/10",
+        tab: "border-divider/80 bg-surface-200/78 text-foreground hover:border-status-error/20 hover:bg-surface-200",
         tabActive:
-          "border-status-error/25 bg-[linear-gradient(180deg,rgba(220,38,38,0.08),rgba(15,23,42,0.02))] text-foreground shadow-[0_12px_30px_rgba(185,28,28,0.12)]",
-        number: "border-status-error/20 bg-status-error-muted/20 text-status-error",
-        accent: "bg-[linear-gradient(90deg,rgba(220,38,38,0.9),rgba(220,38,38,0.2))]",
-        panel:
-          "border-status-error/20 bg-[linear-gradient(180deg,rgba(220,38,38,0.07),rgba(15,23,42,0.02))]",
+          "border-status-error/25 bg-surface-200 text-foreground shadow-[var(--vr-shadow-xs)]",
+        number: "border-status-error/20 bg-status-error-muted/18 text-status-error",
+        accent: "bg-status-error/85",
+        panel: "border-status-error/22 bg-surface-200/82",
       },
     };
 
@@ -1314,9 +1371,65 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
     const completeStepMeta = [failureStageLabel, totalMs != null ? formatMetricText(totalMs) : null]
       .filter(Boolean)
       .join(" · ");
+    const summaryTone: JourneyTone =
+      statusVariant === "error"
+        ? "error"
+        : hasFailoverHistory || hasFailoverWithoutHistory || statusVariant === "warning"
+          ? "warning"
+          : statusVariant === "success"
+            ? "success"
+            : "neutral";
+    const summaryToneStyles = JOURNEY_TONE_STYLES[summaryTone];
+    const summaryBadge =
+      statusVariant === "error"
+        ? t("tableStatus")
+        : hasFailoverHistory || hasFailoverWithoutHistory
+          ? t("retryAttemptsSummary")
+          : statusVariant === "success"
+            ? t("lifecycleComplete")
+            : t("lifecycleTimeline");
+    const summaryHeadline =
+      statusVariant === "error"
+        ? `HTTP ${log.status_code ?? "-"}`
+        : didSendUpstream === false
+          ? t("journeyRequestNotSent")
+          : finalUpstreamLabel;
+    const summaryReason =
+      statusVariant === "error"
+        ? [
+            failureStageLabel,
+            log.upstream_error?.error_type ?? null,
+            log.upstream_error?.error_message ?? null,
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        : hasFailoverHistory || hasFailoverWithoutHistory
+          ? [requestExecutionMeta, failoverDurationText].filter(Boolean).join(" · ")
+          : [completeStepMeta, responseStepMeta].filter(Boolean).join(" · ");
+    const errorSummaryLines = isError
+      ? [
+          `ERROR_TYPE: HTTP_${log.status_code ?? "UNKNOWN"}`,
+          `STATUS: ${log.status_code != null && log.status_code >= 500 ? "SERVER_ERROR" : "CLIENT_ERROR"}`,
+        ]
+      : [];
+    const errorSummaryCallout = isError
+      ? [
+          `HTTP ${log.status_code ?? "-"}`,
+          failureStageLabel,
+          log.billing_status === "unbilled"
+            ? resolveBillingReasonLabel(log.unbillable_reason)
+            : null,
+          didSendUpstream === false ? t("timelineNoUpstreamSent") : null,
+        ]
+          .filter(Boolean)
+          .join(" • ")
+      : null;
     const getDefaultJourneyStepIndex = () => {
       if (didSendUpstream === false || hasFailoverHistory || hasFailoverWithoutHistory) {
         return 3;
+      }
+      if (routingDecision?.failure_stage === "downstream_streaming") {
+        return 4;
       }
       if (log.is_stream && (ttftMs != null || genMs != null)) {
         return 4;
@@ -1328,6 +1441,80 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
     };
 
     const activeJourneyStepIndex = focusedJourneySteps[log.id] ?? getDefaultJourneyStepIndex();
+    const failureJourneyStepIndex = (() => {
+      if (!isError) {
+        return null;
+      }
+      if (
+        didSendUpstream === false ||
+        hasFailoverHistory ||
+        hasFailoverWithoutHistory ||
+        routingDecision?.failure_stage === "upstream_request"
+      ) {
+        return 3;
+      }
+      if (routingDecision?.failure_stage === "downstream_streaming") {
+        return 4;
+      }
+      return 5;
+    })();
+    const getJourneyProgressState = (stepIndex: number): JourneyProgressState => {
+      if (failureJourneyStepIndex != null) {
+        if (stepIndex < failureJourneyStepIndex) {
+          return "done";
+        }
+        if (stepIndex === failureJourneyStepIndex) {
+          return "failed";
+        }
+        return "pending";
+      }
+
+      if (log.status_code != null && log.status_code >= 200 && log.status_code < 300) {
+        return "done";
+      }
+
+      if (stepIndex < activeJourneyStepIndex) {
+        return "done";
+      }
+      if (stepIndex === activeJourneyStepIndex) {
+        return "active";
+      }
+      return "pending";
+    };
+    const JOURNEY_PROGRESS_STYLES: Record<
+      JourneyProgressState,
+      {
+        tab: string;
+        number: string;
+        accent: string;
+        arrow: string;
+      }
+    > = {
+      done: {
+        tab: "border-status-success/30 bg-status-success-muted/16 text-foreground",
+        number: "border-status-success/25 bg-status-success-muted/22 text-status-success",
+        accent: "bg-status-success/80",
+        arrow: "text-status-success/70",
+      },
+      active: {
+        tab: "border-amber-400/30 bg-surface-200 text-foreground shadow-[var(--vr-shadow-glow-subtle)]",
+        number: "border-amber-400/25 bg-amber-500/12 text-amber-300",
+        accent: "bg-amber-400/80",
+        arrow: "text-amber-300/70",
+      },
+      failed: {
+        tab: "border-status-error/30 bg-status-error-muted/14 text-foreground",
+        number: "border-status-error/24 bg-status-error-muted/22 text-status-error",
+        accent: "bg-status-error/85",
+        arrow: "text-status-error/70",
+      },
+      pending: {
+        tab: "border-divider/80 bg-surface-200/58 text-muted-foreground",
+        number: "border-divider/70 bg-surface-300/70 text-muted-foreground/70",
+        accent: "bg-transparent",
+        arrow: "text-muted-foreground/45",
+      },
+    };
     const setActiveJourneyStep = (stepIndex: number) => {
       setFocusedJourneySteps((prev) =>
         prev[log.id] === stepIndex ? prev : { ...prev, [log.id]: stepIndex }
@@ -1385,7 +1572,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
         title: t("lifecycleDecision"),
         summary: decisionStepSummary,
         meta: decisionStepMeta,
-        tone: routingDecision ? ("info" as JourneyTone) : ("neutral" as JourneyTone),
+        tone: "neutral" as JourneyTone,
         metrics: (
           <>
             {routingTypeLabel ? renderMetricPill(routingTypeLabel, "", "neutral") : null}
@@ -1588,11 +1775,11 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
         summary: requestExecutionSummary,
         meta: requestExecutionMeta,
         tone:
-          hasFailoverHistory || hasFailoverWithoutHistory
-            ? ("warning" as JourneyTone)
-            : didSendUpstream === false
-              ? ("error" as JourneyTone)
-              : ("warning" as JourneyTone),
+          didSendUpstream === false
+            ? ("error" as JourneyTone)
+            : hasFailoverHistory || hasFailoverWithoutHistory
+              ? ("warning" as JourneyTone)
+              : ("success" as JourneyTone),
         metrics: (
           <>
             {requestPhaseDurationText
@@ -1703,7 +1890,9 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
         tone:
           isError && routingDecision?.failure_stage === "downstream_streaming"
             ? ("error" as JourneyTone)
-            : ("success" as JourneyTone),
+            : ttftMs != null && requestTps == null
+              ? ("warning" as JourneyTone)
+              : ("success" as JourneyTone),
         metrics: (
           <>
             {responsePhaseDurationText
@@ -1717,43 +1906,39 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
         content: (
           <div className="space-y-2">
             {ttftMs != null ? (
-              <div className="rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
-                <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    {t("journeyFirstOutput")}
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {formatStageDurationText(cumulativeFirstOutputMs, ttftMs)
-                      ? renderMetricPill(
-                          t("tableDuration"),
-                          formatStageDurationText(cumulativeFirstOutputMs, ttftMs)!,
-                          "warning"
-                        )
-                      : null}
-                  </div>
+              <div className="space-y-2 rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
+                <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 text-[11px]">
+                  <span className="text-foreground">{t("journeyFirstOutput")}</span>
+                  <span className="text-muted-foreground">{t("perfTtft")}</span>
+                  <span className="text-right text-status-warning">
+                    {formatStageDurationText(cumulativeFirstOutputMs, ttftMs)}
+                  </span>
                 </div>
-                <div className="text-muted-foreground">{t("perfTtft")}</div>
-              </div>
-            ) : null}
-
-            {genMs != null ? (
-              <div className="rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
-                <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    {t("journeyGenerationFinished")}
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {responsePhaseDurationText
-                      ? renderMetricPill(t("tableDuration"), responsePhaseDurationText, "success")
-                      : null}
-                  </div>
-                </div>
-                {requestTps != null ? (
-                  <div className="text-muted-foreground">
-                    {t("perfTps")}:{" "}
-                    <span className="text-foreground">{requestTps.toFixed(1) + " tok/s"}</span>
+                {genMs != null ? (
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 border-t border-divider/40 pt-2 text-[11px]">
+                    <span className="text-foreground">{t("journeyGenerationFinished")}</span>
+                    <span className="text-muted-foreground">
+                      {requestTps != null
+                        ? `${t("perfTps")} ${requestTps.toFixed(1)}`
+                        : t("perfTps")}
+                    </span>
+                    <span className="text-right text-status-success">
+                      {responsePhaseDurationText}
+                    </span>
                   </div>
                 ) : null}
+              </div>
+            ) : genMs != null ? (
+              <div className="space-y-2 rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
+                <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 text-[11px]">
+                  <span className="text-foreground">{t("journeyGenerationFinished")}</span>
+                  <span className="text-muted-foreground">
+                    {requestTps != null ? `${t("perfTps")} ${requestTps.toFixed(1)}` : t("perfTps")}
+                  </span>
+                  <span className="text-right text-status-success">
+                    {responsePhaseDurationText}
+                  </span>
+                </div>
               </div>
             ) : ttftMs == null ? (
               <div className="text-muted-foreground">{requestModeLabel}</div>
@@ -1834,10 +2019,96 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
       <div className={cn("space-y-4 font-mono text-xs", className)}>
         {hasLifecycleFusion && (
           <section className="space-y-3">
-            <div className="px-1 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-              {t("lifecycleTimeline")}
-            </div>
             <div className="space-y-3">
+              <div className={cn(DETAIL_SUMMARY_BANNER_CLASS, summaryToneStyles.panel)}>
+                <div className={cn("absolute inset-x-0 top-0 h-0.5", summaryToneStyles.accent)} />
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge
+                        variant={
+                          summaryTone === "error"
+                            ? "destructive"
+                            : summaryTone === "warning"
+                              ? "warning"
+                              : summaryTone === "success"
+                                ? "success"
+                                : "neutral"
+                        }
+                        className="px-1.5 py-0 text-[10px]"
+                      >
+                        {summaryBadge}
+                      </Badge>
+                    </div>
+                    <div
+                      className={cn(
+                        "mt-2 text-sm font-medium",
+                        summaryTone === "error"
+                          ? "text-status-error"
+                          : summaryTone === "success"
+                            ? "text-status-success"
+                            : "text-foreground"
+                      )}
+                    >
+                      {summaryHeadline}
+                    </div>
+                    {summaryReason ? (
+                      <div
+                        className={cn(
+                          "mt-1 text-[11px] leading-relaxed",
+                          summaryTone === "error"
+                            ? "text-status-error/80"
+                            : "text-muted-foreground/82"
+                        )}
+                      >
+                        {summaryReason}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-1">
+                    {log.status_code != null
+                      ? renderMetricPill(t("tableStatus"), String(log.status_code), statusVariant)
+                      : null}
+                    {totalMs != null
+                      ? renderMetricPill(t("tableDuration"), formatMetricText(totalMs), "info")
+                      : null}
+                    {requestTps != null
+                      ? renderMetricPill(t("perfTps"), requestTps.toFixed(1) + " tok/s", "success")
+                      : null}
+                  </div>
+                </div>
+                <div className="mt-3 border-t border-divider/35 pt-3 text-[11px] text-muted-foreground">
+                  <span className="mr-2 uppercase tracking-[0.14em]">{t("requestKey")}</span>
+                  <RequestKeyIdentity
+                    keyName={log.api_key_name}
+                    keyPrefix={log.api_key_prefix}
+                    compact
+                    className="inline-flex max-w-full align-middle"
+                    textClassName={
+                      requestKeyMeta.hasKeyData ? "text-foreground" : "text-muted-foreground"
+                    }
+                  />
+                </div>
+                {errorSummaryLines.length > 0 ? (
+                  <div className="mt-3 space-y-2 border-t border-divider/35 pt-3">
+                    <div className="rounded-cf-sm border border-divider/70 bg-surface-300/58 px-3 py-2 text-[10px] text-muted-foreground">
+                      {errorSummaryLines.map((line) => (
+                        <div key={line}>{line}</div>
+                      ))}
+                    </div>
+                    {errorSummaryCallout ? (
+                      <div className="rounded-cf-sm border border-status-error/30 bg-status-error-muted/12 px-3 py-2 text-[11px] text-status-error">
+                        {errorSummaryCallout}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="px-1 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                {t("lifecycleTimeline")}
+              </div>
+
               <div className="space-y-2">
                 <div className="sm:hidden">
                   <LifecycleTrack
@@ -1862,18 +2133,6 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                     durationMs={totalMs}
                   />
                 </div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {log.status_code != null
-                    ? renderMetricPill(t("tableStatus"), String(log.status_code), statusVariant)
-                    : null}
-                  {totalMs != null
-                    ? renderMetricPill(t("tableDuration"), formatMetricText(totalMs), "info")
-                    : null}
-                  {renderMetricPill(requestModeLabel, "", "neutral")}
-                  {finalUpstreamLabel
-                    ? renderMetricPill(t("timelineFinalUpstream"), finalUpstreamLabel, "neutral")
-                    : null}
-                </div>
               </div>
 
               <div className="space-y-3">
@@ -1881,11 +2140,6 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                   <div className="min-w-0">
                     <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                       {t("journeyViewLabel")}
-                    </div>
-                    <div className="mt-1 text-[11px] leading-relaxed text-muted-foreground/80">
-                      {journeyViewMode === "focused"
-                        ? t("journeyViewFocused")
-                        : t("journeyViewSequential")}
                     </div>
                   </div>
                   <div
@@ -1921,58 +2175,63 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                 {journeyViewMode === "focused" ? (
                   <>
                     <div className="relative">
-                      <div className="pointer-events-none absolute left-7 right-7 top-7 hidden h-px bg-[linear-gradient(90deg,transparent,rgba(148,163,184,0.4),transparent)] xl:block" />
-                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-                        {journeySteps.map((step) => {
+                      <div className="flex flex-wrap items-center gap-1.5 xl:grid-cols-5">
+                        {journeySteps.map((step, index) => {
                           const tone = JOURNEY_TONE_STYLES[step.tone];
                           const isActive = step.index === activeJourneyStep.index;
+                          const progressState = getJourneyProgressState(step.index);
+                          const progressTone = JOURNEY_PROGRESS_STYLES[progressState];
                           return (
-                            <button
-                              key={step.index}
-                              type="button"
-                              onClick={() => setActiveJourneyStep(step.index)}
-                              aria-pressed={isActive}
-                              aria-label={step.title}
-                              className={cn(
-                                "group relative min-w-0 overflow-hidden rounded-[20px] border px-3 py-3 text-left",
-                                LOGS_SURFACE_TRANSITION_CLASS,
-                                "before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.55),transparent)]",
-                                "motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0",
-                                tone.tab,
-                                isActive && cn("motion-safe:-translate-y-0.5", tone.tabActive)
-                              )}
-                            >
-                              <div
+                            <Fragment key={step.index}>
+                              <button
+                                type="button"
+                                onClick={() => setActiveJourneyStep(step.index)}
+                                aria-pressed={isActive}
+                                aria-label={step.title}
                                 className={cn(
-                                  "absolute inset-x-3 top-0 h-0.5 rounded-full opacity-0 transition-opacity duration-cf-fast ease-cf-standard motion-reduce:transition-none",
-                                  tone.accent,
-                                  isActive && "opacity-100"
+                                  "group relative inline-flex min-w-0 items-center gap-2 overflow-hidden rounded-full border px-3 py-2 text-left",
+                                  LOGS_SURFACE_TRANSITION_CLASS,
+                                  "motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0",
+                                  progressTone.tab,
+                                  isActive && cn("motion-safe:-translate-y-0.5", tone.tabActive)
                                 )}
-                              />
-                              <div className="flex items-start gap-3">
+                              >
+                                <div
+                                  className={cn(
+                                    "absolute inset-x-0 top-0 h-0.5 opacity-0 transition-opacity duration-cf-fast ease-cf-standard motion-reduce:transition-none",
+                                    progressTone.accent,
+                                    isActive && "opacity-100"
+                                  )}
+                                />
                                 <span
                                   className={cn(
-                                    "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold transition-[background-color,border-color,color] duration-cf-fast ease-cf-standard motion-reduce:transition-none",
-                                    tone.number
+                                    "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold transition-[background-color,border-color,color] duration-cf-fast ease-cf-standard motion-reduce:transition-none",
+                                    progressTone.number
                                   )}
                                 >
                                   {step.index}
                                 </span>
-                                <div className="min-w-0 flex-1">
+                                <div className="min-w-0">
                                   <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                                     {step.title}
                                   </div>
-                                  <div className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-foreground">
+                                  <div className="truncate text-[11px] text-foreground">
                                     {step.summary}
                                   </div>
-                                  {step.meta ? (
-                                    <div className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-muted-foreground/80">
-                                      {step.meta}
-                                    </div>
-                                  ) : null}
                                 </div>
-                              </div>
-                            </button>
+                              </button>
+                              {index < journeySteps.length - 1 ? (
+                                <span
+                                  className={cn(
+                                    "inline-flex h-6 items-center px-0.5",
+                                    progressTone.arrow
+                                  )}
+                                  aria-hidden="true"
+                                >
+                                  →
+                                </span>
+                              ) : null}
+                            </Fragment>
                           );
                         })}
                       </div>
@@ -1981,7 +2240,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                     <div
                       key={`journey-panel-${activeJourneyStep.index}-${journeyViewMode}`}
                       className={cn(
-                        "relative overflow-hidden rounded-[22px] border p-3 shadow-[0_12px_32px_rgba(15,23,42,0.06)] transition-[background-color,border-color,box-shadow,opacity] duration-cf-normal ease-cf-standard motion-reduce:transition-none",
+                        "relative overflow-hidden rounded-[22px] border p-3 shadow-[var(--vr-shadow-xs)] transition-[background-color,border-color,box-shadow,opacity] duration-cf-normal ease-cf-standard motion-reduce:transition-none",
                         LOGS_CARD_ENTER_CLASS,
                         activeJourneyTone.panel
                       )}
@@ -2031,7 +2290,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                           key={step.index}
                           aria-label={step.title}
                           className={cn(
-                            "relative overflow-hidden rounded-[22px] border p-3 shadow-[0_12px_30px_rgba(15,23,42,0.06)] transition-[background-color,border-color,box-shadow,opacity] duration-cf-normal ease-cf-standard motion-reduce:transition-none sm:p-3.5",
+                            "relative overflow-hidden rounded-[22px] border p-3 shadow-[var(--vr-shadow-xs)] transition-[background-color,border-color,box-shadow,opacity] duration-cf-normal ease-cf-standard motion-reduce:transition-none sm:p-3.5",
                             LOGS_CARD_ENTER_CLASS,
                             tone.panel
                           )}
@@ -2082,260 +2341,267 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
         )}
 
         {/* Token, Billing & Thinking Details */}
-        <div className="grid gap-4 xl:grid-cols-4">
-          <div className={DETAIL_PANEL_CLASS}>
-            <div className={DETAIL_PANEL_HEADER_CLASS}>{t("requestKey")}</div>
-            <div className={cn(DETAIL_PANEL_BODY_CLASS, "space-y-2")}>
-              <div className="flex items-start gap-2">
-                <span className="text-muted-foreground">{t("requestKey")}:</span>
-                <div className="ml-auto min-w-0 max-w-[70%] text-right">
-                  <TruncatedTextTooltip
-                    text={requestKeyMeta.primaryLabel}
-                    className={cn(
-                      "text-right",
-                      requestKeyMeta.hasKeyData ? "text-foreground" : "text-muted-foreground"
-                    )}
-                  />
+        <section className={DETAIL_PANEL_CLASS}>
+          <div className={DETAIL_PANEL_HEADER_CLASS}>
+            {t("tokenDetails")} · {t("billingDetails")}
+          </div>
+          <div className={DETAIL_PANEL_BODY_CLASS}>
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1.35fr)]">
+              <div className="space-y-3">
+                <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground/78">
+                  {t("tokenDetails")}
                 </div>
+                <TokenDetailContent
+                  promptTokens={log.prompt_tokens}
+                  completionTokens={log.completion_tokens}
+                  totalTokens={log.total_tokens}
+                  cachedTokens={log.cached_tokens}
+                  reasoningTokens={log.reasoning_tokens}
+                  cacheCreationTokens={log.cache_creation_tokens}
+                  cacheCreation5mTokens={log.cache_creation_5m_tokens}
+                  cacheCreation1hTokens={log.cache_creation_1h_tokens}
+                  cacheReadTokens={log.cache_read_tokens}
+                  showHeader={false}
+                />
+                {(log.model_max_input_tokens != null || log.model_max_output_tokens != null) && (
+                  <div className="border-t border-divider/40 pt-3">
+                    <div className="space-y-2 text-[11px]">
+                      <div className="uppercase tracking-[0.12em] text-muted-foreground/78">
+                        {t("modelWindow")}
+                      </div>
+                      <div className="space-y-1.5">
+                        {log.model_max_input_tokens != null ? (
+                          <div className="flex items-start gap-3">
+                            <span className={DETAIL_PANEL_LABEL_CLASS}>
+                              {t("modelWindowMaxInput")}
+                            </span>
+                            <span className="ml-auto tabular-nums text-right text-foreground">
+                              {log.model_max_input_tokens.toLocaleString()}
+                            </span>
+                          </div>
+                        ) : null}
+                        {log.model_max_output_tokens != null ? (
+                          <div className="flex items-start gap-3">
+                            <span className={DETAIL_PANEL_LABEL_CLASS}>
+                              {t("modelWindowMaxOutput")}
+                            </span>
+                            <span className="ml-auto tabular-nums text-right text-foreground">
+                              {log.model_max_output_tokens.toLocaleString()}
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-              {requestKeyMeta.secondaryLabel ? (
-                <div className="flex items-start gap-2">
-                  <span className="text-muted-foreground">{t("keyPrefix")}:</span>
-                  <span className="ml-auto font-mono text-foreground break-all">
-                    {requestKeyMeta.secondaryLabel}
-                  </span>
+
+              <div className="space-y-3 border-t border-divider/35 pt-4 xl:border-t-0 xl:border-l xl:border-divider/35 xl:pl-4 xl:pt-0">
+                <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground/78">
+                  {t("billingDetails")}
                 </div>
-              ) : null}
-            </div>
-          </div>
+                {log.billing_status === "billed" ? (
+                  (() => {
+                    const currency = log.currency ?? "USD";
 
-          <div className={DETAIL_PANEL_CLASS}>
-            <div className={DETAIL_PANEL_HEADER_CLASS}>{t("tokenDetails")}</div>
-            <div className={DETAIL_PANEL_BODY_CLASS}>
-              <TokenDetailContent
-                promptTokens={log.prompt_tokens}
-                completionTokens={log.completion_tokens}
-                totalTokens={log.total_tokens}
-                cachedTokens={log.cached_tokens}
-                reasoningTokens={log.reasoning_tokens}
-                cacheCreationTokens={log.cache_creation_tokens}
-                cacheCreation5mTokens={log.cache_creation_5m_tokens}
-                cacheCreation1hTokens={log.cache_creation_1h_tokens}
-                cacheReadTokens={log.cache_read_tokens}
-                showHeader={false}
-              />
-              {(log.model_max_input_tokens != null || log.model_max_output_tokens != null) && (
-                <div className="mt-3 border-t border-divider/50 pt-2">
-                  <p className="text-[11px] text-muted-foreground">
-                    {t("modelWindow")}:{" "}
-                    {log.model_max_input_tokens != null &&
-                      `Max Input: ${log.model_max_input_tokens.toLocaleString()}`}
-                    {log.model_max_input_tokens != null &&
-                      log.model_max_output_tokens != null &&
-                      " · "}
-                    {log.model_max_output_tokens != null &&
-                      `Max Output: ${log.model_max_output_tokens.toLocaleString()}`}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
+                    const billedInputTokens = log.billed_input_tokens ?? log.prompt_tokens;
+                    const completionTokens = log.completion_tokens;
+                    const cacheReadTokens = log.cache_read_tokens;
+                    const cacheWriteTokens = log.cache_creation_tokens;
 
-          <ThinkingConfigPanel thinkingConfig={log.thinking_config} />
+                    const inputPricePerMillion = log.base_input_price_per_million ?? null;
+                    const outputPricePerMillion = log.base_output_price_per_million ?? null;
+                    const cacheReadPricePerMillion =
+                      log.base_cache_read_input_price_per_million ?? inputPricePerMillion;
+                    const cacheWritePricePerMillion =
+                      log.base_cache_write_input_price_per_million ?? inputPricePerMillion;
 
-          <div className={DETAIL_PANEL_CLASS}>
-            <div className={DETAIL_PANEL_HEADER_CLASS}>{t("billingDetails")}</div>
-            <div className={cn(DETAIL_PANEL_BODY_CLASS, "space-y-1")}>
-              {log.billing_status === "billed" ? (
-                (() => {
-                  const currency = log.currency ?? "USD";
+                    const inputMultiplier = log.input_multiplier ?? 1;
+                    const outputMultiplier = log.output_multiplier ?? 1;
 
-                  const billedInputTokens = log.billed_input_tokens ?? log.prompt_tokens;
-                  const completionTokens = log.completion_tokens;
-                  const cacheReadTokens = log.cache_read_tokens;
-                  const cacheWriteTokens = log.cache_creation_tokens;
+                    const inputCost =
+                      inputPricePerMillion == null
+                        ? null
+                        : (billedInputTokens / 1_000_000) * inputPricePerMillion * inputMultiplier;
+                    const outputCost =
+                      outputPricePerMillion == null
+                        ? null
+                        : (completionTokens / 1_000_000) * outputPricePerMillion * outputMultiplier;
 
-                  const inputPricePerMillion = log.base_input_price_per_million ?? null;
-                  const outputPricePerMillion = log.base_output_price_per_million ?? null;
-                  const cacheReadPricePerMillion =
-                    log.base_cache_read_input_price_per_million ?? inputPricePerMillion;
-                  const cacheWritePricePerMillion =
-                    log.base_cache_write_input_price_per_million ?? inputPricePerMillion;
+                    const computedCacheReadCost =
+                      cacheReadTokens > 0 && cacheReadPricePerMillion != null
+                        ? (cacheReadTokens / 1_000_000) * cacheReadPricePerMillion * inputMultiplier
+                        : null;
+                    const computedCacheWriteCost =
+                      cacheWriteTokens > 0 && cacheWritePricePerMillion != null
+                        ? (cacheWriteTokens / 1_000_000) *
+                          cacheWritePricePerMillion *
+                          inputMultiplier
+                        : null;
 
-                  const inputMultiplier = log.input_multiplier ?? 1;
-                  const outputMultiplier = log.output_multiplier ?? 1;
+                    const cacheReadCost = log.cache_read_cost ?? computedCacheReadCost;
+                    const cacheWriteCost = log.cache_write_cost ?? computedCacheWriteCost;
 
-                  const inputCost =
-                    inputPricePerMillion == null
-                      ? null
-                      : (billedInputTokens / 1_000_000) * inputPricePerMillion * inputMultiplier;
-                  const outputCost =
-                    outputPricePerMillion == null
-                      ? null
-                      : (completionTokens / 1_000_000) * outputPricePerMillion * outputMultiplier;
-
-                  const computedCacheReadCost =
-                    cacheReadTokens > 0 && cacheReadPricePerMillion != null
-                      ? (cacheReadTokens / 1_000_000) * cacheReadPricePerMillion * inputMultiplier
-                      : null;
-                  const computedCacheWriteCost =
-                    cacheWriteTokens > 0 && cacheWritePricePerMillion != null
-                      ? (cacheWriteTokens / 1_000_000) * cacheWritePricePerMillion * inputMultiplier
-                      : null;
-
-                  const cacheReadCost = log.cache_read_cost ?? computedCacheReadCost;
-                  const cacheWriteCost = log.cache_write_cost ?? computedCacheWriteCost;
-
-                  const formatFormulaLine = (options: {
-                    tokens: number;
-                    pricePerMillion: number | null;
-                    multiplier: number;
-                    cost: number | null;
-                  }) => {
-                    const { tokens, pricePerMillion, multiplier, cost } = options;
-                    if (pricePerMillion == null) {
-                      return "-";
-                    }
-                    const tokensLabel = tokenFormatter.format(tokens);
-                    const priceLabel = formatMoneyValue(pricePerMillion, currency);
-                    const multiplierLabel = Number.isFinite(multiplier)
-                      ? multiplier.toFixed(4).replace(/\.?0+$/, "")
-                      : "1";
-                    const costLabel = formatMoneyValue(cost, currency);
-                    return `${tokensLabel} * ${priceLabel} / 1M * ${multiplierLabel} = ${costLabel}`;
-                  };
-
-                  const hasTierRule =
-                    log.matched_rule_type === "tiered" || log.applied_tier_threshold != null;
-                  const tierRuleSource = log.price_source ?? "litellm";
-
-                  return (
-                    <>
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">{t("billingTotal")}:</span>
-                        <span className="ml-auto tabular-nums text-foreground">
-                          {formatBillingCost(log)}
+                    const renderFormulaLine = (options: {
+                      tokens: number;
+                      pricePerMillion: number | null;
+                      multiplier: number;
+                      cost: number | null;
+                    }) => {
+                      const { tokens, pricePerMillion, multiplier, cost } = options;
+                      if (pricePerMillion == null) {
+                        return "-";
+                      }
+                      const tokensLabel = tokenFormatter.format(tokens);
+                      const priceLabel = formatMoneyValue(pricePerMillion, currency);
+                      const multiplierLabel = Number.isFinite(multiplier)
+                        ? multiplier.toFixed(4).replace(/\.?0+$/, "")
+                        : "1";
+                      const costLabel = formatMoneyValue(cost, currency);
+                      return (
+                        <span className="ml-auto flex min-w-0 flex-wrap justify-end gap-x-1 gap-y-0.5 text-right tabular-nums text-foreground">
+                          <span className="whitespace-nowrap">{tokensLabel}</span>
+                          <span className="whitespace-nowrap">*</span>
+                          <span className="whitespace-nowrap">{priceLabel}</span>
+                          <span className="whitespace-nowrap">/ 1M</span>
+                          <span className="whitespace-nowrap">*</span>
+                          <span className="whitespace-nowrap">{multiplierLabel}</span>
+                          <span className="whitespace-nowrap">=</span>
+                          <span className="whitespace-nowrap">{costLabel}</span>
                         </span>
-                      </div>
+                      );
+                    };
 
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
-                        <span className="text-muted-foreground">{t("billingRuleType")}:</span>
-                        {hasTierRule ? (
-                          <>
-                            <Badge variant="info" className="px-1.5 py-0 text-[10px]">
-                              {t("billingRuleTier")}
-                            </Badge>
-                            {log.matched_rule_display_label && (
-                              <>
-                                <span className="text-muted-foreground">·</span>
-                                <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
-                                  {log.matched_rule_display_label}
-                                </Badge>
-                              </>
-                            )}
-                            {log.applied_tier_threshold != null && (
-                              <>
-                                <span className="text-muted-foreground">·</span>
-                                <span className="text-muted-foreground">
-                                  {t("billingThreshold")}:
+                    const hasTierRule =
+                      log.matched_rule_type === "tiered" || log.applied_tier_threshold != null;
+                    const tierRuleSource = log.price_source ?? "litellm";
+
+                    return (
+                      <>
+                        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-divider/40 pb-3">
+                          <div className="space-y-1">
+                            <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground/78">
+                              {t("billingTotalCostTitle")}
+                            </div>
+                            <span className="block tabular-nums text-lg text-foreground">
+                              {formatBillingCost(log)}
+                            </span>
+                            <div className="flex flex-wrap gap-x-3 gap-y-1 pt-1 text-[11px] text-muted-foreground">
+                              <span>
+                                {t("billingRuleType")}:{" "}
+                                <span className="text-foreground">
+                                  {hasTierRule ? t("billingRuleTier") : t("billingRuleFlat")}
                                 </span>
-                                <Badge variant="info" className="px-1.5 py-0 text-[10px]">
-                                  {log.applied_tier_threshold?.toLocaleString()}
-                                </Badge>
-                              </>
+                              </span>
+                              <span>
+                                {t("billingPriceSource")}:{" "}
+                                <span className="text-foreground">
+                                  {tierRuleSource === "manual"
+                                    ? t("billingSourceManual")
+                                    : t("billingSourceSynced")}
+                                </span>
+                              </span>
+                              {log.matched_rule_display_label ? (
+                                <span>
+                                  {t("billingRuleLabel")}:{" "}
+                                  <span className="text-foreground">
+                                    {log.matched_rule_display_label}
+                                  </span>
+                                </span>
+                              ) : null}
+                              {log.applied_tier_threshold != null ? (
+                                <span>
+                                  {t("billingThreshold")}:{" "}
+                                  <span className="text-foreground">
+                                    {log.applied_tier_threshold.toLocaleString()}
+                                  </span>
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="rounded-cf-sm border border-divider/45 bg-surface-300/48 p-3">
+                          <div className="mb-2 text-[10px] uppercase tracking-[0.14em] text-muted-foreground/78">
+                            {t("billingFormulaTitle")}
+                          </div>
+                          <div className={DETAIL_PANEL_STACK_CLASS}>
+                            <div className={DETAIL_PANEL_ROW_CLASS}>
+                              <span className={DETAIL_PANEL_LABEL_CLASS}>{t("tokenInput")}</span>
+                              {renderFormulaLine({
+                                tokens: billedInputTokens,
+                                pricePerMillion: inputPricePerMillion,
+                                multiplier: inputMultiplier,
+                                cost: inputCost,
+                              })}
+                            </div>
+
+                            <div className={DETAIL_PANEL_ROW_CLASS}>
+                              <span className={DETAIL_PANEL_LABEL_CLASS}>{t("tokenOutput")}</span>
+                              {renderFormulaLine({
+                                tokens: completionTokens,
+                                pricePerMillion: outputPricePerMillion,
+                                multiplier: outputMultiplier,
+                                cost: outputCost,
+                              })}
+                            </div>
+
+                            {cacheReadTokens > 0 && (
+                              <div className={DETAIL_PANEL_ROW_CLASS}>
+                                <span className={DETAIL_PANEL_LABEL_CLASS}>
+                                  {t("tokenCacheRead")}
+                                </span>
+                                {renderFormulaLine({
+                                  tokens: cacheReadTokens,
+                                  pricePerMillion: cacheReadPricePerMillion,
+                                  multiplier: inputMultiplier,
+                                  cost: cacheReadCost,
+                                })}
+                              </div>
                             )}
-                          </>
-                        ) : (
-                          <Badge variant="neutral" className="px-1.5 py-0 text-[10px]">
-                            {t("billingRuleFlat")}
-                          </Badge>
-                        )}
-                        <span className="text-muted-foreground">·</span>
-                        <span className="text-muted-foreground">{t("billingPriceSource")}:</span>
-                        <Badge variant="neutral" className="px-1.5 py-0 text-[10px]">
-                          {tierRuleSource === "manual"
-                            ? t("billingSourceManual")
-                            : t("billingSourceSynced")}
-                        </Badge>
-                      </div>
 
-                      <div className="mt-2 space-y-1">
-                        <div className="flex items-start gap-2">
-                          <span className="text-muted-foreground">{t("tokenInput")}:</span>
-                          <span className="ml-auto text-right tabular-nums text-foreground break-all">
-                            {formatFormulaLine({
-                              tokens: billedInputTokens,
-                              pricePerMillion: inputPricePerMillion,
-                              multiplier: inputMultiplier,
-                              cost: inputCost,
-                            })}
-                          </span>
-                        </div>
-
-                        <div className="flex items-start gap-2">
-                          <span className="text-muted-foreground">{t("tokenOutput")}:</span>
-                          <span className="ml-auto text-right tabular-nums text-foreground break-all">
-                            {formatFormulaLine({
-                              tokens: completionTokens,
-                              pricePerMillion: outputPricePerMillion,
-                              multiplier: outputMultiplier,
-                              cost: outputCost,
-                            })}
-                          </span>
-                        </div>
-
-                        {cacheReadTokens > 0 && (
-                          <div className="flex items-start gap-2">
-                            <span className="text-muted-foreground">{t("tokenCacheRead")}:</span>
-                            <span className="ml-auto text-right tabular-nums text-foreground break-all">
-                              {formatFormulaLine({
-                                tokens: cacheReadTokens,
-                                pricePerMillion: cacheReadPricePerMillion,
-                                multiplier: inputMultiplier,
-                                cost: cacheReadCost,
-                              })}
-                            </span>
+                            {cacheWriteTokens > 0 && (
+                              <div className={DETAIL_PANEL_ROW_CLASS}>
+                                <span className={DETAIL_PANEL_LABEL_CLASS}>
+                                  {t("tokenCacheWrite")}
+                                </span>
+                                {renderFormulaLine({
+                                  tokens: cacheWriteTokens,
+                                  pricePerMillion: cacheWritePricePerMillion,
+                                  multiplier: inputMultiplier,
+                                  cost: cacheWriteCost,
+                                })}
+                              </div>
+                            )}
                           </div>
-                        )}
-
-                        {cacheWriteTokens > 0 && (
-                          <div className="flex items-start gap-2">
-                            <span className="text-muted-foreground">{t("tokenCacheWrite")}:</span>
-                            <span className="ml-auto text-right tabular-nums text-foreground break-all">
-                              {formatFormulaLine({
-                                tokens: cacheWriteTokens,
-                                pricePerMillion: cacheWritePricePerMillion,
-                                multiplier: inputMultiplier,
-                                cost: cacheWriteCost,
-                              })}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  );
-                })()
-              ) : log.billing_status === "unbilled" ? (
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">{t("billingStatusLabel")}:</span>
-                    <span className="ml-auto tabular-nums text-status-warning">
-                      {t("billingStatusUnbilled")}
-                    </span>
+                        </div>
+                      </>
+                    );
+                  })()
+                ) : log.billing_status === "unbilled" ? (
+                  <div className={DETAIL_PANEL_STACK_CLASS}>
+                    <div className={DETAIL_PANEL_ROW_CLASS}>
+                      <span className={DETAIL_PANEL_LABEL_CLASS}>{t("billingStatusLabel")}</span>
+                      <span className="ml-auto tabular-nums text-status-warning">
+                        {t("billingStatusUnbilled")}
+                      </span>
+                    </div>
+                    <div className={DETAIL_PANEL_ROW_CLASS}>
+                      <span className={DETAIL_PANEL_LABEL_CLASS}>{t("unbillableReason")}</span>
+                      <span className="ml-auto text-status-warning">
+                        {resolveBillingReasonLabel(log.unbillable_reason)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">{t("unbillableReason")}:</span>
-                    <span className="ml-auto text-status-warning">
-                      {resolveBillingReasonLabel(log.unbillable_reason)}
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-muted-foreground">{t("billingStatusPending")}</div>
-              )}
+                ) : (
+                  <div className={DETAIL_PANEL_MUTED_TEXT_CLASS}>{t("billingStatusPending")}</div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        </section>
+
+        <ThinkingConfigPanel thinkingConfig={log.thinking_config} />
 
         {/* Header Diff Panel */}
         {log.header_diff && (
@@ -2345,17 +2611,6 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
               <HeaderDiffPanel headerDiff={log.header_diff} />
             </div>
           </section>
-        )}
-
-        {/* Error Display */}
-        {isError && (
-          <div className="text-status-error">
-            <span className="text-surface-500">├─</span> ERROR_TYPE: HTTP_
-            {log.status_code}
-            <br />
-            <span className="text-surface-500">└─</span> STATUS:{" "}
-            {log.status_code && log.status_code >= 500 ? "SERVER_ERROR" : "CLIENT_ERROR"}
-          </div>
         )}
       </div>
     );
