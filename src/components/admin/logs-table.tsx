@@ -2176,17 +2176,8 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
               </div>
 
               <div className="space-y-3">
-                <div className="flex flex-wrap items-start justify-between gap-3 px-1">
-                  <div className="min-w-0">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                      {t("journeyViewLabel")}
-                    </div>
-                  </div>
-                  <div
-                    className="flex w-full max-w-full flex-wrap items-center justify-start gap-1 sm:w-auto sm:justify-end"
-                    role="group"
-                    aria-label={t("journeyViewLabel")}
-                  >
+                <div className="px-1">
+                  <div className="flex w-full max-w-full flex-wrap items-center justify-start gap-1">
                     {journeyViewOptions.map((option) => {
                       const isActive = journeyViewMode === option.value;
                       return (

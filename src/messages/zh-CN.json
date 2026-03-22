@@ -429,7 +429,7 @@
     "headerDiffNoChanges": "无请求头变更",
     "compensationBadge": "已补偿",
     "compensationBadgeTooltip": "session_id 从请求体中恢复（原始请求头缺失）",
-    "thinkingConfig": "Thinking 配置",
+    "thinkingConfig": "思考信息",
     "thinkingBadgeAria": "Thinking 标记 {value}",
     "thinkingProvider": "提供方",
     "thinkingProtocol": "协议",
@@ -520,7 +520,6 @@
       "unknown": "未知原因"
     },
     "journeyInitialUpstream": "首次选中上游",
-    "journeyViewLabel": "视图模式",
     "journeyViewFocused": "焦点查看",
     "journeyViewSequential": "顺序全览"
   },

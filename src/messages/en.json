@@ -515,7 +515,6 @@
       "unknown": "unknown reason"
     },
     "journeyInitialUpstream": "Initially selected upstream",
-    "journeyViewLabel": "View mode",
     "journeyViewFocused": "Focused",
     "journeyViewSequential": "Sequential"
   },
