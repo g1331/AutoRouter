@@ -672,6 +672,33 @@ describe("LogsTable", () => {
       // Check for formatted number (locale-dependent, may be "30,000" or "30000")
       expect(screen.getByText(/30[,.]?000/)).toBeInTheDocument();
     });
+
+    it("renders absolute timestamp once the log is older than one minute", () => {
+      const createdAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+      const expectedTimestamp = new Intl.DateTimeFormat("en", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: "UTC",
+      }).format(new Date(createdAt));
+
+      render(<LogsTable logs={[{ ...mockLog, created_at: createdAt }]} />);
+
+      expect(document.body).toHaveTextContent(expectedTimestamp);
+      expect(screen.queryByText(/ago/)).not.toBeInTheDocument();
+    });
+
+    it("renders less than one minute copy for fresh logs", () => {
+      render(<LogsTable logs={[{ ...mockLog, created_at: new Date().toISOString() }]} />);
+
+      return waitFor(() => {
+        expect(screen.getByText("logTimeLessThanMinute")).toBeInTheDocument();
+        expect(screen.queryByText(/ago/)).not.toBeInTheDocument();
+      });
+    });
   });
 
   describe("Lifecycle Track Timing Display", () => {

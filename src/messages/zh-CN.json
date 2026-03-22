@@ -262,6 +262,7 @@
     "tableStatus": "状态",
     "displayStatusInProgress": "进行中",
     "tableDuration": "耗时",
+    "logTimeLessThanMinute": "不到 1 分钟",
     "requestModeStreaming": "流式",
     "requestModeNonStreaming": "非流式",
     "requestModeStreamingShort": "流式",

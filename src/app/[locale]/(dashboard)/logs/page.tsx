@@ -42,7 +42,7 @@ function LogsLoadingSkeleton({ loadingLabel }: LogsLoadingSkeletonProps) {
         <TableHeader>
           <TableRow>
             <TableHead className="w-9 px-1.5"></TableHead>
-            <TableHead className="w-[92px] px-1.5">
+            <TableHead className="w-[148px] px-1.5">
               <Skeleton className="h-3 w-12" />
             </TableHead>
             <TableHead className="hidden lg:table-cell w-[120px] px-1.5">
@@ -77,8 +77,8 @@ function LogsLoadingSkeleton({ loadingLabel }: LogsLoadingSkeletonProps) {
               <TableCell className="px-1.5 py-1.5">
                 <Skeleton className="h-2 w-4" />
               </TableCell>
-              <TableCell className="w-[92px] font-mono text-[8px] whitespace-nowrap px-1.5 py-1.5">
-                <Skeleton className="h-2 w-16" />
+              <TableCell className="w-[148px] font-mono text-[10px] whitespace-nowrap px-1.5 py-1.5">
+                <Skeleton className="h-2 w-24" />
               </TableCell>
               <TableCell className="hidden lg:table-cell w-[120px] px-1.5 py-1.5 min-w-0 overflow-hidden text-[10px]">
                 <Skeleton className="h-2 w-full max-w-[80px]" />
@@ -152,7 +152,7 @@ export default function LogsPage() {
     <>
       <Topbar title={t("pageTitle")} />
 
-      <div className="mx-auto max-w-7xl space-y-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+      <div className="mx-auto w-full max-w-[1560px] space-y-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
         <Card
           variant="outlined"
           className={cn("border-divider bg-surface-200/70", LOGS_SECTION_ENTER_CLASS)}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef, Fragment, type ReactNode } from "react";
-import { formatDistanceToNow, subDays, startOfDay } from "date-fns";
+import { subDays, startOfDay } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
 import { ScrollText, Filter, ChevronDown, Loader2 } from "lucide-react";
 import type {
@@ -22,7 +22,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { TimeRangeSelector } from "@/components/dashboard/time-range-selector";
-import { getDateLocale } from "@/lib/date-locale";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -680,7 +679,6 @@ function getPercentile(values: number[], percentile: number): number | null {
 export function LogsTable({ logs, isLive = false }: LogsTableProps) {
   const t = useTranslations("logs");
   const locale = useLocale();
-  const dateLocale = getDateLocale(locale);
   const usdFormatter = useMemo(
     () =>
       new Intl.NumberFormat(locale, {
@@ -694,6 +692,27 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
     [locale]
   );
   const tokenFormatter = useMemo(() => new Intl.NumberFormat(locale), [locale]);
+  const timestampFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(locale, {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: "UTC",
+      }),
+    [locale]
+  );
+
+  const formatLogTimestamp = (value: string) => {
+    const timestamp = new Date(value);
+    if (hydratedAt !== null && hydratedAt - timestamp.getTime() < 60_000) {
+      return t("logTimeLessThanMinute");
+    }
+    return timestampFormatter.format(timestamp);
+  };
 
   const resolveBillingReasonLabel = (reason: string | null | undefined): string => {
     if (!reason) {
@@ -741,6 +760,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
   const [timeRangeFilter, setTimeRangeFilter] = useState<TimeRange>("30d");
   const [performancePreset, setPerformancePreset] = useState<PerformancePreset>("all");
   const [isMobileLayout, setIsMobileLayout] = useState(false);
+  const [hydratedAt, setHydratedAt] = useState<number | null>(null);
 
   // Expanded rows state for failover details
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -767,6 +787,16 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
     mediaQuery.addEventListener("change", updateLayout);
     return () => {
       mediaQuery.removeEventListener("change", updateLayout);
+    };
+  }, []);
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      setHydratedAt(Date.now());
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
     };
   }, []);
 
@@ -2979,10 +3009,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                         <div className="min-w-0 flex-1 space-y-2">
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                             <span className="font-mono text-muted-foreground whitespace-nowrap">
-                              {formatDistanceToNow(new Date(log.created_at), {
-                                addSuffix: true,
-                                locale: dateLocale,
-                              })}
+                              {formatLogTimestamp(log.created_at)}
                             </span>
                             <div className="inline-flex min-w-0 items-center text-muted-foreground">
                               <span className="mr-1 shrink-0">•</span>
@@ -3159,7 +3186,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                         <TableHeader>
                           <TableRow>
                             <TableHead className="w-9 px-1.5"></TableHead>
-                            <TableHead className="w-[92px] px-1.5">{t("tableTime")}</TableHead>
+                            <TableHead className="w-[148px] px-1.5">{t("tableTime")}</TableHead>
                             <TableHead className="w-[148px] px-1.5">{t("tableKey")}</TableHead>
                             <TableHead className="hidden lg:table-cell w-[96px] px-1.5">
                               {t("tableUpstream")}
@@ -3242,11 +3269,8 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                   </button>
                                 )}
                               </TableCell>
-                              <TableCell className="w-[92px] font-mono text-[8px] whitespace-nowrap px-1.5 py-1.5">
-                                {formatDistanceToNow(new Date(log.created_at), {
-                                  addSuffix: true,
-                                  locale: dateLocale,
-                                })}
+                              <TableCell className="w-[148px] font-mono text-[10px] whitespace-nowrap px-1.5 py-1.5">
+                                {formatLogTimestamp(log.created_at)}
                               </TableCell>
                               <TableCell className="w-[148px] px-1.5 py-1.5 text-[10px] min-w-0">
                                 <RequestKeyIdentity

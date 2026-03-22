@@ -262,6 +262,7 @@
     "tableStatus": "Status",
     "displayStatusInProgress": "In progress",
     "tableDuration": "Duration",
+    "logTimeLessThanMinute": "less than 1 minute",
     "requestModeStreaming": "Streaming",
     "requestModeNonStreaming": "Non-streaming",
     "requestModeStreamingShort": "Stream",
