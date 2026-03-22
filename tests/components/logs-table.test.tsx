@@ -682,13 +682,14 @@ describe("LogsTable", () => {
         hour: "2-digit",
         minute: "2-digit",
         hour12: false,
-        timeZone: "UTC",
       }).format(new Date(createdAt));
 
       render(<LogsTable logs={[{ ...mockLog, created_at: createdAt }]} />);
 
-      expect(document.body).toHaveTextContent(expectedTimestamp);
-      expect(screen.queryByText(/ago/)).not.toBeInTheDocument();
+      return waitFor(() => {
+        expect(document.body).toHaveTextContent(expectedTimestamp);
+        expect(screen.queryByText(/ago/)).not.toBeInTheDocument();
+      });
     });
 
     it("renders less than one minute copy for fresh logs", () => {

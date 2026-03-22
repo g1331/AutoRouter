@@ -692,7 +692,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
     [locale]
   );
   const tokenFormatter = useMemo(() => new Intl.NumberFormat(locale), [locale]);
-  const timestampFormatter = useMemo(
+  const serverTimestampFormatter = useMemo(
     () =>
       new Intl.DateTimeFormat(locale, {
         year: "numeric",
@@ -705,13 +705,27 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
       }),
     [locale]
   );
+  const localTimestampFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(locale, {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }),
+    [locale]
+  );
 
   const formatLogTimestamp = (value: string) => {
     const timestamp = new Date(value);
     if (hydratedAt !== null && hydratedAt - timestamp.getTime() < 60_000) {
       return t("logTimeLessThanMinute");
     }
-    return timestampFormatter.format(timestamp);
+    return hydratedAt === null
+      ? serverTimestampFormatter.format(timestamp)
+      : localTimestampFormatter.format(timestamp);
   };
 
   const resolveBillingReasonLabel = (reason: string | null | undefined): string => {
