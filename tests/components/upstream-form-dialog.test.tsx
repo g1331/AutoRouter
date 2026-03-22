@@ -105,9 +105,9 @@ describe("UpstreamFormDialog", () => {
       ).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText("upstreamName").length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText("priorityAndWeight").length).toBeGreaterThanOrEqual(1);
-      expect(screen.queryByText("configCategoryBasic")).not.toBeInTheDocument();
-      expect(screen.queryByText("configCategoryStrategy")).not.toBeInTheDocument();
-      expect(screen.queryByText("configCategoryReliability")).not.toBeInTheDocument();
+      expect(screen.getByText("configCategoryBasic")).toBeInTheDocument();
+      expect(screen.getByText("configCategoryStrategy")).toBeInTheDocument();
+      expect(screen.getByText("configCategoryReliability")).toBeInTheDocument();
     });
 
     it("keeps section order consistent with navigation order", () => {

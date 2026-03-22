@@ -204,11 +204,21 @@ type AdvancedSectionId =
 
 type BasicSectionId = "basic-name" | "basic-profile" | "basic-route-endpoint" | "basic-api-key";
 type ConfigSectionId = BasicSectionId | AdvancedSectionId;
+type ConfigCategoryKey =
+  | "configCategoryBasic"
+  | "configCategoryStrategy"
+  | "configCategoryReliability";
 
 interface ConfigSectionEntry {
   id: ConfigSectionId;
   label: string;
   icon: LucideIcon;
+  category: ConfigCategoryKey;
+}
+
+interface ConfigSectionGroup {
+  category: ConfigCategoryKey;
+  sections: ConfigSectionEntry[];
 }
 
 interface EndpointPreviewState {
@@ -373,56 +383,67 @@ export function UpstreamFormDialog({
         id: "basic-name",
         label: t("upstreamName"),
         icon: Type,
+        category: "configCategoryBasic",
       },
       {
         id: "basic-profile",
         label: t("upstreamDescription"),
         icon: FileText,
+        category: "configCategoryBasic",
       },
       {
         id: "basic-route-endpoint",
         label: t("baseUrl"),
         icon: Link2,
+        category: "configCategoryBasic",
       },
       {
         id: "basic-api-key",
         label: t("apiKey"),
         icon: KeyRound,
+        category: "configCategoryBasic",
       },
       {
         id: "advanced-priority-weight",
         label: t("priorityAndWeight"),
         icon: SlidersHorizontal,
+        category: "configCategoryStrategy",
       },
       {
         id: "advanced-model-routing",
         label: t("modelBasedRouting"),
         icon: Route,
+        category: "configCategoryStrategy",
       },
       {
         id: "advanced-billing-multipliers",
         label: t("billingMultipliers"),
         icon: Coins,
+        category: "configCategoryStrategy",
       },
       {
         id: "advanced-spending-quota",
         label: t("spendingQuota"),
         icon: Wallet,
+        category: "configCategoryStrategy",
       },
       {
         id: "advanced-capacity-control",
         label: t("maxConcurrency"),
         icon: Gauge,
+        category: "configCategoryReliability",
       },
       {
         id: "advanced-circuit-breaker",
         label: t("circuitBreakerConfig"),
         icon: Shield,
+        category: "configCategoryReliability",
       },
       {
         id: "advanced-affinity-migration",
         label: t("affinityMigrationConfig"),
         icon: Shuffle,
+        category: "configCategoryReliability",
       },
     ],
     [t]
@@ -434,6 +455,24 @@ export function UpstreamFormDialog({
       ? configSections.filter((section) => section.label.toLowerCase().includes(query))
       : configSections;
   }, [configSearchQuery, configSections]);
+
+  const groupedFilteredConfigSections = useMemo<ConfigSectionGroup[]>(
+    () =>
+      filteredConfigSections.reduce<ConfigSectionGroup[]>((groups, section) => {
+        const existingGroup = groups.find((group) => group.category === section.category);
+        if (existingGroup) {
+          existingGroup.sections.push(section);
+          return groups;
+        }
+
+        groups.push({
+          category: section.category,
+          sections: [section],
+        });
+        return groups;
+      }, []),
+    [filteredConfigSections]
+  );
 
   useEffect(() => {
     if (!highlightedSectionId) {
@@ -829,28 +868,41 @@ export function UpstreamFormDialog({
                       />
                     </div>
                     {filteredConfigSections.length > 0 ? (
-                      <div className="mt-3 flex-1 space-y-1 overflow-y-auto pr-1 [scrollbar-gutter:stable]">
-                        {filteredConfigSections.map((section) => {
-                          const Icon = section.icon;
-                          return (
-                            <Button
-                              key={section.id}
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className={cn(
-                                "h-8 w-full justify-start gap-2 border text-xs",
-                                activeSectionId === section.id
-                                  ? "border-status-info/45 bg-status-info-muted text-foreground hover:bg-status-info-muted/90"
-                                  : "border-transparent text-muted-foreground hover:border-divider hover:bg-surface-300/65 hover:text-foreground"
-                              )}
-                              onClick={() => jumpToSection(section.id)}
-                            >
-                              <Icon className="h-3.5 w-3.5" />
-                              <span className="truncate">{section.label}</span>
-                            </Button>
-                          );
-                        })}
+                      <div className="mt-3 flex-1 space-y-4 overflow-y-auto pr-1 [scrollbar-gutter:stable]">
+                        {groupedFilteredConfigSections.map((group, groupIndex) => (
+                          <section
+                            key={group.category}
+                            className={cn(
+                              "space-y-1.5",
+                              groupIndex > 0 && "border-t border-divider/70 pt-3"
+                            )}
+                          >
+                            <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80">
+                              {t(group.category)}
+                            </p>
+                            {group.sections.map((section) => {
+                              const Icon = section.icon;
+                              return (
+                                <Button
+                                  key={section.id}
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className={cn(
+                                    "h-8 w-full justify-start gap-2 border text-xs",
+                                    activeSectionId === section.id
+                                      ? "border-status-info/45 bg-status-info-muted text-foreground hover:bg-status-info-muted/90"
+                                      : "border-transparent text-muted-foreground hover:border-divider hover:bg-surface-300/65 hover:text-foreground"
+                                  )}
+                                  onClick={() => jumpToSection(section.id)}
+                                >
+                                  <Icon className="h-3.5 w-3.5" />
+                                  <span className="truncate">{section.label}</span>
+                                </Button>
+                              );
+                            })}
+                          </section>
+                        ))}
                       </div>
                     ) : (
                       <p className="mt-3 text-xs text-muted-foreground">
