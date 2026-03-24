@@ -847,13 +847,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
       return;
     }
 
-    if (isMobileLayout) {
-      setDesktopTableWidth(null);
-      return;
-    }
-
-    if (!desktopTableContainerElement) {
-      setDesktopTableWidth(null);
+    if (isMobileLayout || !desktopTableContainerElement) {
       return;
     }
 
@@ -2868,12 +2862,15 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
     (desktopBreakpointState.lg
       ? DESKTOP_TABLE_BASE_WIDTHS.upstream + DESKTOP_TABLE_BASE_WIDTHS.interfaceType
       : 0);
+  const resolvedDesktopTableWidth =
+    !isMobileLayout && desktopTableContainerElement ? desktopTableWidth : null;
   const desktopModelColumnWidth = desktopBreakpointState.xl
     ? Math.max(
         DESKTOP_MODEL_COLUMN_MIN_WIDTH,
         Math.min(
           DESKTOP_MODEL_COLUMN_MAX_WIDTH,
-          (desktopTableWidth ?? desktopFixedColumnWidth + DESKTOP_MODEL_COLUMN_MAX_WIDTH) -
+          (resolvedDesktopTableWidth ??
+            desktopFixedColumnWidth + DESKTOP_MODEL_COLUMN_MAX_WIDTH) -
             desktopFixedColumnWidth
         )
       )
