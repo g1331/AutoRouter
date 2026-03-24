@@ -152,7 +152,7 @@ export default function LogsPage() {
     <>
       <Topbar title={t("pageTitle")} />
 
-      <div className="mx-auto w-full max-w-[1560px] space-y-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+      <div className="mx-auto min-w-0 w-full max-w-[1560px] space-y-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
         <Card
           variant="outlined"
           className={cn("border-divider bg-surface-200/70", LOGS_SECTION_ENTER_CLASS)}
