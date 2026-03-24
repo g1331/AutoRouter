@@ -11,7 +11,6 @@ on:
       - "*.json"
       - "*.ts"
       - "*.mjs"
-      - ".github/code-argus/**"
       - ".github/workflows/**"
   pull_request:
     types: [opened, synchronize, reopened] # Explicitly specify types to ensure all PR updates trigger
@@ -24,7 +23,6 @@ on:
       - "*.json"
       - "*.ts"
       - "*.mjs"
-      - ".github/code-argus/**"
       - ".github/workflows/**"
 
 concurrency:
