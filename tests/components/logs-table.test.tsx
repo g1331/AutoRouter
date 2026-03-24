@@ -134,7 +134,7 @@ describe("LogsTable", () => {
       expect(interfaceTypeHeader?.className).toContain("w-[84px]");
 
       const modelHeader = screen.getByText("tableModel").closest("th");
-      expect(modelHeader?.className).toContain("w-[264px]");
+      expect(modelHeader).toHaveStyle({ width: "264px" });
 
       const tokenHeader = screen.getByText("tableTokens").closest("th");
       expect(tokenHeader?.className).toContain("w-[104px]");
@@ -143,6 +143,106 @@ describe("LogsTable", () => {
 
       const tokenDetails = screen.getByText("tokenDetails");
       expect(tokenDetails.closest("td")).toBeNull();
+    });
+
+    it("shrinks the desktop model column when the table container becomes narrow", async () => {
+      const originalMatchMedia = window.matchMedia;
+      const originalClientWidth = Object.getOwnPropertyDescriptor(
+        HTMLElement.prototype,
+        "clientWidth"
+      );
+
+      window.matchMedia = ((query: string) => ({
+        matches:
+          query === "(min-width: 768px)" ||
+          query === "(min-width: 1024px)" ||
+          query === "(min-width: 1280px)",
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      })) as unknown as typeof window.matchMedia;
+
+      Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+        configurable: true,
+        get() {
+          return 1040;
+        },
+      });
+
+      try {
+        render(<LogsTable logs={[mockLog]} />);
+
+        await waitFor(() => {
+          const modelHeader = screen.getByText("tableModel").closest("th");
+          expect(modelHeader).toHaveStyle({ width: "136px" });
+        });
+      } finally {
+        window.matchMedia = originalMatchMedia;
+        if (originalClientWidth) {
+          Object.defineProperty(HTMLElement.prototype, "clientWidth", originalClientWidth);
+        } else {
+          delete (HTMLElement.prototype as Partial<HTMLElement>).clientWidth;
+        }
+      }
+    });
+
+    it("remeasures the desktop model column after switching from empty filter state back to table rows", async () => {
+      const originalMatchMedia = window.matchMedia;
+      const originalClientWidth = Object.getOwnPropertyDescriptor(
+        HTMLElement.prototype,
+        "clientWidth"
+      );
+      const thirtyFiveDaysAgo = new Date();
+      thirtyFiveDaysAgo.setDate(thirtyFiveDaysAgo.getDate() - 35);
+
+      window.matchMedia = ((query: string) => ({
+        matches:
+          query === "(min-width: 768px)" ||
+          query === "(min-width: 1024px)" ||
+          query === "(min-width: 1280px)",
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      })) as unknown as typeof window.matchMedia;
+
+      Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+        configurable: true,
+        get() {
+          return 1040;
+        },
+      });
+
+      try {
+        const { rerender } = render(
+          <LogsTable
+            logs={[{ ...mockLog, id: "old-log", created_at: thirtyFiveDaysAgo.toISOString() }]}
+          />
+        );
+
+        expect(screen.getByText("noMatchingLogs")).toBeInTheDocument();
+
+        rerender(<LogsTable logs={[mockLog]} />);
+
+        await waitFor(() => {
+          const modelHeader = screen.getByText("tableModel").closest("th");
+          expect(modelHeader).toHaveStyle({ width: "136px" });
+        });
+      } finally {
+        window.matchMedia = originalMatchMedia;
+        if (originalClientWidth) {
+          Object.defineProperty(HTMLElement.prototype, "clientWidth", originalClientWidth);
+        } else {
+          delete (HTMLElement.prototype as Partial<HTMLElement>).clientWidth;
+        }
+      }
     });
 
     it("renders log data correctly", () => {

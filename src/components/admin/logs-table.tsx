@@ -50,6 +50,20 @@ const LOW_TPS_THRESHOLD = 30;
 const SLOW_DURATION_THRESHOLD_MS = 20000;
 const MIN_TPS_COMPLETION_TOKENS = 10;
 const MIN_TPS_DURATION_MS = 100;
+const DESKTOP_MODEL_COLUMN_MAX_WIDTH = 264;
+const DESKTOP_MODEL_COLUMN_MIN_WIDTH = 136;
+const DESKTOP_TABLE_BASE_WIDTHS = {
+  expand: 36,
+  time: 148,
+  key: 148,
+  upstream: 96,
+  method: 60,
+  interfaceType: 84,
+  tokens: 104,
+  cost: 84,
+  status: 68,
+  duration: 112,
+} as const;
 
 const DETAIL_PANEL_CLASS =
   "overflow-hidden rounded-cf-md border border-divider/80 bg-surface-200/82 shadow-[var(--vr-shadow-xs)]";
@@ -679,6 +693,8 @@ function getPercentile(values: number[], percentile: number): number | null {
 export function LogsTable({ logs, isLive = false }: LogsTableProps) {
   const t = useTranslations("logs");
   const locale = useLocale();
+  const [desktopTableContainerElement, setDesktopTableContainerElement] =
+    useState<HTMLDivElement | null>(null);
   const usdFormatter = useMemo(
     () =>
       new Intl.NumberFormat(locale, {
@@ -774,6 +790,12 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
   const [timeRangeFilter, setTimeRangeFilter] = useState<TimeRange>("30d");
   const [performancePreset, setPerformancePreset] = useState<PerformancePreset>("all");
   const [isMobileLayout, setIsMobileLayout] = useState(false);
+  const [desktopBreakpointState, setDesktopBreakpointState] = useState({
+    md: true,
+    lg: true,
+    xl: true,
+  });
+  const [desktopTableWidth, setDesktopTableWidth] = useState<number | null>(null);
   const [hydratedAt, setHydratedAt] = useState<number | null>(null);
 
   // Expanded rows state for failover details
@@ -794,15 +816,71 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
       return;
     }
 
-    const mediaQuery = window.matchMedia("(max-width: 1023px)");
-    const updateLayout = () => setIsMobileLayout(mediaQuery.matches);
+    const mobileMediaQuery = window.matchMedia("(max-width: 1023px)");
+    const mdMediaQuery = window.matchMedia("(min-width: 768px)");
+    const lgMediaQuery = window.matchMedia("(min-width: 1024px)");
+    const xlMediaQuery = window.matchMedia("(min-width: 1280px)");
+    const updateLayout = () => {
+      setIsMobileLayout(mobileMediaQuery.matches);
+      setDesktopBreakpointState({
+        md: mdMediaQuery.matches,
+        lg: lgMediaQuery.matches,
+        xl: xlMediaQuery.matches,
+      });
+    };
     updateLayout();
 
-    mediaQuery.addEventListener("change", updateLayout);
+    mobileMediaQuery.addEventListener("change", updateLayout);
+    mdMediaQuery.addEventListener("change", updateLayout);
+    lgMediaQuery.addEventListener("change", updateLayout);
+    xlMediaQuery.addEventListener("change", updateLayout);
     return () => {
-      mediaQuery.removeEventListener("change", updateLayout);
+      mobileMediaQuery.removeEventListener("change", updateLayout);
+      mdMediaQuery.removeEventListener("change", updateLayout);
+      lgMediaQuery.removeEventListener("change", updateLayout);
+      xlMediaQuery.removeEventListener("change", updateLayout);
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (isMobileLayout) {
+      setDesktopTableWidth(null);
+      return;
+    }
+
+    if (!desktopTableContainerElement) {
+      setDesktopTableWidth(null);
+      return;
+    }
+
+    const updateDesktopTableWidth = () => {
+      const nextWidth = desktopTableContainerElement.clientWidth;
+      setDesktopTableWidth(nextWidth > 0 ? nextWidth : null);
+    };
+
+    updateDesktopTableWidth();
+
+    if (typeof ResizeObserver === "function") {
+      const resizeObserver = new ResizeObserver(() => {
+        updateDesktopTableWidth();
+      });
+      resizeObserver.observe(desktopTableContainerElement);
+
+      return () => {
+        resizeObserver.disconnect();
+      };
+    }
+
+    window.addEventListener("resize", updateDesktopTableWidth);
+
+    return () => {
+      window.removeEventListener("resize", updateDesktopTableWidth);
+    };
+  }, [desktopTableContainerElement, isMobileLayout]);
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
@@ -2778,6 +2856,33 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
     }
   }
 
+  const desktopFixedColumnWidth =
+    DESKTOP_TABLE_BASE_WIDTHS.expand +
+    DESKTOP_TABLE_BASE_WIDTHS.time +
+    DESKTOP_TABLE_BASE_WIDTHS.key +
+    DESKTOP_TABLE_BASE_WIDTHS.method +
+    DESKTOP_TABLE_BASE_WIDTHS.cost +
+    DESKTOP_TABLE_BASE_WIDTHS.status +
+    DESKTOP_TABLE_BASE_WIDTHS.duration +
+    (desktopBreakpointState.md ? DESKTOP_TABLE_BASE_WIDTHS.tokens : 0) +
+    (desktopBreakpointState.lg
+      ? DESKTOP_TABLE_BASE_WIDTHS.upstream + DESKTOP_TABLE_BASE_WIDTHS.interfaceType
+      : 0);
+  const desktopModelColumnWidth = desktopBreakpointState.xl
+    ? Math.max(
+        DESKTOP_MODEL_COLUMN_MIN_WIDTH,
+        Math.min(
+          DESKTOP_MODEL_COLUMN_MAX_WIDTH,
+          (desktopTableWidth ?? desktopFixedColumnWidth + DESKTOP_MODEL_COLUMN_MAX_WIDTH) -
+            desktopFixedColumnWidth
+        )
+      )
+    : DESKTOP_MODEL_COLUMN_MAX_WIDTH;
+  const desktopTableMinWidth =
+    desktopFixedColumnWidth + (desktopBreakpointState.xl ? desktopModelColumnWidth : 0);
+  const desktopModelColumnStyle = { width: `${desktopModelColumnWidth}px` };
+  const desktopTableStyle = { minWidth: `${desktopTableMinWidth}px` };
+
   if (logs.length === 0) {
     return (
       <div
@@ -3192,11 +3297,17 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
               </div>
             </TooltipProvider>
           ) : (
-            <div className="overflow-visible rounded-cf-md border border-divider bg-card">
+            <div
+              ref={setDesktopTableContainerElement}
+              className="overflow-x-auto rounded-cf-md border border-divider bg-card"
+            >
               <TooltipProvider>
                 {desktopSections.map((section, sectionIndex) => (
                   <Fragment key={section.key}>
-                    <table className="w-full table-fixed border-collapse text-sm text-foreground">
+                    <table
+                      className="w-full table-fixed border-collapse text-sm text-foreground"
+                      style={desktopTableStyle}
+                    >
                       {sectionIndex === 0 ? (
                         <TableHeader>
                           <TableRow>
@@ -3210,7 +3321,10 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                             <TableHead className="hidden lg:table-cell w-[84px] px-1.5 text-left whitespace-nowrap">
                               {t("tableInterfaceType")}
                             </TableHead>
-                            <TableHead className="hidden xl:table-cell w-[264px] px-1.5 pl-1">
+                            <TableHead
+                              className="hidden xl:table-cell px-1.5 pl-1"
+                              style={desktopModelColumnStyle}
+                            >
                               {t("tableModel")}
                             </TableHead>
                             <TableHead className="hidden md:table-cell w-[104px] px-1.5">
@@ -3325,7 +3439,10 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                   variant="desktop"
                                 />
                               </TableCell>
-                              <TableCell className="hidden font-mono text-[10px] xl:table-cell w-[264px] px-1.5 py-1 pl-1 min-w-0">
+                              <TableCell
+                                className="hidden font-mono text-[10px] xl:table-cell px-1.5 py-1 pl-1 min-w-0"
+                                style={desktopModelColumnStyle}
+                              >
                                 {log.model ? (
                                   <ModelIdentity
                                     label={log.model}
