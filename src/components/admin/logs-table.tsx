@@ -2869,8 +2869,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
         DESKTOP_MODEL_COLUMN_MIN_WIDTH,
         Math.min(
           DESKTOP_MODEL_COLUMN_MAX_WIDTH,
-          (resolvedDesktopTableWidth ??
-            desktopFixedColumnWidth + DESKTOP_MODEL_COLUMN_MAX_WIDTH) -
+          (resolvedDesktopTableWidth ?? desktopFixedColumnWidth + DESKTOP_MODEL_COLUMN_MAX_WIDTH) -
             desktopFixedColumnWidth
         )
       )
