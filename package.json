@@ -16,6 +16,7 @@
     "e2e": "playwright test -c playwright.e2e.config.ts",
     "e2e:headed": "playwright test -c playwright.e2e.config.ts --headed",
     "db:generate": "drizzle-kit generate",
+    "db:check:consistency": "node scripts/ci/check-drizzle-consistency.mjs",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx scripts/seed-lite.ts",
