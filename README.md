@@ -8,8 +8,8 @@
 
 <!-- Badges: Status -->
 
-[![Lint](https://github.com/g1331/AutoRouter/actions/workflows/lint.yml/badge.svg)](https://github.com/g1331/AutoRouter/actions/workflows/lint.yml)
-[![Test](https://github.com/g1331/AutoRouter/actions/workflows/test.yml/badge.svg)](https://github.com/g1331/AutoRouter/actions/workflows/test.yml)
+[![Verify](https://github.com/g1331/AutoRouter/actions/workflows/verify.yml/badge.svg)](https://github.com/g1331/AutoRouter/actions/workflows/verify.yml)
+[![Release](https://github.com/g1331/AutoRouter/actions/workflows/release.yml/badge.svg)](https://github.com/g1331/AutoRouter/actions/workflows/release.yml)
 [![codecov](https://codecov.io/gh/g1331/AutoRouter/graph/badge.svg)](https://codecov.io/gh/g1331/AutoRouter)
 
 <!-- Badges: Tech -->
@@ -166,11 +166,25 @@ docker compose up -d
 # 如果你修改了 .env 中的 PORT，请改用对应端口访问
 ```
 
-### 生产环境 CI/CD 部署
+### 版本发布与个人部署
 
-项目支持通过 GitHub Actions 自动构建镜像并部署到云服务器。
+仓库默认的 GitHub Actions 主线负责校验、构建镜像和创建 GitHub Release。个人服务器部署改为手动触发的独立流程，只消费已经发布的镜像。
 
-**1. 配置 GitHub Secrets**
+**1. 正式版本发布**
+
+```bash
+# 1. 确认 master 已通过 Verify workflow
+
+# 2. 更新 package.json 中的 version
+
+# 3. 创建并推送标签
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+推送标签后，`Release` workflow 会自动校验标签与版本号一致、构建 GHCR 镜像并创建 GitHub Release。
+
+**2. 配置个人部署 Secrets**
 
 在仓库 Settings → Secrets and variables → Actions 中添加：
 
@@ -183,31 +197,30 @@ docker compose up -d
 | `DEPLOY_DIR`      | 部署目录 (可选，默认 /opt/autorouter)     |
 | `ADMIN_TOKEN`     | 管理后台令牌，会在部署时写入服务器 `.env` |
 
-**2. 服务器初始化**
+**3. 服务器初始化**
 
 ```bash
 # 创建部署目录
 mkdir -p /opt/autorouter && cd /opt/autorouter
 
 # 下载 docker-compose.yml
-curl -O https://raw.githubusercontent.com/g1331/AutoRouter/master/docker-compose.yml
+curl -O https://raw.githubusercontent.com/g1331/AutoRouter/v1.0.0/docker-compose.yml
 
 # 创建 .env 文件 (参考 .env.example)
+# 其中 AUTOROUTER_IMAGE 需要填写目标发布镜像，例如 ghcr.io/g1331/autorouter:v1.0.0
 nano .env
 
 # 首次启动
 docker compose up -d
 ```
 
-**3. 触发部署**
+**4. 手动触发个人部署**
 
 ```bash
-# 打 tag 触发自动部署
-git tag v1.0.0
-git push origin v1.0.0
+# 在 GitHub Actions 页面手动运行 Personal Deploy
+# image_ref 可填写 v1.0.0、完整 ghcr.io 镜像地址或 sha256 digest
+# confirm_release_id 填写对应的发布标签，例如 v1.0.0
 ```
-
-或在 GitHub Actions 页面手动触发 "Build and Deploy" workflow。
 
 ### 本地开发
 
@@ -288,7 +301,7 @@ pnpm dev
 | `HEALTH_CHECK_TIMEOUT`      |          | 上游健康检查超时（秒），默认 `10`                                                     |
 | `CORS_ORIGINS`              |          | CORS 白名单，逗号分隔                                                                 |
 | `PORT`                      |          | 服务端口，默认 `3000`                                                                 |
-| `RECORDER_ENABLED`          |          | 是否开启流量录制。代码默认关闭，但仓库提供的生产 compose / deploy workflow 默认开启   |
+| `RECORDER_ENABLED`          |          | 是否开启流量录制。代码默认关闭，仓库提供的 compose 默认开启                           |
 | `RECORDER_MODE`             |          | 录制模式：`all` / `success` / `failure`                                               |
 | `RECORDER_FIXTURES_DIR`     |          | 录制文件目录，默认 `tests/fixtures`                                                   |
 | `RECORDER_REDACT_SENSITIVE` |          | 是否脱敏录制内容。代码默认 `true`，但仓库提供的生产部署模板默认写入 `false`           |

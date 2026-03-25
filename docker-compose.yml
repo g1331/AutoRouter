@@ -5,11 +5,11 @@
 #   2. Create .env file with required variables (see .env.example)
 #   3. Run: docker compose up -d
 #
-# For CI/CD deployment, GitHub Actions will automatically update IMAGE_TAG
+# Set AUTOROUTER_IMAGE in the server .env to pin the exact released image to run.
 
 services:
   autorouter:
-    image: ghcr.io/g1331/autorouter:${IMAGE_TAG:-latest}
+    image: ${AUTOROUTER_IMAGE:-ghcr.io/g1331/autorouter:latest}
     container_name: autorouter
     restart: unless-stopped
     ports:

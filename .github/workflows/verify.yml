@@ -1,4 +1,4 @@
-name: Test
+name: Verify
 
 on:
   push:
@@ -6,39 +6,47 @@ on:
     paths:
       - "src/**"
       - "tests/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "*.json"
-      - "*.ts"
-      - "*.mjs"
+      - "scripts/**"
       - ".github/workflows/**"
-      - ".github/workflows/test.yml"
+      - "*.ts"
+      - "*.mts"
+      - "*.js"
+      - "*.mjs"
+      - "*.cjs"
+      - "*.json"
+      - "*.yaml"
+      - "*.yml"
+      - ".env.example"
+      - "Dockerfile"
   pull_request:
+    types: [opened, synchronize, reopened]
     branches: [master]
     paths:
       - "src/**"
       - "tests/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "*.json"
-      - "*.ts"
-      - "*.mjs"
+      - "scripts/**"
       - ".github/workflows/**"
-      - ".github/workflows/test.yml"
+      - "*.ts"
+      - "*.mts"
+      - "*.js"
+      - "*.mjs"
+      - "*.cjs"
+      - "*.json"
+      - "*.yaml"
+      - "*.yml"
+      - ".env.example"
+      - "Dockerfile"
 
 concurrency:
-  group: test-${{ github.head_ref || github.run_id }}
+  group: verify-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  # ============================================================
-  # TypeScript / Next.js Tests
-  # ============================================================
-  typescript:
-    name: TypeScript Tests
+  quality:
+    name: Quality
     runs-on: ubuntu-latest
 
     steps:
@@ -62,29 +70,67 @@ jobs:
             pnpm install --frozen-lockfile
           fi
 
-      - name: Run tests with coverage
+      - name: ESLint
+        run: pnpm lint
+
+      - name: Prettier Check
+        run: pnpm format:check
+
+      - name: TypeScript Check
+        run: pnpm exec tsc --noEmit
+
+      - name: Unit and component tests with coverage
         run: pnpm test:run --coverage --reporter=junit --outputFile=test-report.junit.xml
 
       - name: Upload coverage to Codecov
+        if: ${{ !cancelled() && secrets.CODECOV_TOKEN != '' }}
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage/lcov.info
-          flags: typescript
-          name: typescript-coverage
+          flags: verify
+          name: verify-coverage
           fail_ci_if_error: false
 
       - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && secrets.CODECOV_TOKEN != '' }}
         uses: codecov/test-results-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: test-report.junit.xml
-          flags: typescript
+          flags: verify
 
-  # ============================================================
-  # Playwright E2E Tests
-  # ============================================================
+  build:
+    name: Production Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: |
+          if [[ "${{ github.actor }}" == "dependabot[bot]" ]]; then
+            pnpm install --no-frozen-lockfile
+          else
+            pnpm install --frozen-lockfile
+          fi
+
+      - name: Build application
+        env:
+          DB_TYPE: postgres
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: pnpm build
+
   e2e:
     name: Playwright E2E
     runs-on: ubuntu-latest
@@ -124,19 +170,33 @@ jobs:
           path: playwright-report
           if-no-files-found: ignore
 
-  # ============================================================
-  # Summary Status Check
-  # ============================================================
-  test-status:
-    name: Test Status
+  actionlint:
+    name: GitHub Actions
     runs-on: ubuntu-latest
-    needs: [typescript, e2e]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Run actionlint
+        uses: raven-actions/actionlint@v2
+        with:
+          shellcheck: false
+
+  verify-status:
+    name: Verify Status
+    runs-on: ubuntu-latest
+    needs: [quality, build, e2e, actionlint]
     if: always()
+
     steps:
       - name: Check all jobs
         run: |
-          if [[ "${{ needs.typescript.result }}" != "success" || "${{ needs.e2e.result }}" != "success" ]]; then
-            echo "::error::Tests failed"
+          if [[ "${{ needs.quality.result }}" != "success" ]] || \
+             [[ "${{ needs.build.result }}" != "success" ]] || \
+             [[ "${{ needs.e2e.result }}" != "success" ]] || \
+             [[ "${{ needs.actionlint.result }}" != "success" ]]; then
+            echo "::error::One or more verification checks failed"
             exit 1
           fi
-          echo "All tests passed!"
+          echo "All verification checks passed!"

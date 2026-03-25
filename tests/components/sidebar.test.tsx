@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Sidebar } from "@/components/admin/sidebar";
+import { APP_REPOSITORY_URL, APP_VERSION_TAG } from "@/lib/app-version";
 
 // Mock next-intl
 vi.mock("next-intl", () => ({
@@ -50,6 +51,7 @@ vi.mock("lucide-react", () => ({
   Wrench: () => <svg data-testid="icon-wrench" />,
   ArrowLeftRight: () => <svg data-testid="icon-arrow-left-right" />,
   Wallet: () => <svg data-testid="icon-wallet" />,
+  Github: () => <svg data-testid="icon-github" />,
 }));
 
 // Mock useAuth hook
@@ -133,7 +135,7 @@ describe("Sidebar", () => {
     it("renders version info", () => {
       renderSidebar();
 
-      expect(screen.getByText(/version/)).toBeInTheDocument();
+      expect(screen.getByText(APP_VERSION_TAG)).toBeInTheDocument();
     });
 
     it("renders all navigation items", () => {
@@ -168,6 +170,15 @@ describe("Sidebar", () => {
 
       expect(screen.getByText("logout")).toBeInTheDocument();
     });
+
+    it("renders repository shortcut", () => {
+      renderSidebar();
+
+      expect(screen.getByRole("link", { name: "open" })).toHaveAttribute(
+        "href",
+        APP_REPOSITORY_URL
+      );
+    });
   });
 
   describe("Navigation Links", () => {
@@ -181,6 +192,7 @@ describe("Sidebar", () => {
       expect(hrefs).toContain("/keys");
       expect(hrefs).toContain("/upstreams");
       expect(hrefs).toContain("/logs");
+      expect(hrefs).toContain(APP_REPOSITORY_URL);
     });
   });
 
