@@ -7,6 +7,8 @@ on:
       - "src/**"
       - "tests/**"
       - "scripts/**"
+      - "drizzle/**"
+      - "drizzle-sqlite/**"
       - ".github/workflows/**"
       - "*.ts"
       - "*.mts"
@@ -25,6 +27,8 @@ on:
       - "src/**"
       - "tests/**"
       - "scripts/**"
+      - "drizzle/**"
+      - "drizzle-sqlite/**"
       - ".github/workflows/**"
       - "*.ts"
       - "*.mts"
@@ -133,6 +137,56 @@ jobs:
           NEXT_TELEMETRY_DISABLED: "1"
         run: pnpm build
 
+  migration:
+    name: Migration Consistency
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: autorouter
+          POSTGRES_PASSWORD: autorouter
+          POSTGRES_DB: autorouter
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U autorouter -d autorouter"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://autorouter:autorouter@127.0.0.1:5432/autorouter
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: |
+          if [[ "${{ github.actor }}" == "dependabot[bot]" ]]; then
+            pnpm install --no-frozen-lockfile
+          else
+            pnpm install --frozen-lockfile
+          fi
+
+      - name: Validate Drizzle artifact consistency
+        run: pnpm db:check:consistency
+
+      - name: Apply migrations on fresh database
+        run: pnpm db:migrate
+
+      - name: Re-apply migrations for idempotency
+        run: pnpm db:migrate
+
   e2e:
     name: Playwright E2E
     runs-on: ubuntu-latest
@@ -188,7 +242,7 @@ jobs:
   verify-status:
     name: Verify Status
     runs-on: ubuntu-latest
-    needs: [quality, build, e2e, actionlint]
+    needs: [quality, build, migration, e2e, actionlint]
     if: always()
 
     steps:
@@ -196,6 +250,7 @@ jobs:
         run: |
           if [[ "${{ needs.quality.result }}" != "success" ]] || \
              [[ "${{ needs.build.result }}" != "success" ]] || \
+             [[ "${{ needs.migration.result }}" != "success" ]] || \
              [[ "${{ needs.e2e.result }}" != "success" ]] || \
              [[ "${{ needs.actionlint.result }}" != "success" ]]; then
             echo "::error::One or more verification checks failed"
