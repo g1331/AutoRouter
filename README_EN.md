@@ -8,8 +8,8 @@
 
 <!-- Badges: Status -->
 
-[![Lint](https://github.com/g1331/AutoRouter/actions/workflows/lint.yml/badge.svg)](https://github.com/g1331/AutoRouter/actions/workflows/lint.yml)
-[![Test](https://github.com/g1331/AutoRouter/actions/workflows/test.yml/badge.svg)](https://github.com/g1331/AutoRouter/actions/workflows/test.yml)
+[![Verify](https://github.com/g1331/AutoRouter/actions/workflows/verify.yml/badge.svg)](https://github.com/g1331/AutoRouter/actions/workflows/verify.yml)
+[![Release](https://github.com/g1331/AutoRouter/actions/workflows/release.yml/badge.svg)](https://github.com/g1331/AutoRouter/actions/workflows/release.yml)
 [![codecov](https://codecov.io/gh/g1331/AutoRouter/graph/badge.svg)](https://codecov.io/gh/g1331/AutoRouter)
 
 <!-- Badges: Tech -->
@@ -166,11 +166,25 @@ docker compose up -d
 # If you changed PORT in .env, use that port instead
 ```
 
-### CI/CD Deployment
+### Release And Personal Deployment
 
-The repository includes a GitHub Actions workflow that builds the image and deploys it to a server over SSH.
+The default GitHub Actions flow now handles verification, image publishing, and GitHub Releases. Personal server deployment is a separate manual workflow that only deploys images that have already been released.
 
-**1. Configure GitHub Secrets**
+**1. Publish an official release**
+
+```bash
+# 1. Ensure master has passed the Verify workflow
+
+# 2. Update the version in package.json
+
+# 3. Create and push the release tag
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+After the tag is pushed, the `Release` workflow validates the tag, publishes the GHCR image, and creates the GitHub Release.
+
+**2. Configure personal deployment secrets**
 
 Add these secrets in Settings → Secrets and variables → Actions:
 
@@ -183,23 +197,23 @@ Add these secrets in Settings → Secrets and variables → Actions:
 | `DEPLOY_DIR`      | Deploy directory, optional, default `/opt/autorouter`          |
 | `ADMIN_TOKEN`     | Admin console token written to the server `.env` during deploy |
 
-**2. Initialize the server**
+**3. Initialize the server**
 
 ```bash
 mkdir -p /opt/autorouter && cd /opt/autorouter
-curl -O https://raw.githubusercontent.com/g1331/AutoRouter/master/docker-compose.yml
+curl -O https://raw.githubusercontent.com/g1331/AutoRouter/v1.0.0/docker-compose.yml
+# Set AUTOROUTER_IMAGE in .env, for example ghcr.io/g1331/autorouter:v1.0.0
 nano .env
 docker compose up -d
 ```
 
-**3. Trigger deployment**
+**4. Trigger a personal deployment**
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+# Run the Personal Deploy workflow from GitHub Actions
+# image_ref may be a release tag, full ghcr.io image ref, or sha256 digest
+# confirm_release_id must be the matching release tag, for example v1.0.0
 ```
-
-You can also trigger the `Build and Deploy` workflow manually from GitHub Actions.
 
 ### Local Development
 
@@ -280,7 +294,7 @@ Note: the packaged Drizzle CLI scripts currently target PostgreSQL by default. S
 | `HEALTH_CHECK_TIMEOUT`      |             | Upstream health check timeout in seconds, default `10`                                                                          |
 | `CORS_ORIGINS`              |             | CORS allowlist, comma-separated                                                                                                 |
 | `PORT`                      |             | Service port, default `3000`                                                                                                    |
-| `RECORDER_ENABLED`          |             | Enable traffic recording. Code defaults to off, but the repository's production compose / deploy workflow enables it by default |
+| `RECORDER_ENABLED`          |             | Enable traffic recording. Code defaults to off, while the repository compose file enables it by default                         |
 | `RECORDER_MODE`             |             | Recorder mode: `all` / `success` / `failure`                                                                                    |
 | `RECORDER_FIXTURES_DIR`     |             | Fixture output directory, default `tests/fixtures`                                                                              |
 | `RECORDER_REDACT_SENSITIVE` |             | Redact sensitive fields in fixtures. Code default is `true`, but the repository's production deployment template writes `false` |

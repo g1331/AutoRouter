@@ -52,6 +52,11 @@
     "headerCompensation": "请求头补偿",
     "billing": "计费"
   },
+  "repository": {
+    "title": "项目仓库",
+    "description": "查看源代码、版本发布与问题反馈",
+    "open": "在 GitHub 中打开项目仓库"
+  },
   "auth": {
     "title": "AUTOROUTER",
     "subtitle": "管理控制台",

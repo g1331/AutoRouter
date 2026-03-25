@@ -1,4 +1,5 @@
 import "@testing-library/jest-dom";
+import packageJson from "../package.json";
 
 /**
  * Vitest Setup File
@@ -6,6 +7,7 @@ import "@testing-library/jest-dom";
  * Global test configuration and matchers.
  */
 process.env.DB_TYPE = "postgres";
+process.env.NEXT_PUBLIC_APP_VERSION = packageJson.version;
 
 // Mock window.matchMedia for components that use media queries
 Object.defineProperty(window, "matchMedia", {

@@ -8,6 +8,7 @@ import {
   Check,
   ChevronLeft,
   Globe,
+  Github,
   Key,
   LayoutDashboard,
   LogOut,
@@ -42,6 +43,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { APP_REPOSITORY_URL, APP_VERSION_TAG } from "@/lib/app-version";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
 
@@ -211,6 +213,24 @@ function ThemeItem({ collapsed }: { collapsed: boolean }) {
   );
 }
 
+function RepositoryItem({ collapsed }: { collapsed: boolean }) {
+  const tRepository = useTranslations("repository");
+
+  return (
+    <a
+      href={APP_REPOSITORY_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={baseControlItemClass(collapsed)}
+      title={tRepository("open")}
+      aria-label={tRepository("open")}
+    >
+      <Github className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+      {!collapsed && <span className="type-body-small truncate">{tRepository("title")}</span>}
+    </a>
+  );
+}
+
 interface SidebarProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
@@ -259,7 +279,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           {!collapsed && (
             <div className="min-w-0">
               <p className="type-label-large truncate text-foreground">{tCommon("appName")}</p>
-              <p className="type-caption truncate text-muted-foreground">{tCommon("version")}</p>
+              <p className="type-caption truncate text-muted-foreground">{APP_VERSION_TAG}</p>
             </div>
           )}
         </div>
@@ -354,6 +374,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         >
           <LanguageItem collapsed={collapsed} />
           <ThemeItem collapsed={collapsed} />
+          <RepositoryItem collapsed={collapsed} />
 
           <Button
             type="button"

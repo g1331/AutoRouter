@@ -52,6 +52,11 @@
     "headerCompensation": "Header Compensation",
     "billing": "Billing"
   },
+  "repository": {
+    "title": "Project Repository",
+    "description": "Browse source code, releases, and issue tracking",
+    "open": "Open the project repository on GitHub"
+  },
   "auth": {
     "title": "AUTOROUTER",
     "subtitle": "Admin Console",
