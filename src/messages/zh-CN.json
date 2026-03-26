@@ -129,7 +129,6 @@
       "chartTabDuration": "平均耗时",
       "chartTabCost": "消费金额",
       "chartMetricLabel": "指标",
-      "chartDisplayModeLabel": "视图",
       "chartModeTotal": "整体趋势",
       "chartModeByUpstream": "来源拆分",
       "ttftUnit": "ms",

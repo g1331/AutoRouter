@@ -432,20 +432,20 @@ export function UsageChart({
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2 sm:justify-end">
-            {summaryItems.map((item) => (
-              <div
-                key={item.key}
-                className="min-w-[120px] rounded-cf-sm border border-divider/70 bg-surface-200/30 px-3 py-2"
-              >
-                <p className="type-caption tracking-[0.08em] text-muted-foreground/80">
-                  {item.label}
-                </p>
-                {isLoading ? (
-                  <UsageSummaryLoading loadingLabel={tCommon("loading")} />
-                ) : (
-                  <p className="mt-1 type-title-medium text-foreground">{item.value}</p>
-                )}
+          <div className="flex flex-wrap items-end gap-x-5 gap-y-2 sm:justify-end">
+            {summaryItems.map((item, index) => (
+              <div key={item.key} className="flex items-end gap-3">
+                {index > 0 ? <div className="hidden h-7 w-px bg-divider/75 sm:block" /> : null}
+                <div>
+                  <p className="type-caption tracking-[0.08em] text-muted-foreground/80">
+                    {item.label}
+                  </p>
+                  {isLoading ? (
+                    <UsageSummaryLoading loadingLabel={tCommon("loading")} />
+                  ) : (
+                    <p className="mt-1 type-title-medium text-foreground">{item.value}</p>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -453,23 +453,17 @@ export function UsageChart({
 
         <div className="rounded-cf-md border border-divider/75 bg-surface-200/25 px-3 py-2.5">
           <div className="flex flex-wrap items-center gap-3 lg:gap-4">
-            <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
-              <p className="type-caption shrink-0 tracking-[0.12em] text-muted-foreground/80">
-                {t("stats.chartDisplayModeLabel")}
-              </p>
-
-              <div className="inline-flex w-fit flex-wrap items-center gap-1 rounded-full border border-divider/75 bg-card/55 p-1">
-                <button
-                  onClick={() => onDisplayModeChange(nextDisplayMode)}
-                  aria-label={currentDisplayModeLabel}
-                  title={displayModeLabels[nextDisplayMode]}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 type-label-medium text-amber-500 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.18)] transition-all hover:bg-amber-500/20"
-                >
-                  <CurrentDisplayModeIcon className="h-3 w-3" />
-                  <span>{currentDisplayModeLabel}</span>
-                  <ArrowLeftRight className="h-3 w-3 text-amber-500/80" />
-                </button>
-              </div>
+            <div className="inline-flex w-fit flex-wrap items-center gap-1 rounded-full border border-divider/75 bg-card/55 p-1 lg:shrink-0">
+              <button
+                onClick={() => onDisplayModeChange(nextDisplayMode)}
+                aria-label={currentDisplayModeLabel}
+                title={displayModeLabels[nextDisplayMode]}
+                className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 type-label-medium text-amber-500 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.18)] transition-all hover:bg-amber-500/20"
+              >
+                <CurrentDisplayModeIcon className="h-3 w-3" />
+                <span>{currentDisplayModeLabel}</span>
+                <ArrowLeftRight className="h-3 w-3 text-amber-500/80" />
+              </button>
             </div>
 
             <div className="hidden h-5 w-px bg-divider/75 lg:block" />

@@ -129,7 +129,6 @@
       "chartTabDuration": "Avg Duration",
       "chartTabCost": "Cost",
       "chartMetricLabel": "Metric",
-      "chartDisplayModeLabel": "View",
       "chartModeTotal": "Overall Trend",
       "chartModeByUpstream": "Upstream Breakdown",
       "ttftUnit": "ms",
