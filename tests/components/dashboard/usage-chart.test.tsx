@@ -313,14 +313,6 @@ describe("UsageChart", () => {
       fireEvent.click(screen.getByRole("button", { name: "stats.chartModeTotal" }));
       expect(onDisplayModeChange).toHaveBeenNthCalledWith(2, "byUpstream");
     });
-
-    it("renders mode-specific description text", () => {
-      const { rerender, props } = renderChart({ displayMode: "total" });
-      expect(screen.getByText("stats.usageDescriptionTotal")).toBeInTheDocument();
-
-      rerender(<UsageChart {...props} displayMode="byUpstream" />);
-      expect(screen.getByText("stats.usageDescriptionByUpstream")).toBeInTheDocument();
-    });
   });
 
   describe("metric formatting", () => {

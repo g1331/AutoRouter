@@ -183,6 +183,21 @@ describe("StatsCards", () => {
 
       expect(screen.getByText("12.35%")).toBeInTheDocument();
     });
+
+    it("renders percent unit for cache hit rate card", () => {
+      render(
+        <StatsCards
+          {...defaultProps}
+          todayRequests={100}
+          avgResponseTimeMs={250}
+          totalTokensToday={5000}
+          cacheHitRate={12.345}
+        />
+      );
+
+      expect(screen.getByText("12.35%")).toBeInTheDocument();
+      expect(screen.getByText("%")).toBeInTheDocument();
+    });
   });
 
   describe("Icons", () => {

@@ -259,11 +259,6 @@ export function UsageChart({
   const mode = resolvedTheme === "light" ? "light" : "dark";
   const theme = getChartTheme(mode);
 
-  const description =
-    displayMode === "total"
-      ? t("stats.usageDescriptionTotal")
-      : t("stats.usageDescriptionByUpstream");
-
   const displayModeLabels: Record<UsageChartDisplayMode, string> = {
     total: t("stats.chartModeTotal"),
     byUpstream: t("stats.chartModeByUpstream"),
@@ -423,13 +418,8 @@ export function UsageChart({
     <Card className="border-border bg-card">
       <CardContent className="space-y-5 p-5 sm:p-6">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="type-title-medium text-foreground">{t("stats.usageStatistics")}</h3>
-              <span className="rounded-full border border-divider/70 bg-surface-200/35 px-2.5 py-1 type-caption tracking-[0.08em] text-muted-foreground/85">
-                {description}
-              </span>
-            </div>
+          <div>
+            <h3 className="type-title-medium text-foreground">{t("stats.usageStatistics")}</h3>
           </div>
 
           <div className="flex flex-wrap items-end gap-x-5 gap-y-2 sm:justify-end">
@@ -468,10 +458,7 @@ export function UsageChart({
 
             <div className="hidden h-5 w-px bg-divider/75 lg:block" />
 
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-              <p className="type-caption shrink-0 tracking-[0.12em] text-muted-foreground/80">
-                {t("stats.chartMetricLabel")}
-              </p>
+            <div className="flex min-w-0 flex-1 flex-wrap items-center">
               <div className="flex min-w-0 flex-1 flex-wrap gap-1">
                 {METRIC_OPTIONS.map((m) => {
                   return (
