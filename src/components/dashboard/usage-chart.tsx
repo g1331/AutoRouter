@@ -416,9 +416,9 @@ export function UsageChart({
           </div>
         </div>
 
-        <div className="grid gap-4 rounded-cf-md border border-divider/75 bg-surface-200/30 p-3">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <p className="type-label-medium text-muted-foreground">
+        <div className="space-y-3 rounded-cf-md border border-divider/75 bg-surface-200/30 p-3">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center">
+            <p className="type-label-medium w-[88px] shrink-0 text-muted-foreground">
               {t("stats.chartDisplayModeLabel")}
             </p>
 
@@ -452,9 +452,11 @@ export function UsageChart({
             </div>
           </div>
 
-          <div>
-            <p className="type-label-medium text-muted-foreground">{t("stats.chartMetricLabel")}</p>
-            <div className="mt-2 flex flex-wrap gap-1 rounded-cf-sm border border-divider/80 bg-card/65 p-1">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center">
+            <p className="type-label-medium w-[88px] shrink-0 text-muted-foreground">
+              {t("stats.chartMetricLabel")}
+            </p>
+            <div className="flex flex-1 flex-wrap gap-1 rounded-cf-sm border border-divider/80 bg-card/65 p-1">
               {(["requests", "tokens", "cost", "ttft", "tps", "duration"] as const).map((m) => {
                 const labelMap: Record<string, string> = {
                   requests: t("stats.chartTabRequests"),
