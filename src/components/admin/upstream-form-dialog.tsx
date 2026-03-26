@@ -93,7 +93,10 @@ const affinityMigrationConfigSchema = z
   .object({
     enabled: z.boolean(),
     metric: z.enum(["tokens", "length"]),
-    threshold: z.number().int().min(1).max(10000000),
+    threshold: z.preprocess(
+      (value) => coerceNumericInput(value, undefined),
+      z.number().int().min(1).max(10000000)
+    ),
   })
   .nullable();
 
@@ -104,6 +107,26 @@ const spendingRuleSchema = z.object({
 });
 
 const ROLLING_DEFAULT_PERIOD_HOURS = 24;
+
+function coerceNumericInput(
+  value: unknown,
+  emptyValue: null | undefined
+): number | null | undefined | unknown {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return emptyValue;
+  }
+
+  return Number(trimmed);
+}
+
+function getNumericInputValue(value: unknown): string | number {
+  return typeof value === "string" || typeof value === "number" ? value : "";
+}
 
 function hasValidRollingPeriodHours(rules: z.input<typeof spendingRuleSchema>[]): boolean {
   return rules.every(
@@ -121,10 +144,22 @@ const createUpstreamFormSchema = z
     api_key: z.string().min(1),
     description: z.string().max(500),
     max_concurrency: z.number().int().positive().nullable(),
-    priority: z.number().int().min(0).max(100),
-    weight: z.number().int().min(1).max(100),
-    billing_input_multiplier: z.number().min(0).max(100),
-    billing_output_multiplier: z.number().min(0).max(100),
+    priority: z.preprocess(
+      (value) => coerceNumericInput(value, undefined),
+      z.number().int().min(0).max(100)
+    ),
+    weight: z.preprocess(
+      (value) => coerceNumericInput(value, undefined),
+      z.number().int().min(1).max(100)
+    ),
+    billing_input_multiplier: z.preprocess(
+      (value) => coerceNumericInput(value, undefined),
+      z.number().min(0).max(100)
+    ),
+    billing_output_multiplier: z.preprocess(
+      (value) => coerceNumericInput(value, undefined),
+      z.number().min(0).max(100)
+    ),
     spending_rules: z.array(spendingRuleSchema),
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
     allowed_models: z.array(z.string()).nullable(),
@@ -150,10 +185,22 @@ const editUpstreamFormSchema = z
     api_key: z.string(),
     description: z.string().max(500),
     max_concurrency: z.number().int().positive().nullable(),
-    priority: z.number().int().min(0).max(100),
-    weight: z.number().int().min(1).max(100),
-    billing_input_multiplier: z.number().min(0).max(100),
-    billing_output_multiplier: z.number().min(0).max(100),
+    priority: z.preprocess(
+      (value) => coerceNumericInput(value, undefined),
+      z.number().int().min(0).max(100)
+    ),
+    weight: z.preprocess(
+      (value) => coerceNumericInput(value, undefined),
+      z.number().int().min(1).max(100)
+    ),
+    billing_input_multiplier: z.preprocess(
+      (value) => coerceNumericInput(value, undefined),
+      z.number().min(0).max(100)
+    ),
+    billing_output_multiplier: z.preprocess(
+      (value) => coerceNumericInput(value, undefined),
+      z.number().min(0).max(100)
+    ),
     spending_rules: z.array(spendingRuleSchema),
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
     allowed_models: z.array(z.string()).nullable(),
@@ -1145,8 +1192,11 @@ export function UpstreamFormDialog({
                                 min={0}
                                 max={100}
                                 placeholder={t("priorityPlaceholder")}
-                                {...field}
-                                onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 0)}
+                                name={field.name}
+                                ref={field.ref}
+                                value={getNumericInputValue(field.value)}
+                                onBlur={field.onBlur}
+                                onChange={(e) => field.onChange(e.target.value)}
                               />
                             </FormControl>
                             <FormDescription>{t("priorityDescription")}</FormDescription>
@@ -1167,8 +1217,11 @@ export function UpstreamFormDialog({
                                 min={1}
                                 max={100}
                                 placeholder={t("weightPlaceholder")}
-                                {...field}
-                                onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
+                                name={field.name}
+                                ref={field.ref}
+                                value={getNumericInputValue(field.value)}
+                                onBlur={field.onBlur}
+                                onChange={(e) => field.onChange(e.target.value)}
                               />
                             </FormControl>
                             <FormDescription>{t("weightDescription")}</FormDescription>
@@ -1254,8 +1307,11 @@ export function UpstreamFormDialog({
                                   max={100}
                                   step={0.01}
                                   inputMode="decimal"
-                                  {...field}
-                                  onChange={(e) => field.onChange(Number(e.target.value) || 0)}
+                                  name={field.name}
+                                  ref={field.ref}
+                                  value={getNumericInputValue(field.value)}
+                                  onBlur={field.onBlur}
+                                  onChange={(e) => field.onChange(e.target.value)}
                                 />
                               </FormControl>
                               <FormDescription>{t("billingInputMultiplierDesc")}</FormDescription>
@@ -1277,8 +1333,11 @@ export function UpstreamFormDialog({
                                   max={100}
                                   step={0.01}
                                   inputMode="decimal"
-                                  {...field}
-                                  onChange={(e) => field.onChange(Number(e.target.value) || 0)}
+                                  name={field.name}
+                                  ref={field.ref}
+                                  value={getNumericInputValue(field.value)}
+                                  onBlur={field.onBlur}
+                                  onChange={(e) => field.onChange(e.target.value)}
                                 />
                               </FormControl>
                               <FormDescription>{t("billingOutputMultiplierDesc")}</FormDescription>
@@ -1400,14 +1459,7 @@ export function UpstreamFormDialog({
                                           className="h-8 text-xs"
                                           placeholder={t("spendingLimitPlaceholder")}
                                           {...field}
-                                          value={
-                                            field.value === 0
-                                              ? ""
-                                              : typeof field.value === "number" ||
-                                                  typeof field.value === "string"
-                                                ? field.value
-                                                : ""
-                                          }
+                                          value={getNumericInputValue(field.value)}
                                           onChange={(e) => field.onChange(e.target.value)}
                                           onBlur={(e) => {
                                             field.onBlur();
@@ -1445,12 +1497,7 @@ export function UpstreamFormDialog({
                                               const v = e.target.value;
                                               field.onChange(v === "" ? null : Number(v));
                                             }}
-                                            onBlur={(e) => {
-                                              field.onBlur();
-                                              if (e.target.value.trim() === "") {
-                                                field.onChange(ROLLING_DEFAULT_PERIOD_HOURS);
-                                              }
-                                            }}
+                                            onBlur={field.onBlur}
                                           />
                                         </FormControl>
                                         <FormDescription className="text-xs">
@@ -1696,14 +1743,13 @@ export function UpstreamFormDialog({
                                 max={10000000}
                                 step={1}
                                 placeholder="50000"
-                                value={affinityMigration.threshold}
+                                value={getNumericInputValue(affinityMigration.threshold)}
                                 onChange={(e) => {
-                                  const val = parseInt(e.target.value, 10) || 50000;
                                   form.setValue(
                                     "affinity_migration",
                                     {
                                       ...affinityMigration,
-                                      threshold: val,
+                                      threshold: e.target.value,
                                     },
                                     { shouldValidate: true }
                                   );

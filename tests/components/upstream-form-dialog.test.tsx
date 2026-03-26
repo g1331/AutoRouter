@@ -79,7 +79,10 @@ describe("UpstreamFormDialog", () => {
         mutations: { retry: false },
       },
     });
-    vi.clearAllMocks();
+    mockCreateMutateAsync.mockReset();
+    mockUpdateMutateAsync.mockReset();
+    mockOnOpenChange.mockReset();
+    mockToastError.mockReset();
   });
 
   describe("Create Mode", () => {
@@ -607,6 +610,111 @@ describe("UpstreamFormDialog", () => {
         });
       });
     });
+
+    it("keeps advanced numeric inputs editable through empty string and zero", async () => {
+      mockCreateMutateAsync.mockResolvedValueOnce({});
+
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("upstreamNamePlaceholder"), {
+        target: { value: "Numeric Sequence Upstream" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("baseUrlPlaceholder"), {
+        target: { value: "https://api.example.com/v1" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("apiKeyPlaceholder"), {
+        target: { value: "sk-test-key" },
+      });
+
+      ensureAdvancedConfigExpanded();
+
+      const priorityInput = screen.getByPlaceholderText("priorityPlaceholder") as HTMLInputElement;
+      const weightInput = screen.getByPlaceholderText("weightPlaceholder") as HTMLInputElement;
+      const billingInputMultiplier = screen
+        .getByText("billingInputMultiplier")
+        .parentElement?.querySelector("input") as HTMLInputElement;
+      const billingOutputMultiplier = screen
+        .getByText("billingOutputMultiplier")
+        .parentElement?.querySelector("input") as HTMLInputElement;
+
+      fireEvent.click(screen.getByRole("switch"));
+      const affinityThresholdInput = screen.getByPlaceholderText("50000") as HTMLInputElement;
+
+      fireEvent.change(priorityInput, { target: { value: "30" } });
+      expect(priorityInput.value).toBe("30");
+      fireEvent.change(priorityInput, { target: { value: "3" } });
+      expect(priorityInput.value).toBe("3");
+      fireEvent.change(priorityInput, { target: { value: "" } });
+      expect(priorityInput.value).toBe("");
+      fireEvent.change(priorityInput, { target: { value: "0" } });
+      expect(priorityInput.value).toBe("0");
+      fireEvent.change(priorityInput, { target: { value: "5" } });
+      expect(priorityInput.value).toBe("5");
+
+      fireEvent.change(weightInput, { target: { value: "30" } });
+      expect(weightInput.value).toBe("30");
+      fireEvent.change(weightInput, { target: { value: "3" } });
+      expect(weightInput.value).toBe("3");
+      fireEvent.change(weightInput, { target: { value: "" } });
+      expect(weightInput.value).toBe("");
+      fireEvent.change(weightInput, { target: { value: "0" } });
+      expect(weightInput.value).toBe("0");
+      fireEvent.change(weightInput, { target: { value: "5" } });
+      expect(weightInput.value).toBe("5");
+
+      fireEvent.change(billingInputMultiplier, { target: { value: "30" } });
+      expect(billingInputMultiplier.value).toBe("30");
+      fireEvent.change(billingInputMultiplier, { target: { value: "3" } });
+      expect(billingInputMultiplier.value).toBe("3");
+      fireEvent.change(billingInputMultiplier, { target: { value: "" } });
+      expect(billingInputMultiplier.value).toBe("");
+      fireEvent.change(billingInputMultiplier, { target: { value: "0" } });
+      expect(billingInputMultiplier.value).toBe("0");
+      fireEvent.change(billingInputMultiplier, { target: { value: "5" } });
+      expect(billingInputMultiplier.value).toBe("5");
+
+      fireEvent.change(billingOutputMultiplier, { target: { value: "30" } });
+      expect(billingOutputMultiplier.value).toBe("30");
+      fireEvent.change(billingOutputMultiplier, { target: { value: "3" } });
+      expect(billingOutputMultiplier.value).toBe("3");
+      fireEvent.change(billingOutputMultiplier, { target: { value: "" } });
+      expect(billingOutputMultiplier.value).toBe("");
+      fireEvent.change(billingOutputMultiplier, { target: { value: "0" } });
+      expect(billingOutputMultiplier.value).toBe("0");
+      fireEvent.change(billingOutputMultiplier, { target: { value: "5" } });
+      expect(billingOutputMultiplier.value).toBe("5");
+
+      fireEvent.change(affinityThresholdInput, { target: { value: "30" } });
+      expect(affinityThresholdInput.value).toBe("30");
+      fireEvent.change(affinityThresholdInput, { target: { value: "3" } });
+      expect(affinityThresholdInput.value).toBe("3");
+      fireEvent.change(affinityThresholdInput, { target: { value: "" } });
+      expect(affinityThresholdInput.value).toBe("");
+      fireEvent.change(affinityThresholdInput, { target: { value: "0" } });
+      expect(affinityThresholdInput.value).toBe("0");
+      fireEvent.change(affinityThresholdInput, { target: { value: "5" } });
+      expect(affinityThresholdInput.value).toBe("5");
+
+      fireEvent.click(screen.getByText("create"));
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            priority: 5,
+            weight: 5,
+            billing_input_multiplier: 5,
+            billing_output_multiplier: 5,
+            affinity_migration: {
+              enabled: true,
+              metric: "tokens",
+              threshold: 5,
+            },
+          })
+        );
+      });
+    });
   });
 
   describe("Dialog Actions", () => {
@@ -852,6 +960,69 @@ describe("UpstreamFormDialog", () => {
         expect(mockCreateMutateAsync).toHaveBeenCalledWith(
           expect.objectContaining({
             spending_rules: [{ period_type: "rolling", limit: 20, period_hours: 24 }],
+          })
+        );
+      });
+    });
+
+    it("keeps spending rule inputs editable through empty string and avoids refilling rolling hours", async () => {
+      mockCreateMutateAsync.mockResolvedValue({});
+
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("upstreamNamePlaceholder"), {
+        target: { value: "Quota Sequence Upstream" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("baseUrlPlaceholder"), {
+        target: { value: "https://api.example.com/v1" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("apiKeyPlaceholder"), {
+        target: { value: "sk-test-key" },
+      });
+
+      addSpendingRule();
+      const limitInput = screen.getByPlaceholderText(
+        "spendingLimitPlaceholder"
+      ) as HTMLInputElement;
+
+      fireEvent.change(limitInput, { target: { value: "30" } });
+      expect(limitInput.value).toBe("30");
+      fireEvent.change(limitInput, { target: { value: "3" } });
+      expect(limitInput.value).toBe("3");
+      fireEvent.change(limitInput, { target: { value: "" } });
+      expect(limitInput.value).toBe("");
+      fireEvent.change(limitInput, { target: { value: "0" } });
+      expect(limitInput.value).toBe("0");
+      fireEvent.change(limitInput, { target: { value: "5" } });
+      expect(limitInput.value).toBe("5");
+
+      fireEvent.click(screen.getAllByText("spendingPeriodDaily")[0]);
+      fireEvent.click(screen.getAllByText("spendingPeriodRolling").slice(-1)[0]);
+
+      const periodHoursInput = screen.getByPlaceholderText("24") as HTMLInputElement;
+      expect(periodHoursInput.value).toBe("24");
+
+      fireEvent.change(periodHoursInput, { target: { value: "30" } });
+      expect(periodHoursInput.value).toBe("30");
+      fireEvent.change(periodHoursInput, { target: { value: "3" } });
+      expect(periodHoursInput.value).toBe("3");
+      fireEvent.change(periodHoursInput, { target: { value: "" } });
+      expect(periodHoursInput.value).toBe("");
+      fireEvent.blur(periodHoursInput);
+      expect(periodHoursInput.value).toBe("");
+      fireEvent.change(periodHoursInput, { target: { value: "0" } });
+      expect(periodHoursInput.value).toBe("0");
+      fireEvent.change(periodHoursInput, { target: { value: "5" } });
+      expect(periodHoursInput.value).toBe("5");
+
+      fireEvent.click(screen.getByText("create"));
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            spending_rules: [{ period_type: "rolling", limit: 5, period_hours: 5 }],
           })
         );
       });
