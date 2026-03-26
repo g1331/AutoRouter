@@ -297,14 +297,20 @@ describe("UsageChart", () => {
       expect(onMetricChange).toHaveBeenNthCalledWith(2, "tps");
     });
 
-    it("calls onDisplayModeChange when clicking mode tabs", () => {
+    it("calls onDisplayModeChange with the next display mode", () => {
       const onDisplayModeChange = vi.fn();
-      renderChart({ onDisplayModeChange });
+      const { rerender, props } = renderChart({
+        onDisplayModeChange,
+        displayMode: "byUpstream",
+      });
 
-      fireEvent.click(screen.getByRole("button", { name: "stats.chartModeTotal" }));
       fireEvent.click(screen.getByRole("button", { name: "stats.chartModeByUpstream" }));
-
       expect(onDisplayModeChange).toHaveBeenNthCalledWith(1, "total");
+
+      rerender(
+        <UsageChart {...props} displayMode="total" onDisplayModeChange={onDisplayModeChange} />
+      );
+      fireEvent.click(screen.getByRole("button", { name: "stats.chartModeTotal" }));
       expect(onDisplayModeChange).toHaveBeenNthCalledWith(2, "byUpstream");
     });
 

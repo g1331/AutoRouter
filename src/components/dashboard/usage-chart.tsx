@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { format, parseISO } from "date-fns";
-import { Activity, BarChart3 } from "lucide-react";
+import { Activity, ArrowLeftRight, BarChart3 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import {
@@ -58,7 +58,6 @@ const DISPLAY_MODE_META = {
   },
 } as const;
 
-const DISPLAY_MODE_OPTIONS = ["total", "byUpstream"] as const;
 const METRIC_OPTIONS = ["requests", "tokens", "cost", "ttft", "tps", "duration"] as const;
 
 function formatTtft(ttftMs: number): string {
@@ -265,6 +264,11 @@ export function UsageChart({
       ? t("stats.usageDescriptionTotal")
       : t("stats.usageDescriptionByUpstream");
 
+  const displayModeLabels: Record<UsageChartDisplayMode, string> = {
+    total: t("stats.chartModeTotal"),
+    byUpstream: t("stats.chartModeByUpstream"),
+  };
+
   const metricLabels: Record<TimeseriesMetric, string> = {
     requests: t("stats.chartTabRequests"),
     tokens: t("stats.chartTabTokens"),
@@ -411,6 +415,10 @@ export function UsageChart({
   const chartHeightClass =
     isLoading || chartData.length > 0 ? "h-[280px] sm:h-[320px]" : "h-[200px] sm:h-[220px]";
 
+  const currentDisplayModeLabel = displayModeLabels[displayMode];
+  const nextDisplayMode: UsageChartDisplayMode = displayMode === "total" ? "byUpstream" : "total";
+  const CurrentDisplayModeIcon = DISPLAY_MODE_META[displayMode].icon;
+
   return (
     <Card className="border-border bg-card">
       <CardContent className="space-y-5 p-5 sm:p-6">
@@ -451,31 +459,16 @@ export function UsageChart({
               </p>
 
               <div className="inline-flex w-fit flex-wrap items-center gap-1 rounded-full border border-divider/75 bg-card/55 p-1">
-                {DISPLAY_MODE_OPTIONS.map((modeValue) => {
-                  const isActive = displayMode === modeValue;
-                  const Icon = DISPLAY_MODE_META[modeValue].icon;
-                  const label =
-                    modeValue === "total"
-                      ? t("stats.chartModeTotal")
-                      : t("stats.chartModeByUpstream");
-
-                  return (
-                    <button
-                      key={modeValue}
-                      onClick={() => onDisplayModeChange(modeValue)}
-                      aria-pressed={isActive}
-                      className={cn(
-                        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 type-label-medium transition-all",
-                        isActive
-                          ? "bg-amber-500/15 text-amber-500 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.18)]"
-                          : "text-muted-foreground hover:bg-surface-200/65 hover:text-foreground"
-                      )}
-                    >
-                      <Icon className="h-3 w-3" />
-                      <span>{label}</span>
-                    </button>
-                  );
-                })}
+                <button
+                  onClick={() => onDisplayModeChange(nextDisplayMode)}
+                  aria-label={currentDisplayModeLabel}
+                  title={displayModeLabels[nextDisplayMode]}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 type-label-medium text-amber-500 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.18)] transition-all hover:bg-amber-500/20"
+                >
+                  <CurrentDisplayModeIcon className="h-3 w-3" />
+                  <span>{currentDisplayModeLabel}</span>
+                  <ArrowLeftRight className="h-3 w-3 text-amber-500/80" />
+                </button>
               </div>
             </div>
 
