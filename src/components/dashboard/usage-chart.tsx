@@ -453,7 +453,7 @@ export function UsageChart({
 
         <div className="rounded-cf-md border border-divider/75 bg-surface-200/25 px-3 py-2.5">
           <div className="flex flex-wrap items-center gap-3 lg:gap-4">
-            <div className="inline-flex w-fit flex-wrap items-center gap-1 rounded-full border border-divider/75 bg-card/55 p-1 lg:shrink-0">
+            <div className="inline-flex w-fit lg:shrink-0">
               <button
                 onClick={() => onDisplayModeChange(nextDisplayMode)}
                 aria-label={currentDisplayModeLabel}
