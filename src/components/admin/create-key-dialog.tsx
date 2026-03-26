@@ -158,6 +158,7 @@ export function CreateKeyDialog() {
     filteredUpstreamIds.length > 0 && selectedFilteredCount === filteredUpstreamIds.length;
 
   const syncSpendingRuleDraftsToForm = () => {
+    // Keep raw text editable until submit, then sync the final numeric value into RHF.
     spendingRulesFieldArray.fields.forEach((ruleField, index) => {
       const limitDraftKey = getSpendingRuleDraftKey(ruleField.id, "limit");
       if (Object.prototype.hasOwnProperty.call(spendingRuleDrafts, limitDraftKey)) {
@@ -205,6 +206,7 @@ export function CreateKeyDialog() {
   const onInvalidSubmit = () => {
     const rules = form.getValues("spending_rules") ?? [];
 
+    // Cleared numeric fields fail `z.number()` first, so re-apply localized field errors here.
     rules.forEach((rule, index) => {
       if (rule.limit == null || Number(rule.limit) <= 0) {
         form.setError(`spending_rules.${index}.limit`, {

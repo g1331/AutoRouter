@@ -108,6 +108,7 @@ const spendingRuleSchema = z.object({
 
 const ROLLING_DEFAULT_PERIOD_HOURS = 24;
 
+// Preserve transient empty-string edits in the input, and only coerce to numbers at validation time.
 function coerceNumericInput(
   value: unknown,
   emptyValue: null | undefined
