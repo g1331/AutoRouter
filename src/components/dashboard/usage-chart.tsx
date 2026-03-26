@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { format, parseISO } from "date-fns";
+import { Activity, BarChart3 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import {
@@ -47,6 +48,15 @@ interface ChartSeriesDefinition {
 }
 
 export type UsageChartDisplayMode = "total" | "byUpstream";
+
+const DISPLAY_MODE_META = {
+  total: {
+    icon: Activity,
+  },
+  byUpstream: {
+    icon: BarChart3,
+  },
+} as const;
 
 function formatTtft(ttftMs: number): string {
   if (ttftMs >= 1000) {
@@ -251,6 +261,8 @@ export function UsageChart({
     displayMode === "total"
       ? t("stats.usageDescriptionTotal")
       : t("stats.usageDescriptionByUpstream");
+  const activeDisplayModeHint =
+    displayMode === "total" ? t("stats.chartModeTotalHint") : t("stats.chartModeByUpstreamHint");
 
   const { chartData, seriesDefinitions } = useMemo(() => {
     if (!data) {
@@ -406,10 +418,48 @@ export function UsageChart({
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="grid gap-4 rounded-cf-md border border-divider/75 bg-surface-200/30 p-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-1">
+              <p className="type-label-medium text-muted-foreground">
+                {t("stats.chartDisplayModeLabel")}
+              </p>
+              <p className="type-caption text-muted-foreground">{activeDisplayModeHint}</p>
+            </div>
+
+            <div className="inline-flex w-fit flex-wrap items-center gap-1 rounded-full border border-divider/80 bg-card/70 p-1">
+              {(
+                [
+                  ["total", t("stats.chartModeTotal")],
+                  ["byUpstream", t("stats.chartModeByUpstream")],
+                ] as const
+              ).map(([modeValue, label]) => {
+                const isActive = displayMode === modeValue;
+                const Icon = DISPLAY_MODE_META[modeValue].icon;
+
+                return (
+                  <button
+                    key={modeValue}
+                    onClick={() => onDisplayModeChange(modeValue)}
+                    aria-pressed={isActive}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 type-label-medium transition-all",
+                      isActive
+                        ? "bg-amber-500/15 text-amber-500 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.18)]"
+                        : "text-muted-foreground hover:bg-surface-200/65 hover:text-foreground"
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    <span>{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div>
             <p className="type-label-medium text-muted-foreground">{t("stats.chartMetricLabel")}</p>
-            <div className="mt-2 flex flex-wrap gap-1 rounded-cf-sm border border-divider bg-surface-200/50 p-0.5">
+            <div className="mt-2 flex flex-wrap gap-1 rounded-cf-sm border border-divider/80 bg-card/65 p-1">
               {(["requests", "tokens", "cost", "ttft", "tps", "duration"] as const).map((m) => {
                 const labelMap: Record<string, string> = {
                   requests: t("stats.chartTabRequests"),
@@ -423,44 +473,18 @@ export function UsageChart({
                   <button
                     key={m}
                     onClick={() => onMetricChange(m)}
+                    aria-pressed={metric === m}
                     className={cn(
-                      "rounded-cf-sm px-3 py-1.5 type-label-medium transition-colors",
+                      "rounded-cf-sm px-3 py-1.5 type-label-medium transition-all",
                       metric === m
-                        ? "bg-amber-500/15 text-amber-500"
-                        : "text-muted-foreground hover:text-foreground"
+                        ? "bg-amber-500/15 text-amber-500 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.18)]"
+                        : "text-muted-foreground hover:bg-surface-200/65 hover:text-foreground"
                     )}
                   >
                     {labelMap[m]}
                   </button>
                 );
               })}
-            </div>
-          </div>
-
-          <div>
-            <p className="type-label-medium text-muted-foreground">
-              {t("stats.chartDisplayModeLabel")}
-            </p>
-            <div className="mt-2 flex flex-wrap gap-1 rounded-cf-sm border border-divider bg-surface-200/50 p-0.5">
-              {(
-                [
-                  ["total", t("stats.chartModeTotal")],
-                  ["byUpstream", t("stats.chartModeByUpstream")],
-                ] as const
-              ).map(([modeValue, label]) => (
-                <button
-                  key={modeValue}
-                  onClick={() => onDisplayModeChange(modeValue)}
-                  className={cn(
-                    "rounded-cf-sm px-3 py-1.5 type-label-medium transition-colors",
-                    displayMode === modeValue
-                      ? "bg-amber-500/15 text-amber-500"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
             </div>
           </div>
         </div>
