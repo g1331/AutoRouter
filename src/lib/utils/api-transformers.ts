@@ -1250,7 +1250,7 @@ export function transformStatsTimeseriesToApi(stats: StatsTimeseries): StatsTime
     range: stats.range,
     granularity: stats.granularity,
     series: stats.series.map(transformUpstreamTimeseriesToApi),
-    total_series: stats.totalSeries.map(transformTimeseriesDataPointToApi),
+    total_series: (stats.totalSeries ?? []).map(transformTimeseriesDataPointToApi),
   };
 }
 
