@@ -70,7 +70,8 @@ describe("CreateKeyDialog", () => {
         mutations: { retry: false },
       },
     });
-    vi.clearAllMocks();
+    mockCreateMutateAsync.mockReset();
+    mockToastError.mockReset();
   });
 
   describe("Trigger Button", () => {
@@ -256,6 +257,74 @@ describe("CreateKeyDialog", () => {
         });
       });
     });
+
+    it("keeps spending rule numeric inputs editable through empty string and zero", async () => {
+      mockCreateMutateAsync.mockResolvedValueOnce({
+        id: "key-3",
+        key_value: "sk-auto-sequence",
+        key_prefix: "sk-auto-sequence",
+        name: "Sequence Key",
+        description: null,
+        access_mode: "unrestricted",
+        upstream_ids: [],
+        spending_rules: [{ period_type: "rolling", limit: 5, period_hours: 5 }],
+        spending_rule_statuses: [],
+        is_quota_exceeded: false,
+        is_active: true,
+        expires_at: null,
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-01T00:00:00Z",
+      });
+
+      render(<CreateKeyDialog />, { wrapper: Wrapper });
+
+      fireEvent.click(screen.getByText("createKey"));
+      fireEvent.click(screen.getByText("addSpendingRule"));
+      fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
+        target: { value: "Sequence Key" },
+      });
+
+      const limitInput = screen.getByPlaceholderText("quotaLimitPlaceholder") as HTMLInputElement;
+      fireEvent.change(limitInput, { target: { value: "30" } });
+      expect(limitInput.value).toBe("30");
+      fireEvent.change(limitInput, { target: { value: "3" } });
+      expect(limitInput.value).toBe("3");
+      fireEvent.change(limitInput, { target: { value: "" } });
+      expect(limitInput.value).toBe("");
+      fireEvent.change(limitInput, { target: { value: "0" } });
+      expect(limitInput.value).toBe("0");
+      fireEvent.change(limitInput, { target: { value: "5" } });
+      expect(limitInput.value).toBe("5");
+
+      fireEvent.click(screen.getByText("quotaPeriodType_rolling"));
+
+      const periodHoursInput = screen.getByPlaceholderText(
+        "quotaPeriodHoursPlaceholder"
+      ) as HTMLInputElement;
+      fireEvent.change(periodHoursInput, { target: { value: "30" } });
+      expect(periodHoursInput.value).toBe("30");
+      fireEvent.change(periodHoursInput, { target: { value: "3" } });
+      expect(periodHoursInput.value).toBe("3");
+      fireEvent.change(periodHoursInput, { target: { value: "" } });
+      expect(periodHoursInput.value).toBe("");
+      fireEvent.change(periodHoursInput, { target: { value: "0" } });
+      expect(periodHoursInput.value).toBe("0");
+      fireEvent.change(periodHoursInput, { target: { value: "5" } });
+      expect(periodHoursInput.value).toBe("5");
+
+      fireEvent.click(screen.getByText("create"));
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalledWith({
+          name: "Sequence Key",
+          description: null,
+          access_mode: "unrestricted",
+          upstream_ids: [],
+          expires_at: null,
+          spending_rules: [{ period_type: "rolling", limit: 5, period_hours: 5 }],
+        });
+      });
+    });
   });
 
   describe("Form Validation", () => {
@@ -276,6 +345,29 @@ describe("CreateKeyDialog", () => {
       });
 
       expect(mockToastError).toHaveBeenCalledWith("formValidationFailed");
+    });
+
+    it("shows localized spending rule error instead of default english number error", async () => {
+      render(<CreateKeyDialog />, { wrapper: Wrapper });
+
+      fireEvent.click(screen.getByText("createKey"));
+      fireEvent.click(screen.getByText("addSpendingRule"));
+      fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
+        target: { value: "Localized Error Key" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("quotaLimitPlaceholder"), {
+        target: { value: "" },
+      });
+
+      fireEvent.click(screen.getByText("create"));
+
+      await waitFor(() => {
+        expect(screen.getByText("quotaLimitPositive")).toBeInTheDocument();
+      });
+
+      expect(
+        screen.queryByText("Invalid input: expected number, received undefined")
+      ).not.toBeInTheDocument();
     });
 
     it("allows submit without selecting upstreams in unrestricted mode", async () => {

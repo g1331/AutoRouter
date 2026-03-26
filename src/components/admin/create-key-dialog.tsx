@@ -39,6 +39,26 @@ import type { APIKeyCreateResponse } from "@/types/api";
 import { ShowKeyDialog } from "./show-key-dialog";
 import { getDateLocale } from "@/lib/date-locale";
 
+function getSpendingRuleDraftKey(ruleId: string, fieldName: "limit" | "period_hours") {
+  return `${ruleId}:${fieldName}`;
+}
+
+function getSpendingRuleInputValue(
+  drafts: Record<string, string>,
+  draftKey: string,
+  fieldValue: number | undefined
+) {
+  if (drafts[draftKey] !== undefined) {
+    return drafts[draftKey];
+  }
+
+  if (typeof fieldValue === "number") {
+    return fieldValue === 0 ? "" : String(fieldValue);
+  }
+
+  return "";
+}
+
 /**
  * M3 Create API Key Dialog
  */
@@ -46,6 +66,7 @@ export function CreateKeyDialog() {
   const [open, setOpen] = useState(false);
   const [createdKey, setCreatedKey] = useState<APIKeyCreateResponse | null>(null);
   const [upstreamSearchQuery, setUpstreamSearchQuery] = useState("");
+  const [spendingRuleDrafts, setSpendingRuleDrafts] = useState<Record<string, string>>({});
   const createMutation = useCreateAPIKey();
   const t = useTranslations("keys");
   const tCommon = useTranslations("common");
@@ -136,6 +157,31 @@ export function CreateKeyDialog() {
   const allFilteredUpstreamsSelected =
     filteredUpstreamIds.length > 0 && selectedFilteredCount === filteredUpstreamIds.length;
 
+  const syncSpendingRuleDraftsToForm = () => {
+    // Keep raw text editable until submit, then sync the final numeric value into RHF.
+    spendingRulesFieldArray.fields.forEach((ruleField, index) => {
+      const limitDraftKey = getSpendingRuleDraftKey(ruleField.id, "limit");
+      if (Object.prototype.hasOwnProperty.call(spendingRuleDrafts, limitDraftKey)) {
+        const rawValue = spendingRuleDrafts[limitDraftKey];
+        form.setValue(
+          `spending_rules.${index}.limit`,
+          (rawValue === "" ? undefined : Number(rawValue)) as never,
+          { shouldDirty: true }
+        );
+      }
+
+      const periodHoursDraftKey = getSpendingRuleDraftKey(ruleField.id, "period_hours");
+      if (Object.prototype.hasOwnProperty.call(spendingRuleDrafts, periodHoursDraftKey)) {
+        const rawValue = spendingRuleDrafts[periodHoursDraftKey];
+        form.setValue(
+          `spending_rules.${index}.period_hours`,
+          (rawValue === "" ? undefined : Number(rawValue)) as never,
+          { shouldDirty: true }
+        );
+      }
+    });
+  };
+
   const onSubmit = async (data: CreateKeyForm) => {
     try {
       const result = await createMutation.mutateAsync({
@@ -150,6 +196,7 @@ export function CreateKeyDialog() {
       setCreatedKey(result);
       setOpen(false);
       setUpstreamSearchQuery("");
+      setSpendingRuleDrafts({});
       form.reset();
     } catch {
       // Error already handled by mutation onError
@@ -157,6 +204,28 @@ export function CreateKeyDialog() {
   };
 
   const onInvalidSubmit = () => {
+    const rules = form.getValues("spending_rules") ?? [];
+
+    // Cleared numeric fields fail `z.number()` first, so re-apply localized field errors here.
+    rules.forEach((rule, index) => {
+      if (rule.limit == null || Number(rule.limit) <= 0) {
+        form.setError(`spending_rules.${index}.limit`, {
+          type: "manual",
+          message: t("quotaLimitPositive"),
+        });
+      }
+
+      if (
+        rule.period_type === "rolling" &&
+        (rule.period_hours == null || Number(rule.period_hours) < 1)
+      ) {
+        form.setError(`spending_rules.${index}.period_hours`, {
+          type: "manual",
+          message: t("quotaPeriodHoursRequired"),
+        });
+      }
+    });
+
     toast.error(t("formValidationFailed"));
   };
 
@@ -165,6 +234,7 @@ export function CreateKeyDialog() {
 
     if (!nextOpen) {
       setUpstreamSearchQuery("");
+      setSpendingRuleDrafts({});
     }
   };
 
@@ -185,7 +255,10 @@ export function CreateKeyDialog() {
 
           <Form {...form}>
             <form
-              onSubmit={form.handleSubmit(onSubmit, onInvalidSubmit)}
+              onSubmit={(event) => {
+                syncSpendingRuleDraftsToForm();
+                void form.handleSubmit(onSubmit, onInvalidSubmit)(event);
+              }}
               className="flex min-h-0 flex-1 flex-col"
             >
               <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-6">
@@ -413,11 +486,11 @@ export function CreateKeyDialog() {
                     </p>
                   ) : (
                     <div className="space-y-3">
-                      {spendingRulesFieldArray.fields.map((field, index) => {
+                      {spendingRulesFieldArray.fields.map((ruleField, index) => {
                         const rulePeriodType = spendingRules?.[index]?.period_type;
                         return (
                           <div
-                            key={field.id}
+                            key={ruleField.id}
                             className="space-y-3 rounded-[var(--shape-corner-small)] border border-[rgb(var(--md-sys-color-outline-variant))] bg-background/70 p-3"
                           >
                             <div className="flex items-center justify-between gap-3">
@@ -428,7 +501,19 @@ export function CreateKeyDialog() {
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => spendingRulesFieldArray.remove(index)}
+                                onClick={() => {
+                                  setSpendingRuleDrafts((currentDrafts) => {
+                                    const nextDrafts = { ...currentDrafts };
+                                    delete nextDrafts[
+                                      getSpendingRuleDraftKey(ruleField.id, "limit")
+                                    ];
+                                    delete nextDrafts[
+                                      getSpendingRuleDraftKey(ruleField.id, "period_hours")
+                                    ];
+                                    return nextDrafts;
+                                  });
+                                  spendingRulesFieldArray.remove(index);
+                                }}
                               >
                                 {tCommon("delete")}
                               </Button>
@@ -450,6 +535,16 @@ export function CreateKeyDialog() {
                                         onClick={() => {
                                           field.onChange(value);
                                           if (value !== "rolling") {
+                                            setSpendingRuleDrafts((currentDrafts) => {
+                                              const nextDrafts = { ...currentDrafts };
+                                              delete nextDrafts[
+                                                getSpendingRuleDraftKey(
+                                                  ruleField.id,
+                                                  "period_hours"
+                                                )
+                                              ];
+                                              return nextDrafts;
+                                            });
                                             form.setValue(
                                               `spending_rules.${index}.period_hours`,
                                               undefined
@@ -478,14 +573,22 @@ export function CreateKeyDialog() {
                                         type="number"
                                         min="0"
                                         step="0.01"
-                                        value={field.value || ""}
-                                        onChange={(event) =>
+                                        value={getSpendingRuleInputValue(
+                                          spendingRuleDrafts,
+                                          getSpendingRuleDraftKey(ruleField.id, "limit"),
+                                          field.value
+                                        )}
+                                        onChange={(event) => {
+                                          const rawValue = event.target.value;
+                                          setSpendingRuleDrafts((currentDrafts) => ({
+                                            ...currentDrafts,
+                                            [getSpendingRuleDraftKey(ruleField.id, "limit")]:
+                                              rawValue,
+                                          }));
                                           field.onChange(
-                                            event.target.value === ""
-                                              ? undefined
-                                              : Number(event.target.value)
-                                          )
-                                        }
+                                            rawValue === "" ? undefined : Number(rawValue)
+                                          );
+                                        }}
                                         placeholder={t("quotaLimitPlaceholder")}
                                       />
                                     </FormControl>
@@ -507,14 +610,24 @@ export function CreateKeyDialog() {
                                           min="1"
                                           max="8760"
                                           step="1"
-                                          value={field.value || ""}
-                                          onChange={(event) =>
+                                          value={getSpendingRuleInputValue(
+                                            spendingRuleDrafts,
+                                            getSpendingRuleDraftKey(ruleField.id, "period_hours"),
+                                            field.value
+                                          )}
+                                          onChange={(event) => {
+                                            const rawValue = event.target.value;
+                                            setSpendingRuleDrafts((currentDrafts) => ({
+                                              ...currentDrafts,
+                                              [getSpendingRuleDraftKey(
+                                                ruleField.id,
+                                                "period_hours"
+                                              )]: rawValue,
+                                            }));
                                             field.onChange(
-                                              event.target.value === ""
-                                                ? undefined
-                                                : Number(event.target.value)
-                                            )
-                                          }
+                                              rawValue === "" ? undefined : Number(rawValue)
+                                            );
+                                          }}
                                           placeholder={t("quotaPeriodHoursPlaceholder")}
                                         />
                                       </FormControl>

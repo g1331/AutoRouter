@@ -95,7 +95,9 @@ describe("EditKeyDialog", () => {
         mutations: { retry: false },
       },
     });
-    vi.clearAllMocks();
+    mockUpdateMutateAsync.mockReset();
+    mockOnOpenChange.mockReset();
+    mockToastError.mockReset();
   });
 
   describe("Dialog Rendering", () => {
@@ -270,6 +272,65 @@ describe("EditKeyDialog", () => {
         });
       });
     });
+
+    it("keeps spending rule numeric inputs editable through empty string and zero", async () => {
+      mockUpdateMutateAsync.mockResolvedValueOnce({});
+
+      const editableQuotaApiKey: APIKeyResponse = {
+        ...mockApiKey,
+        spending_rules: [{ period_type: "rolling", limit: 30, period_hours: 30 }],
+        spending_rule_statuses: [
+          {
+            period_type: "rolling",
+            period_hours: 30,
+            current_spending: 8,
+            spending_limit: 30,
+            percent_used: 26.7,
+            is_exceeded: false,
+            resets_at: null,
+            estimated_recovery_at: null,
+          },
+        ],
+      };
+
+      render(
+        <EditKeyDialog apiKey={editableQuotaApiKey} open={true} onOpenChange={mockOnOpenChange} />,
+        { wrapper: Wrapper }
+      );
+
+      const limitInput = screen.getByPlaceholderText("quotaLimitPlaceholder") as HTMLInputElement;
+      fireEvent.change(limitInput, { target: { value: "3" } });
+      expect(limitInput.value).toBe("3");
+      fireEvent.change(limitInput, { target: { value: "" } });
+      expect(limitInput.value).toBe("");
+      fireEvent.change(limitInput, { target: { value: "0" } });
+      expect(limitInput.value).toBe("0");
+      fireEvent.change(limitInput, { target: { value: "5" } });
+      expect(limitInput.value).toBe("5");
+
+      const periodHoursInput = screen.getByPlaceholderText(
+        "quotaPeriodHoursPlaceholder"
+      ) as HTMLInputElement;
+      fireEvent.change(periodHoursInput, { target: { value: "3" } });
+      expect(periodHoursInput.value).toBe("3");
+      fireEvent.change(periodHoursInput, { target: { value: "" } });
+      expect(periodHoursInput.value).toBe("");
+      fireEvent.change(periodHoursInput, { target: { value: "0" } });
+      expect(periodHoursInput.value).toBe("0");
+      fireEvent.change(periodHoursInput, { target: { value: "5" } });
+      expect(periodHoursInput.value).toBe("5");
+
+      fireEvent.click(screen.getByText("save"));
+
+      await waitFor(() => {
+        expect(mockUpdateMutateAsync).toHaveBeenCalledWith({
+          id: "key-123",
+          data: expect.objectContaining({
+            spending_rules: [{ period_type: "rolling", limit: 5, period_hours: 5 }],
+          }),
+        });
+      });
+    });
   });
 
   describe("Form Validation", () => {
@@ -288,6 +349,41 @@ describe("EditKeyDialog", () => {
       });
 
       expect(mockToastError).toHaveBeenCalledWith("formValidationFailed");
+    });
+
+    it("shows localized spending rule error instead of default english number error", async () => {
+      const quotaApiKey: APIKeyResponse = {
+        ...mockApiKey,
+        spending_rules: [{ period_type: "daily", limit: 15 }],
+        spending_rule_statuses: [
+          {
+            period_type: "daily",
+            current_spending: 8,
+            spending_limit: 15,
+            percent_used: 53.3,
+            is_exceeded: false,
+            resets_at: null,
+            estimated_recovery_at: null,
+          },
+        ],
+      };
+
+      render(<EditKeyDialog apiKey={quotaApiKey} open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("quotaLimitPlaceholder"), {
+        target: { value: "" },
+      });
+      fireEvent.click(screen.getByText("save"));
+
+      await waitFor(() => {
+        expect(screen.getByText("quotaLimitPositive")).toBeInTheDocument();
+      });
+
+      expect(
+        screen.queryByText("Invalid input: expected number, received undefined")
+      ).not.toBeInTheDocument();
     });
 
     it("shows validation error when all upstreams are deselected in restricted mode", async () => {
