@@ -1128,6 +1128,7 @@ export interface StatsTimeseriesApiResponse {
   range: TimeRange | "custom";
   granularity: "hour" | "day";
   series: UpstreamTimeseriesApiResponse[];
+  total_series: TimeseriesDataPointApiResponse[];
 }
 
 export interface DistributionItemApiResponse {
@@ -1249,6 +1250,7 @@ export function transformStatsTimeseriesToApi(stats: StatsTimeseries): StatsTime
     range: stats.range,
     granularity: stats.granularity,
     series: stats.series.map(transformUpstreamTimeseriesToApi),
+    total_series: stats.totalSeries.map(transformTimeseriesDataPointToApi),
   };
 }
 

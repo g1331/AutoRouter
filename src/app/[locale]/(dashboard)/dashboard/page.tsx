@@ -11,6 +11,7 @@ import {
   TimeRangeSelector,
   UsageChart,
 } from "@/components/dashboard";
+import type { UsageChartDisplayMode } from "@/components/dashboard/usage-chart";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   useStatsLeaderboard,
@@ -28,6 +29,7 @@ export default function DashboardPage() {
   const [timeRange, setTimeRange] = useState<TimeRangeOrCustom>("7d");
   const [customRange, setCustomRange] = useState<CustomDateRange | undefined>();
   const [metric, setMetric] = useState<TimeseriesMetric>("requests");
+  const [displayMode, setDisplayMode] = useState<UsageChartDisplayMode>("total");
 
   const { data: overview, isLoading: overviewLoading } = useStatsOverview();
   const { data: timeseries, isLoading: timeseriesLoading } = useStatsTimeseries(
@@ -85,6 +87,8 @@ export default function DashboardPage() {
             isLoading={timeseriesLoading}
             metric={metric}
             onMetricChange={setMetric}
+            displayMode={displayMode}
+            onDisplayModeChange={setDisplayMode}
           />
         </section>
 

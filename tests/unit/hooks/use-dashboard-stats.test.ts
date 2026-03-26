@@ -91,6 +91,14 @@ describe("use-dashboard-stats hooks", () => {
             ],
           },
         ],
+        total_series: [
+          {
+            timestamp: "2024-01-01T00:00:00Z",
+            request_count: 100,
+            total_tokens: 5000,
+            avg_duration_ms: 200,
+          },
+        ],
       };
       mockGet.mockResolvedValueOnce(mockResponse);
 
@@ -107,6 +115,7 @@ describe("use-dashboard-stats hooks", () => {
         range: "today",
         granularity: "hour",
         series: [],
+        total_series: [],
       };
       mockGet.mockResolvedValueOnce(mockResponse);
 
@@ -122,6 +131,7 @@ describe("use-dashboard-stats hooks", () => {
         range: "30d",
         granularity: "day",
         series: [],
+        total_series: [],
       };
       mockGet.mockResolvedValueOnce(mockResponse);
 

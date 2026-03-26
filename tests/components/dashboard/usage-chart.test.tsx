@@ -1,28 +1,33 @@
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
+
 import { UsageChart } from "@/components/dashboard/usage-chart";
 import type { StatsTimeseriesResponse } from "@/types/api";
 
 const yAxisPropsSpy = vi.fn();
 
-// Mock next-intl
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
 }));
 
-// Mock recharts - render as simple divs with data attributes for testing
+vi.mock("next-themes", () => ({
+  useTheme: () => ({
+    resolvedTheme: "light",
+  }),
+}));
+
 vi.mock("recharts", () => ({
   ResponsiveContainer: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="responsive-container">{children}</div>
   ),
   AreaChart: ({ children, data }: { children: React.ReactNode; data: unknown[] }) => (
-    <div data-testid="area-chart" data-points={data.length}>
+    <svg data-testid="area-chart" data-points={data.length} data-chart={JSON.stringify(data)}>
       {children}
-    </div>
+    </svg>
   ),
   Area: ({ name, dataKey }: { name: string; dataKey: unknown }) => (
-    <div data-testid={`area-${name}`} data-key={typeof dataKey} />
+    <div data-testid={`area-${name}`} data-key={String(dataKey)} />
   ),
   XAxis: () => <div data-testid="x-axis" />,
   YAxis: (props: unknown) => {
@@ -44,368 +49,246 @@ vi.mock("recharts", () => ({
   Legend: ({ content }: { content: React.ReactNode }) => <div data-testid="legend">{content}</div>,
 }));
 
-describe("UsageChart", () => {
-  const defaultProps = {
-    metric: "requests" as const,
+const mockTimeseriesData: StatsTimeseriesResponse = {
+  range: "7d",
+  granularity: "day",
+  series: [
+    {
+      upstream_id: "1",
+      upstream_name: "OpenAI",
+      data: [
+        {
+          timestamp: "2024-01-01T00:00:00Z",
+          request_count: 100,
+          total_tokens: 5000,
+          avg_duration_ms: 200,
+          avg_tps: 35,
+        },
+        {
+          timestamp: "2024-01-02T00:00:00Z",
+          request_count: 150,
+          total_tokens: 7500,
+          avg_duration_ms: 180,
+          avg_tps: 42,
+        },
+      ],
+    },
+    {
+      upstream_id: "2",
+      upstream_name: "Anthropic",
+      data: [
+        {
+          timestamp: "2024-01-01T00:00:00Z",
+          request_count: 80,
+          total_tokens: 4000,
+          avg_duration_ms: 220,
+          avg_tps: 28,
+        },
+        {
+          timestamp: "2024-01-02T00:00:00Z",
+          request_count: 120,
+          total_tokens: 6000,
+          avg_duration_ms: 190,
+          avg_tps: 33,
+        },
+      ],
+    },
+  ],
+  total_series: [
+    {
+      timestamp: "2024-01-01T00:00:00Z",
+      request_count: 180,
+      total_tokens: 9000,
+      avg_duration_ms: 209,
+      avg_tps: 31,
+    },
+    {
+      timestamp: "2024-01-02T00:00:00Z",
+      request_count: 270,
+      total_tokens: 13500,
+      avg_duration_ms: 184,
+      avg_tps: 38,
+    },
+  ],
+};
+
+const mockHourlyData: StatsTimeseriesResponse = {
+  range: "today",
+  granularity: "hour",
+  series: [
+    {
+      upstream_id: "1",
+      upstream_name: "OpenAI",
+      data: [
+        {
+          timestamp: "2024-01-01T10:00:00Z",
+          request_count: 50,
+          total_tokens: 2500,
+          avg_duration_ms: 150,
+        },
+        {
+          timestamp: "2024-01-01T11:00:00Z",
+          request_count: 60,
+          total_tokens: 3000,
+          avg_duration_ms: 160,
+        },
+      ],
+    },
+  ],
+  total_series: [
+    {
+      timestamp: "2024-01-01T10:00:00Z",
+      request_count: 50,
+      total_tokens: 2500,
+      avg_duration_ms: 150,
+    },
+    {
+      timestamp: "2024-01-01T11:00:00Z",
+      request_count: 60,
+      total_tokens: 3000,
+      avg_duration_ms: 160,
+    },
+  ],
+};
+
+function renderChart(overrides: Partial<React.ComponentProps<typeof UsageChart>> = {}) {
+  const props: React.ComponentProps<typeof UsageChart> = {
+    data: mockTimeseriesData,
+    isLoading: false,
+    timeRange: "7d",
+    metric: "requests",
     onMetricChange: vi.fn(),
+    displayMode: "byUpstream",
+    onDisplayModeChange: vi.fn(),
+    ...overrides,
   };
 
-  const mockTimeseriesData: StatsTimeseriesResponse = {
-    range: "7d",
-    granularity: "day",
-    series: [
-      {
-        upstream_id: "1",
-        upstream_name: "OpenAI",
-        data: [
-          {
-            timestamp: "2024-01-01T00:00:00Z",
-            request_count: 100,
-            total_tokens: 5000,
-            avg_duration_ms: 200,
-          },
-          {
-            timestamp: "2024-01-02T00:00:00Z",
-            request_count: 150,
-            total_tokens: 7500,
-            avg_duration_ms: 180,
-          },
-        ],
-      },
-      {
-        upstream_id: "2",
-        upstream_name: "Anthropic",
-        data: [
-          {
-            timestamp: "2024-01-01T00:00:00Z",
-            request_count: 80,
-            total_tokens: 4000,
-            avg_duration_ms: 220,
-          },
-          {
-            timestamp: "2024-01-02T00:00:00Z",
-            request_count: 120,
-            total_tokens: 6000,
-            avg_duration_ms: 190,
-          },
-        ],
-      },
-    ],
+  return {
+    ...render(<UsageChart {...props} />),
+    props,
   };
+}
 
-  const mockHourlyData: StatsTimeseriesResponse = {
-    range: "today",
-    granularity: "hour",
-    series: [
-      {
-        upstream_id: "1",
-        upstream_name: "OpenAI",
-        data: [
-          {
-            timestamp: "2024-01-01T10:00:00Z",
-            request_count: 50,
-            total_tokens: 2500,
-            avg_duration_ms: 150,
-          },
-          {
-            timestamp: "2024-01-01T11:00:00Z",
-            request_count: 60,
-            total_tokens: 3000,
-            avg_duration_ms: 160,
-          },
-        ],
-      },
-    ],
-  };
-
-  describe("Loading State", () => {
-    it("renders chart skeleton when loading", () => {
-      render(<UsageChart {...defaultProps} data={undefined} isLoading={true} timeRange="7d" />);
+describe("UsageChart", () => {
+  describe("loading and empty states", () => {
+    it("renders chart skeleton and summary placeholders while loading", () => {
+      renderChart({ data: undefined, isLoading: true });
 
       expect(screen.getByTestId("usage-chart-loading-skeleton")).toBeInTheDocument();
-    });
-
-    it("renders skeleton for total requests when loading", () => {
-      render(<UsageChart {...defaultProps} data={undefined} isLoading={true} timeRange="7d" />);
-
-      const summaryLoaders = screen.getAllByTestId("usage-chart-summary-loading");
-      expect(summaryLoaders.length).toBe(2);
-      expect(screen.queryByText("---")).not.toBeInTheDocument();
-    });
-
-    it("renders section headers when loading", () => {
-      render(<UsageChart {...defaultProps} data={undefined} isLoading={true} timeRange="7d" />);
-
+      expect(screen.getAllByTestId("usage-chart-summary-loading")).toHaveLength(2);
       expect(screen.getByText("stats.usageStatistics")).toBeInTheDocument();
-      expect(screen.getByText("stats.usageDescription")).toBeInTheDocument();
     });
 
-    it("does not use spinner animation in loading state", () => {
-      const { container } = render(
-        <UsageChart {...defaultProps} data={undefined} isLoading={true} timeRange="7d" />
-      );
+    it("renders no data message and zero totals when data is empty", () => {
+      renderChart({
+        data: {
+          range: "7d",
+          granularity: "day",
+          series: [],
+          total_series: [],
+        },
+      });
 
-      const spinner = container.querySelector(".animate-spin");
-      expect(spinner).not.toBeInTheDocument();
-      expect(screen.getByTestId("usage-chart-loading-skeleton")).toBeInTheDocument();
+      expect(screen.getByText("stats.noData")).toBeInTheDocument();
+      expect(screen.getAllByText("0")).toHaveLength(2);
     });
   });
 
-  describe("Empty State", () => {
-    it("renders no data message when data is empty", () => {
-      const emptyData: StatsTimeseriesResponse = {
-        range: "7d",
-        granularity: "day",
-        series: [],
-      };
-
-      render(<UsageChart {...defaultProps} data={emptyData} isLoading={false} timeRange="7d" />);
-
-      expect(screen.getByText("stats.noData")).toBeInTheDocument();
-    });
-
-    it("renders no data message when data is undefined", () => {
-      render(<UsageChart {...defaultProps} data={undefined} isLoading={false} timeRange="7d" />);
-
-      expect(screen.getByText("stats.noData")).toBeInTheDocument();
-    });
-
-    it("shows zero totals when no data", () => {
-      render(<UsageChart {...defaultProps} data={undefined} isLoading={false} timeRange="7d" />);
-
-      // Should display "0" for totals
-      const zeros = screen.getAllByText("0");
-      expect(zeros.length).toBe(2); // requests and tokens
-    });
-  });
-
-  describe("Data Rendering", () => {
-    it("renders area chart when data is provided", () => {
-      render(
-        <UsageChart {...defaultProps} data={mockTimeseriesData} isLoading={false} timeRange="7d" />
-      );
-
-      expect(screen.getByTestId("area-chart")).toBeInTheDocument();
-    });
-
-    it("renders correct number of data points", () => {
-      render(
-        <UsageChart {...defaultProps} data={mockTimeseriesData} isLoading={false} timeRange="7d" />
-      );
-
-      const chart = screen.getByTestId("area-chart");
-      // 2 unique timestamps
-      expect(chart).toHaveAttribute("data-points", "2");
-    });
-
-    it("renders area for each upstream", () => {
-      render(
-        <UsageChart {...defaultProps} data={mockTimeseriesData} isLoading={false} timeRange="7d" />
-      );
+  describe("chart rendering", () => {
+    it("renders one area per upstream in by-upstream mode", () => {
+      renderChart({ displayMode: "byUpstream" });
 
       expect(screen.getByTestId("area-OpenAI")).toBeInTheDocument();
       expect(screen.getByTestId("area-Anthropic")).toBeInTheDocument();
-    });
-
-    it("renders chart axes", () => {
-      render(
-        <UsageChart {...defaultProps} data={mockTimeseriesData} isLoading={false} timeRange="7d" />
-      );
-
+      expect(screen.getByTestId("area-chart")).toHaveAttribute("data-points", "2");
       expect(screen.getByTestId("x-axis")).toBeInTheDocument();
       expect(screen.getByTestId("y-axis")).toBeInTheDocument();
-    });
-
-    it("renders cartesian grid", () => {
-      render(
-        <UsageChart {...defaultProps} data={mockTimeseriesData} isLoading={false} timeRange="7d" />
-      );
-
       expect(screen.getByTestId("cartesian-grid")).toBeInTheDocument();
-    });
-
-    it("renders tooltip and legend", () => {
-      render(
-        <UsageChart {...defaultProps} data={mockTimeseriesData} isLoading={false} timeRange="7d" />
-      );
-
       expect(screen.getByTestId("tooltip")).toBeInTheDocument();
       expect(screen.getByTestId("legend")).toBeInTheDocument();
     });
-  });
 
-  describe("Totals Calculation", () => {
-    it("calculates total requests correctly", () => {
-      render(<UsageChart data={mockTimeseriesData} isLoading={false} timeRange="7d" />);
+    it("renders hourly data correctly", () => {
+      renderChart({ data: mockHourlyData, timeRange: "today" });
 
-      // Total: 100 + 150 + 80 + 120 = 450
-      expect(screen.getByText("450")).toBeInTheDocument();
+      expect(screen.getByTestId("area-chart")).toHaveAttribute("data-points", "2");
+      expect(screen.getByTestId("area-OpenAI")).toBeInTheDocument();
     });
 
-    it("calculates total tokens correctly", () => {
-      render(<UsageChart data={mockTimeseriesData} isLoading={false} timeRange="7d" />);
+    it("renders total mode from total_series instead of per-upstream values", () => {
+      renderChart({
+        metric: "tps",
+        displayMode: "total",
+      });
 
-      // Total tokens: 5000 + 7500 + 4000 + 6000 = 22500 -> 22.5K
+      expect(screen.getByTestId("area-stats.chartModeTotal")).toBeInTheDocument();
+      expect(screen.queryByTestId("area-OpenAI")).not.toBeInTheDocument();
+
+      const chartData = JSON.parse(
+        screen.getByTestId("area-chart").getAttribute("data-chart") ?? "[]"
+      );
+      expect(chartData).toEqual([
+        {
+          timestamp: "2024-01-01T00:00:00Z",
+          formattedTime: "01/01",
+          totalValue: 31,
+        },
+        {
+          timestamp: "2024-01-02T00:00:00Z",
+          formattedTime: "01/02",
+          totalValue: 38,
+        },
+      ]);
+    });
+  });
+
+  describe("summary values", () => {
+    it("calculates total requests and tokens from total_series", () => {
+      renderChart();
+
+      expect(screen.getByText("450")).toBeInTheDocument();
       expect(screen.getByText("22.5K")).toBeInTheDocument();
     });
 
-    it("formats large numbers with K suffix", () => {
-      const largeData: StatsTimeseriesResponse = {
-        range: "7d",
-        granularity: "day",
-        series: [
-          {
-            upstream_id: "1",
-            upstream_name: "OpenAI",
-            data: [
-              {
-                timestamp: "2024-01-01T00:00:00Z",
-                request_count: 15000,
-                total_tokens: 1500000,
-                avg_duration_ms: 200,
-              },
-            ],
-          },
-        ],
-      };
-
-      render(<UsageChart data={largeData} isLoading={false} timeRange="7d" />);
+    it("formats large numbers with suffixes", () => {
+      renderChart({
+        data: {
+          range: "7d",
+          granularity: "day",
+          series: [
+            {
+              upstream_id: "1",
+              upstream_name: "OpenAI",
+              data: [
+                {
+                  timestamp: "2024-01-01T00:00:00Z",
+                  request_count: 15000,
+                  total_tokens: 1500000,
+                  avg_duration_ms: 200,
+                },
+              ],
+            },
+          ],
+          total_series: [
+            {
+              timestamp: "2024-01-01T00:00:00Z",
+              request_count: 15000,
+              total_tokens: 1500000,
+              avg_duration_ms: 200,
+            },
+          ],
+        },
+      });
 
       expect(screen.getByText("15.0K")).toBeInTheDocument();
       expect(screen.getByText("1.5M")).toBeInTheDocument();
     });
   });
 
-  describe("Time Granularity", () => {
-    it("handles hourly granularity data", () => {
-      render(<UsageChart data={mockHourlyData} isLoading={false} timeRange="today" />);
-
-      expect(screen.getByTestId("area-chart")).toBeInTheDocument();
-      expect(screen.getByTestId("area-OpenAI")).toBeInTheDocument();
-    });
-
-    it("renders correct number of data points for hourly data", () => {
-      render(<UsageChart data={mockHourlyData} isLoading={false} timeRange="today" />);
-
-      const chart = screen.getByTestId("area-chart");
-      expect(chart).toHaveAttribute("data-points", "2");
-    });
-  });
-
-  describe("Header Section", () => {
-    it("renders usage statistics title", () => {
-      render(<UsageChart data={mockTimeseriesData} isLoading={false} timeRange="7d" />);
-
-      expect(screen.getByText("stats.usageStatistics")).toBeInTheDocument();
-    });
-
-    it("renders usage description", () => {
-      render(<UsageChart data={mockTimeseriesData} isLoading={false} timeRange="7d" />);
-
-      expect(screen.getByText("stats.usageDescription")).toBeInTheDocument();
-    });
-
-    it("renders total requests label", () => {
-      render(<UsageChart data={mockTimeseriesData} isLoading={false} timeRange="7d" />);
-
-      expect(screen.getByText("stats.totalRequests")).toBeInTheDocument();
-    });
-
-    it("renders total tokens label", () => {
-      render(<UsageChart data={mockTimeseriesData} isLoading={false} timeRange="7d" />);
-
-      expect(screen.getByText("stats.totalTokensUsed")).toBeInTheDocument();
-    });
-  });
-
-  describe("Single Upstream", () => {
-    it("renders chart with single upstream", () => {
-      const singleUpstream: StatsTimeseriesResponse = {
-        range: "7d",
-        granularity: "day",
-        series: [
-          {
-            upstream_id: "1",
-            upstream_name: "Claude",
-            data: [
-              {
-                timestamp: "2024-01-01T00:00:00Z",
-                request_count: 200,
-                total_tokens: 10000,
-                avg_duration_ms: 250,
-              },
-            ],
-          },
-        ],
-      };
-
-      render(<UsageChart data={singleUpstream} isLoading={false} timeRange="7d" />);
-
-      expect(screen.getByTestId("area-Claude")).toBeInTheDocument();
-      // Should not have other areas
-      expect(screen.queryByTestId("area-OpenAI")).not.toBeInTheDocument();
-    });
-  });
-
-  describe("ResponsiveContainer", () => {
-    it("wraps chart in responsive container", () => {
-      render(<UsageChart data={mockTimeseriesData} isLoading={false} timeRange="7d" />);
-
-      expect(screen.getByTestId("responsive-container")).toBeInTheDocument();
-    });
-  });
-
-  describe("TTFT Unit Formatting", () => {
-    it("formats TTFT ticks as seconds when value is >= 1000ms", () => {
-      yAxisPropsSpy.mockClear();
-      render(
-        <UsageChart
-          data={mockTimeseriesData}
-          isLoading={false}
-          timeRange="7d"
-          metric="ttft"
-          onMetricChange={vi.fn()}
-        />
-      );
-
-      const yAxisProps = yAxisPropsSpy.mock.calls.at(-1)?.[0] as {
-        tickFormatter?: (v: number) => string;
-      };
-      expect(yAxisProps.tickFormatter?.(1222)).toBe("1.222s");
-      expect(screen.getByText(/1.222s/)).toBeInTheDocument();
-    });
-
-    it("formats TTFT ticks as milliseconds when value is < 1000ms", () => {
-      yAxisPropsSpy.mockClear();
-      render(
-        <UsageChart
-          data={mockTimeseriesData}
-          isLoading={false}
-          timeRange="7d"
-          metric="ttft"
-          onMetricChange={vi.fn()}
-        />
-      );
-
-      const yAxisProps = yAxisPropsSpy.mock.calls.at(-1)?.[0] as {
-        tickFormatter?: (v: number) => string;
-      };
-      expect(yAxisProps.tickFormatter?.(650)).toBe("650ms");
-    });
-  });
-
-  describe("Metric Interaction", () => {
+  describe("interaction", () => {
     it("calls onMetricChange when clicking metric tabs", () => {
       const onMetricChange = vi.fn();
-      render(
-        <UsageChart
-          data={mockTimeseriesData}
-          isLoading={false}
-          timeRange="7d"
-          metric="requests"
-          onMetricChange={onMetricChange}
-        />
-      );
+      renderChart({ onMetricChange });
 
       fireEvent.click(screen.getByRole("button", { name: "stats.chartTabTtft" }));
       fireEvent.click(screen.getByRole("button", { name: "stats.chartTabTps" }));
@@ -414,16 +297,52 @@ describe("UsageChart", () => {
       expect(onMetricChange).toHaveBeenNthCalledWith(2, "tps");
     });
 
+    it("calls onDisplayModeChange when clicking mode tabs", () => {
+      const onDisplayModeChange = vi.fn();
+      renderChart({ onDisplayModeChange });
+
+      fireEvent.click(screen.getByRole("button", { name: "stats.chartModeTotal" }));
+      fireEvent.click(screen.getByRole("button", { name: "stats.chartModeByUpstream" }));
+
+      expect(onDisplayModeChange).toHaveBeenNthCalledWith(1, "total");
+      expect(onDisplayModeChange).toHaveBeenNthCalledWith(2, "byUpstream");
+    });
+
+    it("renders mode-specific description text", () => {
+      const { rerender, props } = renderChart({ displayMode: "total" });
+      expect(screen.getByText("stats.usageDescriptionTotal")).toBeInTheDocument();
+
+      rerender(<UsageChart {...props} displayMode="byUpstream" />);
+      expect(screen.getByText("stats.usageDescriptionByUpstream")).toBeInTheDocument();
+    });
+  });
+
+  describe("metric formatting", () => {
+    it("formats TTFT ticks as seconds for large values", () => {
+      yAxisPropsSpy.mockClear();
+
+      renderChart({ metric: "ttft" });
+
+      const yAxisProps = yAxisPropsSpy.mock.calls.at(-1)?.[0] as {
+        tickFormatter?: (value: number) => string;
+      };
+      expect(yAxisProps.tickFormatter?.(1222)).toBe("1.222s");
+      expect(screen.getByText(/1.222s/)).toBeInTheDocument();
+    });
+
+    it("formats TTFT ticks as milliseconds for small values", () => {
+      yAxisPropsSpy.mockClear();
+
+      renderChart({ metric: "ttft" });
+
+      const yAxisProps = yAxisPropsSpy.mock.calls.at(-1)?.[0] as {
+        tickFormatter?: (value: number) => string;
+      };
+      expect(yAxisProps.tickFormatter?.(650)).toBe("650ms");
+    });
+
     it("formats tooltip values for TPS metric with tok/s suffix", () => {
-      render(
-        <UsageChart
-          data={mockTimeseriesData}
-          isLoading={false}
-          timeRange="7d"
-          metric="tps"
-          onMetricChange={vi.fn()}
-        />
-      );
+      renderChart({ metric: "tps" });
 
       expect(screen.getByText(/tok\/s/)).toBeInTheDocument();
     });

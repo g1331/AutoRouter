@@ -422,6 +422,70 @@ describe("stats-service", () => {
       expect(result.series[0].data[1].requestCount).toBe(20);
     });
 
+    it("should include aggregated totalSeries from the shared time buckets", async () => {
+      const { db } = await import("@/lib/db");
+      const { getTimeseriesStats } = await import("@/lib/services/stats-service");
+
+      vi.mocked(db.select)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              groupBy: vi.fn().mockReturnValue({
+                orderBy: vi.fn().mockResolvedValue([
+                  {
+                    upstreamId: "upstream-1",
+                    timeBucket: "2024-06-15 10:00:00",
+                    requestCount: 10,
+                    totalTokens: "1000",
+                    avgDuration: "100",
+                  },
+                  {
+                    upstreamId: "upstream-2",
+                    timeBucket: "2024-06-15 10:00:00",
+                    requestCount: 8,
+                    totalTokens: "800",
+                    avgDuration: "160",
+                  },
+                ]),
+              }),
+            }),
+          }),
+        } as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              groupBy: vi.fn().mockReturnValue({
+                orderBy: vi.fn().mockResolvedValue([
+                  {
+                    timeBucket: "2024-06-15 10:00:00",
+                    requestCount: 18,
+                    totalTokens: "1800",
+                    avgDuration: "126.7",
+                  },
+                ]),
+              }),
+            }),
+          }),
+        } as unknown as ReturnType<typeof db.select>);
+
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        { id: "upstream-1", name: "OpenAI" },
+        { id: "upstream-2", name: "Anthropic" },
+      ]);
+
+      const result = await getTimeseriesStats("today");
+
+      expect(result.series).toHaveLength(2);
+      expect(result.totalSeries).toEqual([
+        {
+          timestamp: new Date("2024-06-15T10:00:00.000Z"),
+          requestCount: 18,
+          totalTokens: 1800,
+          avgDurationMs: 126.7,
+        },
+      ]);
+    });
+
     it("should handle empty result", async () => {
       const { db } = await import("@/lib/db");
       const { getTimeseriesStats } = await import("@/lib/services/stats-service");
@@ -507,6 +571,7 @@ describe("stats-service", () => {
 
       expect(result.series).toHaveLength(1);
       expect(result.series[0].data[0].avgTps).toBe(60);
+      expect(result.totalSeries[0].avgTps).toBe(60);
     });
 
     it("should return avgTps as 0 when no eligible stream samples exist", async () => {
