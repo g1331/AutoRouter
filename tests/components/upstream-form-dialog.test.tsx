@@ -751,6 +751,54 @@ describe("UpstreamFormDialog", () => {
       });
     });
 
+    it("closes without discard prompt after numeric fields are restored to their original values", async () => {
+      const upstreamWithAdvancedNumericValues: Upstream = {
+        ...mockUpstream,
+        billing_input_multiplier: 1,
+        spending_rules: [{ period_type: "daily", limit: 100 }],
+        affinity_migration: {
+          enabled: true,
+          metric: "tokens",
+          threshold: 50000,
+        },
+      };
+
+      render(
+        <UpstreamFormDialog
+          upstream={upstreamWithAdvancedNumericValues}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      ensureAdvancedConfigExpanded();
+
+      const billingInputMultiplier = screen
+        .getByText("billingInputMultiplier")
+        .parentElement?.querySelector("input") as HTMLInputElement;
+      const spendingLimitInput = screen.getByPlaceholderText(
+        "spendingLimitPlaceholder"
+      ) as HTMLInputElement;
+      const affinityThresholdInput = screen.getByPlaceholderText("50000") as HTMLInputElement;
+
+      fireEvent.change(billingInputMultiplier, { target: { value: "1.5" } });
+      fireEvent.change(billingInputMultiplier, { target: { value: "1" } });
+
+      fireEvent.change(spendingLimitInput, { target: { value: "150" } });
+      fireEvent.change(spendingLimitInput, { target: { value: "100" } });
+
+      fireEvent.change(affinityThresholdInput, { target: { value: "60000" } });
+      fireEvent.change(affinityThresholdInput, { target: { value: "50000" } });
+
+      fireEvent.click(screen.getByText("cancel"));
+
+      await waitFor(() => {
+        expect(mockOnOpenChange).toHaveBeenCalledWith(false);
+      });
+      expect(screen.queryByText("unsavedChangesTitle")).not.toBeInTheDocument();
+    });
+
     it("does not render content when closed", () => {
       render(<UpstreamFormDialog open={false} onOpenChange={mockOnOpenChange} />, {
         wrapper: Wrapper,

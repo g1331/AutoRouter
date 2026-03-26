@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useForm, useWatch, useFieldArray } from "react-hook-form";
+import { useForm, useWatch, useFieldArray, type DeepPartial } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -127,6 +127,36 @@ function coerceNumericInput(
 
 function getNumericInputValue(value: unknown): string | number {
   return typeof value === "string" || typeof value === "number" ? value : "";
+}
+
+function normalizeUpstreamFormValuesForDirtyCheck(
+  values: Readonly<DeepPartial<UpstreamFormValues>> | undefined
+): Readonly<DeepPartial<UpstreamFormValues>> | undefined {
+  if (!values) {
+    return values;
+  }
+
+  return {
+    ...values,
+    priority: coerceNumericInput(values.priority, undefined),
+    weight: coerceNumericInput(values.weight, undefined),
+    billing_input_multiplier: coerceNumericInput(values.billing_input_multiplier, undefined),
+    billing_output_multiplier: coerceNumericInput(values.billing_output_multiplier, undefined),
+    spending_rules: values.spending_rules?.map((rule) =>
+      rule
+        ? {
+            ...rule,
+            limit: coerceNumericInput(rule.limit, undefined),
+          }
+        : rule
+    ),
+    affinity_migration: values.affinity_migration
+      ? {
+          ...values.affinity_migration,
+          threshold: coerceNumericInput(values.affinity_migration.threshold, undefined),
+        }
+      : values.affinity_migration,
+  };
 }
 
 function hasValidRollingPeriodHours(rules: z.input<typeof spendingRuleSchema>[]): boolean {
@@ -602,16 +632,15 @@ export function UpstreamFormDialog({
   };
 
   const hasUnsavedChanges = () => {
-    if (form.formState.isDirty) {
-      return true;
-    }
-
     const defaultValues = form.formState.defaultValues;
     if (!defaultValues) {
       return false;
     }
 
-    return JSON.stringify(form.getValues()) !== JSON.stringify(defaultValues);
+    const currentValues = normalizeUpstreamFormValuesForDirtyCheck(form.getValues());
+    const normalizedDefaultValues = normalizeUpstreamFormValuesForDirtyCheck(defaultValues);
+
+    return JSON.stringify(currentValues) !== JSON.stringify(normalizedDefaultValues);
   };
 
   const handleDialogOpenChange = (nextOpen: boolean) => {
