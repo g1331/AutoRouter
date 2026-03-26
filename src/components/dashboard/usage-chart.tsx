@@ -261,8 +261,6 @@ export function UsageChart({
     displayMode === "total"
       ? t("stats.usageDescriptionTotal")
       : t("stats.usageDescriptionByUpstream");
-  const activeDisplayModeHint =
-    displayMode === "total" ? t("stats.chartModeTotalHint") : t("stats.chartModeByUpstreamHint");
 
   const { chartData, seriesDefinitions } = useMemo(() => {
     if (!data) {
@@ -420,12 +418,9 @@ export function UsageChart({
 
         <div className="grid gap-4 rounded-cf-md border border-divider/75 bg-surface-200/30 p-3">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="space-y-1">
-              <p className="type-label-medium text-muted-foreground">
-                {t("stats.chartDisplayModeLabel")}
-              </p>
-              <p className="type-caption text-muted-foreground">{activeDisplayModeHint}</p>
-            </div>
+            <p className="type-label-medium text-muted-foreground">
+              {t("stats.chartDisplayModeLabel")}
+            </p>
 
             <div className="inline-flex w-fit flex-wrap items-center gap-1 rounded-full border border-divider/80 bg-card/70 p-1">
               {(
