@@ -1331,6 +1331,14 @@ describe("api-transformers", () => {
             ],
           },
         ],
+        totalSeries: [
+          {
+            timestamp: new Date("2024-01-15T10:00:00.000Z"),
+            requestCount: 100,
+            totalTokens: 30000,
+            avgDurationMs: 250,
+          },
+        ],
       };
 
       const result = transformStatsTimeseriesToApi(stats);
@@ -1339,9 +1347,17 @@ describe("api-transformers", () => {
       expect(result.granularity).toBe("hour");
       expect(result.series).toHaveLength(1);
       expect(result.series[0].upstream_name).toBe("OpenAI");
+      expect(result.total_series).toEqual([
+        {
+          timestamp: "2024-01-15T10:00:00.000Z",
+          request_count: 100,
+          total_tokens: 30000,
+          avg_duration_ms: 250,
+        },
+      ]);
     });
 
-    it("should handle day granularity", () => {
+    it("should default total_series to an empty array when aggregate data is omitted", () => {
       const stats = {
         range: "7d" as const,
         granularity: "day" as const,
@@ -1353,6 +1369,7 @@ describe("api-transformers", () => {
       expect(result.range).toBe("7d");
       expect(result.granularity).toBe("day");
       expect(result.series).toHaveLength(0);
+      expect(result.total_series).toEqual([]);
     });
   });
 

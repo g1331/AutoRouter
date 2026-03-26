@@ -271,7 +271,7 @@ export function StatsCards({
       <StatCard
         title={t("stats.cacheHitRate")}
         value={formatCacheRate(cacheHitRate)}
-        subtitle={t("stats.tokens")}
+        subtitle="%"
         icon={Database}
         isLoading={isLoading}
         delay={250}

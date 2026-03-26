@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { format, parseISO } from "date-fns";
+import { Activity, ArrowLeftRight, BarChart3 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import {
@@ -29,6 +30,8 @@ interface UsageChartProps {
   timeRange?: string;
   metric: TimeseriesMetric;
   onMetricChange: (metric: TimeseriesMetric) => void;
+  displayMode: UsageChartDisplayMode;
+  onDisplayModeChange: (mode: UsageChartDisplayMode) => void;
 }
 
 interface ChartDataPoint {
@@ -36,6 +39,26 @@ interface ChartDataPoint {
   formattedTime: string;
   [key: string]: string | number;
 }
+
+interface ChartSeriesDefinition {
+  dataKey: string;
+  gradientId: string;
+  color: string;
+  name: string;
+}
+
+export type UsageChartDisplayMode = "total" | "byUpstream";
+
+const DISPLAY_MODE_META = {
+  total: {
+    icon: Activity,
+  },
+  byUpstream: {
+    icon: BarChart3,
+  },
+} as const;
+
+const METRIC_OPTIONS = ["requests", "tokens", "cost", "ttft", "tps", "duration"] as const;
 
 function formatTtft(ttftMs: number): string {
   if (ttftMs >= 1000) {
@@ -55,6 +78,27 @@ function formatMetricValue(value: number, metric: TimeseriesMetric): string {
     return `$${value.toFixed(4)}`;
   }
   return formatNumber(value);
+}
+
+function getPointMetricValue(
+  point: StatsTimeseriesResponse["total_series"][number],
+  metric: TimeseriesMetric
+): number {
+  switch (metric) {
+    case "ttft":
+      return point.avg_ttft_ms ?? 0;
+    case "tps":
+      return point.avg_tps ?? 0;
+    case "tokens":
+      return point.total_tokens;
+    case "duration":
+      return point.avg_duration_ms;
+    case "cost":
+      return point.total_cost ?? 0;
+    case "requests":
+    default:
+      return point.request_count;
+  }
 }
 
 function CustomTooltip({
@@ -152,10 +196,16 @@ function UsageChartLoading({ loadingLabel }: { loadingLabel: string }) {
           <DashboardLoadingBlock className="h-3 w-12" />
           <DashboardLoadingBlock className="h-3 w-14" />
         </div>
-        <div className="flex items-center gap-1.5 rounded-cf-sm border border-divider/70 bg-surface-300/45 p-1">
-          <DashboardLoadingBlock tone="accent" className="h-7 w-16" />
-          <DashboardLoadingBlock className="h-7 w-14" />
-          <DashboardLoadingBlock className="h-7 w-12" />
+        <div className="flex flex-wrap gap-2">
+          <div className="flex items-center gap-1.5 rounded-cf-sm border border-divider/70 bg-surface-300/45 p-1">
+            <DashboardLoadingBlock tone="accent" className="h-7 w-16" />
+            <DashboardLoadingBlock className="h-7 w-14" />
+            <DashboardLoadingBlock className="h-7 w-12" />
+          </div>
+          <div className="flex items-center gap-1.5 rounded-cf-sm border border-divider/70 bg-surface-300/45 p-1">
+            <DashboardLoadingBlock tone="accent" className="h-7 w-16" />
+            <DashboardLoadingBlock className="h-7 w-16" />
+          </div>
         </div>
       </div>
 
@@ -195,47 +245,98 @@ function UsageChartLoading({ loadingLabel }: { loadingLabel: string }) {
   );
 }
 
-export function UsageChart({ data, isLoading, metric, onMetricChange }: UsageChartProps) {
+export function UsageChart({
+  data,
+  isLoading,
+  metric,
+  onMetricChange,
+  displayMode,
+  onDisplayModeChange,
+}: UsageChartProps) {
   const t = useTranslations("dashboard");
   const tCommon = useTranslations("common");
   const { resolvedTheme } = useTheme();
   const mode = resolvedTheme === "light" ? "light" : "dark";
   const theme = getChartTheme(mode);
 
-  const valueKey: string =
-    metric === "ttft"
-      ? "avg_ttft_ms"
-      : metric === "tps"
-        ? "avg_tps"
-        : metric === "tokens"
-          ? "total_tokens"
-          : metric === "duration"
-            ? "avg_duration_ms"
-            : metric === "cost"
-              ? "total_cost"
-              : "request_count";
+  const displayModeLabels: Record<UsageChartDisplayMode, string> = {
+    total: t("stats.chartModeTotal"),
+    byUpstream: t("stats.chartModeByUpstream"),
+  };
 
-  const { chartData, upstreamNames } = useMemo(() => {
-    if (!data?.series?.length) {
-      return { chartData: [] as ChartDataPoint[], upstreamNames: [] as string[] };
+  const metricLabels: Record<TimeseriesMetric, string> = {
+    requests: t("stats.chartTabRequests"),
+    tokens: t("stats.chartTabTokens"),
+    cost: t("stats.chartTabCost"),
+    ttft: t("stats.chartTabTtft"),
+    tps: t("stats.chartTabTps"),
+    duration: t("stats.chartTabDuration"),
+  };
+
+  const { chartData, seriesDefinitions } = useMemo(() => {
+    if (!data) {
+      return {
+        chartData: [] as ChartDataPoint[],
+        seriesDefinitions: [] as ChartSeriesDefinition[],
+      };
+    }
+
+    if (displayMode === "total") {
+      const totalSeries = data.total_series ?? [];
+      if (!totalSeries.length) {
+        return {
+          chartData: [] as ChartDataPoint[],
+          seriesDefinitions: [] as ChartSeriesDefinition[],
+        };
+      }
+
+      return {
+        chartData: totalSeries.map((point) => {
+          const date = parseISO(point.timestamp);
+          return {
+            timestamp: point.timestamp,
+            formattedTime:
+              data.granularity === "hour" ? format(date, "HH:mm") : format(date, "MM/dd"),
+            totalValue: getPointMetricValue(point, metric),
+          };
+        }),
+        seriesDefinitions: [
+          {
+            dataKey: "totalValue",
+            gradientId: "usage-gradient-total",
+            color: getUpstreamColor(0, mode),
+            name: t("stats.chartModeTotal"),
+          },
+        ],
+      };
+    }
+
+    if (!data.series?.length) {
+      return {
+        chartData: [] as ChartDataPoint[],
+        seriesDefinitions: [] as ChartSeriesDefinition[],
+      };
     }
 
     const timestampMap = new Map<string, ChartDataPoint>();
-    const namesSet = new Set<string>();
+    const nextSeriesDefinitions = data.series.map((series, index) => ({
+      dataKey: `series_${series.upstream_id ?? "unknown"}_${index}`,
+      gradientId: `usage-gradient-${series.upstream_id ?? "unknown"}-${index}`,
+      color: getUpstreamColor(index, mode),
+      name: series.upstream_name,
+    }));
 
-    data.series.forEach((series) => {
-      namesSet.add(series.upstream_name);
+    data.series.forEach((series, index) => {
+      const definition = nextSeriesDefinitions[index];
 
       series.data.forEach((point) => {
         const key = point.timestamp;
         if (!timestampMap.has(key)) {
           const date = parseISO(point.timestamp);
-          const formattedTime =
-            data.granularity === "hour" ? format(date, "HH:mm") : format(date, "MM/dd");
-
           timestampMap.set(key, {
             timestamp: key,
-            formattedTime,
+            formattedTime:
+              data.granularity === "hour" ? format(date, "HH:mm") : format(date, "MM/dd"),
           });
         }
 
@@ -244,29 +345,38 @@ export function UsageChart({ data, isLoading, metric, onMetricChange }: UsageCha
           return;
         }
 
-        row[series.upstream_name] =
-          ((point as unknown as Record<string, unknown>)[valueKey] as number) ?? 0;
+        row[definition.dataKey] = getPointMetricValue(point, metric);
       });
     });
 
-    const names = Array.from(namesSet);
-
     for (const row of timestampMap.values()) {
-      for (const name of names) {
-        if (row[name] === undefined) {
-          row[name] = 0;
+      for (const definition of nextSeriesDefinitions) {
+        if (row[definition.dataKey] === undefined) {
+          row[definition.dataKey] = 0;
         }
       }
     }
 
-    const sorted = Array.from(timestampMap.values()).sort(
-      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
-
-    return { chartData: sorted, upstreamNames: names };
-  }, [data, valueKey]);
+    return {
+      chartData: Array.from(timestampMap.values()).sort(
+        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      ),
+      seriesDefinitions: nextSeriesDefinitions,
+    };
+  }, [data, displayMode, metric, mode, t]);
 
   const totals = useMemo(() => {
+    const totalSeries = data?.total_series ?? [];
+    if (totalSeries.length > 0) {
+      return totalSeries.reduce(
+        (acc, point) => ({
+          requests: acc.requests + point.request_count,
+          tokens: acc.tokens + point.total_tokens,
+        }),
+        { requests: 0, tokens: 0 }
+      );
+    }
+
     if (!data?.series?.length) {
       return { requests: 0, tokens: 0 };
     }
@@ -284,69 +394,95 @@ export function UsageChart({ data, isLoading, metric, onMetricChange }: UsageCha
     return { requests, tokens };
   }, [data]);
 
+  const summaryItems = [
+    {
+      key: "requests",
+      label: t("stats.totalRequests"),
+      value: formatNumber(totals.requests),
+    },
+    {
+      key: "tokens",
+      label: t("stats.totalTokensUsed"),
+      value: formatNumber(totals.tokens),
+    },
+  ] as const;
+
+  const chartHeightClass =
+    isLoading || chartData.length > 0 ? "h-[280px] sm:h-[320px]" : "h-[200px] sm:h-[220px]";
+
+  const currentDisplayModeLabel = displayModeLabels[displayMode];
+  const nextDisplayMode: UsageChartDisplayMode = displayMode === "total" ? "byUpstream" : "total";
+  const CurrentDisplayModeIcon = DISPLAY_MODE_META[displayMode].icon;
+
   return (
     <Card className="border-border bg-card">
-      <CardContent className="space-y-6 p-5 sm:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <CardContent className="space-y-5 p-5 sm:p-6">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h3 className="type-title-medium text-foreground">{t("stats.usageStatistics")}</h3>
-            <p className="type-body-small mt-1 text-muted-foreground">
-              {t("stats.usageDescription")}
-            </p>
           </div>
 
-          <div className="flex gap-6">
-            <div>
-              <p className="type-label-medium text-muted-foreground">{t("stats.totalRequests")}</p>
-              {isLoading ? (
-                <UsageSummaryLoading loadingLabel={tCommon("loading")} />
-              ) : (
-                <p className="type-display-small text-foreground">
-                  {formatNumber(totals.requests)}
-                </p>
-              )}
-            </div>
-            <div>
-              <p className="type-label-medium text-muted-foreground">
-                {t("stats.totalTokensUsed")}
-              </p>
-              {isLoading ? (
-                <UsageSummaryLoading loadingLabel={tCommon("loading")} />
-              ) : (
-                <p className="type-display-small text-foreground">{formatNumber(totals.tokens)}</p>
-              )}
-            </div>
+          <div className="flex flex-wrap items-end gap-x-5 gap-y-2 sm:justify-end">
+            {summaryItems.map((item, index) => (
+              <div key={item.key} className="flex items-end gap-3">
+                {index > 0 ? <div className="hidden h-7 w-px bg-divider/75 sm:block" /> : null}
+                <div>
+                  <p className="type-caption tracking-[0.08em] text-muted-foreground/80">
+                    {item.label}
+                  </p>
+                  {isLoading ? (
+                    <UsageSummaryLoading loadingLabel={tCommon("loading")} />
+                  ) : (
+                    <p className="mt-1 type-title-medium text-foreground">{item.value}</p>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-1 rounded-cf-sm border border-divider bg-surface-200/50 p-0.5">
-          {(["requests", "tokens", "cost", "ttft", "tps", "duration"] as const).map((m) => {
-            const labelMap: Record<string, string> = {
-              requests: t("stats.chartTabRequests"),
-              tokens: t("stats.chartTabTokens"),
-              cost: t("stats.chartTabCost"),
-              ttft: t("stats.chartTabTtft"),
-              tps: t("stats.chartTabTps"),
-              duration: t("stats.chartTabDuration"),
-            };
-            return (
+        <div className="rounded-cf-md border border-divider/75 bg-surface-200/25 px-3 py-2.5">
+          <div className="flex flex-wrap items-center gap-3 lg:gap-4">
+            <div className="inline-flex w-fit lg:shrink-0">
               <button
-                key={m}
-                onClick={() => onMetricChange(m)}
-                className={cn(
-                  "rounded-cf-sm px-3 py-1.5 type-label-medium transition-colors",
-                  metric === m
-                    ? "bg-amber-500/15 text-amber-500"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
+                onClick={() => onDisplayModeChange(nextDisplayMode)}
+                aria-label={currentDisplayModeLabel}
+                title={displayModeLabels[nextDisplayMode]}
+                className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 type-label-medium text-amber-500 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.18)] transition-all hover:bg-amber-500/20"
               >
-                {labelMap[m]}
+                <CurrentDisplayModeIcon className="h-3 w-3" />
+                <span>{currentDisplayModeLabel}</span>
+                <ArrowLeftRight className="h-3 w-3 text-amber-500/80" />
               </button>
-            );
-          })}
+            </div>
+
+            <div className="hidden h-5 w-px bg-divider/75 lg:block" />
+
+            <div className="flex min-w-0 flex-1 flex-wrap items-center">
+              <div className="flex min-w-0 flex-1 flex-wrap gap-1">
+                {METRIC_OPTIONS.map((m) => {
+                  return (
+                    <button
+                      key={m}
+                      onClick={() => onMetricChange(m)}
+                      aria-pressed={metric === m}
+                      className={cn(
+                        "rounded-full px-2.5 py-1 type-label-medium transition-all",
+                        metric === m
+                          ? "bg-amber-500/15 text-amber-500 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.18)]"
+                          : "text-muted-foreground hover:bg-surface-200/65 hover:text-foreground"
+                      )}
+                    >
+                      {metricLabels[m]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="h-[280px] sm:h-[320px]">
+        <div className={chartHeightClass}>
           {isLoading ? (
             <UsageChartLoading loadingLabel={tCommon("loading")} />
           ) : chartData.length === 0 ? (
@@ -357,19 +493,26 @@ export function UsageChart({ data, isLoading, metric, onMetricChange }: UsageCha
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={theme.spacing.margin}>
                 <defs>
-                  {upstreamNames.map((name, index) => {
-                    const color = getUpstreamColor(index, mode);
+                  {seriesDefinitions.map((series) => {
                     return (
                       <linearGradient
-                        key={name}
-                        id={`usage-gradient-${name}`}
+                        key={series.gradientId}
+                        id={series.gradientId}
                         x1="0"
                         y1="0"
                         x2="0"
                         y2="1"
                       >
-                        <stop offset="5%" stopColor={color} stopOpacity={theme.area.opacityStart} />
-                        <stop offset="95%" stopColor={color} stopOpacity={theme.area.opacityEnd} />
+                        <stop
+                          offset="5%"
+                          stopColor={series.color}
+                          stopOpacity={theme.area.opacityStart}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor={series.color}
+                          stopOpacity={theme.area.opacityEnd}
+                        />
                       </linearGradient>
                     );
                   })}
@@ -404,17 +547,16 @@ export function UsageChart({ data, isLoading, metric, onMetricChange }: UsageCha
                 <Tooltip content={<CustomTooltip mode={mode} metric={metric} />} />
                 <Legend content={<CustomLegend mode={mode} />} />
 
-                {upstreamNames.map((name, index) => {
-                  const color = getUpstreamColor(index, mode);
+                {seriesDefinitions.map((series) => {
                   return (
                     <Area
-                      key={name}
+                      key={series.dataKey}
                       type="monotone"
-                      dataKey={(point: ChartDataPoint) => point[name] as number}
-                      name={name}
-                      stroke={color}
+                      dataKey={series.dataKey}
+                      name={series.name}
+                      stroke={series.color}
                       strokeWidth={2}
-                      fill={`url(#usage-gradient-${name})`}
+                      fill={`url(#${series.gradientId})`}
                       fillOpacity={1}
                     />
                   );

@@ -835,6 +835,7 @@ export interface StatsTimeseriesResponse {
   range: string;
   granularity: string;
   series: UpstreamTimeseriesData[];
+  total_series: TimeseriesDataPoint[];
 }
 
 export interface LeaderboardAPIKeyItem {

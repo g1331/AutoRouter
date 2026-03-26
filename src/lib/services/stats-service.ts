@@ -50,6 +50,17 @@ export interface StatsTimeseries {
   range: TimeRange | "custom";
   granularity: "hour" | "day";
   series: UpstreamTimeseriesData[];
+  totalSeries: TimeseriesDataPoint[];
+}
+
+interface TimeseriesAggregationRow {
+  timeBucket: unknown;
+  requestCount: number;
+  totalTokens: number | string | null;
+  avgDuration: string | null;
+  avgTtft?: string | null;
+  totalCompletionTokens?: number | string | null;
+  totalDurationMs?: number | string | null;
 }
 
 export interface LeaderboardApiKeyItem {
@@ -144,6 +155,80 @@ function buildTimeBucketExpr(granularity: "hour" | "day") {
   return granularity === "hour"
     ? sql<Date>`date_trunc('hour', ${requestLogs.createdAt})`
     : sql<Date>`date_trunc('day', ${requestLogs.createdAt})`;
+}
+
+function buildTimeseriesSelectFields(
+  metric: TimeseriesMetric,
+  timeBucketExpr: ReturnType<typeof buildTimeBucketExpr>
+) {
+  return {
+    timeBucket: timeBucketExpr,
+    requestCount: count(requestLogs.id),
+    totalTokens: sum(requestLogs.totalTokens),
+    avgDuration: sql<
+      string | null
+    >`avg(case when ${successfulRequestCondition} then ${requestLogs.durationMs} end)`,
+    ...(metric === "ttft"
+      ? {
+          avgTtft: sql<
+            string | null
+          >`avg(case when ${successfulRequestCondition} then ${requestLogs.ttftMs} end)`,
+        }
+      : {}),
+    ...(metric === "tps"
+      ? {
+          totalCompletionTokens: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.completionTokens} else 0 end)`,
+          totalDurationMs: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.durationMs} else 0 end)`,
+        }
+      : {}),
+  };
+}
+
+function parseTimeBucket(rawTimeBucket: unknown): Date {
+  if (rawTimeBucket instanceof Date) {
+    return rawTimeBucket;
+  }
+
+  if (typeof rawTimeBucket === "string") {
+    const normalized =
+      rawTimeBucket.endsWith("Z") || rawTimeBucket.includes("+")
+        ? rawTimeBucket
+        : rawTimeBucket + "Z";
+    return new Date(normalized);
+  }
+
+  return new Date(rawTimeBucket as number);
+}
+
+function buildTimeseriesDataPoint(
+  row: TimeseriesAggregationRow,
+  metric: TimeseriesMetric,
+  totalCost = 0
+): TimeseriesDataPoint {
+  const point: TimeseriesDataPoint = {
+    timestamp: parseTimeBucket(row.timeBucket),
+    requestCount: row.requestCount,
+    totalTokens: row.totalTokens != null ? Number(row.totalTokens) : 0,
+    avgDurationMs: row.avgDuration != null ? Math.round(Number(row.avgDuration) * 10) / 10 : 0,
+  };
+
+  if (metric === "ttft") {
+    point.avgTtftMs = row.avgTtft != null ? Math.round(Number(row.avgTtft) * 10) / 10 : 0;
+  }
+
+  if (metric === "tps") {
+    const completionTokens =
+      row.totalCompletionTokens != null ? Number(row.totalCompletionTokens) : 0;
+    const durationMs = row.totalDurationMs != null ? Number(row.totalDurationMs) : 0;
+    point.avgTps =
+      durationMs > 0 ? Math.round((completionTokens / durationMs) * 1000 * 10) / 10 : 0;
+  }
+
+  if (metric === "cost") {
+    point.totalCost = totalCost;
+  }
+
+  return point;
 }
 
 /**
@@ -305,6 +390,7 @@ export async function getTimeseriesStats(
     : new Date().getTime() - startTime.getTime();
   const granularity = getGranularity(rangeType, diffMs);
   const timeBucketExpr = buildTimeBucketExpr(granularity);
+  const selectFields = buildTimeseriesSelectFields(metric, timeBucketExpr);
 
   const whereConditions = [
     gte(requestLogs.createdAt, startTime),
@@ -312,55 +398,62 @@ export async function getTimeseriesStats(
     ...(endTime ? [lt(requestLogs.createdAt, endTime)] : []),
   ];
 
-  // Main timeseries query
-  const result = await db
-    .select({
-      upstreamId: requestLogs.upstreamId,
-      timeBucket: timeBucketExpr,
-      requestCount: count(requestLogs.id),
-      totalTokens: sum(requestLogs.totalTokens),
-      avgDuration: sql<
-        string | null
-      >`avg(case when ${successfulRequestCondition} then ${requestLogs.durationMs} end)`,
-      ...(metric === "ttft"
-        ? {
-            avgTtft: sql<
-              string | null
-            >`avg(case when ${successfulRequestCondition} then ${requestLogs.ttftMs} end)`,
-          }
-        : {}),
-      ...(metric === "tps"
-        ? {
-            totalCompletionTokens: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.completionTokens} else 0 end)`,
-            totalDurationMs: sql<number>`sum(case when ${tpsEligibleCondition} then ${requestLogs.durationMs} else 0 end)`,
-          }
-        : {}),
-    })
-    .from(requestLogs)
-    .where(and(...whereConditions))
-    .groupBy(requestLogs.upstreamId, timeBucketExpr)
-    .orderBy(timeBucketExpr);
-
-  // Separate cost query when metric is "cost"
-  const costMap = new Map<string, number>();
-  if (metric === "cost") {
-    const costResult = await db
+  const [result, totalResult] = await Promise.all([
+    db
       .select({
         upstreamId: requestLogs.upstreamId,
-        timeBucket: timeBucketExpr,
-        totalCost: sql<
-          string | null
-        >`sum(case when ${requestBillingSnapshots.billingStatus} = 'billed' then ${requestBillingSnapshots.finalCost} else 0 end)`,
+        ...selectFields,
       })
       .from(requestLogs)
-      .leftJoin(requestBillingSnapshots, eq(requestLogs.id, requestBillingSnapshots.requestLogId))
       .where(and(...whereConditions))
       .groupBy(requestLogs.upstreamId, timeBucketExpr)
-      .orderBy(timeBucketExpr);
+      .orderBy(timeBucketExpr),
+    db
+      .select(selectFields)
+      .from(requestLogs)
+      .where(and(...whereConditions))
+      .groupBy(timeBucketExpr)
+      .orderBy(timeBucketExpr),
+  ]);
+
+  const costMap = new Map<string, number>();
+  const totalCostMap = new Map<string, number>();
+  if (metric === "cost") {
+    const [costResult, totalCostResult] = await Promise.all([
+      db
+        .select({
+          upstreamId: requestLogs.upstreamId,
+          timeBucket: timeBucketExpr,
+          totalCost: sql<
+            string | null
+          >`sum(case when ${requestBillingSnapshots.billingStatus} = 'billed' then ${requestBillingSnapshots.finalCost} else 0 end)`,
+        })
+        .from(requestLogs)
+        .leftJoin(requestBillingSnapshots, eq(requestLogs.id, requestBillingSnapshots.requestLogId))
+        .where(and(...whereConditions))
+        .groupBy(requestLogs.upstreamId, timeBucketExpr)
+        .orderBy(timeBucketExpr),
+      db
+        .select({
+          timeBucket: timeBucketExpr,
+          totalCost: sql<
+            string | null
+          >`sum(case when ${requestBillingSnapshots.billingStatus} = 'billed' then ${requestBillingSnapshots.finalCost} else 0 end)`,
+        })
+        .from(requestLogs)
+        .leftJoin(requestBillingSnapshots, eq(requestLogs.id, requestBillingSnapshots.requestLogId))
+        .where(and(...whereConditions))
+        .groupBy(timeBucketExpr)
+        .orderBy(timeBucketExpr),
+    ]);
 
     for (const row of costResult) {
       const key = `${row.upstreamId}|${String(row.timeBucket)}`;
       costMap.set(key, row.totalCost ? Number(row.totalCost) : 0);
+    }
+
+    for (const row of totalCostResult) {
+      totalCostMap.set(String(row.timeBucket), row.totalCost ? Number(row.totalCost) : 0);
     }
   }
 
@@ -389,42 +482,11 @@ export async function getTimeseriesStats(
       upstreamData.set(upstreamId, []);
     }
 
-    const rawTimeBucket: unknown = row.timeBucket;
-    let timestamp: Date;
-
-    if (rawTimeBucket instanceof Date) {
-      timestamp = rawTimeBucket;
-    } else if (typeof rawTimeBucket === "string") {
-      const normalized =
-        rawTimeBucket.endsWith("Z") || rawTimeBucket.includes("+")
-          ? rawTimeBucket
-          : rawTimeBucket + "Z";
-      timestamp = new Date(normalized);
-    } else {
-      timestamp = new Date(rawTimeBucket as number);
-    }
-
     const costKey = `${upstreamId}|${String(row.timeBucket)}`;
 
-    upstreamData.get(upstreamId)!.push({
-      timestamp,
-      requestCount: row.requestCount,
-      totalTokens: row.totalTokens ? Number(row.totalTokens) : 0,
-      avgDurationMs: row.avgDuration ? Math.round(Number(row.avgDuration) * 10) / 10 : 0,
-      ...(metric === "ttft" && "avgTtft" in row
-        ? { avgTtftMs: row.avgTtft ? Math.round(Number(row.avgTtft) * 10) / 10 : 0 }
-        : {}),
-      ...(metric === "tps" && "totalCompletionTokens" in row && "totalDurationMs" in row
-        ? (() => {
-            const compTokens = row.totalCompletionTokens ? Number(row.totalCompletionTokens) : 0;
-            const dur = row.totalDurationMs ? Number(row.totalDurationMs) : 0;
-            return {
-              avgTps: dur > 0 ? Math.round((compTokens / dur) * 1000 * 10) / 10 : 0,
-            };
-          })()
-        : {}),
-      ...(metric === "cost" ? { totalCost: costMap.get(costKey) ?? 0 } : {}),
-    });
+    upstreamData
+      .get(upstreamId)!
+      .push(buildTimeseriesDataPoint(row, metric, costMap.get(costKey) ?? 0));
   }
 
   // Convert to response format
@@ -443,10 +505,17 @@ export async function getTimeseriesStats(
     return a.upstreamName.localeCompare(b.upstreamName);
   });
 
+  const totalSeries = totalResult
+    .map((row) =>
+      buildTimeseriesDataPoint(row, metric, totalCostMap.get(String(row.timeBucket)) ?? 0)
+    )
+    .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
   return {
     range: rangeType,
     granularity,
     series,
+    totalSeries,
   };
 }
 

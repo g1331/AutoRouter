@@ -47,6 +47,16 @@ describe("GET /api/admin/stats/timeseries", () => {
           ],
         },
       ],
+      totalSeries: [
+        {
+          timestamp: new Date("2026-02-01T00:00:00.000Z"),
+          requestCount: 120,
+          totalTokens: 9000,
+          avgDurationMs: 1500.5,
+          avgTtftMs: 980.1,
+          avgTps: 57.8,
+        },
+      ],
     });
 
     const request = new Request(
@@ -64,6 +74,14 @@ describe("GET /api/admin/stats/timeseries", () => {
     expect(data.range).toBe("30d");
     expect(data.granularity).toBe("day");
     expect(data.series[0].upstream_id).toBe("up-1");
+    expect(data.total_series[0]).toEqual({
+      timestamp: "2026-02-01T00:00:00.000Z",
+      request_count: 120,
+      total_tokens: 9000,
+      avg_duration_ms: 1500.5,
+      avg_ttft_ms: 980.1,
+      avg_tps: 57.8,
+    });
     expect(data.series[0].data[0]).toEqual({
       timestamp: "2026-02-01T00:00:00.000Z",
       request_count: 120,
