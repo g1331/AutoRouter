@@ -58,6 +58,9 @@ const DISPLAY_MODE_META = {
   },
 } as const;
 
+const DISPLAY_MODE_OPTIONS = ["total", "byUpstream"] as const;
+const METRIC_OPTIONS = ["requests", "tokens", "cost", "ttft", "tps", "duration"] as const;
+
 function formatTtft(ttftMs: number): string {
   if (ttftMs >= 1000) {
     return `${(ttftMs / 1000).toFixed(3)}s`;
@@ -262,6 +265,15 @@ export function UsageChart({
       ? t("stats.usageDescriptionTotal")
       : t("stats.usageDescriptionByUpstream");
 
+  const metricLabels: Record<TimeseriesMetric, string> = {
+    requests: t("stats.chartTabRequests"),
+    tokens: t("stats.chartTabTokens"),
+    cost: t("stats.chartTabCost"),
+    ttft: t("stats.chartTabTtft"),
+    tps: t("stats.chartTabTps"),
+    duration: t("stats.chartTabDuration"),
+  };
+
   const { chartData, seriesDefinitions } = useMemo(() => {
     if (!data) {
       return {
@@ -383,110 +395,120 @@ export function UsageChart({
     return { requests, tokens };
   }, [data]);
 
+  const summaryItems = [
+    {
+      key: "requests",
+      label: t("stats.totalRequests"),
+      value: formatNumber(totals.requests),
+    },
+    {
+      key: "tokens",
+      label: t("stats.totalTokensUsed"),
+      value: formatNumber(totals.tokens),
+    },
+  ] as const;
+
+  const chartHeightClass =
+    isLoading || chartData.length > 0 ? "h-[280px] sm:h-[320px]" : "h-[200px] sm:h-[220px]";
+
   return (
     <Card className="border-border bg-card">
-      <CardContent className="space-y-6 p-5 sm:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h3 className="type-title-medium text-foreground">{t("stats.usageStatistics")}</h3>
-            <p className="type-body-small mt-1 text-muted-foreground">{description}</p>
+      <CardContent className="space-y-5 p-5 sm:p-6">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="type-title-medium text-foreground">{t("stats.usageStatistics")}</h3>
+              <span className="rounded-full border border-divider/70 bg-surface-200/35 px-2.5 py-1 type-caption tracking-[0.08em] text-muted-foreground/85">
+                {description}
+              </span>
+            </div>
           </div>
 
-          <div className="flex gap-6">
-            <div>
-              <p className="type-label-medium text-muted-foreground">{t("stats.totalRequests")}</p>
-              {isLoading ? (
-                <UsageSummaryLoading loadingLabel={tCommon("loading")} />
-              ) : (
-                <p className="type-display-small text-foreground">
-                  {formatNumber(totals.requests)}
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            {summaryItems.map((item) => (
+              <div
+                key={item.key}
+                className="min-w-[120px] rounded-cf-sm border border-divider/70 bg-surface-200/30 px-3 py-2"
+              >
+                <p className="type-caption tracking-[0.08em] text-muted-foreground/80">
+                  {item.label}
                 </p>
-              )}
-            </div>
-            <div>
-              <p className="type-label-medium text-muted-foreground">
-                {t("stats.totalTokensUsed")}
+                {isLoading ? (
+                  <UsageSummaryLoading loadingLabel={tCommon("loading")} />
+                ) : (
+                  <p className="mt-1 type-title-medium text-foreground">{item.value}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-cf-md border border-divider/75 bg-surface-200/25 px-3 py-2.5">
+          <div className="flex flex-wrap items-center gap-3 lg:gap-4">
+            <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
+              <p className="type-caption shrink-0 tracking-[0.12em] text-muted-foreground/80">
+                {t("stats.chartDisplayModeLabel")}
               </p>
-              {isLoading ? (
-                <UsageSummaryLoading loadingLabel={tCommon("loading")} />
-              ) : (
-                <p className="type-display-small text-foreground">{formatNumber(totals.tokens)}</p>
-              )}
+
+              <div className="inline-flex w-fit flex-wrap items-center gap-1 rounded-full border border-divider/75 bg-card/55 p-1">
+                {DISPLAY_MODE_OPTIONS.map((modeValue) => {
+                  const isActive = displayMode === modeValue;
+                  const Icon = DISPLAY_MODE_META[modeValue].icon;
+                  const label =
+                    modeValue === "total"
+                      ? t("stats.chartModeTotal")
+                      : t("stats.chartModeByUpstream");
+
+                  return (
+                    <button
+                      key={modeValue}
+                      onClick={() => onDisplayModeChange(modeValue)}
+                      aria-pressed={isActive}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 type-label-medium transition-all",
+                        isActive
+                          ? "bg-amber-500/15 text-amber-500 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.18)]"
+                          : "text-muted-foreground hover:bg-surface-200/65 hover:text-foreground"
+                      )}
+                    >
+                      <Icon className="h-3 w-3" />
+                      <span>{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="hidden h-5 w-px bg-divider/75 lg:block" />
+
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+              <p className="type-caption shrink-0 tracking-[0.12em] text-muted-foreground/80">
+                {t("stats.chartMetricLabel")}
+              </p>
+              <div className="flex min-w-0 flex-1 flex-wrap gap-1">
+                {METRIC_OPTIONS.map((m) => {
+                  return (
+                    <button
+                      key={m}
+                      onClick={() => onMetricChange(m)}
+                      aria-pressed={metric === m}
+                      className={cn(
+                        "rounded-full px-2.5 py-1 type-label-medium transition-all",
+                        metric === m
+                          ? "bg-amber-500/15 text-amber-500 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.18)]"
+                          : "text-muted-foreground hover:bg-surface-200/65 hover:text-foreground"
+                      )}
+                    >
+                      {metricLabels[m]}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="space-y-3 rounded-cf-md border border-divider/75 bg-surface-200/30 p-3">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center">
-            <p className="type-label-medium w-[88px] shrink-0 text-muted-foreground">
-              {t("stats.chartDisplayModeLabel")}
-            </p>
-
-            <div className="inline-flex w-fit flex-wrap items-center gap-1 rounded-full border border-divider/80 bg-card/70 p-1">
-              {(
-                [
-                  ["total", t("stats.chartModeTotal")],
-                  ["byUpstream", t("stats.chartModeByUpstream")],
-                ] as const
-              ).map(([modeValue, label]) => {
-                const isActive = displayMode === modeValue;
-                const Icon = DISPLAY_MODE_META[modeValue].icon;
-
-                return (
-                  <button
-                    key={modeValue}
-                    onClick={() => onDisplayModeChange(modeValue)}
-                    aria-pressed={isActive}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 type-label-medium transition-all",
-                      isActive
-                        ? "bg-amber-500/15 text-amber-500 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.18)]"
-                        : "text-muted-foreground hover:bg-surface-200/65 hover:text-foreground"
-                    )}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    <span>{label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2 md:flex-row md:items-center">
-            <p className="type-label-medium w-[88px] shrink-0 text-muted-foreground">
-              {t("stats.chartMetricLabel")}
-            </p>
-            <div className="flex flex-1 flex-wrap gap-1 rounded-cf-sm border border-divider/80 bg-card/65 p-1">
-              {(["requests", "tokens", "cost", "ttft", "tps", "duration"] as const).map((m) => {
-                const labelMap: Record<string, string> = {
-                  requests: t("stats.chartTabRequests"),
-                  tokens: t("stats.chartTabTokens"),
-                  cost: t("stats.chartTabCost"),
-                  ttft: t("stats.chartTabTtft"),
-                  tps: t("stats.chartTabTps"),
-                  duration: t("stats.chartTabDuration"),
-                };
-                return (
-                  <button
-                    key={m}
-                    onClick={() => onMetricChange(m)}
-                    aria-pressed={metric === m}
-                    className={cn(
-                      "rounded-cf-sm px-3 py-1.5 type-label-medium transition-all",
-                      metric === m
-                        ? "bg-amber-500/15 text-amber-500 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.18)]"
-                        : "text-muted-foreground hover:bg-surface-200/65 hover:text-foreground"
-                    )}
-                  >
-                    {labelMap[m]}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        <div className="h-[280px] sm:h-[320px]">
+        <div className={chartHeightClass}>
           {isLoading ? (
             <UsageChartLoading loadingLabel={tCommon("loading")} />
           ) : chartData.length === 0 ? (
