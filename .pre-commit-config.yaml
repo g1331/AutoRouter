@@ -10,14 +10,14 @@ repos:
         args: ["--maxkb=500"]
         exclude: ^docs/images/
       - id: check-yaml
-        exclude: (\.claude|\.codex|openspec)/
+        exclude: (\.claude|\.codex|\.gemini|openspec)/
       - id: check-toml
       - id: check-json
       - id: end-of-file-fixer
-        exclude: (\.claude|\.codex|openspec)/
+        exclude: (\.claude|\.codex|\.gemini|openspec)/
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
-        exclude: (\.claude|\.codex|openspec)/
+        exclude: (\.claude|\.codex|\.gemini|openspec)/
 
   # ============================================================
   # TypeScript / Next.js
@@ -29,13 +29,14 @@ repos:
         entry: pnpm exec prettier --check
         language: system
         files: \.(js|jsx|ts|tsx|css|json|md|yml|yaml)$
-        exclude: (node_modules|\.next|drizzle|\.claude|\.codex|openspec)/
+        exclude: (node_modules|\.next|drizzle|\.claude|\.codex|\.gemini|openspec)/
 
       - id: eslint
         name: eslint
         entry: pnpm exec eslint --fix
         language: system
         files: ^src/.*\.(js|jsx|ts|tsx)$
+        exclude: (\.claude|\.codex|\.gemini|openspec)/
 
       - id: tsc
         name: tsc
@@ -43,3 +44,4 @@ repos:
         language: system
         files: \.(ts|tsx)$
         pass_filenames: false
+        exclude: (\.claude|\.codex|\.gemini|openspec)/
