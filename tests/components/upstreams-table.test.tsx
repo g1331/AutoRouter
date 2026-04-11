@@ -150,6 +150,38 @@ describe("UpstreamsTable", () => {
     expect(screen.getByText("runtimeStatus")).toBeInTheDocument();
   });
 
+  it("renders compact model summary separately from runtime status", () => {
+    const modelAwareUpstream: Upstream = {
+      ...baseUpstream,
+      model_catalog_last_status: "success",
+      model_catalog_updated_at: "2026-04-11T00:00:00Z",
+      model_catalog_last_error: null,
+      model_catalog: [
+        { model: "gpt-4.1", source: "native" },
+        { model: "claude-3.7-sonnet", source: "inferred" },
+      ],
+      model_rules: [
+        { type: "exact", model: "gpt-4.1", source: "native" },
+        { type: "regex", pattern: "^gpt-4\\..*$", source: "manual" },
+        { type: "alias", alias: "chat-prod", target_model: "gpt-4.1", source: "manual" },
+      ],
+    };
+
+    render(
+      <UpstreamsTable
+        upstreams={[modelAwareUpstream]}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onTest={onTest}
+      />
+    );
+
+    expect(screen.getByText("modelSummary")).toBeInTheDocument();
+    expect(screen.getByText("modelCatalogLastStatusSuccess")).toBeInTheDocument();
+    expect(screen.getByText(/modelCatalogSourceSummary/)).toBeInTheDocument();
+    expect(screen.getByText(/modelRuleSummary/)).toBeInTheDocument();
+  });
+
   it("sorts tiers by priority and renders degraded/offline tier led labels", () => {
     const healthyInP0: Upstream = {
       ...baseUpstream,

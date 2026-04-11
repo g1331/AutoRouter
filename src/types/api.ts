@@ -165,6 +165,16 @@ export interface UpstreamModelCatalogEntry {
   source: UpstreamModelCatalogSource;
 }
 
+export interface UpstreamCatalogRefreshResponse {
+  upstream: UpstreamResponse;
+  refresh: {
+    resolved_mode: UpstreamModelDiscoveryMode;
+    fallback_used: boolean;
+    status: UpstreamModelCatalogFetchStatus | null;
+    error: string | null;
+  };
+}
+
 export type UpstreamModelRuleSource = "manual" | "native" | "inferred";
 
 export interface UpstreamExactModelRule {

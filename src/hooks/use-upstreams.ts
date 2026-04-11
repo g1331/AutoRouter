@@ -3,6 +3,7 @@ import type { QueryKey } from "@tanstack/react-query";
 import { useAuth } from "@/providers/auth-provider";
 import type {
   Upstream,
+  UpstreamCatalogRefreshResponse,
   UpstreamCreate,
   UpstreamUpdate,
   PaginatedUpstreamsResponse,
@@ -293,6 +294,38 @@ export function useSyncUpstreamQuota() {
     mutationFn: () => apiClient.post<{ synced: boolean }>("/admin/upstreams/quota", {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["upstreams", "quota"] });
+    },
+  });
+}
+
+/**
+ * Refresh cached model catalog for one upstream.
+ */
+export function useRefreshUpstreamCatalog() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiClient.post<UpstreamCatalogRefreshResponse>(`/admin/upstreams/${id}/catalog/refresh`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["upstreams"] });
+    },
+  });
+}
+
+/**
+ * Import selected cached catalog models into explicit exact rules.
+ */
+export function useImportUpstreamCatalog() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, models }: { id: string; models: string[] }) =>
+      apiClient.post<Upstream>(`/admin/upstreams/${id}/catalog/import`, { models }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["upstreams"] });
     },
   });
 }

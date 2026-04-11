@@ -17,6 +17,7 @@ import {
   Shield,
   Shuffle,
   SlidersHorizontal,
+  Sparkles,
   Trash2,
   Type,
   Wallet,
@@ -62,11 +63,22 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useCreateUpstream, useUpdateUpstream } from "@/hooks/use-upstreams";
-import type { RouteCapability, Upstream } from "@/types/api";
-import { TagInput } from "@/components/ui/tag-input";
-import { KeyValueInput } from "@/components/ui/key-value-input";
+import {
+  useCreateUpstream,
+  useImportUpstreamCatalog,
+  useRefreshUpstreamCatalog,
+  useUpdateUpstream,
+} from "@/hooks/use-upstreams";
+import type {
+  RouteCapability,
+  Upstream,
+  UpstreamModelDiscoveryConfig,
+  UpstreamModelDiscoveryMode,
+  UpstreamModelRule,
+} from "@/types/api";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { ROUTE_CAPABILITY_VALUES, areSingleProviderCapabilities } from "@/lib/route-capabilities";
 import { RouteCapabilityMultiSelect } from "@/components/admin/route-capability-badges";
 import { cn } from "@/lib/utils";
@@ -105,6 +117,40 @@ const spendingRuleSchema = z.object({
   limit: z.coerce.number().positive(),
   period_hours: z.number().int().min(1).max(8760).nullable(),
 });
+
+const modelDiscoveryConfigSchema = z
+  .object({
+    mode: z.enum([
+      "openai_compatible",
+      "anthropic_native",
+      "gemini_native",
+      "gemini_openai_compatible",
+      "custom",
+      "litellm",
+    ] satisfies UpstreamModelDiscoveryMode[]),
+    custom_endpoint: z.union([z.literal(""), z.string().url()]).nullable(),
+    enable_lite_llm_fallback: z.boolean(),
+  })
+  .nullable();
+
+const modelRuleSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("exact"),
+    model: z.string().trim().min(1),
+    source: z.enum(["manual", "native", "inferred"]).optional(),
+  }),
+  z.object({
+    type: z.literal("regex"),
+    pattern: z.string().trim().min(1),
+    source: z.enum(["manual", "native", "inferred"]).optional(),
+  }),
+  z.object({
+    type: z.literal("alias"),
+    alias: z.string().trim().min(1),
+    target_model: z.string().trim().min(1),
+    source: z.enum(["manual", "native", "inferred"]).optional(),
+  }),
+]);
 
 const ROLLING_DEFAULT_PERIOD_HOURS = 24;
 
@@ -166,6 +212,120 @@ function hasValidRollingPeriodHours(rules: z.input<typeof spendingRuleSchema>[])
   );
 }
 
+function createDefaultModelDiscovery(): UpstreamFormValues["model_discovery"] {
+  return {
+    mode: "openai_compatible",
+    custom_endpoint: null,
+    enable_lite_llm_fallback: true,
+  };
+}
+
+function mapLegacyRules(upstream: Upstream | null | undefined): UpstreamModelRule[] {
+  if (!upstream) {
+    return [];
+  }
+
+  const exactRules = (upstream.allowed_models ?? []).map((model) => ({
+    type: "exact" as const,
+    model,
+    source: "manual" as const,
+  }));
+  const aliasRules = Object.entries(upstream.model_redirects ?? {}).map(
+    ([alias, target_model]) => ({
+      type: "alias" as const,
+      alias,
+      target_model,
+      source: "manual" as const,
+    })
+  );
+
+  return [...exactRules, ...aliasRules];
+}
+
+function toEditableModelRules(
+  upstream: Upstream | null | undefined
+): UpstreamFormValues["model_rules"] {
+  const sourceRules = upstream?.model_rules?.length
+    ? upstream.model_rules
+    : mapLegacyRules(upstream);
+
+  return sourceRules.map((rule) => {
+    if (rule.type === "alias") {
+      return {
+        type: "alias" as const,
+        alias: rule.alias,
+        target_model: rule.target_model,
+        source: rule.source ?? "manual",
+      };
+    }
+
+    if (rule.type === "regex") {
+      return {
+        type: "regex" as const,
+        pattern: rule.pattern,
+        source: rule.source ?? "manual",
+      };
+    }
+
+    return {
+      type: "exact" as const,
+      model: rule.model,
+      source: rule.source ?? "manual",
+    };
+  });
+}
+
+function modelRulesToApi(rules: UpstreamFormData["model_rules"]): UpstreamModelRule[] | null {
+  if (!rules || rules.length === 0) {
+    return null;
+  }
+
+  return rules.map((rule) => {
+    if (rule.type === "alias") {
+      return {
+        type: "alias",
+        alias: rule.alias,
+        target_model: rule.target_model,
+        source: rule.source ?? "manual",
+      };
+    }
+
+    if (rule.type === "regex") {
+      return {
+        type: "regex",
+        pattern: rule.pattern,
+        source: rule.source ?? "manual",
+      };
+    }
+
+    return {
+      type: "exact",
+      model: rule.model,
+      source: rule.source ?? "manual",
+    };
+  });
+}
+
+function deriveLegacyAllowedModels(rules: UpstreamModelRule[] | null): string[] | null {
+  const exactRules = (rules ?? []).flatMap((rule) =>
+    rule.type === "exact" && rule.model.trim() ? [rule.model.trim()] : []
+  );
+
+  return exactRules.length > 0 ? exactRules : null;
+}
+
+function deriveLegacyModelRedirects(
+  rules: UpstreamModelRule[] | null
+): Record<string, string> | null {
+  const aliasEntries = (rules ?? []).flatMap((rule) =>
+    rule.type === "alias" && rule.alias.trim() && rule.target_model.trim()
+      ? [[rule.alias.trim(), rule.target_model.trim()] as const]
+      : []
+  );
+
+  return aliasEntries.length > 0 ? Object.fromEntries(aliasEntries) : null;
+}
+
 // Schema for create mode - api_key is required
 const createUpstreamFormSchema = z
   .object({
@@ -193,6 +353,8 @@ const createUpstreamFormSchema = z
     ),
     spending_rules: z.array(spendingRuleSchema),
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
+    model_discovery: modelDiscoveryConfigSchema,
+    model_rules: z.array(modelRuleSchema),
     allowed_models: z.array(z.string()).nullable(),
     model_redirects: z.record(z.string(), z.string()).nullable(),
     circuit_breaker_config: circuitBreakerConfigSchema,
@@ -234,6 +396,8 @@ const editUpstreamFormSchema = z
     ),
     spending_rules: z.array(spendingRuleSchema),
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
+    model_discovery: modelDiscoveryConfigSchema,
+    model_rules: z.array(modelRuleSchema),
     allowed_models: z.array(z.string()).nullable(),
     model_redirects: z.record(z.string(), z.string()).nullable(),
     circuit_breaker_config: circuitBreakerConfigSchema,
@@ -386,6 +550,8 @@ export function UpstreamFormDialog({
   const activeSchema = isEdit ? editUpstreamFormSchema : createUpstreamFormSchema;
   const createMutation = useCreateUpstream();
   const updateMutation = useUpdateUpstream();
+  const refreshCatalogMutation = useRefreshUpstreamCatalog();
+  const importCatalogMutation = useImportUpstreamCatalog();
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
   const circuitBreakerUseDefaultPlaceholder = t("circuitBreakerUseDefaultPlaceholder");
@@ -393,6 +559,8 @@ export function UpstreamFormDialog({
   const [activeSectionId, setActiveSectionId] = useState<ConfigSectionId>("basic-name");
   const [highlightedSectionId, setHighlightedSectionId] = useState<ConfigSectionId | null>(null);
   const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState(false);
+  const [selectedCatalogModels, setSelectedCatalogModels] = useState<string[]>([]);
+  const [upstreamSnapshot, setUpstreamSnapshot] = useState<Upstream | null>(upstream ?? null);
   const contentScrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   const form = useForm<UpstreamFormValues>({
@@ -410,6 +578,8 @@ export function UpstreamFormDialog({
       billing_output_multiplier: 1,
       spending_rules: [],
       route_capabilities: [],
+      model_discovery: createDefaultModelDiscovery(),
+      model_rules: [],
       allowed_models: null,
       model_redirects: null,
       circuit_breaker_config: null,
@@ -439,6 +609,15 @@ export function UpstreamFormDialog({
     name: "spending_rules",
   });
 
+  const {
+    fields: modelRuleFields,
+    append: appendModelRule,
+    remove: removeModelRule,
+  } = useFieldArray({
+    control: form.control,
+    name: "model_rules",
+  });
+
   const spendingRules = useWatch({
     control: form.control,
     name: "spending_rules",
@@ -450,6 +629,10 @@ export function UpstreamFormDialog({
   const watchedBaseUrl = useWatch({
     control: form.control,
     name: "base_url",
+  });
+  const watchedModelDiscovery = useWatch({
+    control: form.control,
+    name: "model_discovery",
   });
   const endpointPreview = useMemo(
     () => resolveEndpointPreview(watchedBaseUrl ?? "", watchedRouteCapabilities),
@@ -526,6 +709,19 @@ export function UpstreamFormDialog({
     ],
     [t]
   );
+  const resolvedUpstream = upstreamSnapshot ?? upstream ?? null;
+  const catalogEntries = resolvedUpstream?.model_catalog ?? [];
+  const modelCatalogStatus = resolvedUpstream?.model_catalog_last_status ?? null;
+  const modelCatalogError = resolvedUpstream?.model_catalog_last_error ?? null;
+  const modelCatalogUpdatedAt = resolvedUpstream?.model_catalog_updated_at ?? null;
+  const modelDiscoveryMode =
+    watchedModelDiscovery?.mode ?? resolvedUpstream?.model_discovery?.mode ?? "openai_compatible";
+  const modelFallbackEnabled =
+    watchedModelDiscovery?.enable_lite_llm_fallback ??
+    resolvedUpstream?.model_discovery?.enable_lite_llm_fallback ??
+    true;
+  const nativeCatalogCount = catalogEntries.filter((entry) => entry.source === "native").length;
+  const inferredCatalogCount = catalogEntries.filter((entry) => entry.source === "inferred").length;
 
   const filteredConfigSections = useMemo(() => {
     const query = configSearchQuery.trim().toLowerCase();
@@ -586,6 +782,14 @@ export function UpstreamFormDialog({
             r.period_type === "rolling" ? (r.period_hours ?? ROLLING_DEFAULT_PERIOD_HOURS) : null,
         })),
         route_capabilities: upstream.route_capabilities || [],
+        model_discovery: upstream.model_discovery
+          ? {
+              mode: upstream.model_discovery.mode,
+              custom_endpoint: upstream.model_discovery.custom_endpoint ?? null,
+              enable_lite_llm_fallback: upstream.model_discovery.enable_lite_llm_fallback ?? true,
+            }
+          : createDefaultModelDiscovery(),
+        model_rules: toEditableModelRules(upstream),
         allowed_models: upstream.allowed_models || null,
         model_redirects: upstream.model_redirects || null,
         circuit_breaker_config: upstream.circuit_breaker?.config
@@ -612,6 +816,8 @@ export function UpstreamFormDialog({
         billing_output_multiplier: 1,
         spending_rules: [],
         route_capabilities: [],
+        model_discovery: createDefaultModelDiscovery(),
+        model_rules: [],
         allowed_models: null,
         model_redirects: null,
         circuit_breaker_config: null,
@@ -620,10 +826,18 @@ export function UpstreamFormDialog({
     }
   }, [upstream, open, form]);
 
+  useEffect(() => {
+    if (watchedModelDiscovery?.mode !== "custom" && watchedModelDiscovery?.custom_endpoint) {
+      form.setValue("model_discovery.custom_endpoint", null, { shouldDirty: true });
+    }
+  }, [watchedModelDiscovery?.mode, watchedModelDiscovery?.custom_endpoint, form]);
+
   const resetDialogUiState = () => {
     setConfigSearchQuery("");
     setActiveSectionId("basic-name");
     setHighlightedSectionId(null);
+    setSelectedCatalogModels([]);
+    setUpstreamSnapshot(null);
   };
 
   const closeDialog = () => {
@@ -717,6 +931,7 @@ export function UpstreamFormDialog({
         ? data.official_website_url.trim()
         : null;
       const maxConcurrency = data.max_concurrency ?? null;
+      const modelRules = modelRulesToApi(data.model_rules);
       if (isEdit) {
         // Only include api_key when provided
         const updateData: {
@@ -738,6 +953,8 @@ export function UpstreamFormDialog({
               }[]
             | null;
           route_capabilities?: RouteCapability[] | null;
+          model_discovery?: UpstreamModelDiscoveryConfig | null;
+          model_rules?: UpstreamModelRule[] | null;
           allowed_models?: string[] | null;
           model_redirects?: Record<string, string> | null;
           circuit_breaker_config?: {
@@ -761,8 +978,15 @@ export function UpstreamFormDialog({
           billing_output_multiplier: data.billing_output_multiplier,
           spending_rules: spendingRulesToApi(data.spending_rules),
           route_capabilities: data.route_capabilities,
-          allowed_models: data.allowed_models,
-          model_redirects: data.model_redirects,
+          model_discovery: data.model_discovery
+            ? {
+                ...data.model_discovery,
+                custom_endpoint: data.model_discovery.custom_endpoint || null,
+              }
+            : null,
+          model_rules: modelRules,
+          allowed_models: deriveLegacyAllowedModels(modelRules),
+          model_redirects: deriveLegacyModelRedirects(modelRules),
           circuit_breaker_config: data.circuit_breaker_config,
           affinity_migration: data.affinity_migration,
         };
@@ -799,6 +1023,8 @@ export function UpstreamFormDialog({
               }[]
             | null;
           route_capabilities: RouteCapability[] | null;
+          model_discovery: UpstreamModelDiscoveryConfig | null;
+          model_rules: UpstreamModelRule[] | null;
           allowed_models: string[] | null;
           model_redirects: Record<string, string> | null;
           circuit_breaker_config: {
@@ -823,8 +1049,15 @@ export function UpstreamFormDialog({
           billing_output_multiplier: data.billing_output_multiplier,
           spending_rules: spendingRulesToApi(data.spending_rules),
           route_capabilities: data.route_capabilities,
-          allowed_models: data.allowed_models,
-          model_redirects: data.model_redirects,
+          model_discovery: data.model_discovery
+            ? {
+                ...data.model_discovery,
+                custom_endpoint: data.model_discovery.custom_endpoint || null,
+              }
+            : null,
+          model_rules: modelRules,
+          allowed_models: deriveLegacyAllowedModels(modelRules),
+          model_redirects: deriveLegacyModelRedirects(modelRules),
           circuit_breaker_config: data.circuit_breaker_config,
           affinity_migration: data.affinity_migration,
         };
@@ -839,8 +1072,10 @@ export function UpstreamFormDialog({
 
       form.reset();
       closeDialog();
-    } catch {
-      // Error already handled by mutation onError
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast.error(t("formValidationFailed"));
+      }
     }
   };
 
@@ -907,6 +1142,43 @@ export function UpstreamFormDialog({
           ? t("spendingLimitMustBePositive")
           : t("formValidationFailed")
     );
+  };
+
+  const handleRefreshCatalog = async () => {
+    if (!upstream) {
+      return;
+    }
+
+    const response = await refreshCatalogMutation.mutateAsync(upstream.id);
+    setUpstreamSnapshot(response.upstream);
+    setSelectedCatalogModels([]);
+  };
+
+  const handleImportCatalogModels = async () => {
+    if (!upstream || selectedCatalogModels.length === 0) {
+      return;
+    }
+
+    const importedUpstream = await importCatalogMutation.mutateAsync({
+      id: upstream.id,
+      models: selectedCatalogModels,
+    });
+    setUpstreamSnapshot(importedUpstream);
+    form.setValue("model_rules", toEditableModelRules(importedUpstream), {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    setSelectedCatalogModels([]);
+  };
+
+  const toggleCatalogSelection = (model: string, checked: boolean) => {
+    setSelectedCatalogModels((current) => {
+      if (checked) {
+        return current.includes(model) ? current : [...current, model];
+      }
+
+      return current.filter((item) => item !== model);
+    });
   };
 
   const dialogContent = (
@@ -1270,49 +1542,398 @@ export function UpstreamFormDialog({
                         {t("modelBasedRouting")}
                       </h3>
 
-                      <FormField
-                        control={form.control}
-                        name="allowed_models"
-                        render={({ field }) => (
-                          <FormItem className="mt-4">
-                            <FormLabel>{t("allowedModels")}</FormLabel>
-                            <FormControl>
-                              <TagInput
-                                placeholder={t("allowedModelsPlaceholder")}
-                                tags={field.value || []}
-                                onTagsChange={(tags) =>
-                                  field.onChange(tags.length > 0 ? tags : null)
-                                }
-                              />
-                            </FormControl>
-                            <FormDescription>{t("allowedModelsDescription")}</FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+                        <section className="space-y-4 rounded-cf-sm border border-divider bg-surface-300/35 p-4">
+                          <div className="space-y-3">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <Sparkles className="h-4 w-4 text-status-info" aria-hidden="true" />
+                                <h4 className="text-sm font-medium text-foreground">
+                                  {t("modelDiscovery")}
+                                </h4>
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                {t("modelDiscoveryDescription")}
+                              </p>
+                            </div>
 
-                      <FormField
-                        control={form.control}
-                        name="model_redirects"
-                        render={({ field }) => (
-                          <FormItem className="mt-4">
-                            <FormLabel>{t("modelRedirects")}</FormLabel>
-                            <FormControl>
-                              <KeyValueInput
-                                placeholder={t("modelRedirectsPlaceholder")}
-                                entries={field.value || {}}
-                                onEntriesChange={(entries) =>
-                                  field.onChange(Object.keys(entries).length > 0 ? entries : null)
+                            <div className="space-y-2 border-t border-divider/60 pt-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant="outline" className="text-[11px]">
+                                  {t(`modelDiscoveryMode_${modelDiscoveryMode}`)}
+                                </Badge>
+                                <Badge variant="outline" className="text-[11px]">
+                                  {modelFallbackEnabled
+                                    ? t("modelCatalogFallbackEnabled")
+                                    : t("modelCatalogFallbackDisabled")}
+                                </Badge>
+                                <Badge variant="outline" className="text-[11px]">
+                                  {modelCatalogStatus
+                                    ? t(
+                                        modelCatalogStatus === "success"
+                                          ? "modelCatalogLastStatusSuccess"
+                                          : "modelCatalogLastStatusFailure"
+                                      )
+                                    : t("modelCatalogLastStatusUnknown")}
+                                </Badge>
+                              </div>
+                              <div className="space-y-1 text-[11px] text-muted-foreground">
+                                <p>
+                                  {t("modelCatalogUpdatedAt")}:{" "}
+                                  {modelCatalogUpdatedAt ?? tCommon("noData")}
+                                </p>
+                                <p>
+                                  {t("modelCatalogSourceSummary", {
+                                    native: nativeCatalogCount,
+                                    inferred: inferredCatalogCount,
+                                  })}
+                                </p>
+                                {modelCatalogError ? (
+                                  <p className="text-status-error">
+                                    {t("modelCatalogLastError")}: {modelCatalogError}
+                                  </p>
+                                ) : null}
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    void handleRefreshCatalog();
+                                  }}
+                                  disabled={!isEdit || refreshCatalogMutation.isPending}
+                                >
+                                  {t("refreshModelCatalog")}
+                                </Button>
+                                {!isEdit && (
+                                  <p className="text-xs text-muted-foreground">
+                                    {t("saveUpstreamFirstForCatalogActions")}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <FormField
+                            control={form.control}
+                            name="model_discovery.mode"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>{t("modelDiscoveryMode")}</FormLabel>
+                                <Select value={field.value} onValueChange={field.onChange}>
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="openai_compatible">
+                                      {t("modelDiscoveryMode_openai_compatible")}
+                                    </SelectItem>
+                                    <SelectItem value="anthropic_native">
+                                      {t("modelDiscoveryMode_anthropic_native")}
+                                    </SelectItem>
+                                    <SelectItem value="gemini_native">
+                                      {t("modelDiscoveryMode_gemini_native")}
+                                    </SelectItem>
+                                    <SelectItem value="gemini_openai_compatible">
+                                      {t("modelDiscoveryMode_gemini_openai_compatible")}
+                                    </SelectItem>
+                                    <SelectItem value="custom">
+                                      {t("modelDiscoveryMode_custom")}
+                                    </SelectItem>
+                                    <SelectItem value="litellm">
+                                      {t("modelDiscoveryMode_litellm")}
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          {watchedModelDiscovery?.mode === "custom" && (
+                            <FormField
+                              control={form.control}
+                              name="model_discovery.custom_endpoint"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>{t("modelDiscoveryCustomEndpoint")}</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type="url"
+                                      placeholder={t("modelDiscoveryCustomEndpointPlaceholder")}
+                                      value={field.value ?? ""}
+                                      onChange={(event) => field.onChange(event.target.value)}
+                                      onBlur={field.onBlur}
+                                      name={field.name}
+                                      ref={field.ref}
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          )}
+
+                          <FormField
+                            control={form.control}
+                            name="model_discovery.enable_lite_llm_fallback"
+                            render={({ field }) => (
+                              <FormItem className="border-t border-divider/60 pt-4">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="space-y-1">
+                                    <FormLabel>{t("modelCatalogFallback")}</FormLabel>
+                                    <FormDescription>
+                                      {t("modelCatalogFallbackDescription")}
+                                    </FormDescription>
+                                  </div>
+                                  <FormControl>
+                                    <Switch
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                      aria-label={t("modelCatalogFallback")}
+                                    />
+                                  </FormControl>
+                                </div>
+                              </FormItem>
+                            )}
+                          />
+
+                          <div className="space-y-3 border-t border-divider/60 pt-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-xs font-medium text-foreground">
+                                  {t("modelCatalogBrowser")}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground">
+                                  {t("modelCatalogBrowserDescription")}
+                                </p>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  void handleImportCatalogModels();
+                                }}
+                                disabled={
+                                  !isEdit ||
+                                  selectedCatalogModels.length === 0 ||
+                                  importCatalogMutation.isPending
                                 }
-                                keyLabel={t("sourceModel")}
-                                valueLabel={t("targetModel")}
-                              />
-                            </FormControl>
-                            <FormDescription>{t("modelRedirectsDescription")}</FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                              >
+                                {t("importSelectedModels")}
+                              </Button>
+                            </div>
+                            {catalogEntries.length === 0 ? (
+                              <p className="text-xs text-muted-foreground">
+                                {t("modelCatalogEmpty")}
+                              </p>
+                            ) : (
+                              <div className="space-y-2">
+                                {catalogEntries.map((entry) => {
+                                  const checked = selectedCatalogModels.includes(entry.model);
+                                  return (
+                                    <label
+                                      key={`${entry.source}-${entry.model}`}
+                                      className="flex items-start gap-3 rounded-cf-sm bg-surface-200/45 p-2.5"
+                                    >
+                                      <Checkbox
+                                        checked={checked}
+                                        onCheckedChange={(value) =>
+                                          toggleCatalogSelection(entry.model, value === true)
+                                        }
+                                        aria-label={t("catalogModelSelect", { model: entry.model })}
+                                      />
+                                      <div className="min-w-0 flex-1 space-y-1">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className="font-mono text-xs text-foreground">
+                                            {entry.model}
+                                          </span>
+                                          <Badge variant="outline" className="text-[10px]">
+                                            {entry.source === "native"
+                                              ? t("catalogSourceNative")
+                                              : t("catalogSourceInferred")}
+                                          </Badge>
+                                        </div>
+                                      </div>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </section>
+
+                        <section className="space-y-4 rounded-cf-sm border border-divider bg-surface-300/35 p-4">
+                          <div className="space-y-1">
+                            <h4 className="text-sm font-medium text-foreground">
+                              {t("modelRules")}
+                            </h4>
+                            <p className="text-xs text-muted-foreground">
+                              {t("modelRulesDescription")}
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 gap-1 text-xs"
+                              onClick={() =>
+                                appendModelRule({ type: "exact", model: "", source: "manual" })
+                              }
+                            >
+                              <Plus className="h-3 w-3" />
+                              {t("addExactRule")}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 gap-1 text-xs"
+                              onClick={() =>
+                                appendModelRule({ type: "regex", pattern: "", source: "manual" })
+                              }
+                            >
+                              <Plus className="h-3 w-3" />
+                              {t("addRegexRule")}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 gap-1 text-xs"
+                              onClick={() =>
+                                appendModelRule({
+                                  type: "alias",
+                                  alias: "",
+                                  target_model: "",
+                                  source: "manual",
+                                })
+                              }
+                            >
+                              <Plus className="h-3 w-3" />
+                              {t("addAliasRule")}
+                            </Button>
+                          </div>
+
+                          {modelRuleFields.length === 0 && (
+                            <p className="text-xs text-muted-foreground">{t("modelRulesEmpty")}</p>
+                          )}
+
+                          <div className="space-y-3 border-t border-divider/60 pt-4">
+                            {modelRuleFields.map((ruleField, index) => {
+                              const source = ruleField.source ?? "manual";
+
+                              return (
+                                <div
+                                  key={ruleField.id}
+                                  className="space-y-3 rounded-cf-sm bg-surface-200/45 p-3"
+                                >
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                      <Badge variant="outline" className="text-[10px]">
+                                        {t(`modelRuleType_${ruleField.type}`)}
+                                      </Badge>
+                                      <Badge variant="outline" className="text-[10px]">
+                                        {t(`modelRuleSource_${source}`)}
+                                      </Badge>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => removeModelRule(index)}
+                                      aria-label={`${tCommon("delete")}: ${t(`modelRuleType_${ruleField.type}`)}`}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                    </Button>
+                                  </div>
+
+                                  {ruleField.type === "exact" && (
+                                    <FormField
+                                      control={form.control}
+                                      name={`model_rules.${index}.model`}
+                                      render={({ field }) => (
+                                        <FormItem>
+                                          <FormLabel>{t("exactModelName")}</FormLabel>
+                                          <FormControl>
+                                            <Input
+                                              placeholder={t("exactModelNamePlaceholder")}
+                                              {...field}
+                                            />
+                                          </FormControl>
+                                          <FormMessage />
+                                        </FormItem>
+                                      )}
+                                    />
+                                  )}
+
+                                  {ruleField.type === "regex" && (
+                                    <FormField
+                                      control={form.control}
+                                      name={`model_rules.${index}.pattern`}
+                                      render={({ field }) => (
+                                        <FormItem>
+                                          <FormLabel>{t("regexPattern")}</FormLabel>
+                                          <FormControl>
+                                            <Input
+                                              placeholder={t("regexPatternPlaceholder")}
+                                              {...field}
+                                            />
+                                          </FormControl>
+                                          <FormMessage />
+                                        </FormItem>
+                                      )}
+                                    />
+                                  )}
+
+                                  {ruleField.type === "alias" && (
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                      <FormField
+                                        control={form.control}
+                                        name={`model_rules.${index}.alias`}
+                                        render={({ field }) => (
+                                          <FormItem>
+                                            <FormLabel>{t("sourceModel")}</FormLabel>
+                                            <FormControl>
+                                              <Input
+                                                placeholder={t("aliasNamePlaceholder")}
+                                                {...field}
+                                              />
+                                            </FormControl>
+                                            <FormMessage />
+                                          </FormItem>
+                                        )}
+                                      />
+                                      <FormField
+                                        control={form.control}
+                                        name={`model_rules.${index}.target_model`}
+                                        render={({ field }) => (
+                                          <FormItem>
+                                            <FormLabel>{t("targetModel")}</FormLabel>
+                                            <FormControl>
+                                              <Input
+                                                placeholder={t("targetModelPlaceholder")}
+                                                {...field}
+                                              />
+                                            </FormControl>
+                                            <FormMessage />
+                                          </FormItem>
+                                        )}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </section>
+                      </div>
                     </div>
 
                     <div

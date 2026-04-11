@@ -632,3 +632,57 @@ describe("useUpstreamHealth", () => {
     expect(mockGet).toHaveBeenCalledWith("/admin/upstreams/health?active_only=false");
   });
 });
+
+describe("catalog mutations", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("refreshes upstream model catalog and invalidates upstream caches", async () => {
+    const { useRefreshUpstreamCatalog } = await import("@/hooks/use-upstreams");
+    const { queryClient, wrapper } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    mockPost.mockResolvedValueOnce({
+      status: "success",
+      catalog_count: 2,
+      updated_at: "2026-04-11T00:00:00Z",
+    });
+
+    const { result } = renderHook(() => useRefreshUpstreamCatalog(), { wrapper });
+
+    result.current.mutate("upstream-1");
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(mockPost).toHaveBeenCalledWith("/admin/upstreams/upstream-1/catalog/refresh", {});
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["upstreams"] });
+  });
+
+  it("imports selected catalog models and invalidates upstream caches", async () => {
+    const { useImportUpstreamCatalog } = await import("@/hooks/use-upstreams");
+    const { queryClient, wrapper } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    mockPost.mockResolvedValueOnce({
+      imported: [
+        { type: "exact", model: "gpt-4.1", source: "native" },
+        { type: "exact", model: "claude-3.7-sonnet", source: "inferred" },
+      ],
+    });
+
+    const { result } = renderHook(() => useImportUpstreamCatalog(), { wrapper });
+
+    result.current.mutate({
+      id: "upstream-1",
+      models: ["gpt-4.1", "claude-3.7-sonnet"],
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(mockPost).toHaveBeenCalledWith("/admin/upstreams/upstream-1/catalog/import", {
+      models: ["gpt-4.1", "claude-3.7-sonnet"],
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["upstreams"] });
+  });
+});

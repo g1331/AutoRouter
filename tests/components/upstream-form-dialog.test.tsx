@@ -12,6 +12,8 @@ vi.mock("next-intl", () => ({
 // Mock hooks
 const mockCreateMutateAsync = vi.fn();
 const mockUpdateMutateAsync = vi.fn();
+const mockRefreshCatalogMutateAsync = vi.fn();
+const mockImportCatalogMutateAsync = vi.fn();
 const { mockToastError } = vi.hoisted(() => ({
   mockToastError: vi.fn(),
 }));
@@ -30,6 +32,14 @@ vi.mock("@/hooks/use-upstreams", () => ({
   }),
   useUpdateUpstream: () => ({
     mutateAsync: mockUpdateMutateAsync,
+    isPending: false,
+  }),
+  useRefreshUpstreamCatalog: () => ({
+    mutateAsync: mockRefreshCatalogMutateAsync,
+    isPending: false,
+  }),
+  useImportUpstreamCatalog: () => ({
+    mutateAsync: mockImportCatalogMutateAsync,
     isPending: false,
   }),
 }));
@@ -81,6 +91,8 @@ describe("UpstreamFormDialog", () => {
     });
     mockCreateMutateAsync.mockReset();
     mockUpdateMutateAsync.mockReset();
+    mockRefreshCatalogMutateAsync.mockReset();
+    mockImportCatalogMutateAsync.mockReset();
     mockOnOpenChange.mockReset();
     mockToastError.mockReset();
   });
@@ -111,6 +123,20 @@ describe("UpstreamFormDialog", () => {
       expect(screen.getByText("configCategoryBasic")).toBeInTheDocument();
       expect(screen.getByText("configCategoryStrategy")).toBeInTheDocument();
       expect(screen.getByText("configCategoryReliability")).toBeInTheDocument();
+    });
+
+    it("shows save-first discovery actions in create mode", () => {
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      ensureAdvancedConfigExpanded();
+
+      expect(screen.getByText("modelDiscovery")).toBeInTheDocument();
+      expect(screen.getByText("modelRules")).toBeInTheDocument();
+      expect(screen.getByText("saveUpstreamFirstForCatalogActions")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "refreshModelCatalog" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "importSelectedModels" })).toBeDisabled();
     });
 
     it("keeps section order consistent with navigation order", () => {
@@ -245,6 +271,12 @@ describe("UpstreamFormDialog", () => {
           billing_output_multiplier: 1,
           spending_rules: null,
           route_capabilities: [],
+          model_discovery: {
+            mode: "openai_compatible",
+            custom_endpoint: null,
+            enable_lite_llm_fallback: true,
+          },
+          model_rules: null,
           allowed_models: null,
           model_redirects: null,
           circuit_breaker_config: null,
@@ -433,6 +465,108 @@ describe("UpstreamFormDialog", () => {
       expect(screen.getByDisplayValue("Production OpenAI API")).toBeInTheDocument();
     });
 
+    it("separates discovery status from rule authoring and shows fetched metadata", () => {
+      const modelAwareUpstream: Upstream = {
+        ...mockUpstream,
+        model_discovery: {
+          mode: "openai_compatible",
+          enable_lite_llm_fallback: true,
+        },
+        model_catalog: [
+          { model: "gpt-4.1", source: "native" },
+          { model: "claude-3.7-sonnet", source: "inferred" },
+        ],
+        model_catalog_last_status: "failure",
+        model_catalog_last_error: "Discovery timeout",
+        model_catalog_updated_at: "2026-04-11T00:00:00Z",
+        model_rules: [
+          { type: "exact", model: "gpt-4.1", source: "native" },
+          { type: "regex", pattern: "^gpt-4\\..*$", source: "manual" },
+          {
+            type: "alias",
+            alias: "chat-prod",
+            target_model: "gpt-4.1",
+            source: "manual",
+          },
+        ],
+      };
+
+      render(
+        <UpstreamFormDialog
+          upstream={modelAwareUpstream}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      ensureAdvancedConfigExpanded();
+
+      expect(screen.getByText("modelDiscovery")).toBeInTheDocument();
+      expect(screen.getByText("modelRules")).toBeInTheDocument();
+      expect(screen.getByText("modelDiscoveryMode")).toBeInTheDocument();
+      expect(screen.getByText("modelCatalogFallbackEnabled")).toBeInTheDocument();
+      expect(screen.getByText("modelCatalogLastStatusFailure")).toBeInTheDocument();
+      expect(screen.getByText(/modelCatalogLastError:/)).toBeInTheDocument();
+      expect(screen.getByText(/modelCatalogUpdatedAt:/)).toBeInTheDocument();
+      expect(screen.getByText("catalogSourceNative")).toBeInTheDocument();
+      expect(screen.getByText("catalogSourceInferred")).toBeInTheDocument();
+      expect(screen.getAllByDisplayValue("gpt-4.1").length).toBeGreaterThan(0);
+      expect(screen.getByDisplayValue("^gpt-4\\..*$")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("chat-prod")).toBeInTheDocument();
+    });
+
+    it("imports selected catalog entries into exact rules", async () => {
+      const importableUpstream: Upstream = {
+        ...mockUpstream,
+        model_discovery: {
+          mode: "openai_compatible",
+          enable_lite_llm_fallback: true,
+        },
+        model_catalog: [
+          { model: "gpt-4.1", source: "native" },
+          { model: "claude-3.7-sonnet", source: "inferred" },
+        ],
+        model_catalog_last_status: "success",
+        model_catalog_last_error: null,
+        model_catalog_updated_at: "2026-04-11T00:00:00Z",
+        model_rules: [],
+      };
+
+      mockImportCatalogMutateAsync.mockResolvedValueOnce({
+        ...importableUpstream,
+        model_rules: [
+          { type: "exact", model: "gpt-4.1", source: "native" },
+          { type: "exact", model: "claude-3.7-sonnet", source: "inferred" },
+        ],
+      });
+
+      render(
+        <UpstreamFormDialog
+          upstream={importableUpstream}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      ensureAdvancedConfigExpanded();
+
+      fireEvent.click(screen.getByText("gpt-4.1"));
+      fireEvent.click(screen.getByText("claude-3.7-sonnet"));
+      fireEvent.click(screen.getByRole("button", { name: "importSelectedModels" }));
+
+      await waitFor(() => {
+        expect(mockImportCatalogMutateAsync).toHaveBeenCalledWith({
+          id: "upstream-1",
+          models: ["gpt-4.1", "claude-3.7-sonnet"],
+        });
+      });
+
+      expect(screen.getAllByDisplayValue("gpt-4.1").length).toBeGreaterThan(0);
+      expect(screen.getAllByDisplayValue("claude-3.7-sonnet").length).toBeGreaterThan(0);
+    });
+
     it("renders save button in edit mode", () => {
       render(
         <UpstreamFormDialog upstream={mockUpstream} open={true} onOpenChange={mockOnOpenChange} />,
@@ -482,6 +616,12 @@ describe("UpstreamFormDialog", () => {
             billing_output_multiplier: 1,
             spending_rules: null,
             route_capabilities: [],
+            model_discovery: {
+              mode: "openai_compatible",
+              custom_endpoint: null,
+              enable_lite_llm_fallback: true,
+            },
+            model_rules: null,
             allowed_models: null,
             model_redirects: null,
             circuit_breaker_config: null,
@@ -519,6 +659,12 @@ describe("UpstreamFormDialog", () => {
             billing_output_multiplier: 1,
             spending_rules: null,
             route_capabilities: [],
+            model_discovery: {
+              mode: "openai_compatible",
+              custom_endpoint: null,
+              enable_lite_llm_fallback: true,
+            },
+            model_rules: null,
             allowed_models: null,
             model_redirects: null,
             circuit_breaker_config: null,
@@ -639,7 +785,7 @@ describe("UpstreamFormDialog", () => {
         .getByText("billingOutputMultiplier")
         .parentElement?.querySelector("input") as HTMLInputElement;
 
-      fireEvent.click(screen.getByRole("switch"));
+      fireEvent.click(screen.getAllByRole("switch")[1]);
       const affinityThresholdInput = screen.getByPlaceholderText("50000") as HTMLInputElement;
 
       fireEvent.change(priorityInput, { target: { value: "30" } });

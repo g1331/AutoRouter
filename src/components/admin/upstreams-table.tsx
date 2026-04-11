@@ -312,6 +312,38 @@ export function UpstreamsTable({
     return `${t("spendingPeriodRolling")} ${rule.period_hours ?? "-"}h`;
   };
 
+  const getModelCatalogStatusLabel = (upstream: Upstream): string => {
+    if (upstream.model_catalog_last_status === "success") {
+      return t("modelCatalogLastStatusSuccess");
+    }
+
+    if (upstream.model_catalog_last_status === "failure") {
+      return t("modelCatalogLastStatusFailure");
+    }
+
+    return t("modelCatalogLastStatusUnknown");
+  };
+
+  const getModelSourceSummary = (upstream: Upstream): string => {
+    const native = (upstream.model_catalog ?? []).filter(
+      (entry) => entry.source === "native"
+    ).length;
+    const inferred = (upstream.model_catalog ?? []).filter(
+      (entry) => entry.source === "inferred"
+    ).length;
+
+    return t("modelCatalogSourceSummary", { native, inferred });
+  };
+
+  const getModelRuleSummary = (upstream: Upstream): string => {
+    const rules = upstream.model_rules ?? [];
+    const exact = rules.filter((rule) => rule.type === "exact").length;
+    const regex = rules.filter((rule) => rule.type === "regex").length;
+    const alias = rules.filter((rule) => rule.type === "alias").length;
+
+    return t("modelRuleSummary", { exact, regex, alias });
+  };
+
   const handleRecoverCircuit = async (upstream: Upstream, e?: SyntheticEvent) => {
     e?.stopPropagation();
     try {
@@ -649,7 +681,7 @@ export function UpstreamsTable({
                             "mt-2.5 grid",
                             isCompactDensity
                               ? "gap-2 grid-cols-1"
-                              : "gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]"
+                              : "gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.95fr)_minmax(0,0.95fr)]"
                           )}
                         >
                           <section
@@ -689,6 +721,31 @@ export function UpstreamsTable({
                                 {(upstream.billing_output_multiplier ?? 1).toFixed(2)}
                               </span>
                             </div>
+                          </section>
+
+                          <section
+                            className={cn(
+                              "rounded-cf-sm border border-divider bg-surface-300/45",
+                              isCompactDensity ? "p-2.5" : "p-3"
+                            )}
+                          >
+                            <div className="mb-2 text-xs text-muted-foreground">
+                              {t("modelSummary")}
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <Badge variant="outline" className="text-[11px]">
+                                {getModelCatalogStatusLabel(upstream)}
+                              </Badge>
+                            </div>
+                            <div className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+                              <div>{getModelSourceSummary(upstream)}</div>
+                              <div>{getModelRuleSummary(upstream)}</div>
+                            </div>
+                            {upstream.model_catalog_last_error ? (
+                              <div className="mt-2 text-[11px] text-status-error">
+                                {t("modelCatalogLastError")}: {upstream.model_catalog_last_error}
+                              </div>
+                            ) : null}
                           </section>
 
                           <section
