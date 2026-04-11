@@ -5,6 +5,11 @@ import {
   CircuitBreakerStateEnum,
   DEFAULT_CONFIG as CB_DEFAULT_CONFIG,
 } from "./circuit-breaker";
+import {
+  filterCandidateUpstreamsByLegacyModelSupport,
+  matchLegacyUpstreamModelConfig,
+  resolveLegacyModelRedirects,
+} from "./upstream-model-rules";
 import { getPrimaryProviderByCapabilities } from "@/lib/route-capabilities";
 
 /**
@@ -163,40 +168,20 @@ export function resolveModelWithRedirects(
   modelRedirects: Record<string, string> | null,
   maxDepth: number = 10
 ): { resolvedModel: string; redirectApplied: boolean } {
-  if (!modelRedirects || Object.keys(modelRedirects).length === 0) {
-    return { resolvedModel: model, redirectApplied: false };
-  }
-
-  let currentModel = model;
-  let redirectApplied = false;
-  let depth = 0;
-
-  while (depth < maxDepth) {
-    const targetModel = modelRedirects[currentModel];
-    if (!targetModel) {
-      break;
-    }
-    currentModel = targetModel;
-    redirectApplied = true;
-    depth++;
-  }
-
-  return { resolvedModel: currentModel, redirectApplied };
+  return resolveLegacyModelRedirects(model, modelRedirects, maxDepth);
 }
 
 /**
  * Filter upstreams by model support (allowedModels)
  */
 export function filterUpstreamsByModel(upstreamList: Upstream[], model: string): Upstream[] {
-  return upstreamList.filter((upstream) => {
-    // If no allowedModels specified, upstream accepts all models
-    if (!upstream.allowedModels || upstream.allowedModels.length === 0) {
-      return true;
-    }
-
-    // Check if model is in allowed list
-    return upstream.allowedModels.includes(model);
-  });
+  return upstreamList.filter(
+    (upstream) =>
+      matchLegacyUpstreamModelConfig(model, {
+        allowedModels: upstream.allowedModels,
+        modelRedirects: null,
+      }).matches
+  );
 }
 
 /**
@@ -349,34 +334,20 @@ export async function routeByModel(model: string): Promise<ModelRouterResult> {
   let selectedUpstream: Upstream | null = null;
   let finalResolvedModel = model;
   let redirectApplied = false;
-  const modelExcluded: ExcludedUpstream[] = [];
-  let candidateCount = 0;
+  const {
+    allowed: modelCompatibleUpstreams,
+    excluded: modelExcluded,
+    matchesByUpstreamId,
+  } = filterCandidateUpstreamsByLegacyModelSupport(healthyUpstreams, model);
+  let candidateCount = modelCompatibleUpstreams.length;
 
-  for (const upstream of healthyUpstreams) {
-    const { resolvedModel, redirectApplied: wasRedirected } = resolveModelWithRedirects(
-      model,
-      upstream.modelRedirects
-    );
+  if (modelCompatibleUpstreams.length > 0) {
+    selectedUpstream = modelCompatibleUpstreams[0] ?? null;
 
-    // Check if this upstream supports the resolved model
-    const supportsModel =
-      !upstream.allowedModels ||
-      upstream.allowedModels.length === 0 ||
-      upstream.allowedModels.includes(resolvedModel);
-
-    if (supportsModel) {
-      if (!selectedUpstream) {
-        selectedUpstream = upstream;
-        finalResolvedModel = resolvedModel;
-        redirectApplied = wasRedirected;
-      }
-      candidateCount++;
-    } else {
-      modelExcluded.push({
-        id: upstream.id,
-        name: upstream.name,
-        reason: "model_not_allowed",
-      });
+    if (selectedUpstream) {
+      const selectedMatch = matchesByUpstreamId[selectedUpstream.id];
+      finalResolvedModel = selectedMatch?.resolvedModel ?? model;
+      redirectApplied = selectedMatch?.modelRedirectApplied ?? false;
     }
   }
 
@@ -387,6 +358,7 @@ export async function routeByModel(model: string): Promise<ModelRouterResult> {
   const usingModelFilter = upstreamList.some((u) => u.allowedModels && u.allowedModels.length > 0);
 
   if (!selectedUpstream && healthyUpstreams.length > 0) {
+    // Preserve the legacy availability-first fallback until explicit model rules reach the proxy path.
     selectedUpstream = healthyUpstreams[0];
     const { resolvedModel } = resolveModelWithRedirects(model, selectedUpstream.modelRedirects);
     finalResolvedModel = resolvedModel;

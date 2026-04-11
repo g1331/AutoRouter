@@ -307,6 +307,71 @@ describe("model-router", () => {
       expect(result.routingDecision.modelRedirectApplied).toBe(true);
     });
 
+    it("should resolve redirects before checking legacy allow lists", async () => {
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        {
+          id: "upstream-1",
+          name: "openai-1",
+          providerType: "openai",
+          routeCapabilities: ["openai_chat_compatible"],
+          allowedModels: ["gpt-4o"],
+          modelRedirects: { "gpt-internal": "gpt-4o" },
+          weight: 1,
+          isActive: true,
+        },
+      ] as unknown as Awaited<ReturnType<typeof db.query.upstreams.findMany>>);
+
+      const result = await routeByModel("gpt-internal");
+
+      expect(result.upstream?.id).toBe("upstream-1");
+      expect(result.resolvedModel).toBe("gpt-4o");
+      expect(result.routingDecision.modelRedirectApplied).toBe(true);
+      expect(result.routingDecision.finalCandidateCount).toBe(1);
+    });
+
+    it("should preserve legacy fallback when no allow list matches", async () => {
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        {
+          id: "upstream-1",
+          name: "openai-1",
+          providerType: "openai",
+          routeCapabilities: ["openai_chat_compatible"],
+          allowedModels: ["gpt-4o"],
+          modelRedirects: null,
+          weight: 1,
+          isActive: true,
+        },
+        {
+          id: "upstream-2",
+          name: "openai-2",
+          providerType: "openai",
+          routeCapabilities: ["openai_chat_compatible"],
+          allowedModels: ["gpt-4.1"],
+          modelRedirects: null,
+          weight: 1,
+          isActive: true,
+        },
+      ] as unknown as Awaited<ReturnType<typeof db.query.upstreams.findMany>>);
+
+      const result = await routeByModel("gpt-3.5-turbo");
+
+      expect(result.upstream?.id).toBe("upstream-1");
+      expect(result.routingDecision.finalCandidateCount).toBe(1);
+      expect(result.routingDecision.modelRedirectApplied).toBe(false);
+      expect(result.excludedUpstreams).toEqual([
+        {
+          id: "upstream-1",
+          name: "openai-1",
+          reason: "model_not_allowed",
+        },
+        {
+          id: "upstream-2",
+          name: "openai-2",
+          reason: "model_not_allowed",
+        },
+      ]);
+    });
+
     it("should include routing decision details", async () => {
       // Mock upstreams with provider_type field
       vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([

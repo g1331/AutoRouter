@@ -207,6 +207,7 @@ export function normalizeLegacyModelRules(
   config: LegacyUpstreamModelConfig,
   source: UpstreamModelRuleSource = "manual"
 ): UpstreamModelRule[] | null {
+  // Keep exact rules ahead of aliases so legacy config can be migrated deterministically.
   const exactRules = normalizeStringList(config.allowedModels).map<ExactUpstreamModelRule>(
     (model) => ({
       type: "exact",
@@ -268,6 +269,7 @@ export function matchLegacyUpstreamModelConfig(
   );
 
   if (!restrictiveRulesConfigured) {
+    // Legacy redirect-only upstreams still accept unmatched models; only allow lists tighten routing.
     return {
       matches: true,
       restrictiveRulesConfigured: false,
@@ -354,6 +356,7 @@ export function filterCandidateUpstreamsByLegacyModelSupport<
   const excluded: FilteredLegacyModelCandidates<TCandidate>["excluded"] = [];
   const matchesByUpstreamId: Record<string, ModelRuleMatchResult> = {};
 
+  // This mirrors the future proxy insertion point: capability filtering first, model support pruning second.
   for (const candidate of candidates) {
     const match = matchLegacyUpstreamModelConfig(model, candidate);
     matchesByUpstreamId[candidate.id] = match;
