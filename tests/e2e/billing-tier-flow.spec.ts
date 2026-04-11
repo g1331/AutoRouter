@@ -207,7 +207,7 @@ async function mockBillingApis(page: Page, options?: { duplicateThresholdOnly?: 
 }
 
 async function mockLogsApi(page: Page) {
-  const now = new Date("2026-03-01T01:23:45.000Z").toISOString();
+  const now = new Date().toISOString();
   await page.route("**/api/admin/logs**", async (route) => {
     await fulfillJson(route, 200, {
       items: [
