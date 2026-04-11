@@ -69,6 +69,41 @@ export interface UpstreamCircuitBreakerApiResponse {
   opened_at: string | null;
 }
 
+export interface UpstreamModelDiscoveryApiResponse {
+  mode:
+    | "openai_compatible"
+    | "anthropic_native"
+    | "gemini_native"
+    | "gemini_openai_compatible"
+    | "custom"
+    | "litellm";
+  custom_endpoint: string | null;
+  enable_lite_llm_fallback: boolean;
+}
+
+export interface UpstreamModelCatalogEntryApiResponse {
+  model: string;
+  source: "native" | "inferred";
+}
+
+export type UpstreamModelRuleApiResponse =
+  | {
+      type: "exact";
+      model: string;
+      source: "manual" | "native" | "inferred";
+    }
+  | {
+      type: "regex";
+      pattern: string;
+      source: "manual" | "native" | "inferred";
+    }
+  | {
+      type: "alias";
+      alias: string;
+      target_model: string;
+      source: "manual" | "native" | "inferred";
+    };
+
 /**
  * API response format for upstream (snake_case).
  * This matches the actual response format used by the API routes.
@@ -90,6 +125,12 @@ export interface UpstreamApiResponse {
   route_capabilities: RouteCapability[];
   allowed_models: string[] | null;
   model_redirects: Record<string, string> | null;
+  model_discovery: UpstreamModelDiscoveryApiResponse | null;
+  model_catalog: UpstreamModelCatalogEntryApiResponse[] | null;
+  model_catalog_updated_at: string | null;
+  model_catalog_last_status: "success" | "failure" | null;
+  model_catalog_last_error: string | null;
+  model_rules: UpstreamModelRuleApiResponse[] | null;
   affinity_migration: {
     enabled: boolean;
     metric: "tokens" | "length";
@@ -124,6 +165,32 @@ export interface PaginatedApiResponse<T> {
  * Converts camelCase properties to snake_case for API consistency.
  */
 export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): UpstreamApiResponse {
+  const modelRules =
+    upstream.modelRules?.map((rule) => {
+      if (rule.type === "alias") {
+        return {
+          type: rule.type,
+          alias: rule.alias,
+          target_model: rule.targetModel,
+          source: rule.source,
+        } satisfies UpstreamModelRuleApiResponse;
+      }
+
+      if (rule.type === "regex") {
+        return {
+          type: rule.type,
+          pattern: rule.pattern,
+          source: rule.source,
+        } satisfies UpstreamModelRuleApiResponse;
+      }
+
+      return {
+        type: rule.type,
+        model: rule.model,
+        source: rule.source,
+      } satisfies UpstreamModelRuleApiResponse;
+    }) ?? null;
+
   return {
     id: upstream.id,
     name: upstream.name,
@@ -141,6 +208,18 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
     route_capabilities: upstream.routeCapabilities,
     allowed_models: upstream.allowedModels,
     model_redirects: upstream.modelRedirects,
+    model_discovery: upstream.modelDiscovery
+      ? {
+          mode: upstream.modelDiscovery.mode,
+          custom_endpoint: upstream.modelDiscovery.customEndpoint,
+          enable_lite_llm_fallback: upstream.modelDiscovery.enableLiteLlmFallback,
+        }
+      : null,
+    model_catalog: upstream.modelCatalog ?? null,
+    model_catalog_updated_at: upstream.modelCatalogUpdatedAt?.toISOString() ?? null,
+    model_catalog_last_status: upstream.modelCatalogLastStatus ?? null,
+    model_catalog_last_error: upstream.modelCatalogLastError ?? null,
+    model_rules: modelRules,
     affinity_migration: upstream.affinityMigration,
     billing_input_multiplier: upstream.billingInputMultiplier ?? 1,
     billing_output_multiplier: upstream.billingOutputMultiplier ?? 1,

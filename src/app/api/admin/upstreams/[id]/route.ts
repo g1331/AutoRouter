@@ -18,6 +18,15 @@ import {
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 import { quotaTracker } from "@/lib/services/upstream-quota-tracker";
+import {
+  MODEL_DISCOVERY_MODES,
+  MODEL_RULE_SOURCES,
+  type AliasUpstreamModelRule,
+  type ExactUpstreamModelRule,
+  type RegexUpstreamModelRule,
+  type UpstreamModelDiscoveryConfig,
+  type UpstreamModelRule,
+} from "@/lib/services/upstream-model-rules";
 
 const log = createLogger("admin-upstreams");
 
@@ -36,6 +45,86 @@ const affinityMigrationConfigSchema = z.object({
   metric: z.enum(["tokens", "length"]),
   threshold: z.number().int().min(1).max(10000000),
 });
+
+const modelDiscoverySchema = z.object({
+  mode: z.enum(MODEL_DISCOVERY_MODES),
+  custom_endpoint: z.string().trim().min(1).nullable().optional(),
+  enable_lite_llm_fallback: z.boolean().optional(),
+});
+
+const modelRuleSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("exact"),
+    model: z.string().trim().min(1),
+    source: z.enum(MODEL_RULE_SOURCES).optional(),
+  }),
+  z.object({
+    type: z.literal("regex"),
+    pattern: z.string().trim().min(1),
+    source: z.enum(MODEL_RULE_SOURCES).optional(),
+  }),
+  z.object({
+    type: z.literal("alias"),
+    alias: z.string().trim().min(1),
+    target_model: z.string().trim().min(1),
+    source: z.enum(MODEL_RULE_SOURCES).optional(),
+  }),
+]);
+
+function toServiceModelDiscovery(
+  value: z.infer<typeof modelDiscoverySchema> | null | undefined
+): UpstreamModelDiscoveryConfig | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  return {
+    mode: value.mode,
+    customEndpoint: value.custom_endpoint ?? null,
+    enableLiteLlmFallback: value.enable_lite_llm_fallback ?? false,
+  };
+}
+
+function toServiceModelRules(
+  value: z.infer<typeof modelRuleSchema>[] | null | undefined
+): UpstreamModelRule[] | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  return value.map((rule) => {
+    if (rule.type === "alias") {
+      return {
+        type: rule.type,
+        alias: rule.alias,
+        targetModel: rule.target_model,
+        source: rule.source ?? "manual",
+      } satisfies AliasUpstreamModelRule;
+    }
+
+    if (rule.type === "regex") {
+      return {
+        type: rule.type,
+        pattern: rule.pattern,
+        source: rule.source ?? "manual",
+      } satisfies RegexUpstreamModelRule;
+    }
+
+    return {
+      type: rule.type,
+      model: rule.model,
+      source: rule.source ?? "manual",
+    } satisfies ExactUpstreamModelRule;
+  });
+}
 
 function normalizeDurationToMs(
   value: number | undefined,
@@ -63,6 +152,8 @@ const updateUpstreamSchema = z
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)).nullable().optional(),
     allowed_models: z.array(z.string()).nullable().optional(),
     model_redirects: z.record(z.string(), z.string()).nullable().optional(),
+    model_discovery: modelDiscoverySchema.nullable().optional(),
+    model_rules: z.array(modelRuleSchema).nullable().optional(),
     circuit_breaker_config: circuitBreakerConfigSchema.nullable().optional(),
     affinity_migration: affinityMigrationConfigSchema.nullable().optional(),
     billing_input_multiplier: z.number().min(0).max(100).optional(),
@@ -157,6 +248,12 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
     if (validated.allowed_models !== undefined) input.allowedModels = validated.allowed_models;
     if (validated.model_redirects !== undefined) input.modelRedirects = validated.model_redirects;
+    if (validated.model_discovery !== undefined) {
+      input.modelDiscovery = toServiceModelDiscovery(validated.model_discovery);
+    }
+    if (validated.model_rules !== undefined) {
+      input.modelRules = toServiceModelRules(validated.model_rules);
+    }
     if (validated.circuit_breaker_config !== undefined) {
       input.circuitBreakerConfig = validated.circuit_breaker_config
         ? {

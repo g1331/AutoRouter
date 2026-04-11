@@ -288,6 +288,143 @@ describe("upstream-crud", () => {
       expect(result.modelRedirects).toEqual({ "gpt-4-turbo": "gpt-4" });
     });
 
+    it("should expose derived modelRules when only legacy fields are stored", async () => {
+      const { createUpstream } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(null);
+
+      const mockReturning = vi.fn().mockResolvedValue([
+        {
+          id: "test-id",
+          name: "legacy-upstream",
+          baseUrl: "https://api.openai.com",
+          apiKeyEncrypted: "encrypted:sk-test-key",
+          isDefault: false,
+          timeout: 60,
+          isActive: true,
+          config: null,
+          priority: 0,
+          weight: 1,
+          routeCapabilities: ["openai_chat_compatible"],
+          allowedModels: ["gpt-4.1"],
+          modelRedirects: { "company-gpt4": "gpt-4.1" },
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      vi.mocked(db.insert).mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: mockReturning,
+        }),
+      } as unknown as MockInsertChain);
+
+      const result = await createUpstream({
+        name: "legacy-upstream",
+        baseUrl: "https://api.openai.com",
+        apiKey: "sk-test-key",
+        allowedModels: ["gpt-4.1"],
+        modelRedirects: { "company-gpt4": "gpt-4.1" },
+      });
+
+      expect(result.modelRules).toEqual([
+        { type: "exact", model: "gpt-4.1", source: "manual" },
+        {
+          type: "alias",
+          alias: "company-gpt4",
+          targetModel: "gpt-4.1",
+          source: "manual",
+        },
+      ]);
+    });
+
+    it("should normalize discovery config and explicit rules before insert", async () => {
+      const { createUpstream } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(null);
+
+      const insertValues = vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue([
+          {
+            id: "test-id",
+            name: "discovery-upstream",
+            baseUrl: "https://api.openai.com",
+            apiKeyEncrypted: "encrypted:sk-test-key",
+            isDefault: false,
+            timeout: 60,
+            isActive: true,
+            config: null,
+            priority: 0,
+            weight: 1,
+            routeCapabilities: ["openai_chat_compatible"],
+            allowedModels: null,
+            modelRedirects: null,
+            modelDiscovery: {
+              mode: "custom",
+              customEndpoint: "https://catalog.example.com/models",
+              enableLiteLlmFallback: false,
+            },
+            modelRules: [
+              { type: "regex", pattern: "^gpt-4\\..+$", source: "manual" },
+              {
+                type: "alias",
+                alias: "company-gpt4",
+                targetModel: "gpt-4.1",
+                source: "manual",
+              },
+            ],
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ]),
+      });
+
+      vi.mocked(db.insert).mockReturnValue({
+        values: insertValues,
+      } as unknown as MockInsertChain);
+
+      await createUpstream({
+        name: "discovery-upstream",
+        baseUrl: "https://api.openai.com",
+        apiKey: "sk-test-key",
+        modelDiscovery: {
+          mode: "custom",
+          customEndpoint: "https://catalog.example.com/models",
+          enableLiteLlmFallback: false,
+        },
+        modelRules: [
+          { type: "regex", pattern: "^gpt-4\\..+$", source: "manual" },
+          {
+            type: "alias",
+            alias: "company-gpt4",
+            targetModel: "gpt-4.1",
+            source: "manual",
+          },
+        ],
+      });
+
+      expect(insertValues).toHaveBeenCalledWith(
+        expect.objectContaining({
+          modelDiscovery: {
+            mode: "custom",
+            customEndpoint: "https://catalog.example.com/models",
+            enableLiteLlmFallback: false,
+          },
+          modelRules: [
+            { type: "regex", pattern: "^gpt-4\\..+$", source: "manual" },
+            {
+              type: "alias",
+              alias: "company-gpt4",
+              targetModel: "gpt-4.1",
+              source: "manual",
+            },
+          ],
+        })
+      );
+    });
+
     it("should throw error if name already exists", async () => {
       const { createUpstream } = await import("@/lib/services/upstream-crud");
       const { db } = await import("@/lib/db");

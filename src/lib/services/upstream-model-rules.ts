@@ -6,6 +6,7 @@ export const MODEL_DISCOVERY_MODES = [
   "gemini_native",
   "gemini_openai_compatible",
   "custom",
+  "litellm",
 ] as const;
 
 export type UpstreamModelDiscoveryMode = (typeof MODEL_DISCOVERY_MODES)[number];
@@ -14,6 +15,17 @@ export interface UpstreamModelDiscoveryConfig {
   mode: UpstreamModelDiscoveryMode;
   customEndpoint: string | null;
   enableLiteLlmFallback: boolean;
+}
+
+export const MODEL_CATALOG_SOURCES = ["native", "inferred"] as const;
+export type UpstreamModelCatalogSource = (typeof MODEL_CATALOG_SOURCES)[number];
+
+export const MODEL_CATALOG_FETCH_STATUSES = ["success", "failure"] as const;
+export type UpstreamModelCatalogFetchStatus = (typeof MODEL_CATALOG_FETCH_STATUSES)[number];
+
+export interface UpstreamModelCatalogEntry {
+  model: string;
+  source: UpstreamModelCatalogSource;
 }
 
 export const MODEL_RULE_TYPES = ["exact", "regex", "alias"] as const;
@@ -81,6 +93,11 @@ const modelDiscoveryConfigSchema = z.object({
   mode: z.enum(MODEL_DISCOVERY_MODES),
   customEndpoint: z.string().trim().min(1).nullable().optional(),
   enableLiteLlmFallback: z.boolean().optional(),
+});
+
+const modelCatalogEntrySchema = z.object({
+  model: z.string().trim().min(1),
+  source: z.enum(MODEL_CATALOG_SOURCES),
 });
 
 const exactUpstreamModelRuleSchema = z.object({
@@ -152,6 +169,37 @@ function normalizeRedirectEntries(
   return normalized;
 }
 
+function normalizeModelCatalog(
+  entries: UpstreamModelCatalogEntry[] | null | undefined
+): UpstreamModelCatalogEntry[] | null {
+  if (!Array.isArray(entries)) {
+    return null;
+  }
+
+  const seen = new Set<string>();
+  const normalized: UpstreamModelCatalogEntry[] = [];
+
+  for (const entry of entries) {
+    const model = entry.model.trim();
+    if (!model) {
+      continue;
+    }
+
+    const dedupeKey = `${entry.source}:${model}`;
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+
+    seen.add(dedupeKey);
+    normalized.push({
+      model,
+      source: entry.source,
+    });
+  }
+
+  return normalized.length > 0 ? normalized : null;
+}
+
 function createNoRestrictionMatch(model: string): ModelRuleMatchResult {
   return {
     matches: true,
@@ -194,6 +242,15 @@ export function parseModelDiscoveryConfig(input: unknown): UpstreamModelDiscover
   return normalizeModelDiscoveryConfig(parsed);
 }
 
+export function parseUpstreamModelCatalog(input: unknown): UpstreamModelCatalogEntry[] | null {
+  if (input == null) {
+    return null;
+  }
+
+  const parsed = z.array(modelCatalogEntrySchema).parse(input);
+  return normalizeModelCatalog(parsed);
+}
+
 export function parseUpstreamModelRules(input: unknown): UpstreamModelRule[] | null {
   if (input == null) {
     return null;
@@ -227,6 +284,18 @@ export function normalizeLegacyModelRules(
 
   const rules = [...exactRules, ...aliasRules];
   return rules.length > 0 ? rules : null;
+}
+
+export function resolveStoredUpstreamModelRules(
+  rules: unknown,
+  config: LegacyUpstreamModelConfig
+): UpstreamModelRule[] | null {
+  const parsedRules = parseUpstreamModelRules(rules);
+  if (parsedRules) {
+    return parsedRules;
+  }
+
+  return normalizeLegacyModelRules(config);
 }
 
 export function resolveLegacyModelRedirects(

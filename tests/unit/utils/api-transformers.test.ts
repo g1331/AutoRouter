@@ -83,6 +83,12 @@ describe("api-transformers", () => {
         route_capabilities: undefined,
         allowed_models: undefined,
         model_redirects: undefined,
+        model_discovery: null,
+        model_catalog: null,
+        model_catalog_updated_at: null,
+        model_catalog_last_status: null,
+        model_catalog_last_error: null,
+        model_rules: null,
         affinity_migration: null,
         billing_input_multiplier: 1,
         billing_output_multiplier: 1,
@@ -119,6 +125,78 @@ describe("api-transformers", () => {
       expect(result.official_website_url).toBeNull();
       expect(result.max_concurrency).toBeNull();
       expect(result.last_used_at).toBeNull();
+      expect(result.model_discovery).toBeNull();
+      expect(result.model_rules).toBeNull();
+    });
+
+    it("should transform model discovery and rule fields to snake_case", () => {
+      const upstream = {
+        id: "upstream-789",
+        name: "catalog-upstream",
+        baseUrl: "https://api.openai.com",
+        officialWebsiteUrl: null,
+        apiKeyMasked: "sk-***xyz",
+        isDefault: false,
+        timeout: 45,
+        isActive: true,
+        currentConcurrency: 1,
+        maxConcurrency: 20,
+        config: null,
+        weight: 2,
+        priority: 5,
+        routeCapabilities: ["openai_chat_compatible"],
+        allowedModels: ["gpt-4.1"],
+        modelRedirects: { "company-gpt4": "gpt-4.1" },
+        modelDiscovery: {
+          mode: "openai_compatible",
+          customEndpoint: null,
+          enableLiteLlmFallback: true,
+        },
+        modelCatalog: [
+          { model: "gpt-4.1", source: "native" as const },
+          { model: "gpt-4.1-mini", source: "inferred" as const },
+        ],
+        modelCatalogUpdatedAt: new Date("2026-04-11T09:00:00.000Z"),
+        modelCatalogLastStatus: "success" as const,
+        modelCatalogLastError: null,
+        modelRules: [
+          { type: "exact" as const, model: "gpt-4.1", source: "native" as const },
+          {
+            type: "alias" as const,
+            alias: "company-gpt4",
+            targetModel: "gpt-4.1",
+            source: "manual" as const,
+          },
+        ],
+        affinityMigration: null,
+        lastUsedAt: null,
+        createdAt: new Date("2026-04-11T08:00:00.000Z"),
+        updatedAt: new Date("2026-04-11T10:00:00.000Z"),
+      };
+
+      const result = transformUpstreamToApi(upstream);
+
+      expect(result.model_discovery).toEqual({
+        mode: "openai_compatible",
+        custom_endpoint: null,
+        enable_lite_llm_fallback: true,
+      });
+      expect(result.model_catalog).toEqual([
+        { model: "gpt-4.1", source: "native" },
+        { model: "gpt-4.1-mini", source: "inferred" },
+      ]);
+      expect(result.model_catalog_updated_at).toBe("2026-04-11T09:00:00.000Z");
+      expect(result.model_catalog_last_status).toBe("success");
+      expect(result.model_catalog_last_error).toBeNull();
+      expect(result.model_rules).toEqual([
+        { type: "exact", model: "gpt-4.1", source: "native" },
+        {
+          type: "alias",
+          alias: "company-gpt4",
+          target_model: "gpt-4.1",
+          source: "manual",
+        },
+      ]);
     });
   });
 

@@ -315,6 +315,111 @@ describe("Admin Upstreams API with new fields", () => {
       );
     });
 
+    it("should map model_discovery and model_rules into service input", async () => {
+      mockCreateUpstream.mockResolvedValueOnce({
+        id: "upstream-1",
+        name: "catalog-upstream",
+        baseUrl: "https://api.openai.com",
+        officialWebsiteUrl: null,
+        apiKeyMasked: "sk-***1234",
+        isDefault: false,
+        timeout: 60,
+        isActive: true,
+        maxConcurrency: null,
+        config: null,
+        weight: 1,
+        priority: 0,
+        routeCapabilities: ["openai_chat_compatible"],
+        allowedModels: ["gpt-4.1"],
+        modelRedirects: { "company-gpt4": "gpt-4.1" },
+        modelDiscovery: {
+          mode: "openai_compatible",
+          customEndpoint: null,
+          enableLiteLlmFallback: true,
+        },
+        modelCatalog: [{ model: "gpt-4.1", source: "native" }],
+        modelCatalogUpdatedAt: new Date("2026-04-11T09:00:00.000Z"),
+        modelCatalogLastStatus: "success",
+        modelCatalogLastError: null,
+        modelRules: [
+          { type: "exact", model: "gpt-4.1", source: "native" },
+          {
+            type: "alias",
+            alias: "company-gpt4",
+            targetModel: "gpt-4.1",
+            source: "manual",
+          },
+        ],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const request = new NextRequest("http://localhost:3000/api/admin/upstreams", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "catalog-upstream",
+          base_url: "https://api.openai.com",
+          api_key: "sk-test-key-12345678",
+          route_capabilities: ["openai_chat_compatible"],
+          model_discovery: {
+            mode: "openai_compatible",
+            custom_endpoint: null,
+            enable_lite_llm_fallback: true,
+          },
+          model_rules: [
+            { type: "exact", model: "gpt-4.1", source: "native" },
+            {
+              type: "alias",
+              alias: "company-gpt4",
+              target_model: "gpt-4.1",
+              source: "manual",
+            },
+          ],
+        }),
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(201);
+      expect(mockCreateUpstream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          modelDiscovery: {
+            mode: "openai_compatible",
+            customEndpoint: null,
+            enableLiteLlmFallback: true,
+          },
+          modelRules: [
+            { type: "exact", model: "gpt-4.1", source: "native" },
+            {
+              type: "alias",
+              alias: "company-gpt4",
+              targetModel: "gpt-4.1",
+              source: "manual",
+            },
+          ],
+        })
+      );
+      expect(data.model_discovery).toEqual({
+        mode: "openai_compatible",
+        custom_endpoint: null,
+        enable_lite_llm_fallback: true,
+      });
+      expect(data.model_rules).toEqual([
+        { type: "exact", model: "gpt-4.1", source: "native" },
+        {
+          type: "alias",
+          alias: "company-gpt4",
+          target_model: "gpt-4.1",
+          source: "manual",
+        },
+      ]);
+    });
+
     it("should ignore legacy provider_type values without validation errors", async () => {
       const providerTypes = ["anthropic", "openai", "google", "custom"];
 
@@ -734,6 +839,108 @@ describe("Admin Upstreams API with new fields", () => {
           maxConcurrency: 8,
         })
       );
+    });
+
+    it("should update model discovery and rule fields", async () => {
+      mockUpdateUpstream.mockResolvedValueOnce({
+        id: "upstream-1",
+        name: "catalog-upstream",
+        baseUrl: "https://api.openai.com",
+        officialWebsiteUrl: null,
+        apiKeyMasked: "sk-***1234",
+        isDefault: false,
+        timeout: 60,
+        isActive: true,
+        maxConcurrency: null,
+        config: null,
+        weight: 1,
+        priority: 0,
+        routeCapabilities: ["openai_chat_compatible"],
+        allowedModels: ["gpt-4.1"],
+        modelRedirects: { "company-gpt4": "gpt-4.1" },
+        modelDiscovery: {
+          mode: "litellm",
+          customEndpoint: "https://litellm.example.com/models",
+          enableLiteLlmFallback: false,
+        },
+        modelCatalog: [{ model: "gpt-4.1", source: "inferred" }],
+        modelCatalogUpdatedAt: new Date("2026-04-11T09:30:00.000Z"),
+        modelCatalogLastStatus: "failure",
+        modelCatalogLastError: "provider timeout",
+        modelRules: [
+          { type: "regex", pattern: "^gpt-4\\..+$", source: "manual" },
+          {
+            type: "alias",
+            alias: "company-gpt4",
+            targetModel: "gpt-4.1",
+            source: "manual",
+          },
+        ],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const request = new NextRequest("http://localhost:3000/api/admin/upstreams/upstream-1", {
+        method: "PUT",
+        headers: {
+          authorization: "Bearer test-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model_discovery: {
+            mode: "litellm",
+            custom_endpoint: "https://litellm.example.com/models",
+            enable_lite_llm_fallback: false,
+          },
+          model_rules: [
+            { type: "regex", pattern: "^gpt-4\\..+$", source: "manual" },
+            {
+              type: "alias",
+              alias: "company-gpt4",
+              target_model: "gpt-4.1",
+              source: "manual",
+            },
+          ],
+        }),
+      });
+
+      const response = await PUT(request, { params: Promise.resolve({ id: "upstream-1" }) });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(mockUpdateUpstream).toHaveBeenCalledWith(
+        "upstream-1",
+        expect.objectContaining({
+          modelDiscovery: {
+            mode: "litellm",
+            customEndpoint: "https://litellm.example.com/models",
+            enableLiteLlmFallback: false,
+          },
+          modelRules: [
+            { type: "regex", pattern: "^gpt-4\\..+$", source: "manual" },
+            {
+              type: "alias",
+              alias: "company-gpt4",
+              targetModel: "gpt-4.1",
+              source: "manual",
+            },
+          ],
+        })
+      );
+      expect(data.model_discovery).toEqual({
+        mode: "litellm",
+        custom_endpoint: "https://litellm.example.com/models",
+        enable_lite_llm_fallback: false,
+      });
+      expect(data.model_rules).toEqual([
+        { type: "regex", pattern: "^gpt-4\\..+$", source: "manual" },
+        {
+          type: "alias",
+          alias: "company-gpt4",
+          target_model: "gpt-4.1",
+          source: "manual",
+        },
+      ]);
     });
   });
 

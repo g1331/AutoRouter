@@ -10,6 +10,16 @@ import {
   type RouteCapability,
 } from "@/lib/route-capabilities";
 import { ensureRouteCapabilityMigration } from "./route-capability-migration";
+import {
+  normalizeModelDiscoveryConfig,
+  parseUpstreamModelCatalog,
+  parseUpstreamModelRules,
+  resolveStoredUpstreamModelRules,
+  type UpstreamModelCatalogEntry,
+  type UpstreamModelCatalogFetchStatus,
+  type UpstreamModelDiscoveryConfig,
+  type UpstreamModelRule,
+} from "./upstream-model-rules";
 
 const log = createLogger("upstream-crud");
 
@@ -57,6 +67,12 @@ export interface UpstreamCreateInput {
   routeCapabilities?: RouteCapability[] | null;
   allowedModels?: string[] | null;
   modelRedirects?: Record<string, string> | null;
+  modelDiscovery?: UpstreamModelDiscoveryConfig | null;
+  modelCatalog?: UpstreamModelCatalogEntry[] | null;
+  modelCatalogUpdatedAt?: Date | null;
+  modelCatalogLastStatus?: UpstreamModelCatalogFetchStatus | null;
+  modelCatalogLastError?: string | null;
+  modelRules?: UpstreamModelRule[] | null;
   circuitBreakerConfig?: {
     failureThreshold?: number;
     successThreshold?: number;
@@ -90,6 +106,12 @@ export interface UpstreamUpdateInput {
   routeCapabilities?: RouteCapability[] | null;
   allowedModels?: string[] | null;
   modelRedirects?: Record<string, string> | null;
+  modelDiscovery?: UpstreamModelDiscoveryConfig | null;
+  modelCatalog?: UpstreamModelCatalogEntry[] | null;
+  modelCatalogUpdatedAt?: Date | null;
+  modelCatalogLastStatus?: UpstreamModelCatalogFetchStatus | null;
+  modelCatalogLastError?: string | null;
+  modelRules?: UpstreamModelRule[] | null;
   circuitBreakerConfig?: {
     failureThreshold?: number;
     successThreshold?: number;
@@ -125,6 +147,12 @@ export interface UpstreamResponse {
   routeCapabilities: RouteCapability[];
   allowedModels: string[] | null;
   modelRedirects: Record<string, string> | null;
+  modelDiscovery: UpstreamModelDiscoveryConfig | null;
+  modelCatalog: UpstreamModelCatalogEntry[] | null;
+  modelCatalogUpdatedAt: Date | null;
+  modelCatalogLastStatus: UpstreamModelCatalogFetchStatus | null;
+  modelCatalogLastError: string | null;
+  modelRules: UpstreamModelRule[] | null;
   affinityMigration: {
     enabled: boolean;
     metric: "tokens" | "length";
@@ -148,6 +176,8 @@ export interface PaginatedUpstreams {
   pageSize: number;
   totalPages: number;
 }
+
+type UpstreamRecord = typeof upstreams.$inferSelect;
 
 async function getLastUsedAtMap(upstreamIds: string[]): Promise<Map<string, Date | null>> {
   if (upstreamIds.length === 0) {
@@ -186,6 +216,53 @@ export function maskApiKey(apiKey: string): string {
   return `${prefix}***${suffix}`;
 }
 
+function mapUpstreamRecordToResponse(
+  upstream: UpstreamRecord,
+  options: {
+    apiKeyMasked: string;
+    currentConcurrency?: number;
+    lastUsedAt?: Date | null;
+    circuitBreaker?: UpstreamCircuitBreakerStatus | null;
+  }
+): UpstreamResponse {
+  return {
+    id: upstream.id,
+    name: upstream.name,
+    baseUrl: upstream.baseUrl,
+    officialWebsiteUrl: upstream.officialWebsiteUrl,
+    apiKeyMasked: options.apiKeyMasked,
+    isDefault: upstream.isDefault,
+    timeout: upstream.timeout,
+    isActive: upstream.isActive,
+    currentConcurrency: options.currentConcurrency ?? 0,
+    maxConcurrency: upstream.maxConcurrency,
+    config: upstream.config,
+    weight: upstream.weight,
+    priority: upstream.priority,
+    routeCapabilities: resolveRouteCapabilities(upstream.routeCapabilities),
+    allowedModels: upstream.allowedModels,
+    modelRedirects: upstream.modelRedirects,
+    modelDiscovery: normalizeModelDiscoveryConfig(upstream.modelDiscovery),
+    modelCatalog: parseUpstreamModelCatalog(upstream.modelCatalog),
+    modelCatalogUpdatedAt: upstream.modelCatalogUpdatedAt ?? null,
+    modelCatalogLastStatus: upstream.modelCatalogLastStatus ?? null,
+    modelCatalogLastError: upstream.modelCatalogLastError ?? null,
+    // Preserve legacy reads by deriving rule objects when the richer column is still empty.
+    modelRules: resolveStoredUpstreamModelRules(upstream.modelRules, {
+      allowedModels: upstream.allowedModels,
+      modelRedirects: upstream.modelRedirects,
+    }),
+    affinityMigration: upstream.affinityMigration,
+    billingInputMultiplier: upstream.billingInputMultiplier,
+    billingOutputMultiplier: upstream.billingOutputMultiplier,
+    spendingRules: upstream.spendingRules as SpendingRules,
+    lastUsedAt: options.lastUsedAt ?? null,
+    createdAt: upstream.createdAt,
+    updatedAt: upstream.updatedAt,
+    circuitBreaker: options.circuitBreaker ?? null,
+  };
+}
+
 /**
  * Create a new upstream with encrypted API key.
  */
@@ -204,6 +281,12 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     routeCapabilities,
     allowedModels,
     modelRedirects,
+    modelDiscovery,
+    modelCatalog,
+    modelCatalogUpdatedAt,
+    modelCatalogLastStatus,
+    modelCatalogLastError,
+    modelRules,
     affinityMigration,
     billingInputMultiplier = 1,
     billingOutputMultiplier = 1,
@@ -211,6 +294,9 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
   const { spendingRules = null } = input;
 
   const normalizedRouteCapabilities = resolveRouteCapabilities(routeCapabilities);
+  const normalizedModelDiscovery = normalizeModelDiscoveryConfig(modelDiscovery);
+  const normalizedModelCatalog = parseUpstreamModelCatalog(modelCatalog);
+  const normalizedModelRules = parseUpstreamModelRules(modelRules);
 
   // Check if name already exists
   const existing = await db.query.upstreams.findFirst({
@@ -244,6 +330,12 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
       routeCapabilities: normalizedRouteCapabilities,
       allowedModels: allowedModels ?? null,
       modelRedirects: modelRedirects ?? null,
+      modelDiscovery: normalizedModelDiscovery,
+      modelCatalog: normalizedModelCatalog,
+      modelCatalogUpdatedAt: modelCatalogUpdatedAt ?? null,
+      modelCatalogLastStatus: modelCatalogLastStatus ?? null,
+      modelCatalogLastError: modelCatalogLastError ?? null,
+      modelRules: normalizedModelRules,
       affinityMigration: affinityMigration ?? null,
       billingInputMultiplier,
       billingOutputMultiplier,
@@ -266,31 +358,10 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     });
   }
 
-  return {
-    id: newUpstream.id,
-    name: newUpstream.name,
-    baseUrl: newUpstream.baseUrl,
-    officialWebsiteUrl: newUpstream.officialWebsiteUrl,
+  return mapUpstreamRecordToResponse(newUpstream, {
     apiKeyMasked: maskApiKey(apiKey),
-    isDefault: newUpstream.isDefault,
-    timeout: newUpstream.timeout,
-    isActive: newUpstream.isActive,
     currentConcurrency: getConnectionCountsSnapshot()[newUpstream.id] ?? 0,
-    maxConcurrency: newUpstream.maxConcurrency,
-    config: newUpstream.config,
-    weight: newUpstream.weight,
-    priority: newUpstream.priority,
-    routeCapabilities: resolveRouteCapabilities(newUpstream.routeCapabilities),
-    allowedModels: newUpstream.allowedModels,
-    modelRedirects: newUpstream.modelRedirects,
-    affinityMigration: newUpstream.affinityMigration,
-    billingInputMultiplier: newUpstream.billingInputMultiplier,
-    billingOutputMultiplier: newUpstream.billingOutputMultiplier,
-    spendingRules: newUpstream.spendingRules as SpendingRules,
-    lastUsedAt: null,
-    createdAt: newUpstream.createdAt,
-    updatedAt: newUpstream.updatedAt,
-  };
+  });
 }
 
 /**
@@ -340,6 +411,24 @@ export async function updateUpstream(
   }
   if (input.allowedModels !== undefined) updateValues.allowedModels = input.allowedModels;
   if (input.modelRedirects !== undefined) updateValues.modelRedirects = input.modelRedirects;
+  if (input.modelDiscovery !== undefined) {
+    updateValues.modelDiscovery = normalizeModelDiscoveryConfig(input.modelDiscovery);
+  }
+  if (input.modelCatalog !== undefined) {
+    updateValues.modelCatalog = parseUpstreamModelCatalog(input.modelCatalog);
+  }
+  if (input.modelCatalogUpdatedAt !== undefined) {
+    updateValues.modelCatalogUpdatedAt = input.modelCatalogUpdatedAt;
+  }
+  if (input.modelCatalogLastStatus !== undefined) {
+    updateValues.modelCatalogLastStatus = input.modelCatalogLastStatus;
+  }
+  if (input.modelCatalogLastError !== undefined) {
+    updateValues.modelCatalogLastError = input.modelCatalogLastError;
+  }
+  if (input.modelRules !== undefined) {
+    updateValues.modelRules = parseUpstreamModelRules(input.modelRules);
+  }
   if (input.affinityMigration !== undefined)
     updateValues.affinityMigration = input.affinityMigration;
   if (input.billingInputMultiplier !== undefined)
@@ -392,31 +481,11 @@ export async function updateUpstream(
   }
   const lastUsedAtByUpstreamId = await getLastUsedAtMap([updated.id]);
 
-  return {
-    id: updated.id,
-    name: updated.name,
-    baseUrl: updated.baseUrl,
-    officialWebsiteUrl: updated.officialWebsiteUrl,
+  return mapUpstreamRecordToResponse(updated, {
     apiKeyMasked,
-    isDefault: updated.isDefault,
-    timeout: updated.timeout,
-    isActive: updated.isActive,
     currentConcurrency: getConnectionCountsSnapshot()[updated.id] ?? 0,
-    maxConcurrency: updated.maxConcurrency,
-    config: updated.config,
-    weight: updated.weight,
-    priority: updated.priority,
-    routeCapabilities: resolveRouteCapabilities(updated.routeCapabilities),
-    allowedModels: updated.allowedModels,
-    modelRedirects: updated.modelRedirects,
-    affinityMigration: updated.affinityMigration,
-    billingInputMultiplier: updated.billingInputMultiplier,
-    billingOutputMultiplier: updated.billingOutputMultiplier,
-    spendingRules: updated.spendingRules as SpendingRules,
     lastUsedAt: lastUsedAtByUpstreamId.get(updated.id) ?? null,
-    createdAt: updated.createdAt,
-    updatedAt: updated.updatedAt,
-  };
+  });
 }
 
 /**
@@ -508,30 +577,10 @@ export async function listUpstreams(
 
     const cbState = cbStateMap.get(upstream.id);
 
-    return {
-      id: upstream.id,
-      name: upstream.name,
-      baseUrl: upstream.baseUrl,
-      officialWebsiteUrl: upstream.officialWebsiteUrl,
+    return mapUpstreamRecordToResponse(upstream, {
       apiKeyMasked: maskedKey,
-      isDefault: upstream.isDefault,
-      timeout: upstream.timeout,
-      isActive: upstream.isActive,
       currentConcurrency: currentConcurrencySnapshot[upstream.id] ?? 0,
-      maxConcurrency: upstream.maxConcurrency,
-      config: upstream.config,
-      weight: upstream.weight,
-      priority: upstream.priority,
-      routeCapabilities: resolveRouteCapabilities(upstream.routeCapabilities),
-      allowedModels: upstream.allowedModels,
-      modelRedirects: upstream.modelRedirects,
-      affinityMigration: upstream.affinityMigration,
-      billingInputMultiplier: upstream.billingInputMultiplier,
-      billingOutputMultiplier: upstream.billingOutputMultiplier,
-      spendingRules: upstream.spendingRules as SpendingRules,
       lastUsedAt: lastUsedAtByUpstreamId.get(upstream.id) ?? null,
-      createdAt: upstream.createdAt,
-      updatedAt: upstream.updatedAt,
       circuitBreaker: cbState
         ? {
             state: cbState.state as "closed" | "open" | "half_open",
@@ -541,7 +590,7 @@ export async function listUpstreams(
             openedAt: cbState.openedAt,
           }
         : null,
-    };
+    });
   });
 
   const totalPages = total > 0 ? Math.ceil(total / pageSize) : 1;
@@ -580,31 +629,11 @@ export async function getUpstreamById(upstreamId: string): Promise<UpstreamRespo
   const currentConcurrencySnapshot = getConnectionCountsSnapshot();
   const lastUsedAtByUpstreamId = await getLastUsedAtMap([upstream.id]);
 
-  return {
-    id: upstream.id,
-    name: upstream.name,
-    baseUrl: upstream.baseUrl,
-    officialWebsiteUrl: upstream.officialWebsiteUrl,
+  return mapUpstreamRecordToResponse(upstream, {
     apiKeyMasked: maskedKey,
-    isDefault: upstream.isDefault,
-    timeout: upstream.timeout,
-    isActive: upstream.isActive,
     currentConcurrency: currentConcurrencySnapshot[upstream.id] ?? 0,
-    maxConcurrency: upstream.maxConcurrency,
-    config: upstream.config,
-    weight: upstream.weight,
-    priority: upstream.priority,
-    routeCapabilities: resolveRouteCapabilities(upstream.routeCapabilities),
-    allowedModels: upstream.allowedModels,
-    modelRedirects: upstream.modelRedirects,
-    affinityMigration: upstream.affinityMigration,
-    billingInputMultiplier: upstream.billingInputMultiplier,
-    billingOutputMultiplier: upstream.billingOutputMultiplier,
-    spendingRules: upstream.spendingRules as SpendingRules,
     lastUsedAt: lastUsedAtByUpstreamId.get(upstream.id) ?? null,
-    createdAt: upstream.createdAt,
-    updatedAt: upstream.updatedAt,
-  };
+  });
 }
 
 /**

@@ -2,6 +2,13 @@ import { randomUUID } from "crypto";
 import { index, integer, real, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 
+import type {
+  UpstreamModelCatalogEntry,
+  UpstreamModelCatalogFetchStatus,
+  UpstreamModelDiscoveryConfig,
+  UpstreamModelRule,
+} from "@/lib/services/upstream-model-rules";
+
 /**
  * API keys distributed to downstream clients.
  */
@@ -59,6 +66,18 @@ export const upstreams = sqliteTable(
       string,
       string
     > | null>(),
+    modelDiscovery: text("model_discovery", {
+      mode: "json",
+    }).$type<UpstreamModelDiscoveryConfig | null>(),
+    modelCatalog: text("model_catalog", { mode: "json" }).$type<
+      UpstreamModelCatalogEntry[] | null
+    >(),
+    modelCatalogUpdatedAt: integer("model_catalog_updated_at", { mode: "timestamp_ms" }),
+    modelCatalogLastStatus: text(
+      "model_catalog_last_status"
+    ).$type<UpstreamModelCatalogFetchStatus | null>(),
+    modelCatalogLastError: text("model_catalog_last_error"),
+    modelRules: text("model_rules", { mode: "json" }).$type<UpstreamModelRule[] | null>(),
     affinityMigration: text("affinity_migration", { mode: "json" }).$type<{
       enabled: boolean;
       metric: "tokens" | "length";
