@@ -47,3 +47,11 @@ export {
   type ProviderType,
   type ModelRouterResult,
 } from "./model-router";
+
+export {
+  discoverUpstreamModels,
+  refreshUpstreamModelCatalog,
+  type UpstreamModelDiscoveryTarget,
+  type UpstreamModelCatalogPersistencePatch,
+  type UpstreamModelCatalogRefreshResult,
+} from "./upstream-model-discovery";
