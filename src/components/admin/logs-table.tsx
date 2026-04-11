@@ -1117,7 +1117,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
     if (reason === "concurrency_full") {
       return "warning";
     }
-    if (reason === "model_not_allowed") {
+    if (reason === "model_not_allowed" || reason === "capability_not_matched") {
       return "neutral";
     }
     return "error";
@@ -1131,6 +1131,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
           text: "text-status-warning",
         };
       case "model_not_allowed":
+      case "capability_not_matched":
         return {
           row: "border-divider bg-surface-300/65",
           text: "text-foreground",

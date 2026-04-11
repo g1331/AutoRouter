@@ -371,6 +371,9 @@ export interface RoutingSelectionReason {
   selected_circuit_state?: RoutingCircuitState | null;
   candidate_count?: number | null;
   final_candidate_count?: number | null;
+  circuit_breaker_filtered_count?: number | null;
+  quota_filtered_count?: number | null;
+  concurrency_filtered_count?: number | null;
   retry_reason?: RoutingRetryReason | null;
 }
 
@@ -467,8 +470,10 @@ export interface RoutingCandidate {
  */
 export type ExclusionReason =
   | "circuit_open"
+  | "capability_not_matched"
   | "model_not_allowed"
   | "unhealthy"
+  | "quota_exceeded"
   | "concurrency_full";
 
 /**
@@ -495,6 +500,11 @@ export interface RoutingDecisionLog {
   matched_route_capability?: RouteCapability | null;
   route_match_source?: RouteMatchSource | null;
   capability_candidates_count?: number | null;
+  capability_mismatch_count?: number | null;
+  model_rule_filtered_count?: number | null;
+  circuit_breaker_filtered_count?: number | null;
+  quota_filtered_count?: number | null;
+  concurrency_filtered_count?: number | null;
 
   // Candidate upstreams (simplified, only key info)
   candidates: RoutingCandidate[];

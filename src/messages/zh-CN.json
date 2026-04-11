@@ -369,8 +369,10 @@
     "more": "更多",
     "exclusionReason": {
       "circuit_open": "熔断",
+      "capability_not_matched": "能力未命中",
       "model_not_allowed": "模型不支持",
       "unhealthy": "不健康",
+      "quota_exceeded": "配额已满",
       "concurrency_full": "并发已满"
     },
     "circuitState": {
@@ -522,6 +524,7 @@
       "http_429": "429 限流",
       "connection_error": "连接失败",
       "circuit_open": "熔断阻断",
+      "quota_exceeded": "配额已满",
       "concurrency_full": "并发已满",
       "unknown": "未知原因"
     },

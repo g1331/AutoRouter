@@ -123,6 +123,9 @@ function createSelectionReason(options: {
   selectedTier: number;
   totalCandidates: number;
   finalCandidateCount: number;
+  circuitBreakerFilteredCount?: number;
+  quotaFilteredCount?: number;
+  concurrencyFilteredCount?: number;
   selectedCircuitState?: RoutingSelectionReason["selected_circuit_state"];
 }): RoutingSelectionReason {
   const {
@@ -131,6 +134,9 @@ function createSelectionReason(options: {
     selectedTier,
     totalCandidates,
     finalCandidateCount,
+    circuitBreakerFilteredCount = 0,
+    quotaFilteredCount = 0,
+    concurrencyFilteredCount = 0,
     selectedCircuitState = null,
   } = options;
 
@@ -141,6 +147,9 @@ function createSelectionReason(options: {
     selected_circuit_state: selectedCircuitState ?? null,
     candidate_count: totalCandidates,
     final_candidate_count: finalCandidateCount,
+    circuit_breaker_filtered_count: circuitBreakerFilteredCount,
+    quota_filtered_count: quotaFilteredCount,
+    concurrency_filtered_count: concurrencyFilteredCount,
     retry_reason: null,
   };
 }
@@ -937,6 +946,9 @@ async function performTieredSelection(
               selectedTier: tier,
               totalCandidates,
               finalCandidateCount: afterConcurrency.allowed.length,
+              circuitBreakerFilteredCount: totalCircuitBreakerFiltered,
+              quotaFilteredCount: totalQuotaFiltered,
+              concurrencyFilteredCount: totalConcurrencyFiltered,
               selectedCircuitState: normalizeSelectionCircuitState(selected.circuitState),
             }),
           };

@@ -54,8 +54,11 @@ import {
   extractGeminiModelFromPath,
   resolveRouteCapability,
 } from "@/lib/services/route-capability-matcher";
-import { resolveModelWithRedirects } from "@/lib/services/model-router";
 import { ensureRouteCapabilityMigration } from "@/lib/services/route-capability-migration";
+import {
+  matchUpstreamModelRules,
+  resolveStoredUpstreamModelRules,
+} from "@/lib/services/upstream-model-rules";
 import {
   type FailoverConfig,
   DEFAULT_FAILOVER_CONFIG,
@@ -260,6 +263,8 @@ interface RoutingDecisionDiagnostics {
   didSendUpstream?: boolean;
   failureStage?: RoutingFailureStage | null;
   finalSelectionReason?: RoutingSelectionReason | null;
+  capabilityMismatchCount?: number;
+  modelRuleFilteredCount?: number;
 }
 
 type CandidateCircuitStateMap = Record<string, RoutingCandidate["circuit_state"]>;
@@ -340,6 +345,12 @@ function transformPathRoutingDecisionLog(
     matched_route_capability: input.matchedRouteCapability,
     route_match_source: input.routeMatchSource,
     capability_candidates_count: input.capabilityCandidates.length,
+    capability_mismatch_count: diagnostics?.capabilityMismatchCount ?? 0,
+    model_rule_filtered_count: diagnostics?.modelRuleFilteredCount ?? 0,
+    circuit_breaker_filtered_count:
+      diagnostics?.finalSelectionReason?.circuit_breaker_filtered_count ?? 0,
+    quota_filtered_count: diagnostics?.finalSelectionReason?.quota_filtered_count ?? 0,
+    concurrency_filtered_count: diagnostics?.finalSelectionReason?.concurrency_filtered_count ?? 0,
     candidates,
     excluded: input.excludedCandidates,
     candidate_count: input.capabilityCandidates.length,
@@ -401,11 +412,88 @@ function resolvePathRoutingModelForUpstream(
     return { resolvedModel: originalModel, redirectApplied: false };
   }
 
-  const { resolvedModel, redirectApplied } = resolveModelWithRedirects(
+  const modelRules = resolveStoredUpstreamModelRules(upstream.modelRules, {
+    allowedModels: upstream.allowedModels,
+    modelRedirects: upstream.modelRedirects,
+  });
+  const { resolvedModel, modelRedirectApplied } = matchUpstreamModelRules(
     originalModel,
-    upstream.modelRedirects
+    modelRules
   );
-  return { resolvedModel, redirectApplied };
+  return { resolvedModel, redirectApplied: modelRedirectApplied };
+}
+
+function buildCapabilityMismatchExcludedCandidates(
+  activeUpstreams: Upstream[],
+  capabilityCandidates: Upstream[],
+  allowedUpstreamIdSet: Set<string>
+): RoutingExcluded[] {
+  const capabilityCandidateIds = new Set(capabilityCandidates.map((upstream) => upstream.id));
+
+  return activeUpstreams
+    .filter(
+      (upstream) =>
+        allowedUpstreamIdSet.has(upstream.id) && !capabilityCandidateIds.has(upstream.id)
+    )
+    .map((upstream) => ({
+      id: upstream.id,
+      name: upstream.name,
+      reason: "capability_not_matched" as const,
+    }));
+}
+
+function filterAuthorizedCandidatesByModelRules(
+  candidates: Upstream[],
+  requestedModel: string | null
+): {
+  allowedCandidates: Upstream[];
+  excludedCandidates: RoutingExcluded[];
+  resolvedModel: string | null;
+  modelRedirectApplied: boolean;
+} {
+  if (!requestedModel) {
+    return {
+      allowedCandidates: candidates,
+      excludedCandidates: [],
+      resolvedModel: requestedModel,
+      modelRedirectApplied: false,
+    };
+  }
+
+  const allowedCandidates: Upstream[] = [];
+  const excludedCandidates: RoutingExcluded[] = [];
+  let resolvedModel = requestedModel;
+  let modelRedirectApplied = false;
+
+  for (const candidate of candidates) {
+    const modelRules = resolveStoredUpstreamModelRules(candidate.modelRules, {
+      allowedModels: candidate.allowedModels,
+      modelRedirects: candidate.modelRedirects,
+    });
+    const match = matchUpstreamModelRules(requestedModel, modelRules);
+
+    if (match.matches) {
+      allowedCandidates.push(candidate);
+      if (allowedCandidates.length === 1) {
+        resolvedModel = match.resolvedModel;
+        modelRedirectApplied = match.modelRedirectApplied;
+      }
+      continue;
+    }
+
+    excludedCandidates.push({
+      id: candidate.id,
+      name: candidate.name,
+      reason: "model_not_allowed",
+    });
+  }
+
+  return {
+    allowedCandidates,
+    excludedCandidates,
+    resolvedModel,
+    modelRedirectApplied,
+  };
 }
 
 function mergeExcludedCandidates(
@@ -1953,6 +2041,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   let finalCapabilityCandidates: Upstream[] = [];
   let excludedCapabilityCandidates: RoutingExcluded[] = [];
   let candidateCircuitStates: CandidateCircuitStateMap = {};
+  let capabilityMismatchCount = 0;
+  let modelRuleFilteredCount = 0;
   let sessionId: string | null = null;
   let sessionIdSource: "header" | "body" | null = null;
   const activeUpstreams = await db.query.upstreams.findMany({
@@ -2007,8 +2097,23 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   }
 
   capabilityCandidates = activeCandidatePool.capabilityCandidates;
-  finalCapabilityCandidates = activeCandidatePool.authorizedCapabilityCandidates;
-  candidateUpstreamIds = activeCandidatePool.candidateUpstreamIds;
+  const capabilityMismatchCandidates = buildCapabilityMismatchExcludedCandidates(
+    activeUpstreams,
+    capabilityCandidates,
+    allowedUpstreamIdSet
+  );
+  const initialModelRuleFilter = filterAuthorizedCandidatesByModelRules(
+    activeCandidatePool.authorizedCapabilityCandidates,
+    model
+  );
+  capabilityMismatchCount = capabilityMismatchCandidates.length;
+  modelRuleFilteredCount = initialModelRuleFilter.excludedCandidates.length;
+  finalCapabilityCandidates = initialModelRuleFilter.allowedCandidates;
+  excludedCapabilityCandidates = mergeExcludedCandidates(
+    capabilityMismatchCandidates,
+    initialModelRuleFilter.excludedCandidates
+  );
+  candidateUpstreamIds = finalCapabilityCandidates.map((upstream) => upstream.id);
 
   if (capabilityCandidates.length === 0) {
     log.warn(
@@ -2054,14 +2159,11 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     });
   }
 
-  excludedCapabilityCandidates = [];
   candidateCircuitStates = await buildCandidateCircuitStateMap(capabilityCandidates, requestId);
 
   let selectedCandidate = finalCapabilityCandidates[0];
-  ({ resolvedModel, redirectApplied: modelRedirectApplied } = resolvePathRoutingModelForUpstream(
-    model,
-    selectedCandidate
-  ));
+  resolvedModel = initialModelRuleFilter.resolvedModel;
+  modelRedirectApplied = initialModelRuleFilter.modelRedirectApplied;
 
   const shouldRejectApiKeyQuotaBeforeProxy = await shouldRejectExceededApiKeyQuotaBeforeProxy({
     quotaStatus: apiKeyQuotaStatus,
@@ -2116,7 +2218,9 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       candidatePoolCapability: activeCandidatePool.candidateCapability,
       routeMatchSource,
       candidateCount: capabilityCandidates.length,
-      authorizedCount: finalCapabilityCandidates.length,
+      authorizedCount: activeCandidatePool.authorizedCapabilityCandidates.length,
+      capabilityMismatchCount,
+      modelRuleFilteredCount,
       selectableCount: finalCapabilityCandidates.length,
     },
     "path-based capability routing decision"
@@ -2164,6 +2268,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       actualUpstreamId: null,
       didSendUpstream: false,
       failureStage: null,
+      capabilityMismatchCount,
+      modelRuleFilteredCount,
     }
   );
 
@@ -2232,8 +2338,23 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       ) {
         activeCandidatePool = fallbackCandidatePool!;
         capabilityCandidates = activeCandidatePool.capabilityCandidates;
-        finalCapabilityCandidates = activeCandidatePool.authorizedCapabilityCandidates;
-        candidateUpstreamIds = activeCandidatePool.candidateUpstreamIds;
+        const fallbackCapabilityMismatchCandidates = buildCapabilityMismatchExcludedCandidates(
+          activeUpstreams,
+          capabilityCandidates,
+          allowedUpstreamIdSet
+        );
+        const fallbackModelRuleFilter = filterAuthorizedCandidatesByModelRules(
+          activeCandidatePool.authorizedCapabilityCandidates,
+          model
+        );
+        capabilityMismatchCount = fallbackCapabilityMismatchCandidates.length;
+        modelRuleFilteredCount = fallbackModelRuleFilter.excludedCandidates.length;
+        finalCapabilityCandidates = fallbackModelRuleFilter.allowedCandidates;
+        excludedCapabilityCandidates = mergeExcludedCandidates(
+          fallbackCapabilityMismatchCandidates,
+          fallbackModelRuleFilter.excludedCandidates
+        );
+        candidateUpstreamIds = finalCapabilityCandidates.map((upstream) => upstream.id);
         candidateCircuitStates = await buildCandidateCircuitStateMap(
           capabilityCandidates,
           requestId
@@ -2241,8 +2362,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
         const fallbackSelectedCandidate = finalCapabilityCandidates[0];
         selectedCandidate = fallbackSelectedCandidate;
-        ({ resolvedModel, redirectApplied: modelRedirectApplied } =
-          resolvePathRoutingModelForUpstream(model, fallbackSelectedCandidate));
+        resolvedModel = fallbackModelRuleFilter.resolvedModel;
+        modelRedirectApplied = fallbackModelRuleFilter.modelRedirectApplied;
 
         log.warn(
           {
@@ -2335,6 +2456,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         didSendUpstream: true,
         failureStage: null,
         finalSelectionReason,
+        capabilityMismatchCount,
+        modelRuleFilteredCount,
       }
     );
 
@@ -2932,6 +3055,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         didSendUpstream,
         failureStage,
         finalSelectionReason: attributionFailoverAttempt?.selection_reason ?? null,
+        capabilityMismatchCount,
+        modelRuleFilteredCount,
       }
     );
 

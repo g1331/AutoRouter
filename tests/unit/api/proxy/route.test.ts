@@ -1801,6 +1801,148 @@ describe("proxy route upstream selection", () => {
     );
   });
 
+  it("should filter path-based candidates by capability and model rules before load balancing", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-google-allowed" },
+      { upstreamId: "up-google-blocked" },
+      { upstreamId: "up-openai-capability-miss" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-google-allowed",
+        name: "google-allowed",
+        providerType: "google",
+        baseUrl: "https://generativelanguage.googleapis.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["gemini_native_generate"],
+        modelRules: [{ type: "exact", model: "gemini-2.5-flash-lite", source: "manual" }],
+      },
+      {
+        id: "up-google-blocked",
+        name: "google-blocked",
+        providerType: "google",
+        baseUrl: "https://generativelanguage.googleapis.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["gemini_native_generate"],
+        modelRules: [{ type: "exact", model: "gemini-1.5-pro", source: "manual" }],
+      },
+      {
+        id: "up-openai-capability-miss",
+        name: "openai-capability-miss",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["openai_responses"],
+        modelRules: [{ type: "exact", model: "gemini-2.5-flash-lite", source: "manual" }],
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+    const selectedUpstream = {
+      id: "up-google-allowed",
+      name: "google-allowed",
+      providerType: "google",
+      baseUrl: "https://generativelanguage.googleapis.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 0,
+      weight: 1,
+      routeCapabilities: ["gemini_native_generate"],
+      modelRules: [{ type: "exact", model: "gemini-2.5-flash-lite", source: "manual" }],
+    };
+
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: selectedUpstream,
+      providerType: "google",
+      selectedTier: 0,
+      totalCandidates: 1,
+      circuitBreakerFiltered: 0,
+      quotaFiltered: 0,
+      concurrencyFiltered: 0,
+    });
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: {
+        promptTokens: 8,
+        completionTokens: 2,
+        totalTokens: 10,
+      },
+    });
+
+    const request = new NextRequest(
+      "http://localhost/api/proxy/v1/v1beta/models/gemini-2.5-flash-lite:generateContent",
+      {
+        method: "POST",
+        headers: {
+          "x-goog-api-key": "sk-x-goog-api-key",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: "hello" }] }],
+        }),
+      }
+    );
+
+    const response = await POST(request, {
+      params: Promise.resolve({
+        path: ["v1beta", "models", "gemini-2.5-flash-lite:generateContent"],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(selectFromProviderType).toHaveBeenCalledWith(
+      ["up-google-allowed"],
+      undefined,
+      undefined
+    );
+
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload?.routingDecision).toEqual(
+      expect.objectContaining({
+        capability_candidates_count: 2,
+        capability_mismatch_count: 1,
+        model_rule_filtered_count: 1,
+        final_candidate_count: 1,
+        excluded: expect.arrayContaining([
+          expect.objectContaining({
+            id: "up-openai-capability-miss",
+            reason: "capability_not_matched",
+          }),
+          expect.objectContaining({
+            id: "up-google-blocked",
+            reason: "model_not_allowed",
+          }),
+        ]),
+      })
+    );
+  });
+
   it("should return no-upstream-configured error when matched path has no capability candidates", async () => {
     const { db } = await import("@/lib/db");
     const { routeByModel } = await import("@/lib/services/model-router");

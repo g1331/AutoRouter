@@ -369,8 +369,10 @@
     "more": "more",
     "exclusionReason": {
       "circuit_open": "Circuit breaker open",
+      "capability_not_matched": "Capability not matched",
       "model_not_allowed": "Model not allowed",
       "unhealthy": "Unhealthy",
+      "quota_exceeded": "Quota exceeded",
       "concurrency_full": "Concurrency full"
     },
     "circuitState": {
@@ -517,6 +519,7 @@
       "http_429": "HTTP 429",
       "connection_error": "connection error",
       "circuit_open": "circuit open",
+      "quota_exceeded": "quota exceeded",
       "concurrency_full": "concurrency full",
       "unknown": "unknown reason"
     },
