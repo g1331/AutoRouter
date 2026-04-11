@@ -19,6 +19,8 @@ export {
   deleteUpstream,
   listUpstreams,
   getUpstreamById,
+  refreshStoredUpstreamModelCatalog,
+  importStoredUpstreamCatalogModels,
   loadActiveUpstreams,
   getDefaultUpstream,
   getUpstreamByName,
@@ -29,6 +31,7 @@ export {
   type UpstreamUpdateInput,
   type UpstreamResponse,
   type PaginatedUpstreams,
+  type ImportUpstreamCatalogModelsInput,
 } from "./upstream-crud";
 
 // Re-export model router functions and types

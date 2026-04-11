@@ -1,13 +1,13 @@
 ## 1. 数据契约与兼容迁移
 
-- [ ] 1.1 设计并落地上游模型发现配置、目录缓存与统一模型规则结构，更新数据库 schema、API 类型与 transformer，同时定义旧 `allowed_models` / `model_redirects` 到新结构的兼容读取策略。
-- [ ] 1.2 扩展 upstream CRUD 与管理端请求校验，支持 discovery config、catalog cache 元数据与 exact / regex / alias 规则的读写，并补充对应的服务层与接口测试。
+- [x] 1.1 设计并落地上游模型发现配置、目录缓存与统一模型规则结构，更新数据库 schema、API 类型与 transformer，同时定义旧 `allowed_models` / `model_redirects` 到新结构的兼容读取策略。
+- [x] 1.2 扩展 upstream CRUD 与管理端请求校验，支持 discovery config、catalog cache 元数据与 exact / regex / alias 规则的读写，并补充对应的服务层与接口测试。
 
 ## 2. 模型发现与目录缓存链路
 
-- [ ] 2.1 实现按上游发现方式执行模型抓取的服务层，覆盖 OpenAI 兼容、Anthropic、Gemini 原生、Gemini OpenAI 兼容与自定义发现端点。
-- [ ] 2.2 为模型抓取结果建立统一规范化与持久化流程，记录来源、抓取时间、最近成功状态与失败原因，并补充抓取成功/失败测试。
-- [ ] 2.3 实现原生发现失败后的 LiteLLM fallback 候选装配逻辑，确保返回结果带有推断来源标记且不会伪装成上游真实目录。
+- [x] 2.1 实现按上游发现方式执行模型抓取的服务层，覆盖 OpenAI 兼容、Anthropic、Gemini 原生、Gemini OpenAI 兼容与自定义发现端点。
+- [x] 2.2 为模型抓取结果建立统一规范化与持久化流程，记录来源、抓取时间、最近成功状态与失败原因，并补充抓取成功/失败测试。
+- [x] 2.3 实现原生发现失败后的 LiteLLM fallback 候选装配逻辑，确保返回结果带有推断来源标记且不会伪装成上游真实目录。
 
 ## 3. 管理端工作台与导入流程
 

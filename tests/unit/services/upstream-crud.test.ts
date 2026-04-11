@@ -98,6 +98,12 @@ vi.mock("@/lib/utils/encryption", () => ({
   decrypt: vi.fn((value: string) => value.replace("encrypted:", "")),
 }));
 
+const mockRefreshUpstreamModelCatalog = vi.fn();
+
+vi.mock("@/lib/services/upstream-model-discovery", () => ({
+  refreshUpstreamModelCatalog: (...args: unknown[]) => mockRefreshUpstreamModelCatalog(...args),
+}));
+
 vi.mock("@/lib/services/load-balancer", () => ({
   getConnectionCountsSnapshot: vi.fn(() => ({})),
 }));
@@ -951,6 +957,241 @@ describe("upstream-crud", () => {
       const result = await getUpstreamById("nonexistent-id");
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe("refreshStoredUpstreamModelCatalog", () => {
+    it("should persist successful catalog refresh state", async () => {
+      const { refreshStoredUpstreamModelCatalog } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      const existingUpstream = {
+        id: "test-id",
+        name: "test-upstream",
+        baseUrl: "https://api.openai.com",
+        apiKeyEncrypted: "encrypted:sk-test-key",
+        routeCapabilities: ["openai_chat_compatible"],
+        modelDiscovery: { mode: "openai_compatible", enableLiteLlmFallback: true },
+        isDefault: false,
+        timeout: 60,
+        isActive: true,
+        config: null,
+        priority: 0,
+        weight: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      vi.mocked(db.query.upstreams.findFirst)
+        .mockResolvedValueOnce(existingUpstream as never)
+        .mockResolvedValueOnce(existingUpstream as never);
+
+      const refreshedAt = new Date("2026-04-11T08:00:00.000Z");
+      mockRefreshUpstreamModelCatalog.mockResolvedValueOnce({
+        upstreamId: "test-id",
+        upstreamName: "test-upstream",
+        resolvedMode: "openai_compatible",
+        fallbackUsed: false,
+        modelCatalog: [{ model: "gpt-4.1", source: "native" }],
+        modelCatalogUpdatedAt: refreshedAt,
+        modelCatalogLastStatus: "success",
+        modelCatalogLastError: null,
+      });
+
+      const setSpy = vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([
+            {
+              ...existingUpstream,
+              modelCatalog: [{ model: "gpt-4.1", source: "native" }],
+              modelCatalogUpdatedAt: refreshedAt,
+              modelCatalogLastStatus: "success",
+              modelCatalogLastError: null,
+            },
+          ]),
+        }),
+      });
+
+      vi.mocked(db.update).mockReturnValue({ set: setSpy } as unknown as MockUpdateChain);
+
+      const result = await refreshStoredUpstreamModelCatalog("test-id");
+
+      expect(mockRefreshUpstreamModelCatalog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "test-id",
+          apiKey: "sk-test-key",
+        })
+      );
+      expect(setSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          modelCatalog: [{ model: "gpt-4.1", source: "native" }],
+          modelCatalogLastStatus: "success",
+          modelCatalogLastError: null,
+        })
+      );
+      expect(result.upstream.modelCatalog).toEqual([{ model: "gpt-4.1", source: "native" }]);
+      expect(result.modelCatalogLastStatus).toBe("success");
+    });
+
+    it("should persist failed catalog refresh state", async () => {
+      const { refreshStoredUpstreamModelCatalog } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      const existingUpstream = {
+        id: "test-id",
+        name: "test-upstream",
+        baseUrl: "https://api.openai.com",
+        apiKeyEncrypted: "encrypted:sk-test-key",
+        routeCapabilities: ["openai_chat_compatible"],
+        modelDiscovery: { mode: "openai_compatible", enableLiteLlmFallback: true },
+        isDefault: false,
+        timeout: 60,
+        isActive: true,
+        config: null,
+        priority: 0,
+        weight: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      vi.mocked(db.query.upstreams.findFirst)
+        .mockResolvedValueOnce(existingUpstream as never)
+        .mockResolvedValueOnce(existingUpstream as never);
+
+      mockRefreshUpstreamModelCatalog.mockResolvedValueOnce({
+        upstreamId: "test-id",
+        upstreamName: "test-upstream",
+        resolvedMode: "openai_compatible",
+        fallbackUsed: false,
+        modelCatalog: null,
+        modelCatalogUpdatedAt: null,
+        modelCatalogLastStatus: "failure",
+        modelCatalogLastError: "HTTP 503 from https://api.openai.com/v1/models",
+      });
+
+      const setSpy = vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([
+            {
+              ...existingUpstream,
+              modelCatalog: null,
+              modelCatalogUpdatedAt: null,
+              modelCatalogLastStatus: "failure",
+              modelCatalogLastError: "HTTP 503 from https://api.openai.com/v1/models",
+            },
+          ]),
+        }),
+      });
+
+      vi.mocked(db.update).mockReturnValue({ set: setSpy } as unknown as MockUpdateChain);
+
+      const result = await refreshStoredUpstreamModelCatalog("test-id");
+
+      expect(setSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          modelCatalog: null,
+          modelCatalogLastStatus: "failure",
+          modelCatalogLastError: "HTTP 503 from https://api.openai.com/v1/models",
+        })
+      );
+      expect(result.upstream.modelCatalogLastStatus).toBe("failure");
+      expect(result.upstream.modelCatalogLastError).toBe(
+        "HTTP 503 from https://api.openai.com/v1/models"
+      );
+    });
+  });
+
+  describe("importStoredUpstreamCatalogModels", () => {
+    it("should merge selected catalog models into exact rules", async () => {
+      const { importStoredUpstreamCatalogModels } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      const existingUpstream = {
+        id: "test-id",
+        name: "catalog-upstream",
+        baseUrl: "https://api.openai.com",
+        apiKeyEncrypted: "encrypted:sk-test-key",
+        routeCapabilities: ["openai_chat_compatible"],
+        allowedModels: ["gpt-4.1"],
+        modelRedirects: { "company-gpt4": "gpt-4.1" },
+        modelCatalog: [
+          { model: "gpt-4.1", source: "native" },
+          { model: "gpt-4.1-mini", source: "inferred" },
+        ],
+        modelRules: [{ type: "regex", pattern: "^gpt-4\\..+$", source: "manual" }],
+        isDefault: false,
+        timeout: 60,
+        isActive: true,
+        config: null,
+        priority: 0,
+        weight: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      vi.mocked(db.query.upstreams.findFirst)
+        .mockResolvedValueOnce(existingUpstream as never)
+        .mockResolvedValueOnce(existingUpstream as never);
+
+      const setSpy = vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([
+            {
+              ...existingUpstream,
+              modelRules: [
+                { type: "regex", pattern: "^gpt-4\\..+$", source: "manual" },
+                { type: "exact", model: "gpt-4.1", source: "native" },
+                { type: "exact", model: "gpt-4.1-mini", source: "inferred" },
+              ],
+            },
+          ]),
+        }),
+      });
+
+      vi.mocked(db.update).mockReturnValue({ set: setSpy } as unknown as MockUpdateChain);
+
+      const result = await importStoredUpstreamCatalogModels("test-id", {
+        models: ["gpt-4.1", "gpt-4.1-mini"],
+      });
+
+      expect(setSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          modelRules: expect.arrayContaining([
+            { type: "regex", pattern: "^gpt-4\\..+$", source: "manual" },
+            { type: "exact", model: "gpt-4.1", source: "native" },
+            { type: "exact", model: "gpt-4.1-mini", source: "inferred" },
+          ]),
+        })
+      );
+      expect(result.modelRules).toEqual(
+        expect.arrayContaining([
+          { type: "exact", model: "gpt-4.1", source: "native" },
+          { type: "exact", model: "gpt-4.1-mini", source: "inferred" },
+        ])
+      );
+    });
+
+    it("should reject models missing from cached catalog", async () => {
+      const { importStoredUpstreamCatalogModels } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValueOnce({
+        id: "test-id",
+        name: "catalog-upstream",
+        baseUrl: "https://api.openai.com",
+        apiKeyEncrypted: "encrypted:sk-test-key",
+        routeCapabilities: ["openai_chat_compatible"],
+        allowedModels: null,
+        modelRedirects: null,
+        modelCatalog: [{ model: "gpt-4.1", source: "native" }],
+        modelRules: null,
+      } as never);
+
+      await expect(
+        importStoredUpstreamCatalogModels("test-id", {
+          models: ["gpt-4.1-mini"],
+        })
+      ).rejects.toThrow("Requested models are not present in the cached catalog: gpt-4.1-mini");
     });
   });
 

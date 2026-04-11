@@ -20,6 +20,10 @@ import {
   type UpstreamModelDiscoveryConfig,
   type UpstreamModelRule,
 } from "./upstream-model-rules";
+import {
+  refreshUpstreamModelCatalog as refreshUpstreamModelCatalogPatch,
+  type UpstreamModelCatalogRefreshResult,
+} from "./upstream-model-discovery";
 
 const log = createLogger("upstream-crud");
 
@@ -177,6 +181,10 @@ export interface PaginatedUpstreams {
   totalPages: number;
 }
 
+export interface ImportUpstreamCatalogModelsInput {
+  models: string[];
+}
+
 type UpstreamRecord = typeof upstreams.$inferSelect;
 
 async function getLastUsedAtMap(upstreamIds: string[]): Promise<Map<string, Date | null>> {
@@ -261,6 +269,61 @@ function mapUpstreamRecordToResponse(
     updatedAt: upstream.updatedAt,
     circuitBreaker: options.circuitBreaker ?? null,
   };
+}
+
+function buildDiscoveryTarget(upstream: UpstreamRecord): {
+  id: string;
+  name: string;
+  baseUrl: string;
+  apiKey: string;
+  routeCapabilities: RouteCapability[];
+  modelDiscovery: UpstreamModelDiscoveryConfig | null;
+} {
+  return {
+    id: upstream.id,
+    name: upstream.name,
+    baseUrl: upstream.baseUrl,
+    apiKey: decrypt(upstream.apiKeyEncrypted),
+    routeCapabilities: resolveRouteCapabilities(upstream.routeCapabilities),
+    modelDiscovery: normalizeModelDiscoveryConfig(upstream.modelDiscovery),
+  };
+}
+
+function mergeImportedCatalogRules(
+  existingRules: UpstreamModelRule[] | null,
+  catalog: UpstreamModelCatalogEntry[] | null,
+  models: string[]
+): UpstreamModelRule[] {
+  const catalogEntries = parseUpstreamModelCatalog(catalog) ?? [];
+  const catalogByModel = new Map(catalogEntries.map((entry) => [entry.model, entry]));
+  const dedupedModels = [...new Set(models.map((model) => model.trim()).filter(Boolean))];
+  const missingModels = dedupedModels.filter((model) => !catalogByModel.has(model));
+
+  if (missingModels.length > 0) {
+    throw new Error(
+      `Requested models are not present in the cached catalog: ${missingModels.join(", ")}`
+    );
+  }
+
+  const mergedRules = [...(existingRules ?? [])];
+  for (const model of dedupedModels) {
+    if (mergedRules.some((rule) => rule.type === "exact" && rule.model === model)) {
+      continue;
+    }
+
+    const catalogEntry = catalogByModel.get(model);
+    if (!catalogEntry) {
+      continue;
+    }
+
+    mergedRules.push({
+      type: "exact",
+      model: catalogEntry.model,
+      source: catalogEntry.source,
+    });
+  }
+
+  return mergedRules;
 }
 
 /**
@@ -633,6 +696,57 @@ export async function getUpstreamById(upstreamId: string): Promise<UpstreamRespo
     apiKeyMasked: maskedKey,
     currentConcurrency: currentConcurrencySnapshot[upstream.id] ?? 0,
     lastUsedAt: lastUsedAtByUpstreamId.get(upstream.id) ?? null,
+  });
+}
+
+export async function refreshStoredUpstreamModelCatalog(
+  upstreamId: string
+): Promise<UpstreamModelCatalogRefreshResult & { upstream: UpstreamResponse }> {
+  const upstream = await db.query.upstreams.findFirst({
+    where: eq(upstreams.id, upstreamId),
+  });
+
+  if (!upstream) {
+    throw new UpstreamNotFoundError(`Upstream not found: ${upstreamId}`);
+  }
+
+  const refreshResult = await refreshUpstreamModelCatalogPatch(buildDiscoveryTarget(upstream));
+  const updated = await updateUpstream(upstreamId, {
+    modelCatalog: refreshResult.modelCatalog,
+    modelCatalogUpdatedAt: refreshResult.modelCatalogUpdatedAt,
+    modelCatalogLastStatus: refreshResult.modelCatalogLastStatus,
+    modelCatalogLastError: refreshResult.modelCatalogLastError,
+  });
+
+  return {
+    ...refreshResult,
+    upstream: updated,
+  };
+}
+
+export async function importStoredUpstreamCatalogModels(
+  upstreamId: string,
+  input: ImportUpstreamCatalogModelsInput
+): Promise<UpstreamResponse> {
+  const upstream = await db.query.upstreams.findFirst({
+    where: eq(upstreams.id, upstreamId),
+  });
+
+  if (!upstream) {
+    throw new UpstreamNotFoundError(`Upstream not found: ${upstreamId}`);
+  }
+
+  const mergedRules = mergeImportedCatalogRules(
+    resolveStoredUpstreamModelRules(upstream.modelRules, {
+      allowedModels: upstream.allowedModels,
+      modelRedirects: upstream.modelRedirects,
+    }),
+    upstream.modelCatalog,
+    input.models
+  );
+
+  return updateUpstream(upstreamId, {
+    modelRules: mergedRules,
   });
 }
 
