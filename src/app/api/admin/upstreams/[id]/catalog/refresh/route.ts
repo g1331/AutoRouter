@@ -27,6 +27,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         resolved_mode: result.resolvedMode,
         fallback_used: result.fallbackUsed,
         status: result.modelCatalogLastStatus,
+        failed_at: result.modelCatalogLastFailedAt?.toISOString() ?? null,
         error: result.modelCatalogLastError,
       },
     });
