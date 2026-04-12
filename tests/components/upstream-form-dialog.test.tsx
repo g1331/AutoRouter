@@ -5,8 +5,31 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Upstream } from "@/types/api";
 
 // Mock next-intl
+const translatedLabels: Record<string, string | ((values?: Record<string, unknown>) => string)> = {
+  searchModelCatalog: "搜索目录模型名称或来源标签",
+  selectFilteredCatalogModels: "全选当前结果",
+  deselectFilteredCatalogModels: "取消当前结果",
+  filteredCatalogModelsSelected: (values) =>
+    `当前结果 ${values?.selected ?? 0}/${values?.total ?? 0} 已选`,
+  totalSelectedCatalogModels: (values) => `总计 ${values?.selected ?? 0} 项已选`,
+  hiddenSelectedCatalogModels: (values) => `当前筛选外另有 ${values?.count ?? 0} 项已选`,
+  importSelectedModels: "导入所选模型",
+  modelCatalogResultsRegion: "模型目录结果列表",
+  catalogSourceNative: "原生",
+  catalogSourceInferred: "推断候选",
+  catalogModelCheckboxLabel: (values) =>
+    `选择目录模型 ${values?.model ?? ""}（${values?.source ?? ""}）`,
+};
+
 vi.mock("next-intl", () => ({
-  useTranslations: () => (key: string) => key,
+  useTranslations: () => (key: string, values?: Record<string, unknown>) => {
+    const translated = translatedLabels[key];
+    if (typeof translated === "function") {
+      return translated(values);
+    }
+
+    return translated ?? key;
+  },
 }));
 
 // Mock hooks
@@ -134,9 +157,9 @@ describe("UpstreamFormDialog", () => {
 
       expect(screen.getByText("modelDiscovery")).toBeInTheDocument();
       expect(screen.getByText("modelRules")).toBeInTheDocument();
-      expect(screen.getByText("saveUpstreamFirstForCatalogActions")).toBeInTheDocument();
+      expect(screen.getAllByText("saveUpstreamFirstForCatalogActions").length).toBeGreaterThan(0);
       expect(screen.getByRole("button", { name: "refreshModelCatalog" })).toBeDisabled();
-      expect(screen.getByRole("button", { name: "importSelectedModels" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "导入所选模型" })).toBeDisabled();
     });
 
     it("keeps section order consistent with navigation order", () => {
@@ -349,6 +372,42 @@ describe("UpstreamFormDialog", () => {
       });
     });
 
+    it("preserves valid versioned API roots without appending an extra /v1", async () => {
+      mockCreateMutateAsync.mockResolvedValueOnce({});
+
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("upstreamNamePlaceholder"), {
+        target: { value: "Gemini OpenAI Proxy" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("baseUrlPlaceholder"), {
+        target: { value: "https://generativelanguage.googleapis.com/v1beta/openai" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("apiKeyPlaceholder"), {
+        target: { value: "sk-test-key" },
+      });
+      fireEvent.click(screen.getByText("capabilityOpenAIChatCompatible"));
+
+      expect(screen.queryByText("baseUrlAutoAppendV1Hint")).not.toBeInTheDocument();
+      expect(
+        screen.getByText("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions")
+      ).toBeInTheDocument();
+      expect(screen.getByText("finalRequestPreviewPath: /chat/completions")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText("create"));
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            base_url: "https://generativelanguage.googleapis.com/v1beta/openai",
+            route_capabilities: ["openai_chat_compatible"],
+          })
+        );
+      });
+    });
+
     it("shows duplicate /v1 warning when manual /v1 overlaps with auto append", () => {
       render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
         wrapper: Wrapper,
@@ -505,15 +564,139 @@ describe("UpstreamFormDialog", () => {
       expect(screen.getByText("modelDiscovery")).toBeInTheDocument();
       expect(screen.getByText("modelRules")).toBeInTheDocument();
       expect(screen.getByText("modelDiscoveryMode")).toBeInTheDocument();
-      expect(screen.getByText("modelCatalogFallbackEnabled")).toBeInTheDocument();
+      expect(screen.getByText("modelCatalogFallback")).toBeInTheDocument();
       expect(screen.getByText("modelCatalogLastStatusFailure")).toBeInTheDocument();
       expect(screen.getByText(/modelCatalogLastError:/)).toBeInTheDocument();
       expect(screen.getByText(/modelCatalogUpdatedAt:/)).toBeInTheDocument();
-      expect(screen.getByText("catalogSourceNative")).toBeInTheDocument();
-      expect(screen.getByText("catalogSourceInferred")).toBeInTheDocument();
+      expect(screen.getByText("原生")).toBeInTheDocument();
+      expect(screen.getByText("推断候选")).toBeInTheDocument();
       expect(screen.getAllByDisplayValue("gpt-4.1").length).toBeGreaterThan(0);
       expect(screen.getByDisplayValue("^gpt-4\\..*$")).toBeInTheDocument();
       expect(screen.getByDisplayValue("chat-prod")).toBeInTheDocument();
+    });
+
+    it("filters catalog entries and toggles visible selections in the bounded catalog panel", () => {
+      const searchableCatalogUpstream: Upstream = {
+        ...mockUpstream,
+        model_discovery: {
+          mode: "openai_compatible",
+          enable_lite_llm_fallback: true,
+        },
+        model_catalog: [
+          { model: "gpt-4.1", source: "native" },
+          { model: "gpt-4o-mini", source: "native" },
+          { model: "claude-3.7-sonnet", source: "inferred" },
+        ],
+        model_rules: [],
+      };
+
+      render(
+        <UpstreamFormDialog
+          upstream={searchableCatalogUpstream}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      ensureAdvancedConfigExpanded();
+
+      const searchInput = screen.getByLabelText("搜索目录模型名称或来源标签");
+      fireEvent.change(searchInput, { target: { value: "claude" } });
+
+      expect(screen.getByText("claude-3.7-sonnet")).toBeInTheDocument();
+      expect(screen.queryByText("gpt-4.1")).not.toBeInTheDocument();
+      expect(screen.queryByText("gpt-4o-mini")).not.toBeInTheDocument();
+      expect(screen.getByTestId("catalog-selection-summary")).toHaveTextContent(
+        "当前结果 0/1 已选"
+      );
+      expect(screen.getByText("总计 0 项已选")).toBeInTheDocument();
+
+      const catalogBrowserSection = screen.getByText("modelCatalogBrowser").closest("section");
+      expect(catalogBrowserSection).toHaveClass("xl:sticky");
+
+      const catalogResultsRegion = screen.getByLabelText("模型目录结果列表");
+      expect(catalogResultsRegion).toHaveClass("max-h-80", "overflow-y-auto");
+
+      fireEvent.click(screen.getByRole("button", { name: "全选当前结果" }));
+      expect(
+        screen.getByRole("checkbox", {
+          name: "选择目录模型 claude-3.7-sonnet（推断候选）",
+        })
+      ).toBeChecked();
+
+      fireEvent.click(screen.getByRole("button", { name: "取消当前结果" }));
+      expect(
+        screen.getByRole("checkbox", {
+          name: "选择目录模型 claude-3.7-sonnet（推断候选）",
+        })
+      ).not.toBeChecked();
+    });
+
+    it("keeps hidden selections visible in the summary and import behavior", async () => {
+      const importableUpstream: Upstream = {
+        ...mockUpstream,
+        model_discovery: {
+          mode: "openai_compatible",
+          enable_lite_llm_fallback: true,
+        },
+        model_catalog: [
+          { model: "gpt-4.1", source: "native" },
+          { model: "gpt-4o-mini", source: "native" },
+          { model: "claude-3.7-sonnet", source: "inferred" },
+        ],
+        model_catalog_last_status: "success",
+        model_catalog_last_error: null,
+        model_catalog_updated_at: "2026-04-11T00:00:00Z",
+        model_rules: [],
+      };
+
+      mockImportCatalogMutateAsync.mockResolvedValueOnce({
+        ...importableUpstream,
+        model_rules: [{ type: "exact", model: "claude-3.7-sonnet", source: "inferred" }],
+      });
+
+      render(
+        <UpstreamFormDialog
+          upstream={importableUpstream}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      ensureAdvancedConfigExpanded();
+
+      fireEvent.change(screen.getByLabelText("搜索目录模型名称或来源标签"), {
+        target: { value: "claude" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "全选当前结果" }));
+
+      expect(screen.getByTestId("catalog-selection-summary")).toHaveTextContent(
+        "当前结果 1/1 已选"
+      );
+      expect(screen.getByText("总计 1 项已选")).toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText("搜索目录模型名称或来源标签"), {
+        target: { value: "gpt" },
+      });
+
+      expect(screen.getByTestId("catalog-selection-summary")).toHaveTextContent(
+        "当前结果 0/2 已选"
+      );
+      expect(screen.getByText("总计 1 项已选")).toBeInTheDocument();
+      expect(screen.getByText("当前筛选外另有 1 项已选")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "导入所选模型" }));
+
+      await waitFor(() => {
+        expect(mockImportCatalogMutateAsync).toHaveBeenCalledWith({
+          id: "upstream-1",
+          models: ["claude-3.7-sonnet"],
+        });
+      });
+
+      expect(screen.getAllByDisplayValue("claude-3.7-sonnet").length).toBeGreaterThan(0);
     });
 
     it("imports selected catalog entries into exact rules", async () => {
@@ -552,9 +735,17 @@ describe("UpstreamFormDialog", () => {
 
       ensureAdvancedConfigExpanded();
 
-      fireEvent.click(screen.getByText("gpt-4.1"));
-      fireEvent.click(screen.getByText("claude-3.7-sonnet"));
-      fireEvent.click(screen.getByRole("button", { name: "importSelectedModels" }));
+      fireEvent.click(
+        screen.getByRole("checkbox", {
+          name: "选择目录模型 gpt-4.1（原生）",
+        })
+      );
+      fireEvent.click(
+        screen.getByRole("checkbox", {
+          name: "选择目录模型 claude-3.7-sonnet（推断候选）",
+        })
+      );
+      fireEvent.click(screen.getByRole("button", { name: "导入所选模型" }));
 
       await waitFor(() => {
         expect(mockImportCatalogMutateAsync).toHaveBeenCalledWith({
@@ -565,6 +756,64 @@ describe("UpstreamFormDialog", () => {
 
       expect(screen.getAllByDisplayValue("gpt-4.1").length).toBeGreaterThan(0);
       expect(screen.getAllByDisplayValue("claude-3.7-sonnet").length).toBeGreaterThan(0);
+    });
+
+    it("keeps same-name native and inferred catalog entries independently selectable", async () => {
+      const duplicateCatalogUpstream: Upstream = {
+        ...mockUpstream,
+        model_discovery: {
+          mode: "openai_compatible",
+          enable_lite_llm_fallback: true,
+        },
+        model_catalog: [
+          { model: "gpt-4.1", source: "native" },
+          { model: "gpt-4.1", source: "inferred" },
+        ],
+        model_catalog_last_status: "success",
+        model_catalog_last_error: null,
+        model_catalog_updated_at: "2026-04-11T00:00:00Z",
+        model_rules: [],
+      };
+
+      mockImportCatalogMutateAsync.mockResolvedValueOnce({
+        ...duplicateCatalogUpstream,
+        model_rules: [{ type: "exact", model: "gpt-4.1", source: "native" }],
+      });
+
+      render(
+        <UpstreamFormDialog
+          upstream={duplicateCatalogUpstream}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      ensureAdvancedConfigExpanded();
+
+      const nativeCheckbox = screen.getByRole("checkbox", {
+        name: "选择目录模型 gpt-4.1（原生）",
+      });
+      const inferredCheckbox = screen.getByRole("checkbox", {
+        name: "选择目录模型 gpt-4.1（推断候选）",
+      });
+
+      fireEvent.click(nativeCheckbox);
+      expect(nativeCheckbox).toBeChecked();
+      expect(inferredCheckbox).not.toBeChecked();
+
+      fireEvent.click(inferredCheckbox);
+      expect(nativeCheckbox).toBeChecked();
+      expect(inferredCheckbox).toBeChecked();
+
+      fireEvent.click(screen.getByRole("button", { name: "导入所选模型" }));
+
+      await waitFor(() => {
+        expect(mockImportCatalogMutateAsync).toHaveBeenCalledWith({
+          id: "upstream-1",
+          models: ["gpt-4.1"],
+        });
+      });
     });
 
     it("renders save button in edit mode", () => {

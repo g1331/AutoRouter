@@ -477,6 +477,10 @@ function shouldAutoAppendV1(routeCapabilities: RouteCapability[] | null | undefi
   );
 }
 
+function hasVersionedApiRoot(pathname: string): boolean {
+  return /\/v\d+(?:[a-z0-9.-]+)?(?:\/[a-z0-9._-]+)?$/i.test(pathname);
+}
+
 function getPreviewPath(routeCapabilities: RouteCapability[] | null | undefined): string {
   const firstCapability = (routeCapabilities ?? [])[0];
   if (!firstCapability) {
@@ -499,10 +503,11 @@ function resolveEndpointPreview(
     const autoAppendV1 = shouldAutoAppendV1(routeCapabilities);
     const normalizedPathname = url.pathname.replace(/\/+$/, "") || "/";
     const manualV1Present = normalizedPathname.toLowerCase().endsWith("/v1");
+    const versionedApiRootPresent = hasVersionedApiRoot(normalizedPathname);
 
     let finalPathname = normalizedPathname;
     let autoAppendV1Applied = false;
-    if (autoAppendV1 && !manualV1Present) {
+    if (autoAppendV1 && !versionedApiRootPresent) {
       finalPathname = `${normalizedPathname === "/" ? "" : normalizedPathname}/v1`;
       autoAppendV1Applied = true;
     }
@@ -559,7 +564,8 @@ export function UpstreamFormDialog({
   const [activeSectionId, setActiveSectionId] = useState<ConfigSectionId>("basic-name");
   const [highlightedSectionId, setHighlightedSectionId] = useState<ConfigSectionId | null>(null);
   const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState(false);
-  const [selectedCatalogModels, setSelectedCatalogModels] = useState<string[]>([]);
+  const [catalogSearchQuery, setCatalogSearchQuery] = useState("");
+  const [selectedCatalogEntryKeys, setSelectedCatalogEntryKeys] = useState<string[]>([]);
   const [upstreamSnapshot, setUpstreamSnapshot] = useState<Upstream | null>(upstream ?? null);
   const contentScrollContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -716,12 +722,40 @@ export function UpstreamFormDialog({
   const modelCatalogUpdatedAt = resolvedUpstream?.model_catalog_updated_at ?? null;
   const modelDiscoveryMode =
     watchedModelDiscovery?.mode ?? resolvedUpstream?.model_discovery?.mode ?? "openai_compatible";
-  const modelFallbackEnabled =
-    watchedModelDiscovery?.enable_lite_llm_fallback ??
-    resolvedUpstream?.model_discovery?.enable_lite_llm_fallback ??
-    true;
   const nativeCatalogCount = catalogEntries.filter((entry) => entry.source === "native").length;
   const inferredCatalogCount = catalogEntries.filter((entry) => entry.source === "inferred").length;
+  const getCatalogEntryKey = (entry: { model: string; source: "native" | "inferred" }) =>
+    `${entry.source}:${entry.model}`;
+  const normalizedCatalogSearchQuery = catalogSearchQuery.trim().toLowerCase();
+  const filteredCatalogEntries = !normalizedCatalogSearchQuery
+    ? catalogEntries
+    : catalogEntries.filter((entry) => {
+        const searchableText = [
+          entry.model,
+          entry.source === "native" ? t("catalogSourceNative") : t("catalogSourceInferred"),
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        return searchableText.includes(normalizedCatalogSearchQuery);
+      });
+  const filteredCatalogEntryKeys = filteredCatalogEntries.map((entry) => getCatalogEntryKey(entry));
+  const selectedFilteredCatalogCount = filteredCatalogEntryKeys.filter((entryKey) =>
+    selectedCatalogEntryKeys.includes(entryKey)
+  ).length;
+  const allFilteredCatalogSelected =
+    filteredCatalogEntryKeys.length > 0 &&
+    selectedFilteredCatalogCount === filteredCatalogEntryKeys.length;
+  const hiddenSelectedCatalogCount = selectedCatalogEntryKeys.filter(
+    (entryKey) => !filteredCatalogEntryKeys.includes(entryKey)
+  ).length;
+  const selectedCatalogModelsForImport = Array.from(
+    new Set(
+      catalogEntries
+        .filter((entry) => selectedCatalogEntryKeys.includes(getCatalogEntryKey(entry)))
+        .map((entry) => entry.model)
+    )
+  );
 
   const filteredConfigSections = useMemo(() => {
     const query = configSearchQuery.trim().toLowerCase();
@@ -834,9 +868,10 @@ export function UpstreamFormDialog({
 
   const resetDialogUiState = () => {
     setConfigSearchQuery("");
+    setCatalogSearchQuery("");
     setActiveSectionId("basic-name");
     setHighlightedSectionId(null);
-    setSelectedCatalogModels([]);
+    setSelectedCatalogEntryKeys([]);
     setUpstreamSnapshot(null);
   };
 
@@ -1151,39 +1186,49 @@ export function UpstreamFormDialog({
 
     const response = await refreshCatalogMutation.mutateAsync(upstream.id);
     setUpstreamSnapshot(response.upstream);
-    setSelectedCatalogModels([]);
+    setSelectedCatalogEntryKeys([]);
   };
 
   const handleImportCatalogModels = async () => {
-    if (!upstream || selectedCatalogModels.length === 0) {
+    if (!upstream || selectedCatalogModelsForImport.length === 0) {
       return;
     }
 
     const importedUpstream = await importCatalogMutation.mutateAsync({
       id: upstream.id,
-      models: selectedCatalogModels,
+      models: selectedCatalogModelsForImport,
     });
     setUpstreamSnapshot(importedUpstream);
     form.setValue("model_rules", toEditableModelRules(importedUpstream), {
       shouldDirty: true,
       shouldValidate: true,
     });
-    setSelectedCatalogModels([]);
+    setSelectedCatalogEntryKeys([]);
   };
 
-  const toggleCatalogSelection = (model: string, checked: boolean) => {
-    setSelectedCatalogModels((current) => {
+  const toggleCatalogSelection = (entryKey: string, checked: boolean) => {
+    setSelectedCatalogEntryKeys((current) => {
       if (checked) {
-        return current.includes(model) ? current : [...current, model];
+        return current.includes(entryKey) ? current : [...current, entryKey];
       }
 
-      return current.filter((item) => item !== model);
+      return current.filter((item) => item !== entryKey);
+    });
+  };
+
+  const toggleFilteredCatalogSelection = () => {
+    setSelectedCatalogEntryKeys((current) => {
+      if (allFilteredCatalogSelected) {
+        return current.filter((entryKey) => !filteredCatalogEntryKeys.includes(entryKey));
+      }
+
+      return Array.from(new Set([...current, ...filteredCatalogEntryKeys]));
     });
   };
 
   const dialogContent = (
     <DialogContent
-      className="max-w-5xl h-[90vh] overflow-hidden p-0"
+      className="max-w-6xl h-[90vh] overflow-hidden p-0"
       onOpenAutoFocus={(event) => {
         event.preventDefault();
         (event.currentTarget as HTMLElement).focus();
@@ -1542,7 +1587,7 @@ export function UpstreamFormDialog({
                         {t("modelBasedRouting")}
                       </h3>
 
-                      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+                      <div className="space-y-4">
                         <section className="space-y-4 rounded-cf-sm border border-divider bg-surface-300/35 p-4">
                           <div className="space-y-3">
                             <div className="space-y-1">
@@ -1561,11 +1606,6 @@ export function UpstreamFormDialog({
                               <div className="flex flex-wrap items-center gap-2">
                                 <Badge variant="outline" className="text-[11px]">
                                   {t(`modelDiscoveryMode_${modelDiscoveryMode}`)}
-                                </Badge>
-                                <Badge variant="outline" className="text-[11px]">
-                                  {modelFallbackEnabled
-                                    ? t("modelCatalogFallbackEnabled")
-                                    : t("modelCatalogFallbackDisabled")}
                                 </Badge>
                                 <Badge variant="outline" className="text-[11px]">
                                   {modelCatalogStatus
@@ -1700,239 +1740,319 @@ export function UpstreamFormDialog({
                               </FormItem>
                             )}
                           />
+                        </section>
 
-                          <div className="space-y-3 border-t border-divider/60 pt-4">
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <p className="text-xs font-medium text-foreground">
-                                  {t("modelCatalogBrowser")}
-                                </p>
-                                <p className="text-[11px] text-muted-foreground">
-                                  {t("modelCatalogBrowserDescription")}
-                                </p>
-                              </div>
+                        <div className="grid gap-4 xl:gap-5 xl:grid-cols-[minmax(0,1.12fr)_minmax(360px,1fr)] xl:items-start">
+                          <section className="min-w-0 space-y-4 rounded-cf-sm border border-divider bg-surface-300/35 p-4">
+                            <div className="space-y-1">
+                              <h4 className="text-sm font-medium text-foreground">
+                                {t("modelRules")}
+                              </h4>
+                              <p className="text-xs text-muted-foreground">
+                                {t("modelRulesDescription")}
+                              </p>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2">
                               <Button
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                onClick={() => {
-                                  void handleImportCatalogModels();
-                                }}
-                                disabled={
-                                  !isEdit ||
-                                  selectedCatalogModels.length === 0 ||
-                                  importCatalogMutation.isPending
+                                className="h-7 gap-1 text-xs"
+                                onClick={() =>
+                                  appendModelRule({ type: "exact", model: "", source: "manual" })
                                 }
                               >
-                                {t("importSelectedModels")}
+                                <Plus className="h-3 w-3" />
+                                {t("addExactRule")}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 gap-1 text-xs"
+                                onClick={() =>
+                                  appendModelRule({ type: "regex", pattern: "", source: "manual" })
+                                }
+                              >
+                                <Plus className="h-3 w-3" />
+                                {t("addRegexRule")}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 gap-1 text-xs"
+                                onClick={() =>
+                                  appendModelRule({
+                                    type: "alias",
+                                    alias: "",
+                                    target_model: "",
+                                    source: "manual",
+                                  })
+                                }
+                              >
+                                <Plus className="h-3 w-3" />
+                                {t("addAliasRule")}
                               </Button>
                             </div>
+
+                            {modelRuleFields.length === 0 && (
+                              <p className="text-xs text-muted-foreground">
+                                {t("modelRulesEmpty")}
+                              </p>
+                            )}
+
+                            <div className="space-y-3 border-t border-divider/60 pt-4">
+                              {modelRuleFields.map((ruleField, index) => {
+                                const source = ruleField.source ?? "manual";
+
+                                return (
+                                  <div
+                                    key={ruleField.id}
+                                    className="space-y-3 rounded-cf-sm bg-surface-200/45 p-3"
+                                  >
+                                    <div className="flex items-center justify-between gap-3">
+                                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                        <Badge variant="outline" className="text-[10px]">
+                                          {t(`modelRuleType_${ruleField.type}`)}
+                                        </Badge>
+                                        <Badge variant="outline" className="text-[10px]">
+                                          {t(`modelRuleSource_${source}`)}
+                                        </Badge>
+                                      </div>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => removeModelRule(index)}
+                                        aria-label={`${tCommon("delete")}: ${t(`modelRuleType_${ruleField.type}`)}`}
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                      </Button>
+                                    </div>
+
+                                    {ruleField.type === "exact" && (
+                                      <FormField
+                                        control={form.control}
+                                        name={`model_rules.${index}.model`}
+                                        render={({ field }) => (
+                                          <FormItem>
+                                            <FormLabel>{t("exactModelName")}</FormLabel>
+                                            <FormControl>
+                                              <Input
+                                                placeholder={t("exactModelNamePlaceholder")}
+                                                {...field}
+                                              />
+                                            </FormControl>
+                                            <FormMessage />
+                                          </FormItem>
+                                        )}
+                                      />
+                                    )}
+
+                                    {ruleField.type === "regex" && (
+                                      <FormField
+                                        control={form.control}
+                                        name={`model_rules.${index}.pattern`}
+                                        render={({ field }) => (
+                                          <FormItem>
+                                            <FormLabel>{t("regexPattern")}</FormLabel>
+                                            <FormControl>
+                                              <Input
+                                                placeholder={t("regexPatternPlaceholder")}
+                                                {...field}
+                                              />
+                                            </FormControl>
+                                            <FormMessage />
+                                          </FormItem>
+                                        )}
+                                      />
+                                    )}
+
+                                    {ruleField.type === "alias" && (
+                                      <div className="grid gap-3 sm:grid-cols-2">
+                                        <FormField
+                                          control={form.control}
+                                          name={`model_rules.${index}.alias`}
+                                          render={({ field }) => (
+                                            <FormItem>
+                                              <FormLabel>{t("sourceModel")}</FormLabel>
+                                              <FormControl>
+                                                <Input
+                                                  placeholder={t("aliasNamePlaceholder")}
+                                                  {...field}
+                                                />
+                                              </FormControl>
+                                              <FormMessage />
+                                            </FormItem>
+                                          )}
+                                        />
+                                        <FormField
+                                          control={form.control}
+                                          name={`model_rules.${index}.target_model`}
+                                          render={({ field }) => (
+                                            <FormItem>
+                                              <FormLabel>{t("targetModel")}</FormLabel>
+                                              <FormControl>
+                                                <Input
+                                                  placeholder={t("targetModelPlaceholder")}
+                                                  {...field}
+                                                />
+                                              </FormControl>
+                                              <FormMessage />
+                                            </FormItem>
+                                          )}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </section>
+
+                          <section className="min-w-0 space-y-4 rounded-cf-sm border border-divider bg-surface-300/35 p-4 xl:sticky xl:top-4">
+                            <div className="space-y-1">
+                              <h4 className="text-sm font-medium text-foreground">
+                                {t("modelCatalogBrowser")}
+                              </h4>
+                              <p className="text-xs text-muted-foreground">
+                                {t("modelCatalogBrowserDescription")}
+                              </p>
+                            </div>
+
+                            <div className="flex flex-col gap-3">
+                              <div className="relative">
+                                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                <Input
+                                  value={catalogSearchQuery}
+                                  onChange={(event) => setCatalogSearchQuery(event.target.value)}
+                                  placeholder={t("searchModelCatalog")}
+                                  aria-label={t("searchModelCatalog")}
+                                  className="border-surface-400/70 bg-surface-200/70 pl-9 transition-colors duration-cf-fast hover:border-surface-400 focus-visible:border-amber-400/45 focus-visible:ring-amber-400/20"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <div
+                                  data-testid="catalog-selection-summary"
+                                  className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs leading-5 text-muted-foreground"
+                                >
+                                  <span className="whitespace-nowrap">
+                                    {t("filteredCatalogModelsSelected", {
+                                      selected: selectedFilteredCatalogCount,
+                                      total: filteredCatalogEntryKeys.length,
+                                    })}
+                                  </span>
+                                  <span className="whitespace-nowrap">
+                                    {t("totalSelectedCatalogModels", {
+                                      selected: selectedCatalogEntryKeys.length,
+                                    })}
+                                  </span>
+                                  {hiddenSelectedCatalogCount > 0 ? (
+                                    <p className="basis-full text-[11px] leading-4 text-muted-foreground/90">
+                                      {t("hiddenSelectedCatalogModels", {
+                                        count: hiddenSelectedCatalogCount,
+                                      })}
+                                    </p>
+                                  ) : null}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="shrink-0"
+                                    disabled={filteredCatalogEntryKeys.length === 0}
+                                    onClick={toggleFilteredCatalogSelection}
+                                  >
+                                    {t(
+                                      allFilteredCatalogSelected
+                                        ? "deselectFilteredCatalogModels"
+                                        : "selectFilteredCatalogModels"
+                                    )}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      void handleImportCatalogModels();
+                                    }}
+                                    disabled={
+                                      !isEdit ||
+                                      selectedCatalogModelsForImport.length === 0 ||
+                                      importCatalogMutation.isPending
+                                    }
+                                  >
+                                    {t("importSelectedModels")}
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+
                             {catalogEntries.length === 0 ? (
                               <p className="text-xs text-muted-foreground">
                                 {t("modelCatalogEmpty")}
                               </p>
                             ) : (
-                              <div className="space-y-2">
-                                {catalogEntries.map((entry) => {
-                                  const checked = selectedCatalogModels.includes(entry.model);
-                                  return (
-                                    <label
-                                      key={`${entry.source}-${entry.model}`}
-                                      className="flex items-start gap-3 rounded-cf-sm bg-surface-200/45 p-2.5"
-                                    >
-                                      <Checkbox
-                                        checked={checked}
-                                        onCheckedChange={(value) =>
-                                          toggleCatalogSelection(entry.model, value === true)
-                                        }
-                                        aria-label={t("catalogModelSelect", { model: entry.model })}
-                                      />
-                                      <div className="min-w-0 flex-1 space-y-1">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                          <span className="font-mono text-xs text-foreground">
-                                            {entry.model}
-                                          </span>
-                                          <Badge variant="outline" className="text-[10px]">
-                                            {entry.source === "native"
-                                              ? t("catalogSourceNative")
-                                              : t("catalogSourceInferred")}
-                                          </Badge>
-                                        </div>
-                                      </div>
-                                    </label>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        </section>
-
-                        <section className="space-y-4 rounded-cf-sm border border-divider bg-surface-300/35 p-4">
-                          <div className="space-y-1">
-                            <h4 className="text-sm font-medium text-foreground">
-                              {t("modelRules")}
-                            </h4>
-                            <p className="text-xs text-muted-foreground">
-                              {t("modelRulesDescription")}
-                            </p>
-                          </div>
-
-                          <div className="flex flex-wrap gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-7 gap-1 text-xs"
-                              onClick={() =>
-                                appendModelRule({ type: "exact", model: "", source: "manual" })
-                              }
-                            >
-                              <Plus className="h-3 w-3" />
-                              {t("addExactRule")}
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-7 gap-1 text-xs"
-                              onClick={() =>
-                                appendModelRule({ type: "regex", pattern: "", source: "manual" })
-                              }
-                            >
-                              <Plus className="h-3 w-3" />
-                              {t("addRegexRule")}
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-7 gap-1 text-xs"
-                              onClick={() =>
-                                appendModelRule({
-                                  type: "alias",
-                                  alias: "",
-                                  target_model: "",
-                                  source: "manual",
-                                })
-                              }
-                            >
-                              <Plus className="h-3 w-3" />
-                              {t("addAliasRule")}
-                            </Button>
-                          </div>
-
-                          {modelRuleFields.length === 0 && (
-                            <p className="text-xs text-muted-foreground">{t("modelRulesEmpty")}</p>
-                          )}
-
-                          <div className="space-y-3 border-t border-divider/60 pt-4">
-                            {modelRuleFields.map((ruleField, index) => {
-                              const source = ruleField.source ?? "manual";
-
-                              return (
+                              <div className="rounded-cf-sm border border-divider/70 bg-surface-200/35 p-2">
                                 <div
-                                  key={ruleField.id}
-                                  className="space-y-3 rounded-cf-sm bg-surface-200/45 p-3"
+                                  aria-label={t("modelCatalogResultsRegion")}
+                                  className="max-h-80 space-y-2 overflow-y-auto pr-1 [scrollbar-gutter:stable]"
                                 >
-                                  <div className="flex items-center justify-between gap-3">
-                                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                      <Badge variant="outline" className="text-[10px]">
-                                        {t(`modelRuleType_${ruleField.type}`)}
-                                      </Badge>
-                                      <Badge variant="outline" className="text-[10px]">
-                                        {t(`modelRuleSource_${source}`)}
-                                      </Badge>
-                                    </div>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => removeModelRule(index)}
-                                      aria-label={`${tCommon("delete")}: ${t(`modelRuleType_${ruleField.type}`)}`}
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                                    </Button>
-                                  </div>
-
-                                  {ruleField.type === "exact" && (
-                                    <FormField
-                                      control={form.control}
-                                      name={`model_rules.${index}.model`}
-                                      render={({ field }) => (
-                                        <FormItem>
-                                          <FormLabel>{t("exactModelName")}</FormLabel>
-                                          <FormControl>
-                                            <Input
-                                              placeholder={t("exactModelNamePlaceholder")}
-                                              {...field}
-                                            />
-                                          </FormControl>
-                                          <FormMessage />
-                                        </FormItem>
-                                      )}
-                                    />
-                                  )}
-
-                                  {ruleField.type === "regex" && (
-                                    <FormField
-                                      control={form.control}
-                                      name={`model_rules.${index}.pattern`}
-                                      render={({ field }) => (
-                                        <FormItem>
-                                          <FormLabel>{t("regexPattern")}</FormLabel>
-                                          <FormControl>
-                                            <Input
-                                              placeholder={t("regexPatternPlaceholder")}
-                                              {...field}
-                                            />
-                                          </FormControl>
-                                          <FormMessage />
-                                        </FormItem>
-                                      )}
-                                    />
-                                  )}
-
-                                  {ruleField.type === "alias" && (
-                                    <div className="grid gap-3 sm:grid-cols-2">
-                                      <FormField
-                                        control={form.control}
-                                        name={`model_rules.${index}.alias`}
-                                        render={({ field }) => (
-                                          <FormItem>
-                                            <FormLabel>{t("sourceModel")}</FormLabel>
-                                            <FormControl>
-                                              <Input
-                                                placeholder={t("aliasNamePlaceholder")}
-                                                {...field}
-                                              />
-                                            </FormControl>
-                                            <FormMessage />
-                                          </FormItem>
-                                        )}
-                                      />
-                                      <FormField
-                                        control={form.control}
-                                        name={`model_rules.${index}.target_model`}
-                                        render={({ field }) => (
-                                          <FormItem>
-                                            <FormLabel>{t("targetModel")}</FormLabel>
-                                            <FormControl>
-                                              <Input
-                                                placeholder={t("targetModelPlaceholder")}
-                                                {...field}
-                                              />
-                                            </FormControl>
-                                            <FormMessage />
-                                          </FormItem>
-                                        )}
-                                      />
-                                    </div>
+                                  {filteredCatalogEntries.length === 0 ? (
+                                    <p className="px-2 py-3 text-xs text-muted-foreground">
+                                      {t("modelCatalogNoSearchResults")}
+                                    </p>
+                                  ) : (
+                                    filteredCatalogEntries.map((entry) => {
+                                      const entryKey = getCatalogEntryKey(entry);
+                                      const checked = selectedCatalogEntryKeys.includes(entryKey);
+                                      const sourceLabel =
+                                        entry.source === "native"
+                                          ? t("catalogSourceNative")
+                                          : t("catalogSourceInferred");
+                                      return (
+                                        <label
+                                          key={`${entry.source}-${entry.model}`}
+                                          className="flex items-start gap-3 rounded-cf-sm bg-surface-300/45 p-2.5"
+                                        >
+                                          <Checkbox
+                                            checked={checked}
+                                            onCheckedChange={(value) =>
+                                              toggleCatalogSelection(entryKey, value === true)
+                                            }
+                                            aria-label={t("catalogModelCheckboxLabel", {
+                                              model: entry.model,
+                                              source: sourceLabel,
+                                            })}
+                                          />
+                                          <div className="min-w-0 flex-1 space-y-1">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                              <span className="font-mono text-xs text-foreground">
+                                                {entry.model}
+                                              </span>
+                                              <Badge variant="outline" className="text-[10px]">
+                                                {sourceLabel}
+                                              </Badge>
+                                            </div>
+                                          </div>
+                                        </label>
+                                      );
+                                    })
                                   )}
                                 </div>
-                              );
-                            })}
-                          </div>
-                        </section>
+                              </div>
+                            )}
+
+                            {!isEdit && (
+                              <p className="text-xs text-muted-foreground">
+                                {t("saveUpstreamFirstForCatalogActions")}
+                              </p>
+                            )}
+                          </section>
+                        </div>
                       </div>
                     </div>
 
