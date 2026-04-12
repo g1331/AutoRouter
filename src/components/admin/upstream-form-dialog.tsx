@@ -1742,7 +1742,7 @@ export function UpstreamFormDialog({
                           />
                         </section>
 
-                        <div className="grid gap-4 xl:gap-5 xl:grid-cols-[minmax(0,1.12fr)_minmax(360px,1fr)] xl:items-start">
+                        <div className="flex flex-col gap-4 xl:gap-5">
                           <section className="min-w-0 space-y-4 rounded-cf-sm border border-divider bg-surface-300/35 p-4">
                             <div className="space-y-1">
                               <h4 className="text-sm font-medium text-foreground">
@@ -1912,7 +1912,7 @@ export function UpstreamFormDialog({
                             </div>
                           </section>
 
-                          <section className="min-w-0 space-y-4 rounded-cf-sm border border-divider bg-surface-300/35 p-4 xl:sticky xl:top-4">
+                          <section className="min-w-0 space-y-4 rounded-cf-sm border border-divider bg-surface-300/35 p-4">
                             <div className="space-y-1">
                               <h4 className="text-sm font-medium text-foreground">
                                 {t("modelCatalogBrowser")}

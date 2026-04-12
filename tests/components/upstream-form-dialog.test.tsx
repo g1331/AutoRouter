@@ -575,7 +575,7 @@ describe("UpstreamFormDialog", () => {
       expect(screen.getByDisplayValue("chat-prod")).toBeInTheDocument();
     });
 
-    it("filters catalog entries and toggles visible selections in the bounded catalog panel", () => {
+    it("stacks the catalog browser below model rules and keeps bounded catalog selection behavior", () => {
       const searchableCatalogUpstream: Upstream = {
         ...mockUpstream,
         model_discovery: {
@@ -612,8 +612,34 @@ describe("UpstreamFormDialog", () => {
       );
       expect(screen.getByText("总计 0 项已选")).toBeInTheDocument();
 
+      const modelRulesSection = screen.getByText("modelRules").closest("section");
       const catalogBrowserSection = screen.getByText("modelCatalogBrowser").closest("section");
-      expect(catalogBrowserSection).toHaveClass("xl:sticky");
+
+      expect(modelRulesSection).toBeInTheDocument();
+      expect(catalogBrowserSection).toBeInTheDocument();
+      expect(modelRulesSection?.parentElement).toBe(catalogBrowserSection?.parentElement);
+      expect(modelRulesSection?.parentElement).toHaveClass("flex", "flex-col");
+      expect(modelRulesSection?.parentElement).not.toHaveClass(
+        "xl:grid",
+        "xl:grid-cols-[minmax(0,1.12fr)_minmax(360px,1fr)]",
+        "xl:items-start",
+        "xl:flex-row"
+      );
+      expect(modelRulesSection?.compareDocumentPosition(catalogBrowserSection as Node)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING
+      );
+      expect(catalogBrowserSection).not.toHaveClass("xl:sticky");
+
+      const stickyLayoutNode = [
+        catalogBrowserSection,
+        ...Array.from(catalogBrowserSection?.querySelectorAll("*") ?? []),
+      ].find((element) => {
+        const className = element?.getAttribute("class") ?? "";
+        return ["sticky", "xl:sticky", "top-4", "xl:top-4"].some((token) =>
+          className.split(/\s+/).includes(token)
+        );
+      });
+      expect(stickyLayoutNode).toBeUndefined();
 
       const catalogResultsRegion = screen.getByLabelText("模型目录结果列表");
       expect(catalogResultsRegion).toHaveClass("max-h-80", "overflow-y-auto");
