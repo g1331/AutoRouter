@@ -128,6 +128,76 @@ describe("Admin Upstream Catalog API", () => {
       expect(data.upstream.model_catalog).toEqual([{ model: "gpt-4.1", source: "native" }]);
       expect(mockRefreshStoredUpstreamModelCatalog).toHaveBeenCalledWith("up-1");
     });
+
+    it("should expose inferred legacy discovery config in the refresh response", async () => {
+      mockRefreshStoredUpstreamModelCatalog.mockResolvedValueOnce({
+        upstream: {
+          id: "up-legacy",
+          name: "legacy-anyrouter",
+          baseUrl: "https://api.anyrouter.top",
+          officialWebsiteUrl: null,
+          apiKeyMasked: "sk-***-key",
+          isDefault: false,
+          timeout: 60,
+          isActive: true,
+          currentConcurrency: 0,
+          maxConcurrency: null,
+          config: null,
+          weight: 1,
+          priority: 0,
+          routeCapabilities: ["anthropic_messages"],
+          allowedModels: null,
+          modelRedirects: null,
+          modelDiscovery: {
+            mode: "anthropic_native",
+            customEndpoint: null,
+            enableLiteLlmFallback: true,
+          },
+          modelCatalog: [{ model: "claude-3-7-sonnet", source: "native" }],
+          modelCatalogUpdatedAt: new Date("2026-04-11T08:00:00.000Z"),
+          modelCatalogLastStatus: "success",
+          modelCatalogLastError: null,
+          modelRules: null,
+          affinityMigration: null,
+          spendingRules: null,
+          lastUsedAt: null,
+          createdAt: new Date("2026-04-10T08:00:00.000Z"),
+          updatedAt: new Date("2026-04-11T08:00:00.000Z"),
+        },
+        resolvedMode: "anthropic_native",
+        fallbackUsed: true,
+        modelCatalog: [{ model: "claude-3-7-sonnet", source: "native" }],
+        modelCatalogUpdatedAt: new Date("2026-04-11T08:00:00.000Z"),
+        modelCatalogLastStatus: "success",
+        modelCatalogLastError: null,
+      });
+
+      const request = new NextRequest(
+        "http://localhost:3000/api/admin/upstreams/up-legacy/catalog/refresh",
+        {
+          method: "POST",
+          headers: {
+            authorization: "Bearer test-admin-token",
+          },
+        }
+      );
+
+      const response = await POST(request, { params: Promise.resolve({ id: "up-legacy" }) });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.refresh).toEqual({
+        resolved_mode: "anthropic_native",
+        fallback_used: true,
+        status: "success",
+        error: null,
+      });
+      expect(data.upstream.model_discovery).toEqual({
+        mode: "anthropic_native",
+        custom_endpoint: null,
+        enable_lite_llm_fallback: true,
+      });
+    });
   });
 
   describe("POST /api/admin/upstreams/[id]/catalog/import", () => {

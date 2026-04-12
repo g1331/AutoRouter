@@ -948,6 +948,40 @@ describe("upstream-crud", () => {
       expect(result?.weight).toBe(3);
     });
 
+    it("should infer legacy model discovery for old upstream records", async () => {
+      const { getUpstreamById } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+      const { decrypt } = await import("@/lib/utils/encryption");
+
+      vi.mocked(decrypt).mockImplementation((value: string) => value.replace("encrypted:", ""));
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue({
+        id: "legacy-id",
+        name: "legacy-anthropic",
+        providerType: "anthropic",
+        baseUrl: "https://api.anyrouter.top",
+        apiKeyEncrypted: "encrypted:sk-test-key",
+        isDefault: false,
+        timeout: 60,
+        isActive: true,
+        config: null,
+        priority: 1,
+        weight: 1,
+        routeCapabilities: ["anthropic_messages"],
+        modelDiscovery: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as unknown as PartialUpstream);
+
+      const result = await getUpstreamById("legacy-id");
+
+      expect(result?.modelDiscovery).toEqual({
+        mode: "anthropic_native",
+        customEndpoint: null,
+        enableLiteLlmFallback: true,
+      });
+    });
+
     it("should return null if upstream not found", async () => {
       const { getUpstreamById } = await import("@/lib/services/upstream-crud");
       const { db } = await import("@/lib/db");
@@ -1029,7 +1063,89 @@ describe("upstream-crud", () => {
           modelCatalogLastError: null,
         })
       );
+      expect(setSpy.mock.calls[0]?.[0]?.modelDiscovery).toBeUndefined();
       expect(result.upstream.modelCatalog).toEqual([{ model: "gpt-4.1", source: "native" }]);
+      expect(result.modelCatalogLastStatus).toBe("success");
+    });
+
+    it("should infer and persist a legacy discovery config when refreshing old upstreams", async () => {
+      const { refreshStoredUpstreamModelCatalog } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      const existingUpstream = {
+        id: "test-id",
+        name: "legacy-upstream",
+        baseUrl: "https://api.anthropic.com",
+        apiKeyEncrypted: "encrypted:sk-test-key",
+        routeCapabilities: ["anthropic_messages"],
+        modelDiscovery: null,
+        isDefault: false,
+        timeout: 60,
+        isActive: true,
+        config: null,
+        priority: 0,
+        weight: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const inferredDiscovery = {
+        mode: "anthropic_native" as const,
+        customEndpoint: null,
+        enableLiteLlmFallback: true,
+      };
+
+      vi.mocked(db.query.upstreams.findFirst)
+        .mockResolvedValueOnce(existingUpstream as never)
+        .mockResolvedValueOnce(existingUpstream as never);
+
+      const refreshedAt = new Date("2026-04-11T08:00:00.000Z");
+      mockRefreshUpstreamModelCatalog.mockResolvedValueOnce({
+        upstreamId: "test-id",
+        upstreamName: "legacy-upstream",
+        resolvedMode: "anthropic_native",
+        fallbackUsed: false,
+        modelCatalog: [{ model: "claude-3-7-sonnet", source: "native" }],
+        modelCatalogUpdatedAt: refreshedAt,
+        modelCatalogLastStatus: "success",
+        modelCatalogLastError: null,
+      });
+
+      const setSpy = vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([
+            {
+              ...existingUpstream,
+              modelDiscovery: inferredDiscovery,
+              modelCatalog: [{ model: "claude-3-7-sonnet", source: "native" }],
+              modelCatalogUpdatedAt: refreshedAt,
+              modelCatalogLastStatus: "success",
+              modelCatalogLastError: null,
+            },
+          ]),
+        }),
+      });
+
+      vi.mocked(db.update).mockReturnValue({ set: setSpy } as unknown as MockUpdateChain);
+
+      const result = await refreshStoredUpstreamModelCatalog("test-id");
+
+      expect(mockRefreshUpstreamModelCatalog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "test-id",
+          modelDiscovery: inferredDiscovery,
+          routeCapabilities: ["anthropic_messages"],
+        })
+      );
+      expect(setSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          modelDiscovery: inferredDiscovery,
+          modelCatalog: [{ model: "claude-3-7-sonnet", source: "native" }],
+          modelCatalogLastStatus: "success",
+          modelCatalogLastError: null,
+        })
+      );
+      expect(result.upstream.modelDiscovery).toEqual(inferredDiscovery);
       expect(result.modelCatalogLastStatus).toBe("success");
     });
 

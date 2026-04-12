@@ -5,6 +5,7 @@ import { createLogger } from "../utils/logger";
 import { CircuitBreakerStateEnum } from "./circuit-breaker";
 import { getConnectionCountsSnapshot } from "./load-balancer";
 import {
+  getPrimaryProviderByCapabilities,
   normalizeRouteCapabilities,
   resolveRouteCapabilities,
   type RouteCapability,
@@ -250,7 +251,10 @@ function mapUpstreamRecordToResponse(
     routeCapabilities: resolveRouteCapabilities(upstream.routeCapabilities),
     allowedModels: upstream.allowedModels,
     modelRedirects: upstream.modelRedirects,
-    modelDiscovery: normalizeModelDiscoveryConfig(upstream.modelDiscovery),
+    modelDiscovery: resolveLegacyCompatibleModelDiscovery(
+      upstream.modelDiscovery,
+      upstream.routeCapabilities
+    ),
     modelCatalog: parseUpstreamModelCatalog(upstream.modelCatalog),
     modelCatalogUpdatedAt: upstream.modelCatalogUpdatedAt ?? null,
     modelCatalogLastStatus: upstream.modelCatalogLastStatus ?? null,
@@ -285,8 +289,42 @@ function buildDiscoveryTarget(upstream: UpstreamRecord): {
     baseUrl: upstream.baseUrl,
     apiKey: decrypt(upstream.apiKeyEncrypted),
     routeCapabilities: resolveRouteCapabilities(upstream.routeCapabilities),
-    modelDiscovery: normalizeModelDiscoveryConfig(upstream.modelDiscovery),
+    modelDiscovery: resolveLegacyCompatibleModelDiscovery(
+      upstream.modelDiscovery,
+      upstream.routeCapabilities
+    ),
   };
+}
+
+function buildLegacyDiscoveryFallback(
+  routeCapabilities: readonly string[] | null | undefined
+): UpstreamModelDiscoveryConfig {
+  const provider = getPrimaryProviderByCapabilities(routeCapabilities);
+
+  return {
+    mode:
+      provider === "anthropic"
+        ? "anthropic_native"
+        : provider === "google"
+          ? "gemini_native"
+          : "openai_compatible",
+    customEndpoint: null,
+    enableLiteLlmFallback: true,
+  };
+}
+
+function resolveLegacyCompatibleModelDiscovery(
+  modelDiscovery:
+    | Partial<UpstreamModelDiscoveryConfig>
+    | UpstreamModelDiscoveryConfig
+    | null
+    | undefined,
+  routeCapabilities: readonly string[] | null | undefined
+): UpstreamModelDiscoveryConfig {
+  const normalizedConfig = normalizeModelDiscoveryConfig(modelDiscovery);
+
+  // Legacy upstream rows may still have a null discovery config after upgrade.
+  return normalizedConfig ?? buildLegacyDiscoveryFallback(routeCapabilities);
 }
 
 function mergeImportedCatalogRules(
@@ -710,8 +748,19 @@ export async function refreshStoredUpstreamModelCatalog(
     throw new UpstreamNotFoundError(`Upstream not found: ${upstreamId}`);
   }
 
-  const refreshResult = await refreshUpstreamModelCatalogPatch(buildDiscoveryTarget(upstream));
+  const resolvedModelDiscovery = resolveLegacyCompatibleModelDiscovery(
+    upstream.modelDiscovery,
+    upstream.routeCapabilities
+  );
+  const refreshResult = await refreshUpstreamModelCatalogPatch({
+    ...buildDiscoveryTarget(upstream),
+    modelDiscovery: resolvedModelDiscovery,
+  });
   const updated = await updateUpstream(upstreamId, {
+    modelDiscovery:
+      normalizeModelDiscoveryConfig(upstream.modelDiscovery) === null
+        ? resolvedModelDiscovery
+        : undefined,
     modelCatalog: refreshResult.modelCatalog,
     modelCatalogUpdatedAt: refreshResult.modelCatalogUpdatedAt,
     modelCatalogLastStatus: refreshResult.modelCatalogLastStatus,
