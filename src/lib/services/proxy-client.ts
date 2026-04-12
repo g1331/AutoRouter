@@ -179,6 +179,10 @@ const INFRASTRUCTURE_REQUEST_HEADERS = new Set([
 
 const INFRASTRUCTURE_REQUEST_PREFIXES = ["x-envoy-", "x-vercel-"];
 
+// AutoRouter may rebuild outbound request bodies before forwarding. Let the runtime
+// recompute payload metadata instead of forwarding stale client-supplied values.
+const RUNTIME_MANAGED_REQUEST_HEADERS = new Set(["content-length"]);
+
 function isInfrastructureRequestHeader(headerName: string): boolean {
   const lower = headerName.toLowerCase();
   return (
@@ -199,7 +203,11 @@ export function filterHeaders(headers: Headers): {
   const dropped: Array<{ header: string; value: string }> = [];
   headers.forEach((value, key) => {
     const lower = key.toLowerCase();
-    if (!HOP_BY_HOP_HEADERS.has(lower) && !isInfrastructureRequestHeader(lower)) {
+    if (
+      !HOP_BY_HOP_HEADERS.has(lower) &&
+      !isInfrastructureRequestHeader(lower) &&
+      !RUNTIME_MANAGED_REQUEST_HEADERS.has(lower)
+    ) {
       filtered[key] = value;
     } else {
       dropped.push({ header: lower, value: sanitizeHeaderValueForLogging(lower, value) });

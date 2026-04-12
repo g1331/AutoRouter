@@ -49,6 +49,7 @@ describe("proxy-client", () => {
     it("should remove hop-by-hop and infrastructure headers", () => {
       const headers = new Headers({
         "Content-Type": "application/json",
+        "Content-Length": "42",
         Connection: "keep-alive",
         "Keep-Alive": "timeout=5",
         "Transfer-Encoding": "chunked",
@@ -74,6 +75,7 @@ describe("proxy-client", () => {
       const { filtered, dropped } = filterHeaders(headers);
 
       expect(filtered["content-type"]).toBe("application/json");
+      expect(filtered["content-length"]).toBeUndefined();
       expect(filtered["connection"]).toBeUndefined();
       expect(filtered["keep-alive"]).toBeUndefined();
       expect(filtered["transfer-encoding"]).toBeUndefined();
@@ -95,7 +97,10 @@ describe("proxy-client", () => {
       expect(filtered["via"]).toBeUndefined();
       expect(filtered["x-envoy-external-address"]).toBeUndefined();
       expect(dropped).toEqual(
-        expect.arrayContaining([expect.objectContaining({ header: "cf-ew-via", value: "15" })])
+        expect.arrayContaining([
+          expect.objectContaining({ header: "content-length", value: "42" }),
+          expect.objectContaining({ header: "cf-ew-via", value: "15" }),
+        ])
       );
     });
 
