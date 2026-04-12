@@ -177,7 +177,7 @@ describe("upstream-connection-tester", () => {
       expect(mockFetch).toHaveBeenCalledWith("https://api.openai.com/v1/models", expect.anything());
     });
 
-    it("should normalize base URL with path to origin only", async () => {
+    it("should preserve a configured API path prefix", async () => {
       mockFetch.mockResolvedValueOnce({
         status: 200,
         text: vi.fn().mockResolvedValue(""),
@@ -185,13 +185,15 @@ describe("upstream-connection-tester", () => {
 
       const result = await testUpstreamConnection({
         routeCapabilities: ["openai_chat_compatible"],
-        baseUrl: "https://api.openai.com/v2/some/path",
+        baseUrl: "https://www.right.codes/codex/v1",
         apiKey: "sk-test",
       });
 
       expect(result.success).toBe(true);
-      // Should use origin only, not append to path
-      expect(mockFetch).toHaveBeenCalledWith("https://api.openai.com/v1/models", expect.anything());
+      expect(mockFetch).toHaveBeenCalledWith(
+        "https://www.right.codes/codex/v1/models",
+        expect.anything()
+      );
     });
   });
 

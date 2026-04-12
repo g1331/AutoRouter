@@ -21,7 +21,7 @@ describe("upstream-model-discovery", () => {
     vi.unstubAllGlobals();
   });
 
-  it("uses the OpenAI-compatible /v1/models endpoint with bearer auth", async () => {
+  it("preserves a configured API path prefix for OpenAI-compatible discovery", async () => {
     const { discoverUpstreamModels } = await import("@/lib/services/upstream-model-discovery");
 
     fetchMock.mockResolvedValueOnce({
@@ -34,7 +34,7 @@ describe("upstream-model-discovery", () => {
     const catalog = await discoverUpstreamModels({
       id: "up-openai",
       name: "OpenAI",
-      baseUrl: "https://api.openai.com/custom/path",
+      baseUrl: "https://www.right.codes/codex/v1",
       apiKey: "sk-test",
       routeCapabilities: ["openai_chat_compatible"],
       modelDiscovery: {
@@ -49,7 +49,7 @@ describe("upstream-model-discovery", () => {
       { model: "gpt-4.1-mini", source: "native" },
     ]);
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.openai.com/v1/models",
+      "https://www.right.codes/codex/v1/models",
       expect.objectContaining({
         method: "GET",
         headers: expect.objectContaining({
@@ -58,6 +58,32 @@ describe("upstream-model-discovery", () => {
         }),
       })
     );
+  });
+
+  it("keeps the default OpenAI-compatible models path for a root base URL", async () => {
+    const { discoverUpstreamModels } = await import("@/lib/services/upstream-model-discovery");
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        data: [{ id: "gpt-4.1" }],
+      }),
+    });
+
+    await discoverUpstreamModels({
+      id: "up-openai-root",
+      name: "OpenAI Root",
+      baseUrl: "https://api.openai.com",
+      apiKey: "sk-test",
+      routeCapabilities: ["openai_chat_compatible"],
+      modelDiscovery: {
+        mode: "openai_compatible",
+        customEndpoint: null,
+        enableLiteLlmFallback: false,
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("https://api.openai.com/v1/models", expect.any(Object));
   });
 
   it("uses Anthropic headers for anthropic-native discovery", async () => {
@@ -125,6 +151,39 @@ describe("upstream-model-discovery", () => {
       "https://generativelanguage.googleapis.com/v1beta/models?key=gemini-key",
       expect.objectContaining({
         headers: expect.objectContaining({ Accept: "application/json" }),
+      })
+    );
+  });
+
+  it("resolves relative custom discovery endpoints from the configured API root", async () => {
+    const { discoverUpstreamModels } = await import("@/lib/services/upstream-model-discovery");
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        data: [{ id: "gpt-4.1" }],
+      }),
+    });
+
+    await discoverUpstreamModels({
+      id: "up-custom",
+      name: "Custom Discovery",
+      baseUrl: "https://www.right.codes/codex/v1",
+      apiKey: "sk-test",
+      routeCapabilities: ["openai_chat_compatible"],
+      modelDiscovery: {
+        mode: "custom",
+        customEndpoint: "catalog/models",
+        enableLiteLlmFallback: false,
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://www.right.codes/codex/v1/catalog/models",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer sk-test",
+        }),
       })
     );
   });

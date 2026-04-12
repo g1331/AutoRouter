@@ -52,8 +52,31 @@ interface DiscoveryExecutionResult {
   fallbackUsed: boolean;
 }
 
-function normalizeBaseUrl(baseUrl: string): string {
-  return new URL(baseUrl).origin;
+function normalizeBaseUrl(baseUrl: string): URL {
+  const url = new URL(baseUrl);
+  url.search = "";
+  url.hash = "";
+  url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+  return url;
+}
+
+function buildRelativeDiscoveryBase(baseUrl: string): string {
+  const url = normalizeBaseUrl(baseUrl);
+  url.pathname = url.pathname === "/" ? "/" : `${url.pathname}/`;
+  return url.toString();
+}
+
+function buildDefaultDiscoveryUrl(baseUrl: string, defaultPath: string): string {
+  const url = normalizeBaseUrl(baseUrl);
+
+  // A non-root pathname means the upstream already points at an API root such as
+  // /codex/v1 or /v1beta/openai, so discovery must append the relative models resource.
+  if (url.pathname === "/") {
+    url.pathname = defaultPath;
+    return url.toString();
+  }
+
+  return new URL("models", buildRelativeDiscoveryBase(baseUrl)).toString();
 }
 
 function resolveDiscoveryProvider(
@@ -67,14 +90,13 @@ function resolveCustomDiscoveryUrl(baseUrl: string, customEndpoint: string | nul
     throw new Error("Custom discovery mode requires a custom endpoint");
   }
 
-  return new URL(customEndpoint, normalizeBaseUrl(baseUrl)).toString();
+  return new URL(customEndpoint, buildRelativeDiscoveryBase(baseUrl)).toString();
 }
 
 function buildDiscoveryRequest(
   target: Pick<UpstreamModelDiscoveryTarget, "baseUrl" | "apiKey" | "routeCapabilities">,
   config: UpstreamModelDiscoveryConfig
 ): DiscoveryRequest {
-  const normalizedBaseUrl = normalizeBaseUrl(target.baseUrl);
   const provider = resolveDiscoveryProvider(target.routeCapabilities);
 
   if (config.mode === "litellm") {
@@ -93,7 +115,7 @@ function buildDiscoveryRequest(
   if (config.mode === "gemini_native") {
     const baseUrl = config.customEndpoint
       ? resolveCustomDiscoveryUrl(target.baseUrl, config.customEndpoint)
-      : new URL("/v1beta/models", normalizedBaseUrl).toString();
+      : buildDefaultDiscoveryUrl(target.baseUrl, "/v1beta/models");
     const url = new URL(baseUrl);
     url.searchParams.set("key", target.apiKey);
     return {
@@ -121,7 +143,7 @@ function buildDiscoveryRequest(
   const url =
     config.mode === "custom"
       ? resolveCustomDiscoveryUrl(target.baseUrl, config.customEndpoint)
-      : new URL(defaultPathByMode[config.mode], normalizedBaseUrl).toString();
+      : buildDefaultDiscoveryUrl(target.baseUrl, defaultPathByMode[config.mode]);
 
   const headers: HeadersInit = {
     Accept: "application/json",

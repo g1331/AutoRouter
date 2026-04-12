@@ -198,11 +198,23 @@ export function formatTestUpstreamResponse(result: TestUpstreamResult) {
   };
 }
 
+function buildModelListTestUrl(baseUrl: string): string {
+  const url = new URL(baseUrl);
+  url.search = "";
+  url.hash = "";
+  url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+
+  // Saved upstreams may already point at an API root such as /codex/v1, while manual
+  // test inputs can still use a site root like https://api.openai.com.
+  url.pathname = url.pathname === "/" ? "/v1/models" : `${url.pathname}/models`;
+  return url.toString();
+}
+
 /**
  * Test connection to an upstream provider.
  *
  * Makes a lightweight API call to verify connectivity and authentication by calling
- * the provider's `/v1/models` endpoint. This function does NOT throw errors - all
+ * the provider's model-list endpoint. This function does NOT throw errors - all
  * failure scenarios are captured in the returned TestUpstreamResult object.
  *
  * **Supported Providers:**
@@ -211,7 +223,7 @@ export function formatTestUpstreamResponse(result: TestUpstreamResult) {
  *
  * **Test Process:**
  * 1. Validates provider type and base URL format
- * 2. Constructs test endpoint: `{baseUrl}/v1/models`
+ * 2. Constructs the model-list endpoint from the configured API root
  * 3. Makes GET request with provider-specific authentication headers
  * 4. Measures response latency and validates status code
  * 5. Returns structured result with success status and diagnostic information
@@ -377,9 +389,7 @@ export async function testUpstreamConnection(
     }
   }
 
-  // Normalize base URL to origin only (prevent path doubling)
-  const normalizedBaseUrl = parsedUrl.origin;
-  const testUrl = `${normalizedBaseUrl}/v1/models`;
+  const testUrl = buildModelListTestUrl(baseUrl);
 
   const headers: Record<string, string> = {};
 
