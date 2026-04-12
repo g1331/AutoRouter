@@ -1651,6 +1651,13 @@ describe("proxy route upstream selection", () => {
       undefined
     );
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(googleUpstream);
+    expect(forwardRequest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      "v1beta/models/gemini-2.5-flash:generateContent",
+      expect.any(String),
+      expect.any(Array)
+    );
     expect(logRequestStart).toHaveBeenCalledWith(
       expect.objectContaining({
         model: "gemini-2.5-flash",
@@ -1936,6 +1943,201 @@ describe("proxy route upstream selection", () => {
           }),
           expect.objectContaining({
             id: "up-google-blocked",
+            reason: "model_not_allowed",
+          }),
+        ]),
+      })
+    );
+  });
+
+  it("should rewrite OpenAI-compatible request bodies when an alias rule resolves to a target model", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+
+    const openaiUpstream = {
+      id: "up-openai-alias",
+      name: "openai-alias",
+      providerType: "openai",
+      baseUrl: "https://api.openai.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 0,
+      weight: 1,
+      routeCapabilities: ["openai_chat_compatible"],
+      modelRules: [
+        {
+          type: "alias",
+          alias: "chat-prod",
+          targetModel: "gpt-4.1",
+          source: "manual",
+        },
+      ],
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-openai-alias" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([openaiUpstream]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstreamId: "up-openai-alias",
+      providerType: "openai",
+      routeSource: "model_prefix",
+      priority: 1,
+    });
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: openaiUpstream,
+      providerType: "openai",
+      selectedTier: 0,
+      totalCandidates: 1,
+      circuitBreakerFiltered: 0,
+      quotaFiltered: 0,
+      concurrencyFiltered: 0,
+    });
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: null,
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "chat-prod",
+        messages: [{ role: "user", content: "hello" }],
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["chat", "completions"] }),
+    });
+
+    expect(response.status).toBe(200);
+    const forwardedRequest = vi.mocked(forwardRequest).mock.calls.at(-1)?.[0];
+    expect(forwardedRequest).toBeInstanceOf(Request);
+    await expect(forwardedRequest?.clone().json()).resolves.toEqual(
+      expect.objectContaining({
+        model: "gpt-4.1",
+      })
+    );
+  });
+
+  it("should keep regex-matched upstreams in the proxy mainline candidate set", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-regex-allowed" },
+      { upstreamId: "up-regex-blocked" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-regex-allowed",
+        name: "regex-allowed",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["openai_chat_compatible"],
+        modelRules: [{ type: "regex", pattern: "^gpt-4\\.1.*$", source: "manual" }],
+      },
+      {
+        id: "up-regex-blocked",
+        name: "regex-blocked",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["openai_chat_compatible"],
+        modelRules: [{ type: "regex", pattern: "^gpt-3\\.5.*$", source: "manual" }],
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstreamId: "up-regex-allowed",
+      providerType: "openai",
+      routeSource: "model_prefix",
+      priority: 1,
+    });
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: {
+        id: "up-regex-allowed",
+        name: "regex-allowed",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["openai_chat_compatible"],
+        modelRules: [{ type: "regex", pattern: "^gpt-4\\.1.*$", source: "manual" }],
+      },
+      providerType: "openai",
+      selectedTier: 0,
+      totalCandidates: 1,
+      circuitBreakerFiltered: 0,
+      quotaFiltered: 0,
+      concurrencyFiltered: 0,
+    });
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: null,
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4.1-mini",
+        messages: [{ role: "user", content: "hello" }],
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["chat", "completions"] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(selectFromProviderType).toHaveBeenCalledWith(["up-regex-allowed"], undefined, undefined);
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload?.routingDecision).toEqual(
+      expect.objectContaining({
+        model_rule_filtered_count: 1,
+        final_candidate_count: 1,
+        excluded: expect.arrayContaining([
+          expect.objectContaining({
+            id: "up-regex-blocked",
             reason: "model_not_allowed",
           }),
         ]),

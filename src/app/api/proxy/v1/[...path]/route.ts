@@ -423,6 +423,88 @@ function resolvePathRoutingModelForUpstream(
   return { resolvedModel, redirectApplied: modelRedirectApplied };
 }
 
+function rewriteOutboundPathModel(
+  path: string,
+  originalModel: string | null,
+  resolvedModel: string | null
+): string {
+  if (!originalModel || !resolvedModel || originalModel === resolvedModel) {
+    return path;
+  }
+
+  const pathModel = extractGeminiModelFromPath(path);
+  if (!pathModel || pathModel !== originalModel) {
+    return path;
+  }
+
+  return path.replace(pathModel, resolvedModel);
+}
+
+function rewriteOutboundBodyModel(
+  requestBody: Uint8Array,
+  originalModel: string | null,
+  resolvedModel: string | null
+): Uint8Array {
+  if (
+    requestBody.byteLength === 0 ||
+    !originalModel ||
+    !resolvedModel ||
+    originalModel === resolvedModel
+  ) {
+    return requestBody;
+  }
+
+  try {
+    const parsedBody = JSON.parse(new TextDecoder().decode(requestBody)) as {
+      model?: unknown;
+      [key: string]: unknown;
+    };
+
+    if (
+      parsedBody == null ||
+      typeof parsedBody !== "object" ||
+      typeof parsedBody.model !== "string" ||
+      parsedBody.model !== originalModel
+    ) {
+      return requestBody;
+    }
+
+    return new TextEncoder().encode(
+      JSON.stringify({
+        ...parsedBody,
+        model: resolvedModel,
+      })
+    );
+  } catch {
+    return requestBody;
+  }
+}
+
+function toRequestBodyInit(requestBody: Uint8Array): ArrayBuffer | undefined {
+  if (requestBody.byteLength === 0) {
+    return undefined;
+  }
+
+  return new Uint8Array(requestBody).buffer;
+}
+
+function buildResolvedOutboundRequest(
+  path: string,
+  requestBody: Uint8Array,
+  originalModel: string | null,
+  upstream: Upstream
+): {
+  resolvedPath: string;
+  resolvedBody: Uint8Array;
+} {
+  const { resolvedModel } = resolvePathRoutingModelForUpstream(originalModel, upstream);
+
+  return {
+    resolvedPath: rewriteOutboundPathModel(path, originalModel, resolvedModel),
+    resolvedBody: rewriteOutboundBodyModel(requestBody, originalModel, resolvedModel),
+  };
+}
+
 function buildCapabilityMismatchExcludedCandidates(
   activeUpstreams: Upstream[],
   capabilityCandidates: Upstream[],
@@ -1112,6 +1194,7 @@ async function forwardWithFailover(
   request: NextRequest,
   routeCapability: RouteCapability,
   path: string,
+  originalModel: string | null,
   requestId: string,
   candidateUpstreamIds: string[],
   affinityContext: {
@@ -1163,7 +1246,7 @@ async function forwardWithFailover(
 
   // Clone the request body once for potential retries
   const requestClone = request.clone();
-  const requestBodyBuffer = await requestClone.arrayBuffer();
+  const requestBodyBuffer = new Uint8Array(await requestClone.arrayBuffer());
 
   // Loop until we succeed, exhaust all upstreams, or hit max attempts
   let attemptCount = 0;
@@ -1263,11 +1346,17 @@ async function forwardWithFailover(
     let attemptUpstreamBaseUrl = selectedUpstream.baseUrl;
 
     try {
+      const outboundRequest = buildResolvedOutboundRequest(
+        path,
+        requestBodyBuffer,
+        originalModel,
+        selectedUpstream
+      );
       // Create a new request with the buffered body
       const proxyRequest = new Request(request.url, {
         method: request.method,
         headers: request.headers,
-        body: requestBodyBuffer.byteLength > 0 ? requestBodyBuffer : undefined,
+        body: toRequestBodyInit(outboundRequest.resolvedBody),
       });
 
       const upstreamForProxy = prepareUpstreamForProxy(selectedUpstream);
@@ -1276,7 +1365,7 @@ async function forwardWithFailover(
       const result = await forwardRequest(
         proxyRequest,
         upstreamForProxy,
-        path,
+        outboundRequest.resolvedPath,
         requestId,
         compensationHeaders
       );
@@ -2326,6 +2415,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         request,
         matchedRouteCapability,
         path,
+        model,
         requestId,
         candidateUpstreamIds,
         affinityContext,
@@ -2381,6 +2471,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           request,
           matchedRouteCapability,
           path,
+          model,
           requestId,
           candidateUpstreamIds,
           affinityContext,
