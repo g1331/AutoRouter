@@ -73,6 +73,7 @@ export const upstreams = sqliteTable(
       UpstreamModelCatalogEntry[] | null
     >(),
     modelCatalogUpdatedAt: integer("model_catalog_updated_at", { mode: "timestamp_ms" }),
+    modelCatalogLastFailedAt: integer("model_catalog_last_failed_at", { mode: "timestamp_ms" }),
     modelCatalogLastStatus: text(
       "model_catalog_last_status"
     ).$type<UpstreamModelCatalogFetchStatus | null>(),
