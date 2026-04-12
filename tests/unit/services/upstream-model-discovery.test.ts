@@ -283,6 +283,7 @@ describe("upstream-model-discovery", () => {
         upstreamName: "No discovery",
         modelCatalog: null,
         modelCatalogUpdatedAt: null,
+        modelCatalogLastFailedAt: expect.any(Date),
         modelCatalogLastStatus: "failure",
         fallbackUsed: false,
       })

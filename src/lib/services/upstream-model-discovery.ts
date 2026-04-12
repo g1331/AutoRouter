@@ -30,6 +30,7 @@ export interface UpstreamModelDiscoveryTarget {
 export interface UpstreamModelCatalogPersistencePatch {
   modelCatalog: UpstreamModelCatalogEntry[] | null;
   modelCatalogUpdatedAt: Date | null;
+  modelCatalogLastFailedAt: Date | null;
   modelCatalogLastStatus: UpstreamModelCatalogFetchStatus;
   modelCatalogLastError: string | null;
 }
@@ -359,11 +360,13 @@ export async function refreshUpstreamModelCatalog(
       fallbackUsed: discovered.fallbackUsed,
       modelCatalog: discovered.catalog,
       modelCatalogUpdatedAt: refreshedAt,
+      modelCatalogLastFailedAt: null,
       modelCatalogLastStatus: "success",
       modelCatalogLastError: null,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const failedAt = new Date();
     log.warn(
       { upstreamId: target.id, upstreamName: target.name, err: error },
       "model discovery failed"
@@ -376,6 +379,7 @@ export async function refreshUpstreamModelCatalog(
       fallbackUsed: false,
       modelCatalog: null,
       modelCatalogUpdatedAt: null,
+      modelCatalogLastFailedAt: failedAt,
       modelCatalogLastStatus: "failure",
       modelCatalogLastError: message,
     };
