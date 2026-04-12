@@ -720,6 +720,7 @@ export function UpstreamFormDialog({
   const modelCatalogStatus = resolvedUpstream?.model_catalog_last_status ?? null;
   const modelCatalogError = resolvedUpstream?.model_catalog_last_error ?? null;
   const modelCatalogUpdatedAt = resolvedUpstream?.model_catalog_updated_at ?? null;
+  const modelCatalogLastFailedAt = resolvedUpstream?.model_catalog_last_failed_at ?? null;
   const modelDiscoveryMode =
     watchedModelDiscovery?.mode ?? resolvedUpstream?.model_discovery?.mode ?? "openai_compatible";
   const nativeCatalogCount = catalogEntries.filter((entry) => entry.source === "native").length;
@@ -859,12 +860,6 @@ export function UpstreamFormDialog({
       });
     }
   }, [upstream, open, form]);
-
-  useEffect(() => {
-    if (watchedModelDiscovery?.mode !== "custom" && watchedModelDiscovery?.custom_endpoint) {
-      form.setValue("model_discovery.custom_endpoint", null, { shouldDirty: true });
-    }
-  }, [watchedModelDiscovery?.mode, watchedModelDiscovery?.custom_endpoint, form]);
 
   const resetDialogUiState = () => {
     setConfigSearchQuery("");
@@ -1623,6 +1618,10 @@ export function UpstreamFormDialog({
                                   {modelCatalogUpdatedAt ?? tCommon("noData")}
                                 </p>
                                 <p>
+                                  {t("modelCatalogLastFailedAt")}:{" "}
+                                  {modelCatalogLastFailedAt ?? tCommon("noData")}
+                                </p>
+                                <p>
                                   {t("modelCatalogSourceSummary", {
                                     native: nativeCatalogCount,
                                     inferred: inferredCatalogCount,
@@ -1693,29 +1692,30 @@ export function UpstreamFormDialog({
                             )}
                           />
 
-                          {watchedModelDiscovery?.mode === "custom" && (
-                            <FormField
-                              control={form.control}
-                              name="model_discovery.custom_endpoint"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>{t("modelDiscoveryCustomEndpoint")}</FormLabel>
-                                  <FormControl>
-                                    <Input
-                                      type="url"
-                                      placeholder={t("modelDiscoveryCustomEndpointPlaceholder")}
-                                      value={field.value ?? ""}
-                                      onChange={(event) => field.onChange(event.target.value)}
-                                      onBlur={field.onBlur}
-                                      name={field.name}
-                                      ref={field.ref}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          )}
+                          <FormField
+                            control={form.control}
+                            name="model_discovery.custom_endpoint"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>{t("modelDiscoveryCustomEndpoint")}</FormLabel>
+                                <FormDescription>
+                                  {t("modelDiscoveryCustomEndpointDescription")}
+                                </FormDescription>
+                                <FormControl>
+                                  <Input
+                                    type="url"
+                                    placeholder={t("modelDiscoveryCustomEndpointPlaceholder")}
+                                    value={field.value ?? ""}
+                                    onChange={(event) => field.onChange(event.target.value)}
+                                    onBlur={field.onBlur}
+                                    name={field.name}
+                                    ref={field.ref}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
 
                           <FormField
                             control={form.control}

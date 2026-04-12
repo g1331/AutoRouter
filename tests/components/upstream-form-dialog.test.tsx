@@ -99,6 +99,7 @@ describe("UpstreamFormDialog", () => {
     route_capabilities: [],
     allowed_models: null,
     model_redirects: null,
+    model_catalog_last_failed_at: null,
     health_status: null,
     affinity_migration: null,
     created_at: new Date().toISOString(),
@@ -538,6 +539,7 @@ describe("UpstreamFormDialog", () => {
         model_catalog_last_status: "failure",
         model_catalog_last_error: "Discovery timeout",
         model_catalog_updated_at: "2026-04-11T00:00:00Z",
+        model_catalog_last_failed_at: "2026-04-11T01:00:00Z",
         model_rules: [
           { type: "exact", model: "gpt-4.1", source: "native" },
           { type: "regex", pattern: "^gpt-4\\..*$", source: "manual" },
@@ -564,15 +566,32 @@ describe("UpstreamFormDialog", () => {
       expect(screen.getByText("modelDiscovery")).toBeInTheDocument();
       expect(screen.getByText("modelRules")).toBeInTheDocument();
       expect(screen.getByText("modelDiscoveryMode")).toBeInTheDocument();
+      expect(screen.getByText("modelDiscoveryCustomEndpointDescription")).toBeInTheDocument();
       expect(screen.getByText("modelCatalogFallback")).toBeInTheDocument();
       expect(screen.getByText("modelCatalogLastStatusFailure")).toBeInTheDocument();
       expect(screen.getByText(/modelCatalogLastError:/)).toBeInTheDocument();
       expect(screen.getByText(/modelCatalogUpdatedAt:/)).toBeInTheDocument();
+      expect(screen.getByText(/modelCatalogLastFailedAt:/)).toBeInTheDocument();
       expect(screen.getByText("原生")).toBeInTheDocument();
       expect(screen.getByText("推断候选")).toBeInTheDocument();
       expect(screen.getAllByDisplayValue("gpt-4.1").length).toBeGreaterThan(0);
       expect(screen.getByDisplayValue("^gpt-4\\..*$")).toBeInTheDocument();
       expect(screen.getByDisplayValue("chat-prod")).toBeInTheDocument();
+    });
+
+    it("keeps the custom discovery endpoint semantics visible even outside custom mode", () => {
+      render(
+        <UpstreamFormDialog upstream={mockUpstream} open={true} onOpenChange={mockOnOpenChange} />,
+        { wrapper: Wrapper }
+      );
+
+      ensureAdvancedConfigExpanded();
+
+      expect(screen.getByText("modelDiscoveryCustomEndpoint")).toBeInTheDocument();
+      expect(screen.getByText("modelDiscoveryCustomEndpointDescription")).toBeInTheDocument();
+      expect(
+        screen.getByPlaceholderText("modelDiscoveryCustomEndpointPlaceholder")
+      ).toBeInTheDocument();
     });
 
     it("stacks the catalog browser below model rules and keeps bounded catalog selection behavior", () => {
