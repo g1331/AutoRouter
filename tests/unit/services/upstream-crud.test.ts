@@ -1181,6 +1181,7 @@ describe("upstream-crud", () => {
         fallbackUsed: false,
         modelCatalog: null,
         modelCatalogUpdatedAt: null,
+        modelCatalogLastFailedAt: new Date("2026-04-11T09:30:00.000Z"),
         modelCatalogLastStatus: "failure",
         modelCatalogLastError: "HTTP 503 from https://api.openai.com/v1/models",
       });
@@ -1192,6 +1193,7 @@ describe("upstream-crud", () => {
               ...existingUpstream,
               modelCatalog: null,
               modelCatalogUpdatedAt: null,
+              modelCatalogLastFailedAt: new Date("2026-04-11T09:30:00.000Z"),
               modelCatalogLastStatus: "failure",
               modelCatalogLastError: "HTTP 503 from https://api.openai.com/v1/models",
             },
@@ -1206,9 +1208,13 @@ describe("upstream-crud", () => {
       expect(setSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           modelCatalog: null,
+          modelCatalogLastFailedAt: new Date("2026-04-11T09:30:00.000Z"),
           modelCatalogLastStatus: "failure",
           modelCatalogLastError: "HTTP 503 from https://api.openai.com/v1/models",
         })
+      );
+      expect(result.upstream.modelCatalogLastFailedAt).toEqual(
+        new Date("2026-04-11T09:30:00.000Z")
       );
       expect(result.upstream.modelCatalogLastStatus).toBe("failure");
       expect(result.upstream.modelCatalogLastError).toBe(

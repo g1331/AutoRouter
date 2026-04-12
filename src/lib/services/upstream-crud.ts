@@ -75,6 +75,7 @@ export interface UpstreamCreateInput {
   modelDiscovery?: UpstreamModelDiscoveryConfig | null;
   modelCatalog?: UpstreamModelCatalogEntry[] | null;
   modelCatalogUpdatedAt?: Date | null;
+  modelCatalogLastFailedAt?: Date | null;
   modelCatalogLastStatus?: UpstreamModelCatalogFetchStatus | null;
   modelCatalogLastError?: string | null;
   modelRules?: UpstreamModelRule[] | null;
@@ -114,6 +115,7 @@ export interface UpstreamUpdateInput {
   modelDiscovery?: UpstreamModelDiscoveryConfig | null;
   modelCatalog?: UpstreamModelCatalogEntry[] | null;
   modelCatalogUpdatedAt?: Date | null;
+  modelCatalogLastFailedAt?: Date | null;
   modelCatalogLastStatus?: UpstreamModelCatalogFetchStatus | null;
   modelCatalogLastError?: string | null;
   modelRules?: UpstreamModelRule[] | null;
@@ -155,6 +157,7 @@ export interface UpstreamResponse {
   modelDiscovery: UpstreamModelDiscoveryConfig | null;
   modelCatalog: UpstreamModelCatalogEntry[] | null;
   modelCatalogUpdatedAt: Date | null;
+  modelCatalogLastFailedAt: Date | null;
   modelCatalogLastStatus: UpstreamModelCatalogFetchStatus | null;
   modelCatalogLastError: string | null;
   modelRules: UpstreamModelRule[] | null;
@@ -257,6 +260,7 @@ function mapUpstreamRecordToResponse(
     ),
     modelCatalog: parseUpstreamModelCatalog(upstream.modelCatalog),
     modelCatalogUpdatedAt: upstream.modelCatalogUpdatedAt ?? null,
+    modelCatalogLastFailedAt: upstream.modelCatalogLastFailedAt ?? null,
     modelCatalogLastStatus: upstream.modelCatalogLastStatus ?? null,
     modelCatalogLastError: upstream.modelCatalogLastError ?? null,
     // Preserve legacy reads by deriving rule objects when the richer column is still empty.
@@ -385,6 +389,7 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     modelDiscovery,
     modelCatalog,
     modelCatalogUpdatedAt,
+    modelCatalogLastFailedAt,
     modelCatalogLastStatus,
     modelCatalogLastError,
     modelRules,
@@ -434,6 +439,7 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
       modelDiscovery: normalizedModelDiscovery,
       modelCatalog: normalizedModelCatalog,
       modelCatalogUpdatedAt: modelCatalogUpdatedAt ?? null,
+      modelCatalogLastFailedAt: modelCatalogLastFailedAt ?? null,
       modelCatalogLastStatus: modelCatalogLastStatus ?? null,
       modelCatalogLastError: modelCatalogLastError ?? null,
       modelRules: normalizedModelRules,
@@ -520,6 +526,9 @@ export async function updateUpstream(
   }
   if (input.modelCatalogUpdatedAt !== undefined) {
     updateValues.modelCatalogUpdatedAt = input.modelCatalogUpdatedAt;
+  }
+  if (input.modelCatalogLastFailedAt !== undefined) {
+    updateValues.modelCatalogLastFailedAt = input.modelCatalogLastFailedAt;
   }
   if (input.modelCatalogLastStatus !== undefined) {
     updateValues.modelCatalogLastStatus = input.modelCatalogLastStatus;
@@ -763,6 +772,7 @@ export async function refreshStoredUpstreamModelCatalog(
         : undefined,
     modelCatalog: refreshResult.modelCatalog,
     modelCatalogUpdatedAt: refreshResult.modelCatalogUpdatedAt,
+    modelCatalogLastFailedAt: refreshResult.modelCatalogLastFailedAt,
     modelCatalogLastStatus: refreshResult.modelCatalogLastStatus,
     modelCatalogLastError: refreshResult.modelCatalogLastError,
   });
