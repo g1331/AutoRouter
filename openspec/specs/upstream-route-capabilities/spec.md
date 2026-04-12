@@ -4,7 +4,7 @@
 TBD - created by archiving change path-capability-routing. Update Purpose after archive.
 ## Requirements
 ### Requirement: 上游支持多能力配置
-系统 SHALL 允许单个上游配置多个能力类型，并将该配置作为路径路由候选过滤的第一层依据；在满足能力匹配后，系统 MUST 继续按运行态约束（健康、熔断、配额、并发容量）进行候选筛选。
+系统 SHALL 允许单个上游配置多个能力类型，并将该配置作为路径路由候选过滤的第一层依据；在满足能力匹配后，系统 MUST 继续结合显式模型允许规则与运行态约束（健康、熔断、配额、并发容量）进行候选筛选。
 
 #### Scenario: 创建上游时配置多个能力
 - **WHEN** 管理员创建上游并提交多个能力类型
@@ -13,6 +13,14 @@ TBD - created by archiving change path-capability-routing. Update Purpose after 
 #### Scenario: 更新上游能力集合
 - **WHEN** 管理员在编辑上游时新增或移除能力类型
 - **THEN** 系统更新存储并立即用于后续路由决策
+
+#### Scenario: 能力匹配后执行显式模型规则过滤
+- **WHEN** 请求路径已匹配某能力且候选上游中存在显式配置模型允许规则的上游
+- **THEN** 系统 MUST 在进入负载均衡前排除所有未命中对应模型规则的上游
+
+#### Scenario: 显式模型规则未命中时不再静默保留候选
+- **WHEN** 某上游显式配置了模型允许规则且当前请求模型未命中任何允许规则
+- **THEN** 系统 MUST 将该上游视为本次请求的不支持候选
 
 #### Scenario: 能力匹配后执行并发容量过滤
 - **WHEN** 请求路径已匹配某能力且该能力对应候选上游中存在并发满载项
@@ -62,4 +70,3 @@ TBD - created by archiving change path-capability-routing. Update Purpose after 
 #### Scenario: 图标资源不可用时的兜底展示
 - **WHEN** 某能力类型对应图标资源加载失败
 - **THEN** 系统使用通用兜底图标并保留能力文案，确保语义不丢失
-
