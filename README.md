@@ -273,11 +273,14 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 # 4. 安装依赖
 pnpm install
 
-# 5. 启动开发服务器
+# 5. 同步本地 SQLite 迁移
+pnpm db:migrate:sqlite
+
+# 6. 启动开发服务器
 pnpm dev
 ```
 
-注意：仓库当前封装的 Drizzle CLI 脚本默认面向 PostgreSQL。SQLite 运行时是受支持的，但 README 不再把 `pnpm db:push` 宣传为 SQLite 的通用初始化命令。
+如果 SQLite 开发库与当前 schema 不一致，优先执行 `pnpm db:migrate:sqlite`；只有需要重新生成 SQLite 迁移产物时，才使用 `pnpm db:generate:sqlite`。
 
 ---
 
@@ -355,10 +358,14 @@ pnpm e2e:headed            # 有界面模式运行 E2E
 
 ```bash
 pnpm db:generate           # 生成迁移文件
+pnpm db:generate:sqlite    # 生成 SQLite 迁移文件
 pnpm db:migrate            # 执行迁移
+pnpm db:migrate:sqlite     # 执行本地 SQLite 迁移
 pnpm db:push               # 推送 Schema 到数据库
+pnpm db:push:sqlite        # 推送 Schema 到 SQLite 数据库
 pnpm db:seed               # 写入轻量示例数据
 pnpm db:studio             # 打开 Drizzle Studio
+pnpm db:studio:sqlite      # 打开 SQLite Drizzle Studio
 ```
 
 </details>

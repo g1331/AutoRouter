@@ -4,6 +4,64 @@
  */
 
 const API_BASE_URL = "/api";
+const DEFAULT_ERROR_MESSAGE = "请求失败";
+
+function getNonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function extractErrorMessage(payload: unknown): string | undefined {
+  const directMessage = getNonEmptyString(payload);
+  if (directMessage) {
+    return directMessage;
+  }
+
+  if (!isRecord(payload)) {
+    return undefined;
+  }
+
+  const detailMessage = getNonEmptyString(payload.detail);
+  if (detailMessage) {
+    return detailMessage;
+  }
+
+  const topLevelErrorMessage = getNonEmptyString(payload.error);
+  if (topLevelErrorMessage) {
+    return topLevelErrorMessage;
+  }
+
+  if (isRecord(payload.error)) {
+    const nestedErrorMessage =
+      getNonEmptyString(payload.error.message) ?? getNonEmptyString(payload.error.detail);
+    if (nestedErrorMessage) {
+      return nestedErrorMessage;
+    }
+  }
+
+  const topLevelMessage = getNonEmptyString(payload.message);
+  if (topLevelMessage) {
+    return topLevelMessage;
+  }
+
+  if (isRecord(payload.detail)) {
+    return (
+      getNonEmptyString(payload.detail.error) ??
+      getNonEmptyString(payload.detail.message) ??
+      getNonEmptyString(payload.detail.detail)
+    );
+  }
+
+  return undefined;
+}
 
 /**
  * API 错误类
@@ -74,19 +132,25 @@ export function createApiClient(options: ApiClientOptions) {
 
       // 非 2xx 状态：解析错误详情
       if (!response.ok) {
-        let errorDetail: unknown;
-        try {
-          const errorData = await response.json();
-          errorDetail = errorData.detail || errorData;
-        } catch {
-          errorDetail = response.statusText;
+        const fallbackMessage = getNonEmptyString(response.statusText) ?? DEFAULT_ERROR_MESSAGE;
+        const rawErrorText = await response.text();
+        const errorText = getNonEmptyString(rawErrorText);
+
+        let errorDetail: unknown = fallbackMessage;
+        let errorMessage = fallbackMessage;
+
+        if (errorText) {
+          try {
+            const errorData = JSON.parse(errorText);
+            errorDetail = errorData;
+            errorMessage = extractErrorMessage(errorData) ?? fallbackMessage;
+          } catch {
+            errorDetail = errorText;
+            errorMessage = errorText;
+          }
         }
 
-        throw new ApiError(
-          typeof errorDetail === "string" ? errorDetail : "请求失败",
-          response.status,
-          errorDetail
-        );
+        throw new ApiError(errorMessage, response.status, errorDetail);
       }
 
       // 204 No Content：返回 null

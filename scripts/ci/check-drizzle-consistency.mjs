@@ -3,9 +3,18 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const ROOT = process.cwd();
-const DRIZZLE_DIR = path.join(ROOT, "drizzle");
-const DRIZZLE_META_DIR = path.join(DRIZZLE_DIR, "meta");
-const JOURNAL_PATH = path.join(DRIZZLE_META_DIR, "_journal.json");
+const MIGRATION_TARGETS = [
+  {
+    label: "PostgreSQL",
+    directory: "drizzle",
+    generateScript: "db:generate",
+  },
+  {
+    label: "SQLite",
+    directory: "drizzle-sqlite",
+    generateScript: "db:generate:sqlite",
+  },
+];
 
 function runCommand(command, args) {
   const env = {
@@ -61,22 +70,27 @@ function sorted(values) {
   return [...values].sort((a, b) => a.localeCompare(b));
 }
 
-function assertJournalEntriesHaveSqlFiles() {
-  if (!existsSync(JOURNAL_PATH)) {
-    console.error(`Missing Drizzle journal file: ${path.relative(ROOT, JOURNAL_PATH)}`);
+function assertJournalEntriesHaveSqlFiles(target) {
+  const drizzleDir = path.join(ROOT, target.directory);
+  const journalPath = path.join(drizzleDir, "meta", "_journal.json");
+
+  if (!existsSync(journalPath)) {
+    console.error(
+      `Missing ${target.label} Drizzle journal file: ${path.relative(ROOT, journalPath)}`
+    );
     process.exit(1);
   }
 
-  const journal = JSON.parse(readFileSync(JOURNAL_PATH, "utf8"));
+  const journal = JSON.parse(readFileSync(journalPath, "utf8"));
   const entries = Array.isArray(journal.entries) ? journal.entries : [];
   const missingSql = sorted(
     entries
       .map((entry) => `${entry.tag}.sql`)
-      .filter((sqlFile) => !existsSync(path.join(DRIZZLE_DIR, sqlFile)))
+      .filter((sqlFile) => !existsSync(path.join(drizzleDir, sqlFile)))
   );
 
   if (missingSql.length > 0) {
-    console.error("Drizzle journal references missing SQL migration files:");
+    console.error(`${target.label} Drizzle journal references missing SQL migration files:`);
     for (const file of missingSql) {
       console.error(`- ${file}`);
     }
@@ -84,31 +98,37 @@ function assertJournalEntriesHaveSqlFiles() {
   }
 }
 
-function assertNoGeneratedDiff() {
-  const status = readTextCommand("git", ["status", "--porcelain", "--", "drizzle"]);
+function assertNoGeneratedDiff(target) {
+  const status = readTextCommand("git", ["status", "--porcelain", "--", target.directory]);
   if (!status) {
     return;
   }
 
-  console.error("Detected uncommitted changes in drizzle artifacts after generation:");
+  console.error(
+    `Detected uncommitted changes in ${target.label} drizzle artifacts after generation:`
+  );
   for (const line of status.split("\n")) {
     console.error(`- ${line}`);
   }
-  console.error("Run `pnpm db:generate`, review the changes, and commit updated drizzle files.");
+  console.error(
+    `Run \`pnpm ${target.generateScript}\`, review the changes, and commit updated ${target.directory} files.`
+  );
   process.exit(1);
 }
 
 function main() {
   const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 
-  console.log("Generating Drizzle migrations for consistency validation...");
-  runCommand(pnpmCommand, ["db:generate"]);
+  for (const target of MIGRATION_TARGETS) {
+    console.log(`Generating ${target.label} Drizzle migrations for consistency validation...`);
+    runCommand(pnpmCommand, [target.generateScript]);
 
-  console.log("Checking drizzle/meta journal SQL references...");
-  assertJournalEntriesHaveSqlFiles();
+    console.log(`Checking ${target.directory}/meta journal SQL references...`);
+    assertJournalEntriesHaveSqlFiles(target);
 
-  console.log("Checking for uncommitted drizzle changes after generation...");
-  assertNoGeneratedDiff();
+    console.log(`Checking for uncommitted ${target.label} drizzle changes after generation...`);
+    assertNoGeneratedDiff(target);
+  }
 
   console.log("Drizzle migration artifacts are consistent.");
 }

@@ -5,6 +5,25 @@ describe("api", () => {
   const mockFetch = vi.fn();
   const originalFetch = globalThis.fetch;
 
+  function createErrorResponse({
+    status,
+    statusText,
+    body,
+  }: {
+    status: number;
+    statusText: string;
+    body?: string | Record<string, unknown>;
+  }) {
+    const text = typeof body === "string" ? body : body === undefined ? "" : JSON.stringify(body);
+
+    return {
+      ok: false,
+      status,
+      statusText,
+      text: () => Promise.resolve(text),
+    };
+  }
+
   beforeEach(() => {
     globalThis.fetch = mockFetch;
     mockFetch.mockClear();
@@ -243,12 +262,13 @@ describe("api", () => {
 
       it("throws ApiError with JSON error detail on non-2xx response", async () => {
         mockGetToken.mockReturnValue("test-token");
-        mockFetch.mockResolvedValueOnce({
-          ok: false,
-          status: 400,
-          statusText: "Bad Request",
-          json: () => Promise.resolve({ detail: "Validation failed" }),
-        });
+        mockFetch.mockResolvedValueOnce(
+          createErrorResponse({
+            status: 400,
+            statusText: "Bad Request",
+            body: { detail: "Validation failed" },
+          })
+        );
 
         const client = createApiClient({
           getToken: mockGetToken,
@@ -262,17 +282,45 @@ describe("api", () => {
           expect(error).toBeInstanceOf(ApiError);
           expect((error as ApiError).status).toBe(400);
           expect((error as ApiError).message).toBe("Validation failed");
+          expect((error as ApiError).detail).toEqual({ detail: "Validation failed" });
         }
       });
 
-      it("throws ApiError with error object when detail is not string", async () => {
+      it("throws ApiError with top-level error message and preserves structured detail", async () => {
         mockGetToken.mockReturnValue("test-token");
-        mockFetch.mockResolvedValueOnce({
-          ok: false,
-          status: 422,
-          statusText: "Unprocessable Entity",
-          json: () => Promise.resolve({ detail: { errors: ["field1", "field2"] } }),
+        mockFetch.mockResolvedValueOnce(
+          createErrorResponse({
+            status: 400,
+            statusText: "Bad Request",
+            body: { error: "Refresh failed" },
+          })
+        );
+
+        const client = createApiClient({
+          getToken: mockGetToken,
+          onUnauthorized: mockOnUnauthorized,
         });
+
+        try {
+          await client.post("/refresh", { force: true });
+          expect.fail("Should have thrown");
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect((error as ApiError).status).toBe(400);
+          expect((error as ApiError).message).toBe("Refresh failed");
+          expect((error as ApiError).detail).toEqual({ error: "Refresh failed" });
+        }
+      });
+
+      it("falls back to statusText when JSON error detail has no readable message", async () => {
+        mockGetToken.mockReturnValue("test-token");
+        mockFetch.mockResolvedValueOnce(
+          createErrorResponse({
+            status: 422,
+            statusText: "Unprocessable Entity",
+            body: { detail: { errors: ["field1", "field2"] } },
+          })
+        );
 
         const client = createApiClient({
           getToken: mockGetToken,
@@ -285,19 +333,22 @@ describe("api", () => {
         } catch (error) {
           expect(error).toBeInstanceOf(ApiError);
           expect((error as ApiError).status).toBe(422);
-          expect((error as ApiError).message).toBe("请求失败");
-          expect((error as ApiError).detail).toEqual({ errors: ["field1", "field2"] });
+          expect((error as ApiError).message).toBe("Unprocessable Entity");
+          expect((error as ApiError).detail).toEqual({
+            detail: { errors: ["field1", "field2"] },
+          });
         }
       });
 
-      it("throws ApiError with statusText when JSON parse fails", async () => {
+      it("throws ApiError with plain text response body when JSON parse fails", async () => {
         mockGetToken.mockReturnValue("test-token");
-        mockFetch.mockResolvedValueOnce({
-          ok: false,
-          status: 500,
-          statusText: "Internal Server Error",
-          json: () => Promise.reject(new Error("Invalid JSON")),
-        });
+        mockFetch.mockResolvedValueOnce(
+          createErrorResponse({
+            status: 500,
+            statusText: "Internal Server Error",
+            body: "Catalog refresh failed upstream",
+          })
+        );
 
         const client = createApiClient({
           getToken: mockGetToken,
@@ -310,6 +361,32 @@ describe("api", () => {
         } catch (error) {
           expect(error).toBeInstanceOf(ApiError);
           expect((error as ApiError).status).toBe(500);
+          expect((error as ApiError).message).toBe("Catalog refresh failed upstream");
+          expect((error as ApiError).detail).toBe("Catalog refresh failed upstream");
+        }
+      });
+
+      it("throws ApiError with statusText when error response body is empty", async () => {
+        mockGetToken.mockReturnValue("test-token");
+        mockFetch.mockResolvedValueOnce(
+          createErrorResponse({
+            status: 500,
+            statusText: "Internal Server Error",
+          })
+        );
+
+        const client = createApiClient({
+          getToken: mockGetToken,
+          onUnauthorized: mockOnUnauthorized,
+        });
+
+        try {
+          await client.get("/error");
+          expect.fail("Should have thrown");
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect((error as ApiError).status).toBe(500);
+          expect((error as ApiError).message).toBe("Internal Server Error");
           expect((error as ApiError).detail).toBe("Internal Server Error");
         }
       });

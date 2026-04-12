@@ -20,9 +20,13 @@ pnpm build
 
 # Database commands (Drizzle ORM)
 pnpm db:generate    # Generate migrations from schema changes
+pnpm db:generate:sqlite  # Generate SQLite migrations from schema changes
 pnpm db:migrate     # Apply migrations
+pnpm db:migrate:sqlite  # Apply local SQLite migrations
 pnpm db:push        # Push schema directly (development)
+pnpm db:push:sqlite # Push schema directly to SQLite (development)
 pnpm db:studio      # Open Drizzle Studio
+pnpm db:studio:sqlite  # Open SQLite Drizzle Studio
 
 # Linting & formatting
 pnpm lint           # ESLint

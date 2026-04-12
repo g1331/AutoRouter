@@ -266,11 +266,14 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 # 4. Install dependencies
 pnpm install
 
-# 5. Start development server
+# 5. Sync local SQLite migrations
+pnpm db:migrate:sqlite
+
+# 6. Start development server
 pnpm dev
 ```
 
-Note: the packaged Drizzle CLI scripts currently target PostgreSQL by default. SQLite is supported at runtime, but this README no longer claims that `pnpm db:push` is a general SQLite initialization flow.
+If the SQLite development database drifts from the current schema, run `pnpm db:migrate:sqlite` first. Use `pnpm db:generate:sqlite` only when new SQLite migration artifacts need to be generated.
 
 ---
 
@@ -348,10 +351,14 @@ pnpm e2e:headed            # Run E2E with visible browser
 
 ```bash
 pnpm db:generate           # Generate migration files
+pnpm db:generate:sqlite    # Generate SQLite migration files
 pnpm db:migrate            # Apply migrations
+pnpm db:migrate:sqlite     # Apply local SQLite migrations
 pnpm db:push               # Push schema to database
+pnpm db:push:sqlite        # Push schema to SQLite database
 pnpm db:seed               # Seed lightweight sample data
 pnpm db:studio             # Open Drizzle Studio
+pnpm db:studio:sqlite      # Open SQLite Drizzle Studio
 ```
 
 </details>
