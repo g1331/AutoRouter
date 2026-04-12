@@ -274,6 +274,7 @@ export interface UpstreamResponse {
   model_discovery: UpstreamModelDiscoveryConfig | null;
   model_catalog: UpstreamModelCatalogEntry[] | null;
   model_catalog_updated_at: string | null;
+  model_catalog_last_failed_at: string | null;
   model_catalog_last_status: UpstreamModelCatalogFetchStatus | null;
   model_catalog_last_error: string | null;
   model_rules: UpstreamModelRule[] | null;

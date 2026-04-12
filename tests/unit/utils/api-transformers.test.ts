@@ -55,6 +55,7 @@ describe("api-transformers", () => {
         currentConcurrency: 3,
         maxConcurrency: 10,
         config: '{"model": "gpt-4"}',
+        modelCatalogLastFailedAt: null,
         affinityMigration: null,
         lastUsedAt: new Date("2024-01-15T11:00:00.000Z"),
         createdAt: new Date("2024-01-15T10:00:00.000Z"),
@@ -86,6 +87,7 @@ describe("api-transformers", () => {
         model_discovery: null,
         model_catalog: null,
         model_catalog_updated_at: null,
+        model_catalog_last_failed_at: null,
         model_catalog_last_status: null,
         model_catalog_last_error: null,
         model_rules: null,
@@ -157,6 +159,7 @@ describe("api-transformers", () => {
           { model: "gpt-4.1-mini", source: "inferred" as const },
         ],
         modelCatalogUpdatedAt: new Date("2026-04-11T09:00:00.000Z"),
+        modelCatalogLastFailedAt: new Date("2026-04-11T09:30:00.000Z"),
         modelCatalogLastStatus: "success" as const,
         modelCatalogLastError: null,
         modelRules: [
@@ -186,6 +189,7 @@ describe("api-transformers", () => {
         { model: "gpt-4.1-mini", source: "inferred" },
       ]);
       expect(result.model_catalog_updated_at).toBe("2026-04-11T09:00:00.000Z");
+      expect(result.model_catalog_last_failed_at).toBe("2026-04-11T09:30:00.000Z");
       expect(result.model_catalog_last_status).toBe("success");
       expect(result.model_catalog_last_error).toBeNull();
       expect(result.model_rules).toEqual([

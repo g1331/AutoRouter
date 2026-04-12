@@ -128,6 +128,7 @@ export interface UpstreamApiResponse {
   model_discovery: UpstreamModelDiscoveryApiResponse | null;
   model_catalog: UpstreamModelCatalogEntryApiResponse[] | null;
   model_catalog_updated_at: string | null;
+  model_catalog_last_failed_at: string | null;
   model_catalog_last_status: "success" | "failure" | null;
   model_catalog_last_error: string | null;
   model_rules: UpstreamModelRuleApiResponse[] | null;
@@ -217,6 +218,7 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
       : null,
     model_catalog: upstream.modelCatalog ?? null,
     model_catalog_updated_at: upstream.modelCatalogUpdatedAt?.toISOString() ?? null,
+    model_catalog_last_failed_at: upstream.modelCatalogLastFailedAt?.toISOString() ?? null,
     model_catalog_last_status: upstream.modelCatalogLastStatus ?? null,
     model_catalog_last_error: upstream.modelCatalogLastError ?? null,
     model_rules: modelRules,
