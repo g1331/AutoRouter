@@ -73,6 +73,7 @@ export const upstreams = pgTable(
     modelDiscovery: json("model_discovery").$type<UpstreamModelDiscoveryConfig | null>(),
     modelCatalog: json("model_catalog").$type<UpstreamModelCatalogEntry[] | null>(),
     modelCatalogUpdatedAt: timestamp("model_catalog_updated_at", { withTimezone: true }),
+    modelCatalogLastFailedAt: timestamp("model_catalog_last_failed_at", { withTimezone: true }),
     modelCatalogLastStatus: varchar("model_catalog_last_status", {
       length: 16,
     }).$type<UpstreamModelCatalogFetchStatus | null>(),
