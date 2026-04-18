@@ -85,7 +85,7 @@ describe("upstream-connection-tester", () => {
       expect(result.testedAt).toBeInstanceOf(Date);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.openai.com/v1/models",
+        "https://api.openai.com/models",
         expect.objectContaining({
           method: "GET",
           headers: {
@@ -133,7 +133,7 @@ describe("upstream-connection-tester", () => {
       expect(result.latencyMs).toBeGreaterThanOrEqual(0);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.anthropic.com/v1/models",
+        "https://api.anthropic.com/models",
         expect.objectContaining({
           method: "GET",
           headers: {
@@ -174,7 +174,7 @@ describe("upstream-connection-tester", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(mockFetch).toHaveBeenCalledWith("https://api.openai.com/v1/models", expect.anything());
+      expect(mockFetch).toHaveBeenCalledWith("https://api.openai.com/models", expect.anything());
     });
 
     it("should normalize base URL with path to origin only", async () => {
@@ -190,8 +190,41 @@ describe("upstream-connection-tester", () => {
       });
 
       expect(result.success).toBe(true);
-      // Should use origin only, not append to path
-      expect(mockFetch).toHaveBeenCalledWith("https://api.openai.com/v1/models", expect.anything());
+      // Should preserve the configured API-root path prefix
+      expect(mockFetch).toHaveBeenCalledWith(
+        "https://api.openai.com/v2/some/path/models",
+        expect.anything()
+      );
+    });
+
+    it("should keep LiteLLM mode connection tests pointed at the configured upstream", async () => {
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        text: vi.fn().mockResolvedValue(""),
+      });
+
+      const result = await testUpstreamConnection({
+        routeCapabilities: ["openai_chat_compatible"],
+        baseUrl: "https://gateway.example.com/codex/v1",
+        apiKey: "sk-test",
+        modelDiscovery: {
+          mode: "litellm",
+          customEndpoint: null,
+          enableLiteLlmFallback: false,
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockFetch).toHaveBeenCalledWith(
+        "https://gateway.example.com/codex/v1/models",
+        expect.objectContaining({
+          method: "GET",
+          headers: {
+            Authorization: "Bearer sk-test",
+          },
+          redirect: "error",
+        })
+      );
     });
   });
 
@@ -255,6 +288,46 @@ describe("upstream-connection-tester", () => {
       expect(result.errorDetails).toContain("is not a valid URL");
       expect(result.latencyMs).toBeNull();
       expect(result.statusCode).toBeNull();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("should reject absolute custom discovery endpoints before issuing the test request", async () => {
+      const result = await testUpstreamConnection({
+        routeCapabilities: ["openai_chat_compatible"],
+        baseUrl: "https://api.openai.com/v1",
+        apiKey: "sk-test",
+        modelDiscovery: {
+          mode: "custom",
+          customEndpoint: "https://169.254.169.254/latest/meta-data",
+          enableLiteLlmFallback: false,
+        },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe("Invalid model discovery configuration");
+      expect(result.errorDetails).toContain(
+        "Custom discovery endpoint must be a relative path under the configured API root"
+      );
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("should reject custom discovery endpoints that escape the configured API-root path", async () => {
+      const result = await testUpstreamConnection({
+        routeCapabilities: ["openai_chat_compatible"],
+        baseUrl: "https://gateway.example.com/codex/v1",
+        apiKey: "sk-test",
+        modelDiscovery: {
+          mode: "custom",
+          customEndpoint: "../models",
+          enableLiteLlmFallback: false,
+        },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe("Invalid model discovery configuration");
+      expect(result.errorDetails).toContain(
+        "Custom discovery endpoint must stay under the configured API root"
+      );
       expect(mockFetch).not.toHaveBeenCalled();
     });
 

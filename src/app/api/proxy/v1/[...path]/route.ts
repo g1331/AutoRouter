@@ -54,8 +54,11 @@ import {
   extractGeminiModelFromPath,
   resolveRouteCapability,
 } from "@/lib/services/route-capability-matcher";
-import { resolveModelWithRedirects } from "@/lib/services/model-router";
 import { ensureRouteCapabilityMigration } from "@/lib/services/route-capability-migration";
+import {
+  matchUpstreamModelRules,
+  normalizeUpstreamModelRules,
+} from "@/lib/services/upstream-model-rules";
 import {
   type FailoverConfig,
   DEFAULT_FAILOVER_CONFIG,
@@ -396,16 +399,70 @@ function attachRetryReason(
 function resolvePathRoutingModelForUpstream(
   originalModel: string | null,
   upstream: Upstream | null | undefined
-): { resolvedModel: string | null; redirectApplied: boolean } {
+): {
+  matched: boolean;
+  hasExplicitRules: boolean;
+  resolvedModel: string | null;
+  redirectApplied: boolean;
+} {
   if (!originalModel || !upstream) {
-    return { resolvedModel: originalModel, redirectApplied: false };
+    return {
+      matched: true,
+      hasExplicitRules: false,
+      resolvedModel: originalModel,
+      redirectApplied: false,
+    };
   }
 
-  const { resolvedModel, redirectApplied } = resolveModelWithRedirects(
+  const result = matchUpstreamModelRules(
     originalModel,
-    upstream.modelRedirects
+    normalizeUpstreamModelRules({
+      modelRules: upstream.modelRules,
+      allowedModels: upstream.allowedModels,
+      modelRedirects: upstream.modelRedirects,
+    })
   );
-  return { resolvedModel, redirectApplied };
+  return {
+    matched: result.matched,
+    hasExplicitRules: result.hasExplicitRules,
+    resolvedModel: result.resolvedModel,
+    redirectApplied: result.redirectApplied,
+  };
+}
+
+function filterCandidatesByModelRules(
+  originalModel: string | null,
+  candidates: Upstream[]
+): { allowed: Upstream[]; excluded: RoutingExcluded[] } {
+  if (!originalModel) {
+    return {
+      allowed: candidates,
+      excluded: [],
+    };
+  }
+
+  const allowed: Upstream[] = [];
+  const excluded: RoutingExcluded[] = [];
+  for (const candidate of candidates) {
+    const modelResolution = resolvePathRoutingModelForUpstream(originalModel, candidate);
+    if (modelResolution.matched) {
+      allowed.push(candidate);
+      continue;
+    }
+
+    if (modelResolution.hasExplicitRules) {
+      excluded.push({
+        id: candidate.id,
+        name: candidate.name,
+        reason: "model_not_allowed",
+      });
+      continue;
+    }
+
+    allowed.push(candidate);
+  }
+
+  return { allowed, excluded };
 }
 
 function mergeExcludedCandidates(
@@ -2056,6 +2113,74 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
 
   excludedCapabilityCandidates = [];
   candidateCircuitStates = await buildCandidateCircuitStateMap(capabilityCandidates, requestId);
+  const modelRuleFiltering = filterCandidatesByModelRules(model, finalCapabilityCandidates);
+  finalCapabilityCandidates = modelRuleFiltering.allowed;
+  candidateUpstreamIds = finalCapabilityCandidates.map((upstream) => upstream.id);
+  excludedCapabilityCandidates = modelRuleFiltering.excluded;
+
+  if (finalCapabilityCandidates.length === 0) {
+    const rejectedDurationMs = Date.now() - startTime;
+    const rejectedResponse = createUnifiedErrorResponse("NO_UPSTREAMS_CONFIGURED", {
+      reason: "NO_HEALTHY_CANDIDATES",
+      did_send_upstream: false,
+      request_id: requestId,
+      user_hint: model
+        ? `当前路径能力下没有上游允许模型 ${model}，请检查上游模型规则或目录导入结果`
+        : "当前路径能力下没有可用上游候选，请检查上游模型规则配置",
+    });
+    const rejectedRoutingDecision = transformPathRoutingDecisionLog(
+      {
+        matchedRouteCapability,
+        routeMatchSource,
+        originalModel: model,
+        resolvedModel: model,
+        modelRedirectApplied: false,
+        capabilityCandidates,
+        finalCandidates: [],
+        excludedCandidates: excludedCapabilityCandidates,
+        candidateCircuitStates,
+      },
+      null,
+      {
+        candidateUpstreamId: null,
+        actualUpstreamId: null,
+        didSendUpstream: false,
+        failureStage: "candidate_selection",
+      }
+    );
+
+    try {
+      await logRequest({
+        apiKeyId: validApiKey.id,
+        ...apiKeySnapshot,
+        upstreamId: null,
+        method: request.method,
+        path,
+        model,
+        reasoningEffort,
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        statusCode: rejectedResponse.status,
+        durationMs: rejectedDurationMs,
+        routingDurationMs: rejectedDurationMs,
+        errorMessage: "all authorized upstreams were excluded by model rules",
+        routingType,
+        priorityTier: null,
+        failoverAttempts: 0,
+        failoverHistory: null,
+        routingDecision: rejectedRoutingDecision,
+        thinkingConfig,
+      });
+    } catch (error) {
+      log.error(
+        { err: error, requestId, matchedRouteCapability, model },
+        "failed to log model rule exclusion response"
+      );
+    }
+
+    return rejectedResponse;
+  }
 
   let selectedCandidate = finalCapabilityCandidates[0];
   ({ resolvedModel, redirectApplied: modelRedirectApplied } = resolvePathRoutingModelForUpstream(
@@ -2233,11 +2358,24 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         activeCandidatePool = fallbackCandidatePool!;
         capabilityCandidates = activeCandidatePool.capabilityCandidates;
         finalCapabilityCandidates = activeCandidatePool.authorizedCapabilityCandidates;
-        candidateUpstreamIds = activeCandidatePool.candidateUpstreamIds;
         candidateCircuitStates = await buildCandidateCircuitStateMap(
           capabilityCandidates,
           requestId
         );
+        const fallbackModelRuleFiltering = filterCandidatesByModelRules(
+          model,
+          finalCapabilityCandidates
+        );
+        finalCapabilityCandidates = fallbackModelRuleFiltering.allowed;
+        candidateUpstreamIds = finalCapabilityCandidates.map((upstream) => upstream.id);
+        excludedCapabilityCandidates = mergeExcludedCandidates(
+          excludedCapabilityCandidates,
+          fallbackModelRuleFiltering.excluded
+        );
+
+        if (finalCapabilityCandidates.length === 0) {
+          throw new NoHealthyUpstreamsError("All fallback candidates were excluded by model rules");
+        }
 
         const fallbackSelectedCandidate = finalCapabilityCandidates[0];
         selectedCandidate = fallbackSelectedCandidate;

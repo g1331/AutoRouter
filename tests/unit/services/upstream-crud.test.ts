@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
+  InvalidUpstreamModelRulesError,
   maskApiKey,
   UpstreamNotFoundError,
   type UpstreamUpdateInput,
@@ -288,6 +289,153 @@ describe("upstream-crud", () => {
       expect(result.modelRedirects).toEqual({ "gpt-4-turbo": "gpt-4" });
     });
 
+    it("should persist normalized model discovery and unified model rules", async () => {
+      const { createUpstream } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(null);
+
+      const values = vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue([
+          {
+            id: "test-id",
+            name: "anthropic-upstream",
+            baseUrl: "https://api.anthropic.com/v1",
+            apiKeyEncrypted: "encrypted:sk-ant-test",
+            isDefault: false,
+            timeout: 60,
+            isActive: true,
+            config: null,
+            priority: 0,
+            weight: 1,
+            routeCapabilities: ["anthropic_messages"],
+            allowedModels: ["claude-3-7-sonnet"],
+            modelRedirects: { "claude-3-opus": "claude-3-7-sonnet" },
+            modelDiscovery: {
+              mode: "anthropic_native",
+              customEndpoint: null,
+              enableLiteLlmFallback: true,
+            },
+            modelCatalog: null,
+            modelCatalogUpdatedAt: null,
+            modelCatalogLastStatus: null,
+            modelCatalogLastError: null,
+            modelCatalogLastFailedAt: null,
+            modelRules: [
+              {
+                type: "exact",
+                value: "claude-3-7-sonnet",
+                targetModel: null,
+                source: "manual",
+                displayLabel: "精确匹配",
+              },
+              {
+                type: "alias",
+                value: "claude-3-opus",
+                targetModel: "claude-3-7-sonnet",
+                source: "manual",
+                displayLabel: "模型别名",
+              },
+            ],
+            affinityMigration: null,
+            billingInputMultiplier: 1,
+            billingOutputMultiplier: 1,
+            spendingRules: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ]),
+      });
+
+      vi.mocked(db.insert).mockReturnValue({
+        values,
+      } as unknown as MockInsertChain);
+
+      const result = await createUpstream({
+        name: "anthropic-upstream",
+        baseUrl: "https://api.anthropic.com/v1",
+        apiKey: "sk-ant-test",
+        routeCapabilities: ["anthropic_messages"],
+        modelDiscovery: {
+          mode: "anthropic_native",
+          customEndpoint: null,
+          enableLiteLlmFallback: true,
+        },
+        modelRules: [
+          {
+            type: "exact",
+            value: "claude-3-7-sonnet",
+            targetModel: null,
+            source: "manual",
+            displayLabel: "精确匹配",
+          },
+          {
+            type: "alias",
+            value: "claude-3-opus",
+            targetModel: "claude-3-7-sonnet",
+            source: "manual",
+            displayLabel: "模型别名",
+          },
+        ],
+      });
+
+      expect(values).toHaveBeenCalledWith(
+        expect.objectContaining({
+          allowedModels: ["claude-3-7-sonnet"],
+          modelRedirects: { "claude-3-opus": "claude-3-7-sonnet" },
+          modelDiscovery: {
+            mode: "anthropic_native",
+            customEndpoint: null,
+            enableLiteLlmFallback: true,
+          },
+          modelRules: [
+            {
+              type: "exact",
+              value: "claude-3-7-sonnet",
+              targetModel: null,
+              source: "manual",
+              displayLabel: "精确匹配",
+            },
+            {
+              type: "alias",
+              value: "claude-3-opus",
+              targetModel: "claude-3-7-sonnet",
+              source: "manual",
+              displayLabel: "模型别名",
+            },
+          ],
+        })
+      );
+      expect(result.modelDiscovery?.mode).toBe("anthropic_native");
+      expect(result.modelRules).toHaveLength(2);
+    });
+
+    it("should reject invalid model rules before writing them", async () => {
+      const { createUpstream } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(null);
+
+      await expect(
+        createUpstream({
+          name: "broken-upstream",
+          baseUrl: "https://api.openai.com/v1",
+          apiKey: "sk-test-key",
+          modelRules: [
+            {
+              type: "regex",
+              value: "(",
+              targetModel: null,
+              source: "manual",
+              displayLabel: "模式匹配",
+            },
+          ],
+        })
+      ).rejects.toThrow(InvalidUpstreamModelRulesError);
+
+      expect(db.insert).not.toHaveBeenCalled();
+    });
+
     it("should throw error if name already exists", async () => {
       const { createUpstream } = await import("@/lib/services/upstream-crud");
       const { db } = await import("@/lib/db");
@@ -518,6 +666,298 @@ describe("upstream-crud", () => {
         })
       );
       expect(result.routeCapabilities).toEqual(["openai_chat_compatible"]);
+    });
+
+    it("should preserve existing alias rules when only allowed models are updated", async () => {
+      const { updateUpstream } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValueOnce({
+        id: "test-id",
+        name: "test-upstream",
+        baseUrl: "https://api.openai.com/v1",
+        apiKeyEncrypted: "encrypted:sk-test-key",
+        routeCapabilities: ["openai_chat_compatible"],
+        modelRules: [
+          {
+            type: "regex",
+            value: "^gpt-4.*$",
+            targetModel: null,
+            source: "manual",
+            displayLabel: "模式匹配",
+          },
+          {
+            type: "alias",
+            value: "gpt-4.1-preview",
+            targetModel: "gpt-4.1",
+            source: "manual",
+            displayLabel: "模型别名",
+          },
+        ],
+      } as unknown as PartialUpstream);
+
+      const set = vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([
+            {
+              id: "test-id",
+              name: "test-upstream",
+              baseUrl: "https://api.openai.com/v1",
+              apiKeyEncrypted: "encrypted:sk-test-key",
+              isDefault: false,
+              timeout: 60,
+              isActive: true,
+              config: null,
+              priority: 0,
+              weight: 1,
+              routeCapabilities: ["openai_chat_compatible"],
+              allowedModels: ["gpt-4.1", "gpt-4.1-mini"],
+              modelRedirects: { "gpt-4.1-preview": "gpt-4.1" },
+              modelDiscovery: null,
+              modelCatalog: null,
+              modelCatalogUpdatedAt: null,
+              modelCatalogLastStatus: null,
+              modelCatalogLastError: null,
+              modelCatalogLastFailedAt: null,
+              modelRules: [
+                {
+                  type: "regex",
+                  value: "^gpt-4.*$",
+                  targetModel: null,
+                  source: "manual",
+                  displayLabel: "模式匹配",
+                },
+                {
+                  type: "exact",
+                  value: "gpt-4.1",
+                  targetModel: null,
+                  source: "manual",
+                  displayLabel: "精确匹配",
+                },
+                {
+                  type: "exact",
+                  value: "gpt-4.1-mini",
+                  targetModel: null,
+                  source: "manual",
+                  displayLabel: "精确匹配",
+                },
+                {
+                  type: "alias",
+                  value: "gpt-4.1-preview",
+                  targetModel: "gpt-4.1",
+                  source: "manual",
+                  displayLabel: "模型别名",
+                },
+              ],
+              affinityMigration: null,
+              billingInputMultiplier: 1,
+              billingOutputMultiplier: 1,
+              spendingRules: null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ]),
+        }),
+      });
+
+      vi.mocked(db.update).mockReturnValue({
+        set,
+      } as unknown as MockUpdateChain);
+
+      await updateUpstream("test-id", {
+        allowedModels: ["gpt-4.1", "gpt-4.1-mini"],
+      });
+
+      expect(set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          allowedModels: ["gpt-4.1", "gpt-4.1-mini"],
+          modelRedirects: { "gpt-4.1-preview": "gpt-4.1" },
+          modelRules: [
+            {
+              type: "regex",
+              value: "^gpt-4.*$",
+              targetModel: null,
+              source: "manual",
+              displayLabel: "模式匹配",
+            },
+            {
+              type: "exact",
+              value: "gpt-4.1",
+              targetModel: null,
+              source: "manual",
+              displayLabel: "精确匹配",
+            },
+            {
+              type: "exact",
+              value: "gpt-4.1-mini",
+              targetModel: null,
+              source: "manual",
+              displayLabel: "精确匹配",
+            },
+            {
+              type: "alias",
+              value: "gpt-4.1-preview",
+              targetModel: "gpt-4.1",
+              source: "manual",
+              displayLabel: "模型别名",
+            },
+          ],
+        })
+      );
+    });
+
+    it("should preserve existing exact rules when only redirects are updated", async () => {
+      const { updateUpstream } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValueOnce({
+        id: "test-id",
+        name: "test-upstream",
+        baseUrl: "https://api.openai.com/v1",
+        apiKeyEncrypted: "encrypted:sk-test-key",
+        routeCapabilities: ["openai_chat_compatible"],
+        modelRules: [
+          {
+            type: "regex",
+            value: "^gpt-4.*$",
+            targetModel: null,
+            source: "manual",
+            displayLabel: "模式匹配",
+          },
+          {
+            type: "exact",
+            value: "gpt-4.1",
+            targetModel: null,
+            source: "manual",
+            displayLabel: "精确匹配",
+          },
+        ],
+      } as unknown as PartialUpstream);
+
+      const set = vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([
+            {
+              id: "test-id",
+              name: "test-upstream",
+              baseUrl: "https://api.openai.com/v1",
+              apiKeyEncrypted: "encrypted:sk-test-key",
+              isDefault: false,
+              timeout: 60,
+              isActive: true,
+              config: null,
+              priority: 0,
+              weight: 1,
+              routeCapabilities: ["openai_chat_compatible"],
+              allowedModels: ["gpt-4.1"],
+              modelRedirects: { "gpt-4.1-preview": "gpt-4.1" },
+              modelDiscovery: null,
+              modelCatalog: null,
+              modelCatalogUpdatedAt: null,
+              modelCatalogLastStatus: null,
+              modelCatalogLastError: null,
+              modelCatalogLastFailedAt: null,
+              modelRules: [
+                {
+                  type: "regex",
+                  value: "^gpt-4.*$",
+                  targetModel: null,
+                  source: "manual",
+                  displayLabel: "模式匹配",
+                },
+                {
+                  type: "exact",
+                  value: "gpt-4.1",
+                  targetModel: null,
+                  source: "manual",
+                  displayLabel: "精确匹配",
+                },
+                {
+                  type: "alias",
+                  value: "gpt-4.1-preview",
+                  targetModel: "gpt-4.1",
+                  source: "manual",
+                  displayLabel: "模型别名",
+                },
+              ],
+              affinityMigration: null,
+              billingInputMultiplier: 1,
+              billingOutputMultiplier: 1,
+              spendingRules: null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ]),
+        }),
+      });
+
+      vi.mocked(db.update).mockReturnValue({
+        set,
+      } as unknown as MockUpdateChain);
+
+      await updateUpstream("test-id", {
+        modelRedirects: { "gpt-4.1-preview": "gpt-4.1" },
+      });
+
+      expect(set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          allowedModels: ["gpt-4.1"],
+          modelRedirects: { "gpt-4.1-preview": "gpt-4.1" },
+          modelRules: [
+            {
+              type: "regex",
+              value: "^gpt-4.*$",
+              targetModel: null,
+              source: "manual",
+              displayLabel: "模式匹配",
+            },
+            {
+              type: "exact",
+              value: "gpt-4.1",
+              targetModel: null,
+              source: "manual",
+              displayLabel: "精确匹配",
+            },
+            {
+              type: "alias",
+              value: "gpt-4.1-preview",
+              targetModel: "gpt-4.1",
+              source: "manual",
+              displayLabel: "模型别名",
+            },
+          ],
+        })
+      );
+    });
+
+    it("should reject invalid merged model rules during update", async () => {
+      const { updateUpstream } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValueOnce({
+        id: "test-id",
+        name: "test-upstream",
+        baseUrl: "https://api.openai.com/v1",
+        apiKeyEncrypted: "encrypted:sk-test-key",
+        routeCapabilities: ["openai_chat_compatible"],
+        modelRules: [
+          {
+            type: "regex",
+            value: "(",
+            targetModel: null,
+            source: "manual",
+            displayLabel: "模式匹配",
+          },
+        ],
+      } as unknown as PartialUpstream);
+
+      await expect(
+        updateUpstream("test-id", {
+          allowedModels: ["gpt-4.1"],
+        })
+      ).rejects.toThrow(InvalidUpstreamModelRulesError);
+
+      expect(db.update).not.toHaveBeenCalled();
     });
 
     it("should throw UpstreamNotFoundError if upstream does not exist", async () => {
@@ -814,6 +1254,283 @@ describe("upstream-crud", () => {
       const result = await getUpstreamById("nonexistent-id");
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe("refreshUpstreamCatalog", () => {
+    it("should refresh catalog metadata and persist the refreshed fields", async () => {
+      const discoveryModule = await import("@/lib/services/upstream-model-discovery");
+      vi.spyOn(discoveryModule, "refreshUpstreamModelCatalog").mockResolvedValue({
+        modelDiscovery: {
+          mode: "openai_compatible",
+          customEndpoint: null,
+          enableLiteLlmFallback: false,
+        },
+        modelCatalog: [{ model: "gpt-4.1", source: "native" }],
+        modelCatalogUpdatedAt: new Date("2026-04-18T08:00:00.000Z"),
+        modelCatalogLastStatus: "success",
+        modelCatalogLastError: null,
+        modelCatalogLastFailedAt: null,
+      });
+
+      const { refreshUpstreamCatalog } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst)
+        .mockResolvedValueOnce({
+          id: "test-id",
+          name: "test-upstream",
+          baseUrl: "https://api.openai.com/v1",
+          apiKeyEncrypted: "encrypted:sk-test-key",
+          timeout: 60,
+          routeCapabilities: ["openai_chat_compatible"],
+          modelDiscovery: null,
+          modelCatalog: null,
+          modelCatalogUpdatedAt: new Date("2026-04-17T08:00:00.000Z"),
+        } as unknown as PartialUpstream)
+        .mockResolvedValueOnce({
+          id: "test-id",
+          name: "test-upstream",
+          baseUrl: "https://api.openai.com/v1",
+          apiKeyEncrypted: "encrypted:sk-test-key",
+          timeout: 60,
+          isDefault: false,
+          isActive: true,
+          config: null,
+          priority: 0,
+          weight: 1,
+          routeCapabilities: ["openai_chat_compatible"],
+          modelDiscovery: null,
+          modelCatalog: null,
+          modelRules: null,
+          allowedModels: null,
+          modelRedirects: null,
+          affinityMigration: null,
+          billingInputMultiplier: 1,
+          billingOutputMultiplier: 1,
+          spendingRules: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        } as unknown as PartialUpstream);
+
+      const set = vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([
+            {
+              id: "test-id",
+              name: "test-upstream",
+              baseUrl: "https://api.openai.com/v1",
+              apiKeyEncrypted: "encrypted:sk-test-key",
+              timeout: 60,
+              isDefault: false,
+              isActive: true,
+              config: null,
+              priority: 0,
+              weight: 1,
+              routeCapabilities: ["openai_chat_compatible"],
+              modelDiscovery: {
+                mode: "openai_compatible",
+                customEndpoint: null,
+                enableLiteLlmFallback: false,
+              },
+              modelCatalog: [{ model: "gpt-4.1", source: "native" }],
+              modelCatalogUpdatedAt: new Date("2026-04-18T08:00:00.000Z"),
+              modelCatalogLastStatus: "success",
+              modelCatalogLastError: null,
+              modelCatalogLastFailedAt: null,
+              modelRules: null,
+              allowedModels: null,
+              modelRedirects: null,
+              affinityMigration: null,
+              billingInputMultiplier: 1,
+              billingOutputMultiplier: 1,
+              spendingRules: null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ]),
+        }),
+      });
+      vi.mocked(db.update).mockReturnValue({
+        set,
+      } as unknown as MockUpdateChain);
+
+      const result = await refreshUpstreamCatalog("test-id");
+
+      expect(discoveryModule.refreshUpstreamModelCatalog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          apiKey: "sk-test-key",
+          previousCatalogUpdatedAt: new Date("2026-04-17T08:00:00.000Z"),
+          timeoutMs: 60000,
+        })
+      );
+      expect(set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          modelCatalog: [{ model: "gpt-4.1", source: "native" }],
+          modelCatalogLastStatus: "success",
+        })
+      );
+      expect(result.modelCatalog).toEqual([{ model: "gpt-4.1", source: "native" }]);
+    });
+
+    it("should throw when refreshing a missing upstream catalog", async () => {
+      const { refreshUpstreamCatalog } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(null);
+
+      await expect(refreshUpstreamCatalog("missing-id")).rejects.toThrow(UpstreamNotFoundError);
+    });
+  });
+
+  describe("importUpstreamCatalogModels", () => {
+    it("should import selected catalog entries into unified model rules", async () => {
+      const { importUpstreamCatalogModels } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst)
+        .mockResolvedValueOnce({
+          id: "test-id",
+          name: "test-upstream",
+          baseUrl: "https://api.openai.com/v1",
+          apiKeyEncrypted: "encrypted:sk-test-key",
+          timeout: 60,
+          routeCapabilities: ["openai_chat_compatible"],
+          modelCatalog: [{ model: "gpt-4.1", source: "native" }],
+          modelRules: [
+            {
+              type: "alias",
+              value: "gpt-4.1-preview",
+              targetModel: "gpt-4.1",
+              source: "manual",
+              displayLabel: "模型别名",
+            },
+          ],
+        } as unknown as PartialUpstream)
+        .mockResolvedValueOnce({
+          id: "test-id",
+          name: "test-upstream",
+          baseUrl: "https://api.openai.com/v1",
+          apiKeyEncrypted: "encrypted:sk-test-key",
+          timeout: 60,
+          isDefault: false,
+          isActive: true,
+          config: null,
+          priority: 0,
+          weight: 1,
+          routeCapabilities: ["openai_chat_compatible"],
+          modelDiscovery: null,
+          modelCatalog: [{ model: "gpt-4.1", source: "native" }],
+          modelCatalogUpdatedAt: null,
+          modelCatalogLastStatus: null,
+          modelCatalogLastError: null,
+          modelCatalogLastFailedAt: null,
+          modelRules: [
+            {
+              type: "alias",
+              value: "gpt-4.1-preview",
+              targetModel: "gpt-4.1",
+              source: "manual",
+              displayLabel: "模型别名",
+            },
+          ],
+          allowedModels: null,
+          modelRedirects: { "gpt-4.1-preview": "gpt-4.1" },
+          affinityMigration: null,
+          billingInputMultiplier: 1,
+          billingOutputMultiplier: 1,
+          spendingRules: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        } as unknown as PartialUpstream);
+
+      const set = vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([
+            {
+              id: "test-id",
+              name: "test-upstream",
+              baseUrl: "https://api.openai.com/v1",
+              apiKeyEncrypted: "encrypted:sk-test-key",
+              timeout: 60,
+              isDefault: false,
+              isActive: true,
+              config: null,
+              priority: 0,
+              weight: 1,
+              routeCapabilities: ["openai_chat_compatible"],
+              modelDiscovery: null,
+              modelCatalog: [{ model: "gpt-4.1", source: "native" }],
+              modelCatalogUpdatedAt: null,
+              modelCatalogLastStatus: null,
+              modelCatalogLastError: null,
+              modelCatalogLastFailedAt: null,
+              modelRules: [
+                {
+                  type: "alias",
+                  value: "gpt-4.1-preview",
+                  targetModel: "gpt-4.1",
+                  source: "manual",
+                  displayLabel: "模型别名",
+                },
+                {
+                  type: "exact",
+                  value: "gpt-4.1",
+                  targetModel: null,
+                  source: "native",
+                  displayLabel: "精确匹配",
+                },
+              ],
+              allowedModels: ["gpt-4.1"],
+              modelRedirects: { "gpt-4.1-preview": "gpt-4.1" },
+              affinityMigration: null,
+              billingInputMultiplier: 1,
+              billingOutputMultiplier: 1,
+              spendingRules: null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ]),
+        }),
+      });
+      vi.mocked(db.update).mockReturnValue({
+        set,
+      } as unknown as MockUpdateChain);
+
+      const result = await importUpstreamCatalogModels("test-id", ["gpt-4.1"]);
+
+      expect(set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          modelRules: [
+            {
+              type: "alias",
+              value: "gpt-4.1-preview",
+              targetModel: "gpt-4.1",
+              source: "manual",
+              displayLabel: "模型别名",
+            },
+            {
+              type: "exact",
+              value: "gpt-4.1",
+              targetModel: null,
+              source: "native",
+              displayLabel: "精确匹配",
+            },
+          ],
+        })
+      );
+      expect(result.modelRules).toHaveLength(2);
+    });
+
+    it("should throw when importing models for a missing upstream", async () => {
+      const { importUpstreamCatalogModels } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(null);
+
+      await expect(importUpstreamCatalogModels("missing-id", ["gpt-4.1"])).rejects.toThrow(
+        UpstreamNotFoundError
+      );
     });
   });
 

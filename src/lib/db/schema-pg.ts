@@ -12,6 +12,12 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+import type {
+  UpstreamModelCatalogEntry,
+  UpstreamModelCatalogStatus,
+  UpstreamModelDiscoveryConfig,
+  UpstreamModelRule,
+} from "@/lib/services/upstream-model-types";
 
 /**
  * API keys distributed to downstream clients.
@@ -63,6 +69,15 @@ export const upstreams = pgTable(
     routeCapabilities: json("route_capabilities").$type<string[] | null>(), // Path routing capabilities
     allowedModels: json("allowed_models").$type<string[] | null>(), // JSON array of supported model names
     modelRedirects: json("model_redirects").$type<Record<string, string> | null>(), // JSON object mapping incoming model to target model
+    modelDiscovery: json("model_discovery").$type<UpstreamModelDiscoveryConfig | null>(),
+    modelCatalog: json("model_catalog").$type<UpstreamModelCatalogEntry[] | null>(),
+    modelCatalogUpdatedAt: timestamp("model_catalog_updated_at", { withTimezone: true }),
+    modelCatalogLastStatus: varchar("model_catalog_last_status", {
+      length: 16,
+    }).$type<UpstreamModelCatalogStatus | null>(),
+    modelCatalogLastError: text("model_catalog_last_error"),
+    modelCatalogLastFailedAt: timestamp("model_catalog_last_failed_at", { withTimezone: true }),
+    modelRules: json("model_rules").$type<UpstreamModelRule[] | null>(),
     affinityMigration: json("affinity_migration").$type<{
       enabled: boolean;
       metric: "tokens" | "length";

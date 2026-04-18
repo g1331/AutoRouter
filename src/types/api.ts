@@ -143,6 +143,38 @@ export interface AffinityMigrationConfig {
   threshold: number;
 }
 
+export type UpstreamModelDiscoveryMode =
+  | "openai_compatible"
+  | "anthropic_native"
+  | "gemini_native"
+  | "gemini_openai_compatible"
+  | "custom"
+  | "litellm";
+
+export type UpstreamModelCatalogSource = "native" | "inferred";
+export type UpstreamModelCatalogStatus = "success" | "failed";
+export type UpstreamModelRuleType = "exact" | "regex" | "alias";
+export type UpstreamModelRuleSource = "manual" | "native" | "inferred";
+
+export interface UpstreamModelDiscoveryConfig {
+  mode: UpstreamModelDiscoveryMode;
+  custom_endpoint: string | null;
+  enable_lite_llm_fallback: boolean;
+}
+
+export interface UpstreamModelCatalogEntry {
+  model: string;
+  source: UpstreamModelCatalogSource;
+}
+
+export interface UpstreamModelRule {
+  type: UpstreamModelRuleType;
+  value: string;
+  target_model: string | null;
+  source: UpstreamModelRuleSource;
+  display_label: string | null;
+}
+
 export interface UpstreamCreate {
   name: string;
   base_url: string;
@@ -157,6 +189,13 @@ export interface UpstreamCreate {
   route_capabilities?: RouteCapability[] | null; // Path routing capability set
   allowed_models?: string[] | null; // List of supported model names
   model_redirects?: Record<string, string> | null; // Model name mapping
+  model_discovery?: UpstreamModelDiscoveryConfig | null;
+  model_catalog?: UpstreamModelCatalogEntry[] | null;
+  model_catalog_updated_at?: string | null;
+  model_catalog_last_status?: UpstreamModelCatalogStatus | null;
+  model_catalog_last_error?: string | null;
+  model_catalog_last_failed_at?: string | null;
+  model_rules?: UpstreamModelRule[] | null;
   circuit_breaker_config?: CircuitBreakerConfig | null; // Circuit breaker configuration
   affinity_migration?: AffinityMigrationConfig | null; // Session affinity migration configuration
   billing_input_multiplier?: number;
@@ -181,6 +220,13 @@ export interface UpstreamUpdate {
   route_capabilities?: RouteCapability[] | null; // Path routing capability set
   allowed_models?: string[] | null; // List of supported model names
   model_redirects?: Record<string, string> | null; // Model name mapping
+  model_discovery?: UpstreamModelDiscoveryConfig | null;
+  model_catalog?: UpstreamModelCatalogEntry[] | null;
+  model_catalog_updated_at?: string | null;
+  model_catalog_last_status?: UpstreamModelCatalogStatus | null;
+  model_catalog_last_error?: string | null;
+  model_catalog_last_failed_at?: string | null;
+  model_rules?: UpstreamModelRule[] | null;
   circuit_breaker_config?: CircuitBreakerConfig | null; // Circuit breaker configuration
   affinity_migration?: AffinityMigrationConfig | null; // Session affinity migration configuration
   billing_input_multiplier?: number;
@@ -209,6 +255,13 @@ export interface UpstreamResponse {
   route_capabilities: RouteCapability[]; // Path routing capability set
   allowed_models: string[] | null; // List of supported model names
   model_redirects: Record<string, string> | null; // Model name mapping
+  model_discovery: UpstreamModelDiscoveryConfig | null;
+  model_catalog: UpstreamModelCatalogEntry[] | null;
+  model_catalog_updated_at: string | null;
+  model_catalog_last_status: UpstreamModelCatalogStatus | null;
+  model_catalog_last_error: string | null;
+  model_catalog_last_failed_at: string | null;
+  model_rules: UpstreamModelRule[] | null;
   affinity_migration: AffinityMigrationConfig | null; // Session affinity migration configuration
   billing_input_multiplier?: number;
   billing_output_multiplier?: number;
@@ -255,6 +308,7 @@ export interface TestUpstreamRequest {
   route_capabilities: RouteCapability[];
   base_url: string;
   api_key: string;
+  model_discovery?: UpstreamModelDiscoveryConfig | null;
   timeout?: number; // Optional timeout in seconds (defaults to 10)
 }
 

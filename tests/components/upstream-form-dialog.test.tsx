@@ -12,6 +12,14 @@ vi.mock("next-intl", () => ({
 // Mock hooks
 const mockCreateMutateAsync = vi.fn();
 const mockUpdateMutateAsync = vi.fn();
+const mockRefreshCatalogMutateAsync = vi.fn();
+const mockImportCatalogMutateAsync = vi.fn();
+const upstreamHookState = {
+  createPending: false,
+  updatePending: false,
+  refreshPending: false,
+  importPending: false,
+};
 const { mockToastError } = vi.hoisted(() => ({
   mockToastError: vi.fn(),
 }));
@@ -26,11 +34,19 @@ vi.mock("sonner", () => ({
 vi.mock("@/hooks/use-upstreams", () => ({
   useCreateUpstream: () => ({
     mutateAsync: mockCreateMutateAsync,
-    isPending: false,
+    isPending: upstreamHookState.createPending,
   }),
   useUpdateUpstream: () => ({
     mutateAsync: mockUpdateMutateAsync,
-    isPending: false,
+    isPending: upstreamHookState.updatePending,
+  }),
+  useRefreshUpstreamCatalog: () => ({
+    mutateAsync: mockRefreshCatalogMutateAsync,
+    isPending: upstreamHookState.refreshPending,
+  }),
+  useImportUpstreamCatalogModels: () => ({
+    mutateAsync: mockImportCatalogMutateAsync,
+    isPending: upstreamHookState.importPending,
   }),
 }));
 
@@ -66,8 +82,38 @@ describe("UpstreamFormDialog", () => {
     route_capabilities: [],
     allowed_models: null,
     model_redirects: null,
+    model_discovery: {
+      mode: "openai_compatible",
+      custom_endpoint: null,
+      enable_lite_llm_fallback: false,
+    },
+    model_catalog: [
+      { model: "gpt-4.1", source: "native" },
+      { model: "gpt-4.1-mini", source: "inferred" },
+    ],
+    model_catalog_updated_at: new Date().toISOString(),
+    model_catalog_last_status: "success",
+    model_catalog_last_error: null,
+    model_catalog_last_failed_at: null,
+    model_rules: [
+      {
+        type: "exact",
+        value: "gpt-4.1",
+        target_model: null,
+        source: "native",
+        display_label: "精确匹配",
+      },
+    ],
     health_status: null,
+    circuit_breaker: null,
     affinity_migration: null,
+    billing_input_multiplier: 1,
+    billing_output_multiplier: 1,
+    spending_rules: null,
+    current_concurrency: 0,
+    max_concurrency: null,
+    official_website_url: null,
+    last_used_at: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
@@ -81,8 +127,14 @@ describe("UpstreamFormDialog", () => {
     });
     mockCreateMutateAsync.mockReset();
     mockUpdateMutateAsync.mockReset();
+    mockRefreshCatalogMutateAsync.mockReset();
+    mockImportCatalogMutateAsync.mockReset();
     mockOnOpenChange.mockReset();
     mockToastError.mockReset();
+    upstreamHookState.createPending = false;
+    upstreamHookState.updatePending = false;
+    upstreamHookState.refreshPending = false;
+    upstreamHookState.importPending = false;
   });
 
   describe("Create Mode", () => {
@@ -111,6 +163,18 @@ describe("UpstreamFormDialog", () => {
       expect(screen.getByText("configCategoryBasic")).toBeInTheDocument();
       expect(screen.getByText("configCategoryStrategy")).toBeInTheDocument();
       expect(screen.getByText("configCategoryReliability")).toBeInTheDocument();
+    });
+
+    it("renders the model discovery workspace instead of legacy routing inputs", () => {
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      expect(screen.getByText("modelDiscoverySectionTitle")).toBeInTheDocument();
+      expect(screen.getByText("modelRulesSectionTitle")).toBeInTheDocument();
+      expect(screen.getByText("catalogSectionTitle")).toBeInTheDocument();
+      expect(screen.queryByText("allowedModels")).not.toBeInTheDocument();
+      expect(screen.queryByText("modelRedirects")).not.toBeInTheDocument();
     });
 
     it("keeps section order consistent with navigation order", () => {
@@ -245,8 +309,12 @@ describe("UpstreamFormDialog", () => {
           billing_output_multiplier: 1,
           spending_rules: null,
           route_capabilities: [],
-          allowed_models: null,
-          model_redirects: null,
+          model_discovery: {
+            mode: "openai_compatible",
+            custom_endpoint: null,
+            enable_lite_llm_fallback: false,
+          },
+          model_rules: null,
           circuit_breaker_config: null,
           affinity_migration: null,
         });
@@ -451,6 +519,147 @@ describe("UpstreamFormDialog", () => {
       expect(screen.getByText("apiKeyEditHint")).toBeInTheDocument();
     });
 
+    it("blocks catalog refresh when discovery dependencies are edited but not saved", () => {
+      render(
+        <UpstreamFormDialog upstream={mockUpstream} open={true} onOpenChange={mockOnOpenChange} />,
+        { wrapper: Wrapper }
+      );
+
+      fireEvent.change(screen.getByDisplayValue("https://api.openai.com/v1"), {
+        target: { value: "https://gateway.example.com/codex/v1" },
+      });
+
+      expect(screen.getByText("catalogSavedConfigHint")).toBeInTheDocument();
+      expect(screen.getByText("refreshCatalog")).toBeDisabled();
+    });
+
+    it("shows catalog loading state without hiding the rules workspace", () => {
+      upstreamHookState.refreshPending = true;
+
+      render(
+        <UpstreamFormDialog upstream={mockUpstream} open={true} onOpenChange={mockOnOpenChange} />,
+        { wrapper: Wrapper }
+      );
+
+      expect(screen.getByText("catalogLoading")).toBeInTheDocument();
+      expect(screen.getByText("modelRulesSectionTitle")).toBeInTheDocument();
+      expect(screen.getByText("refreshCatalog")).toBeDisabled();
+    });
+
+    it("shows catalog empty state when an editable upstream has no cached entries", () => {
+      const upstreamWithoutCatalog: Upstream = {
+        ...mockUpstream,
+        model_catalog: null,
+        model_catalog_updated_at: null,
+        model_catalog_last_status: null,
+        model_catalog_last_error: null,
+        model_catalog_last_failed_at: null,
+      };
+
+      render(
+        <UpstreamFormDialog
+          upstream={upstreamWithoutCatalog}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      expect(screen.getByText("catalogEmptyState")).toBeInTheDocument();
+      expect(screen.getByText("modelRulesSectionTitle")).toBeInTheDocument();
+      expect(screen.getByText("refreshCatalog")).toBeInTheDocument();
+    });
+
+    it("shows catalog failure state with error details and retry action", () => {
+      const failedCatalogUpstream: Upstream = {
+        ...mockUpstream,
+        model_catalog: null,
+        model_catalog_last_status: "failed",
+        model_catalog_last_error: "gateway timeout",
+        model_catalog_last_failed_at: new Date("2026-04-18T12:00:00.000Z").toISOString(),
+      };
+
+      render(
+        <UpstreamFormDialog
+          upstream={failedCatalogUpstream}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      expect(screen.getByText("catalogFailureTitle")).toBeInTheDocument();
+      expect(screen.getByText("gateway timeout")).toBeInTheDocument();
+      expect(screen.getByText("catalogFailedAtLabel")).toBeInTheDocument();
+      expect(screen.getByText("refreshCatalog")).toBeEnabled();
+    });
+
+    it("keeps the compact status bar ahead of a desktop-secondary workspace", () => {
+      render(
+        <UpstreamFormDialog upstream={mockUpstream} open={true} onOpenChange={mockOnOpenChange} />,
+        { wrapper: Wrapper }
+      );
+
+      const statusHint = screen.getByText("catalogStatusBarHint");
+      const rulesTitle = screen.getByText("modelRulesSectionTitle");
+      const catalogTitle = screen.getByText("catalogSectionTitle");
+
+      expect(
+        statusHint.compareDocumentPosition(rulesTitle) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(
+        rulesTitle.compareDocumentPosition(catalogTitle) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+
+      const workspaceContainer = Array.from(document.querySelectorAll("div")).find(
+        (element) =>
+          typeof element.className === "string" &&
+          element.className.includes("xl:grid-cols-[minmax(0,1.02fr)_minmax(340px,0.98fr)]")
+      );
+
+      expect(workspaceContainer).toBeTruthy();
+      expect(workspaceContainer?.className).toContain("grid");
+    });
+
+    it("imports selected catalog entries and echoes returned model rules", async () => {
+      mockImportCatalogMutateAsync.mockResolvedValueOnce({
+        ...mockUpstream,
+        model_rules: [
+          {
+            type: "exact",
+            value: "gpt-4.1",
+            target_model: null,
+            source: "native",
+            display_label: "精确匹配",
+          },
+          {
+            type: "exact",
+            value: "gpt-4.1-mini",
+            target_model: null,
+            source: "inferred",
+            display_label: "精确匹配",
+          },
+        ],
+      });
+
+      render(
+        <UpstreamFormDialog upstream={mockUpstream} open={true} onOpenChange={mockOnOpenChange} />,
+        { wrapper: Wrapper }
+      );
+
+      fireEvent.click(screen.getByText("gpt-4.1-mini"));
+      fireEvent.click(screen.getByText("catalogImportScope"));
+
+      await waitFor(() => {
+        expect(mockImportCatalogMutateAsync).toHaveBeenCalledWith({
+          id: "upstream-1",
+          models: ["gpt-4.1-mini"],
+        });
+      });
+
+      expect(screen.getAllByDisplayValue("gpt-4.1-mini").length).toBeGreaterThanOrEqual(1);
+    });
+
     it("calls updateMutation on valid form submission with new api_key", async () => {
       mockUpdateMutateAsync.mockResolvedValueOnce({});
 
@@ -482,8 +691,20 @@ describe("UpstreamFormDialog", () => {
             billing_output_multiplier: 1,
             spending_rules: null,
             route_capabilities: [],
-            allowed_models: null,
-            model_redirects: null,
+            model_discovery: {
+              mode: "openai_compatible",
+              custom_endpoint: null,
+              enable_lite_llm_fallback: false,
+            },
+            model_rules: [
+              {
+                type: "exact",
+                value: "gpt-4.1",
+                target_model: null,
+                source: "native",
+                display_label: "精确匹配",
+              },
+            ],
             circuit_breaker_config: null,
             affinity_migration: null,
           },
@@ -519,8 +740,20 @@ describe("UpstreamFormDialog", () => {
             billing_output_multiplier: 1,
             spending_rules: null,
             route_capabilities: [],
-            allowed_models: null,
-            model_redirects: null,
+            model_discovery: {
+              mode: "openai_compatible",
+              custom_endpoint: null,
+              enable_lite_llm_fallback: false,
+            },
+            model_rules: [
+              {
+                type: "exact",
+                value: "gpt-4.1",
+                target_model: null,
+                source: "native",
+                display_label: "精确匹配",
+              },
+            ],
             circuit_breaker_config: null,
             affinity_migration: null,
             // api_key should NOT be included when empty
@@ -530,6 +763,129 @@ describe("UpstreamFormDialog", () => {
 
       // Should successfully submit (edit mode allows empty api_key)
       expect(mockUpdateMutateAsync).toHaveBeenCalled();
+    });
+
+    it("supports bulk deleting selected model rules", () => {
+      const upstreamWithMultipleRules: Upstream = {
+        ...mockUpstream,
+        model_rules: [
+          {
+            type: "exact",
+            value: "gpt-4.1",
+            target_model: null,
+            source: "native",
+            display_label: "精确匹配",
+          },
+          {
+            type: "exact",
+            value: "gpt-4.1-mini",
+            target_model: null,
+            source: "manual",
+            display_label: "精确匹配",
+          },
+          {
+            type: "alias",
+            value: "gpt-4.1-preview",
+            target_model: "gpt-4.1",
+            source: "manual",
+            display_label: "别名改写",
+          },
+        ],
+      };
+
+      render(
+        <UpstreamFormDialog
+          upstream={upstreamWithMultipleRules}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      expect(screen.getAllByDisplayValue("gpt-4.1")).toHaveLength(2);
+      fireEvent.click(screen.getByLabelText("selectModelRule 1"));
+      fireEvent.click(screen.getByLabelText("selectModelRule 2"));
+      fireEvent.click(screen.getByText("deleteSelectedModelRules"));
+
+      expect(screen.getAllByDisplayValue("gpt-4.1")).toHaveLength(1);
+      expect(screen.queryByDisplayValue("gpt-4.1-mini")).not.toBeInTheDocument();
+      expect(screen.getByDisplayValue("gpt-4.1-preview")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("gpt-4.1")).toBeInTheDocument();
+    });
+
+    it("filters catalog entries, selects visible models, and clears the selection", () => {
+      render(
+        <UpstreamFormDialog upstream={mockUpstream} open={true} onOpenChange={mockOnOpenChange} />,
+        { wrapper: Wrapper }
+      );
+
+      const importButton = screen
+        .getByText("catalogImportScope")
+        .closest("button") as HTMLButtonElement;
+      expect(importButton).toBeDisabled();
+
+      fireEvent.change(screen.getByPlaceholderText("catalogSearchPlaceholder"), {
+        target: { value: "mini" },
+      });
+      fireEvent.click(screen.getAllByText("catalogSourceFilterAll")[0]);
+      fireEvent.click(screen.getAllByText("modelRuleSource_inferred").slice(-1)[0]);
+      fireEvent.click(screen.getByText("catalogSelectVisible"));
+
+      expect(importButton).toBeEnabled();
+
+      fireEvent.click(screen.getByText("catalogClearSelection"));
+      expect(importButton).toBeDisabled();
+    });
+
+    it("switches a model rule to alias mode and submits manual source updates", async () => {
+      mockUpdateMutateAsync.mockResolvedValueOnce({});
+
+      render(
+        <UpstreamFormDialog upstream={mockUpstream} open={true} onOpenChange={mockOnOpenChange} />,
+        { wrapper: Wrapper }
+      );
+
+      fireEvent.click(screen.getAllByText("modelRuleTypeLabel_exact")[0]);
+      fireEvent.click(screen.getAllByText("modelRuleTypeLabel_alias").slice(-1)[0]);
+
+      fireEvent.change(screen.getByDisplayValue("gpt-4.1"), {
+        target: { value: "gpt-4.1-preview" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("modelRuleTargetPlaceholder"), {
+        target: { value: "gpt-4.1" },
+      });
+      fireEvent.click(screen.getByText("save"));
+
+      await waitFor(() => {
+        expect(mockUpdateMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id: "upstream-1",
+            data: expect.objectContaining({
+              model_rules: [
+                {
+                  type: "alias",
+                  value: "gpt-4.1-preview",
+                  target_model: "gpt-4.1",
+                  source: "manual",
+                  display_label: null,
+                },
+              ],
+            }),
+          })
+        );
+      });
+    });
+
+    it("removes a single model rule from the workspace", () => {
+      render(
+        <UpstreamFormDialog upstream={mockUpstream} open={true} onOpenChange={mockOnOpenChange} />,
+        { wrapper: Wrapper }
+      );
+
+      fireEvent.click(screen.getByLabelText("removeModelRule"));
+
+      expect(screen.getByText("modelRulesEmpty")).toBeInTheDocument();
+      expect(screen.queryByDisplayValue("gpt-4.1")).not.toBeInTheDocument();
     });
   });
 
@@ -639,7 +995,7 @@ describe("UpstreamFormDialog", () => {
         .getByText("billingOutputMultiplier")
         .parentElement?.querySelector("input") as HTMLInputElement;
 
-      fireEvent.click(screen.getByRole("switch"));
+      fireEvent.click(screen.getAllByRole("switch")[1]);
       const affinityThresholdInput = screen.getByPlaceholderText("50000") as HTMLInputElement;
 
       fireEvent.change(priorityInput, { target: { value: "30" } });

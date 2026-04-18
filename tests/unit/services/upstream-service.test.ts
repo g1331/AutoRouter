@@ -207,7 +207,7 @@ describe("upstream-service", () => {
       expect(result.testedAt).toBeInstanceOf(Date);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.openai.com/v1/models",
+        "https://api.openai.com/models",
         expect.objectContaining({
           method: "GET",
           headers: {
@@ -240,7 +240,7 @@ describe("upstream-service", () => {
       expect(result.testedAt).toBeInstanceOf(Date);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.anthropic.com/v1/models",
+        "https://api.anthropic.com/models",
         expect.objectContaining({
           method: "GET",
           headers: {
@@ -502,10 +502,7 @@ describe("upstream-service", () => {
         timeout: 10,
       });
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.openai.com/v1/models",
-        expect.any(Object)
-      );
+      expect(mockFetch).toHaveBeenCalledWith("https://api.openai.com/models", expect.any(Object));
     });
 
     it("should use default timeout of 10 seconds when not specified", async () => {

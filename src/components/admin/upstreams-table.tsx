@@ -312,6 +312,34 @@ export function UpstreamsTable({
     return `${t("spendingPeriodRolling")} ${rule.period_hours ?? "-"}h`;
   };
 
+  const getCatalogSignal = (
+    upstream: Upstream
+  ): {
+    label: string;
+    variant: "success" | "error" | "info" | "outline";
+    title?: string;
+  } | null => {
+    if (upstream.model_catalog_last_status === "failed") {
+      return {
+        label: t("catalogSignalFailed"),
+        variant: "error",
+        title: upstream.model_catalog_last_error ?? undefined,
+      };
+    }
+
+    if ((upstream.model_catalog?.length ?? 0) > 0) {
+      return {
+        label: t("catalogSignalReady"),
+        variant: upstream.model_catalog?.some((entry) => entry.source === "inferred")
+          ? "info"
+          : "success",
+        title: t("catalogSignalReadyHint", { count: upstream.model_catalog?.length ?? 0 }),
+      };
+    }
+
+    return null;
+  };
+
   const handleRecoverCircuit = async (upstream: Upstream, e?: SyntheticEvent) => {
     e?.stopPropagation();
     try {
@@ -453,6 +481,7 @@ export function UpstreamsTable({
                   {tier.upstreams.map((upstream) => {
                     const quota = quotaMap.get(upstream.id);
                     const concurrency = getConcurrencyInfo(upstream);
+                    const catalogSignal = getCatalogSignal(upstream);
                     const showRecover =
                       upstream.circuit_breaker != null &&
                       upstream.circuit_breaker.state !== "closed";
@@ -563,6 +592,15 @@ export function UpstreamsTable({
                                   className="border-status-error/45 text-status-error"
                                 >
                                   {t("quotaExceeded")}
+                                </Badge>
+                              )}
+                              {catalogSignal && (
+                                <Badge
+                                  variant={catalogSignal.variant}
+                                  className="text-[11px]"
+                                  title={catalogSignal.title}
+                                >
+                                  {catalogSignal.label}
                                 </Badge>
                               )}
                             </div>

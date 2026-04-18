@@ -37,6 +37,33 @@ interface ApiClientOptions {
   onUnauthorized?: () => void;
 }
 
+function extractApiErrorMessage(detail: unknown): string | null {
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  if (!detail || typeof detail !== "object") {
+    return null;
+  }
+
+  const detailRecord = detail as Record<string, unknown>;
+  const nestedDetail =
+    "detail" in detailRecord ? extractApiErrorMessage(detailRecord.detail) : null;
+  if (nestedDetail) {
+    return nestedDetail;
+  }
+
+  if (typeof detailRecord.message === "string" && detailRecord.message.trim()) {
+    return detailRecord.message;
+  }
+
+  if (typeof detailRecord.error === "string" && detailRecord.error.trim()) {
+    return detailRecord.error;
+  }
+
+  return null;
+}
+
 /**
  * 创建 API 客户端
  */
@@ -82,11 +109,9 @@ export function createApiClient(options: ApiClientOptions) {
           errorDetail = response.statusText;
         }
 
-        throw new ApiError(
-          typeof errorDetail === "string" ? errorDetail : "请求失败",
-          response.status,
-          errorDetail
-        );
+        const errorMessage = extractApiErrorMessage(errorDetail) ?? "请求失败";
+
+        throw new ApiError(errorMessage, response.status, errorDetail);
       }
 
       // 204 No Content：返回 null

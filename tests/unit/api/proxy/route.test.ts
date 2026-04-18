@@ -1869,6 +1869,94 @@ describe("proxy route upstream selection", () => {
     );
   });
 
+  it("should exclude authorized capability candidates when model rules do not match", async () => {
+    const { db } = await import("@/lib/db");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { logRequest } = await import("@/lib/services/request-logger");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-openai" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-openai",
+        name: "openai-capability-upstream",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com/v1",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["openai_chat_compatible"],
+        allowedModels: null,
+        modelRedirects: null,
+        modelRules: [
+          {
+            type: "exact",
+            value: "gpt-4.1",
+            targetModel: null,
+            source: "manual",
+            displayLabel: "精确匹配",
+          },
+        ],
+      },
+    ]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.2",
+        messages: [{ role: "user", content: "hello" }],
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["chat", "completions"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(data).toEqual({
+      error: expect.objectContaining({
+        code: "NO_UPSTREAMS_CONFIGURED",
+        reason: "NO_HEALTHY_CANDIDATES",
+        did_send_upstream: false,
+        user_hint: expect.stringContaining("gpt-5.2"),
+      }),
+    });
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(selectFromProviderType).not.toHaveBeenCalled();
+    expect(forwardRequest).not.toHaveBeenCalled();
+    expect(logRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        upstreamId: null,
+        errorMessage: "all authorized upstreams were excluded by model rules",
+        routingDecision: expect.objectContaining({
+          matched_route_capability: "openai_chat_compatible",
+          failure_stage: "candidate_selection",
+          did_send_upstream: false,
+          excluded: expect.arrayContaining([
+            expect.objectContaining({
+              id: "up-openai",
+              reason: "model_not_allowed",
+            }),
+          ]),
+        }),
+      })
+    );
+  });
+
   it("should treat responses subpath as generic responses route capability", async () => {
     const { db } = await import("@/lib/db");
     const { routeByModel } = await import("@/lib/services/model-router");

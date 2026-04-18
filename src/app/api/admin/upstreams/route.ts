@@ -4,6 +4,7 @@ import { getPaginationParams, errorResponse } from "@/lib/utils/api-auth";
 import {
   listUpstreams,
   createUpstream,
+  InvalidUpstreamModelRulesError,
   type UpstreamCreateInput,
 } from "@/lib/services/upstream-service";
 import { transformPaginatedUpstreams, transformUpstreamToApi } from "@/lib/utils/api-transformers";
@@ -33,6 +34,37 @@ const affinityMigrationConfigSchema = z.object({
   threshold: z.number().int().min(1).max(10000000),
 });
 
+const modelDiscoverySchema = z.object({
+  mode: z.enum([
+    "openai_compatible",
+    "anthropic_native",
+    "gemini_native",
+    "gemini_openai_compatible",
+    "custom",
+    "litellm",
+  ]),
+  custom_endpoint: z.string().trim().min(1).nullable().optional(),
+  enable_lite_llm_fallback: z.boolean().default(false),
+});
+
+const modelCatalogEntrySchema = z.object({
+  model: z.string().trim().min(1),
+  source: z.enum(["native", "inferred"]),
+});
+
+const modelRuleSchema = z
+  .object({
+    type: z.enum(["exact", "regex", "alias"]),
+    value: z.string().trim().min(1),
+    target_model: z.string().trim().min(1).nullable().optional(),
+    source: z.enum(["manual", "native", "inferred"]).default("manual"),
+    display_label: z.string().trim().min(1).nullable().optional(),
+  })
+  .refine((rule) => rule.type !== "alias" || Boolean(rule.target_model), {
+    message: "target_model is required when rule type is alias",
+    path: ["target_model"],
+  });
+
 function normalizeDurationToMs(
   value: number | undefined,
   kind: "open_duration" | "probe_interval"
@@ -58,6 +90,13 @@ const createUpstreamSchema = z
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)).nullable().optional(),
     allowed_models: z.array(z.string()).nullable().optional(),
     model_redirects: z.record(z.string(), z.string()).nullable().optional(),
+    model_discovery: modelDiscoverySchema.nullable().optional(),
+    model_catalog: z.array(modelCatalogEntrySchema).nullable().optional(),
+    model_catalog_updated_at: z.string().datetime().nullable().optional(),
+    model_catalog_last_status: z.enum(["success", "failed"]).nullable().optional(),
+    model_catalog_last_error: z.string().nullable().optional(),
+    model_catalog_last_failed_at: z.string().datetime().nullable().optional(),
+    model_rules: z.array(modelRuleSchema).nullable().optional(),
     circuit_breaker_config: circuitBreakerConfigSchema.nullable().optional(),
     affinity_migration: affinityMigrationConfigSchema.nullable().optional(),
     billing_input_multiplier: z.number().min(0).max(100).default(1),
@@ -145,6 +184,37 @@ export async function POST(request: NextRequest) {
           : undefined,
       allowedModels: validated.allowed_models ?? null,
       modelRedirects: validated.model_redirects ?? null,
+      modelDiscovery:
+        validated.model_discovery !== undefined
+          ? validated.model_discovery
+            ? {
+                mode: validated.model_discovery.mode,
+                customEndpoint: validated.model_discovery.custom_endpoint ?? null,
+                enableLiteLlmFallback: validated.model_discovery.enable_lite_llm_fallback,
+              }
+            : null
+          : undefined,
+      modelCatalog:
+        validated.model_catalog?.map((entry) => ({
+          model: entry.model,
+          source: entry.source,
+        })) ?? null,
+      modelCatalogUpdatedAt: validated.model_catalog_updated_at
+        ? new Date(validated.model_catalog_updated_at)
+        : null,
+      modelCatalogLastStatus: validated.model_catalog_last_status ?? null,
+      modelCatalogLastError: validated.model_catalog_last_error ?? null,
+      modelCatalogLastFailedAt: validated.model_catalog_last_failed_at
+        ? new Date(validated.model_catalog_last_failed_at)
+        : null,
+      modelRules:
+        validated.model_rules?.map((rule) => ({
+          type: rule.type,
+          value: rule.value,
+          targetModel: rule.target_model ?? null,
+          source: rule.source,
+          displayLabel: rule.display_label ?? null,
+        })) ?? null,
       circuitBreakerConfig: validated.circuit_breaker_config
         ? {
             failureThreshold: validated.circuit_breaker_config.failure_threshold,
@@ -184,6 +254,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(transformUpstreamToApi(result), { status: 201 });
   } catch (error) {
+    if (error instanceof InvalidUpstreamModelRulesError) {
+      return errorResponse(`Validation error: ${error.issues.join(", ")}`, 400);
+    }
     if (error instanceof z.ZodError) {
       return errorResponse(
         `Validation error: ${error.issues.map((e: { message: string }) => e.message).join(", ")}`,

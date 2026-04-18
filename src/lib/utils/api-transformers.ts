@@ -90,6 +90,30 @@ export interface UpstreamApiResponse {
   route_capabilities: RouteCapability[];
   allowed_models: string[] | null;
   model_redirects: Record<string, string> | null;
+  model_discovery: {
+    mode: import("@/types/api").UpstreamModelDiscoveryMode;
+    custom_endpoint: string | null;
+    enable_lite_llm_fallback: boolean;
+  } | null;
+  model_catalog:
+    | {
+        model: string;
+        source: import("@/types/api").UpstreamModelCatalogSource;
+      }[]
+    | null;
+  model_catalog_updated_at: string | null;
+  model_catalog_last_status: import("@/types/api").UpstreamModelCatalogStatus | null;
+  model_catalog_last_error: string | null;
+  model_catalog_last_failed_at: string | null;
+  model_rules:
+    | {
+        type: import("@/types/api").UpstreamModelRuleType;
+        value: string;
+        target_model: string | null;
+        source: import("@/types/api").UpstreamModelRuleSource;
+        display_label: string | null;
+      }[]
+    | null;
   affinity_migration: {
     enabled: boolean;
     metric: "tokens" | "length";
@@ -141,6 +165,30 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
     route_capabilities: upstream.routeCapabilities,
     allowed_models: upstream.allowedModels,
     model_redirects: upstream.modelRedirects,
+    model_discovery: upstream.modelDiscovery
+      ? {
+          mode: upstream.modelDiscovery.mode,
+          custom_endpoint: upstream.modelDiscovery.customEndpoint,
+          enable_lite_llm_fallback: upstream.modelDiscovery.enableLiteLlmFallback,
+        }
+      : null,
+    model_catalog:
+      upstream.modelCatalog?.map((entry) => ({
+        model: entry.model,
+        source: entry.source,
+      })) ?? null,
+    model_catalog_updated_at: upstream.modelCatalogUpdatedAt?.toISOString() ?? null,
+    model_catalog_last_status: upstream.modelCatalogLastStatus ?? null,
+    model_catalog_last_error: upstream.modelCatalogLastError ?? null,
+    model_catalog_last_failed_at: upstream.modelCatalogLastFailedAt?.toISOString() ?? null,
+    model_rules:
+      upstream.modelRules?.map((rule) => ({
+        type: rule.type,
+        value: rule.value,
+        target_model: rule.targetModel,
+        source: rule.source,
+        display_label: rule.displayLabel,
+      })) ?? null,
     affinity_migration: upstream.affinityMigration,
     billing_input_multiplier: upstream.billingInputMultiplier ?? 1,
     billing_output_multiplier: upstream.billingOutputMultiplier ?? 1,
