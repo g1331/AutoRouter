@@ -6,6 +6,7 @@ import {
   updateUpstream,
   deleteUpstream,
   UpstreamNotFoundError,
+  InvalidUpstreamModelRulesError,
   type UpstreamUpdateInput,
 } from "@/lib/services/upstream-service";
 import { transformUpstreamToApi } from "@/lib/utils/api-transformers";
@@ -287,6 +288,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   } catch (error) {
     if (error instanceof UpstreamNotFoundError) {
       return errorResponse("Upstream not found", 404);
+    }
+    if (error instanceof InvalidUpstreamModelRulesError) {
+      return errorResponse(`Validation error: ${error.issues.join(", ")}`, 400);
     }
     if (error instanceof z.ZodError) {
       return errorResponse(

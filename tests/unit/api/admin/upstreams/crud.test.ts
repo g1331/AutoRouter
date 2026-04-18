@@ -38,6 +38,16 @@ const mockUpdateUpstream = vi.fn();
 const mockDeleteUpstream = vi.fn();
 const mockListUpstreams = vi.fn();
 const mockGetUpstreamById = vi.fn();
+class MockUpstreamNotFoundError extends Error {}
+class MockInvalidUpstreamModelRulesError extends Error {
+  issues: string[];
+
+  constructor(issues: string[]) {
+    super(issues.join(", "));
+    this.name = "InvalidUpstreamModelRulesError";
+    this.issues = issues;
+  }
+}
 
 vi.mock("@/lib/services/upstream-service", () => ({
   createUpstream: (...args: unknown[]) => mockCreateUpstream(...args),
@@ -45,7 +55,8 @@ vi.mock("@/lib/services/upstream-service", () => ({
   deleteUpstream: (...args: unknown[]) => mockDeleteUpstream(...args),
   listUpstreams: (...args: unknown[]) => mockListUpstreams(...args),
   getUpstreamById: (...args: unknown[]) => mockGetUpstreamById(...args),
-  UpstreamNotFoundError: class UpstreamNotFoundError extends Error {},
+  UpstreamNotFoundError: MockUpstreamNotFoundError,
+  InvalidUpstreamModelRulesError: MockInvalidUpstreamModelRulesError,
 }));
 
 describe("Admin Upstreams API with new fields", () => {
@@ -458,6 +469,39 @@ describe("Admin Upstreams API with new fields", () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
     });
+
+    it("should surface invalid model rules as a validation error", async () => {
+      mockCreateUpstream.mockRejectedValueOnce(
+        new MockInvalidUpstreamModelRulesError(["Invalid regex rule: ("])
+      );
+
+      const request = new NextRequest("http://localhost:3000/api/admin/upstreams", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "broken-upstream",
+          base_url: "https://api.openai.com",
+          api_key: "sk-test-key-12345678",
+          model_rules: [
+            {
+              type: "regex",
+              value: "(",
+              target_model: null,
+              source: "manual",
+            },
+          ],
+        }),
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toContain("Invalid regex rule: (");
+    });
   });
 
   describe("PUT /api/admin/upstreams/[id] - Update with new fields", () => {
@@ -734,6 +778,36 @@ describe("Admin Upstreams API with new fields", () => {
           maxConcurrency: 8,
         })
       );
+    });
+
+    it("should surface invalid model rules during update", async () => {
+      mockUpdateUpstream.mockRejectedValueOnce(
+        new MockInvalidUpstreamModelRulesError(["Invalid regex rule: ("])
+      );
+
+      const request = new NextRequest("http://localhost:3000/api/admin/upstreams/upstream-1", {
+        method: "PUT",
+        headers: {
+          authorization: "Bearer test-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model_rules: [
+            {
+              type: "regex",
+              value: "(",
+              target_model: null,
+              source: "manual",
+            },
+          ],
+        }),
+      });
+
+      const response = await PUT(request, { params: Promise.resolve({ id: "upstream-1" }) });
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toContain("Invalid regex rule: (");
     });
   });
 

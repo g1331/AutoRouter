@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
+  InvalidUpstreamModelRulesError,
   maskApiKey,
   UpstreamNotFoundError,
   type UpstreamUpdateInput,
@@ -407,6 +408,32 @@ describe("upstream-crud", () => {
       );
       expect(result.modelDiscovery?.mode).toBe("anthropic_native");
       expect(result.modelRules).toHaveLength(2);
+    });
+
+    it("should reject invalid model rules before writing them", async () => {
+      const { createUpstream } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(null);
+
+      await expect(
+        createUpstream({
+          name: "broken-upstream",
+          baseUrl: "https://api.openai.com/v1",
+          apiKey: "sk-test-key",
+          modelRules: [
+            {
+              type: "regex",
+              value: "(",
+              targetModel: null,
+              source: "manual",
+              displayLabel: "模式匹配",
+            },
+          ],
+        })
+      ).rejects.toThrow(InvalidUpstreamModelRulesError);
+
+      expect(db.insert).not.toHaveBeenCalled();
     });
 
     it("should throw error if name already exists", async () => {
@@ -901,6 +928,36 @@ describe("upstream-crud", () => {
           ],
         })
       );
+    });
+
+    it("should reject invalid merged model rules during update", async () => {
+      const { updateUpstream } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValueOnce({
+        id: "test-id",
+        name: "test-upstream",
+        baseUrl: "https://api.openai.com/v1",
+        apiKeyEncrypted: "encrypted:sk-test-key",
+        routeCapabilities: ["openai_chat_compatible"],
+        modelRules: [
+          {
+            type: "regex",
+            value: "(",
+            targetModel: null,
+            source: "manual",
+            displayLabel: "模式匹配",
+          },
+        ],
+      } as unknown as PartialUpstream);
+
+      await expect(
+        updateUpstream("test-id", {
+          allowedModels: ["gpt-4.1"],
+        })
+      ).rejects.toThrow(InvalidUpstreamModelRulesError);
+
+      expect(db.update).not.toHaveBeenCalled();
     });
 
     it("should throw UpstreamNotFoundError if upstream does not exist", async () => {

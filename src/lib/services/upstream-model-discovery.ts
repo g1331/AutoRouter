@@ -42,6 +42,8 @@ export interface DiscoveryRequest {
   headers: Record<string, string>;
 }
 
+const ABSOLUTE_URL_PATTERN = /^[a-zA-Z][a-zA-Z\d+.-]*:/;
+
 function stripTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
 }
@@ -59,6 +61,22 @@ export function normalizeApiRoot(baseUrl: string): string {
   url.search = "";
   url.pathname = stripTrailingModelsPath(stripTrailingSlash(url.pathname || "/"));
   return url.toString().replace(/\/$/, url.pathname === "/" ? "" : "");
+}
+
+function resolveCustomDiscoveryUrl(customEndpoint: string, apiRoot: string): URL {
+  if (ABSOLUTE_URL_PATTERN.test(customEndpoint) || customEndpoint.startsWith("//")) {
+    throw new Error(
+      "Custom discovery endpoint must be a relative path under the configured API root"
+    );
+  }
+
+  const apiRootUrl = new URL(`${apiRoot}/`);
+  const resolvedUrl = new URL(customEndpoint, apiRootUrl);
+  if (resolvedUrl.origin !== apiRootUrl.origin) {
+    throw new Error("Custom discovery endpoint must stay under the configured API root");
+  }
+
+  return resolvedUrl;
 }
 
 export function buildUpstreamModelDiscoveryRequest(
@@ -100,7 +118,7 @@ export function buildUpstreamModelDiscoveryRequest(
         throw new Error("Custom discovery endpoint is required when mode is custom");
       }
 
-      requestUrl = new URL(customEndpoint, `${apiRoot}/`);
+      requestUrl = resolveCustomDiscoveryUrl(customEndpoint, apiRoot);
       if (provider === "anthropic") {
         headers["x-api-key"] = input.apiKey;
         headers["anthropic-version"] = "2023-06-01";

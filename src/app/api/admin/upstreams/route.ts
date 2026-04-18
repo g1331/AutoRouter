@@ -4,6 +4,7 @@ import { getPaginationParams, errorResponse } from "@/lib/utils/api-auth";
 import {
   listUpstreams,
   createUpstream,
+  InvalidUpstreamModelRulesError,
   type UpstreamCreateInput,
 } from "@/lib/services/upstream-service";
 import { transformPaginatedUpstreams, transformUpstreamToApi } from "@/lib/utils/api-transformers";
@@ -253,6 +254,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(transformUpstreamToApi(result), { status: 201 });
   } catch (error) {
+    if (error instanceof InvalidUpstreamModelRulesError) {
+      return errorResponse(`Validation error: ${error.issues.join(", ")}`, 400);
+    }
     if (error instanceof z.ZodError) {
       return errorResponse(
         `Validation error: ${error.issues.map((e: { message: string }) => e.message).join(", ")}`,

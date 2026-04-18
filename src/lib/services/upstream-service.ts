@@ -13,6 +13,7 @@ export {
 export {
   // Error classes
   UpstreamNotFoundError,
+  InvalidUpstreamModelRulesError,
   // Upstream CRUD functions
   createUpstream,
   updateUpstream,

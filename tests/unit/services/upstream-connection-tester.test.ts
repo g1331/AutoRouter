@@ -261,6 +261,26 @@ describe("upstream-connection-tester", () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
+    it("should reject absolute custom discovery endpoints before issuing the test request", async () => {
+      const result = await testUpstreamConnection({
+        routeCapabilities: ["openai_chat_compatible"],
+        baseUrl: "https://api.openai.com/v1",
+        apiKey: "sk-test",
+        modelDiscovery: {
+          mode: "custom",
+          customEndpoint: "https://169.254.169.254/latest/meta-data",
+          enableLiteLlmFallback: false,
+        },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe("Invalid model discovery configuration");
+      expect(result.errorDetails).toContain(
+        "Custom discovery endpoint must be a relative path under the configured API root"
+      );
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
     it("should reject non-HTTP/HTTPS protocols", async () => {
       const result = await testUpstreamConnection({
         routeCapabilities: ["openai_chat_compatible"],

@@ -42,6 +42,11 @@ async function getAppliedHashes(client) {
   return new Set((result.rows ?? []).map((row) => String(row.hash)));
 }
 
+function isIgnorableSqliteMigrationError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("already exists") || message.includes("duplicate column name");
+}
+
 async function applyMigration(client, hash, sqlContent) {
   const statements = splitStatements(sqlContent);
   if (statements.length === 0) {
@@ -51,7 +56,14 @@ async function applyMigration(client, hash, sqlContent) {
   await client.execute("BEGIN");
   try {
     for (const statement of statements) {
-      await client.execute(statement);
+      try {
+        await client.execute(statement);
+      } catch (error) {
+        if (isIgnorableSqliteMigrationError(error)) {
+          continue;
+        }
+        throw error;
+      }
     }
     await client.execute({
       sql: "INSERT INTO __drizzle_migrations (hash) VALUES (?)",

@@ -128,6 +128,61 @@ function detectCircularRedirect(
   return detectCircularRedirect(aliasMap, targetModel, visited);
 }
 
+const MAX_ALIAS_RESOLUTION_DEPTH = 10;
+
+function isRuntimeValidRegexRule(value: string): boolean {
+  try {
+    new RegExp(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function buildRuntimeRuleState(normalizedRules: UpstreamModelRule[]): {
+  runtimeRules: UpstreamModelRule[];
+  aliasMap: Record<string, string>;
+} {
+  const aliasMap = buildAliasMap(normalizedRules);
+  const runtimeRules = normalizedRules.filter((rule) => {
+    if (rule.type === "regex") {
+      return isRuntimeValidRegexRule(rule.value);
+    }
+
+    if (rule.type === "alias") {
+      return Boolean(rule.targetModel) && !detectCircularRedirect(aliasMap, rule.value);
+    }
+
+    return true;
+  });
+
+  return {
+    runtimeRules,
+    aliasMap: buildAliasMap(runtimeRules),
+  };
+}
+
+function resolveAliasTarget(
+  initialTarget: string,
+  aliasMap: Record<string, string>,
+  maxDepth: number = MAX_ALIAS_RESOLUTION_DEPTH
+): string {
+  let currentModel = initialTarget;
+  let depth = 0;
+
+  while (depth < maxDepth) {
+    const nextTarget = aliasMap[currentModel];
+    if (!nextTarget) {
+      break;
+    }
+
+    currentModel = nextTarget;
+    depth += 1;
+  }
+
+  return currentModel;
+}
+
 export function normalizeUpstreamModelRules(
   input: UpstreamModelRuleSetInput
 ): UpstreamModelRule[] | null {
@@ -265,7 +320,18 @@ export function matchUpstreamModelRules(
     };
   }
 
-  for (const rule of normalizedRules) {
+  const { runtimeRules, aliasMap } = buildRuntimeRuleState(normalizedRules);
+  if (runtimeRules.length === 0) {
+    return {
+      hasExplicitRules: false,
+      matched: true,
+      resolvedModel: model,
+      redirectApplied: false,
+      matchedRule: null,
+    };
+  }
+
+  for (const rule of runtimeRules) {
     if (rule.type === "exact" && rule.value === model) {
       return {
         hasExplicitRules: true,
@@ -280,25 +346,21 @@ export function matchUpstreamModelRules(
       return {
         hasExplicitRules: true,
         matched: true,
-        resolvedModel: rule.targetModel,
+        resolvedModel: resolveAliasTarget(rule.targetModel, aliasMap),
         redirectApplied: true,
         matchedRule: rule,
       };
     }
 
     if (rule.type === "regex") {
-      try {
-        if (new RegExp(rule.value).test(model)) {
-          return {
-            hasExplicitRules: true,
-            matched: true,
-            resolvedModel: model,
-            redirectApplied: false,
-            matchedRule: rule,
-          };
-        }
-      } catch {
-        continue;
+      if (new RegExp(rule.value).test(model)) {
+        return {
+          hasExplicitRules: true,
+          matched: true,
+          resolvedModel: model,
+          redirectApplied: false,
+          matchedRule: rule,
+        };
       }
     }
   }

@@ -270,6 +270,29 @@ describe("upstream-model-rules", () => {
       expect(result.resolvedModel).toBe("gemini-2.5-flash");
     });
 
+    it("should resolve alias chains to the final target model", () => {
+      const result = matchUpstreamModelRules("gemini-2.5-flash-lite", [
+        {
+          type: "alias",
+          value: "gemini-2.5-flash-lite",
+          targetModel: "gemini-2.5-flash",
+          source: "manual",
+          displayLabel: "模型别名",
+        },
+        {
+          type: "alias",
+          value: "gemini-2.5-flash",
+          targetModel: "gemini-2.5-pro",
+          source: "manual",
+          displayLabel: "模型别名",
+        },
+      ]);
+
+      expect(result.matched).toBe(true);
+      expect(result.redirectApplied).toBe(true);
+      expect(result.resolvedModel).toBe("gemini-2.5-pro");
+    });
+
     it("should reject candidates when explicit rules exist but none match", () => {
       const result = matchUpstreamModelRules("gpt-4.1", [
         {
@@ -295,11 +318,34 @@ describe("upstream-model-rules", () => {
           source: "manual",
           displayLabel: "模式匹配",
         },
+        {
+          type: "exact",
+          value: "gpt-4.1",
+          targetModel: null,
+          source: "manual",
+          displayLabel: "精确匹配",
+        },
+      ]);
+
+      expect(result.matched).toBe(true);
+      expect(result.resolvedModel).toBe("gpt-4.1");
+      expect(result.redirectApplied).toBe(false);
+    });
+
+    it("should fail open when all explicit rules are invalid at runtime", () => {
+      const result = matchUpstreamModelRules("gpt-4.1", [
+        {
+          type: "regex",
+          value: "(",
+          targetModel: null,
+          source: "manual",
+          displayLabel: "模式匹配",
+        },
       ]);
 
       expect(result).toEqual({
-        hasExplicitRules: true,
-        matched: false,
+        hasExplicitRules: false,
+        matched: true,
         resolvedModel: "gpt-4.1",
         redirectApplied: false,
         matchedRule: null,
@@ -321,6 +367,30 @@ describe("upstream-model-rules", () => {
         ])
       ).toEqual({
         resolvedModel: "gpt-4.1",
+        redirectApplied: true,
+      });
+    });
+
+    it("should preserve multi-hop alias resolution", () => {
+      expect(
+        resolveModelWithRedirects("gpt-4.1-preview", [
+          {
+            type: "alias",
+            value: "gpt-4.1-preview",
+            targetModel: "gpt-4.1",
+            source: "manual",
+            displayLabel: "模型别名",
+          },
+          {
+            type: "alias",
+            value: "gpt-4.1",
+            targetModel: "gpt-4.1-mini",
+            source: "manual",
+            displayLabel: "模型别名",
+          },
+        ])
+      ).toEqual({
+        resolvedModel: "gpt-4.1-mini",
         redirectApplied: true,
       });
     });

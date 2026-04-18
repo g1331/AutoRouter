@@ -132,6 +132,21 @@ describe("upstream-model-discovery", () => {
       ).toThrow("Custom discovery endpoint is required when mode is custom");
     });
 
+    it("should reject absolute custom discovery endpoints", () => {
+      expect(() =>
+        buildUpstreamModelDiscoveryRequest({
+          baseUrl: "https://api.openai.com/v1",
+          apiKey: "sk-test",
+          routeCapabilities: ["openai_chat_compatible"],
+          modelDiscovery: {
+            mode: "custom",
+            customEndpoint: "https://169.254.169.254/latest/meta-data",
+            enableLiteLlmFallback: false,
+          },
+        })
+      ).toThrow("Custom discovery endpoint must be a relative path under the configured API root");
+    });
+
     it("should reject requests when discovery mode cannot be inferred", () => {
       expect(() =>
         buildUpstreamModelDiscoveryRequest({
@@ -303,6 +318,29 @@ describe("upstream-model-discovery", () => {
       expect(result.modelCatalogLastError).toBe(
         "Model discovery response did not contain any model entries"
       );
+    });
+
+    it("should reject absolute custom discovery endpoints during refresh without issuing a fetch", async () => {
+      const previousCatalog = [{ model: "gpt-4.1", source: "native" as const }];
+
+      const result = await refreshUpstreamModelCatalog({
+        baseUrl: "https://gateway.example.com/codex/v1",
+        apiKey: "sk-test",
+        routeCapabilities: ["openai_chat_compatible"],
+        previousCatalog,
+        modelDiscovery: {
+          mode: "custom",
+          customEndpoint: "https://169.254.169.254/latest/meta-data",
+          enableLiteLlmFallback: false,
+        },
+      });
+
+      expect(result.modelCatalog).toEqual(previousCatalog);
+      expect(result.modelCatalogLastStatus).toBe("failed");
+      expect(result.modelCatalogLastError).toContain(
+        "Custom discovery endpoint must be a relative path under the configured API root"
+      );
+      expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it("should combine the native and fallback errors when LiteLLM fallback also fails", async () => {

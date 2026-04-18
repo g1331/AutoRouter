@@ -15,6 +15,7 @@ import {
   deriveModelRedirectsFromRules,
   importCatalogEntriesToModelRules,
   normalizeUpstreamModelRules,
+  validateUpstreamModelRules,
 } from "./upstream-model-rules";
 import {
   inferDefaultModelDiscoveryConfig,
@@ -55,6 +56,19 @@ export class UpstreamNotFoundError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "UpstreamNotFoundError";
+  }
+}
+
+/**
+ * Error thrown when upstream model rules are invalid.
+ */
+export class InvalidUpstreamModelRulesError extends Error {
+  issues: string[];
+
+  constructor(issues: string[]) {
+    super(issues.join(", "));
+    this.name = "InvalidUpstreamModelRulesError";
+    this.issues = issues;
   }
 }
 
@@ -323,6 +337,13 @@ function buildUpdatedModelRuleFields(existing: Upstream, input: UpstreamUpdateIn
   };
 }
 
+function assertValidModelRuleFields(modelRules: UpstreamModelRule[] | null | undefined): void {
+  const issues = validateUpstreamModelRules(modelRules);
+  if (issues.length > 0) {
+    throw new InvalidUpstreamModelRulesError(issues);
+  }
+}
+
 function mapUpstreamRecordToResponse(
   upstream: Upstream,
   apiKeyMasked: string,
@@ -400,6 +421,7 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
 
   const normalizedRouteCapabilities = resolveRouteCapabilities(routeCapabilities);
   const modelRuleFields = buildCreateModelRuleFields(input);
+  assertValidModelRuleFields(modelRuleFields.modelRules);
   const normalizedModelDiscovery =
     modelDiscovery !== undefined
       ? normalizeUpstreamModelDiscoveryConfig(
@@ -524,6 +546,7 @@ export async function updateUpstream(
   }
   const modelRuleFields = buildUpdatedModelRuleFields(existing, input);
   if (modelRuleFields) {
+    assertValidModelRuleFields(modelRuleFields.modelRules);
     updateValues.allowedModels = modelRuleFields.allowedModels;
     updateValues.modelRedirects = modelRuleFields.modelRedirects;
     updateValues.modelRules = modelRuleFields.modelRules;
