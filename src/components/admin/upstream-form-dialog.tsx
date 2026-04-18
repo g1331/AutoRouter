@@ -6,17 +6,23 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
   AlertTriangle,
+  ArrowDownToLine,
+  CircleAlert,
   Coins,
   FileText,
   Gauge,
+  CheckCircle2,
   KeyRound,
+  Loader2,
   Link2,
   Plus,
+  RefreshCw,
   Route,
   Search,
   Shield,
   Shuffle,
   SlidersHorizontal,
+  Sparkles,
   Trash2,
   Type,
   Wallet,
@@ -60,15 +66,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useCreateUpstream, useUpdateUpstream } from "@/hooks/use-upstreams";
-import type { RouteCapability, Upstream } from "@/types/api";
-import { TagInput } from "@/components/ui/tag-input";
-import { KeyValueInput } from "@/components/ui/key-value-input";
+import {
+  useCreateUpstream,
+  useImportUpstreamCatalogModels,
+  useRefreshUpstreamCatalog,
+  useUpdateUpstream,
+} from "@/hooks/use-upstreams";
+import type {
+  RouteCapability,
+  Upstream,
+  UpstreamModelCatalogEntry,
+  UpstreamModelCatalogSource,
+  UpstreamModelCatalogStatus,
+  UpstreamModelDiscoveryConfig,
+  UpstreamModelDiscoveryMode,
+  UpstreamModelRule,
+  UpstreamModelRuleSource,
+  UpstreamModelRuleType,
+} from "@/types/api";
 import { Switch } from "@/components/ui/switch";
-import { ROUTE_CAPABILITY_VALUES, areSingleProviderCapabilities } from "@/lib/route-capabilities";
+import {
+  ROUTE_CAPABILITY_VALUES,
+  areSingleProviderCapabilities,
+  getPrimaryProviderByCapabilities,
+  resolveRouteCapabilities,
+} from "@/lib/route-capabilities";
 import { RouteCapabilityMultiSelect } from "@/components/admin/route-capability-badges";
+import { inferDefaultModelDiscoveryConfig } from "@/lib/services/upstream-model-types";
 import { cn } from "@/lib/utils";
 
 interface UpstreamFormDialogProps {
@@ -107,6 +135,44 @@ const spendingRuleSchema = z.object({
 });
 
 const ROLLING_DEFAULT_PERIOD_HOURS = 24;
+const MODEL_DISCOVERY_MODE_VALUES = [
+  "openai_compatible",
+  "anthropic_native",
+  "gemini_native",
+  "gemini_openai_compatible",
+  "custom",
+  "litellm",
+] as const satisfies readonly UpstreamModelDiscoveryMode[];
+const MODEL_RULE_TYPE_VALUES = [
+  "exact",
+  "regex",
+  "alias",
+] as const satisfies readonly UpstreamModelRuleType[];
+const MODEL_RULE_SOURCE_VALUES = [
+  "manual",
+  "native",
+  "inferred",
+] as const satisfies readonly UpstreamModelRuleSource[];
+const MODEL_RULE_ALIAS_TARGET_REQUIRED_MESSAGE = "modelRuleAliasTargetRequired";
+
+const modelDiscoverySchema = z.object({
+  mode: z.enum(MODEL_DISCOVERY_MODE_VALUES),
+  custom_endpoint: z.string(),
+  enable_lite_llm_fallback: z.boolean(),
+});
+
+const modelRuleSchema = z
+  .object({
+    type: z.enum(MODEL_RULE_TYPE_VALUES),
+    value: z.string().trim().min(1),
+    target_model: z.string().trim().nullable().optional(),
+    source: z.enum(MODEL_RULE_SOURCE_VALUES),
+    display_label: z.string().trim().nullable().optional(),
+  })
+  .refine((rule) => rule.type !== "alias" || Boolean(rule.target_model?.trim()), {
+    message: MODEL_RULE_ALIAS_TARGET_REQUIRED_MESSAGE,
+    path: ["target_model"],
+  });
 
 // Preserve transient empty-string edits in the input, and only coerce to numbers at validation time.
 function coerceNumericInput(
@@ -147,6 +213,22 @@ function normalizeUpstreamFormValuesForDirtyCheck(
         ? {
             ...rule,
             limit: coerceNumericInput(rule.limit, undefined),
+          }
+        : rule
+    ),
+    model_discovery: values.model_discovery
+      ? {
+          ...values.model_discovery,
+          custom_endpoint: values.model_discovery.custom_endpoint?.trim() || "",
+        }
+      : values.model_discovery,
+    model_rules: values.model_rules?.map((rule) =>
+      rule
+        ? {
+            ...rule,
+            value: rule.value?.trim() || "",
+            target_model: rule.target_model?.trim() || null,
+            display_label: rule.display_label?.trim() || null,
           }
         : rule
     ),
@@ -193,8 +275,8 @@ const createUpstreamFormSchema = z
     ),
     spending_rules: z.array(spendingRuleSchema),
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
-    allowed_models: z.array(z.string()).nullable(),
-    model_redirects: z.record(z.string(), z.string()).nullable(),
+    model_discovery: modelDiscoverySchema,
+    model_rules: z.array(modelRuleSchema),
     circuit_breaker_config: circuitBreakerConfigSchema,
     affinity_migration: affinityMigrationConfigSchema,
   })
@@ -234,8 +316,8 @@ const editUpstreamFormSchema = z
     ),
     spending_rules: z.array(spendingRuleSchema),
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
-    allowed_models: z.array(z.string()).nullable(),
-    model_redirects: z.record(z.string(), z.string()).nullable(),
+    model_discovery: modelDiscoverySchema,
+    model_rules: z.array(modelRuleSchema),
     circuit_breaker_config: circuitBreakerConfigSchema,
     affinity_migration: affinityMigrationConfigSchema,
   })
@@ -250,6 +332,142 @@ const editUpstreamFormSchema = z
 
 type UpstreamFormValues = z.input<typeof editUpstreamFormSchema>;
 type UpstreamFormData = z.output<typeof editUpstreamFormSchema>;
+type CatalogSourceFilter = "all" | UpstreamModelCatalogSource;
+
+interface CatalogWorkspaceState {
+  modelCatalog: UpstreamModelCatalogEntry[];
+  modelCatalogUpdatedAt: string | null;
+  modelCatalogLastStatus: UpstreamModelCatalogStatus | null;
+  modelCatalogLastError: string | null;
+  modelCatalogLastFailedAt: string | null;
+}
+
+function createEmptyModelRule(
+  type: UpstreamModelRuleType = "exact"
+): UpstreamFormValues["model_rules"][number] {
+  return {
+    type,
+    value: "",
+    target_model: type === "alias" ? "" : null,
+    source: "manual",
+    display_label: null,
+  };
+}
+
+function toFormModelDiscoveryValue(
+  modelDiscovery: Upstream["model_discovery"] | null | undefined,
+  routeCapabilities: RouteCapability[] | null | undefined
+): UpstreamFormValues["model_discovery"] {
+  const inferred = inferDefaultModelDiscoveryConfig(routeCapabilities);
+
+  return {
+    mode: modelDiscovery?.mode ?? inferred?.mode ?? "openai_compatible",
+    custom_endpoint: modelDiscovery?.custom_endpoint ?? inferred?.customEndpoint ?? "",
+    enable_lite_llm_fallback:
+      modelDiscovery?.enable_lite_llm_fallback ?? inferred?.enableLiteLlmFallback ?? false,
+  };
+}
+
+function toApiModelDiscoveryValue(
+  modelDiscovery: UpstreamFormData["model_discovery"]
+): UpstreamModelDiscoveryConfig {
+  return {
+    mode: modelDiscovery.mode,
+    custom_endpoint: modelDiscovery.custom_endpoint.trim() || null,
+    enable_lite_llm_fallback: modelDiscovery.enable_lite_llm_fallback,
+  };
+}
+
+function toFormModelRulesValue(
+  modelRules: Upstream["model_rules"] | null | undefined
+): UpstreamFormValues["model_rules"] {
+  return (modelRules ?? []).map((rule) => ({
+    type: rule.type,
+    value: rule.value,
+    target_model: rule.target_model ?? null,
+    source: rule.source,
+    display_label: rule.display_label ?? null,
+  }));
+}
+
+function toApiModelRulesValue(
+  modelRules: UpstreamFormData["model_rules"]
+): UpstreamModelRule[] | null {
+  const normalizedRules = modelRules
+    .map((rule) => ({
+      type: rule.type,
+      value: rule.value.trim(),
+      target_model: rule.type === "alias" ? rule.target_model?.trim() || null : null,
+      source: rule.source,
+      display_label: rule.display_label?.trim() || null,
+    }))
+    .filter((rule) => rule.value.length > 0);
+
+  return normalizedRules.length > 0 ? normalizedRules : null;
+}
+
+function buildCatalogWorkspaceState(upstream?: Upstream | null): CatalogWorkspaceState {
+  return {
+    modelCatalog: upstream?.model_catalog ?? [],
+    modelCatalogUpdatedAt: upstream?.model_catalog_updated_at ?? null,
+    modelCatalogLastStatus: upstream?.model_catalog_last_status ?? null,
+    modelCatalogLastError: upstream?.model_catalog_last_error ?? null,
+    modelCatalogLastFailedAt: upstream?.model_catalog_last_failed_at ?? null,
+  };
+}
+
+function buildUpstreamFormDefaults(upstream?: Upstream | null): UpstreamFormValues {
+  return {
+    name: upstream?.name ?? "",
+    base_url: upstream?.base_url ?? "",
+    official_website_url: upstream?.official_website_url ?? "",
+    api_key: "",
+    description: upstream?.description || "",
+    max_concurrency: upstream?.max_concurrency ?? null,
+    priority: upstream?.priority ?? 0,
+    weight: upstream?.weight ?? 1,
+    billing_input_multiplier: upstream?.billing_input_multiplier ?? 1,
+    billing_output_multiplier: upstream?.billing_output_multiplier ?? 1,
+    spending_rules: (upstream?.spending_rules ?? []).map((rule) => ({
+      period_type: rule.period_type as "daily" | "monthly" | "rolling",
+      limit: rule.limit,
+      period_hours:
+        rule.period_type === "rolling" ? (rule.period_hours ?? ROLLING_DEFAULT_PERIOD_HOURS) : null,
+    })),
+    route_capabilities: upstream?.route_capabilities ?? [],
+    model_discovery: toFormModelDiscoveryValue(
+      upstream?.model_discovery ?? null,
+      upstream?.route_capabilities ?? []
+    ),
+    model_rules: toFormModelRulesValue(upstream?.model_rules),
+    circuit_breaker_config: upstream?.circuit_breaker?.config
+      ? {
+          failure_threshold: upstream.circuit_breaker.config.failure_threshold,
+          success_threshold: upstream.circuit_breaker.config.success_threshold,
+          open_duration: upstream.circuit_breaker.config.open_duration,
+          probe_interval: upstream.circuit_breaker.config.probe_interval,
+        }
+      : null,
+    affinity_migration: upstream?.affinity_migration ?? null,
+  };
+}
+
+function buildCatalogRefreshDependencySnapshot(
+  values: Readonly<DeepPartial<UpstreamFormValues>> | undefined
+) {
+  return {
+    base_url: values?.base_url?.trim() ?? "",
+    route_capabilities: values?.route_capabilities ?? [],
+    model_discovery: values?.model_discovery
+      ? {
+          mode: values.model_discovery.mode ?? "openai_compatible",
+          custom_endpoint: values.model_discovery.custom_endpoint?.trim() || "",
+          enable_lite_llm_fallback: values.model_discovery.enable_lite_llm_fallback ?? false,
+        }
+      : null,
+    api_key_changed: Boolean(values?.api_key?.trim()),
+  };
+}
 
 const V1_AUTO_APPEND_CAPABILITIES = new Set<RouteCapability>([
   "openai_responses",
@@ -307,6 +525,12 @@ interface EndpointPreviewState {
   autoAppendV1Applied: boolean;
 }
 
+interface ModelDiscoveryPreviewState {
+  apiRoot: string;
+  requestUrl: string | null;
+  authProfile: "bearer" | "anthropic" | "query_key" | "public";
+}
+
 function shouldAutoAppendV1(routeCapabilities: RouteCapability[] | null | undefined): boolean {
   return (routeCapabilities ?? []).some((capability) =>
     V1_AUTO_APPEND_CAPABILITIES.has(capability)
@@ -360,6 +584,129 @@ function resolveEndpointPreview(
   }
 }
 
+function stripTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, "");
+}
+
+function stripTrailingModelsPath(pathname: string): string {
+  if (pathname.endsWith("/models")) {
+    return pathname.slice(0, -"/models".length) || "/";
+  }
+  return pathname || "/";
+}
+
+function normalizeApiRootForDiscoveryPreview(baseUrl: string): string {
+  const url = new URL(baseUrl);
+  url.hash = "";
+  url.search = "";
+  url.pathname = stripTrailingModelsPath(stripTrailingSlash(url.pathname || "/"));
+  return url.toString().replace(/\/$/, url.pathname === "/" ? "" : "");
+}
+
+function resolveDiscoveryPreview(
+  rawBaseUrl: string,
+  routeCapabilities: RouteCapability[] | null | undefined,
+  modelDiscovery: UpstreamFormValues["model_discovery"] | undefined
+): ModelDiscoveryPreviewState | null {
+  const trimmedBaseUrl = rawBaseUrl.trim();
+  if (!trimmedBaseUrl) {
+    return null;
+  }
+
+  try {
+    const apiRoot = normalizeApiRootForDiscoveryPreview(trimmedBaseUrl);
+    const provider = getPrimaryProviderByCapabilities(resolveRouteCapabilities(routeCapabilities));
+    const mode = modelDiscovery?.mode ?? "openai_compatible";
+    let requestUrl: URL;
+    let authProfile: ModelDiscoveryPreviewState["authProfile"];
+
+    switch (mode) {
+      case "anthropic_native":
+        requestUrl = new URL("models", `${apiRoot}/`);
+        authProfile = "anthropic";
+        break;
+      case "gemini_native":
+        requestUrl = new URL("models", `${apiRoot}/`);
+        requestUrl.searchParams.set("key", "API_KEY");
+        authProfile = "query_key";
+        break;
+      case "custom": {
+        const customEndpoint = modelDiscovery?.custom_endpoint.trim();
+        if (!customEndpoint) {
+          return {
+            apiRoot,
+            requestUrl: null,
+            authProfile:
+              provider === "anthropic"
+                ? "anthropic"
+                : provider === "google"
+                  ? "query_key"
+                  : "bearer",
+          };
+        }
+        requestUrl = new URL(customEndpoint, `${apiRoot}/`);
+        authProfile =
+          provider === "anthropic" ? "anthropic" : provider === "google" ? "query_key" : "bearer";
+        if (authProfile === "query_key") {
+          requestUrl.searchParams.set("key", "API_KEY");
+        }
+        break;
+      }
+      case "litellm":
+        requestUrl = new URL(
+          "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
+        );
+        authProfile = "public";
+        break;
+      case "gemini_openai_compatible":
+      case "openai_compatible":
+      default:
+        requestUrl = new URL("models", `${apiRoot}/`);
+        authProfile = "bearer";
+        break;
+    }
+
+    return {
+      apiRoot,
+      requestUrl: requestUrl.toString(),
+      authProfile,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function formatCatalogTimestamp(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed.toLocaleString();
+}
+
+function getCatalogSourceBadgeVariant(
+  source: UpstreamModelCatalogSource
+): NonNullable<React.ComponentProps<typeof Badge>["variant"]> {
+  return source === "inferred" ? "info" : "neutral";
+}
+
+function getRuleSourceBadgeVariant(
+  source: UpstreamModelRuleSource
+): NonNullable<React.ComponentProps<typeof Badge>["variant"]> {
+  if (source === "native") {
+    return "success";
+  }
+  if (source === "inferred") {
+    return "info";
+  }
+  return "secondary";
+}
+
 function spendingRulesToApi(
   rules: UpstreamFormData["spending_rules"]
 ): { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[] | null {
@@ -385,6 +732,8 @@ export function UpstreamFormDialog({
   const isEdit = !!upstream;
   const activeSchema = isEdit ? editUpstreamFormSchema : createUpstreamFormSchema;
   const createMutation = useCreateUpstream();
+  const refreshCatalogMutation = useRefreshUpstreamCatalog();
+  const importCatalogMutation = useImportUpstreamCatalogModels();
   const updateMutation = useUpdateUpstream();
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
@@ -393,28 +742,16 @@ export function UpstreamFormDialog({
   const [activeSectionId, setActiveSectionId] = useState<ConfigSectionId>("basic-name");
   const [highlightedSectionId, setHighlightedSectionId] = useState<ConfigSectionId | null>(null);
   const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState(false);
+  const [catalogSearchQuery, setCatalogSearchQuery] = useState("");
+  const [catalogSourceFilter, setCatalogSourceFilter] = useState<CatalogSourceFilter>("all");
+  const [selectedCatalogModels, setSelectedCatalogModels] = useState<string[]>([]);
+  const [selectedModelRuleIds, setSelectedModelRuleIds] = useState<string[]>([]);
+  const [workspaceUpstream, setWorkspaceUpstream] = useState<Upstream | null>(null);
   const contentScrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   const form = useForm<UpstreamFormValues>({
     resolver: zodResolver(activeSchema),
-    defaultValues: {
-      name: "",
-      base_url: "",
-      official_website_url: "",
-      api_key: "",
-      description: "",
-      max_concurrency: null,
-      priority: 0,
-      weight: 1,
-      billing_input_multiplier: 1,
-      billing_output_multiplier: 1,
-      spending_rules: [],
-      route_capabilities: [],
-      allowed_models: null,
-      model_redirects: null,
-      circuit_breaker_config: null,
-      affinity_migration: null,
-    },
+    defaultValues: buildUpstreamFormDefaults(upstream),
   });
 
   // Watch circuit_breaker_config for controlled inputs
@@ -438,6 +775,15 @@ export function UpstreamFormDialog({
     control: form.control,
     name: "spending_rules",
   });
+  const {
+    fields: modelRuleFields,
+    append: appendModelRule,
+    remove: removeModelRule,
+    replace: replaceModelRules,
+  } = useFieldArray({
+    control: form.control,
+    name: "model_rules",
+  });
 
   const spendingRules = useWatch({
     control: form.control,
@@ -451,9 +797,34 @@ export function UpstreamFormDialog({
     control: form.control,
     name: "base_url",
   });
+  const watchedApiKey = useWatch({
+    control: form.control,
+    name: "api_key",
+  });
+  const watchedModelDiscovery = useWatch({
+    control: form.control,
+    name: "model_discovery",
+  });
+  const watchedModelRules = useWatch({
+    control: form.control,
+    name: "model_rules",
+  });
   const endpointPreview = useMemo(
     () => resolveEndpointPreview(watchedBaseUrl ?? "", watchedRouteCapabilities),
     [watchedBaseUrl, watchedRouteCapabilities]
+  );
+  const discoveryPreview = useMemo(
+    () =>
+      resolveDiscoveryPreview(
+        watchedBaseUrl ?? "",
+        watchedRouteCapabilities,
+        watchedModelDiscovery
+      ),
+    [watchedBaseUrl, watchedRouteCapabilities, watchedModelDiscovery]
+  );
+  const catalogState = useMemo(
+    () => buildCatalogWorkspaceState(workspaceUpstream ?? upstream),
+    [upstream, workspaceUpstream]
   );
   const configSections = useMemo<ConfigSectionEntry[]>(
     () => [
@@ -551,6 +922,46 @@ export function UpstreamFormDialog({
       }, []),
     [filteredConfigSections]
   );
+  const filteredCatalogEntries = useMemo(() => {
+    const query = catalogSearchQuery.trim().toLowerCase();
+    return catalogState.modelCatalog.filter((entry) => {
+      const matchesQuery = !query || entry.model.toLowerCase().includes(query);
+      const matchesSource = catalogSourceFilter === "all" || entry.source === catalogSourceFilter;
+      return matchesQuery && matchesSource;
+    });
+  }, [catalogSearchQuery, catalogSourceFilter, catalogState.modelCatalog]);
+  const catalogSourceCounts = useMemo(
+    () =>
+      catalogState.modelCatalog.reduce(
+        (counts, entry) => {
+          counts[entry.source] += 1;
+          return counts;
+        },
+        { native: 0, inferred: 0 } satisfies Record<UpstreamModelCatalogSource, number>
+      ),
+    [catalogState.modelCatalog]
+  );
+  const catalogRefreshDependencyDirty = useMemo(() => {
+    const defaultValues = form.formState.defaultValues;
+    if (!defaultValues) {
+      return false;
+    }
+
+    const currentSnapshot = buildCatalogRefreshDependencySnapshot({
+      base_url: watchedBaseUrl,
+      api_key: watchedApiKey,
+      route_capabilities: watchedRouteCapabilities,
+      model_discovery: watchedModelDiscovery,
+    });
+    const defaultSnapshot = buildCatalogRefreshDependencySnapshot(defaultValues);
+    return JSON.stringify(currentSnapshot) !== JSON.stringify(defaultSnapshot);
+  }, [
+    form.formState.defaultValues,
+    watchedApiKey,
+    watchedBaseUrl,
+    watchedModelDiscovery,
+    watchedRouteCapabilities,
+  ]);
 
   useEffect(() => {
     if (!highlightedSectionId) {
@@ -567,66 +978,28 @@ export function UpstreamFormDialog({
   }, [highlightedSectionId]);
 
   useEffect(() => {
-    if (upstream && open) {
-      form.reset({
-        name: upstream.name,
-        base_url: upstream.base_url,
-        official_website_url: upstream.official_website_url ?? "",
-        api_key: "",
-        description: upstream.description || "",
-        max_concurrency: upstream.max_concurrency ?? null,
-        priority: upstream.priority ?? 0,
-        weight: upstream.weight ?? 1,
-        billing_input_multiplier: upstream.billing_input_multiplier ?? 1,
-        billing_output_multiplier: upstream.billing_output_multiplier ?? 1,
-        spending_rules: (upstream.spending_rules ?? []).map((r) => ({
-          period_type: r.period_type as "daily" | "monthly" | "rolling",
-          limit: r.limit,
-          period_hours:
-            r.period_type === "rolling" ? (r.period_hours ?? ROLLING_DEFAULT_PERIOD_HOURS) : null,
-        })),
-        route_capabilities: upstream.route_capabilities || [],
-        allowed_models: upstream.allowed_models || null,
-        model_redirects: upstream.model_redirects || null,
-        circuit_breaker_config: upstream.circuit_breaker?.config
-          ? {
-              failure_threshold: upstream.circuit_breaker.config.failure_threshold,
-              success_threshold: upstream.circuit_breaker.config.success_threshold,
-              open_duration: upstream.circuit_breaker.config.open_duration,
-              probe_interval: upstream.circuit_breaker.config.probe_interval,
-            }
-          : null,
-        affinity_migration: upstream.affinity_migration,
-      });
-    } else if (!open) {
-      form.reset({
-        name: "",
-        base_url: "",
-        official_website_url: "",
-        api_key: "",
-        description: "",
-        max_concurrency: null,
-        priority: 0,
-        weight: 1,
-        billing_input_multiplier: 1,
-        billing_output_multiplier: 1,
-        spending_rules: [],
-        route_capabilities: [],
-        allowed_models: null,
-        model_redirects: null,
-        circuit_breaker_config: null,
-        affinity_migration: null,
-      });
+    if (open) {
+      form.reset(buildUpstreamFormDefaults(upstream));
+      replaceModelRules(toFormModelRulesValue(upstream?.model_rules));
+      return;
     }
-  }, [upstream, open, form]);
+
+    form.reset(buildUpstreamFormDefaults(null));
+    replaceModelRules([]);
+  }, [form, open, replaceModelRules, upstream]);
 
   const resetDialogUiState = () => {
     setConfigSearchQuery("");
+    setCatalogSearchQuery("");
+    setCatalogSourceFilter("all");
+    setSelectedCatalogModels([]);
+    setSelectedModelRuleIds([]);
     setActiveSectionId("basic-name");
     setHighlightedSectionId(null);
   };
 
   const closeDialog = () => {
+    setWorkspaceUpstream(null);
     resetDialogUiState();
     onOpenChange(false);
   };
@@ -708,6 +1081,137 @@ export function UpstreamFormDialog({
     scrollToSection(sectionId);
   };
 
+  const updateRuleAtIndex = (
+    index: number,
+    patch: Partial<UpstreamFormValues["model_rules"][number]>,
+    options?: { forceManualSource?: boolean }
+  ) => {
+    const currentRule = form.getValues(`model_rules.${index}`);
+    if (!currentRule) {
+      return;
+    }
+
+    form.setValue(
+      `model_rules.${index}`,
+      {
+        ...currentRule,
+        ...patch,
+        source: options?.forceManualSource ? "manual" : (patch.source ?? currentRule.source),
+      },
+      { shouldDirty: true, shouldValidate: true }
+    );
+  };
+
+  const syncWorkspaceFromRemoteUpstream = (
+    remoteUpstream: Upstream,
+    options?: { replaceRules?: boolean }
+  ) => {
+    const nextRules = toFormModelRulesValue(remoteUpstream.model_rules);
+    const nextDefaults = buildUpstreamFormDefaults(remoteUpstream);
+
+    form.reset(
+      {
+        ...nextDefaults,
+        model_rules: options?.replaceRules ? nextRules : nextDefaults.model_rules,
+      },
+      { keepDirtyValues: true }
+    );
+
+    if (options?.replaceRules) {
+      replaceModelRules(nextRules);
+    }
+
+    setWorkspaceUpstream(remoteUpstream);
+  };
+
+  const toggleCatalogModelSelection = (model: string, checked: boolean) => {
+    setSelectedCatalogModels((current) => {
+      if (checked) {
+        return current.includes(model) ? current : [...current, model];
+      }
+      return current.filter((value) => value !== model);
+    });
+  };
+
+  const toggleModelRuleSelection = (ruleId: string, checked: boolean) => {
+    setSelectedModelRuleIds((current) => {
+      const nextCurrent = current.filter((value) =>
+        modelRuleFields.some((field) => field.id === value)
+      );
+      if (checked) {
+        return nextCurrent.includes(ruleId) ? nextCurrent : [...nextCurrent, ruleId];
+      }
+      return nextCurrent.filter((value) => value !== ruleId);
+    });
+  };
+
+  const handleSelectAllModelRules = (checked: boolean) => {
+    setSelectedModelRuleIds(checked ? modelRuleFields.map((field) => field.id) : []);
+  };
+
+  const handleRemoveModelRule = (index: number) => {
+    const ruleId = modelRuleFields[index]?.id;
+    if (ruleId) {
+      setSelectedModelRuleIds((current) => current.filter((value) => value !== ruleId));
+    }
+    removeModelRule(index);
+  };
+
+  const handleRemoveSelectedModelRules = () => {
+    const selectedRuleIdSet = new Set(
+      selectedModelRuleIds.filter((id) => modelRuleFields.some((field) => field.id === id))
+    );
+    if (selectedRuleIdSet.size === 0) {
+      return;
+    }
+
+    const remainingRules = form
+      .getValues("model_rules")
+      .filter((_, index) => !selectedRuleIdSet.has(modelRuleFields[index]?.id ?? ""));
+
+    replaceModelRules(remainingRules);
+    setSelectedModelRuleIds([]);
+  };
+
+  const handleSelectFilteredCatalogEntries = () => {
+    const filteredModels = filteredCatalogEntries.map((entry) => entry.model);
+    setSelectedCatalogModels((current) => [...new Set([...current, ...filteredModels])]);
+  };
+
+  const handleClearCatalogSelection = () => {
+    setSelectedCatalogModels([]);
+  };
+
+  const handleRefreshCatalog = async () => {
+    if (!upstream || catalogRefreshDependencyDirty) {
+      return;
+    }
+
+    try {
+      const refreshedUpstream = await refreshCatalogMutation.mutateAsync(upstream.id);
+      syncWorkspaceFromRemoteUpstream(refreshedUpstream);
+    } catch {
+      // Refresh errors are surfaced by the mutation toast.
+    }
+  };
+
+  const handleImportCatalog = async () => {
+    if (!upstream || selectedCatalogModels.length === 0) {
+      return;
+    }
+
+    try {
+      const updatedUpstream = await importCatalogMutation.mutateAsync({
+        id: upstream.id,
+        models: selectedCatalogModels,
+      });
+      syncWorkspaceFromRemoteUpstream(updatedUpstream, { replaceRules: true });
+      setSelectedCatalogModels([]);
+    } catch {
+      // Import errors are surfaced by the mutation toast.
+    }
+  };
+
   const onSubmit = async (values: UpstreamFormValues) => {
     try {
       const data = activeSchema.parse(values) as UpstreamFormData;
@@ -738,8 +1242,8 @@ export function UpstreamFormDialog({
               }[]
             | null;
           route_capabilities?: RouteCapability[] | null;
-          allowed_models?: string[] | null;
-          model_redirects?: Record<string, string> | null;
+          model_discovery?: UpstreamModelDiscoveryConfig | null;
+          model_rules?: UpstreamModelRule[] | null;
           circuit_breaker_config?: {
             failure_threshold?: number;
             success_threshold?: number;
@@ -761,8 +1265,8 @@ export function UpstreamFormDialog({
           billing_output_multiplier: data.billing_output_multiplier,
           spending_rules: spendingRulesToApi(data.spending_rules),
           route_capabilities: data.route_capabilities,
-          allowed_models: data.allowed_models,
-          model_redirects: data.model_redirects,
+          model_discovery: toApiModelDiscoveryValue(data.model_discovery),
+          model_rules: toApiModelRulesValue(data.model_rules),
           circuit_breaker_config: data.circuit_breaker_config,
           affinity_migration: data.affinity_migration,
         };
@@ -799,8 +1303,8 @@ export function UpstreamFormDialog({
               }[]
             | null;
           route_capabilities: RouteCapability[] | null;
-          allowed_models: string[] | null;
-          model_redirects: Record<string, string> | null;
+          model_discovery: UpstreamModelDiscoveryConfig | null;
+          model_rules: UpstreamModelRule[] | null;
           circuit_breaker_config: {
             failure_threshold?: number;
             success_threshold?: number;
@@ -823,8 +1327,8 @@ export function UpstreamFormDialog({
           billing_output_multiplier: data.billing_output_multiplier,
           spending_rules: spendingRulesToApi(data.spending_rules),
           route_capabilities: data.route_capabilities,
-          allowed_models: data.allowed_models,
-          model_redirects: data.model_redirects,
+          model_discovery: toApiModelDiscoveryValue(data.model_discovery),
+          model_rules: toApiModelRulesValue(data.model_rules),
           circuit_breaker_config: data.circuit_breaker_config,
           affinity_migration: data.affinity_migration,
         };
@@ -909,9 +1413,31 @@ export function UpstreamFormDialog({
     );
   };
 
+  const selectedVisibleCatalogCount = filteredCatalogEntries.filter((entry) =>
+    selectedCatalogModels.includes(entry.model)
+  ).length;
+  const catalogUpdatedAtLabel = formatCatalogTimestamp(catalogState.modelCatalogUpdatedAt);
+  const catalogFailedAtLabel = formatCatalogTimestamp(catalogState.modelCatalogLastFailedAt);
+  const catalogHasEntries = catalogState.modelCatalog.length > 0;
+  const catalogIsRefreshing = refreshCatalogMutation.isPending;
+  const catalogRefreshBlocked = !isEdit || catalogRefreshDependencyDirty;
+  const currentRuleCount = watchedModelRules?.length ?? 0;
+  const selectedModelRuleIdSet = new Set(
+    selectedModelRuleIds.filter((id) => modelRuleFields.some((field) => field.id === id))
+  );
+  const selectedModelRuleCount = selectedModelRuleIdSet.size;
+  const modelRuleHeaderSelectionState =
+    currentRuleCount === 0
+      ? false
+      : selectedModelRuleCount === 0
+        ? false
+        : selectedModelRuleCount === currentRuleCount
+          ? true
+          : ("indeterminate" as const);
+
   const dialogContent = (
     <DialogContent
-      className="max-w-5xl h-[90vh] overflow-hidden p-0"
+      className="h-[92vh] max-w-6xl overflow-hidden p-0"
       onOpenAutoFocus={(event) => {
         event.preventDefault();
         (event.currentTarget as HTMLElement).focus();
@@ -1266,53 +1792,639 @@ export function UpstreamFormDialog({
                       id="advanced-model-routing"
                       className={getSectionClassName("advanced-model-routing")}
                     >
-                      <h3 className="mb-4 text-sm font-medium text-muted-foreground">
-                        {t("modelBasedRouting")}
-                      </h3>
-
-                      <FormField
-                        control={form.control}
-                        name="allowed_models"
-                        render={({ field }) => (
-                          <FormItem className="mt-4">
-                            <FormLabel>{t("allowedModels")}</FormLabel>
-                            <FormControl>
-                              <TagInput
-                                placeholder={t("allowedModelsPlaceholder")}
-                                tags={field.value || []}
-                                onTagsChange={(tags) =>
-                                  field.onChange(tags.length > 0 ? tags : null)
+                      <div className="space-y-4">
+                        <div className="flex flex-col gap-3 rounded-cf-sm bg-surface-200/45 px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80">
+                                {t("modelBasedRouting")}
+                              </span>
+                              <Badge
+                                variant={
+                                  catalogIsRefreshing
+                                    ? "info"
+                                    : catalogState.modelCatalogLastStatus === "failed"
+                                      ? "error"
+                                      : catalogHasEntries
+                                        ? "success"
+                                        : "neutral"
                                 }
-                              />
-                            </FormControl>
-                            <FormDescription>{t("allowedModelsDescription")}</FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                              >
+                                {catalogIsRefreshing ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : catalogState.modelCatalogLastStatus === "failed" ? (
+                                  <CircleAlert className="h-3.5 w-3.5" />
+                                ) : catalogHasEntries ? (
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                ) : (
+                                  <Sparkles className="h-3.5 w-3.5" />
+                                )}
+                                {catalogIsRefreshing
+                                  ? t("catalogRefreshing")
+                                  : catalogState.modelCatalogLastStatus === "failed"
+                                    ? t("catalogStatusFailed")
+                                    : catalogHasEntries
+                                      ? t("catalogStatusReady")
+                                      : t("catalogStatusIdle")}
+                              </Badge>
+                              {catalogSourceCounts.native > 0 && (
+                                <Badge variant="neutral">
+                                  {t("catalogSourceCountNative", {
+                                    count: catalogSourceCounts.native,
+                                  })}
+                                </Badge>
+                              )}
+                              {catalogSourceCounts.inferred > 0 && (
+                                <Badge variant="info">
+                                  {t("catalogSourceCountInferred", {
+                                    count: catalogSourceCounts.inferred,
+                                  })}
+                                </Badge>
+                              )}
+                              <span className="text-xs text-muted-foreground">
+                                {catalogUpdatedAtLabel
+                                  ? t("catalogUpdatedAtLabel", { time: catalogUpdatedAtLabel })
+                                  : t("catalogNeverRefreshed")}
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {catalogRefreshDependencyDirty && isEdit
+                                ? t("catalogSavedConfigHint")
+                                : t("catalogStatusBarHint")}
+                            </p>
+                          </div>
 
-                      <FormField
-                        control={form.control}
-                        name="model_redirects"
-                        render={({ field }) => (
-                          <FormItem className="mt-4">
-                            <FormLabel>{t("modelRedirects")}</FormLabel>
-                            <FormControl>
-                              <KeyValueInput
-                                placeholder={t("modelRedirectsPlaceholder")}
-                                entries={field.value || {}}
-                                onEntriesChange={(entries) =>
-                                  field.onChange(Object.keys(entries).length > 0 ? entries : null)
-                                }
-                                keyLabel={t("sourceModel")}
-                                valueLabel={t("targetModel")}
-                              />
-                            </FormControl>
-                            <FormDescription>{t("modelRedirectsDescription")}</FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-2 self-start xl:self-auto"
+                            onClick={() => {
+                              void handleRefreshCatalog();
+                            }}
+                            disabled={catalogRefreshBlocked || catalogIsRefreshing}
+                          >
+                            {catalogIsRefreshing ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-4 w-4" />
+                            )}
+                            {t("refreshCatalog")}
+                          </Button>
+                        </div>
+
+                        <div className="grid gap-4 xl:h-[min(62vh,720px)] xl:grid-cols-[minmax(0,1.02fr)_minmax(340px,0.98fr)]">
+                          <div className="flex min-h-0 flex-col gap-4 xl:border-r xl:border-divider/70 xl:pr-5">
+                            <section className="space-y-3">
+                              <div className="flex flex-wrap items-start justify-between gap-3">
+                                <h3 className="text-sm font-medium text-foreground">
+                                  {t("modelDiscoverySectionTitle")}
+                                </h3>
+                                <Badge variant="outline">
+                                  {t(
+                                    `modelDiscoveryModeLabel_${watchedModelDiscovery?.mode ?? "openai_compatible"}`
+                                  )}
+                                </Badge>
+                              </div>
+
+                              <div className="space-y-3">
+                                <FormField
+                                  control={form.control}
+                                  name="model_discovery.mode"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>{t("modelDiscoveryMode")}</FormLabel>
+                                      <Select
+                                        value={field.value}
+                                        onValueChange={(value: UpstreamModelDiscoveryMode) => {
+                                          field.onChange(value);
+                                        }}
+                                      >
+                                        <FormControl>
+                                          <SelectTrigger>
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                          {MODEL_DISCOVERY_MODE_VALUES.map((mode) => (
+                                            <SelectItem key={mode} value={mode}>
+                                              {t(`modelDiscoveryModeLabel_${mode}`)}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                      <FormDescription>
+                                        {t(`modelDiscoveryModeDescription_${field.value}`)}
+                                      </FormDescription>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+
+                                <FormField
+                                  control={form.control}
+                                  name="model_discovery.enable_lite_llm_fallback"
+                                  render={({ field }) => (
+                                    <FormItem className="flex h-10 items-center justify-between gap-3 rounded-cf-sm border border-divider/50 bg-surface-200/35 px-3">
+                                      <FormLabel className="m-0 text-xs font-medium leading-none text-foreground">
+                                        {t("enableLiteLlmFallback")}
+                                      </FormLabel>
+                                      <Switch
+                                        checked={field.value}
+                                        onCheckedChange={field.onChange}
+                                      />
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+
+                              {watchedModelDiscovery?.mode === "custom" && (
+                                <FormField
+                                  control={form.control}
+                                  name="model_discovery.custom_endpoint"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>{t("customDiscoveryEndpoint")}</FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          placeholder={t("customDiscoveryEndpointPlaceholder")}
+                                          value={field.value ?? ""}
+                                          onChange={(event) => field.onChange(event.target.value)}
+                                        />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              )}
+
+                              <div className="space-y-3 border-t border-divider/70 pt-3">
+                                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                                  <Link2 className="h-4 w-4 text-muted-foreground" />
+                                  {t("modelDiscoveryPreviewTitle")}
+                                </div>
+                                {!discoveryPreview ? (
+                                  <p className="text-sm text-muted-foreground">
+                                    {t("modelDiscoveryPreviewEmpty")}
+                                  </p>
+                                ) : (
+                                  <div className="space-y-2 text-xs">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <Badge variant="outline">
+                                        {t(
+                                          `modelDiscoveryAuthProfile_${discoveryPreview.authProfile}`
+                                        )}
+                                      </Badge>
+                                      <span className="text-muted-foreground">
+                                        {t("modelDiscoveryPreviewApiRoot")}
+                                      </span>
+                                      <code className="rounded-cf-sm bg-surface-200/75 px-2 py-1 font-mono text-[11px] text-foreground ring-1 ring-divider/50">
+                                        {discoveryPreview.apiRoot}
+                                      </code>
+                                    </div>
+                                    <div className="rounded-cf-sm bg-surface-200/75 px-3 py-2 font-mono text-[11px] text-foreground ring-1 ring-divider/50">
+                                      {discoveryPreview.requestUrl ??
+                                        t("customDiscoveryEndpointRequired")}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </section>
+
+                            <section className="flex min-h-0 flex-1 flex-col border-t border-divider/70 pt-4">
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div className="flex items-center gap-2">
+                                  <h3 className="text-sm font-medium text-foreground">
+                                    {t("modelRulesSectionTitle")}
+                                  </h3>
+                                  <Badge variant="outline">{currentRuleCount}</Badge>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {modelRuleFields.length > 0 ? (
+                                    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                      <Checkbox
+                                        checked={modelRuleHeaderSelectionState}
+                                        onCheckedChange={(value) =>
+                                          handleSelectAllModelRules(
+                                            value === true || value === "indeterminate"
+                                          )
+                                        }
+                                        aria-label={t("modelRulesSelectAll")}
+                                      />
+                                      <span>{t("modelRulesSelectAll")}</span>
+                                    </label>
+                                  ) : null}
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-2"
+                                    onClick={() => appendModelRule(createEmptyModelRule())}
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                    {t("addModelRule")}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-2 text-status-error hover:bg-status-error-muted"
+                                    onClick={handleRemoveSelectedModelRules}
+                                    disabled={selectedModelRuleCount === 0}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    {t("deleteSelectedModelRules")}
+                                  </Button>
+                                </div>
+                              </div>
+
+                              {modelRuleFields.length === 0 ? (
+                                <div className="flex min-h-[180px] flex-1 items-center rounded-cf-sm border border-dashed border-divider bg-card/15 px-4 text-sm text-muted-foreground">
+                                  {t("modelRulesEmpty")}
+                                </div>
+                              ) : (
+                                <div className="min-h-0 flex-1 overflow-auto pr-1 [scrollbar-gutter:stable]">
+                                  <div className="space-y-3">
+                                    {modelRuleFields.map((ruleField, index) => {
+                                      const currentRule = watchedModelRules?.[index] ?? ruleField;
+                                      const isAliasRule = currentRule.type === "alias";
+                                      const valueLabel =
+                                        currentRule.type === "regex"
+                                          ? t("modelRuleRegexPattern")
+                                          : currentRule.type === "alias"
+                                            ? t("sourceModel")
+                                            : t("modelRuleValue");
+                                      const valuePlaceholder =
+                                        currentRule.type === "regex"
+                                          ? t("modelRuleRegexPlaceholder")
+                                          : currentRule.type === "alias"
+                                            ? t("modelRuleAliasPlaceholder")
+                                            : t("modelRuleExactPlaceholder");
+
+                                      return (
+                                        <div
+                                          key={ruleField.id}
+                                          className="rounded-cf-sm border border-divider/70 bg-card/20 p-3"
+                                        >
+                                          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                              <Checkbox
+                                                checked={selectedModelRuleIdSet.has(ruleField.id)}
+                                                onCheckedChange={(value) =>
+                                                  toggleModelRuleSelection(
+                                                    ruleField.id,
+                                                    value === true
+                                                  )
+                                                }
+                                                aria-label={`${t("selectModelRule")} ${index + 1}`}
+                                              />
+                                              <Badge
+                                                variant={getRuleSourceBadgeVariant(
+                                                  currentRule.source
+                                                )}
+                                              >
+                                                {t(`modelRuleSource_${currentRule.source}`)}
+                                              </Badge>
+                                              <span className="text-xs text-muted-foreground">
+                                                {currentRule.display_label ||
+                                                  t(`modelRuleTypeLabel_${currentRule.type}`)}
+                                              </span>
+                                            </div>
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-8 w-8 text-status-error hover:bg-status-error-muted"
+                                              onClick={() => handleRemoveModelRule(index)}
+                                              aria-label={t("removeModelRule")}
+                                            >
+                                              <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                          </div>
+
+                                          <div
+                                            className={cn(
+                                              "grid gap-3",
+                                              isAliasRule
+                                                ? "md:grid-cols-[150px_minmax(0,1fr)_minmax(0,1fr)]"
+                                                : "md:grid-cols-[150px_minmax(0,1fr)]"
+                                            )}
+                                          >
+                                            <FormField
+                                              control={form.control}
+                                              name={`model_rules.${index}.type`}
+                                              render={({ field }) => (
+                                                <FormItem>
+                                                  <FormLabel>{t("modelRuleType")}</FormLabel>
+                                                  <Select
+                                                    value={field.value}
+                                                    onValueChange={(
+                                                      value: UpstreamModelRuleType
+                                                    ) => {
+                                                      field.onChange(value);
+                                                      updateRuleAtIndex(
+                                                        index,
+                                                        {
+                                                          type: value,
+                                                          target_model:
+                                                            value === "alias"
+                                                              ? (currentRule.target_model ?? "")
+                                                              : null,
+                                                          display_label: null,
+                                                        },
+                                                        { forceManualSource: true }
+                                                      );
+                                                    }}
+                                                  >
+                                                    <FormControl>
+                                                      <SelectTrigger>
+                                                        <SelectValue />
+                                                      </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                      {MODEL_RULE_TYPE_VALUES.map((type) => (
+                                                        <SelectItem key={type} value={type}>
+                                                          {t(`modelRuleTypeLabel_${type}`)}
+                                                        </SelectItem>
+                                                      ))}
+                                                    </SelectContent>
+                                                  </Select>
+                                                  <FormMessage />
+                                                </FormItem>
+                                              )}
+                                            />
+
+                                            <FormField
+                                              control={form.control}
+                                              name={`model_rules.${index}.value`}
+                                              render={({ field }) => (
+                                                <FormItem>
+                                                  <FormLabel>{valueLabel}</FormLabel>
+                                                  <FormControl>
+                                                    <Input
+                                                      placeholder={valuePlaceholder}
+                                                      value={field.value}
+                                                      onChange={(event) => {
+                                                        field.onChange(event.target.value);
+                                                        updateRuleAtIndex(
+                                                          index,
+                                                          { value: event.target.value },
+                                                          { forceManualSource: true }
+                                                        );
+                                                      }}
+                                                    />
+                                                  </FormControl>
+                                                  <FormMessage />
+                                                </FormItem>
+                                              )}
+                                            />
+
+                                            {isAliasRule ? (
+                                              <FormField
+                                                control={form.control}
+                                                name={`model_rules.${index}.target_model`}
+                                                render={({ field, fieldState }) => (
+                                                  <FormItem>
+                                                    <FormLabel>{t("targetModel")}</FormLabel>
+                                                    <FormControl>
+                                                      <Input
+                                                        placeholder={t(
+                                                          "modelRuleTargetPlaceholder"
+                                                        )}
+                                                        value={field.value ?? ""}
+                                                        onChange={(event) => {
+                                                          field.onChange(event.target.value);
+                                                          updateRuleAtIndex(
+                                                            index,
+                                                            { target_model: event.target.value },
+                                                            { forceManualSource: true }
+                                                          );
+                                                        }}
+                                                      />
+                                                    </FormControl>
+                                                    {fieldState.error?.message ? (
+                                                      <p className="type-body-small text-[rgb(var(--md-sys-color-error))]">
+                                                        {fieldState.error.message ===
+                                                        MODEL_RULE_ALIAS_TARGET_REQUIRED_MESSAGE
+                                                          ? t("modelRuleAliasTargetRequired")
+                                                          : fieldState.error.message}
+                                                      </p>
+                                                    ) : null}
+                                                  </FormItem>
+                                                )}
+                                              />
+                                            ) : null}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </section>
+                          </div>
+
+                          <div className="flex min-h-0 flex-col xl:pl-5">
+                            <section className="flex min-h-0 flex-1 flex-col space-y-4">
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div className="space-y-1">
+                                  <h3 className="text-sm font-medium text-foreground">
+                                    {t("catalogSectionTitle")}
+                                  </h3>
+                                </div>
+                                <Badge variant="outline">
+                                  {t("catalogSelectedSummary", {
+                                    count: selectedCatalogModels.length,
+                                  })}
+                                </Badge>
+                              </div>
+
+                              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_136px]">
+                                <div className="space-y-2">
+                                  <label className="text-xs font-medium text-foreground">
+                                    {t("catalogSearchLabel")}
+                                  </label>
+                                  <div className="relative">
+                                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                    <Input
+                                      className="pl-9"
+                                      placeholder={t("catalogSearchPlaceholder")}
+                                      value={catalogSearchQuery}
+                                      onChange={(event) =>
+                                        setCatalogSearchQuery(event.target.value)
+                                      }
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <label className="text-xs font-medium text-foreground">
+                                    {t("catalogSourceFilterLabel")}
+                                  </label>
+                                  <Select
+                                    value={catalogSourceFilter}
+                                    onValueChange={(value: CatalogSourceFilter) =>
+                                      setCatalogSourceFilter(value)
+                                    }
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="all">
+                                        {t("catalogSourceFilterAll")}
+                                      </SelectItem>
+                                      <SelectItem value="native">
+                                        {t("modelRuleSource_native")}
+                                      </SelectItem>
+                                      <SelectItem value="inferred">
+                                        {t("modelRuleSource_inferred")}
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+
+                              {catalogState.modelCatalogLastStatus === "failed" && (
+                                <div className="rounded-cf-sm border border-status-error/45 bg-status-error-muted px-3 py-3 text-xs text-status-error">
+                                  <div className="font-medium">{t("catalogFailureTitle")}</div>
+                                  <div className="mt-1">
+                                    {catalogState.modelCatalogLastError ||
+                                      t("catalogFailureUnknown")}
+                                  </div>
+                                  {catalogFailedAtLabel && (
+                                    <div className="mt-1 text-status-error/85">
+                                      {t("catalogFailedAtLabel", { time: catalogFailedAtLabel })}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {!isEdit ? (
+                                <div className="flex min-h-[180px] items-center rounded-cf-sm border border-dashed border-divider bg-card/15 p-4 text-sm text-muted-foreground">
+                                  {t("catalogCreateHint")}
+                                </div>
+                              ) : catalogIsRefreshing ? (
+                                <div className="flex min-h-[180px] items-center gap-2 rounded-cf-sm bg-card/15 px-3 py-4 text-sm text-muted-foreground ring-1 ring-divider/50">
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  {t("catalogLoading")}
+                                </div>
+                              ) : !catalogHasEntries ? (
+                                <div className="flex min-h-[180px] items-center rounded-cf-sm border border-dashed border-divider bg-card/15 p-4 text-sm text-muted-foreground">
+                                  {t("catalogEmptyState")}
+                                </div>
+                              ) : (
+                                <div className="flex min-h-0 flex-1 flex-col gap-3">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                                    <span>
+                                      {t("catalogFilteredSummary", {
+                                        visible: filteredCatalogEntries.length,
+                                        total: catalogState.modelCatalog.length,
+                                      })}
+                                    </span>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 px-2 text-xs"
+                                        onClick={handleSelectFilteredCatalogEntries}
+                                        disabled={filteredCatalogEntries.length === 0}
+                                      >
+                                        {t("catalogSelectVisible")}
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 px-2 text-xs"
+                                        onClick={handleClearCatalogSelection}
+                                        disabled={selectedCatalogModels.length === 0}
+                                      >
+                                        {t("catalogClearSelection")}
+                                      </Button>
+                                    </div>
+                                  </div>
+
+                                  <div className="min-h-0 flex-1 overflow-auto rounded-cf-sm border border-divider/70 bg-card/15">
+                                    {filteredCatalogEntries.length === 0 ? (
+                                      <div className="p-4 text-sm text-muted-foreground">
+                                        {t("catalogNoMatchingModels")}
+                                      </div>
+                                    ) : (
+                                      <div className="divide-y divide-divider/70">
+                                        {filteredCatalogEntries.map((entry) => {
+                                          const checked = selectedCatalogModels.includes(
+                                            entry.model
+                                          );
+                                          return (
+                                            <label
+                                              key={entry.model}
+                                              className="flex cursor-pointer items-center justify-between gap-3 px-2.5 py-2.5 transition-colors hover:bg-surface-200/55"
+                                            >
+                                              <div className="flex min-w-0 items-center gap-3">
+                                                <Checkbox
+                                                  checked={checked}
+                                                  onCheckedChange={(nextChecked) =>
+                                                    toggleCatalogModelSelection(
+                                                      entry.model,
+                                                      nextChecked === true
+                                                    )
+                                                  }
+                                                />
+                                                <div className="min-w-0">
+                                                  <div className="truncate font-mono text-sm text-foreground">
+                                                    {entry.model}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                              <Badge
+                                                variant={getCatalogSourceBadgeVariant(entry.source)}
+                                                className="shrink-0 whitespace-nowrap px-2 text-[11px]"
+                                              >
+                                                {t(`modelRuleSource_${entry.source}`)}
+                                              </Badge>
+                                            </label>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="flex flex-col gap-3 border-t border-divider/70 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <span className="text-xs text-muted-foreground">
+                                      {t("catalogSelectionFeedback", {
+                                        selected: selectedCatalogModels.length,
+                                        visible: selectedVisibleCatalogCount,
+                                      })}
+                                    </span>
+                                    <Button
+                                      type="button"
+                                      className="gap-2 self-start sm:self-auto"
+                                      onClick={() => {
+                                        void handleImportCatalog();
+                                      }}
+                                      disabled={
+                                        importCatalogMutation.isPending ||
+                                        selectedCatalogModels.length === 0
+                                      }
+                                    >
+                                      {importCatalogMutation.isPending ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <ArrowDownToLine className="h-4 w-4" />
+                                      )}
+                                      {t("catalogImportScope", {
+                                        count: selectedCatalogModels.length,
+                                      })}
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+                            </section>
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     <div

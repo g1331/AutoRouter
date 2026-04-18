@@ -37,6 +37,37 @@ const affinityMigrationConfigSchema = z.object({
   threshold: z.number().int().min(1).max(10000000),
 });
 
+const modelDiscoverySchema = z.object({
+  mode: z.enum([
+    "openai_compatible",
+    "anthropic_native",
+    "gemini_native",
+    "gemini_openai_compatible",
+    "custom",
+    "litellm",
+  ]),
+  custom_endpoint: z.string().trim().min(1).nullable().optional(),
+  enable_lite_llm_fallback: z.boolean().default(false),
+});
+
+const modelCatalogEntrySchema = z.object({
+  model: z.string().trim().min(1),
+  source: z.enum(["native", "inferred"]),
+});
+
+const modelRuleSchema = z
+  .object({
+    type: z.enum(["exact", "regex", "alias"]),
+    value: z.string().trim().min(1),
+    target_model: z.string().trim().min(1).nullable().optional(),
+    source: z.enum(["manual", "native", "inferred"]).default("manual"),
+    display_label: z.string().trim().min(1).nullable().optional(),
+  })
+  .refine((rule) => rule.type !== "alias" || Boolean(rule.target_model), {
+    message: "target_model is required when rule type is alias",
+    path: ["target_model"],
+  });
+
 function normalizeDurationToMs(
   value: number | undefined,
   kind: "open_duration" | "probe_interval"
@@ -63,6 +94,13 @@ const updateUpstreamSchema = z
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)).nullable().optional(),
     allowed_models: z.array(z.string()).nullable().optional(),
     model_redirects: z.record(z.string(), z.string()).nullable().optional(),
+    model_discovery: modelDiscoverySchema.nullable().optional(),
+    model_catalog: z.array(modelCatalogEntrySchema).nullable().optional(),
+    model_catalog_updated_at: z.string().datetime().nullable().optional(),
+    model_catalog_last_status: z.enum(["success", "failed"]).nullable().optional(),
+    model_catalog_last_error: z.string().nullable().optional(),
+    model_catalog_last_failed_at: z.string().datetime().nullable().optional(),
+    model_rules: z.array(modelRuleSchema).nullable().optional(),
     circuit_breaker_config: circuitBreakerConfigSchema.nullable().optional(),
     affinity_migration: affinityMigrationConfigSchema.nullable().optional(),
     billing_input_multiplier: z.number().min(0).max(100).optional(),
@@ -157,6 +195,48 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
     if (validated.allowed_models !== undefined) input.allowedModels = validated.allowed_models;
     if (validated.model_redirects !== undefined) input.modelRedirects = validated.model_redirects;
+    if (validated.model_discovery !== undefined) {
+      input.modelDiscovery = validated.model_discovery
+        ? {
+            mode: validated.model_discovery.mode,
+            customEndpoint: validated.model_discovery.custom_endpoint ?? null,
+            enableLiteLlmFallback: validated.model_discovery.enable_lite_llm_fallback,
+          }
+        : null;
+    }
+    if (validated.model_catalog !== undefined) {
+      input.modelCatalog =
+        validated.model_catalog?.map((entry) => ({
+          model: entry.model,
+          source: entry.source,
+        })) ?? null;
+    }
+    if (validated.model_catalog_updated_at !== undefined) {
+      input.modelCatalogUpdatedAt = validated.model_catalog_updated_at
+        ? new Date(validated.model_catalog_updated_at)
+        : null;
+    }
+    if (validated.model_catalog_last_status !== undefined) {
+      input.modelCatalogLastStatus = validated.model_catalog_last_status;
+    }
+    if (validated.model_catalog_last_error !== undefined) {
+      input.modelCatalogLastError = validated.model_catalog_last_error;
+    }
+    if (validated.model_catalog_last_failed_at !== undefined) {
+      input.modelCatalogLastFailedAt = validated.model_catalog_last_failed_at
+        ? new Date(validated.model_catalog_last_failed_at)
+        : null;
+    }
+    if (validated.model_rules !== undefined) {
+      input.modelRules =
+        validated.model_rules?.map((rule) => ({
+          type: rule.type,
+          value: rule.value,
+          targetModel: rule.target_model ?? null,
+          source: rule.source,
+          displayLabel: rule.display_label ?? null,
+        })) ?? null;
+    }
     if (validated.circuit_breaker_config !== undefined) {
       input.circuitBreakerConfig = validated.circuit_breaker_config
         ? {

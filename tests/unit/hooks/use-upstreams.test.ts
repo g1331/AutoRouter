@@ -59,24 +59,70 @@ function createWrapper() {
 const sampleUpstream: Upstream = {
   id: "upstream-1",
   name: "test-upstream",
-  provider: "openai",
   base_url: "https://api.openai.com",
+  official_website_url: null,
   api_key_masked: "sk-***",
   is_active: true,
   is_default: false,
   timeout: 30,
+  current_concurrency: 0,
+  max_concurrency: null,
+  weight: 1,
+  priority: 0,
+  route_capabilities: [],
+  allowed_models: null,
+  model_redirects: null,
+  model_discovery: null,
+  model_catalog: null,
+  model_catalog_updated_at: null,
+  model_catalog_last_status: null,
+  model_catalog_last_error: null,
+  model_catalog_last_failed_at: null,
+  model_rules: null,
+  affinity_migration: null,
+  billing_input_multiplier: 1,
+  billing_output_multiplier: 1,
+  spending_rules: null,
+  description: null,
+  health_status: null,
+  circuit_breaker: null,
+  last_used_at: null,
+  updated_at: "2024-01-01T00:00:00Z",
   created_at: "2024-01-01T00:00:00Z",
 };
 
 const sampleUpstream2: Upstream = {
   id: "upstream-2",
   name: "test-upstream-2",
-  provider: "anthropic",
   base_url: "https://api.anthropic.com",
+  official_website_url: null,
   api_key_masked: "sk-ant-***",
   is_active: true,
   is_default: false,
   timeout: 30,
+  current_concurrency: 0,
+  max_concurrency: null,
+  weight: 1,
+  priority: 0,
+  route_capabilities: [],
+  allowed_models: null,
+  model_redirects: null,
+  model_discovery: null,
+  model_catalog: null,
+  model_catalog_updated_at: null,
+  model_catalog_last_status: null,
+  model_catalog_last_error: null,
+  model_catalog_last_failed_at: null,
+  model_rules: null,
+  affinity_migration: null,
+  billing_input_multiplier: 1,
+  billing_output_multiplier: 1,
+  spending_rules: null,
+  description: null,
+  health_status: null,
+  circuit_breaker: null,
+  last_used_at: null,
+  updated_at: "2024-01-02T00:00:00Z",
   created_at: "2024-01-02T00:00:00Z",
 };
 
@@ -388,7 +434,6 @@ describe("useCreateUpstream", () => {
     const newUpstream = {
       id: "new-upstream",
       name: "New Upstream",
-      provider: "openai",
       base_url: "https://api.example.com",
     };
     mockPost.mockResolvedValueOnce(newUpstream);
@@ -400,7 +445,6 @@ describe("useCreateUpstream", () => {
 
     result.current.mutate({
       name: "New Upstream",
-      provider: "openai",
       base_url: "https://api.example.com",
       api_key: "sk-test",
     });
@@ -411,7 +455,6 @@ describe("useCreateUpstream", () => {
 
     expect(mockPost).toHaveBeenCalledWith("/admin/upstreams", {
       name: "New Upstream",
-      provider: "openai",
       base_url: "https://api.example.com",
       api_key: "sk-test",
     });
@@ -427,7 +470,6 @@ describe("useCreateUpstream", () => {
 
     result.current.mutate({
       name: "Test",
-      provider: "openai",
       base_url: "https://api.example.com",
       api_key: "sk-test",
     });
@@ -459,7 +501,6 @@ describe("useUpdateUpstream", () => {
       id: "upstream-1",
       data: {
         name: "Updated Name",
-        provider: "openai",
         base_url: "https://api.openai.com",
         api_key: "sk-new",
       },
@@ -471,7 +512,6 @@ describe("useUpdateUpstream", () => {
 
     expect(mockPut).toHaveBeenCalledWith("/admin/upstreams/upstream-1", {
       name: "Updated Name",
-      provider: "openai",
       base_url: "https://api.openai.com",
       api_key: "sk-new",
     });
@@ -492,6 +532,51 @@ describe("useUpdateUpstream", () => {
 
     await waitFor(() => {
       expect(result.current.isError).toBe(true);
+    });
+  });
+});
+
+describe("catalog mutations", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("refreshes upstream catalog through the dedicated endpoint", async () => {
+    mockPost.mockResolvedValueOnce(sampleUpstream);
+
+    const { useRefreshUpstreamCatalog } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useRefreshUpstreamCatalog(), { wrapper });
+
+    result.current.mutate("upstream-1");
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(mockPost).toHaveBeenCalledWith("/admin/upstreams/upstream-1/catalog/refresh");
+  });
+
+  it("imports selected catalog models through the dedicated endpoint", async () => {
+    mockPost.mockResolvedValueOnce(sampleUpstream);
+
+    const { useImportUpstreamCatalogModels } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useImportUpstreamCatalogModels(), { wrapper });
+
+    result.current.mutate({
+      id: "upstream-1",
+      models: ["gpt-4.1", "gpt-4.1-mini"],
+    });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(mockPost).toHaveBeenCalledWith("/admin/upstreams/upstream-1/catalog/import", {
+      models: ["gpt-4.1", "gpt-4.1-mini"],
     });
   });
 });

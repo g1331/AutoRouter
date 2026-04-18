@@ -113,6 +113,45 @@ export function useUpdateUpstream() {
 }
 
 /**
+ * Refresh upstream model catalog
+ */
+export function useRefreshUpstreamCatalog() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => apiClient.post<Upstream>(`/admin/upstreams/${id}/catalog/refresh`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["upstreams"] });
+      toast.success("模型目录已刷新");
+    },
+    onError: (error: Error) => {
+      toast.error(`刷新目录失败: ${error.message}`);
+    },
+  });
+}
+
+/**
+ * Import selected model catalog entries into upstream rules
+ */
+export function useImportUpstreamCatalogModels() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, models }: { id: string; models: string[] }) =>
+      apiClient.post<Upstream>(`/admin/upstreams/${id}/catalog/import`, { models }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["upstreams"] });
+      toast.success("模型规则已导入");
+    },
+    onError: (error: Error) => {
+      toast.error(`导入模型失败: ${error.message}`);
+    },
+  });
+}
+
+/**
  * Toggle upstream active status (optimistic update)
  */
 export function useToggleUpstreamActive() {

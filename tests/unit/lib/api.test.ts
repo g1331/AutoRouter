@@ -290,6 +290,54 @@ describe("api", () => {
         }
       });
 
+      it("extracts a top-level error message when the API responds with { error }", async () => {
+        mockGetToken.mockReturnValue("test-token");
+        mockFetch.mockResolvedValueOnce({
+          ok: false,
+          status: 404,
+          statusText: "Not Found",
+          json: () => Promise.resolve({ error: "Upstream not found" }),
+        });
+
+        const client = createApiClient({
+          getToken: mockGetToken,
+          onUnauthorized: mockOnUnauthorized,
+        });
+
+        await expect(client.get("/missing")).rejects.toMatchObject({
+          status: 404,
+          message: "Upstream not found",
+        });
+      });
+
+      it("extracts nested detail.message when the API returns a structured detail object", async () => {
+        mockGetToken.mockReturnValue("test-token");
+        mockFetch.mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          statusText: "Internal Server Error",
+          json: () =>
+            Promise.resolve({
+              detail: {
+                message: "Catalog import failed",
+                error: "stale_cache",
+              },
+            }),
+        });
+
+        const client = createApiClient({
+          getToken: mockGetToken,
+          onUnauthorized: mockOnUnauthorized,
+        });
+
+        await expect(client.post("/catalog/import", { models: ["gpt-4.1"] })).rejects.toMatchObject(
+          {
+            status: 500,
+            message: "Catalog import failed",
+          }
+        );
+      });
+
       it("throws ApiError with statusText when JSON parse fails", async () => {
         mockGetToken.mockReturnValue("test-token");
         mockFetch.mockResolvedValueOnce({

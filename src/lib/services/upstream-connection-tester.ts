@@ -4,6 +4,11 @@ import {
   normalizeRouteCapabilities,
   type RouteCapability,
 } from "@/lib/route-capabilities";
+import {
+  buildUpstreamModelDiscoveryRequest,
+  type RefreshUpstreamModelCatalogInput,
+} from "./upstream-model-discovery";
+import type { UpstreamModelDiscoveryConfig } from "./upstream-model-types";
 
 /**
  * Validates an IP address to prevent SSRF attacks.
@@ -159,6 +164,8 @@ export interface TestUpstreamInput {
   baseUrl: string;
   /** API key for authentication (plain text, will not be stored) */
   apiKey: string;
+  /** Optional explicit discovery configuration */
+  modelDiscovery?: UpstreamModelDiscoveryConfig | null;
   /** Optional timeout in seconds (defaults to 10) */
   timeout?: number;
 }
@@ -294,7 +301,7 @@ export function formatTestUpstreamResponse(result: TestUpstreamResult) {
 export async function testUpstreamConnection(
   input: TestUpstreamInput
 ): Promise<TestUpstreamResult> {
-  const { routeCapabilities, baseUrl, apiKey, timeout = 10 } = input;
+  const { routeCapabilities, baseUrl, apiKey, modelDiscovery, timeout = 10 } = input;
   const testedAt = new Date();
   const normalizedCapabilities = normalizeRouteCapabilities(routeCapabilities);
 
@@ -326,8 +333,6 @@ export async function testUpstreamConnection(
       testedAt,
     };
   }
-
-  const providerType = getProviderByRouteCapability(normalizedCapabilities[0]);
 
   // Validate baseUrl format
   let parsedUrl: URL;
@@ -377,17 +382,30 @@ export async function testUpstreamConnection(
     }
   }
 
-  // Normalize base URL to origin only (prevent path doubling)
-  const normalizedBaseUrl = parsedUrl.origin;
-  const testUrl = `${normalizedBaseUrl}/v1/models`;
-
-  const headers: Record<string, string> = {};
-
-  if (providerType === "anthropic") {
-    headers["x-api-key"] = apiKey;
-    headers["anthropic-version"] = "2023-06-01";
-  } else {
-    headers["Authorization"] = `Bearer ${apiKey}`;
+  let request: RefreshUpstreamModelCatalogInput;
+  let testUrl: string;
+  let headers: Record<string, string>;
+  try {
+    request = {
+      baseUrl,
+      apiKey,
+      routeCapabilities: normalizedCapabilities,
+      modelDiscovery,
+      timeoutMs: timeout * 1000,
+    };
+    const discoveryRequest = buildUpstreamModelDiscoveryRequest(request);
+    testUrl = discoveryRequest.url;
+    headers = discoveryRequest.headers;
+  } catch (error) {
+    return {
+      success: false,
+      message: "Invalid model discovery configuration",
+      latencyMs: null,
+      statusCode: null,
+      errorType: "unknown",
+      errorDetails: error instanceof Error ? error.message : "Failed to resolve discovery request",
+      testedAt,
+    };
   }
 
   // Create abort controller for timeout

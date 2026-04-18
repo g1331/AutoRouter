@@ -19,6 +19,8 @@ export {
   deleteUpstream,
   listUpstreams,
   getUpstreamById,
+  refreshUpstreamCatalog,
+  importUpstreamCatalogModels,
   loadActiveUpstreams,
   getDefaultUpstream,
   getUpstreamByName,
@@ -30,6 +32,23 @@ export {
   type UpstreamResponse,
   type PaginatedUpstreams,
 } from "./upstream-crud";
+
+export {
+  refreshUpstreamModelCatalog,
+  normalizeApiRoot,
+  type RefreshUpstreamModelCatalogInput,
+  type RefreshUpstreamModelCatalogResult,
+} from "./upstream-model-discovery";
+
+export {
+  matchUpstreamModelRules,
+  normalizeUpstreamModelRules,
+  validateUpstreamModelRules,
+  importCatalogEntriesToModelRules,
+  deriveAllowedModelsFromRules,
+  deriveModelRedirectsFromRules,
+  type UpstreamModelRuleMatchResult,
+} from "./upstream-model-rules";
 
 // Re-export model router functions and types
 export {

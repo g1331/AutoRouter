@@ -88,7 +88,26 @@ describe("UpstreamsTable", () => {
     route_capabilities: ["openai_chat_compatible"],
     allowed_models: null,
     model_redirects: null,
-    health_status: { is_healthy: true, last_check: new Date().toISOString() },
+    model_discovery: {
+      mode: "openai_compatible",
+      custom_endpoint: null,
+      enable_lite_llm_fallback: false,
+    },
+    model_catalog: [{ model: "gpt-4.1", source: "native" }],
+    model_catalog_updated_at: new Date().toISOString(),
+    model_catalog_last_status: "success",
+    model_catalog_last_error: null,
+    model_catalog_last_failed_at: null,
+    model_rules: null,
+    health_status: {
+      upstream_id: "upstream-1",
+      is_healthy: true,
+      last_check_at: new Date().toISOString(),
+      last_success_at: new Date().toISOString(),
+      failure_count: 0,
+      latency_ms: 120,
+      error_message: null,
+    },
     circuit_breaker: {
       state: "closed",
       failure_count: 0,
@@ -150,24 +169,61 @@ describe("UpstreamsTable", () => {
     expect(screen.getByText("runtimeStatus")).toBeInTheDocument();
   });
 
+  it("shows a lightweight catalog signal when cached catalog data exists", () => {
+    render(
+      <UpstreamsTable
+        upstreams={[baseUpstream]}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onTest={onTest}
+      />
+    );
+
+    expect(screen.getByText("catalogSignalReady")).toBeInTheDocument();
+  });
+
   it("sorts tiers by priority and renders degraded/offline tier led labels", () => {
     const healthyInP0: Upstream = {
       ...baseUpstream,
       id: "p0-healthy",
       priority: 0,
-      health_status: { is_healthy: true, last_check: new Date().toISOString() },
+      health_status: {
+        upstream_id: "p0-healthy",
+        is_healthy: true,
+        last_check_at: new Date().toISOString(),
+        last_success_at: new Date().toISOString(),
+        failure_count: 0,
+        latency_ms: 100,
+        error_message: null,
+      },
     };
     const unhealthyInP0: Upstream = {
       ...baseUpstream,
       id: "p0-unhealthy",
       priority: 0,
-      health_status: { is_healthy: false, last_check: new Date().toISOString() },
+      health_status: {
+        upstream_id: "p0-unhealthy",
+        is_healthy: false,
+        last_check_at: new Date().toISOString(),
+        last_success_at: null,
+        failure_count: 2,
+        latency_ms: null,
+        error_message: "timeout",
+      },
     };
     const unhealthyInP5: Upstream = {
       ...baseUpstream,
       id: "p5-unhealthy",
       priority: 5,
-      health_status: { is_healthy: false, last_check: new Date().toISOString() },
+      health_status: {
+        upstream_id: "p5-unhealthy",
+        is_healthy: false,
+        last_check_at: new Date().toISOString(),
+        last_success_at: null,
+        failure_count: 3,
+        latency_ms: null,
+        error_message: "timeout",
+      },
     };
 
     render(

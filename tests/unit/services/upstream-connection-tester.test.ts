@@ -85,7 +85,7 @@ describe("upstream-connection-tester", () => {
       expect(result.testedAt).toBeInstanceOf(Date);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.openai.com/v1/models",
+        "https://api.openai.com/models",
         expect.objectContaining({
           method: "GET",
           headers: {
@@ -133,7 +133,7 @@ describe("upstream-connection-tester", () => {
       expect(result.latencyMs).toBeGreaterThanOrEqual(0);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.anthropic.com/v1/models",
+        "https://api.anthropic.com/models",
         expect.objectContaining({
           method: "GET",
           headers: {
@@ -174,7 +174,7 @@ describe("upstream-connection-tester", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(mockFetch).toHaveBeenCalledWith("https://api.openai.com/v1/models", expect.anything());
+      expect(mockFetch).toHaveBeenCalledWith("https://api.openai.com/models", expect.anything());
     });
 
     it("should normalize base URL with path to origin only", async () => {
@@ -190,8 +190,11 @@ describe("upstream-connection-tester", () => {
       });
 
       expect(result.success).toBe(true);
-      // Should use origin only, not append to path
-      expect(mockFetch).toHaveBeenCalledWith("https://api.openai.com/v1/models", expect.anything());
+      // Should preserve the configured API-root path prefix
+      expect(mockFetch).toHaveBeenCalledWith(
+        "https://api.openai.com/v2/some/path/models",
+        expect.anything()
+      );
     });
   });
 

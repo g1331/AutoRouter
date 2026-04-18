@@ -17,6 +17,19 @@ import {
 
 const log = createLogger("admin-upstreams");
 
+const modelDiscoverySchema = z.object({
+  mode: z.enum([
+    "openai_compatible",
+    "anthropic_native",
+    "gemini_native",
+    "gemini_openai_compatible",
+    "custom",
+    "litellm",
+  ]),
+  custom_endpoint: z.string().trim().min(1).nullable().optional(),
+  enable_lite_llm_fallback: z.boolean().default(false),
+});
+
 const testUpstreamSchema = z
   .object({
     name: z.string().min(1).max(64).optional(),
@@ -27,6 +40,7 @@ const testUpstreamSchema = z
       .trim()
       .min(10, "API key must be at least 10 characters")
       .max(512, "API key must not exceed 512 characters"),
+    model_discovery: modelDiscoverySchema.nullable().optional(),
     timeout: z
       .number()
       .int("Timeout must be an integer")
@@ -141,6 +155,13 @@ export async function POST(request: NextRequest) {
       routeCapabilities: normalizeRouteCapabilities(validated.route_capabilities),
       baseUrl: validated.base_url,
       apiKey: validated.api_key,
+      modelDiscovery: validated.model_discovery
+        ? {
+            mode: validated.model_discovery.mode,
+            customEndpoint: validated.model_discovery.custom_endpoint ?? null,
+            enableLiteLlmFallback: validated.model_discovery.enable_lite_llm_fallback,
+          }
+        : null,
       timeout: validated.timeout,
     };
 

@@ -142,6 +142,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       routeCapabilities: normalizeRouteCapabilities(upstream.routeCapabilities),
       baseUrl: upstream.baseUrl,
       apiKey: decryptedApiKey,
+      modelDiscovery: upstream.modelDiscovery ?? null,
       timeout: upstream.timeout,
     };
 
