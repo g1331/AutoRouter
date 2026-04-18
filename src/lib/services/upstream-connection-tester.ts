@@ -208,9 +208,9 @@ export function formatTestUpstreamResponse(result: TestUpstreamResult) {
 /**
  * Test connection to an upstream provider.
  *
- * Makes a lightweight API call to verify connectivity and authentication by calling
- * the provider's `/v1/models` endpoint. This function does NOT throw errors - all
- * failure scenarios are captured in the returned TestUpstreamResult object.
+ * Makes a lightweight API call to verify connectivity and authentication by reusing
+ * the upstream model discovery request builder. This function does NOT throw errors -
+ * all failure scenarios are captured in the returned TestUpstreamResult object.
  *
  * **Supported Providers:**
  * - **OpenAI**: Uses `Authorization: Bearer {apiKey}` header
@@ -218,7 +218,7 @@ export function formatTestUpstreamResponse(result: TestUpstreamResult) {
  *
  * **Test Process:**
  * 1. Validates provider type and base URL format
- * 2. Constructs test endpoint: `{baseUrl}/v1/models`
+ * 2. Resolves the model discovery endpoint from the current discovery configuration
  * 3. Makes GET request with provider-specific authentication headers
  * 4. Measures response latency and validates status code
  * 5. Returns structured result with success status and diagnostic information

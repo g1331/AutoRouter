@@ -102,6 +102,7 @@ describe("POST /api/admin/upstreams/test", () => {
       routeCapabilities: ["openai_chat_compatible"],
       baseUrl: "https://api.openai.com",
       apiKey: "sk-test-key-12345678",
+      modelDiscovery: null,
       timeout: 10,
     });
   });
@@ -138,6 +139,7 @@ describe("POST /api/admin/upstreams/test", () => {
       routeCapabilities: ["anthropic_messages"],
       baseUrl: "https://api.anthropic.com",
       apiKey: "sk-ant-api03-test",
+      modelDiscovery: null,
       timeout: 10, // Default timeout from Zod schema
     });
   });
@@ -516,6 +518,7 @@ describe("POST /api/admin/upstreams/[id]/test", () => {
       routeCapabilities: ["openai_chat_compatible"],
       baseUrl: "https://api.openai.com",
       apiKey: "sk-test-key-12345678",
+      modelDiscovery: null,
       timeout: 60,
     });
   });
@@ -759,6 +762,7 @@ describe("POST /api/admin/upstreams/[id]/test", () => {
       routeCapabilities: ["anthropic_messages"],
       baseUrl: "https://api.anthropic.com",
       apiKey: "sk-ant-api03-test-key",
+      modelDiscovery: null,
       timeout: 45,
     });
   });
