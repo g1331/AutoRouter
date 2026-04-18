@@ -172,6 +172,285 @@ jobs:
 
             curl -fsS -H "Authorization: Bearer ${{ secrets.ADMIN_TOKEN }}" "http://localhost:${PORT}/api/admin/health?active_only=true" >/dev/null
 
+            docker exec -i \
+              -e AUTOROUTER_ADMIN_TOKEN="${{ secrets.ADMIN_TOKEN }}" \
+              -e AUTOROUTER_APP_PORT="${PORT}" \
+              -e AUTOROUTER_SMOKE_PREFIX="deploy-smoke-${{ github.run_id }}" \
+              autorouter node <<'NODE'
+            const http = require("node:http");
+            const { setTimeout: delay } = require("node:timers/promises");
+
+            const appPort = process.env.PORT || process.env.AUTOROUTER_APP_PORT || "3000";
+            const baseUrl = `http://127.0.0.1:${appPort}`;
+            const adminToken = process.env.AUTOROUTER_ADMIN_TOKEN;
+            const smokePrefix = process.env.AUTOROUTER_SMOKE_PREFIX || `deploy-smoke-${Date.now()}`;
+            const mockPort = 3101;
+
+            function assert(condition, message) {
+              if (!condition) {
+                throw new Error(message);
+              }
+            }
+
+            async function fetchJson(url, init, expectedStatuses) {
+              const response = await fetch(url, init);
+              const bodyText = await response.text();
+              const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+              const parsedBody =
+                bodyText && contentType.includes("application/json")
+                  ? JSON.parse(bodyText)
+                  : bodyText || null;
+
+              if (!expectedStatuses.includes(response.status)) {
+                throw new Error(
+                  `Unexpected response ${response.status} for ${init?.method || "GET"} ${url}: ${
+                    typeof parsedBody === "string" ? parsedBody : JSON.stringify(parsedBody)
+                  }`
+                );
+              }
+
+              return parsedBody;
+            }
+
+            async function main() {
+              assert(adminToken, "Missing AUTOROUTER_ADMIN_TOKEN");
+
+              const requests = [];
+              const server = http.createServer(async (request, response) => {
+                const chunks = [];
+                for await (const chunk of request) {
+                  chunks.push(chunk);
+                }
+
+                const bodyText = Buffer.concat(chunks).toString("utf8");
+                let payload = {};
+                try {
+                  payload = bodyText ? JSON.parse(bodyText) : {};
+                } catch {
+                  payload = {};
+                }
+
+                const pathname = new URL(request.url || "/", "http://127.0.0.1").pathname;
+                const authHeader = String(request.headers.authorization || "");
+                requests.push({ pathname, authHeader, payload });
+
+                if (pathname !== "/deploy/v1/chat/completions") {
+                  response.writeHead(404, { "content-type": "application/json" });
+                  response.end(JSON.stringify({ error: { message: `Unhandled path ${pathname}` } }));
+                  return;
+                }
+
+                assert(
+                  authHeader === "Bearer deploy-smoke-upstream",
+                  "Upstream auth header was not rewritten to the upstream credential"
+                );
+
+                if (payload.stream === true) {
+                  response.writeHead(200, {
+                    "content-type": "text/event-stream; charset=utf-8",
+                    "cache-control": "no-cache",
+                    connection: "keep-alive",
+                  });
+                  response.write(
+                    `data: ${JSON.stringify({
+                      id: "deploy-stream-1",
+                      object: "chat.completion.chunk",
+                      choices: [{ index: 0, delta: { role: "assistant" } }],
+                    })}\n\n`
+                  );
+                  await delay(30);
+                  response.write(
+                    `data: ${JSON.stringify({
+                      id: "deploy-stream-1",
+                      object: "chat.completion.chunk",
+                      choices: [{ index: 0, delta: { content: "deploy stream ok" } }],
+                    })}\n\n`
+                  );
+                  await delay(30);
+                  response.write(
+                    `data: ${JSON.stringify({
+                      usage: {
+                        prompt_tokens: 6,
+                        completion_tokens: 3,
+                        total_tokens: 9,
+                      },
+                    })}\n\n`
+                  );
+                  response.end("data: [DONE]\n\n");
+                  return;
+                }
+
+                response.writeHead(200, { "content-type": "application/json" });
+                response.end(
+                  JSON.stringify({
+                    id: "deploy-chat-1",
+                    object: "chat.completion",
+                    model: "gpt-4.1-smoke",
+                    choices: [
+                      {
+                        index: 0,
+                        message: { role: "assistant", content: "deploy completion ok" },
+                        finish_reason: "stop",
+                      },
+                    ],
+                    usage: {
+                      prompt_tokens: 6,
+                      completion_tokens: 4,
+                      total_tokens: 10,
+                    },
+                  })
+                );
+              });
+
+              const resources = {
+                apiKeyIds: [],
+                upstreamIds: [],
+              };
+
+              try {
+                await new Promise((resolve, reject) => {
+                  server.listen(mockPort, "127.0.0.1", resolve);
+                  server.on("error", reject);
+                });
+
+                const adminHeaders = {
+                  "content-type": "application/json",
+                  authorization: `Bearer ${adminToken}`,
+                };
+
+                const upstream = await fetchJson(
+                  `${baseUrl}/api/admin/upstreams`,
+                  {
+                    method: "POST",
+                    headers: adminHeaders,
+                    body: JSON.stringify({
+                      name: `${smokePrefix}-upstream`,
+                      base_url: `http://127.0.0.1:${mockPort}/deploy/v1`,
+                      api_key: "deploy-smoke-upstream",
+                      timeout: 2,
+                      weight: 1,
+                      priority: 0,
+                      route_capabilities: ["openai_chat_compatible"],
+                    }),
+                  },
+                  [201]
+                );
+                resources.upstreamIds.unshift(upstream.id);
+
+                const apiKey = await fetchJson(
+                  `${baseUrl}/api/admin/keys`,
+                  {
+                    method: "POST",
+                    headers: adminHeaders,
+                    body: JSON.stringify({
+                      name: `${smokePrefix}-key`,
+                      access_mode: "restricted",
+                      upstream_ids: [upstream.id],
+                    }),
+                  },
+                  [201]
+                );
+                resources.apiKeyIds.unshift(apiKey.id);
+
+                const proxyHeaders = {
+                  "content-type": "application/json",
+                  authorization: `Bearer ${apiKey.key_value}`,
+                };
+
+                const completionResponse = await fetch(
+                  `${baseUrl}/api/proxy/v1/chat/completions`,
+                  {
+                    method: "POST",
+                    headers: proxyHeaders,
+                    body: JSON.stringify({
+                      model: "gpt-4.1-smoke",
+                      messages: [{ role: "user", content: "deployment smoke completion" }],
+                    }),
+                  }
+                );
+                assert(
+                  completionResponse.status === 200,
+                  `Deployment smoke completion returned ${completionResponse.status}`
+                );
+                const completionBody = await completionResponse.json();
+                assert(
+                  completionBody?.choices?.[0]?.message?.content === "deploy completion ok",
+                  "Deployment smoke completion body mismatch"
+                );
+
+                const streamResponse = await fetch(`${baseUrl}/api/proxy/v1/chat/completions`, {
+                  method: "POST",
+                  headers: proxyHeaders,
+                  body: JSON.stringify({
+                    model: "gpt-4.1-smoke",
+                    stream: true,
+                    messages: [{ role: "user", content: "deployment smoke stream" }],
+                  }),
+                });
+                assert(
+                  streamResponse.status === 200,
+                  `Deployment smoke stream returned ${streamResponse.status}`
+                );
+                assert(
+                  String(streamResponse.headers.get("content-type") || "")
+                    .toLowerCase()
+                    .includes("text/event-stream"),
+                  "Deployment smoke stream did not return SSE content type"
+                );
+                const streamText = await streamResponse.text();
+                assert(streamText.includes("deploy stream ok"), "Deployment smoke stream body mismatch");
+                assert(streamText.includes("[DONE]"), "Deployment smoke stream missing [DONE]");
+
+                assert(requests.length >= 2, "Deployment smoke mock upstream did not receive requests");
+              } finally {
+                for (const apiKeyId of resources.apiKeyIds) {
+                  try {
+                    await fetchJson(
+                      `${baseUrl}/api/admin/keys/${apiKeyId}`,
+                      {
+                        method: "DELETE",
+                        headers: { authorization: `Bearer ${adminToken}` },
+                      },
+                      [204]
+                    );
+                  } catch {
+                    // Best effort cleanup only.
+                  }
+                }
+
+                for (const upstreamId of resources.upstreamIds) {
+                  try {
+                    await fetchJson(
+                      `${baseUrl}/api/admin/upstreams/${upstreamId}`,
+                      {
+                        method: "DELETE",
+                        headers: { authorization: `Bearer ${adminToken}` },
+                      },
+                      [204]
+                    );
+                  } catch {
+                    // Best effort cleanup only.
+                  }
+                }
+
+                await new Promise((resolve, reject) => {
+                  server.close((error) => {
+                    if (error) {
+                      reject(error);
+                      return;
+                    }
+                    resolve();
+                  });
+                }).catch(() => undefined);
+              }
+            }
+
+            main().catch((error) => {
+              console.error(error instanceof Error ? error.stack || error.message : String(error));
+              process.exit(1);
+            });
+            NODE
+
       - name: Write workflow summary
         shell: bash
         run: |

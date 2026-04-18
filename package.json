@@ -13,6 +13,7 @@
     "format:check": "prettier --check .",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:proxy-stability": "node scripts/ci/proxy-stability-check.mjs",
     "e2e": "playwright test -c playwright.e2e.config.ts",
     "e2e:headed": "playwright test -c playwright.e2e.config.ts --headed",
     "db:generate": "drizzle-kit generate",
