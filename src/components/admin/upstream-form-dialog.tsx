@@ -1991,7 +1991,7 @@ export function UpstreamFormDialog({
                               </div>
                             </section>
 
-                            <section className="flex min-h-0 flex-1 flex-col border-t border-divider/70 pt-4">
+                            <section className="flex min-h-0 flex-1 flex-col gap-3 border-t border-divider/70 pt-4">
                               <div className="flex flex-wrap items-center justify-between gap-3">
                                 <div className="flex items-center gap-2">
                                   <h3 className="text-sm font-medium text-foreground">
