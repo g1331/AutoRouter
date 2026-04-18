@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   deriveAllowedModelsFromRules,
   deriveModelRedirectsFromRules,
+  hasExplicitModelRules,
   importCatalogEntriesToModelRules,
   matchUpstreamModelRules,
   normalizeUpstreamModelRules,
+  resolveModelWithRedirects,
   validateUpstreamModelRules,
 } from "@/lib/services/upstream-model-rules";
 
@@ -66,6 +68,58 @@ describe("upstream-model-rules", () => {
         },
       ]);
     });
+
+    it("should drop blank rules and deduplicate identical entries", () => {
+      const rules = normalizeUpstreamModelRules({
+        modelRules: [
+          {
+            type: "exact",
+            value: "   ",
+            targetModel: null,
+            source: "manual",
+            displayLabel: "精确匹配",
+          },
+          {
+            type: "alias",
+            value: "gpt-4.1-preview",
+            targetModel: "   ",
+            source: "manual",
+            displayLabel: "模型别名",
+          },
+          {
+            type: "regex",
+            value: "   ",
+            targetModel: null,
+            source: "manual",
+            displayLabel: "模式匹配",
+          },
+          {
+            type: "exact",
+            value: "gpt-4.1",
+            targetModel: null,
+            source: "manual",
+            displayLabel: "精确匹配",
+          },
+          {
+            type: "exact",
+            value: "gpt-4.1",
+            targetModel: null,
+            source: "manual",
+            displayLabel: "精确匹配",
+          },
+        ],
+      });
+
+      expect(rules).toEqual([
+        {
+          type: "exact",
+          value: "gpt-4.1",
+          targetModel: null,
+          source: "manual",
+          displayLabel: "精确匹配",
+        },
+      ]);
+    });
   });
 
   describe("deriveAllowedModelsFromRules", () => {
@@ -89,6 +143,20 @@ describe("upstream-model-rules", () => {
 
       expect(allowedModels).toEqual(["gpt-4.1"]);
     });
+
+    it("should return null when no exact rules exist", () => {
+      expect(
+        deriveAllowedModelsFromRules([
+          {
+            type: "regex",
+            value: "^gpt-4.*$",
+            targetModel: null,
+            source: "manual",
+            displayLabel: "模式匹配",
+          },
+        ])
+      ).toBeNull();
+    });
   });
 
   describe("deriveModelRedirectsFromRules", () => {
@@ -106,6 +174,38 @@ describe("upstream-model-rules", () => {
       expect(redirects).toEqual({
         "gpt-4.1-preview": "gpt-4.1",
       });
+    });
+
+    it("should return null when no alias rules exist", () => {
+      expect(
+        deriveModelRedirectsFromRules([
+          {
+            type: "exact",
+            value: "gpt-4.1",
+            targetModel: null,
+            source: "manual",
+            displayLabel: "精确匹配",
+          },
+        ])
+      ).toBeNull();
+    });
+  });
+
+  describe("hasExplicitModelRules", () => {
+    it("should reflect whether explicit rules are configured", () => {
+      expect(hasExplicitModelRules(null)).toBe(false);
+      expect(hasExplicitModelRules([])).toBe(false);
+      expect(
+        hasExplicitModelRules([
+          {
+            type: "exact",
+            value: "gpt-4.1",
+            targetModel: null,
+            source: "manual",
+            displayLabel: "精确匹配",
+          },
+        ])
+      ).toBe(true);
     });
   });
 
@@ -185,6 +285,45 @@ describe("upstream-model-rules", () => {
       expect(result.matched).toBe(false);
       expect(result.redirectApplied).toBe(false);
     });
+
+    it("should ignore invalid regex rules and continue evaluating the remaining set", () => {
+      const result = matchUpstreamModelRules("gpt-4.1", [
+        {
+          type: "regex",
+          value: "(",
+          targetModel: null,
+          source: "manual",
+          displayLabel: "模式匹配",
+        },
+      ]);
+
+      expect(result).toEqual({
+        hasExplicitRules: true,
+        matched: false,
+        resolvedModel: "gpt-4.1",
+        redirectApplied: false,
+        matchedRule: null,
+      });
+    });
+  });
+
+  describe("resolveModelWithRedirects", () => {
+    it("should expose the alias target and redirect flag", () => {
+      expect(
+        resolveModelWithRedirects("gpt-4.1-preview", [
+          {
+            type: "alias",
+            value: "gpt-4.1-preview",
+            targetModel: "gpt-4.1",
+            source: "manual",
+            displayLabel: "模型别名",
+          },
+        ])
+      ).toEqual({
+        resolvedModel: "gpt-4.1",
+        redirectApplied: true,
+      });
+    });
   });
 
   describe("validateUpstreamModelRules", () => {
@@ -215,6 +354,28 @@ describe("upstream-model-rules", () => {
 
       expect(errors).toContain("Invalid regex rule: [unterminated");
       expect(errors.some((message) => message.includes("Circular alias rule detected"))).toBe(true);
+    });
+
+    it("should report missing model values and alias targets", () => {
+      const errors = validateUpstreamModelRules([
+        {
+          type: "exact",
+          value: "   ",
+          targetModel: null,
+          source: "manual",
+          displayLabel: "精确匹配",
+        },
+        {
+          type: "alias",
+          value: "gpt-4.1-preview",
+          targetModel: "   ",
+          source: "manual",
+          displayLabel: "模型别名",
+        },
+      ]);
+
+      expect(errors).toContain("Model rule value is required");
+      expect(errors).toContain("Alias rule target is required for model: gpt-4.1-preview");
     });
   });
 

@@ -714,6 +714,81 @@ describe("UpstreamFormDialog", () => {
       expect(screen.getByDisplayValue("gpt-4.1-preview")).toBeInTheDocument();
       expect(screen.getByDisplayValue("gpt-4.1")).toBeInTheDocument();
     });
+
+    it("filters catalog entries, selects visible models, and clears the selection", () => {
+      render(
+        <UpstreamFormDialog upstream={mockUpstream} open={true} onOpenChange={mockOnOpenChange} />,
+        { wrapper: Wrapper }
+      );
+
+      const importButton = screen
+        .getByText("catalogImportScope")
+        .closest("button") as HTMLButtonElement;
+      expect(importButton).toBeDisabled();
+
+      fireEvent.change(screen.getByPlaceholderText("catalogSearchPlaceholder"), {
+        target: { value: "mini" },
+      });
+      fireEvent.click(screen.getAllByText("catalogSourceFilterAll")[0]);
+      fireEvent.click(screen.getAllByText("modelRuleSource_inferred").slice(-1)[0]);
+      fireEvent.click(screen.getByText("catalogSelectVisible"));
+
+      expect(importButton).toBeEnabled();
+
+      fireEvent.click(screen.getByText("catalogClearSelection"));
+      expect(importButton).toBeDisabled();
+    });
+
+    it("switches a model rule to alias mode and submits manual source updates", async () => {
+      mockUpdateMutateAsync.mockResolvedValueOnce({});
+
+      render(
+        <UpstreamFormDialog upstream={mockUpstream} open={true} onOpenChange={mockOnOpenChange} />,
+        { wrapper: Wrapper }
+      );
+
+      fireEvent.click(screen.getAllByText("modelRuleTypeLabel_exact")[0]);
+      fireEvent.click(screen.getAllByText("modelRuleTypeLabel_alias").slice(-1)[0]);
+
+      fireEvent.change(screen.getByDisplayValue("gpt-4.1"), {
+        target: { value: "gpt-4.1-preview" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("modelRuleTargetPlaceholder"), {
+        target: { value: "gpt-4.1" },
+      });
+      fireEvent.click(screen.getByText("save"));
+
+      await waitFor(() => {
+        expect(mockUpdateMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id: "upstream-1",
+            data: expect.objectContaining({
+              model_rules: [
+                {
+                  type: "alias",
+                  value: "gpt-4.1-preview",
+                  target_model: "gpt-4.1",
+                  source: "manual",
+                  display_label: null,
+                },
+              ],
+            }),
+          })
+        );
+      });
+    });
+
+    it("removes a single model rule from the workspace", () => {
+      render(
+        <UpstreamFormDialog upstream={mockUpstream} open={true} onOpenChange={mockOnOpenChange} />,
+        { wrapper: Wrapper }
+      );
+
+      fireEvent.click(screen.getByLabelText("removeModelRule"));
+
+      expect(screen.getByText("modelRulesEmpty")).toBeInTheDocument();
+      expect(screen.queryByDisplayValue("gpt-4.1")).not.toBeInTheDocument();
+    });
   });
 
   describe("Priority Field", () => {
