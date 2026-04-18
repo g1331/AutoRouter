@@ -14,6 +14,12 @@ const mockCreateMutateAsync = vi.fn();
 const mockUpdateMutateAsync = vi.fn();
 const mockRefreshCatalogMutateAsync = vi.fn();
 const mockImportCatalogMutateAsync = vi.fn();
+const upstreamHookState = {
+  createPending: false,
+  updatePending: false,
+  refreshPending: false,
+  importPending: false,
+};
 const { mockToastError } = vi.hoisted(() => ({
   mockToastError: vi.fn(),
 }));
@@ -28,19 +34,19 @@ vi.mock("sonner", () => ({
 vi.mock("@/hooks/use-upstreams", () => ({
   useCreateUpstream: () => ({
     mutateAsync: mockCreateMutateAsync,
-    isPending: false,
+    isPending: upstreamHookState.createPending,
   }),
   useUpdateUpstream: () => ({
     mutateAsync: mockUpdateMutateAsync,
-    isPending: false,
+    isPending: upstreamHookState.updatePending,
   }),
   useRefreshUpstreamCatalog: () => ({
     mutateAsync: mockRefreshCatalogMutateAsync,
-    isPending: false,
+    isPending: upstreamHookState.refreshPending,
   }),
   useImportUpstreamCatalogModels: () => ({
     mutateAsync: mockImportCatalogMutateAsync,
-    isPending: false,
+    isPending: upstreamHookState.importPending,
   }),
 }));
 
@@ -125,6 +131,10 @@ describe("UpstreamFormDialog", () => {
     mockImportCatalogMutateAsync.mockReset();
     mockOnOpenChange.mockReset();
     mockToastError.mockReset();
+    upstreamHookState.createPending = false;
+    upstreamHookState.updatePending = false;
+    upstreamHookState.refreshPending = false;
+    upstreamHookState.importPending = false;
   });
 
   describe("Create Mode", () => {
@@ -521,6 +531,94 @@ describe("UpstreamFormDialog", () => {
 
       expect(screen.getByText("catalogSavedConfigHint")).toBeInTheDocument();
       expect(screen.getByText("refreshCatalog")).toBeDisabled();
+    });
+
+    it("shows catalog loading state without hiding the rules workspace", () => {
+      upstreamHookState.refreshPending = true;
+
+      render(
+        <UpstreamFormDialog upstream={mockUpstream} open={true} onOpenChange={mockOnOpenChange} />,
+        { wrapper: Wrapper }
+      );
+
+      expect(screen.getByText("catalogLoading")).toBeInTheDocument();
+      expect(screen.getByText("modelRulesSectionTitle")).toBeInTheDocument();
+      expect(screen.getByText("refreshCatalog")).toBeDisabled();
+    });
+
+    it("shows catalog empty state when an editable upstream has no cached entries", () => {
+      const upstreamWithoutCatalog: Upstream = {
+        ...mockUpstream,
+        model_catalog: null,
+        model_catalog_updated_at: null,
+        model_catalog_last_status: null,
+        model_catalog_last_error: null,
+        model_catalog_last_failed_at: null,
+      };
+
+      render(
+        <UpstreamFormDialog
+          upstream={upstreamWithoutCatalog}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      expect(screen.getByText("catalogEmptyState")).toBeInTheDocument();
+      expect(screen.getByText("modelRulesSectionTitle")).toBeInTheDocument();
+      expect(screen.getByText("refreshCatalog")).toBeInTheDocument();
+    });
+
+    it("shows catalog failure state with error details and retry action", () => {
+      const failedCatalogUpstream: Upstream = {
+        ...mockUpstream,
+        model_catalog: null,
+        model_catalog_last_status: "failed",
+        model_catalog_last_error: "gateway timeout",
+        model_catalog_last_failed_at: new Date("2026-04-18T12:00:00.000Z").toISOString(),
+      };
+
+      render(
+        <UpstreamFormDialog
+          upstream={failedCatalogUpstream}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      expect(screen.getByText("catalogFailureTitle")).toBeInTheDocument();
+      expect(screen.getByText("gateway timeout")).toBeInTheDocument();
+      expect(screen.getByText("catalogFailedAtLabel")).toBeInTheDocument();
+      expect(screen.getByText("refreshCatalog")).toBeEnabled();
+    });
+
+    it("keeps the compact status bar ahead of a desktop-secondary workspace", () => {
+      render(
+        <UpstreamFormDialog upstream={mockUpstream} open={true} onOpenChange={mockOnOpenChange} />,
+        { wrapper: Wrapper }
+      );
+
+      const statusHint = screen.getByText("catalogStatusBarHint");
+      const rulesTitle = screen.getByText("modelRulesSectionTitle");
+      const catalogTitle = screen.getByText("catalogSectionTitle");
+
+      expect(
+        statusHint.compareDocumentPosition(rulesTitle) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(
+        rulesTitle.compareDocumentPosition(catalogTitle) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+
+      const workspaceContainer = Array.from(document.querySelectorAll("div")).find(
+        (element) =>
+          typeof element.className === "string" &&
+          element.className.includes("xl:grid-cols-[minmax(0,1.02fr)_minmax(340px,0.98fr)]")
+      );
+
+      expect(workspaceContainer).toBeTruthy();
+      expect(workspaceContainer?.className).toContain("grid");
     });
 
     it("imports selected catalog entries and echoes returned model rules", async () => {
