@@ -99,6 +99,26 @@ describe("upstream-model-discovery", () => {
       });
     });
 
+    it("should keep custom discovery requests under the configured API-root path", () => {
+      const request = buildUpstreamModelDiscoveryRequest({
+        baseUrl: "https://gateway.example.com/codex/v1",
+        apiKey: "sk-test",
+        routeCapabilities: ["openai_chat_compatible"],
+        modelDiscovery: {
+          mode: "custom",
+          customEndpoint: "sub/models?group=chat",
+          enableLiteLlmFallback: false,
+        },
+      });
+
+      expect(request).toEqual({
+        url: "https://gateway.example.com/codex/v1/sub/models?group=chat",
+        headers: {
+          Authorization: "Bearer sk-test",
+        },
+      });
+    });
+
     it("should build a LiteLLM request without provider authentication", () => {
       const request = buildUpstreamModelDiscoveryRequest({
         baseUrl: "https://gateway.example.com/codex/v1",
@@ -147,6 +167,34 @@ describe("upstream-model-discovery", () => {
       ).toThrow("Custom discovery endpoint must be a relative path under the configured API root");
     });
 
+    it("should reject custom discovery endpoints that escape the configured API-root path", () => {
+      expect(() =>
+        buildUpstreamModelDiscoveryRequest({
+          baseUrl: "https://gateway.example.com/codex/v1",
+          apiKey: "sk-test",
+          routeCapabilities: ["openai_chat_compatible"],
+          modelDiscovery: {
+            mode: "custom",
+            customEndpoint: "../models",
+            enableLiteLlmFallback: false,
+          },
+        })
+      ).toThrow("Custom discovery endpoint must stay under the configured API root");
+
+      expect(() =>
+        buildUpstreamModelDiscoveryRequest({
+          baseUrl: "https://gateway.example.com/codex/v1",
+          apiKey: "sk-test",
+          routeCapabilities: ["openai_chat_compatible"],
+          modelDiscovery: {
+            mode: "custom",
+            customEndpoint: "/internal/models",
+            enableLiteLlmFallback: false,
+          },
+        })
+      ).toThrow("Custom discovery endpoint must stay under the configured API root");
+    });
+
     it("should reject requests when discovery mode cannot be inferred", () => {
       expect(() =>
         buildUpstreamModelDiscoveryRequest({
@@ -190,14 +238,17 @@ describe("upstream-model-discovery", () => {
       });
 
       const previousCatalog = [{ model: "gpt-4.1", source: "native" as const }];
+      const previousCatalogUpdatedAt = new Date("2026-04-18T08:00:00.000Z");
       const result = await refreshUpstreamModelCatalog({
         baseUrl: "https://gateway.example.com/codex/v1",
         apiKey: "sk-test",
         routeCapabilities: ["openai_chat_compatible"],
         previousCatalog,
+        previousCatalogUpdatedAt,
       });
 
       expect(result.modelCatalog).toEqual(previousCatalog);
+      expect(result.modelCatalogUpdatedAt).toEqual(previousCatalogUpdatedAt);
       expect(result.modelCatalogLastStatus).toBe("failed");
       expect(result.modelCatalogLastError).toContain("HTTP 503");
       expect(result.modelCatalogLastFailedAt).toBeInstanceOf(Date);
@@ -345,6 +396,7 @@ describe("upstream-model-discovery", () => {
 
     it("should combine the native and fallback errors when LiteLLM fallback also fails", async () => {
       const previousCatalog = [{ model: "gpt-4.1", source: "native" as const }];
+      const previousCatalogUpdatedAt = new Date("2026-04-18T08:00:00.000Z");
       mockFetch
         .mockResolvedValueOnce({
           ok: false,
@@ -361,6 +413,7 @@ describe("upstream-model-discovery", () => {
         apiKey: "sk-test",
         routeCapabilities: ["openai_chat_compatible"],
         previousCatalog,
+        previousCatalogUpdatedAt,
         modelDiscovery: {
           mode: "openai_compatible",
           customEndpoint: null,
@@ -369,6 +422,7 @@ describe("upstream-model-discovery", () => {
       });
 
       expect(result.modelCatalog).toEqual(previousCatalog);
+      expect(result.modelCatalogUpdatedAt).toEqual(previousCatalogUpdatedAt);
       expect(result.modelCatalogLastStatus).toBe("failed");
       expect(result.modelCatalogLastError).toContain("HTTP 503");
       expect(result.modelCatalogLastError).toContain(

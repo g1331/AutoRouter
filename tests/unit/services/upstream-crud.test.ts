@@ -1286,6 +1286,7 @@ describe("upstream-crud", () => {
           routeCapabilities: ["openai_chat_compatible"],
           modelDiscovery: null,
           modelCatalog: null,
+          modelCatalogUpdatedAt: new Date("2026-04-17T08:00:00.000Z"),
         } as unknown as PartialUpstream)
         .mockResolvedValueOnce({
           id: "test-id",
@@ -1359,6 +1360,7 @@ describe("upstream-crud", () => {
       expect(discoveryModule.refreshUpstreamModelCatalog).toHaveBeenCalledWith(
         expect.objectContaining({
           apiKey: "sk-test-key",
+          previousCatalogUpdatedAt: new Date("2026-04-17T08:00:00.000Z"),
           timeoutMs: 60000,
         })
       );

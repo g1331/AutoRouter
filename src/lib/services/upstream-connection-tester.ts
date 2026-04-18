@@ -8,7 +8,10 @@ import {
   buildUpstreamModelDiscoveryRequest,
   type RefreshUpstreamModelCatalogInput,
 } from "./upstream-model-discovery";
-import type { UpstreamModelDiscoveryConfig } from "./upstream-model-types";
+import {
+  inferDefaultModelDiscoveryConfig,
+  type UpstreamModelDiscoveryConfig,
+} from "./upstream-model-types";
 
 /**
  * Validates an IP address to prevent SSRF attacks.
@@ -205,6 +208,24 @@ export function formatTestUpstreamResponse(result: TestUpstreamResult) {
   };
 }
 
+function resolveModelDiscoveryForConnectionTest(
+  routeCapabilities: RouteCapability[],
+  modelDiscovery: UpstreamModelDiscoveryConfig | null | undefined
+): UpstreamModelDiscoveryConfig | null | undefined {
+  if (modelDiscovery?.mode !== "litellm") {
+    return modelDiscovery;
+  }
+
+  const inferredConfig = inferDefaultModelDiscoveryConfig(routeCapabilities);
+  if (!inferredConfig) {
+    throw new Error(
+      "Unable to infer a native discovery mode for the configured route capabilities"
+    );
+  }
+
+  return inferredConfig;
+}
+
 /**
  * Test connection to an upstream provider.
  *
@@ -390,7 +411,10 @@ export async function testUpstreamConnection(
       baseUrl,
       apiKey,
       routeCapabilities: normalizedCapabilities,
-      modelDiscovery,
+      modelDiscovery: resolveModelDiscoveryForConnectionTest(
+        normalizedCapabilities,
+        modelDiscovery
+      ),
       timeoutMs: timeout * 1000,
     };
     const discoveryRequest = buildUpstreamModelDiscoveryRequest(request);

@@ -798,6 +798,7 @@ export async function refreshUpstreamCatalog(upstreamId: string): Promise<Upstre
     routeCapabilities: existing.routeCapabilities,
     modelDiscovery: existing.modelDiscovery,
     previousCatalog: existing.modelCatalog,
+    previousCatalogUpdatedAt: existing.modelCatalogUpdatedAt,
     timeoutMs: existing.timeout * 1000,
   });
 

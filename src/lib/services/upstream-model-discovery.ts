@@ -25,6 +25,7 @@ export interface RefreshUpstreamModelCatalogInput {
   routeCapabilities: RouteCapability[] | string[] | null | undefined;
   modelDiscovery?: Partial<UpstreamModelDiscoveryConfig> | null;
   previousCatalog?: UpstreamModelCatalogEntry[] | null;
+  previousCatalogUpdatedAt?: Date | null;
   timeoutMs?: number;
 }
 
@@ -72,7 +73,17 @@ function resolveCustomDiscoveryUrl(customEndpoint: string, apiRoot: string): URL
 
   const apiRootUrl = new URL(`${apiRoot}/`);
   const resolvedUrl = new URL(customEndpoint, apiRootUrl);
+  const apiRootPath = stripTrailingSlash(apiRootUrl.pathname) || "/";
+  const resolvedPath = stripTrailingSlash(resolvedUrl.pathname) || "/";
+
   if (resolvedUrl.origin !== apiRootUrl.origin) {
+    throw new Error("Custom discovery endpoint must stay under the configured API root");
+  }
+  if (
+    apiRootPath !== "/" &&
+    resolvedPath !== apiRootPath &&
+    !resolvedPath.startsWith(`${apiRootPath}/`)
+  ) {
     throw new Error("Custom discovery endpoint must stay under the configured API root");
   }
 
@@ -346,7 +357,7 @@ export async function refreshUpstreamModelCatalog(
         return {
           modelDiscovery,
           modelCatalog: input.previousCatalog ?? null,
-          modelCatalogUpdatedAt: null,
+          modelCatalogUpdatedAt: input.previousCatalogUpdatedAt ?? null,
           modelCatalogLastStatus: "failed",
           modelCatalogLastError: `${errorMessage}; LiteLLM fallback failed: ${fallbackMessage}`,
           modelCatalogLastFailedAt: attemptedAt,
@@ -357,7 +368,7 @@ export async function refreshUpstreamModelCatalog(
     return {
       modelDiscovery,
       modelCatalog: input.previousCatalog ?? null,
-      modelCatalogUpdatedAt: null,
+      modelCatalogUpdatedAt: input.previousCatalogUpdatedAt ?? null,
       modelCatalogLastStatus: "failed",
       modelCatalogLastError: errorMessage,
       modelCatalogLastFailedAt: attemptedAt,
