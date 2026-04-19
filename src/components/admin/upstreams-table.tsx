@@ -282,6 +282,32 @@ export function UpstreamsTable({
     };
   };
 
+  const getQueuePolicySummary = (upstream: Upstream) => {
+    const policy = upstream.queue_policy;
+
+    if (!policy?.enabled) {
+      return {
+        enabled: false,
+        statusLabel: t("queuePolicyDisabled"),
+        detailLabel: t("queuePolicyDisabledDesc"),
+      };
+    }
+
+    return {
+      enabled: true,
+      statusLabel: t("queuePolicyEnabledBadge"),
+      detailLabel:
+        policy.max_queue_length == null
+          ? t("queuePolicyRuntimeSummaryUnlimited", {
+              timeoutMs: policy.timeout_ms,
+            })
+          : t("queuePolicyRuntimeSummary", {
+              timeoutMs: policy.timeout_ms,
+              maxQueueLength: policy.max_queue_length,
+            }),
+    };
+  };
+
   const formatLastUsed = (upstream: Upstream): string => {
     if (!upstream.last_used_at) return t("neverUsed");
     return formatDistanceToNow(new Date(upstream.last_used_at), {
@@ -481,6 +507,7 @@ export function UpstreamsTable({
                   {tier.upstreams.map((upstream) => {
                     const quota = quotaMap.get(upstream.id);
                     const concurrency = getConcurrencyInfo(upstream);
+                    const queuePolicy = getQueuePolicySummary(upstream);
                     const catalogSignal = getCatalogSignal(upstream);
                     const showRecover =
                       upstream.circuit_breaker != null &&
@@ -760,6 +787,17 @@ export function UpstreamsTable({
                               >
                                 {t("maxConcurrency")}: {concurrency.label}
                               </Badge>
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-[11px]",
+                                  queuePolicy.enabled
+                                    ? "border-status-warning/45 text-status-warning"
+                                    : "border-divider text-muted-foreground"
+                                )}
+                              >
+                                {t("queuePolicyStatus")}: {queuePolicy.statusLabel}
+                              </Badge>
                             </div>
 
                             {!concurrency.unlimited && (
@@ -782,6 +820,11 @@ export function UpstreamsTable({
                                 />
                               </div>
                             )}
+
+                            <div className="mt-2 text-[11px] text-muted-foreground">
+                              {t("queuePolicySummary")}:{" "}
+                              <span className="text-foreground">{queuePolicy.detailLabel}</span>
+                            </div>
 
                             <div className="mt-2 text-[11px] text-muted-foreground">
                               {t("lastUsed")}:{" "}

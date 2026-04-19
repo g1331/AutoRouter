@@ -169,6 +169,29 @@ describe("UpstreamsTable", () => {
     expect(screen.getByText("runtimeStatus")).toBeInTheDocument();
   });
 
+  it("renders queue policy summary in runtime status", () => {
+    render(
+      <UpstreamsTable
+        upstreams={[
+          {
+            ...baseUpstream,
+            queue_policy: {
+              enabled: true,
+              timeout_ms: 45000,
+              max_queue_length: 8,
+            },
+          },
+        ]}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onTest={onTest}
+      />
+    );
+
+    expect(screen.getByText(/queuePolicyStatus/)).toBeInTheDocument();
+    expect(screen.getByText(/queuePolicyRuntimeSummary/)).toBeInTheDocument();
+  });
+
   it("shows a lightweight catalog signal when cached catalog data exists", () => {
     render(
       <UpstreamsTable

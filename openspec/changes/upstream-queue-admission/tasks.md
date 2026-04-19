@@ -20,7 +20,7 @@
 ## 4. 日志观测与管理端展示
 
 - [x] 4.1 扩展 `RoutingDecisionLog`、请求日志写入与转换层，在 `routingDecision.queue` 下记录 `waiting`、`resumed`、`timed_out`、`aborted` 生命周期字段和等待耗时
-- [ ] 4.2 更新上游配置弹窗、hooks、API 客户端与中英文文案，提供 `queue_policy` 的编辑、回显和配置摘要展示
+- [x] 4.2 更新上游配置弹窗、hooks、API 客户端与中英文文案，提供 `queue_policy` 的编辑、回显和配置摘要展示
 - [ ] 4.3 更新日志表格、紧凑视图与路由决策时间线，显示等待状态标识、等待终止链路和真实候选熔断状态
 
 ## 5. 测试与验收
