@@ -54,6 +54,7 @@ describe("api-transformers", () => {
         isActive: true,
         currentConcurrency: 3,
         maxConcurrency: 10,
+        queuePolicy: { enabled: true, timeout_ms: 30000, max_queue_length: 20 },
         config: '{"model": "gpt-4"}',
         affinityMigration: null,
         lastUsedAt: new Date("2024-01-15T11:00:00.000Z"),
@@ -74,6 +75,7 @@ describe("api-transformers", () => {
         is_active: true,
         current_concurrency: 3,
         max_concurrency: 10,
+        queue_policy: { enabled: true, timeout_ms: 30000, max_queue_length: 20 },
         config: '{"model": "gpt-4"}',
         last_used_at: "2024-01-15T11:00:00.000Z",
         created_at: "2024-01-15T10:00:00.000Z",
@@ -111,6 +113,7 @@ describe("api-transformers", () => {
         isActive: false,
         currentConcurrency: 0,
         maxConcurrency: null,
+        queuePolicy: null,
         config: null,
         affinityMigration: null,
         lastUsedAt: null,
@@ -125,6 +128,7 @@ describe("api-transformers", () => {
       expect(result.is_active).toBe(false);
       expect(result.official_website_url).toBeNull();
       expect(result.max_concurrency).toBeNull();
+      expect(result.queue_policy).toBeNull();
       expect(result.last_used_at).toBeNull();
     });
   });

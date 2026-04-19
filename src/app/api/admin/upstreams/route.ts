@@ -34,6 +34,12 @@ const affinityMigrationConfigSchema = z.object({
   threshold: z.number().int().min(1).max(10000000),
 });
 
+const queuePolicySchema = z.object({
+  enabled: z.boolean(),
+  timeout_ms: z.number().int().positive(),
+  max_queue_length: z.number().int().positive().nullable().optional(),
+});
+
 const modelDiscoverySchema = z.object({
   mode: z.enum([
     "openai_compatible",
@@ -85,6 +91,7 @@ const createUpstreamSchema = z
     timeout: z.number().int().positive().default(60),
     config: z.string().nullable().optional(),
     max_concurrency: z.number().int().positive().nullable().optional(),
+    queue_policy: queuePolicySchema.nullable().optional(),
     weight: z.number().int().min(1).max(100).default(1),
     priority: z.number().int().min(0).default(0),
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)).nullable().optional(),
@@ -176,6 +183,7 @@ export async function POST(request: NextRequest) {
       timeout: validated.timeout,
       config: validated.config ?? null,
       maxConcurrency: validated.max_concurrency ?? null,
+      queuePolicy: validated.queue_policy ?? null,
       weight: validated.weight,
       priority: validated.priority,
       routeCapabilities:
