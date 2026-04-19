@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
-import { Manrope, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const manrope = Manrope({
-  subsets: ["latin", "latin-ext"],
+const manrope = localFont({
+  src: "./fonts/manrope-latin-wght-normal.woff2",
+  weight: "200 800",
+  style: "normal",
   display: "swap",
   variable: "--font-sans",
   fallback: [
@@ -17,8 +19,10 @@ const manrope = Manrope({
   ],
 });
 
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin", "latin-ext"],
+const jetbrainsMono = localFont({
+  src: "./fonts/jetbrains-mono-latin-wght-normal.woff2",
+  weight: "100 800",
+  style: "normal",
   display: "swap",
   variable: "--font-mono",
   fallback: [
