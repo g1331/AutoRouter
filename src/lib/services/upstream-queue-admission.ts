@@ -30,6 +30,8 @@ export interface EnqueueWaitInput {
   upstreamId: string;
   requestId: string;
   maxQueueLength: number | null | undefined;
+  timeoutMs?: number | null | undefined;
+  signal?: AbortSignal | null;
 }
 
 export type EnqueueWaitResult =
@@ -42,7 +44,7 @@ export type EnqueueWaitResult =
     }
   | {
       accepted: false;
-      reason: "queue_full";
+      reason: "aborted" | "queue_full";
       position: null;
       queueLength: number;
       waitPromise: null;
@@ -57,9 +59,15 @@ export interface ReleaseReservationResult {
 }
 
 interface WaitingRequestEntry {
+  upstreamId: string;
   requestId: string;
   enqueuedAt: number;
+  active: boolean;
   resolve: (grant: QueueWaitGrant) => void;
+  reject: (error: Error) => void;
+  timeoutHandle: ReturnType<typeof setTimeout> | null;
+  abortHandler: (() => void) | null;
+  signal: AbortSignal | null;
 }
 
 interface UpstreamQueueState {
@@ -73,6 +81,34 @@ function normalizePositiveLimit(value: number | null | undefined): number | null
   }
 
   return value;
+}
+
+export class UpstreamQueueWaitTimeoutError extends Error {
+  upstreamId: string;
+  requestId: string;
+  waitDurationMs: number;
+
+  constructor(upstreamId: string, requestId: string, waitDurationMs: number) {
+    super(`Queue wait timed out for upstream ${upstreamId}`);
+    this.name = "UpstreamQueueWaitTimeoutError";
+    this.upstreamId = upstreamId;
+    this.requestId = requestId;
+    this.waitDurationMs = waitDurationMs;
+  }
+}
+
+export class UpstreamQueueWaitAbortedError extends Error {
+  upstreamId: string;
+  requestId: string;
+  waitDurationMs: number;
+
+  constructor(upstreamId: string, requestId: string, waitDurationMs: number) {
+    super(`Queue wait aborted for upstream ${upstreamId}`);
+    this.name = "UpstreamQueueWaitAbortedError";
+    this.upstreamId = upstreamId;
+    this.requestId = requestId;
+    this.waitDurationMs = waitDurationMs;
+  }
 }
 
 export class UpstreamQueueAdmissionService {
@@ -130,6 +166,17 @@ export class UpstreamQueueAdmissionService {
     const state = this.getOrCreateState(input.upstreamId);
     const maxQueueLength = normalizePositiveLimit(input.maxQueueLength);
 
+    if (input.signal?.aborted) {
+      this.cleanupIdleState(input.upstreamId, state);
+      return {
+        accepted: false,
+        reason: "aborted",
+        position: null,
+        queueLength: state.queue.length,
+        waitPromise: null,
+      };
+    }
+
     if (maxQueueLength !== null && state.queue.length >= maxQueueLength) {
       return {
         accepted: false,
@@ -141,15 +188,55 @@ export class UpstreamQueueAdmissionService {
     }
 
     let resolveWait!: (grant: QueueWaitGrant) => void;
-    const waitPromise = new Promise<QueueWaitGrant>((resolve) => {
+    let rejectWait!: (error: Error) => void;
+    const waitPromise = new Promise<QueueWaitGrant>((resolve, reject) => {
       resolveWait = resolve;
+      rejectWait = reject;
     });
+    waitPromise.catch(() => {});
 
-    state.queue.push({
+    const entry: WaitingRequestEntry = {
+      upstreamId: input.upstreamId,
       requestId: input.requestId,
       enqueuedAt: Date.now(),
+      active: true,
       resolve: resolveWait,
-    });
+      reject: rejectWait,
+      timeoutHandle: null,
+      abortHandler: null,
+      signal: input.signal ?? null,
+    };
+    state.queue.push(entry);
+
+    const timeoutMs = normalizePositiveLimit(input.timeoutMs);
+    if (timeoutMs !== null) {
+      entry.timeoutHandle = setTimeout(() => {
+        this.rejectWaitingEntry(
+          input.upstreamId,
+          entry,
+          new UpstreamQueueWaitTimeoutError(
+            input.upstreamId,
+            input.requestId,
+            Math.max(0, Date.now() - entry.enqueuedAt)
+          )
+        );
+      }, timeoutMs);
+    }
+
+    if (entry.signal) {
+      entry.abortHandler = () => {
+        this.rejectWaitingEntry(
+          input.upstreamId,
+          entry,
+          new UpstreamQueueWaitAbortedError(
+            input.upstreamId,
+            input.requestId,
+            Math.max(0, Date.now() - entry.enqueuedAt)
+          )
+        );
+      };
+      entry.signal.addEventListener("abort", entry.abortHandler, { once: true });
+    }
 
     return {
       accepted: true,
@@ -186,27 +273,48 @@ export class UpstreamQueueAdmissionService {
       };
     }
 
-    const next = state.queue.shift() as WaitingRequestEntry;
-    state.activeCount += 1;
-    next.resolve({
-      upstreamId,
-      requestId: next.requestId,
-      waitDurationMs: Math.max(0, Date.now() - next.enqueuedAt),
-      activeCount: state.activeCount,
-      queueLengthRemaining: state.queue.length,
-    });
-    this.cleanupIdleState(upstreamId, state);
+    while (state.queue.length > 0) {
+      const next = state.queue.shift() as WaitingRequestEntry;
+      if (!next.active) {
+        continue;
+      }
 
+      this.disposeWaitingEntry(next);
+      state.activeCount += 1;
+      next.resolve({
+        upstreamId,
+        requestId: next.requestId,
+        waitDurationMs: Math.max(0, Date.now() - next.enqueuedAt),
+        activeCount: state.activeCount,
+        queueLengthRemaining: state.queue.length,
+      });
+      this.cleanupIdleState(upstreamId, state);
+
+      return {
+        released: true,
+        handedOff: true,
+        resumedRequestId: next.requestId,
+        activeCount: state.activeCount,
+        queueLength: state.queue.length,
+      };
+    }
+
+    this.cleanupIdleState(upstreamId, state);
     return {
       released: true,
-      handedOff: true,
-      resumedRequestId: next.requestId,
+      handedOff: false,
+      resumedRequestId: null,
       activeCount: state.activeCount,
       queueLength: state.queue.length,
     };
   }
 
   reset(): void {
+    for (const [, state] of this.states.entries()) {
+      for (const entry of state.queue) {
+        this.disposeWaitingEntry(entry);
+      }
+    }
     this.states.clear();
   }
 
@@ -231,6 +339,43 @@ export class UpstreamQueueAdmissionService {
 
     if (state.activeCount === 0 && state.queue.length === 0) {
       this.states.delete(upstreamId);
+    }
+  }
+
+  private rejectWaitingEntry(upstreamId: string, entry: WaitingRequestEntry, error: Error): void {
+    if (!entry.active) {
+      return;
+    }
+
+    const state = this.states.get(upstreamId);
+    this.disposeWaitingEntry(entry);
+    if (state) {
+      this.removeWaitingEntry(state, entry);
+      this.cleanupIdleState(upstreamId, state);
+    }
+    entry.reject(error);
+  }
+
+  private disposeWaitingEntry(entry: WaitingRequestEntry): void {
+    if (!entry.active) {
+      return;
+    }
+
+    entry.active = false;
+    if (entry.timeoutHandle) {
+      clearTimeout(entry.timeoutHandle);
+      entry.timeoutHandle = null;
+    }
+    if (entry.signal && entry.abortHandler) {
+      entry.signal.removeEventListener("abort", entry.abortHandler);
+      entry.abortHandler = null;
+    }
+  }
+
+  private removeWaitingEntry(state: UpstreamQueueState, entry: WaitingRequestEntry): void {
+    const index = state.queue.indexOf(entry);
+    if (index >= 0) {
+      state.queue.splice(index, 1);
     }
   }
 }

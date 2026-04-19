@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { UpstreamQueueAdmissionService } from "@/lib/services/upstream-queue-admission";
+import { describe, expect, it, vi } from "vitest";
+import {
+  UpstreamQueueAdmissionService,
+  UpstreamQueueWaitAbortedError,
+  UpstreamQueueWaitTimeoutError,
+} from "@/lib/services/upstream-queue-admission";
 
 describe("UpstreamQueueAdmissionService", () => {
   it("tracks immediate reservations per upstream", () => {
@@ -141,6 +145,94 @@ describe("UpstreamQueueAdmissionService", () => {
       activeCount: 1,
       queueLengthRemaining: 0,
     });
+  });
+
+  it("times out queued requests and removes them from the snapshot", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2024-06-15T12:00:00Z"));
+
+    const service = new UpstreamQueueAdmissionService();
+    const queued = service.enqueueWait({
+      upstreamId: "u1",
+      requestId: "req-1",
+      maxQueueLength: null,
+      timeoutMs: 50,
+    });
+
+    if (!queued.accepted) {
+      throw new Error("expected queued request");
+    }
+
+    await vi.advanceTimersByTimeAsync(50);
+
+    await expect(queued.waitPromise).rejects.toBeInstanceOf(UpstreamQueueWaitTimeoutError);
+    expect(service.getSnapshot()).toEqual({});
+
+    vi.useRealTimers();
+  });
+
+  it("aborts queued requests when the caller signal is cancelled", async () => {
+    const service = new UpstreamQueueAdmissionService();
+    const controller = new AbortController();
+    const queued = service.enqueueWait({
+      upstreamId: "u1",
+      requestId: "req-1",
+      maxQueueLength: null,
+      signal: controller.signal,
+    });
+
+    if (!queued.accepted) {
+      throw new Error("expected queued request");
+    }
+
+    controller.abort();
+
+    await expect(queued.waitPromise).rejects.toBeInstanceOf(UpstreamQueueWaitAbortedError);
+    expect(service.getSnapshot()).toEqual({});
+  });
+
+  it("hands off to the next live waiter after the head request times out", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2024-06-15T12:00:00Z"));
+
+    const service = new UpstreamQueueAdmissionService();
+    service.tryReserveImmediate({ upstreamId: "u1", maxConcurrency: 1 });
+
+    const timedOut = service.enqueueWait({
+      upstreamId: "u1",
+      requestId: "req-1",
+      maxQueueLength: null,
+      timeoutMs: 50,
+    });
+    const live = service.enqueueWait({
+      upstreamId: "u1",
+      requestId: "req-2",
+      maxQueueLength: null,
+      timeoutMs: 500,
+    });
+
+    if (!timedOut.accepted || !live.accepted) {
+      throw new Error("expected queued requests");
+    }
+
+    await vi.advanceTimersByTimeAsync(50);
+    await expect(timedOut.waitPromise).rejects.toBeInstanceOf(UpstreamQueueWaitTimeoutError);
+
+    expect(service.releaseReservation("u1")).toEqual({
+      released: true,
+      handedOff: true,
+      resumedRequestId: "req-2",
+      activeCount: 1,
+      queueLength: 0,
+    });
+    await expect(live.waitPromise).resolves.toMatchObject({
+      upstreamId: "u1",
+      requestId: "req-2",
+      activeCount: 1,
+      queueLengthRemaining: 0,
+    });
+
+    vi.useRealTimers();
   });
 
   it("releases active reservations and removes idle upstream state", () => {
