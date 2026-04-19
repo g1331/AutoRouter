@@ -17,6 +17,7 @@ import {
 import { getPrimaryProviderByCapabilities } from "@/lib/route-capabilities";
 import type { RoutingSelectionReason } from "@/types/api";
 import { quotaTracker } from "./upstream-quota-tracker";
+import { upstreamQueueAdmission } from "./upstream-queue-admission";
 
 // Re-export for convenience
 export { VALID_PROVIDER_TYPES };
@@ -181,43 +182,42 @@ function createSelectionReason(options: {
 /**
  * Active connection counts per upstream.
  */
-const connectionCounts = new Map<string, number>();
-
 /**
  * Get current active connections for an upstream.
  */
 export function getConnectionCount(upstreamId: string): number {
-  return connectionCounts.get(upstreamId) ?? 0;
+  return upstreamQueueAdmission.getActiveCount(upstreamId);
 }
 
 /**
  * Get a shallow snapshot of current active connections keyed by upstream ID.
  */
 export function getConnectionCountsSnapshot(): Record<string, number> {
-  return Object.fromEntries(connectionCounts.entries());
+  return upstreamQueueAdmission.getActiveCountsSnapshot();
 }
 
 /**
  * Record a new connection to an upstream (increment counter).
  */
 export function recordConnection(upstreamId: string): void {
-  const current = connectionCounts.get(upstreamId) ?? 0;
-  connectionCounts.set(upstreamId, current + 1);
+  upstreamQueueAdmission.tryReserveImmediate({
+    upstreamId,
+    maxConcurrency: null,
+  });
 }
 
 /**
  * Release a connection from an upstream (decrement counter).
  */
 export function releaseConnection(upstreamId: string): void {
-  const current = connectionCounts.get(upstreamId) ?? 0;
-  connectionCounts.set(upstreamId, Math.max(0, current - 1));
+  upstreamQueueAdmission.releaseReservation(upstreamId);
 }
 
 /**
  * Reset all connection counts (useful for testing).
  */
 export function resetConnectionCounts(): void {
-  connectionCounts.clear();
+  upstreamQueueAdmission.reset();
 }
 
 /**
@@ -427,7 +427,10 @@ function tryReserveConnectionSlot(upstream: Upstream): {
   const max = upstream.maxConcurrency;
 
   if (max === null || max === undefined || max <= 0) {
-    connectionCounts.set(upstream.id, current + 1);
+    upstreamQueueAdmission.tryReserveImmediate({
+      upstreamId: upstream.id,
+      maxConcurrency: null,
+    });
     return { reserved: true, current, max: null };
   }
 
@@ -435,7 +438,10 @@ function tryReserveConnectionSlot(upstream: Upstream): {
     return { reserved: false, current, max };
   }
 
-  connectionCounts.set(upstream.id, current + 1);
+  upstreamQueueAdmission.tryReserveImmediate({
+    upstreamId: upstream.id,
+    maxConcurrency: max,
+  });
   return { reserved: true, current, max };
 }
 

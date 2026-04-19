@@ -28,10 +28,14 @@ import {
 import { calculateAndPersistRequestBillingSnapshot } from "@/lib/services/billing-cost-service";
 import {
   selectFromUpstreamCandidates,
+  decideQueuedUpstreamResume,
+  reselectQueuedUpstreamOnce,
   releaseConnection,
   AllCandidatesConcurrencyFullError,
   NoHealthyUpstreamsError,
   NoAuthorizedUpstreamsError,
+  type WaitableUpstreamCandidate,
+  type ConcurrencyExcludedCandidate,
 } from "@/lib/services/load-balancer";
 import { markHealthy, markUnhealthy } from "@/lib/services/health-checker";
 import {
@@ -39,6 +43,10 @@ import {
   recordFailure,
   CircuitBreakerOpenError,
 } from "@/lib/services/circuit-breaker";
+import {
+  upstreamQueueAdmission,
+  UpstreamQueueWaitAbortedError,
+} from "@/lib/services/upstream-queue-admission";
 import { randomUUID } from "crypto";
 import {
   type CapabilityProvider,
@@ -1189,8 +1197,47 @@ async function forwardWithFailover(
       }
       if (error instanceof AllCandidatesConcurrencyFullError) {
         appendConcurrencyExclusions(error.excludedCandidates);
-        lastError = error;
-        hasMoreUpstreams = false;
+        if (error.waitableCandidate) {
+          try {
+            const resumedSelection = await resumeQueuedUpstreamSelection({
+              request,
+              requestId,
+              candidateUpstreamIds,
+              failedUpstreamIds,
+              failoverHistory,
+              waitableCandidate: error.waitableCandidate,
+            });
+            appendConcurrencyExclusions(resumedSelection.concurrencyExcludedCandidates);
+            selectedUpstream = resumedSelection.selectedUpstream;
+            finalSelectionReason = resumedSelection.selectionReason;
+          } catch (resumeError) {
+            if (resumeError instanceof AllCandidatesConcurrencyFullError) {
+              appendConcurrencyExclusions(resumeError.excludedCandidates);
+              lastError = resumeError;
+              hasMoreUpstreams = false;
+            } else if (resumeError instanceof NoHealthyUpstreamsError) {
+              lastError = resumeError;
+              hasMoreUpstreams = false;
+            } else if (resumeError instanceof ClientDisconnectedError) {
+              throw attachFailoverContext(
+                resumeError,
+                failoverHistory,
+                didSendUpstream,
+                concurrencyExcludedCandidates
+              );
+            } else {
+              throw attachFailoverContext(
+                resumeError instanceof Error ? resumeError : new Error(String(resumeError)),
+                failoverHistory,
+                didSendUpstream,
+                concurrencyExcludedCandidates
+              );
+            }
+          }
+        } else {
+          lastError = error;
+          hasMoreUpstreams = false;
+        }
       } else if (error instanceof NoHealthyUpstreamsError) {
         hasMoreUpstreams = false;
       } else {
@@ -1394,6 +1441,85 @@ async function forwardWithFailover(
       );
     }
   }
+}
+
+async function resumeQueuedUpstreamSelection(options: {
+  request: NextRequest;
+  requestId: string;
+  candidateUpstreamIds: string[];
+  failedUpstreamIds: string[];
+  failoverHistory: FailoverAttempt[];
+  waitableCandidate: WaitableUpstreamCandidate;
+}): Promise<{
+  selectedUpstream: Upstream;
+  selectionReason: RoutingSelectionReason | null;
+  concurrencyExcludedCandidates: ConcurrencyExcludedCandidate[];
+}> {
+  const {
+    request,
+    requestId,
+    candidateUpstreamIds,
+    failedUpstreamIds,
+    failoverHistory,
+    waitableCandidate,
+  } = options;
+  const queuePolicy = waitableCandidate.upstream.queuePolicy;
+
+  if (!queuePolicy?.enabled) {
+    throw new AllCandidatesConcurrencyFullError([], null);
+  }
+
+  const queued = upstreamQueueAdmission.enqueueWait({
+    upstreamId: waitableCandidate.upstream.id,
+    requestId,
+    maxQueueLength: queuePolicy.max_queue_length ?? null,
+    timeoutMs: queuePolicy.timeout_ms,
+    signal: request.signal,
+  });
+
+  if (!queued.accepted) {
+    if (queued.reason === "aborted") {
+      throw new ClientDisconnectedError("Client disconnected while waiting in queue");
+    }
+    throw new AllCandidatesConcurrencyFullError([], waitableCandidate);
+  }
+
+  try {
+    await queued.waitPromise;
+  } catch (error) {
+    if (error instanceof UpstreamQueueWaitAbortedError) {
+      throw new ClientDisconnectedError("Client disconnected while waiting in queue");
+    }
+    throw error;
+  }
+
+  const excludeIds = failedUpstreamIds.length > 0 ? failedUpstreamIds : undefined;
+  const resumeDecision = await decideQueuedUpstreamResume(
+    waitableCandidate.upstream.id,
+    candidateUpstreamIds,
+    excludeIds
+  );
+
+  if (resumeDecision.action === "resume" && resumeDecision.upstream) {
+    return {
+      selectedUpstream: resumeDecision.upstream,
+      selectionReason: attachRetryReason(null, failoverHistory),
+      concurrencyExcludedCandidates: [],
+    };
+  }
+
+  releaseConnection(waitableCandidate.upstream.id);
+  const reselection = await reselectQueuedUpstreamOnce(
+    waitableCandidate.upstream.id,
+    candidateUpstreamIds,
+    resumeDecision.excludeIds
+  );
+
+  return {
+    selectedUpstream: reselection.upstream,
+    selectionReason: attachRetryReason(reselection.selectionReason ?? null, failoverHistory),
+    concurrencyExcludedCandidates: reselection.concurrencyExcluded ?? [],
+  };
 }
 
 /**
