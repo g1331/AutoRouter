@@ -771,6 +771,61 @@ describe("api-transformers", () => {
       });
     });
 
+    it("preserves routingDecision.queue payload in API responses", () => {
+      const log = {
+        id: "log-queue",
+        apiKeyId: "key-1",
+        upstreamId: "upstream-1",
+        upstreamName: "queued-upstream",
+        method: "POST",
+        path: "/v1/messages",
+        model: "claude-test",
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+        statusCode: 200,
+        durationMs: 450,
+        routingDurationMs: 200,
+        errorMessage: null,
+        routingType: "direct",
+        groupName: null,
+        lbStrategy: null,
+        failoverAttempts: 0,
+        failoverHistory: null,
+        routingDecision: {
+          did_send_upstream: true,
+          failure_stage: null,
+          queue: {
+            status: "resumed",
+            upstream_id: "upstream-1",
+            entered_at: "2024-01-15T10:30:00.000Z",
+            resumed_at: "2024-01-15T10:30:00.150Z",
+            wait_duration_ms: 150,
+            timeout_ms: 30000,
+            is_stream: true,
+          },
+        },
+        isStream: true,
+        createdAt: new Date("2024-01-15T10:30:00.000Z"),
+      };
+
+      const result = transformRequestLogToApi(log as never);
+
+      expect(result.routing_decision?.queue).toEqual({
+        status: "resumed",
+        upstream_id: "upstream-1",
+        entered_at: "2024-01-15T10:30:00.000Z",
+        resumed_at: "2024-01-15T10:30:00.150Z",
+        wait_duration_ms: 150,
+        timeout_ms: 30000,
+        is_stream: true,
+      });
+    });
+
     it("derives stream timing breakdown and upstream error summary from failover history", () => {
       const log = {
         id: "log-failure",

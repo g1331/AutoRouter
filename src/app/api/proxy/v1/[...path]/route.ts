@@ -88,6 +88,7 @@ import type {
   RoutingCandidate,
   RoutingExcluded,
   RoutingFailureStage,
+  RoutingQueueLog,
   RoutingSelectionReason,
 } from "@/types/api";
 import {
@@ -272,6 +273,7 @@ interface RoutingDecisionDiagnostics {
   didSendUpstream?: boolean;
   failureStage?: RoutingFailureStage | null;
   finalSelectionReason?: RoutingSelectionReason | null;
+  queue?: RoutingQueueLog | null;
 }
 
 type CandidateCircuitStateMap = Record<string, RoutingCandidate["circuit_state"]>;
@@ -364,6 +366,7 @@ function transformPathRoutingDecisionLog(
       : {}),
     ...(diagnostics?.failureStage !== undefined ? { failure_stage: diagnostics.failureStage } : {}),
     final_selection_reason: diagnostics?.finalSelectionReason ?? null,
+    ...(diagnostics?.queue !== undefined ? { queue: diagnostics.queue } : {}),
     selection_strategy: "weighted",
   };
 }
@@ -582,6 +585,7 @@ interface FailoverErrorWithHistory extends Error {
   concurrencyExcludedCandidates?: RoutingExcluded[];
   didSendUpstream?: boolean;
   headerDiff?: HeaderDiff | null;
+  queue?: RoutingQueueLog | null;
 }
 
 function attachFailoverContext<T extends Error>(
@@ -589,14 +593,30 @@ function attachFailoverContext<T extends Error>(
   failoverHistory: FailoverAttempt[],
   didSendUpstream: boolean,
   concurrencyExcludedCandidates: RoutingExcluded[] = [],
-  headerDiff: HeaderDiff | null = null
+  headerDiff: HeaderDiff | null = null,
+  queue: RoutingQueueLog | null = null
 ): T & FailoverErrorWithHistory {
   const enrichedError = error as T & FailoverErrorWithHistory;
   enrichedError.failoverHistory = [...failoverHistory];
   enrichedError.concurrencyExcludedCandidates = [...concurrencyExcludedCandidates];
   enrichedError.didSendUpstream = didSendUpstream;
   enrichedError.headerDiff = headerDiff;
+  enrichedError.queue = queue ?? enrichedError.queue ?? null;
   return enrichedError;
+}
+
+function withQueueStreamFlag(
+  queue: RoutingQueueLog | null | undefined,
+  isStream: boolean
+): RoutingQueueLog | null {
+  if (!queue) {
+    return null;
+  }
+
+  return {
+    ...queue,
+    is_stream: isStream,
+  };
 }
 
 function extractHeaderDiffFromError(error: unknown): HeaderDiff | null {
@@ -1118,6 +1138,7 @@ async function forwardWithFailover(
     contentLength: number;
   } | null,
   compensationHeaders: import("@/lib/services/proxy-client").CompensationHeader[],
+  onQueueStateChange?: (queue: RoutingQueueLog) => void | Promise<void>,
   config: FailoverConfig = DEFAULT_FAILOVER_CONFIG
 ): Promise<{
   result: ProxyResult;
@@ -1128,6 +1149,7 @@ async function forwardWithFailover(
   affinityHit: boolean;
   affinityMigrated: boolean;
   finalSelectionReason: RoutingSelectionReason | null;
+  queue: RoutingQueueLog | null;
 }> {
   const failedUpstreamIds: string[] = [];
   const failoverHistory: FailoverAttempt[] = [];
@@ -1137,6 +1159,7 @@ async function forwardWithFailover(
   let affinityHit = false;
   let affinityMigrated = false;
   let finalSelectionReason: RoutingSelectionReason | null = null;
+  let queueLifecycle: RoutingQueueLog | null = null;
 
   const appendConcurrencyExclusions = (
     excludedCandidates: NonNullable<
@@ -1227,10 +1250,12 @@ async function forwardWithFailover(
               failedUpstreamIds,
               failoverHistory,
               waitableCandidate: error.waitableCandidate,
+              onQueueStateChange,
             });
             appendConcurrencyExclusions(resumedSelection.concurrencyExcludedCandidates);
             selectedUpstream = resumedSelection.selectedUpstream;
             finalSelectionReason = resumedSelection.selectionReason;
+            queueLifecycle = resumedSelection.queue;
           } catch (resumeError) {
             if (resumeError instanceof AllCandidatesConcurrencyFullError) {
               appendConcurrencyExclusions(resumeError.excludedCandidates);
@@ -1244,14 +1269,18 @@ async function forwardWithFailover(
                 resumeError,
                 failoverHistory,
                 didSendUpstream,
-                concurrencyExcludedCandidates
+                concurrencyExcludedCandidates,
+                null,
+                (resumeError as FailoverErrorWithHistory).queue ?? null
               );
             } else {
               throw attachFailoverContext(
                 resumeError instanceof Error ? resumeError : new Error(String(resumeError)),
                 failoverHistory,
                 didSendUpstream,
-                concurrencyExcludedCandidates
+                concurrencyExcludedCandidates,
+                null,
+                (resumeError as FailoverErrorWithHistory).queue ?? null
               );
             }
           }
@@ -1266,7 +1295,9 @@ async function forwardWithFailover(
           error instanceof Error ? error : new Error(String(error)),
           failoverHistory,
           didSendUpstream,
-          concurrencyExcludedCandidates
+          concurrencyExcludedCandidates,
+          null,
+          queueLifecycle
         );
       }
     }
@@ -1386,6 +1417,7 @@ async function forwardWithFailover(
           affinityHit,
           affinityMigrated,
           finalSelectionReason,
+          queue: withQueueStreamFlag(queueLifecycle, result.isStream),
         };
       }
 
@@ -1398,6 +1430,7 @@ async function forwardWithFailover(
         affinityHit,
         affinityMigrated,
         finalSelectionReason,
+        queue: withQueueStreamFlag(queueLifecycle, result.isStream),
       };
     } catch (error) {
       // Release connection on error
@@ -1411,7 +1444,9 @@ async function forwardWithFailover(
           new ClientDisconnectedError("Client disconnected during request"),
           failoverHistory,
           didSendUpstream,
-          concurrencyExcludedCandidates
+          concurrencyExcludedCandidates,
+          null,
+          queueLifecycle
         );
       }
 
@@ -1459,7 +1494,8 @@ async function forwardWithFailover(
         failoverHistory,
         didSendUpstream,
         concurrencyExcludedCandidates,
-        errorHeaderDiff
+        errorHeaderDiff,
+        queueLifecycle
       );
     }
   }
@@ -1484,10 +1520,12 @@ async function resumeQueuedUpstreamSelection(options: {
   failedUpstreamIds: string[];
   failoverHistory: FailoverAttempt[];
   waitableCandidate: WaitableUpstreamCandidate;
+  onQueueStateChange?: (queue: RoutingQueueLog) => void | Promise<void>;
 }): Promise<{
   selectedUpstream: Upstream;
   selectionReason: RoutingSelectionReason | null;
   concurrencyExcludedCandidates: ConcurrencyExcludedCandidate[];
+  queue: RoutingQueueLog | null;
 }> {
   const {
     request,
@@ -1496,12 +1534,24 @@ async function resumeQueuedUpstreamSelection(options: {
     failedUpstreamIds,
     failoverHistory,
     waitableCandidate,
+    onQueueStateChange,
   } = options;
   const queuePolicy = waitableCandidate.upstream.queuePolicy;
 
   if (!queuePolicy?.enabled) {
     throw new AllCandidatesConcurrencyFullError([], null);
   }
+
+  const enteredAt = new Date().toISOString();
+  const waitingQueue: RoutingQueueLog = {
+    status: "waiting",
+    upstream_id: waitableCandidate.upstream.id,
+    entered_at: enteredAt,
+    resumed_at: null,
+    wait_duration_ms: null,
+    timeout_ms: queuePolicy.timeout_ms,
+    is_stream: null,
+  };
 
   const queued = upstreamQueueAdmission.enqueueWait({
     upstreamId: waitableCandidate.upstream.id,
@@ -1513,15 +1563,48 @@ async function resumeQueuedUpstreamSelection(options: {
 
   if (!queued.accepted) {
     if (queued.reason === "aborted") {
-      throw new UpstreamQueueWaitAbortedError(waitableCandidate.upstream.id, requestId, 0);
+      const abortError = new UpstreamQueueWaitAbortedError(
+        waitableCandidate.upstream.id,
+        requestId,
+        0
+      );
+      (abortError as FailoverErrorWithHistory).queue = {
+        ...waitingQueue,
+        status: "aborted",
+        wait_duration_ms: 0,
+      };
+      throw abortError;
     }
     throw new AllCandidatesConcurrencyFullError([], waitableCandidate);
   }
 
+  if (onQueueStateChange) {
+    void Promise.resolve(onQueueStateChange(waitingQueue)).catch((error) =>
+      log.error(
+        { err: error, requestId, upstreamId: waitableCandidate.upstream.id },
+        "failed to persist queue waiting state"
+      )
+    );
+  }
+
+  let waitGrant: Awaited<typeof queued.waitPromise>;
   try {
-    await queued.waitPromise;
+    waitGrant = await queued.waitPromise;
   } catch (error) {
-    if (isQueueWaitTimeoutError(error) || isQueueWaitAbortedError(error)) {
+    if (isQueueWaitTimeoutError(error)) {
+      (error as FailoverErrorWithHistory).queue = {
+        ...waitingQueue,
+        status: "timed_out",
+        wait_duration_ms: error.waitDurationMs,
+      };
+      throw error;
+    }
+    if (isQueueWaitAbortedError(error)) {
+      (error as FailoverErrorWithHistory).queue = {
+        ...waitingQueue,
+        status: "aborted",
+        wait_duration_ms: error.waitDurationMs,
+      };
       throw error;
     }
     throw error;
@@ -1539,6 +1622,12 @@ async function resumeQueuedUpstreamSelection(options: {
       selectedUpstream: resumeDecision.upstream,
       selectionReason: attachRetryReason(null, failoverHistory),
       concurrencyExcludedCandidates: [],
+      queue: {
+        ...waitingQueue,
+        status: "resumed",
+        resumed_at: new Date().toISOString(),
+        wait_duration_ms: waitGrant.waitDurationMs,
+      },
     };
   }
 
@@ -1553,6 +1642,12 @@ async function resumeQueuedUpstreamSelection(options: {
     selectedUpstream: reselection.upstream,
     selectionReason: attachRetryReason(reselection.selectionReason ?? null, failoverHistory),
     concurrencyExcludedCandidates: reselection.concurrencyExcluded ?? [],
+    queue: {
+      ...waitingQueue,
+      status: "resumed",
+      resumed_at: new Date().toISOString(),
+      wait_duration_ms: waitGrant.waitDurationMs,
+    },
   };
 }
 
@@ -2468,6 +2563,40 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     log.error({ err: e, requestId }, "failed to create in-progress request log");
   }
 
+  const persistQueueWaitingState = (queue: RoutingQueueLog) => {
+    if (!requestLogId) {
+      return;
+    }
+
+    const waitingRoutingDecisionLog = transformPathRoutingDecisionLog(
+      {
+        matchedRouteCapability,
+        routeMatchSource,
+        originalModel: model,
+        resolvedModel,
+        modelRedirectApplied,
+        capabilityCandidates,
+        finalCandidates: finalCapabilityCandidates,
+        excludedCandidates: excludedCapabilityCandidates,
+        candidateCircuitStates,
+      },
+      queue.upstream_id,
+      {
+        candidateUpstreamId: queue.upstream_id,
+        actualUpstreamId: null,
+        didSendUpstream: false,
+        failureStage: null,
+        queue: withQueueStreamFlag(queue, requestedStream),
+      }
+    );
+
+    return updateRequestLog(requestLogId, {
+      routingDecision: waitingRoutingDecisionLog,
+      isStream: requestedStream,
+      thinkingConfig,
+    }).then(() => undefined);
+  };
+
   // Forward request to upstream
   let compensationHeaders: import("@/lib/services/proxy-client").CompensationHeader[] = [];
   try {
@@ -2501,7 +2630,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         requestId,
         candidateUpstreamIds,
         affinityContext,
-        compensationHeaders
+        compensationHeaders,
+        persistQueueWaitingState
       );
     } catch (error) {
       if (
@@ -2554,7 +2684,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           requestId,
           candidateUpstreamIds,
           affinityContext,
-          compensationHeaders
+          compensationHeaders,
+          persistQueueWaitingState
         );
       } else {
         throw error;
@@ -2569,6 +2700,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       affinityHit: afHit,
       affinityMigrated: afMigrated,
       finalSelectionReason,
+      queue: queueLifecycle,
     } = proxySelection;
     const result: ProxyResult = proxyResult;
     const upstreamForLogging: Upstream = selected;
@@ -2626,6 +2758,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         didSendUpstream: true,
         failureStage: null,
         finalSelectionReason,
+        queue: withQueueStreamFlag(queueLifecycle, result.isStream),
       }
     );
 
@@ -3152,6 +3285,10 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     const attributionFailoverAttempt = didSendUpstream
       ? (lastSentFailoverAttempt ?? lastFailoverAttempt)
       : lastFailoverAttempt;
+    const queueLifecycle = withQueueStreamFlag(
+      (error as FailoverErrorWithHistory | null)?.queue ?? null,
+      requestedStream
+    );
 
     // Determine error code for unified response
     let errorCode: UnifiedErrorCode = "SERVICE_UNAVAILABLE";
@@ -3225,6 +3362,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         didSendUpstream,
         failureStage,
         finalSelectionReason: attributionFailoverAttempt?.selection_reason ?? null,
+        queue: queueLifecycle,
       }
     );
 

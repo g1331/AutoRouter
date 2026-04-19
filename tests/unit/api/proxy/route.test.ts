@@ -2905,6 +2905,7 @@ describe("proxy route upstream selection", () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
     const { routeByModel } = await import("@/lib/services/model-router");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
     const {
       selectFromProviderType,
       decideQueuedUpstreamResume,
@@ -3033,6 +3034,20 @@ describe("proxy route upstream selection", () => {
     );
     expect(forwardRequest).toHaveBeenCalled();
     expect(releaseConnection).toHaveBeenCalledWith("up-queued");
+    expect(
+      vi
+        .mocked(updateRequestLog)
+        .mock.calls.some(([, payload]) => payload?.routingDecision?.queue?.status === "waiting")
+    ).toBe(true);
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload?.routingDecision?.queue).toEqual(
+      expect.objectContaining({
+        status: "resumed",
+        upstream_id: "up-queued",
+        wait_duration_ms: 25,
+        timeout_ms: 30000,
+      })
+    );
   });
 
   it("should release the resumed slot and reselect once when the queued upstream disappears", async () => {
@@ -3300,11 +3315,24 @@ describe("proxy route upstream selection", () => {
     expect(forwardRequest).not.toHaveBeenCalled();
     expect(markUnhealthy).not.toHaveBeenCalled();
     expect(recordFailure).not.toHaveBeenCalled();
+    expect(
+      vi
+        .mocked(updateRequestLog)
+        .mock.calls.some(([, payload]) => payload?.routingDecision?.queue?.status === "waiting")
+    ).toBe(true);
     const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
     expect(updateLogPayload?.routingDecision).toEqual(
       expect.objectContaining({
         did_send_upstream: false,
         failure_stage: "candidate_selection",
+      })
+    );
+    expect(updateLogPayload?.routingDecision?.queue).toEqual(
+      expect.objectContaining({
+        status: "timed_out",
+        upstream_id: "up-queued",
+        wait_duration_ms: 30000,
+        timeout_ms: 30000,
       })
     );
   });
@@ -3420,11 +3448,24 @@ describe("proxy route upstream selection", () => {
     expect(forwardRequest).not.toHaveBeenCalled();
     expect(markUnhealthy).not.toHaveBeenCalled();
     expect(recordFailure).not.toHaveBeenCalled();
+    expect(
+      vi
+        .mocked(updateRequestLog)
+        .mock.calls.some(([, payload]) => payload?.routingDecision?.queue?.status === "waiting")
+    ).toBe(true);
     const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
     expect(updateLogPayload?.routingDecision).toEqual(
       expect.objectContaining({
         did_send_upstream: false,
         failure_stage: "candidate_selection",
+      })
+    );
+    expect(updateLogPayload?.routingDecision?.queue).toEqual(
+      expect.objectContaining({
+        status: "aborted",
+        upstream_id: "up-queued",
+        wait_duration_ms: 1200,
+        timeout_ms: 30000,
       })
     );
   });

@@ -475,6 +475,18 @@ export interface RoutingExcluded {
   reason: ExclusionReason;
 }
 
+export type RoutingQueueStatus = "waiting" | "resumed" | "timed_out" | "aborted";
+
+export interface RoutingQueueLog {
+  status: RoutingQueueStatus;
+  upstream_id: string;
+  entered_at: string;
+  resumed_at?: string | null;
+  wait_duration_ms?: number | null;
+  timeout_ms?: number | null;
+  is_stream?: boolean | null;
+}
+
 /**
  * Complete routing decision log stored in database
  */
@@ -508,6 +520,7 @@ export interface RoutingDecisionLog {
   did_send_upstream?: boolean;
   failure_stage?: RoutingFailureStage | null;
   final_selection_reason?: RoutingSelectionReason | null;
+  queue?: RoutingQueueLog | null;
   selection_strategy: string; // lb_strategy
 }
 
