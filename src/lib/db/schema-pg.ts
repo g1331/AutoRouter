@@ -19,6 +19,12 @@ import type {
   UpstreamModelRule,
 } from "@/lib/services/upstream-model-types";
 
+type UpstreamQueuePolicy = {
+  enabled: boolean;
+  timeout_ms: number;
+  max_queue_length?: number | null;
+};
+
 /**
  * API keys distributed to downstream clients.
  */
@@ -78,6 +84,7 @@ export const upstreams = pgTable(
     modelCatalogLastError: text("model_catalog_last_error"),
     modelCatalogLastFailedAt: timestamp("model_catalog_last_failed_at", { withTimezone: true }),
     modelRules: json("model_rules").$type<UpstreamModelRule[] | null>(),
+    queuePolicy: json("queue_policy").$type<UpstreamQueuePolicy | null>(),
     affinityMigration: json("affinity_migration").$type<{
       enabled: boolean;
       metric: "tokens" | "length";

@@ -142,6 +142,11 @@ describe("lib/db/schema", () => {
       expect(upstreams.maxConcurrency.name).toBe("max_concurrency");
     });
 
+    it("has queuePolicy column", () => {
+      expect(upstreams.queuePolicy).toBeDefined();
+      expect(upstreams.queuePolicy.name).toBe("queue_policy");
+    });
+
     it("has timestamps", () => {
       expect(upstreams.createdAt).toBeDefined();
       expect(upstreams.updatedAt).toBeDefined();
