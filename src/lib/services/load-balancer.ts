@@ -103,6 +103,18 @@ export interface SelectFromProviderOptions {
   affinityScope?: AffinityScope;
 }
 
+export interface ResumeQueuedUpstreamDecision {
+  action: "resume" | "reselect_once";
+  reason:
+    | "bound_available"
+    | "bound_excluded"
+    | "bound_missing"
+    | "bound_over_quota"
+    | "bound_unavailable";
+  upstream: Upstream | null;
+  excludeIds: string[];
+}
+
 export interface ConcurrencyExcludedCandidate {
   upstreamId: string;
   upstreamName: string;
@@ -672,6 +684,69 @@ export async function selectFromUpstreamCandidates(
     affinityContext,
     affinityContext?.affinityScope
   );
+}
+
+export async function decideQueuedUpstreamResume(
+  boundUpstreamId: string,
+  candidateUpstreamIds: string[],
+  excludeIds?: string[]
+): Promise<ResumeQueuedUpstreamDecision> {
+  const nextExcludeIds = Array.from(new Set([...(excludeIds ?? []), boundUpstreamId]));
+  const allUpstreams = await getUpstreamsByIds(candidateUpstreamIds);
+  const boundUpstream =
+    allUpstreams.find((candidate) => candidate.upstream.id === boundUpstreamId) ?? null;
+
+  if (!boundUpstream) {
+    return {
+      action: "reselect_once",
+      reason: "bound_missing",
+      upstream: null,
+      excludeIds: nextExcludeIds,
+    };
+  }
+
+  if (excludeIds?.includes(boundUpstreamId)) {
+    return {
+      action: "reselect_once",
+      reason: "bound_excluded",
+      upstream: null,
+      excludeIds: nextExcludeIds,
+    };
+  }
+
+  if (!isUpstreamAvailable(boundUpstream)) {
+    return {
+      action: "reselect_once",
+      reason: "bound_unavailable",
+      upstream: null,
+      excludeIds: nextExcludeIds,
+    };
+  }
+
+  if (!quotaTracker.isWithinQuota(boundUpstreamId)) {
+    return {
+      action: "reselect_once",
+      reason: "bound_over_quota",
+      upstream: null,
+      excludeIds: nextExcludeIds,
+    };
+  }
+
+  return {
+    action: "resume",
+    reason: "bound_available",
+    upstream: boundUpstream.upstream,
+    excludeIds: excludeIds ?? [],
+  };
+}
+
+export async function reselectQueuedUpstreamOnce(
+  boundUpstreamId: string,
+  candidateUpstreamIds: string[],
+  excludeIds?: string[]
+): Promise<UpstreamSelectionResult> {
+  const nextExcludeIds = Array.from(new Set([...(excludeIds ?? []), boundUpstreamId]));
+  return selectFromUpstreamCandidates(candidateUpstreamIds, nextExcludeIds);
 }
 
 async function selectFromUpstreamPool(

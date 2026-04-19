@@ -67,10 +67,12 @@ vi.mock("@/lib/services/upstream-quota-tracker", () => ({
 import {
   selectFromProviderType,
   selectFromUpstreamCandidates,
+  decideQueuedUpstreamResume,
   filterBySpendingQuota,
   NoHealthyUpstreamsError,
   NoAuthorizedUpstreamsError,
   AllCandidatesConcurrencyFullError,
+  reselectQueuedUpstreamOnce,
   resetConnectionCounts,
   recordConnection,
   releaseConnection,
@@ -606,6 +608,56 @@ describe("load-balancer", () => {
         expect(result.selectedTier).toBe(0);
         expect(mockGetCircuitBreakerState).toHaveBeenCalledWith("p0");
         expect(mockGetCircuitBreakerState).toHaveBeenCalledWith("p1");
+      });
+    });
+
+    describe("queued upstream resume validation", () => {
+      it("returns the bound upstream when it is still available", async () => {
+        const bound = makeUpstream({ id: "bound", priority: 0 });
+        const fallback = makeUpstream({ id: "fallback", priority: 1 });
+        mockFindMany.mockResolvedValue([bound, fallback]);
+
+        await expect(
+          decideQueuedUpstreamResume("bound", ["bound", "fallback"])
+        ).resolves.toMatchObject({
+          action: "resume",
+          reason: "bound_available",
+          upstream: expect.objectContaining({ id: "bound" }),
+          excludeIds: [],
+        });
+      });
+
+      it("requests a single reselection when the bound upstream disappears", async () => {
+        const fallback = makeUpstream({ id: "fallback", priority: 1 });
+        mockFindMany.mockResolvedValue([fallback]);
+
+        await expect(
+          decideQueuedUpstreamResume("bound", ["bound", "fallback"])
+        ).resolves.toMatchObject({
+          action: "reselect_once",
+          reason: "bound_missing",
+          upstream: null,
+          excludeIds: ["bound"],
+        });
+
+        const reselection = await reselectQueuedUpstreamOnce("bound", ["bound", "fallback"]);
+        expect(reselection.upstream.id).toBe("fallback");
+      });
+
+      it("requests a single reselection when the bound upstream becomes unavailable", async () => {
+        const bound = makeUpstream({ id: "bound", priority: 0 });
+        const fallback = makeUpstream({ id: "fallback", priority: 1 });
+        mockFindMany.mockResolvedValue([bound, fallback]);
+        setCBOpen("bound");
+
+        await expect(
+          decideQueuedUpstreamResume("bound", ["bound", "fallback"])
+        ).resolves.toMatchObject({
+          action: "reselect_once",
+          reason: "bound_unavailable",
+          upstream: null,
+          excludeIds: ["bound"],
+        });
       });
     });
 
