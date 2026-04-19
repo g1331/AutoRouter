@@ -109,6 +109,7 @@ describe("UpstreamFormDialog", () => {
     affinity_migration: null,
     billing_input_multiplier: 1,
     billing_output_multiplier: 1,
+    queue_policy: null,
     spending_rules: null,
     current_concurrency: 0,
     max_concurrency: null,
@@ -307,6 +308,7 @@ describe("UpstreamFormDialog", () => {
           weight: 1,
           billing_input_multiplier: 1,
           billing_output_multiplier: 1,
+          queue_policy: null,
           spending_rules: null,
           route_capabilities: [],
           model_discovery: {
@@ -1302,7 +1304,50 @@ describe("UpstreamFormDialog", () => {
       });
 
       const callArgs = mockCreateMutateAsync.mock.calls[0][0];
+      expect(callArgs.queue_policy).toBeNull();
       expect(callArgs.spending_rules).toEqual([{ period_type: "daily", limit: 50 }]);
+    });
+
+    it("preserves existing queue policy on edit submit", async () => {
+      mockUpdateMutateAsync.mockResolvedValue({});
+
+      render(
+        <UpstreamFormDialog
+          open={true}
+          onOpenChange={mockOnOpenChange}
+          upstream={{
+            ...mockUpstream,
+            queue_policy: {
+              enabled: true,
+              timeout_ms: 45000,
+              max_queue_length: 8,
+            },
+          }}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      fireEvent.change(screen.getByPlaceholderText("upstreamNamePlaceholder"), {
+        target: { value: "OpenAI Production Updated" },
+      });
+
+      fireEvent.click(screen.getByText("save"));
+
+      await waitFor(() => {
+        expect(mockUpdateMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id: "upstream-1",
+            data: expect.objectContaining({
+              name: "OpenAI Production Updated",
+              queue_policy: {
+                enabled: true,
+                timeout_ms: 45000,
+                max_queue_length: 8,
+              },
+            }),
+          })
+        );
+      });
     });
 
     it("shows localized error when spending limit is not greater than zero", async () => {

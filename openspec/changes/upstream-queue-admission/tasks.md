@@ -2,7 +2,7 @@
 
 - [x] 1.1 在 `src/lib/db/schema-pg.ts`、`src/lib/db/schema-sqlite.ts` 与对应迁移中为 `upstreams` 新增 `queue_policy` 结构字段，并生成可通过一致性检查的 PostgreSQL 与 SQLite 迁移产物
 - [x] 1.2 扩展 `src/types/api.ts`、`src/lib/utils/api-transformers.ts`、`src/lib/services/upstream-crud.ts` 与 Admin upstream API，使 `queue_policy` 能够被创建、更新、读取和回显
-- [ ] 1.3 在上游表单草稿归一化与提交校验中补齐 `enabled`、`timeout_ms`、`max_queue_length` 的默认值、空值和脏值比较语义
+- [x] 1.3 在上游表单草稿归一化与提交校验中补齐 `enabled`、`timeout_ms`、`max_queue_length` 的默认值、空值和脏值比较语义
 
 ## 2. 队列准入运行时
 
