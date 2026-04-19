@@ -3429,6 +3429,283 @@ describe("proxy route upstream selection", () => {
     );
   });
 
+  it("should release a reserved slot exactly once after successful non-stream forwarding", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType, releaseConnection } =
+      await import("@/lib/services/load-balancer");
+    const { markHealthy } = await import("@/lib/services/health-checker");
+    const { recordSuccess } = await import("@/lib/services/circuit-breaker");
+
+    const upstream = {
+      ...DEFAULT_ACTIVE_UPSTREAMS[0],
+      id: "up-release-success",
+      name: "release-success",
+      providerType: "openai",
+      routeCapabilities: ["openai_chat_compatible"],
+      baseUrl: "https://api.openai.com/v1",
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([upstream]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: upstream.id },
+    ]);
+
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      resolvedModel: "gpt-5.2",
+      candidateUpstreams: [upstream],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "gpt-5.2",
+        resolvedModel: "gpt-5.2",
+        providerType: "openai",
+        upstreamName: upstream.name,
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 1,
+        finalCandidateCount: 1,
+      },
+    });
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+      selectionReason: null,
+    });
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      body: new TextEncoder().encode(JSON.stringify({ id: "resp-1" })),
+      isStream: false,
+      usage: null,
+      headerDiff: null,
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.2",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["v1", "chat", "completions"] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(releaseConnection).mock.calls.map(([upstreamId]) => upstreamId)).toEqual([
+      "up-release-success",
+    ]);
+    expect(markHealthy).toHaveBeenCalledTimes(1);
+    expect(markHealthy).toHaveBeenCalledWith("up-release-success", 100);
+    expect(recordSuccess).toHaveBeenCalledTimes(1);
+    expect(recordSuccess).toHaveBeenCalledWith("up-release-success");
+  });
+
+  it("should release a reserved slot exactly once when forwarding throws before a response is returned", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType, releaseConnection } =
+      await import("@/lib/services/load-balancer");
+    const { markUnhealthy } = await import("@/lib/services/health-checker");
+    const { recordFailure } = await import("@/lib/services/circuit-breaker");
+
+    const upstream = {
+      ...DEFAULT_ACTIVE_UPSTREAMS[0],
+      id: "up-release-error",
+      name: "release-error",
+      providerType: "openai",
+      routeCapabilities: ["openai_chat_compatible"],
+      baseUrl: "https://api.openai.com/v1",
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([upstream]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: upstream.id },
+    ]);
+
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      resolvedModel: "gpt-5.2",
+      candidateUpstreams: [upstream],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "gpt-5.2",
+        resolvedModel: "gpt-5.2",
+        providerType: "openai",
+        upstreamName: upstream.name,
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 1,
+        finalCandidateCount: 1,
+      },
+    });
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+      selectionReason: null,
+    });
+    vi.mocked(forwardRequest).mockRejectedValueOnce(new Error("fetch failed"));
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.2",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["v1", "chat", "completions"] }),
+    });
+
+    expect(response.status).toBe(503);
+    expect(vi.mocked(releaseConnection).mock.calls.map(([upstreamId]) => upstreamId)).toEqual([
+      "up-release-error",
+    ]);
+    expect(markUnhealthy).toHaveBeenCalledTimes(1);
+    expect(markUnhealthy).toHaveBeenCalledWith("up-release-error", "fetch failed");
+    expect(recordFailure).toHaveBeenCalledTimes(1);
+  });
+
+  it("should release a reserved slot exactly once after streaming completes", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType, releaseConnection } =
+      await import("@/lib/services/load-balancer");
+    const { markHealthy } = await import("@/lib/services/health-checker");
+    const { recordSuccess } = await import("@/lib/services/circuit-breaker");
+
+    const upstream = {
+      ...DEFAULT_ACTIVE_UPSTREAMS[0],
+      id: "up-release-stream",
+      name: "release-stream",
+      providerType: "openai",
+      routeCapabilities: ["openai_chat_compatible"],
+      baseUrl: "https://api.openai.com/v1",
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([upstream]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: upstream.id },
+    ]);
+
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      resolvedModel: "gpt-5.2",
+      candidateUpstreams: [upstream],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "gpt-5.2",
+        resolvedModel: "gpt-5.2",
+        providerType: "openai",
+        upstreamName: upstream.name,
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 1,
+        finalCandidateCount: 1,
+      },
+    });
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+      selectionReason: null,
+    });
+
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode("data: hello\n\n"));
+        controller.close();
+      },
+    });
+
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers({ "content-type": "text/event-stream" }),
+      body: stream,
+      isStream: true,
+      usage: null,
+      headerDiff: null,
+      streamMetricsPromise: Promise.resolve({ usage: null, ttftMs: null }),
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.2",
+        messages: [{ role: "user", content: "hi" }],
+        stream: true,
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["v1", "chat", "completions"] }),
+    });
+
+    expect(response.status).toBe(200);
+    const reader = response.body?.getReader();
+    expect(reader).toBeDefined();
+    while (true) {
+      const chunk = await reader!.read();
+      if (chunk.done) {
+        break;
+      }
+    }
+
+    await expect.poll(() => vi.mocked(releaseConnection).mock.calls.length).toBe(1);
+    expect(vi.mocked(releaseConnection).mock.calls.map(([upstreamId]) => upstreamId)).toEqual([
+      "up-release-stream",
+    ]);
+    expect(markHealthy).toHaveBeenCalledTimes(1);
+    expect(markHealthy).toHaveBeenCalledWith("up-release-stream", 100);
+    expect(recordSuccess).toHaveBeenCalledTimes(1);
+    expect(recordSuccess).toHaveBeenCalledWith("up-release-stream");
+  });
+
   it("should attribute failed upstream to last sent attempt when final exclusion is concurrency_full", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
@@ -6150,7 +6427,8 @@ describe("proxy route upstream selection", () => {
     it("should persist an unbilled snapshot when downstream streaming disconnect settles the log", async () => {
       const { db } = await import("@/lib/db");
       const { forwardRequest } = await import("@/lib/services/proxy-client");
-      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+      const { selectFromProviderType, releaseConnection } =
+        await import("@/lib/services/load-balancer");
       const { calculateAndPersistRequestBillingSnapshot } =
         await import("@/lib/services/billing-cost-service");
 
@@ -6231,10 +6509,14 @@ describe("proxy route upstream selection", () => {
       expect(firstChunk.done).toBe(false);
 
       await reader!.cancel("Client disconnected");
+      await expect.poll(() => vi.mocked(releaseConnection).mock.calls.length).toBe(1);
       await expect
         .poll(() => vi.mocked(calculateAndPersistRequestBillingSnapshot).mock.calls.length)
         .toBe(1);
 
+      expect(vi.mocked(releaseConnection).mock.calls.map(([upstreamId]) => upstreamId)).toEqual([
+        "up-openai",
+      ]);
       expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledTimes(1);
       expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
         expect.objectContaining({

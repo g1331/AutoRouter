@@ -1298,6 +1298,7 @@ async function forwardWithFailover(
     attemptCount++;
 
     let attemptUpstreamBaseUrl = selectedUpstream.baseUrl;
+    const releaseSelectedConnectionOnce = createReleaseConnectionOnce(selectedUpstream.id);
 
     try {
       // Create a new request with the buffered body
@@ -1323,7 +1324,7 @@ async function forwardWithFailover(
         const failedResponse = await captureFailedResponse(result);
         const errorType = getErrorType(null, result.statusCode);
         // Release connection and mark as unhealthy
-        releaseConnection(selectedUpstream.id);
+        releaseSelectedConnectionOnce();
         void markUnhealthy(selectedUpstream.id, `HTTP ${result.statusCode} error`);
         // Record failure in circuit breaker when this route should affect upstream reliability.
         if (shouldRecordCircuitBreakerFailure(path)) {
@@ -1350,8 +1351,6 @@ async function forwardWithFailover(
         continue;
       }
 
-      // Success! Record success in circuit breaker and update health status
-      void recordSuccess(selectedUpstream.id);
       if (affinityContext?.sessionId) {
         affinityStore.set(
           affinityContext.apiKeyId,
@@ -1364,9 +1363,10 @@ async function forwardWithFailover(
 
       // For streaming responses, we track the connection until the stream ends
       if (!result.isStream) {
-        releaseConnection(selectedUpstream.id);
+        releaseSelectedConnectionOnce();
         // Mark healthy with a reasonable latency estimate
         void markHealthy(selectedUpstream.id, 100);
+        void recordSuccess(selectedUpstream.id);
       } else {
         // For streaming, wrap the stream to release connection when done
         // and handle mid-stream errors
@@ -1374,6 +1374,7 @@ async function forwardWithFailover(
         const wrappedStream = wrapStreamWithConnectionTracking(
           originalStream,
           selectedUpstream.id,
+          releaseSelectedConnectionOnce,
           request.signal
         );
         return {
@@ -1400,7 +1401,7 @@ async function forwardWithFailover(
       };
     } catch (error) {
       // Release connection on error
-      releaseConnection(selectedUpstream.id);
+      releaseSelectedConnectionOnce();
       const errorHeaderDiff = extractHeaderDiffFromError(error);
 
       // Check if client disconnected
@@ -1462,6 +1463,18 @@ async function forwardWithFailover(
       );
     }
   }
+}
+
+function createReleaseConnectionOnce(upstreamId: string): () => void {
+  let released = false;
+
+  return () => {
+    if (released) {
+      return;
+    }
+    released = true;
+    releaseConnection(upstreamId);
+  };
 }
 
 async function resumeQueuedUpstreamSelection(options: {
@@ -1565,20 +1578,13 @@ class ClientDisconnectedError extends Error {
 function wrapStreamWithConnectionTracking(
   stream: ReadableStream<Uint8Array>,
   upstreamId: string,
+  releaseConnectionOnce: () => void,
   abortSignal?: AbortSignal
 ): ReadableStream<Uint8Array> {
   let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   let streamCompleted = false;
   let disconnectWarnLogged = false;
-  let connectionReleased = false;
   const encoder = new TextEncoder();
-
-  const releaseConnectionOnce = () => {
-    if (!connectionReleased) {
-      releaseConnection(upstreamId);
-      connectionReleased = true;
-    }
-  };
 
   const warnDownstreamDisconnect = (message: string) => {
     if (!disconnectWarnLogged) {
