@@ -9,6 +9,7 @@ import type {
   FailoverErrorType,
   RequestLog,
   RoutingCircuitState,
+  RoutingQueueStatus,
   RoutingSelectionReason,
   TimeRange,
 } from "@/types/api";
@@ -681,6 +682,26 @@ function hasConcurrencyFullSignal(
   );
 }
 
+function hasQueueSignal(log: Pick<RequestLog, "routing_decision">): boolean {
+  return log.routing_decision?.queue != null;
+}
+
+function getQueueStatusVariant(
+  status: RoutingQueueStatus
+): "neutral" | "success" | "warning" | "error" {
+  switch (status) {
+    case "resumed":
+      return "success";
+    case "waiting":
+      return "warning";
+    case "timed_out":
+    case "aborted":
+      return "error";
+    default:
+      return "neutral";
+  }
+}
+
 function getPercentile(values: number[], percentile: number): number | null {
   if (values.length === 0) {
     return null;
@@ -1241,6 +1262,9 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
     const didSendUpstream = routingDecision?.did_send_upstream;
     const finalUpstreamLabel =
       didSendUpstream === false ? t("timelineNoUpstreamSent") : (upstreamDisplayName ?? "-");
+    const queueLog = routingDecision?.queue ?? null;
+    const queueStatusLabel = queueLog ? t("queueStatus." + queueLog.status) : null;
+    const queueLifecycleLabel = queueLog ? t("journeyQueueLifecycle." + queueLog.status) : null;
     const requestKeyMeta = getRequestKeyDisplayMeta({
       keyName: log.api_key_name,
       keyPrefix: log.api_key_prefix,
@@ -1460,20 +1484,45 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
     const decisionStepMeta = [
       decisionUpstreamLabel !== "-" ? decisionUpstreamLabel : null,
       candidateSummary,
+      queueStatusLabel,
     ]
       .filter(Boolean)
       .join(" · ");
     const requestExecutionSummary =
-      didSendUpstream === false
-        ? t("journeyRequestNotSent")
-        : t("journeyRequestSentTo") + " " + finalUpstreamLabel;
-    const requestExecutionMeta = hasFailoverHistory
-      ? String(log.failover_attempts) + " " + t("retryAttemptsSummary")
-      : finalSelectionReason
-        ? getSelectionReasonText(finalSelectionReason)
-        : didSendUpstream === false
-          ? t("timelineNoUpstreamSent")
-          : t("timelineDirectSuccess");
+      queueLog?.status === "timed_out"
+        ? t("journeyRequestQueuedTimedOut")
+        : queueLog?.status === "aborted"
+          ? t("journeyRequestQueuedAborted")
+          : queueLog?.status === "resumed"
+            ? t("journeyRequestQueuedResumed")
+            : queueLog?.status === "waiting"
+              ? t("journeyRequestQueuedWaiting")
+              : didSendUpstream === false
+                ? t("journeyRequestNotSent")
+                : t("journeyRequestSentTo") + " " + finalUpstreamLabel;
+    const queueExecutionMeta = [
+      queueStatusLabel,
+      queueLog?.wait_duration_ms != null
+        ? `${t("journeyQueueWaitDuration")} ${formatMetricText(queueLog.wait_duration_ms)}`
+        : null,
+      queueLog?.timeout_ms != null
+        ? `${t("journeyQueueTimeout")} ${formatMetricText(queueLog.timeout_ms)}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    const requestExecutionMeta = [
+      queueExecutionMeta || null,
+      hasFailoverHistory
+        ? String(log.failover_attempts) + " " + t("retryAttemptsSummary")
+        : finalSelectionReason
+          ? getSelectionReasonText(finalSelectionReason)
+          : didSendUpstream === false
+            ? t("timelineNoUpstreamSent")
+            : t("timelineDirectSuccess"),
+    ]
+      .filter(Boolean)
+      .join(" · ");
     const responseStepSummary =
       ttftMs != null
         ? t("journeyFirstOutput") +
@@ -1821,6 +1870,12 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                   value: getSelectionReasonText(decisionSelectionReason),
                   valueClassName: decisionSelectionReason ? undefined : "text-muted-foreground",
                 })}
+                {decisionSelectionReason?.selected_circuit_state
+                  ? renderJourneyField({
+                      label: t("journeySelectedCircuitState"),
+                      value: t("circuitState." + decisionSelectionReason.selected_circuit_state),
+                    })
+                  : null}
                 {routingDecision?.candidates?.length ? (
                   <div className="space-y-1.5">
                     {routingDecision.candidates.map((candidate) => {
@@ -1921,6 +1976,41 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
               {t("timelineExecutionRetries")}
             </div>
+            {queueLog && queueStatusLabel && queueLifecycleLabel ? (
+              <div className="space-y-2 rounded-cf-sm border border-divider/70 bg-surface-300/65 p-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Badge
+                    variant={getQueueStatusVariant(queueLog.status)}
+                    className="px-1.5 py-0 text-[10px]"
+                  >
+                    {queueStatusLabel}
+                  </Badge>
+                  {queueLog.wait_duration_ms != null
+                    ? renderMetricPill(
+                        t("journeyQueueWaitDuration"),
+                        formatMetricText(queueLog.wait_duration_ms),
+                        "warning"
+                      )
+                    : null}
+                  {queueLog.timeout_ms != null
+                    ? renderMetricPill(
+                        t("journeyQueueTimeout"),
+                        formatMetricText(queueLog.timeout_ms),
+                        "neutral"
+                      )
+                    : null}
+                </div>
+                {renderJourneyField({
+                  label: t("journeyQueueLifecycle"),
+                  value: queueLifecycleLabel,
+                })}
+                {renderJourneyField({
+                  label: t("journeyQueueTarget"),
+                  value: queueLog.upstream_id,
+                  valueClassName: "font-mono break-all",
+                })}
+              </div>
+            ) : null}
             {renderJourneyField({
               label: t("journeyRequestAction"),
               value:
@@ -1970,6 +2060,16 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                         <span className="text-muted-foreground">
                           {attempt.upstream_name || t("upstreamUnknown")}
                         </span>
+                        {attempt.selection_reason?.selected_circuit_state ? (
+                          <Badge
+                            variant={getCircuitStateVariant(
+                              attempt.selection_reason.selected_circuit_state
+                            )}
+                            className="px-1.5 py-0 text-[10px]"
+                          >
+                            {t("circuitState." + attempt.selection_reason.selected_circuit_state)}
+                          </Badge>
+                        ) : null}
                         <span className="text-muted-foreground">[{attempt.error_type}]</span>
                       </div>
                       {attempt.selection_reason
@@ -3177,6 +3277,14 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                                 {t("exclusionReason.concurrency_full")}
                               </Badge>
                             )}
+                            {hasQueueSignal(log) ? (
+                              <Badge
+                                variant={getQueueStatusVariant(log.routing_decision!.queue!.status)}
+                                className="px-1.5 py-0 text-[10px] leading-4"
+                              >
+                                {t("queueStatus." + log.routing_decision!.queue!.status)}
+                              </Badge>
+                            ) : null}
                           </div>
 
                           {displayTotalTokens > 0 && (

@@ -20,7 +20,12 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { RoutingDecisionLog, RoutingCircuitState, FailoverAttempt } from "@/types/api";
+import type {
+  RoutingDecisionLog,
+  RoutingCircuitState,
+  FailoverAttempt,
+  RoutingQueueStatus,
+} from "@/types/api";
 
 interface RoutingDecisionTimelineProps {
   routingDecision: RoutingDecisionLog | null;
@@ -40,6 +45,36 @@ interface RoutingDecisionTimelineProps {
 }
 
 const MAX_RETRY_DISPLAY = 5;
+
+function getQueueStatusVariant(
+  status: RoutingQueueStatus
+): "neutral" | "success" | "warning" | "error" {
+  switch (status) {
+    case "resumed":
+      return "success";
+    case "waiting":
+      return "warning";
+    case "timed_out":
+    case "aborted":
+      return "error";
+    default:
+      return "neutral";
+  }
+}
+
+function getQueueStatusIcon(status: RoutingQueueStatus) {
+  switch (status) {
+    case "resumed":
+      return <CheckCircle2 className="h-3 w-3" />;
+    case "waiting":
+      return <Timer className="h-3 w-3" />;
+    case "timed_out":
+    case "aborted":
+      return <AlertTriangle className="h-3 w-3" />;
+    default:
+      return <Clock className="h-3 w-3" />;
+  }
+}
 
 const CircuitStateIcon = ({ state }: { state: RoutingCircuitState }) => {
   switch (state) {
@@ -140,6 +175,9 @@ export function RoutingDecisionTimeline({
   const didSendUpstream = routingDecision?.did_send_upstream;
   const finalUpstreamLabel =
     didSendUpstream === false ? t("timelineNoUpstreamSent") : (upstreamName ?? "-");
+  const queueLog = routingDecision?.queue ?? null;
+  const queueStatusLabel = queueLog ? t("queueStatus." + queueLog.status) : null;
+  const queueLifecycleLabel = queueLog ? t("timelineQueueLifecycle." + queueLog.status) : null;
   const failureStageLabel = routingDecision?.failure_stage
     ? t(`failureStage.${routingDecision.failure_stage}`)
     : null;
@@ -181,6 +219,15 @@ export function RoutingDecisionTimeline({
             >
               <AlertTriangle className="mr-1 h-3 w-3 shrink-0" />
               <span className="min-w-0 truncate">{t("exclusionReason.concurrency_full")}</span>
+            </Badge>
+          )}
+          {queueLog && queueStatusLabel && (
+            <Badge
+              variant={getQueueStatusVariant(queueLog.status)}
+              className="max-w-[8rem] min-w-0 px-1.5 py-0 text-[10px] leading-4"
+            >
+              <span className="mr-1 shrink-0">{getQueueStatusIcon(queueLog.status)}</span>
+              <span className="min-w-0 truncate">{queueStatusLabel}</span>
             </Badge>
           )}
           <div className="ml-1 flex shrink-0 items-center gap-0.5">
@@ -404,6 +451,33 @@ export function RoutingDecisionTimeline({
         label={t("timelineExecutionRetries")}
         showConnector={showStageConnector}
       >
+        {queueLog && queueStatusLabel && queueLifecycleLabel ? (
+          <div className="mb-2 rounded-cf-sm border border-divider bg-surface-300/40 px-2 py-1.5">
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <Badge
+                variant={getQueueStatusVariant(queueLog.status)}
+                className="px-1.5 py-0 text-[10px]"
+              >
+                {queueStatusLabel}
+              </Badge>
+              {queueLog.wait_duration_ms != null ? (
+                <Badge variant="neutral" className="px-1.5 py-0 text-[10px]">
+                  {t("timelineQueueWaitDuration")}: {formatMs(queueLog.wait_duration_ms)}
+                </Badge>
+              ) : null}
+              {queueLog.timeout_ms != null ? (
+                <Badge variant="neutral" className="px-1.5 py-0 text-[10px]">
+                  {t("timelineQueueTimeout")}: {formatMs(queueLog.timeout_ms)}
+                </Badge>
+              ) : null}
+            </div>
+            <div className="text-foreground">{queueLifecycleLabel}</div>
+            <div className="mt-1 text-muted-foreground">
+              {t("timelineQueueTarget")}:{" "}
+              <span className="font-mono text-foreground">{queueLog.upstream_id}</span>
+            </div>
+          </div>
+        ) : null}
         {hasFailoverHistory ? (
           <RetryTimeline
             failoverHistory={failoverHistory!}
@@ -413,6 +487,10 @@ export function RoutingDecisionTimeline({
           <div className="text-muted-foreground">
             {t("timelineFailoverNoDetails", { count: failoverAttempts })}
           </div>
+        ) : queueLog?.status === "timed_out" || queueLog?.status === "aborted" ? (
+          <div className="text-muted-foreground">{t("timelineNoUpstreamSent")}</div>
+        ) : queueLog?.status === "waiting" ? (
+          <div className="text-muted-foreground">{t("timelineQueueLifecycle.waiting")}</div>
         ) : (
           <div className="text-muted-foreground">{t("timelineDirectSuccess")}</div>
         )}
@@ -554,6 +632,20 @@ function RetryTimeline({
               <div className="flex items-center gap-2 text-muted-foreground">
                 <span className="tabular-nums">{formatAttemptTime(attempt.attempted_at)}</span>
                 <span>{attempt.upstream_name || t("upstreamUnknown")}</span>
+                {attempt.selection_reason?.selected_circuit_state ? (
+                  <Badge
+                    variant={
+                      attempt.selection_reason.selected_circuit_state === "open"
+                        ? "error"
+                        : attempt.selection_reason.selected_circuit_state === "half_open"
+                          ? "warning"
+                          : "neutral"
+                    }
+                    className="px-1.5 py-0 text-[10px]"
+                  >
+                    {t(`circuitState.${attempt.selection_reason.selected_circuit_state}`)}
+                  </Badge>
+                ) : null}
                 <span className="text-muted-foreground">●</span>
               </div>
               <div className="flex items-center gap-2">

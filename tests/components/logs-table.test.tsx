@@ -1598,6 +1598,31 @@ describe("LogsTable", () => {
       expect(screen.getByText("exclusionReason.concurrency_full")).toBeInTheDocument();
     });
 
+    it("shows queue status badges in compact summaries", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              routing_decision: {
+                ...mockRoutingDecision,
+                queue: {
+                  status: "resumed",
+                  upstream_id: "upstream-2",
+                  entered_at: attemptedAt,
+                  resumed_at: attemptedAt,
+                  wait_duration_ms: 1200,
+                  timeout_ms: 30000,
+                },
+              },
+            },
+          ]}
+        />
+      );
+
+      expect(screen.getAllByText("queueStatus.resumed").length).toBeGreaterThan(0);
+    });
+
     const hasAncestorClass = (element: HTMLElement, className: string) => {
       let current: HTMLElement | null = element;
       while (current) {
@@ -2106,6 +2131,44 @@ describe("LogsTable", () => {
 
       fireEvent.click(screen.getAllByRole("button", { name: "lifecycleRequest" })[0]);
       expect(screen.getAllByText("journeyRetryReasonText").length).toBeGreaterThan(0);
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleDecision" })[0]);
+      expect(screen.getByText(/journeySelectedCircuitState/)).toBeInTheDocument();
+    });
+
+    it("shows queue termination chain in focused and sequential views", () => {
+      const logWithQueuedTimeout: RequestLog = {
+        ...mockLog,
+        status_code: 504,
+        failover_attempts: 0,
+        failover_history: null,
+        routing_decision: {
+          ...mockRoutingDecision,
+          selected_upstream_id: null,
+          queue: {
+            status: "timed_out",
+            upstream_id: "upstream-2",
+            entered_at: attemptedAt,
+            wait_duration_ms: 30000,
+            timeout_ms: 30000,
+          },
+          did_send_upstream: false,
+          final_selection_reason: null,
+        },
+      };
+
+      render(<LogsTable logs={[logWithQueuedTimeout]} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleRequest" })[0]);
+
+      expect(screen.getAllByText("queueStatus.timed_out").length).toBeGreaterThan(0);
+      expect(screen.getByText("journeyQueueLifecycle.timed_out")).toBeInTheDocument();
+      expect(screen.getByText(/journeyQueueTarget/)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "journeyViewSequential" }));
+
+      expect(screen.getAllByText("journeyQueueLifecycle.timed_out").length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/journeyQueueTarget/).length).toBeGreaterThan(0);
     });
 
     it("uses error styling for circuit-open excluded upstreams in expanded view", () => {
