@@ -45,6 +45,7 @@ import {
 } from "@/lib/services/circuit-breaker";
 import {
   upstreamQueueAdmission,
+  UpstreamQueueWaitTimeoutError,
   UpstreamQueueWaitAbortedError,
 } from "@/lib/services/upstream-queue-admission";
 import { randomUUID } from "crypto";
@@ -701,6 +702,14 @@ function isAllCandidatesConcurrencyFullError(error: unknown): boolean {
   return error.message.toLowerCase().includes("max concurrency");
 }
 
+function isQueueWaitTimeoutError(error: unknown): error is UpstreamQueueWaitTimeoutError {
+  return error instanceof UpstreamQueueWaitTimeoutError;
+}
+
+function isQueueWaitAbortedError(error: unknown): error is UpstreamQueueWaitAbortedError {
+  return error instanceof UpstreamQueueWaitAbortedError;
+}
+
 function isDownstreamStreamingError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
@@ -742,6 +751,12 @@ function resolveFailureReason(
 ): UnifiedErrorReason {
   if (isNoAuthorizedUpstreamsError(error)) {
     return "NO_AUTHORIZED_UPSTREAMS";
+  }
+  if (isQueueWaitTimeoutError(error)) {
+    return "QUEUE_WAIT_TIMEOUT";
+  }
+  if (isQueueWaitAbortedError(error)) {
+    return "QUEUE_WAIT_ABORTED";
   }
   if (error instanceof ClientDisconnectedError) {
     return "CLIENT_DISCONNECTED";
@@ -796,6 +811,12 @@ function getUserHint(
   }
   if (reason === "CONCURRENCY_FULL") {
     return "当前所有可选上游均已达到并发上限，请提高上游并发配置或增加可用上游后重试";
+  }
+  if (reason === "QUEUE_WAIT_TIMEOUT") {
+    return "请求已进入等待队列，但在获得可用槽位前超过等待时限，请调整队列超时或补充上游容量";
+  }
+  if (reason === "QUEUE_WAIT_ABORTED") {
+    return "调用方在等待队列期间中断了连接，请检查客户端超时配置、网络链路或重试策略";
   }
   if (reason === "API_KEY_QUOTA_EXCEEDED") {
     return "当前密钥已达到消费限额，请等待额度窗口恢复或联系管理员调整额度规则";
@@ -1479,7 +1500,7 @@ async function resumeQueuedUpstreamSelection(options: {
 
   if (!queued.accepted) {
     if (queued.reason === "aborted") {
-      throw new ClientDisconnectedError("Client disconnected while waiting in queue");
+      throw new UpstreamQueueWaitAbortedError(waitableCandidate.upstream.id, requestId, 0);
     }
     throw new AllCandidatesConcurrencyFullError([], waitableCandidate);
   }
@@ -1487,8 +1508,8 @@ async function resumeQueuedUpstreamSelection(options: {
   try {
     await queued.waitPromise;
   } catch (error) {
-    if (error instanceof UpstreamQueueWaitAbortedError) {
-      throw new ClientDisconnectedError("Client disconnected while waiting in queue");
+    if (isQueueWaitTimeoutError(error) || isQueueWaitAbortedError(error)) {
+      throw error;
     }
     throw error;
   }
@@ -3130,12 +3151,14 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     let errorCode: UnifiedErrorCode = "SERVICE_UNAVAILABLE";
     if (isNoAuthorizedUpstreamsError(error)) {
       errorCode = "NO_AUTHORIZED_UPSTREAMS";
+    } else if (isQueueWaitTimeoutError(error)) {
+      errorCode = "QUEUE_WAIT_TIMEOUT";
     } else if (
       error instanceof NoHealthyUpstreamsError ||
       error instanceof CircuitBreakerOpenError
     ) {
       errorCode = "ALL_UPSTREAMS_UNAVAILABLE";
-    } else if (error instanceof ClientDisconnectedError) {
+    } else if (error instanceof ClientDisconnectedError || isQueueWaitAbortedError(error)) {
       errorCode = "CLIENT_DISCONNECTED";
     } else if (error instanceof Error && error.message.includes("timed out")) {
       errorCode = "REQUEST_TIMEOUT";

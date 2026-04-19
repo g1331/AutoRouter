@@ -85,6 +85,22 @@ describe("Unified Error", () => {
       });
     });
 
+    it("should create correct error body for QUEUE_WAIT_TIMEOUT", () => {
+      const body = createUnifiedErrorBody("QUEUE_WAIT_TIMEOUT", {
+        reason: "QUEUE_WAIT_TIMEOUT",
+        did_send_upstream: false,
+      });
+      expect(body).toEqual({
+        error: {
+          message: "请求在等待可用上游槽位时超时，请稍后重试",
+          type: "timeout",
+          code: "QUEUE_WAIT_TIMEOUT",
+          reason: "QUEUE_WAIT_TIMEOUT",
+          did_send_upstream: false,
+        },
+      });
+    });
+
     it("should create correct error body for CLIENT_DISCONNECTED", () => {
       const body = createUnifiedErrorBody("CLIENT_DISCONNECTED");
       expect(body).toEqual({
@@ -118,6 +134,11 @@ describe("Unified Error", () => {
 
     it("should return 504 for REQUEST_TIMEOUT", async () => {
       const response = createUnifiedErrorResponse("REQUEST_TIMEOUT");
+      expect(response.status).toBe(504);
+    });
+
+    it("should return 504 for QUEUE_WAIT_TIMEOUT", async () => {
+      const response = createUnifiedErrorResponse("QUEUE_WAIT_TIMEOUT");
       expect(response.status).toBe(504);
     });
 
@@ -161,6 +182,7 @@ describe("Unified Error", () => {
       { code: "NO_AUTHORIZED_UPSTREAMS", expectedStatus: 403 },
       { code: "NO_UPSTREAMS_CONFIGURED", expectedStatus: 503 },
       { code: "SERVICE_UNAVAILABLE", expectedStatus: 503 },
+      { code: "QUEUE_WAIT_TIMEOUT", expectedStatus: 504 },
       { code: "REQUEST_TIMEOUT", expectedStatus: 504 },
       { code: "CLIENT_DISCONNECTED", expectedStatus: 499 },
       { code: "STREAM_ERROR", expectedStatus: 502 },
