@@ -235,6 +235,45 @@ describe("UpstreamQueueAdmissionService", () => {
     vi.useRealTimers();
   });
 
+  it("hands off to the next live waiter after the head request aborts", async () => {
+    const service = new UpstreamQueueAdmissionService();
+    service.tryReserveImmediate({ upstreamId: "u1", maxConcurrency: 1 });
+
+    const headController = new AbortController();
+    const head = service.enqueueWait({
+      upstreamId: "u1",
+      requestId: "req-1",
+      maxQueueLength: null,
+      signal: headController.signal,
+    });
+    const next = service.enqueueWait({
+      upstreamId: "u1",
+      requestId: "req-2",
+      maxQueueLength: null,
+    });
+
+    if (!head.accepted || !next.accepted) {
+      throw new Error("expected queued requests");
+    }
+
+    headController.abort();
+    await expect(head.waitPromise).rejects.toBeInstanceOf(UpstreamQueueWaitAbortedError);
+
+    expect(service.releaseReservation("u1")).toEqual({
+      released: true,
+      handedOff: true,
+      resumedRequestId: "req-2",
+      activeCount: 1,
+      queueLength: 0,
+    });
+    await expect(next.waitPromise).resolves.toMatchObject({
+      upstreamId: "u1",
+      requestId: "req-2",
+      activeCount: 1,
+      queueLengthRemaining: 0,
+    });
+  });
+
   it("releases active reservations and removes idle upstream state", () => {
     const service = new UpstreamQueueAdmissionService();
 
