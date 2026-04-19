@@ -100,6 +100,11 @@ interface MockUpstreamOpts {
     threshold: number;
   } | null;
   maxConcurrency?: number | null;
+  queuePolicy?: {
+    enabled: boolean;
+    timeout_ms: number;
+    max_queue_length?: number | null;
+  } | null;
 }
 
 function getRouteCapabilitiesByProvider(providerType: string): string[] {
@@ -136,6 +141,7 @@ function makeUpstream(opts: MockUpstreamOpts = {}) {
     routeCapabilities: getRouteCapabilitiesByProvider(providerType),
     allowedModels: null,
     modelRedirects: null,
+    queuePolicy: opts.queuePolicy ?? null,
     affinityMigration: opts.affinityMigration ?? null,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -482,7 +488,16 @@ describe("load-balancer", () => {
       });
 
       it("should degrade to next tier when current tier is fully blocked by concurrency limit", async () => {
-        const p0 = makeUpstream({ id: "p0", priority: 0, maxConcurrency: 1 });
+        const p0 = makeUpstream({
+          id: "p0",
+          priority: 0,
+          maxConcurrency: 1,
+          queuePolicy: {
+            enabled: true,
+            timeout_ms: 30000,
+            max_queue_length: 5,
+          },
+        });
         const p1 = makeUpstream({ id: "p1", priority: 1, maxConcurrency: 2 });
         mockFindMany.mockResolvedValue([p0, p1]);
 
@@ -506,6 +521,33 @@ describe("load-balancer", () => {
         await expect(selectFromProviderType("openai")).rejects.toThrow(
           AllCandidatesConcurrencyFullError
         );
+      });
+
+      it("should expose a waitable upstream when every immediate candidate is full", async () => {
+        const p0 = makeUpstream({
+          id: "p0",
+          priority: 0,
+          maxConcurrency: 1,
+          queuePolicy: {
+            enabled: true,
+            timeout_ms: 30000,
+            max_queue_length: 5,
+          },
+        });
+        const p1 = makeUpstream({ id: "p1", priority: 1, maxConcurrency: 1 });
+        mockFindMany.mockResolvedValue([p0, p1]);
+
+        recordConnection("p0");
+        recordConnection("p1");
+
+        await expect(selectFromProviderType("openai")).rejects.toMatchObject({
+          waitableCandidate: expect.objectContaining({
+            upstream: expect.objectContaining({ id: "p0" }),
+            tier: 0,
+            currentConcurrency: 1,
+            maxConcurrency: 1,
+          }),
+        });
       });
 
       it("should reserve connection slot during selection and reject the next request at maxConcurrency", async () => {

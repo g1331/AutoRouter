@@ -47,11 +47,16 @@ export class NoAuthorizedUpstreamsError extends NoHealthyUpstreamsError {
  */
 export class AllCandidatesConcurrencyFullError extends NoHealthyUpstreamsError {
   excludedCandidates: ConcurrencyExcludedCandidate[];
+  waitableCandidate: WaitableUpstreamCandidate | null;
 
-  constructor(excludedCandidates: ConcurrencyExcludedCandidate[]) {
+  constructor(
+    excludedCandidates: ConcurrencyExcludedCandidate[],
+    waitableCandidate: WaitableUpstreamCandidate | null = null
+  ) {
     super("All candidate upstreams reached max concurrency");
     this.name = "AllCandidatesConcurrencyFullError";
     this.excludedCandidates = excludedCandidates;
+    this.waitableCandidate = waitableCandidate;
   }
 }
 
@@ -103,6 +108,20 @@ export interface ConcurrencyExcludedCandidate {
   upstreamName: string;
   upstreamBaseUrl: string;
   upstreamProviderType: ProviderType | null;
+  tier: number;
+  currentConcurrency: number;
+  maxConcurrency: number;
+}
+
+export interface WaitableUpstreamCandidate {
+  upstream: Upstream;
+  tier: number;
+  currentConcurrency: number;
+  maxConcurrency: number;
+}
+
+interface WaitableUpstreamEntry {
+  entry: UpstreamWithCircuitBreaker;
   tier: number;
   currentConcurrency: number;
   maxConcurrency: number;
@@ -338,6 +357,52 @@ function toConcurrencyExcludedCandidate(
     tier,
     currentConcurrency,
     maxConcurrency,
+  };
+}
+
+function toWaitableUpstreamEntry(
+  entry: UpstreamWithCircuitBreaker,
+  tier: number,
+  currentConcurrency: number,
+  maxConcurrency: number
+): WaitableUpstreamEntry | null {
+  if (entry.upstream.queuePolicy?.enabled !== true) {
+    return null;
+  }
+
+  return {
+    entry,
+    tier,
+    currentConcurrency,
+    maxConcurrency,
+  };
+}
+
+function selectWaitableUpstreamCandidate(
+  candidates: WaitableUpstreamEntry[]
+): WaitableUpstreamCandidate | null {
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const highestPriorityTier = Math.min(...candidates.map((candidate) => candidate.tier));
+  const tierCandidates = candidates.filter((candidate) => candidate.tier === highestPriorityTier);
+  const selected = selectWeightedWithHealthScore(
+    tierCandidates.map((candidate) => candidate.entry)
+  );
+  const selectedCandidate =
+    tierCandidates.find((candidate) => candidate.entry.upstream.id === selected.upstream.id) ??
+    null;
+
+  if (!selectedCandidate) {
+    return null;
+  }
+
+  return {
+    upstream: selectedCandidate.entry.upstream,
+    tier: selectedCandidate.tier,
+    currentConcurrency: selectedCandidate.currentConcurrency,
+    maxConcurrency: selectedCandidate.maxConcurrency,
   };
 }
 
@@ -851,6 +916,7 @@ async function performTieredSelection(
   let totalConcurrencyFiltered = 0;
   let concurrencyScreenedCandidates = 0;
   const concurrencyExcluded: ConcurrencyExcludedCandidate[] = [];
+  const waitableCandidates: WaitableUpstreamEntry[] = [];
   let didResyncQuota = false;
 
   // Try each tier in priority order
@@ -886,6 +952,22 @@ async function performTieredSelection(
     totalConcurrencyFiltered += afterConcurrency.excludedCount;
     if (afterConcurrency.excluded.length > 0) {
       concurrencyExcluded.push(...afterConcurrency.excluded);
+    }
+    for (const entry of afterExclusions.allowed) {
+      const concurrency = isConcurrencyFull(entry.upstream);
+      if (!concurrency.full || concurrency.max === null) {
+        continue;
+      }
+
+      const waitableEntry = toWaitableUpstreamEntry(
+        entry,
+        tier,
+        concurrency.current,
+        concurrency.max
+      );
+      if (waitableEntry) {
+        waitableCandidates.push(waitableEntry);
+      }
     }
 
     if (afterConcurrency.allowed.length > 0) {
@@ -962,7 +1044,10 @@ async function performTieredSelection(
     totalConcurrencyFiltered > 0 &&
     totalConcurrencyFiltered === concurrencyScreenedCandidates
   ) {
-    throw new AllCandidatesConcurrencyFullError(concurrencyExcluded);
+    throw new AllCandidatesConcurrencyFullError(
+      concurrencyExcluded,
+      selectWaitableUpstreamCandidate(waitableCandidates)
+    );
   }
 
   // All tiers exhausted
