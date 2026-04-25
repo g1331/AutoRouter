@@ -43,6 +43,13 @@
       "when": 1776574435735,
       "tag": "0005_cloudy_mesmero",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1777096644847,
+      "tag": "0006_dapper_bucky",
+      "breakpoints": true
     }
   ]
 }
