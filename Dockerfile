@@ -31,8 +31,10 @@ COPY . .
 # Build the application
 # DB_TYPE avoids the production fail-fast check that requires DATABASE_URL.
 # The actual connection string is provided at runtime; db access is lazy.
+ARG NEXT_PUBLIC_APP_VERSION=0.0.0-dev
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DB_TYPE=postgres
+ENV NEXT_PUBLIC_APP_VERSION=${NEXT_PUBLIC_APP_VERSION}
 RUN pnpm build
 
 # Production stage

@@ -86,6 +86,7 @@ vi.mock("lucide-react", () => ({
   Github: () => <svg data-testid="icon-github" />,
   LogOut: () => <svg data-testid="icon-logout" />,
   Moon: () => <svg data-testid="icon-moon" />,
+  RefreshCw: () => <svg data-testid="icon-refresh-cw" />,
   SlidersHorizontal: () => <svg data-testid="icon-sliders-horizontal" />,
   Wallet: () => <svg data-testid="icon-wallet" />,
 }));
@@ -100,5 +101,13 @@ describe("SettingsPage", () => {
     expect(repositoryLink).toHaveAttribute("rel", "noopener noreferrer");
     expect(screen.getByText("repository.title")).toBeInTheDocument();
     expect(screen.getByText("repository.description")).toBeInTheDocument();
+  });
+
+  it("renders background task settings entry", () => {
+    render(<SettingsPage />);
+
+    const backgroundSyncLink = screen.getByRole("link", { name: /backgroundSync.title/i });
+    expect(backgroundSyncLink).toHaveAttribute("href", "/system/background-sync");
+    expect(screen.getByText("backgroundSync.panelDescription")).toBeInTheDocument();
   });
 });

@@ -1,6 +1,8 @@
 import { drizzle as drizzlePg, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import postgres, { type Sql } from "postgres";
 import { createRequire } from "module";
+import { mkdirSync } from "fs";
+import { dirname } from "path";
 import * as schema from "./schema";
 import { config } from "../utils/config";
 
@@ -44,6 +46,14 @@ function getClient(): Sql {
 
 function getSqliteClient() {
   if (!sqliteClient) {
+    const sqlitePath = config.sqliteDbPath.startsWith("file:")
+      ? config.sqliteDbPath.slice("file:".length)
+      : config.sqliteDbPath;
+    const sqliteDir = dirname(sqlitePath);
+    if (sqliteDir && sqliteDir !== ".") {
+      mkdirSync(sqliteDir, { recursive: true });
+    }
+
     // Dynamic require to avoid bundling in production builds.
     // @libsql/client is a devDependency (pure JS, no native compilation needed).
     const { createClient } = require("@libsql/client");
@@ -81,7 +91,7 @@ export * from "./schema";
 // Graceful shutdown helper
 export async function closeDatabase(): Promise<void> {
   if (sqliteClient) {
-    sqliteClient.close();
+    await Promise.resolve(sqliteClient.close());
     sqliteClient = null;
   }
 

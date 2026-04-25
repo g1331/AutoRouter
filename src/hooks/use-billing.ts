@@ -194,6 +194,7 @@ export function useSyncBillingPrices() {
       queryClient.invalidateQueries({ queryKey: ["billing", "overview"] });
       queryClient.invalidateQueries({ queryKey: ["billing", "unresolved-models"] });
       queryClient.invalidateQueries({ queryKey: ["billing", "model-prices"] });
+      queryClient.invalidateQueries({ queryKey: ["background-sync", "tasks"] });
       toast.success(t("syncCompleteSuccess"));
     },
     onError: (error: Error) => {

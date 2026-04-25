@@ -47,6 +47,10 @@ import type {
   PaginatedBillingModelPrices,
   BillingTierRuleRecord,
 } from "@/lib/services/billing-price-service";
+import type {
+  BackgroundSyncExecuteResult,
+  BackgroundSyncTaskState,
+} from "@/lib/services/background-sync-types";
 
 // ========== Helper Utilities ==========
 
@@ -96,6 +100,7 @@ export interface UpstreamApiResponse {
     mode: import("@/types/api").UpstreamModelDiscoveryMode;
     custom_endpoint: string | null;
     enable_lite_llm_fallback: boolean;
+    auto_refresh_enabled: boolean;
   } | null;
   model_catalog:
     | {
@@ -173,6 +178,7 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
           mode: upstream.modelDiscovery.mode,
           custom_endpoint: upstream.modelDiscovery.customEndpoint,
           enable_lite_llm_fallback: upstream.modelDiscovery.enableLiteLlmFallback,
+          auto_refresh_enabled: upstream.modelDiscovery.autoRefreshEnabled,
         }
       : null,
     model_catalog:
@@ -1005,6 +1011,80 @@ export function transformBillingOverviewToApi(
     month_cost_usd: stats.monthCostUsd,
     unresolved_model_count: stats.unresolvedModelCount,
     latest_sync: stats.latestSync ? transformBillingSyncToApi(stats.latestSync) : null,
+  };
+}
+
+export interface BackgroundSyncTaskApiResponse {
+  task_name: string;
+  display_name: string;
+  enabled: boolean;
+  interval_seconds: number;
+  startup_delay_seconds: number;
+  is_running: boolean;
+  last_started_at: string | null;
+  last_finished_at: string | null;
+  last_success_at: string | null;
+  last_failed_at: string | null;
+  last_status: string | null;
+  last_error: string | null;
+  last_duration_ms: number | null;
+  last_success_count: number;
+  last_failure_count: number;
+  next_run_at: string | null;
+  updated_at: string | null;
+}
+
+export interface BackgroundSyncTaskRunApiResponse {
+  task_name: string;
+  trigger_type: string;
+  status: string;
+  success_count: number;
+  failure_count: number;
+  error_summary: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_ms: number | null;
+  next_run_at: string | null;
+}
+
+export function transformBackgroundSyncTaskStateToApi(
+  task: BackgroundSyncTaskState
+): BackgroundSyncTaskApiResponse {
+  return {
+    task_name: task.taskName,
+    display_name: task.displayName,
+    enabled: task.enabled,
+    interval_seconds: task.intervalSeconds,
+    startup_delay_seconds: task.startupDelaySeconds,
+    is_running: task.isRunning,
+    last_started_at: toISOStringOrNull(task.lastStartedAt),
+    last_finished_at: toISOStringOrNull(task.lastFinishedAt),
+    last_success_at: toISOStringOrNull(task.lastSuccessAt),
+    last_failed_at: toISOStringOrNull(task.lastFailedAt),
+    last_status: task.lastStatus,
+    last_error: task.lastError,
+    last_duration_ms: task.lastDurationMs,
+    last_success_count: task.lastSuccessCount,
+    last_failure_count: task.lastFailureCount,
+    next_run_at: toISOStringOrNull(task.nextRunAt),
+    updated_at: toISOStringOrNull(task.updatedAt),
+  };
+}
+
+export function transformBackgroundSyncExecuteResultToApi(
+  result: BackgroundSyncExecuteResult
+): BackgroundSyncTaskRunApiResponse {
+  return {
+    task_name: result.taskName,
+    trigger_type: result.triggerType,
+    status: result.status,
+    success_count: result.successCount,
+    failure_count: result.failureCount,
+    error_summary: result.errorSummary,
+    started_at: toISOStringOrNull(result.startedAt),
+    finished_at: toISOStringOrNull(result.finishedAt),
+    duration_ms: result.durationMs,
+    next_run_at: toISOStringOrNull(result.nextRunAt),
   };
 }
 

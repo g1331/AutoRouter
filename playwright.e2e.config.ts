@@ -16,7 +16,7 @@ export default defineConfig({
     video: "retain-on-failure",
   },
   webServer: {
-    command: `pnpm dev --port ${port}`,
+    command: `pnpm db:migrate:sqlite && pnpm dev --port ${port}`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

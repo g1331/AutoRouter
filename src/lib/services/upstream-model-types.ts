@@ -31,6 +31,7 @@ export interface UpstreamModelDiscoveryConfig {
   mode: UpstreamModelDiscoveryMode;
   customEndpoint: string | null;
   enableLiteLlmFallback: boolean;
+  autoRefreshEnabled: boolean;
 }
 
 export interface UpstreamModelCatalogEntry {
@@ -101,6 +102,7 @@ export function normalizeUpstreamModelDiscoveryConfig(
         : fallbackMode,
     customEndpoint: config?.customEndpoint?.trim() || null,
     enableLiteLlmFallback: Boolean(config?.enableLiteLlmFallback),
+    autoRefreshEnabled: Boolean(config?.autoRefreshEnabled),
   };
 }
 
@@ -128,5 +130,6 @@ export function inferDefaultModelDiscoveryConfig(
     mode,
     customEndpoint: null,
     enableLiteLlmFallback: false,
+    autoRefreshEnabled: false,
   };
 }

@@ -324,6 +324,7 @@ describe("upstream-model-discovery", () => {
         mode: "litellm",
         customEndpoint: null,
         enableLiteLlmFallback: false,
+        autoRefreshEnabled: false,
       });
     });
 

@@ -71,6 +71,13 @@ async function mockBillingApis(page: Page, options?: { duplicateThresholdOnly?: 
       ]
     : [];
 
+  await page.route("**/api/admin/background-sync/tasks", async (route) => {
+    await fulfillJson(route, 200, {
+      items: [],
+      total: 0,
+    });
+  });
+
   await page.route("**/api/admin/billing/**", async (route) => {
     const url = new URL(route.request().url());
     const pathname = url.pathname;

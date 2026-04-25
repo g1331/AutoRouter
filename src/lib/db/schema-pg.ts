@@ -349,6 +349,59 @@ export const billingPriceSyncHistory = pgTable(
 );
 
 /**
+ * Persisted background synchronization task status.
+ */
+export const backgroundSyncTasks = pgTable(
+  "background_sync_tasks",
+  {
+    taskName: varchar("task_name", { length: 128 }).primaryKey(),
+    enabled: boolean("enabled").notNull().default(false),
+    intervalSeconds: integer("interval_seconds").notNull(),
+    startupDelaySeconds: integer("startup_delay_seconds").notNull().default(0),
+    lastStartedAt: timestamp("last_started_at", { withTimezone: true }),
+    lastFinishedAt: timestamp("last_finished_at", { withTimezone: true }),
+    lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+    lastFailedAt: timestamp("last_failed_at", { withTimezone: true }),
+    lastStatus: varchar("last_status", { length: 16 }),
+    lastError: text("last_error"),
+    lastDurationMs: integer("last_duration_ms"),
+    lastSuccessCount: integer("last_success_count").notNull().default(0),
+    lastFailureCount: integer("last_failure_count").notNull().default(0),
+    nextRunAt: timestamp("next_run_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("background_sync_tasks_enabled_idx").on(table.enabled),
+    index("background_sync_tasks_next_run_at_idx").on(table.nextRunAt),
+  ]
+);
+
+/**
+ * Historical runs for background synchronization tasks.
+ */
+export const backgroundSyncTaskRuns = pgTable(
+  "background_sync_task_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    taskName: varchar("task_name", { length: 128 }).notNull(),
+    triggerType: varchar("trigger_type", { length: 16 }).notNull(),
+    status: varchar("status", { length: 16 }).notNull(),
+    successCount: integer("success_count").notNull().default(0),
+    failureCount: integer("failure_count").notNull().default(0),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }).notNull(),
+    durationMs: integer("duration_ms").notNull().default(0),
+    errorSummary: text("error_summary"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("background_sync_task_runs_task_name_idx").on(table.taskName),
+    index("background_sync_task_runs_started_at_idx").on(table.startedAt),
+    index("background_sync_task_runs_status_idx").on(table.status),
+  ]
+);
+
+/**
  * Immutable billing snapshot for each request log row.
  */
 export const requestBillingSnapshots = pgTable(
@@ -510,5 +563,9 @@ export type BillingManualPriceOverride = typeof billingManualPriceOverrides.$inf
 export type NewBillingManualPriceOverride = typeof billingManualPriceOverrides.$inferInsert;
 export type BillingPriceSyncHistory = typeof billingPriceSyncHistory.$inferSelect;
 export type NewBillingPriceSyncHistory = typeof billingPriceSyncHistory.$inferInsert;
+export type BackgroundSyncTask = typeof backgroundSyncTasks.$inferSelect;
+export type NewBackgroundSyncTask = typeof backgroundSyncTasks.$inferInsert;
+export type BackgroundSyncTaskRun = typeof backgroundSyncTaskRuns.$inferSelect;
+export type NewBackgroundSyncTaskRun = typeof backgroundSyncTaskRuns.$inferInsert;
 export type RequestBillingSnapshot = typeof requestBillingSnapshots.$inferSelect;
 export type NewRequestBillingSnapshot = typeof requestBillingSnapshots.$inferInsert;

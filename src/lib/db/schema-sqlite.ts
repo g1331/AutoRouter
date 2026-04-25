@@ -367,6 +367,61 @@ export const billingPriceSyncHistory = sqliteTable(
 );
 
 /**
+ * Persisted background synchronization task status.
+ */
+export const backgroundSyncTasks = sqliteTable(
+  "background_sync_tasks",
+  {
+    taskName: text("task_name").primaryKey(),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
+    intervalSeconds: integer("interval_seconds").notNull(),
+    startupDelaySeconds: integer("startup_delay_seconds").notNull().default(0),
+    lastStartedAt: integer("last_started_at", { mode: "timestamp_ms" }),
+    lastFinishedAt: integer("last_finished_at", { mode: "timestamp_ms" }),
+    lastSuccessAt: integer("last_success_at", { mode: "timestamp_ms" }),
+    lastFailedAt: integer("last_failed_at", { mode: "timestamp_ms" }),
+    lastStatus: text("last_status"),
+    lastError: text("last_error"),
+    lastDurationMs: integer("last_duration_ms"),
+    lastSuccessCount: integer("last_success_count").notNull().default(0),
+    lastFailureCount: integer("last_failure_count").notNull().default(0),
+    nextRunAt: integer("next_run_at", { mode: "timestamp_ms" }),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("background_sync_tasks_enabled_idx").on(table.enabled),
+    index("background_sync_tasks_next_run_at_idx").on(table.nextRunAt),
+  ]
+);
+
+/**
+ * Historical runs for background synchronization tasks.
+ */
+export const backgroundSyncTaskRuns = sqliteTable(
+  "background_sync_task_runs",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    taskName: text("task_name").notNull(),
+    triggerType: text("trigger_type").notNull(),
+    status: text("status").notNull(),
+    successCount: integer("success_count").notNull().default(0),
+    failureCount: integer("failure_count").notNull().default(0),
+    startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),
+    finishedAt: integer("finished_at", { mode: "timestamp_ms" }).notNull(),
+    durationMs: integer("duration_ms").notNull().default(0),
+    errorSummary: text("error_summary"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("background_sync_task_runs_task_name_idx").on(table.taskName),
+    index("background_sync_task_runs_started_at_idx").on(table.startedAt),
+    index("background_sync_task_runs_status_idx").on(table.status),
+  ]
+);
+
+/**
  * Immutable billing snapshot for each request log row.
  */
 export const requestBillingSnapshots = sqliteTable(
@@ -532,5 +587,9 @@ export type BillingManualPriceOverride = typeof billingManualPriceOverrides.$inf
 export type NewBillingManualPriceOverride = typeof billingManualPriceOverrides.$inferInsert;
 export type BillingPriceSyncHistory = typeof billingPriceSyncHistory.$inferSelect;
 export type NewBillingPriceSyncHistory = typeof billingPriceSyncHistory.$inferInsert;
+export type BackgroundSyncTask = typeof backgroundSyncTasks.$inferSelect;
+export type NewBackgroundSyncTask = typeof backgroundSyncTasks.$inferInsert;
+export type BackgroundSyncTaskRun = typeof backgroundSyncTaskRuns.$inferSelect;
+export type NewBackgroundSyncTaskRun = typeof backgroundSyncTaskRuns.$inferInsert;
 export type RequestBillingSnapshot = typeof requestBillingSnapshots.$inferSelect;
 export type NewRequestBillingSnapshot = typeof requestBillingSnapshots.$inferInsert;

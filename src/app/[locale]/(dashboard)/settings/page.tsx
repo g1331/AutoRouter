@@ -7,6 +7,7 @@ import {
   Github,
   LogOut,
   Moon,
+  RefreshCw,
   SlidersHorizontal,
   Wallet,
 } from "lucide-react";
@@ -18,7 +19,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Link } from "@/i18n/navigation";
-import { APP_REPOSITORY_URL } from "@/lib/app-version";
+import { APP_REPOSITORY_URL, APP_VERSION_TAG } from "@/lib/app-version";
 import { useAuth } from "@/providers/auth-provider";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +31,7 @@ export default function SettingsPage() {
   const tLang = useTranslations("language");
   const tCompensation = useTranslations("compensation");
   const tBilling = useTranslations("billing");
+  const tBackgroundSync = useTranslations("backgroundSync");
   const tRepository = useTranslations("repository");
 
   const settingsItems = [
@@ -53,6 +55,12 @@ export default function SettingsPage() {
       icon: Wallet,
       title: tBilling("title"),
       description: tBilling("managementDesc"),
+    },
+    {
+      href: "/system/background-sync",
+      icon: RefreshCw,
+      title: tBackgroundSync("title"),
+      description: tBackgroundSync("panelDescription"),
     },
     {
       href: "/system/header-compensation",
@@ -213,6 +221,12 @@ export default function SettingsPage() {
               </div>
             </CardContent>
           </Card>
+
+          <div className="flex justify-center pt-1 md:hidden">
+            <p className="type-caption text-muted-foreground">
+              {tCommon("appName")} {APP_VERSION_TAG}
+            </p>
+          </div>
         </div>
       </div>
     </>
