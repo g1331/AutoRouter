@@ -1,5 +1,5 @@
 import { createClient } from "@libsql/client";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const ROOT = process.cwd();
@@ -9,6 +9,14 @@ const SQLITE_DB_PATH = process.env.SQLITE_DB_PATH || "./data/dev.sqlite";
 
 function resolveSqliteUrl(dbPath) {
   return dbPath.startsWith("file:") ? dbPath : `file:${dbPath}`;
+}
+
+function ensureSqliteDirectory(dbPath) {
+  const normalizedPath = dbPath.startsWith("file:") ? dbPath.slice("file:".length) : dbPath;
+  const directory = path.dirname(normalizedPath);
+  if (directory && directory !== ".") {
+    mkdirSync(directory, { recursive: true });
+  }
 }
 
 function readMigrationEntries() {
@@ -82,6 +90,8 @@ async function main() {
     console.log("SQLite migrations directory is missing, skipping.");
     return;
   }
+
+  ensureSqliteDirectory(SQLITE_DB_PATH);
 
   const client = createClient({
     url: resolveSqliteUrl(SQLITE_DB_PATH),
