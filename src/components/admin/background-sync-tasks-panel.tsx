@@ -200,7 +200,7 @@ export function BackgroundSyncTasksPanel() {
         </div>
 
         <div className="hidden md:block">
-          <Table className="min-w-[1120px] table-fixed" containerClassName="rounded-cf-sm">
+          <Table className="min-w-[1152px] table-fixed" containerClassName="rounded-cf-sm">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[260px]">{t("task")}</TableHead>
@@ -209,7 +209,7 @@ export function BackgroundSyncTasksPanel() {
                 <TableHead className="w-[100px]">{t("lastFinished")}</TableHead>
                 <TableHead className="w-[100px]">{t("nextRun")}</TableHead>
                 <TableHead className="w-[160px]">{t("result")}</TableHead>
-                <TableHead className="w-[120px] text-right">{t("action")}</TableHead>
+                <TableHead className="w-[152px] text-center">{t("action")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -250,7 +250,7 @@ export function BackgroundSyncTasksPanel() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="py-4 text-right">
+                  <TableCell className="px-5 py-4 text-center">
                     <Button
                       size="sm"
                       variant="outline"
