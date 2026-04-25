@@ -187,7 +187,7 @@ describe("BackgroundSyncScheduler", () => {
     await vi.runOnlyPendingTimersAsync();
 
     expect(task.run).not.toHaveBeenCalled();
-    expect(store.states.get("test_sync")?.nextRunAt).toBeNull();
+    expect(store.states.has("test_sync")).toBe(false);
   });
 
   it("clears scheduled timers when stopped", async () => {

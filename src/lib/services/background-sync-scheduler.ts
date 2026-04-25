@@ -47,7 +47,6 @@ export class BackgroundSyncScheduler {
     this.started = true;
 
     if (!config.backgroundSyncEnabled) {
-      await this.ensureDefinitionsWithoutTimers();
       log.info("background sync disabled");
       return;
     }
@@ -88,12 +87,6 @@ export class BackgroundSyncScheduler {
       throw new Error(`Unknown background sync task: ${taskName}`);
     }
     return this.executeTask(definition, "manual");
-  }
-
-  private async ensureDefinitionsWithoutTimers(): Promise<void> {
-    for (const definition of this.definitions.values()) {
-      await this.store.ensureTaskDefinition(definition, null);
-    }
   }
 
   private schedule(
