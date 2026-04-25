@@ -70,3 +70,27 @@ TBD - created by archiving change add-performance-metrics. Update Purpose after 
 - **WHEN** 单条请求的 `promptTokens + cacheReadTokens` 为 0
 - **THEN** 系统 SHALL 不计算缓存命中率，展示为空或不显示
 
+### Requirement: 已取消或已中断请求不得长期占用进行中统计
+系统 MUST 在请求已取消、已中断或被 stale reconciliation 自动收口后，立即停止将其视为进行中请求。
+
+#### Scenario: 取消请求不再计入进行中数量
+- **WHEN** 某条请求被收口为已取消或已中断终态
+- **THEN** 后续日志统计与聚合 SHALL 不再将其计入进行中数量
+
+#### Scenario: stale 收口后统计立即收敛
+- **WHEN** 某条长期未收口请求被系统自动改写为终态
+- **THEN** 后续统计查询 SHALL 反映新的终态结果
+- **AND** 不得继续把该请求保留在进行中集合中
+
+### Requirement: 成功类性能指标必须排除未完整成功的请求
+系统 MUST 在计算平均 TTFT、平均 TPS、平均响应时间等成功类性能指标时，排除已取消、已中断或未完整完成的请求。
+
+#### Scenario: 客户端取消请求不参与成功类均值
+- **WHEN** 某条请求以客户端断开、下游取消或中断终态结束
+- **THEN** 该请求 SHALL 不参与成功类性能指标的平均值计算
+
+#### Scenario: 部分流式输出不计入完整成功吞吐
+- **WHEN** 某条流式请求已经产生部分输出，但在完成前被中断
+- **THEN** 系统 SHALL 保留该请求的终态诊断信息
+- **AND** 不得将其当作一次完整成功请求纳入成功类吞吐指标
+

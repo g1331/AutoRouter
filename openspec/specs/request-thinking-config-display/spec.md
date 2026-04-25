@@ -5,7 +5,7 @@ Define how request-side thinking configuration is displayed in the admin request
 
 ## Requirements
 ### Requirement: 请求日志列表必须在模型名后显示 thinking badge
-管理端请求日志列表在日志存在显式 thinking 或 reasoning 配置时，必须在模型名后显示一个紧凑的 badge，帮助用户快速识别本次请求设置了什么等级或预算，且不得新增独立的 thinking 列。
+Admin request logs MUST show a compact thinking badge after the model name when a log contains explicit thinking or reasoning configuration, and MUST NOT add a dedicated thinking column. 管理端请求日志列表在日志存在显式 thinking 或 reasoning 配置时，必须在模型名后显示一个紧凑的 badge，帮助用户快速识别本次请求设置了什么等级或预算，且不得新增独立的 thinking 列。
 
 #### Scenario: 日志存在显式 reasoning 等级
 - **WHEN** 某条日志包含可显示的 thinking 配置
@@ -20,7 +20,7 @@ Define how request-side thinking configuration is displayed in the admin request
 - **THEN** 系统不得新增独立的 thinking 列，而必须复用现有模型单元格承载 badge
 
 ### Requirement: 请求日志详情必须将请求配置与响应 usage 分区展示
-管理端请求日志详情必须为 thinking 配置提供独立展示区域，并与 token usage、billing 和路由决策等响应侧或执行侧信息分开显示。
+Admin request log details MUST display thinking configuration in its own section, separate from response-side or execution-side information such as token usage, billing, and routing decisions. 管理端请求日志详情必须为 thinking 配置提供独立展示区域，并与 token usage、billing 和路由决策等响应侧或执行侧信息分开显示。
 
 #### Scenario: 详情页展示 OpenAI reasoning 配置
 - **WHEN** 用户展开包含 OpenAI thinking 配置的日志详情
@@ -35,7 +35,7 @@ Define how request-side thinking configuration is displayed in the admin request
 - **THEN** 界面必须显示明确的空状态文案，例如“未显式指定”，而不是显示 provider 默认值
 
 ### Requirement: 显示文案必须保留 provider 语义差异
-系统在展示 thinking 配置时，必须保留 provider 的字段语义差异，避免把预算、等级和模式混为同一种概念。
+The system MUST preserve provider-specific field semantics when displaying thinking configuration, and MUST NOT collapse budgets, levels, and modes into one concept. 系统在展示 thinking 配置时，必须保留 provider 的字段语义差异，避免把预算、等级和模式混为同一种概念。
 
 #### Scenario: Anthropic adaptive thinking 与 manual thinking 并存
 - **WHEN** 日志中存在 Anthropic `effort` 与 `thinking.budget_tokens` 两类不同配置来源

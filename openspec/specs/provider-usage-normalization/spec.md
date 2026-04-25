@@ -86,7 +86,7 @@ System MUST persist new TTL breakdown fields in request logs and expose them in 
 - **THEN** 界面必须在现有 token 细节结构内按次级层级展示，不得改变已有主信息布局
 
 ### Requirement: provider 归一化必须覆盖请求侧 thinking 配置
-系统的 provider 归一化能力除了处理响应侧 usage 外，还必须统一处理请求侧显式 thinking 或 reasoning 配置，并输出可持久化的归一化结构。
+System MUST normalize explicit request-side thinking or reasoning configuration alongside response-side usage, and produce a persistable normalized structure. 系统的 provider 归一化能力除了处理响应侧 usage 外，还必须统一处理请求侧显式 thinking 或 reasoning 配置，并输出可持久化的归一化结构。
 
 #### Scenario: 相同 provider 在流式与非流式路径上一致归一化
 - **WHEN** 同一协议的请求分别进入流式和非流式日志路径
@@ -97,7 +97,7 @@ System MUST persist new TTL breakdown fields in request logs and expose them in 
 - **THEN** 归一化结果必须同时包含 provider 标识、协议标识和来源路径，便于后续 API 和界面稳定消费
 
 ### Requirement: 系统不得从响应反推 thinking 等级
-系统必须将请求侧 thinking 配置与响应侧 usage 信号分开处理，不得根据 `reasoning_tokens`、thinking 文本块、summary 或其他响应内容反推出请求等级。
+System MUST keep request-side thinking configuration separate from response-side usage signals, and MUST NOT infer request thinking level from response content. 系统必须将请求侧 thinking 配置与响应侧 usage 信号分开处理，不得根据 `reasoning_tokens`、thinking 文本块、summary 或其他响应内容反推出请求等级。
 
 #### Scenario: 响应包含 reasoning token 但请求无显式配置
 - **WHEN** 某次响应产生了 `reasoning_tokens` 或等价的思考 usage，但请求未显式设置 thinking 配置
