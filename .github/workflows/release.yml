@@ -34,21 +34,25 @@ jobs:
         run: |
           set -euo pipefail
           PACKAGE_VERSION=$(node -p "require('./package.json').version")
-          EXPECTED_TAG="v${PACKAGE_VERSION}"
           ACTUAL_TAG="${GITHUB_REF_NAME}"
 
-          if [[ "${ACTUAL_TAG}" != "${EXPECTED_TAG}" ]]; then
-            echo "::error::Tag ${ACTUAL_TAG} does not match package.json version ${EXPECTED_TAG}"
+          if [[ ! "${ACTUAL_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta)\.[0-9]+)?$ ]]; then
+            echo "::error::Tag ${ACTUAL_TAG} must match vMAJOR.MINOR.PATCH, vMAJOR.MINOR.PATCH-alpha.N, or vMAJOR.MINOR.PATCH-beta.N"
             exit 1
           fi
 
-          git fetch origin master --depth=1
-          if ! git branch -r --contains "${GITHUB_SHA}" | grep -q "origin/master"; then
+          RELEASE_VERSION="${ACTUAL_TAG#v}"
+          RELEASE_COMMIT="$(git rev-parse "${GITHUB_SHA}^{commit}")"
+
+          git fetch origin master
+          if ! git merge-base --is-ancestor "${RELEASE_COMMIT}" origin/master; then
             echo "::error::Release tag must point to a commit contained in origin/master"
             exit 1
           fi
 
           echo "package_version=${PACKAGE_VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "release_version=${RELEASE_VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "release_commit=${RELEASE_COMMIT}" >> "${GITHUB_OUTPUT}"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
@@ -66,6 +70,7 @@ jobs:
         env:
           DB_TYPE: postgres
           NEXT_TELEMETRY_DISABLED: "1"
+          NEXT_PUBLIC_APP_VERSION: ${{ steps.validate.outputs.release_version }}
         run: pnpm build
 
       - name: Run actionlint
@@ -91,8 +96,8 @@ jobs:
           tags: |
             type=raw,value=${{ github.ref_name }}
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest
+            type=semver,pattern={{major}}.{{minor}},enable=${{ !contains(steps.validate.outputs.release_version, '-') }}
+            type=raw,value=latest,enable=${{ !contains(steps.validate.outputs.release_version, '-') }}
 
       - name: Build and push Docker image
         id: build_push
@@ -102,6 +107,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            NEXT_PUBLIC_APP_VERSION=${{ steps.validate.outputs.release_version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
@@ -126,8 +133,9 @@ jobs:
           ## Release Metadata
 
           - Tag: \`${GITHUB_REF_NAME}\`
+          - Release version: \`${{ steps.validate.outputs.release_version }}\`
           - Package version: \`${{ steps.validate.outputs.package_version }}\`
-          - Commit: \`${GITHUB_SHA}\`
+          - Commit: \`${{ steps.validate.outputs.release_commit }}\`
           - Image: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${GITHUB_REF_NAME}\`
           - Image digest: \`${{ steps.build_push.outputs.digest }}\`
 
@@ -139,8 +147,9 @@ jobs:
           cat > release-metadata.json <<EOF
           {
             "tag": "${GITHUB_REF_NAME}",
+            "releaseVersion": "${{ steps.validate.outputs.release_version }}",
             "packageVersion": "${{ steps.validate.outputs.package_version }}",
-            "commitSha": "${GITHUB_SHA}",
+            "commitSha": "${{ steps.validate.outputs.release_commit }}",
             "image": "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${GITHUB_REF_NAME}",
             "imageDigest": "${{ steps.build_push.outputs.digest }}",
             "runId": "${GITHUB_RUN_ID}",
@@ -155,6 +164,7 @@ jobs:
           body_path: release-body.md
           files: release-metadata.json
           generate_release_notes: false
+          prerelease: ${{ contains(steps.validate.outputs.release_version, '-') }}
 
       - name: Upload release metadata artifact
         uses: actions/upload-artifact@v7
@@ -171,7 +181,8 @@ jobs:
             echo "## Release Published"
             echo
             echo "- Tag: \`${GITHUB_REF_NAME}\`"
-            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Release version: \`${{ steps.validate.outputs.release_version }}\`"
+            echo "- Commit: \`${{ steps.validate.outputs.release_commit }}\`"
             echo "- Image: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${GITHUB_REF_NAME}\`"
             echo "- Digest: \`${{ steps.build_push.outputs.digest }}\`"
             echo "- Release URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${GITHUB_REF_NAME}"
