@@ -387,6 +387,7 @@ describe("upstream-crud", () => {
             mode: "anthropic_native",
             customEndpoint: null,
             enableLiteLlmFallback: true,
+            autoRefreshEnabled: false,
           },
           modelRules: [
             {

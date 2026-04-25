@@ -86,6 +86,7 @@ describe("UpstreamFormDialog", () => {
       mode: "openai_compatible",
       custom_endpoint: null,
       enable_lite_llm_fallback: false,
+      auto_refresh_enabled: false,
     },
     model_catalog: [
       { model: "gpt-4.1", source: "native" },
@@ -172,6 +173,7 @@ describe("UpstreamFormDialog", () => {
       });
 
       expect(screen.getByText("modelDiscoverySectionTitle")).toBeInTheDocument();
+      expect(screen.getByText("modelDiscoveryAutoRefresh")).toBeInTheDocument();
       expect(screen.getByText("modelRulesSectionTitle")).toBeInTheDocument();
       expect(screen.getByText("catalogSectionTitle")).toBeInTheDocument();
       expect(screen.queryByText("allowedModels")).not.toBeInTheDocument();
@@ -315,11 +317,47 @@ describe("UpstreamFormDialog", () => {
             mode: "openai_compatible",
             custom_endpoint: null,
             enable_lite_llm_fallback: false,
+            auto_refresh_enabled: false,
           },
           model_rules: null,
           circuit_breaker_config: null,
           affinity_migration: null,
         });
+      });
+    });
+
+    it("persists the background auto refresh switch in create mode", async () => {
+      mockCreateMutateAsync.mockResolvedValueOnce({});
+
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("upstreamNamePlaceholder"), {
+        target: { value: "Auto Refresh Upstream" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("baseUrlPlaceholder"), {
+        target: { value: "https://api.example.com/v1" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("apiKeyPlaceholder"), {
+        target: { value: "sk-test-key" },
+      });
+      const autoRefreshSwitch = screen
+        .getByText("modelDiscoveryAutoRefresh")
+        .closest("div")
+        ?.querySelector('[role="switch"]');
+      expect(autoRefreshSwitch).toBeTruthy();
+      fireEvent.click(autoRefreshSwitch as Element);
+      fireEvent.click(screen.getByText("create"));
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            model_discovery: expect.objectContaining({
+              auto_refresh_enabled: true,
+            }),
+          })
+        );
       });
     });
 
@@ -697,6 +735,7 @@ describe("UpstreamFormDialog", () => {
               mode: "openai_compatible",
               custom_endpoint: null,
               enable_lite_llm_fallback: false,
+              auto_refresh_enabled: false,
             },
             model_rules: [
               {
@@ -746,6 +785,7 @@ describe("UpstreamFormDialog", () => {
               mode: "openai_compatible",
               custom_endpoint: null,
               enable_lite_llm_fallback: false,
+              auto_refresh_enabled: false,
             },
             model_rules: [
               {

@@ -59,7 +59,8 @@ const configSchema = z
     }
   });
 
-export type Config = z.infer<typeof configSchema>;
+type ParsedConfig = z.infer<typeof configSchema>;
+export type Config = ParsedConfig;
 
 /**
  * Load and validate configuration from environment variables.

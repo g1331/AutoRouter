@@ -51,6 +51,7 @@ vi.mock("lucide-react", () => ({
   Wrench: () => <svg data-testid="icon-wrench" />,
   ArrowLeftRight: () => <svg data-testid="icon-arrow-left-right" />,
   Wallet: () => <svg data-testid="icon-wallet" />,
+  RefreshCw: () => <svg data-testid="icon-refresh-cw" />,
   Github: () => <svg data-testid="icon-github" />,
 }));
 
