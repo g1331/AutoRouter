@@ -660,6 +660,49 @@ export interface BillingOverviewResponse {
   latest_sync: BillingSyncResponse | null;
 }
 
+export type BackgroundSyncTaskRunStatus = "success" | "partial" | "failed" | "skipped";
+export type BackgroundSyncTaskLastStatus = BackgroundSyncTaskRunStatus | "running";
+export type BackgroundSyncTaskTriggerType = "scheduled" | "startup" | "manual";
+
+export interface BackgroundSyncTaskResponse {
+  task_name: string;
+  display_name: string;
+  enabled: boolean;
+  interval_seconds: number;
+  startup_delay_seconds: number;
+  is_running: boolean;
+  last_started_at: string | null;
+  last_finished_at: string | null;
+  last_success_at: string | null;
+  last_failed_at: string | null;
+  last_status: BackgroundSyncTaskLastStatus | null;
+  last_error: string | null;
+  last_duration_ms: number | null;
+  last_success_count: number;
+  last_failure_count: number;
+  next_run_at: string | null;
+  updated_at: string | null;
+}
+
+export interface BackgroundSyncTasksResponse {
+  background_sync_enabled: boolean;
+  items: BackgroundSyncTaskResponse[];
+  total: number;
+}
+
+export interface BackgroundSyncTaskRunResponse {
+  task_name: string;
+  trigger_type: BackgroundSyncTaskTriggerType;
+  status: BackgroundSyncTaskRunStatus | "running";
+  success_count: number;
+  failure_count: number;
+  error_summary: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_ms: number | null;
+  next_run_at: string | null;
+}
+
 export interface BillingManualOverride {
   id: string;
   model: string;
