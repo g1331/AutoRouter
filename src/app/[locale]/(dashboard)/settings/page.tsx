@@ -7,6 +7,7 @@ import {
   Github,
   LogOut,
   Moon,
+  RefreshCw,
   SlidersHorizontal,
   Wallet,
 } from "lucide-react";
@@ -30,6 +31,7 @@ export default function SettingsPage() {
   const tLang = useTranslations("language");
   const tCompensation = useTranslations("compensation");
   const tBilling = useTranslations("billing");
+  const tBackgroundSync = useTranslations("backgroundSync");
   const tRepository = useTranslations("repository");
 
   const settingsItems = [
@@ -53,6 +55,12 @@ export default function SettingsPage() {
       icon: Wallet,
       title: tBilling("title"),
       description: tBilling("managementDesc"),
+    },
+    {
+      href: "/system/background-sync",
+      icon: RefreshCw,
+      title: tBackgroundSync("title"),
+      description: tBackgroundSync("panelDescription"),
     },
     {
       href: "/system/header-compensation",
