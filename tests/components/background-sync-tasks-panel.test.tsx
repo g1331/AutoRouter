@@ -76,6 +76,8 @@ describe("BackgroundSyncTasksPanel", () => {
     expect(screen.getAllByText("successCount:2").length).toBeGreaterThan(0);
     expect(screen.getAllByText("failureCount:1").length).toBeGreaterThan(0);
     expect(screen.getAllByText("intervalShort").length).toBeGreaterThan(0);
+    expect(screen.getAllByDisplayValue("1").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/intervalDisplay_day:1/).length).toBeGreaterThan(0);
   });
 
   it("runs a task from the panel action", () => {
@@ -147,14 +149,14 @@ describe("BackgroundSyncTasksPanel", () => {
 
     render(<BackgroundSyncTasksPanel />);
 
-    fireEvent.change(screen.getAllByDisplayValue("86400")[0], {
-      target: { value: "7200" },
+    fireEvent.change(screen.getAllByDisplayValue("1")[0], {
+      target: { value: "2" },
     });
     fireEvent.click(screen.getAllByLabelText("saveConfig")[0]);
 
     expect(updateMutateMock).toHaveBeenCalledWith({
       taskName: "billing_price_catalog_sync",
-      data: { enabled: true, interval_seconds: 7200 },
+      data: { enabled: true, interval_seconds: 172800 },
     });
   });
 });

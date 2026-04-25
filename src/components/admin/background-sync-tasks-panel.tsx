@@ -7,6 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
   Table,
@@ -22,6 +29,17 @@ import {
   useUpdateBackgroundSyncTask,
 } from "@/hooks/use-background-sync";
 import type { BackgroundSyncTaskLastStatus, BackgroundSyncTaskResponse } from "@/types/api";
+
+type IntervalUnit = "second" | "minute" | "hour" | "day";
+
+const INTERVAL_SECONDS_BY_UNIT: Record<IntervalUnit, number> = {
+  second: 1,
+  minute: 60,
+  hour: 3600,
+  day: 86400,
+};
+
+const INTERVAL_UNITS: IntervalUnit[] = ["day", "hour", "minute", "second"];
 
 function getStatusVariant(
   status: BackgroundSyncTaskLastStatus | null
@@ -102,20 +120,42 @@ function getTaskDescription(
   return task.task_name;
 }
 
+function getIntervalDraft(intervalSeconds: number): { amount: string; unit: IntervalUnit } {
+  for (const unit of INTERVAL_UNITS) {
+    const unitSeconds = INTERVAL_SECONDS_BY_UNIT[unit];
+    if (intervalSeconds >= unitSeconds && intervalSeconds % unitSeconds === 0) {
+      return { amount: String(intervalSeconds / unitSeconds), unit };
+    }
+  }
+  return { amount: String(intervalSeconds), unit: "second" };
+}
+
+function formatIntervalSeconds(
+  intervalSeconds: number,
+  t: ReturnType<typeof useTranslations>
+): string {
+  const draft = getIntervalDraft(intervalSeconds);
+  return t(`intervalDisplay_${draft.unit}`, { count: Number(draft.amount) });
+}
+
 function TaskConfigControls({ task }: { task: BackgroundSyncTaskResponse }) {
   const t = useTranslations("backgroundSync");
   const updateTask = useUpdateBackgroundSyncTask();
+  const initialIntervalDraft = getIntervalDraft(task.interval_seconds);
   const [enabled, setEnabled] = useState(task.enabled);
-  const [intervalDraft, setIntervalDraft] = useState(String(task.interval_seconds));
+  const [intervalAmount, setIntervalAmount] = useState(initialIntervalDraft.amount);
+  const [intervalUnit, setIntervalUnit] = useState<IntervalUnit>(initialIntervalDraft.unit);
 
-  const intervalValue = Number(intervalDraft);
+  const intervalAmountValue = Number(intervalAmount);
+  const intervalValue = intervalAmountValue * INTERVAL_SECONDS_BY_UNIT[intervalUnit];
   const canSave =
-    Number.isInteger(intervalValue) &&
+    Number.isInteger(intervalAmountValue) &&
+    intervalAmountValue > 0 &&
     intervalValue >= 60 &&
     (enabled !== task.enabled || intervalValue !== task.interval_seconds);
 
   return (
-    <div className="flex min-w-[15.5rem] flex-wrap items-center gap-2 sm:flex-nowrap">
+    <div className="flex min-w-[17.5rem] flex-wrap items-center gap-2 sm:flex-nowrap">
       <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
         <Switch
           checked={enabled}
@@ -128,13 +168,28 @@ function TaskConfigControls({ task }: { task: BackgroundSyncTaskResponse }) {
       <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
         <span>{t("intervalShort")}</span>
         <Input
-          className="h-8 w-24 text-xs tabular-nums"
+          className="h-8 w-14 text-xs tabular-nums"
           inputMode="numeric"
-          value={intervalDraft}
-          onChange={(event) => setIntervalDraft(event.target.value)}
+          value={intervalAmount}
+          onChange={(event) => setIntervalAmount(event.target.value)}
           disabled={updateTask.isPending}
         />
       </label>
+      <Select
+        value={intervalUnit}
+        onValueChange={(value) => setIntervalUnit(value as IntervalUnit)}
+        disabled={updateTask.isPending}
+      >
+        <SelectTrigger className="h-8 w-[4.5rem] px-2 text-xs" aria-label={t("intervalUnit")}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="day">{t("intervalUnitDay")}</SelectItem>
+          <SelectItem value="hour">{t("intervalUnitHour")}</SelectItem>
+          <SelectItem value="minute">{t("intervalUnitMinute")}</SelectItem>
+          <SelectItem value="second">{t("intervalUnitSecond")}</SelectItem>
+        </SelectContent>
+      </Select>
       <Button
         size="sm"
         variant="secondary"
@@ -200,11 +255,11 @@ export function BackgroundSyncTasksPanel() {
         </div>
 
         <div className="hidden md:block">
-          <Table className="min-w-[1152px] table-fixed" containerClassName="rounded-cf-sm">
+          <Table className="min-w-[1182px] table-fixed" containerClassName="rounded-cf-sm">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[260px]">{t("task")}</TableHead>
-                <TableHead className="w-[290px]">{t("config")}</TableHead>
+                <TableHead className="w-[320px]">{t("config")}</TableHead>
                 <TableHead className="w-[90px]">{t("state")}</TableHead>
                 <TableHead className="w-[100px]">{t("lastFinished")}</TableHead>
                 <TableHead className="w-[100px]">{t("nextRun")}</TableHead>
@@ -281,7 +336,8 @@ export function BackgroundSyncTasksPanel() {
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                 <span>{t("config")}</span>
                 <span className="text-right text-foreground">
-                  {task.enabled ? t("enabled") : t("disabled")} / {task.interval_seconds}s
+                  {task.enabled ? t("enabled") : t("disabled")} /{" "}
+                  {formatIntervalSeconds(task.interval_seconds, t)}
                 </span>
                 <span>{t("lastFinished")}</span>
                 <span className="text-right text-foreground">
