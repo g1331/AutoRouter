@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { Cpu, Key, Server, Trophy } from "lucide-react";
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { Cell, Pie, PieChart, Tooltip } from "recharts";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,7 @@ const RANK_COLORS = [
 ];
 
 const PIE_COLORS = [...UPSTREAM_COLORS_DARK];
+const MINI_PIE_CHART_SIZE = 40;
 
 const RANK_LEFT_BORDERS = ["border-l-amber-500", "border-l-status-info", "border-l-status-success"];
 
@@ -91,40 +92,37 @@ function MiniPieChart({ data, label }: { data: DistributionItem[]; label: string
 
   return (
     <div className={cn(PIE_CHART_WIDTH, "flex shrink-0 items-center gap-2")}>
-      {/* Donut */}
       <div className="relative h-10 w-10 shrink-0">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={data as unknown as Record<string, unknown>[]}
-              dataKey="count"
-              nameKey="name"
-              cx="50%"
-              cy="50%"
-              innerRadius={12}
-              outerRadius={19}
-              strokeWidth={1}
-              stroke="var(--vr-surface-2)"
-            >
-              {data.map((_, i) => (
-                <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} opacity={0.85} />
-              ))}
-            </Pie>
-            <Tooltip
-              formatter={(value, name) => {
-                const numericValue = typeof value === "number" ? value : Number(value);
-                if (!Number.isFinite(numericValue) || total <= 0) return ["-", String(name ?? "")];
-                return [
-                  `${formatNumber(numericValue)} (${((numericValue / total) * 100).toFixed(1)}%)`,
-                  String(name ?? ""),
-                ];
-              }}
-              contentStyle={TOOLTIP_CONTENT_STYLE}
-              itemStyle={TOOLTIP_ITEM_STYLE}
-              labelStyle={TOOLTIP_LABEL_STYLE}
-            />
-          </PieChart>
-        </ResponsiveContainer>
+        <PieChart width={MINI_PIE_CHART_SIZE} height={MINI_PIE_CHART_SIZE}>
+          <Pie
+            data={data as unknown as Record<string, unknown>[]}
+            dataKey="count"
+            nameKey="name"
+            cx="50%"
+            cy="50%"
+            innerRadius={12}
+            outerRadius={19}
+            strokeWidth={1}
+            stroke="var(--vr-surface-2)"
+          >
+            {data.map((_, i) => (
+              <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} opacity={0.85} />
+            ))}
+          </Pie>
+          <Tooltip
+            formatter={(value, name) => {
+              const numericValue = typeof value === "number" ? value : Number(value);
+              if (!Number.isFinite(numericValue) || total <= 0) return ["-", String(name ?? "")];
+              return [
+                `${formatNumber(numericValue)} (${((numericValue / total) * 100).toFixed(1)}%)`,
+                String(name ?? ""),
+              ];
+            }}
+            contentStyle={TOOLTIP_CONTENT_STYLE}
+            itemStyle={TOOLTIP_ITEM_STYLE}
+            labelStyle={TOOLTIP_LABEL_STYLE}
+          />
+        </PieChart>
       </div>
       {/* Legend - vertical list beside the donut */}
       <div className="flex min-w-0 flex-col gap-0.5">

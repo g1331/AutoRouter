@@ -482,7 +482,7 @@ export function UsageChart({
           </div>
         </div>
 
-        <div className={chartHeightClass}>
+        <div className={cn(chartHeightClass, "w-full min-w-0")}>
           {isLoading ? (
             <UsageChartLoading loadingLabel={tCommon("loading")} />
           ) : chartData.length === 0 ? (
@@ -490,7 +490,11 @@ export function UsageChart({
               <p className="type-body-medium text-muted-foreground">{t("stats.noData")}</p>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+              initialDimension={{ width: 1, height: 280 }}
+            >
               <AreaChart data={chartData} margin={theme.spacing.margin}>
                 <defs>
                   {seriesDefinitions.map((series) => {
