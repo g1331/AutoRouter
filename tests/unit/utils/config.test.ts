@@ -23,6 +23,12 @@ describe("config utilities", () => {
       expect(config.allowKeyReveal).toBe(false);
       expect(config.debugLogHeaders).toBe(false);
       expect(config.logRetentionDays).toBe(90);
+      expect(config.backgroundSyncEnabled).toBe(false);
+      expect(config.billingPriceSyncEnabled).toBe(true);
+      expect(config.billingPriceSyncIntervalSeconds).toBe(86400);
+      expect(config.modelCatalogSyncEnabled).toBe(true);
+      expect(config.modelCatalogSyncIntervalSeconds).toBe(86400);
+      expect(config.backgroundSyncStartupDelaySeconds).toBe(60);
     });
 
     it("should parse PORT as number", async () => {
@@ -92,6 +98,39 @@ describe("config utilities", () => {
       const { config } = await import("@/lib/utils/config");
 
       expect(config.debugLogHeaders).toBe(true);
+    });
+
+    it("should default background sync to disabled outside production", async () => {
+      process.env.NODE_ENV = "development";
+      const { config } = await import("@/lib/utils/config");
+
+      expect(config.backgroundSyncEnabled).toBe(false);
+    });
+
+    it("should default background sync to enabled in production", async () => {
+      process.env.NODE_ENV = "production";
+      process.env.DATABASE_URL = "postgresql://user:pass@localhost:5432/db";
+      const { config } = await import("@/lib/utils/config");
+
+      expect(config.backgroundSyncEnabled).toBe(true);
+    });
+
+    it("should parse background sync booleans and intervals", async () => {
+      process.env.BACKGROUND_SYNC_ENABLED = "false";
+      process.env.BILLING_PRICE_SYNC_ENABLED = "0";
+      process.env.BILLING_PRICE_SYNC_INTERVAL_SECONDS = "7200";
+      process.env.MODEL_CATALOG_SYNC_ENABLED = "yes";
+      process.env.MODEL_CATALOG_SYNC_INTERVAL_SECONDS = "3600";
+      process.env.BACKGROUND_SYNC_STARTUP_DELAY_SECONDS = "15";
+
+      const { config } = await import("@/lib/utils/config");
+
+      expect(config.backgroundSyncEnabled).toBe(false);
+      expect(config.billingPriceSyncEnabled).toBe(false);
+      expect(config.billingPriceSyncIntervalSeconds).toBe(7200);
+      expect(config.modelCatalogSyncEnabled).toBe(true);
+      expect(config.modelCatalogSyncIntervalSeconds).toBe(3600);
+      expect(config.backgroundSyncStartupDelaySeconds).toBe(15);
     });
   });
 
