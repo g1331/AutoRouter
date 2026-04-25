@@ -2016,6 +2016,22 @@ export function UpstreamFormDialog({
                                     </FormItem>
                                   )}
                                 />
+
+                                <FormField
+                                  control={form.control}
+                                  name="model_discovery.auto_refresh_enabled"
+                                  render={({ field }) => (
+                                    <FormItem className="flex h-10 items-center justify-between gap-3 rounded-cf-sm border border-divider/50 bg-surface-200/35 px-3">
+                                      <FormLabel className="m-0 text-xs font-medium leading-none text-foreground">
+                                        {t("modelDiscoveryAutoRefresh")}
+                                      </FormLabel>
+                                      <Switch
+                                        checked={field.value}
+                                        onCheckedChange={field.onChange}
+                                      />
+                                    </FormItem>
+                                  )}
+                                />
                               </div>
 
                               {watchedModelDiscovery?.mode === "custom" && (

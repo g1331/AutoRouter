@@ -14,6 +14,7 @@ import {
   LogOut,
   Monitor,
   Moon,
+  RefreshCw,
   ScrollText,
   Server,
   Settings,
@@ -56,7 +57,7 @@ type NavigationItem = {
 type SystemNavigationItem = {
   href: string;
   icon: typeof LayoutDashboard;
-  labelKey: "headerCompensation" | "billing";
+  labelKey: "headerCompensation" | "billing" | "backgroundSync";
 };
 
 const navigation: NavigationItem[] = [
@@ -68,6 +69,7 @@ const navigation: NavigationItem[] = [
 
 const systemNavigation: SystemNavigationItem[] = [
   { href: "/system/billing", icon: Wallet, labelKey: "billing" },
+  { href: "/system/background-sync", icon: RefreshCw, labelKey: "backgroundSync" },
   { href: "/system/header-compensation", icon: ArrowLeftRight, labelKey: "headerCompensation" },
 ];
 

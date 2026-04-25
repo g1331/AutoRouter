@@ -64,11 +64,13 @@ import {
   useDeleteBillingTierRule,
   useUpdateBillingTierRule,
 } from "@/hooks/use-billing";
+import { useBackgroundSyncTasks } from "@/hooks/use-background-sync";
 import type {
   BillingModelPrice,
   BillingManualOverride,
   BillingTierRule,
   BillingUnresolvedModel,
+  BackgroundSyncTaskLastStatus,
 } from "@/types/api";
 
 type BillingTranslate = (key: string, values?: Record<string, string | number>) => string;
@@ -110,9 +112,22 @@ function parseOptionalPrice(raw: string): number | null | "invalid" {
 function getSyncBadgeVariant(status: string | null): "success" | "warning" | "error" | "neutral" {
   if (!status) return "neutral";
   if (status === "success") return "success";
-  if (status === "partial") return "warning";
+  if (status === "partial" || status === "running" || status === "skipped") return "warning";
   if (status === "failed") return "error";
   return "neutral";
+}
+
+function getBillingTaskStatusLabel(
+  t: BillingTranslate,
+  status: BackgroundSyncTaskLastStatus | null,
+  fallback: string
+): string {
+  if (!status) return fallback;
+  if (status === "success") return t("syncTaskSuccess");
+  if (status === "partial") return t("syncTaskPartial");
+  if (status === "failed") return t("syncTaskFailed");
+  if (status === "running") return t("syncTaskRunning");
+  return t("syncTaskSkipped");
 }
 
 function formatPriceNumber(value: number | null): string {
@@ -474,6 +489,7 @@ export default function BillingPage() {
   const overview = useBillingOverview();
   const unresolved = useBillingUnresolvedModels();
   const manualOverrides = useBillingManualOverrides();
+  const backgroundTasks = useBackgroundSyncTasks();
   const [modelPriceInput, setModelPriceInput] = useState("");
   const [modelPriceQuery, setModelPriceQuery] = useState("");
   const [modelPricePage, setModelPricePage] = useState(1);
@@ -676,13 +692,22 @@ export default function BillingPage() {
   };
 
   const latestSync = overview.data?.latest_sync ?? null;
-  const latestSyncText = latestSync
+  const priceSyncTask =
+    backgroundTasks.data?.items.find((task) => task.task_name === "billing_price_catalog_sync") ??
+    null;
+  const legacyLatestSyncText = latestSync
     ? latestSync.status === "success"
       ? t("syncSuccess", { source: latestSync.source ?? "-" })
       : latestSync.status === "partial"
         ? t("syncPartial", { source: latestSync.source ?? "-" })
         : t("syncFailed")
     : t("syncNever");
+  const latestSyncText = getBillingTaskStatusLabel(
+    t,
+    priceSyncTask?.last_status ?? null,
+    legacyLatestSyncText
+  );
+  const latestSyncFailureReason = priceSyncTask?.last_error ?? latestSync?.failure_reason ?? null;
 
   useEffect(() => {
     return () => {
@@ -1028,13 +1053,24 @@ export default function BillingPage() {
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground">{t("latestSync")}</p>
               <div className="mt-1 flex items-center gap-2">
-                <Badge variant={getSyncBadgeVariant(latestSync?.status ?? null)}>
+                <Badge
+                  variant={getSyncBadgeVariant(
+                    priceSyncTask?.last_status ?? latestSync?.status ?? null
+                  )}
+                >
                   {latestSyncText}
                 </Badge>
               </div>
-              {latestSync?.failure_reason && (
+              {priceSyncTask?.next_run_at && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {t("syncNextRun", {
+                    time: new Date(priceSyncTask.next_run_at).toLocaleString(locale),
+                  })}
+                </p>
+              )}
+              {latestSyncFailureReason && (
                 <p className="mt-2 text-xs text-status-warning">
-                  {t("syncFailureReason", { reason: latestSync.failure_reason })}
+                  {t("syncFailureReason", { reason: latestSyncFailureReason })}
                 </p>
               )}
             </CardContent>
