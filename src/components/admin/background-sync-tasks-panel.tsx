@@ -242,136 +242,134 @@ export function BackgroundSyncTasksPanel() {
   }
 
   return (
-    <Card variant="outlined" className="border-divider bg-surface-200/70">
-      <CardContent className="space-y-4 p-5 sm:p-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-amber-500">
-              <RefreshCw className="h-4 w-4" aria-hidden="true" />
-              <span className="type-label-medium">{t("panelTitle")}</span>
-            </div>
-            <p className="text-sm text-muted-foreground">{t("panelDescription")}</p>
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-amber-500">
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            <span className="type-label-medium">{t("panelTitle")}</span>
           </div>
+          <p className="text-sm text-muted-foreground">{t("panelDescription")}</p>
         </div>
+      </div>
 
-        <div className="hidden md:block">
-          <Table className="min-w-[1182px] table-fixed" containerClassName="rounded-cf-sm">
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[260px]">{t("task")}</TableHead>
-                <TableHead className="w-[320px]">{t("config")}</TableHead>
-                <TableHead className="w-[90px]">{t("state")}</TableHead>
-                <TableHead className="w-[100px]">{t("lastFinished")}</TableHead>
-                <TableHead className="w-[100px]">{t("nextRun")}</TableHead>
-                <TableHead className="w-[160px]">{t("result")}</TableHead>
-                <TableHead className="w-[152px] text-center">{t("action")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((task) => (
-                <TableRow key={task.task_name}>
-                  <TableCell className="py-4">
-                    <div className="min-w-0 space-y-1.5" title={task.task_name}>
-                      <p className="truncate text-sm font-medium leading-5 text-foreground">
-                        {getTitle(task)}
-                      </p>
-                      <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
-                        {getDescription(task)}
-                      </p>
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <TaskConfigControls
-                      key={`${task.task_name}:${task.enabled}:${task.interval_seconds}`}
-                      task={task}
-                    />
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <TaskStatusBadge status={task.last_status} />
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap py-4 tabular-nums">
-                    {formatDate(task.last_finished_at)}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap py-4 tabular-nums">
-                    {formatDate(task.next_run_at)}
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <div className="space-y-1">
-                      <TaskMetrics task={task} />
-                      {task.last_error && (
-                        <p className="max-w-md truncate text-xs text-status-warning">
-                          {task.last_error}
-                        </p>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-5 py-4 text-center">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="min-w-[6.75rem] whitespace-nowrap"
-                      disabled={runTask.isPending || task.is_running}
-                      onClick={() => runTask.mutate(task.task_name)}
-                    >
-                      <Play className="h-4 w-4 shrink-0" />
-                      {task.is_running ? t("running") : t("runNow")}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-
-        <div className="space-y-3 md:hidden">
-          {rows.map((task) => (
-            <div key={task.task_name} className="rounded-cf-sm border border-divider p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 space-y-1.5">
-                  <p className="text-sm font-medium leading-5 text-foreground">{getTitle(task)}</p>
-                  <p className="text-xs leading-5 text-muted-foreground">{getDescription(task)}</p>
-                </div>
-                <TaskStatusBadge status={task.last_status} />
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                <span>{t("config")}</span>
-                <span className="text-right text-foreground">
-                  {task.enabled ? t("enabled") : t("disabled")} /{" "}
-                  {formatIntervalSeconds(task.interval_seconds, t)}
-                </span>
-                <span>{t("lastFinished")}</span>
-                <span className="text-right text-foreground">
+      <div className="hidden md:block">
+        <Table className="min-w-[1182px] table-fixed" containerClassName="rounded-cf-sm">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[260px]">{t("task")}</TableHead>
+              <TableHead className="w-[320px]">{t("config")}</TableHead>
+              <TableHead className="w-[90px]">{t("state")}</TableHead>
+              <TableHead className="w-[100px]">{t("lastFinished")}</TableHead>
+              <TableHead className="w-[100px]">{t("nextRun")}</TableHead>
+              <TableHead className="w-[160px]">{t("result")}</TableHead>
+              <TableHead className="w-[152px] text-center">{t("action")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((task) => (
+              <TableRow key={task.task_name}>
+                <TableCell className="py-4">
+                  <div className="min-w-0 space-y-1.5" title={task.task_name}>
+                    <p className="truncate text-sm font-medium leading-5 text-foreground">
+                      {getTitle(task)}
+                    </p>
+                    <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
+                      {getDescription(task)}
+                    </p>
+                  </div>
+                </TableCell>
+                <TableCell className="py-4">
+                  <TaskConfigControls
+                    key={`${task.task_name}:${task.enabled}:${task.interval_seconds}`}
+                    task={task}
+                  />
+                </TableCell>
+                <TableCell className="py-4">
+                  <TaskStatusBadge status={task.last_status} />
+                </TableCell>
+                <TableCell className="whitespace-nowrap py-4 tabular-nums">
                   {formatDate(task.last_finished_at)}
-                </span>
-                <span>{t("nextRun")}</span>
-                <span className="text-right text-foreground">{formatDate(task.next_run_at)}</span>
+                </TableCell>
+                <TableCell className="whitespace-nowrap py-4 tabular-nums">
+                  {formatDate(task.next_run_at)}
+                </TableCell>
+                <TableCell className="py-4">
+                  <div className="space-y-1">
+                    <TaskMetrics task={task} />
+                    {task.last_error && (
+                      <p className="max-w-md truncate text-xs text-status-warning">
+                        {task.last_error}
+                      </p>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell className="px-5 py-4 text-center">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="min-w-[6.75rem] whitespace-nowrap"
+                    disabled={runTask.isPending || task.is_running}
+                    onClick={() => runTask.mutate(task.task_name)}
+                  >
+                    <Play className="h-4 w-4 shrink-0" />
+                    {task.is_running ? t("running") : t("runNow")}
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="space-y-3 md:hidden">
+        {rows.map((task) => (
+          <div key={task.task_name} className="rounded-cf-sm border border-divider p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 space-y-1.5">
+                <p className="text-sm font-medium leading-5 text-foreground">{getTitle(task)}</p>
+                <p className="text-xs leading-5 text-muted-foreground">{getDescription(task)}</p>
               </div>
-              <div className="mt-3">
-                <TaskConfigControls
-                  key={`${task.task_name}:${task.enabled}:${task.interval_seconds}`}
-                  task={task}
-                />
-              </div>
-              <div className="mt-3">
-                <TaskMetrics task={task} />
-                {task.last_error && (
-                  <p className="mt-2 text-xs text-status-warning">{task.last_error}</p>
-                )}
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="mt-3 w-full"
-                disabled={runTask.isPending || task.is_running}
-                onClick={() => runTask.mutate(task.task_name)}
-              >
-                <Play className="h-4 w-4" />
-                {task.is_running ? t("running") : t("runNow")}
-              </Button>
+              <TaskStatusBadge status={task.last_status} />
             </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+              <span>{t("config")}</span>
+              <span className="text-right text-foreground">
+                {task.enabled ? t("enabled") : t("disabled")} /{" "}
+                {formatIntervalSeconds(task.interval_seconds, t)}
+              </span>
+              <span>{t("lastFinished")}</span>
+              <span className="text-right text-foreground">
+                {formatDate(task.last_finished_at)}
+              </span>
+              <span>{t("nextRun")}</span>
+              <span className="text-right text-foreground">{formatDate(task.next_run_at)}</span>
+            </div>
+            <div className="mt-3">
+              <TaskConfigControls
+                key={`${task.task_name}:${task.enabled}:${task.interval_seconds}`}
+                task={task}
+              />
+            </div>
+            <div className="mt-3">
+              <TaskMetrics task={task} />
+              {task.last_error && (
+                <p className="mt-2 text-xs text-status-warning">{task.last_error}</p>
+              )}
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-3 w-full"
+              disabled={runTask.isPending || task.is_running}
+              onClick={() => runTask.mutate(task.task_name)}
+            >
+              <Play className="h-4 w-4" />
+              {task.is_running ? t("running") : t("runNow")}
+            </Button>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
