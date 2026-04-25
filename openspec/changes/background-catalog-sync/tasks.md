@@ -46,7 +46,7 @@
 
 ## 7. 验证与交接
 
-- [ ] 7.1 运行后台任务、价格目录、模型目录、管理端 API 和相关组件测试
-- [ ] 7.2 运行 `pnpm exec tsc --noEmit`、`pnpm lint` 和数据库一致性检查
-- [ ] 7.3 运行 OpenSpec 校验，确认 `background-catalog-sync` 的 proposal、design、specs 和 tasks 均满足要求
-- [ ] 7.4 检查差异范围，确认未修改无关功能，并按任务完成节奏提交改动
+- [x] 7.1 运行后台任务、价格目录、模型目录、管理端 API 和相关组件测试
+- [x] 7.2 运行 `pnpm exec tsc --noEmit`、`pnpm lint` 和数据库一致性检查
+- [x] 7.3 运行 OpenSpec 校验，确认 `background-catalog-sync` 的 proposal、design、specs 和 tasks 均满足要求
+- [x] 7.4 检查差异范围，确认未修改无关功能，并按任务完成节奏提交改动
