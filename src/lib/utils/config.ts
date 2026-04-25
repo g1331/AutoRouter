@@ -1,28 +1,5 @@
 import { z } from "zod";
 
-function booleanEnv(defaultValue?: boolean) {
-  return z.preprocess(
-    (value) => {
-      if (value === undefined || value === null || value === "") {
-        return defaultValue;
-      }
-      if (typeof value !== "string") {
-        return value;
-      }
-
-      const normalized = value.trim().toLowerCase();
-      if (["1", "true", "yes", "on"].includes(normalized)) {
-        return true;
-      }
-      if (["0", "false", "no", "off"].includes(normalized)) {
-        return false;
-      }
-      return value;
-    },
-    defaultValue === undefined ? z.boolean().optional() : z.boolean()
-  );
-}
-
 /**
  * Application configuration schema with validation.
  */
@@ -61,14 +38,6 @@ const configSchema = z
     healthCheckInterval: z.coerce.number().int().positive().default(30),
     healthCheckTimeout: z.coerce.number().int().positive().default(10),
 
-    // Background synchronization
-    backgroundSyncEnabled: booleanEnv(),
-    billingPriceSyncEnabled: booleanEnv(true),
-    billingPriceSyncIntervalSeconds: z.coerce.number().int().positive().default(86400),
-    modelCatalogSyncEnabled: booleanEnv(true),
-    modelCatalogSyncIntervalSeconds: z.coerce.number().int().positive().default(86400),
-    backgroundSyncStartupDelaySeconds: z.coerce.number().int().min(0).default(60),
-
     // CORS
     corsOrigins: z
       .string()
@@ -91,9 +60,7 @@ const configSchema = z
   });
 
 type ParsedConfig = z.infer<typeof configSchema>;
-export type Config = Omit<ParsedConfig, "backgroundSyncEnabled"> & {
-  backgroundSyncEnabled: boolean;
-};
+export type Config = ParsedConfig;
 
 /**
  * Load and validate configuration from environment variables.
@@ -115,12 +82,6 @@ function loadConfig(): Config {
     logRetentionDays: process.env.LOG_RETENTION_DAYS,
     healthCheckInterval: process.env.HEALTH_CHECK_INTERVAL,
     healthCheckTimeout: process.env.HEALTH_CHECK_TIMEOUT,
-    backgroundSyncEnabled: process.env.BACKGROUND_SYNC_ENABLED,
-    billingPriceSyncEnabled: process.env.BILLING_PRICE_SYNC_ENABLED,
-    billingPriceSyncIntervalSeconds: process.env.BILLING_PRICE_SYNC_INTERVAL_SECONDS,
-    modelCatalogSyncEnabled: process.env.MODEL_CATALOG_SYNC_ENABLED,
-    modelCatalogSyncIntervalSeconds: process.env.MODEL_CATALOG_SYNC_INTERVAL_SECONDS,
-    backgroundSyncStartupDelaySeconds: process.env.BACKGROUND_SYNC_STARTUP_DELAY_SECONDS,
     corsOrigins: process.env.CORS_ORIGINS,
   };
 
@@ -144,11 +105,7 @@ function loadConfig(): Config {
     );
   }
 
-  return {
-    ...result.data,
-    backgroundSyncEnabled:
-      result.data.backgroundSyncEnabled ?? result.data.environment === "production",
-  };
+  return result.data;
 }
 
 // Export singleton config instance

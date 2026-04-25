@@ -2,18 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Upstream } from "@/lib/db";
 import type { UpstreamResponse } from "@/lib/services/upstream-crud";
 
-const { mockConfig, loadActiveUpstreamsMock, refreshUpstreamCatalogMock } = vi.hoisted(() => ({
-  mockConfig: {
-    modelCatalogSyncEnabled: true,
-    modelCatalogSyncIntervalSeconds: 86_400,
-    backgroundSyncStartupDelaySeconds: 60,
-  },
+const { loadActiveUpstreamsMock, refreshUpstreamCatalogMock } = vi.hoisted(() => ({
   loadActiveUpstreamsMock: vi.fn(),
   refreshUpstreamCatalogMock: vi.fn(),
-}));
-
-vi.mock("@/lib/utils/config", () => ({
-  config: mockConfig,
 }));
 
 vi.mock("@/lib/services/upstream-service", () => ({
@@ -108,26 +99,19 @@ function createRefreshResponse(overrides: Partial<UpstreamResponse> = {}): Upstr
 describe("upstream model catalog background sync task", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockConfig.modelCatalogSyncEnabled = true;
-    mockConfig.modelCatalogSyncIntervalSeconds = 86_400;
-    mockConfig.backgroundSyncStartupDelaySeconds = 60;
   });
 
-  it("creates a definition from background sync configuration", async () => {
+  it("creates a definition with database-backed default configuration", async () => {
     const { createUpstreamModelCatalogSyncTaskDefinition } =
       await import("@/lib/services/upstream-model-catalog-background-sync");
-
-    mockConfig.modelCatalogSyncEnabled = false;
-    mockConfig.modelCatalogSyncIntervalSeconds = 3_600;
-    mockConfig.backgroundSyncStartupDelaySeconds = 20;
 
     const definition = createUpstreamModelCatalogSyncTaskDefinition();
 
     expect(definition.taskName).toBe("upstream_model_catalog_sync");
     expect(definition.displayName).toBe("Model catalog auto refresh");
-    expect(definition.enabled).toBe(false);
-    expect(definition.intervalSeconds).toBe(3_600);
-    expect(definition.startupDelaySeconds).toBe(20);
+    expect(definition.defaultEnabled).toBe(true);
+    expect(definition.defaultIntervalSeconds).toBe(86_400);
+    expect(definition.defaultStartupDelaySeconds).toBe(60);
   });
 
   it("refreshes only active upstreams with auto refresh explicitly enabled", async () => {

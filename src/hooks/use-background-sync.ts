@@ -2,7 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { useAuth } from "@/providers/auth-provider";
-import type { BackgroundSyncTaskRunResponse, BackgroundSyncTasksResponse } from "@/types/api";
+import type {
+  BackgroundSyncTaskResponse,
+  BackgroundSyncTaskRunResponse,
+  BackgroundSyncTasksResponse,
+  BackgroundSyncTaskUpdate,
+} from "@/types/api";
 
 type BackgroundSyncTranslator = (
   key: string,
@@ -50,6 +55,27 @@ export function useRunBackgroundSyncTask() {
     },
     onError: (error: Error) => {
       toast.error(formatBackgroundSyncError(t, "runError", error));
+    },
+  });
+}
+
+export function useUpdateBackgroundSyncTask() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  const t = useTranslations("backgroundSync") as BackgroundSyncTranslator;
+
+  return useMutation({
+    mutationFn: ({ taskName, data }: { taskName: string; data: BackgroundSyncTaskUpdate }) =>
+      apiClient.patch<BackgroundSyncTaskResponse>(
+        `/admin/background-sync/tasks/${encodeURIComponent(taskName)}`,
+        data
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["background-sync", "tasks"] });
+      toast.success(t("configSaved"));
+    },
+    onError: (error: Error) => {
+      toast.error(formatBackgroundSyncError(t, "configSaveError", error));
     },
   });
 }

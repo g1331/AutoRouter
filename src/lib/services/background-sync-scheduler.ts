@@ -1,10 +1,10 @@
-import { config } from "@/lib/utils/config";
 import { createLogger } from "@/lib/utils/logger";
 import { backgroundSyncTaskStore } from "./background-sync-store";
 import type {
   BackgroundSyncExecuteResult,
   BackgroundSyncTaskDefinition,
   BackgroundSyncTaskRunRecord,
+  BackgroundSyncTaskState,
   BackgroundSyncTaskStore,
   BackgroundSyncTaskTriggerType,
 } from "./background-sync-types";
@@ -27,6 +27,7 @@ function maybeUnref(timer: ReturnType<typeof setTimeout>): void {
 
 export class BackgroundSyncScheduler {
   private readonly definitions = new Map<string, BackgroundSyncTaskDefinition>();
+  private readonly taskStates = new Map<string, BackgroundSyncTaskState>();
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly running = new Map<string, Promise<BackgroundSyncExecuteResult>>();
   private started = false;
@@ -46,16 +47,14 @@ export class BackgroundSyncScheduler {
     }
     this.started = true;
 
-    if (!config.backgroundSyncEnabled) {
-      log.info("background sync disabled");
-      return;
-    }
-
     const now = new Date();
     for (const definition of this.definitions.values()) {
-      const nextRunAt = definition.enabled ? addSeconds(now, definition.startupDelaySeconds) : null;
-      await this.store.ensureTaskDefinition(definition, nextRunAt);
-      if (definition.enabled && nextRunAt) {
+      const state = await this.store.ensureTaskDefinition(definition);
+      this.taskStates.set(definition.taskName, state);
+
+      const nextRunAt = state.enabled ? addSeconds(now, state.startupDelaySeconds) : null;
+      await this.updateTaskRuntimeConfig(definition.taskName, { nextRunAt });
+      if (state.enabled && nextRunAt) {
         this.schedule(definition.taskName, nextRunAt, "startup");
       }
     }
@@ -74,7 +73,14 @@ export class BackgroundSyncScheduler {
   }
 
   async listTaskStates() {
-    return this.store.listTaskStates(this.getDefinitions(), new Set(this.running.keys()));
+    const states = await this.store.listTaskStates(
+      this.getDefinitions(),
+      new Set(this.running.keys())
+    );
+    for (const state of states) {
+      this.taskStates.set(state.taskName, state);
+    }
+    return states;
   }
 
   getDefinitions(): BackgroundSyncTaskDefinition[] {
@@ -89,20 +95,90 @@ export class BackgroundSyncScheduler {
     return this.executeTask(definition, "manual");
   }
 
+  async updateTaskConfig(
+    taskName: string,
+    input: { enabled?: boolean; intervalSeconds?: number }
+  ): Promise<BackgroundSyncTaskState> {
+    const definition = this.definitions.get(taskName);
+    if (!definition) {
+      throw new Error(`Unknown background sync task: ${taskName}`);
+    }
+
+    await this.store.ensureTaskDefinition(definition);
+    const current = await this.getTaskRuntimeConfig(definition);
+    const nextEnabled = input.enabled ?? current.enabled;
+    const nextIntervalSeconds = input.intervalSeconds ?? current.intervalSeconds;
+    const nextRunAt = nextEnabled ? addSeconds(new Date(), nextIntervalSeconds) : null;
+    const nextState = await this.updateTaskRuntimeConfig(taskName, {
+      enabled: nextEnabled,
+      intervalSeconds: nextIntervalSeconds,
+      nextRunAt,
+    });
+
+    if (nextEnabled && nextRunAt) {
+      this.schedule(taskName, nextRunAt, "scheduled");
+    } else {
+      this.clearTimer(taskName);
+    }
+
+    return { ...nextState, displayName: definition.displayName };
+  }
+
+  private clearTimer(taskName: string): void {
+    const existingTimer = this.timers.get(taskName);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      this.timers.delete(taskName);
+    }
+  }
+
+  private async getTaskRuntimeConfig(
+    definition: BackgroundSyncTaskDefinition
+  ): Promise<BackgroundSyncTaskState> {
+    const state = this.taskStates.get(definition.taskName);
+    if (state) {
+      return state;
+    }
+    const ensured = await this.store.ensureTaskDefinition(definition);
+    this.taskStates.set(definition.taskName, ensured);
+    return ensured;
+  }
+
+  private async updateTaskRuntimeConfig(
+    taskName: string,
+    input: {
+      enabled?: boolean;
+      intervalSeconds?: number;
+      startupDelaySeconds?: number;
+      nextRunAt?: Date | null;
+    }
+  ): Promise<BackgroundSyncTaskState> {
+    const updated = await this.store.updateTaskConfig(taskName, input);
+    if (!updated) {
+      throw new Error(`Unknown background sync task: ${taskName}`);
+    }
+    const definition = this.definitions.get(taskName);
+    const nextState = {
+      ...updated,
+      displayName: definition?.displayName ?? updated.displayName,
+      isRunning: this.running.has(taskName),
+    };
+    this.taskStates.set(taskName, nextState);
+    return nextState;
+  }
+
   private schedule(
     taskName: string,
     runAt: Date,
     triggerType: BackgroundSyncTaskTriggerType
   ): void {
     const definition = this.definitions.get(taskName);
-    if (!definition || !definition.enabled || !config.backgroundSyncEnabled) {
+    const state = this.taskStates.get(taskName);
+    if (!definition || !state?.enabled) {
       return;
     }
 
-    const existingTimer = this.timers.get(taskName);
-    if (existingTimer) {
-      clearTimeout(existingTimer);
-    }
+    this.clearTimer(taskName);
 
     const delayMs = Math.max(0, runAt.getTime() - Date.now());
     const timer = setTimeout(() => {
@@ -122,7 +198,8 @@ export class BackgroundSyncScheduler {
     if (runningTask) {
       if (triggerType !== "manual") {
         const skippedAt = new Date();
-        const nextRunAt = addSeconds(skippedAt, definition.intervalSeconds);
+        const state = await this.getTaskRuntimeConfig(definition);
+        const nextRunAt = state.enabled ? addSeconds(skippedAt, state.intervalSeconds) : null;
         await this.store.recordTaskRun(
           {
             taskName: definition.taskName,
@@ -137,7 +214,8 @@ export class BackgroundSyncScheduler {
           },
           nextRunAt
         );
-        if (definition.enabled && config.backgroundSyncEnabled) {
+        if (state.enabled && nextRunAt) {
+          await this.updateTaskRuntimeConfig(definition.taskName, { nextRunAt });
           this.schedule(definition.taskName, nextRunAt, "scheduled");
         }
 
@@ -191,7 +269,8 @@ export class BackgroundSyncScheduler {
     try {
       const result = await definition.run(triggerType);
       const finishedAt = new Date();
-      nextRunAt = addSeconds(finishedAt, definition.intervalSeconds);
+      const state = await this.getTaskRuntimeConfig(definition);
+      nextRunAt = state.enabled ? addSeconds(finishedAt, state.intervalSeconds) : null;
       record = {
         taskName: definition.taskName,
         triggerType,
@@ -205,7 +284,8 @@ export class BackgroundSyncScheduler {
       };
     } catch (error) {
       const finishedAt = new Date();
-      nextRunAt = addSeconds(finishedAt, definition.intervalSeconds);
+      const state = await this.getTaskRuntimeConfig(definition);
+      nextRunAt = state.enabled ? addSeconds(finishedAt, state.intervalSeconds) : null;
       record = {
         taskName: definition.taskName,
         triggerType,
@@ -220,7 +300,8 @@ export class BackgroundSyncScheduler {
     }
 
     await this.store.recordTaskRun(record, nextRunAt);
-    if (definition.enabled && config.backgroundSyncEnabled && nextRunAt) {
+    if (nextRunAt) {
+      await this.updateTaskRuntimeConfig(definition.taskName, { nextRunAt });
       this.schedule(definition.taskName, nextRunAt, "scheduled");
     }
 

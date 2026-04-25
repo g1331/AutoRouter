@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { backgroundSyncTaskRuns, backgroundSyncTasks, db } from "@/lib/db";
 import type {
+  BackgroundSyncTaskConfigUpdate,
   BackgroundSyncTaskDefinition,
   BackgroundSyncTaskLastStatus,
   BackgroundSyncTaskRunRecord,
@@ -21,31 +22,101 @@ function toLastStatus(value: string | null): BackgroundSyncTaskLastStatus | null
   return null;
 }
 
+function toTaskState(
+  definition: BackgroundSyncTaskDefinition,
+  row: typeof backgroundSyncTasks.$inferSelect | undefined,
+  isRunning = false
+): BackgroundSyncTaskState {
+  return {
+    taskName: definition.taskName,
+    displayName: definition.displayName,
+    enabled: row?.enabled ?? definition.defaultEnabled,
+    intervalSeconds: row?.intervalSeconds ?? definition.defaultIntervalSeconds,
+    startupDelaySeconds: row?.startupDelaySeconds ?? definition.defaultStartupDelaySeconds,
+    isRunning,
+    lastStartedAt: row?.lastStartedAt ?? null,
+    lastFinishedAt: row?.lastFinishedAt ?? null,
+    lastSuccessAt: row?.lastSuccessAt ?? null,
+    lastFailedAt: row?.lastFailedAt ?? null,
+    lastStatus: isRunning ? "running" : toLastStatus(row?.lastStatus ?? null),
+    lastError: row?.lastError ?? null,
+    lastDurationMs: row?.lastDurationMs ?? null,
+    lastSuccessCount: row?.lastSuccessCount ?? 0,
+    lastFailureCount: row?.lastFailureCount ?? 0,
+    nextRunAt: row?.nextRunAt ?? null,
+    updatedAt: row?.updatedAt ?? null,
+  };
+}
+
 export class DatabaseBackgroundSyncTaskStore implements BackgroundSyncTaskStore {
   async ensureTaskDefinition(
-    definition: BackgroundSyncTaskDefinition,
-    nextRunAt: Date | null
-  ): Promise<void> {
+    definition: BackgroundSyncTaskDefinition
+  ): Promise<BackgroundSyncTaskState> {
     await db
       .insert(backgroundSyncTasks)
       .values({
         taskName: definition.taskName,
-        enabled: definition.enabled,
-        intervalSeconds: definition.intervalSeconds,
-        startupDelaySeconds: definition.startupDelaySeconds,
-        nextRunAt,
+        enabled: definition.defaultEnabled,
+        intervalSeconds: definition.defaultIntervalSeconds,
+        startupDelaySeconds: definition.defaultStartupDelaySeconds,
+        nextRunAt: null,
         updatedAt: new Date(),
       })
-      .onConflictDoUpdate({
+      .onConflictDoNothing({
         target: backgroundSyncTasks.taskName,
-        set: {
-          enabled: definition.enabled,
-          intervalSeconds: definition.intervalSeconds,
-          startupDelaySeconds: definition.startupDelaySeconds,
-          nextRunAt,
-          updatedAt: new Date(),
-        },
       });
+
+    const row = await db.query.backgroundSyncTasks.findFirst({
+      where: eq(backgroundSyncTasks.taskName, definition.taskName),
+    });
+
+    return toTaskState(definition, row);
+  }
+
+  async updateTaskConfig(
+    taskName: string,
+    update: BackgroundSyncTaskConfigUpdate
+  ): Promise<BackgroundSyncTaskState | null> {
+    const updatedRows = await db
+      .update(backgroundSyncTasks)
+      .set({
+        ...(update.enabled !== undefined ? { enabled: update.enabled } : {}),
+        ...(update.intervalSeconds !== undefined
+          ? { intervalSeconds: update.intervalSeconds }
+          : {}),
+        ...(update.startupDelaySeconds !== undefined
+          ? { startupDelaySeconds: update.startupDelaySeconds }
+          : {}),
+        ...(update.nextRunAt !== undefined ? { nextRunAt: update.nextRunAt } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(backgroundSyncTasks.taskName, taskName))
+      .returning();
+
+    const row = updatedRows[0];
+    if (!row) {
+      return null;
+    }
+
+    return {
+      taskName: row.taskName,
+      displayName: row.taskName,
+      enabled: row.enabled,
+      intervalSeconds: row.intervalSeconds,
+      startupDelaySeconds: row.startupDelaySeconds,
+      isRunning: false,
+      lastStartedAt: row.lastStartedAt ?? null,
+      lastFinishedAt: row.lastFinishedAt ?? null,
+      lastSuccessAt: row.lastSuccessAt ?? null,
+      lastFailedAt: row.lastFailedAt ?? null,
+      lastStatus: toLastStatus(row.lastStatus),
+      lastError: row.lastError ?? null,
+      lastDurationMs: row.lastDurationMs ?? null,
+      lastSuccessCount: row.lastSuccessCount ?? 0,
+      lastFailureCount: row.lastFailureCount ?? 0,
+      nextRunAt: row.nextRunAt ?? null,
+      updatedAt: row.updatedAt ?? null,
+    };
   }
 
   async markTaskStarted(taskName: string, startedAt: Date): Promise<void> {
@@ -113,9 +184,9 @@ export class DatabaseBackgroundSyncTaskStore implements BackgroundSyncTaskStore 
       return {
         taskName: definition.taskName,
         displayName: definition.displayName,
-        enabled: row?.enabled ?? definition.enabled,
-        intervalSeconds: row?.intervalSeconds ?? definition.intervalSeconds,
-        startupDelaySeconds: row?.startupDelaySeconds ?? definition.startupDelaySeconds,
+        enabled: row?.enabled ?? definition.defaultEnabled,
+        intervalSeconds: row?.intervalSeconds ?? definition.defaultIntervalSeconds,
+        startupDelaySeconds: row?.startupDelaySeconds ?? definition.defaultStartupDelaySeconds,
         isRunning,
         lastStartedAt: row?.lastStartedAt ?? null,
         lastFinishedAt: row?.lastFinishedAt ?? null,

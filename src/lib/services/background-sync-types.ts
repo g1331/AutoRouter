@@ -12,9 +12,9 @@ export interface BackgroundSyncTaskRunResult {
 export interface BackgroundSyncTaskDefinition {
   taskName: string;
   displayName: string;
-  enabled: boolean;
-  intervalSeconds: number;
-  startupDelaySeconds: number;
+  defaultEnabled: boolean;
+  defaultIntervalSeconds: number;
+  defaultStartupDelaySeconds: number;
   run: (triggerType: BackgroundSyncTaskTriggerType) => Promise<BackgroundSyncTaskRunResult>;
 }
 
@@ -50,11 +50,19 @@ export interface BackgroundSyncTaskRunRecord {
   errorSummary: string | null;
 }
 
+export interface BackgroundSyncTaskConfigUpdate {
+  enabled?: boolean;
+  intervalSeconds?: number;
+  startupDelaySeconds?: number;
+  nextRunAt?: Date | null;
+}
+
 export interface BackgroundSyncTaskStore {
-  ensureTaskDefinition(
-    definition: BackgroundSyncTaskDefinition,
-    nextRunAt: Date | null
-  ): Promise<void>;
+  ensureTaskDefinition(definition: BackgroundSyncTaskDefinition): Promise<BackgroundSyncTaskState>;
+  updateTaskConfig(
+    taskName: string,
+    update: BackgroundSyncTaskConfigUpdate
+  ): Promise<BackgroundSyncTaskState | null>;
   markTaskStarted(taskName: string, startedAt: Date): Promise<void>;
   recordTaskRun(record: BackgroundSyncTaskRunRecord, nextRunAt: Date | null): Promise<void>;
   listTaskStates(

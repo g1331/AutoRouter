@@ -1,4 +1,3 @@
-import { config } from "@/lib/utils/config";
 import {
   syncBillingModelPrices,
   type BillingSyncSummary,
@@ -9,6 +8,8 @@ import type {
 } from "./background-sync-types";
 
 export const BILLING_PRICE_CATALOG_SYNC_TASK_NAME = "billing_price_catalog_sync";
+const DEFAULT_BILLING_PRICE_SYNC_INTERVAL_SECONDS = 86_400;
+const DEFAULT_BACKGROUND_SYNC_STARTUP_DELAY_SECONDS = 60;
 
 export function toBillingPriceCatalogSyncTaskResult(
   summary: BillingSyncSummary
@@ -30,9 +31,9 @@ export function createBillingPriceCatalogSyncTaskDefinition(): BackgroundSyncTas
   return {
     taskName: BILLING_PRICE_CATALOG_SYNC_TASK_NAME,
     displayName: "Price catalog sync",
-    enabled: config.billingPriceSyncEnabled ?? true,
-    intervalSeconds: config.billingPriceSyncIntervalSeconds,
-    startupDelaySeconds: config.backgroundSyncStartupDelaySeconds,
+    defaultEnabled: true,
+    defaultIntervalSeconds: DEFAULT_BILLING_PRICE_SYNC_INTERVAL_SECONDS,
+    defaultStartupDelaySeconds: DEFAULT_BACKGROUND_SYNC_STARTUP_DELAY_SECONDS,
     run: runBillingPriceCatalogSyncTask,
   };
 }

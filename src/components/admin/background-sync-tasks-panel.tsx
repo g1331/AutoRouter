@@ -1,10 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { AlertTriangle, CheckCircle2, Clock3, Loader2, Play, RefreshCw } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, Clock3, Loader2, Play, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -13,7 +16,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useBackgroundSyncTasks, useRunBackgroundSyncTask } from "@/hooks/use-background-sync";
+import {
+  useBackgroundSyncTasks,
+  useRunBackgroundSyncTask,
+  useUpdateBackgroundSyncTask,
+} from "@/hooks/use-background-sync";
 import type { BackgroundSyncTaskLastStatus, BackgroundSyncTaskResponse } from "@/types/api";
 
 function getStatusVariant(
@@ -72,6 +79,57 @@ function TaskMetrics({ task }: { task: BackgroundSyncTaskResponse }) {
   );
 }
 
+function TaskConfigControls({ task }: { task: BackgroundSyncTaskResponse }) {
+  const t = useTranslations("backgroundSync");
+  const updateTask = useUpdateBackgroundSyncTask();
+  const [enabled, setEnabled] = useState(task.enabled);
+  const [intervalDraft, setIntervalDraft] = useState(String(task.interval_seconds));
+
+  const intervalValue = Number(intervalDraft);
+  const canSave =
+    Number.isInteger(intervalValue) &&
+    intervalValue >= 60 &&
+    (enabled !== task.enabled || intervalValue !== task.interval_seconds);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Switch
+          checked={enabled}
+          onCheckedChange={setEnabled}
+          disabled={updateTask.isPending}
+          aria-label={t("enabled")}
+        />
+        <span>{enabled ? t("enabled") : t("disabled")}</span>
+      </label>
+      <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span>{t("intervalSeconds")}</span>
+        <Input
+          className="h-8 w-24 text-xs tabular-nums"
+          inputMode="numeric"
+          value={intervalDraft}
+          onChange={(event) => setIntervalDraft(event.target.value)}
+          disabled={updateTask.isPending}
+        />
+      </label>
+      <Button
+        size="sm"
+        variant="secondary"
+        disabled={!canSave || updateTask.isPending}
+        onClick={() =>
+          updateTask.mutate({
+            taskName: task.task_name,
+            data: { enabled, interval_seconds: intervalValue },
+          })
+        }
+      >
+        <Check className="h-4 w-4" />
+        {t("saveConfig")}
+      </Button>
+    </div>
+  );
+}
+
 export function BackgroundSyncTasksPanel() {
   const t = useTranslations("backgroundSync");
   const tasks = useBackgroundSyncTasks();
@@ -112,9 +170,6 @@ export function BackgroundSyncTasksPanel() {
             </div>
             <p className="text-sm text-muted-foreground">{t("panelDescription")}</p>
           </div>
-          <Badge variant={tasks.data?.background_sync_enabled ? "success" : "neutral"}>
-            {tasks.data?.background_sync_enabled ? t("globalEnabled") : t("globalDisabled")}
-          </Badge>
         </div>
 
         <div className="hidden overflow-hidden rounded-cf-sm border border-divider md:block">
@@ -122,6 +177,7 @@ export function BackgroundSyncTasksPanel() {
             <TableHeader>
               <TableRow>
                 <TableHead>{t("task")}</TableHead>
+                <TableHead>{t("config")}</TableHead>
                 <TableHead>{t("state")}</TableHead>
                 <TableHead>{t("lastFinished")}</TableHead>
                 <TableHead>{t("nextRun")}</TableHead>
@@ -137,6 +193,12 @@ export function BackgroundSyncTasksPanel() {
                       <p className="font-medium text-foreground">{task.display_name}</p>
                       <p className="font-mono text-xs text-muted-foreground">{task.task_name}</p>
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <TaskConfigControls
+                      key={`${task.task_name}:${task.enabled}:${task.interval_seconds}`}
+                      task={task}
+                    />
                   </TableCell>
                   <TableCell>
                     <TaskStatusBadge status={task.last_status} />
@@ -183,12 +245,22 @@ export function BackgroundSyncTasksPanel() {
                 <TaskStatusBadge status={task.last_status} />
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                <span>{t("config")}</span>
+                <span className="text-right text-foreground">
+                  {task.enabled ? t("enabled") : t("disabled")} / {task.interval_seconds}s
+                </span>
                 <span>{t("lastFinished")}</span>
                 <span className="text-right text-foreground">
                   {formatDate(task.last_finished_at)}
                 </span>
                 <span>{t("nextRun")}</span>
                 <span className="text-right text-foreground">{formatDate(task.next_run_at)}</span>
+              </div>
+              <div className="mt-3">
+                <TaskConfigControls
+                  key={`${task.task_name}:${task.enabled}:${task.interval_seconds}`}
+                  task={task}
+                />
               </div>
               <div className="mt-3">
                 <TaskMetrics task={task} />

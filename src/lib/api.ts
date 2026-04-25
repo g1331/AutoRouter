@@ -150,6 +150,16 @@ export function createApiClient(options: ApiClientOptions) {
       }),
 
     /**
+     * PATCH 请求
+     */
+    patch: <T>(path: string, data?: unknown, init?: Omit<RequestInit, "method">) =>
+      request<T>(path, {
+        ...init,
+        method: "PATCH",
+        body: data ? JSON.stringify(data) : undefined,
+      }),
+
+    /**
      * PUT 请求
      */
     put: <T>(path: string, data?: unknown, init?: Omit<RequestInit, "method">) =>

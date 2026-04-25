@@ -685,9 +685,13 @@ export interface BackgroundSyncTaskResponse {
 }
 
 export interface BackgroundSyncTasksResponse {
-  background_sync_enabled: boolean;
   items: BackgroundSyncTaskResponse[];
   total: number;
+}
+
+export interface BackgroundSyncTaskUpdate {
+  enabled?: boolean;
+  interval_seconds?: number;
 }
 
 export interface BackgroundSyncTaskRunResponse {

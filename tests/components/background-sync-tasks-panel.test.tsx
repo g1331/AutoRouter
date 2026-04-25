@@ -4,7 +4,9 @@ import { BackgroundSyncTasksPanel } from "@/components/admin/background-sync-tas
 
 const useBackgroundSyncTasksMock = vi.fn();
 const runMutateMock = vi.fn();
+const updateMutateMock = vi.fn();
 const useRunBackgroundSyncTaskMock = vi.fn();
+const useUpdateBackgroundSyncTaskMock = vi.fn();
 
 vi.mock("next-intl", () => ({
   useLocale: () => "en-US",
@@ -18,6 +20,7 @@ vi.mock("next-intl", () => ({
 vi.mock("@/hooks/use-background-sync", () => ({
   useBackgroundSyncTasks: () => useBackgroundSyncTasksMock(),
   useRunBackgroundSyncTask: () => useRunBackgroundSyncTaskMock(),
+  useUpdateBackgroundSyncTask: () => useUpdateBackgroundSyncTaskMock(),
 }));
 
 describe("BackgroundSyncTasksPanel", () => {
@@ -27,6 +30,10 @@ describe("BackgroundSyncTasksPanel", () => {
       mutate: runMutateMock,
       isPending: false,
     });
+    useUpdateBackgroundSyncTaskMock.mockReturnValue({
+      mutate: updateMutateMock,
+      isPending: false,
+    });
   });
 
   it("shows task status, schedule and failure summary", () => {
@@ -34,7 +41,6 @@ describe("BackgroundSyncTasksPanel", () => {
       isLoading: false,
       isError: false,
       data: {
-        background_sync_enabled: true,
         items: [
           {
             task_name: "upstream_model_catalog_sync",
@@ -63,12 +69,12 @@ describe("BackgroundSyncTasksPanel", () => {
     render(<BackgroundSyncTasksPanel />);
 
     expect(screen.getByText("panelTitle")).toBeInTheDocument();
-    expect(screen.getByText("globalEnabled")).toBeInTheDocument();
     expect(screen.getAllByText("Model catalog auto refresh").length).toBeGreaterThan(0);
     expect(screen.getAllByText("status_partial").length).toBeGreaterThan(0);
     expect(screen.getAllByText("OpenAI: HTTP 500").length).toBeGreaterThan(0);
     expect(screen.getAllByText("successCount:2").length).toBeGreaterThan(0);
     expect(screen.getAllByText("failureCount:1").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("intervalSeconds").length).toBeGreaterThan(0);
   });
 
   it("runs a task from the panel action", () => {
@@ -76,7 +82,6 @@ describe("BackgroundSyncTasksPanel", () => {
       isLoading: false,
       isError: false,
       data: {
-        background_sync_enabled: true,
         items: [
           {
             task_name: "billing_price_catalog_sync",
@@ -107,5 +112,48 @@ describe("BackgroundSyncTasksPanel", () => {
     fireEvent.click(screen.getAllByText("runNow")[0]);
 
     expect(runMutateMock).toHaveBeenCalledWith("billing_price_catalog_sync");
+  });
+
+  it("updates task scheduling config from the panel", () => {
+    useBackgroundSyncTasksMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: {
+        items: [
+          {
+            task_name: "billing_price_catalog_sync",
+            display_name: "Price catalog sync",
+            enabled: true,
+            interval_seconds: 86400,
+            startup_delay_seconds: 60,
+            is_running: false,
+            last_started_at: null,
+            last_finished_at: null,
+            last_success_at: null,
+            last_failed_at: null,
+            last_status: null,
+            last_error: null,
+            last_duration_ms: null,
+            last_success_count: 0,
+            last_failure_count: 0,
+            next_run_at: null,
+            updated_at: null,
+          },
+        ],
+        total: 1,
+      },
+    });
+
+    render(<BackgroundSyncTasksPanel />);
+
+    fireEvent.change(screen.getAllByDisplayValue("86400")[0], {
+      target: { value: "7200" },
+    });
+    fireEvent.click(screen.getAllByText("saveConfig")[0]);
+
+    expect(updateMutateMock).toHaveBeenCalledWith({
+      taskName: "billing_price_catalog_sync",
+      data: { enabled: true, interval_seconds: 7200 },
+    });
   });
 });

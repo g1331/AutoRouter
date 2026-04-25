@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getBackgroundSyncScheduler } from "@/lib/services/background-sync";
 import { errorResponse } from "@/lib/utils/api-auth";
 import { validateAdminAuth } from "@/lib/utils/auth";
-import { config } from "@/lib/utils/config";
 import { createLogger } from "@/lib/utils/logger";
 import { transformBackgroundSyncTaskStateToApi } from "@/lib/utils/api-transformers";
 
@@ -20,7 +19,6 @@ export async function GET(request: NextRequest): Promise<Response> {
   try {
     const tasks = await getBackgroundSyncScheduler().listTaskStates();
     return NextResponse.json({
-      background_sync_enabled: config.backgroundSyncEnabled,
       items: tasks.map(transformBackgroundSyncTaskStateToApi),
       total: tasks.length,
     });

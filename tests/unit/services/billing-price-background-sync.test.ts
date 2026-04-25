@@ -6,18 +6,8 @@ import type {
   BackgroundSyncTaskStore,
 } from "@/lib/services/background-sync-types";
 
-const { mockConfig, syncBillingModelPricesMock } = vi.hoisted(() => ({
-  mockConfig: {
-    backgroundSyncEnabled: true,
-    billingPriceSyncEnabled: true,
-    billingPriceSyncIntervalSeconds: 86_400,
-    backgroundSyncStartupDelaySeconds: 60,
-  },
+const { syncBillingModelPricesMock } = vi.hoisted(() => ({
   syncBillingModelPricesMock: vi.fn(),
-}));
-
-vi.mock("@/lib/utils/config", () => ({
-  config: mockConfig,
 }));
 
 vi.mock("@/lib/services/billing-price-service", () => ({
@@ -36,28 +26,55 @@ class MemoryBackgroundSyncTaskStore implements BackgroundSyncTaskStore {
   runs: BackgroundSyncTaskRunRecord[] = [];
 
   async ensureTaskDefinition(
-    definition: BackgroundSyncTaskDefinition,
-    nextRunAt: Date | null
-  ): Promise<void> {
-    this.states.set(definition.taskName, {
+    definition: BackgroundSyncTaskDefinition
+  ): Promise<BackgroundSyncTaskState> {
+    const existing = this.states.get(definition.taskName);
+    const state = {
       taskName: definition.taskName,
       displayName: definition.displayName,
-      enabled: definition.enabled,
-      intervalSeconds: definition.intervalSeconds,
-      startupDelaySeconds: definition.startupDelaySeconds,
+      enabled: existing?.enabled ?? definition.defaultEnabled,
+      intervalSeconds: existing?.intervalSeconds ?? definition.defaultIntervalSeconds,
+      startupDelaySeconds: existing?.startupDelaySeconds ?? definition.defaultStartupDelaySeconds,
       isRunning: false,
-      lastStartedAt: null,
-      lastFinishedAt: null,
-      lastSuccessAt: null,
-      lastFailedAt: null,
-      lastStatus: null,
-      lastError: null,
-      lastDurationMs: null,
-      lastSuccessCount: 0,
-      lastFailureCount: 0,
-      nextRunAt,
+      lastStartedAt: existing?.lastStartedAt ?? null,
+      lastFinishedAt: existing?.lastFinishedAt ?? null,
+      lastSuccessAt: existing?.lastSuccessAt ?? null,
+      lastFailedAt: existing?.lastFailedAt ?? null,
+      lastStatus: existing?.lastStatus ?? null,
+      lastError: existing?.lastError ?? null,
+      lastDurationMs: existing?.lastDurationMs ?? null,
+      lastSuccessCount: existing?.lastSuccessCount ?? 0,
+      lastFailureCount: existing?.lastFailureCount ?? 0,
+      nextRunAt: existing?.nextRunAt ?? null,
+      updatedAt: existing?.updatedAt ?? new Date(),
+    };
+    this.states.set(definition.taskName, state);
+    return state;
+  }
+
+  async updateTaskConfig(
+    taskName: string,
+    update: {
+      enabled?: boolean;
+      intervalSeconds?: number;
+      startupDelaySeconds?: number;
+      nextRunAt?: Date | null;
+    }
+  ): Promise<BackgroundSyncTaskState | null> {
+    const state = this.states.get(taskName);
+    if (!state) return null;
+    const nextState = {
+      ...state,
+      ...(update.enabled !== undefined ? { enabled: update.enabled } : {}),
+      ...(update.intervalSeconds !== undefined ? { intervalSeconds: update.intervalSeconds } : {}),
+      ...(update.startupDelaySeconds !== undefined
+        ? { startupDelaySeconds: update.startupDelaySeconds }
+        : {}),
+      ...(update.nextRunAt !== undefined ? { nextRunAt: update.nextRunAt } : {}),
       updatedAt: new Date(),
-    });
+    };
+    this.states.set(taskName, nextState);
+    return nextState;
   }
 
   async markTaskStarted(taskName: string, startedAt: Date): Promise<void> {
@@ -104,31 +121,23 @@ describe("billing price catalog background sync task", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-25T00:00:00.000Z"));
     vi.clearAllMocks();
-    mockConfig.backgroundSyncEnabled = true;
-    mockConfig.billingPriceSyncEnabled = true;
-    mockConfig.billingPriceSyncIntervalSeconds = 86_400;
-    mockConfig.backgroundSyncStartupDelaySeconds = 60;
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it("creates a definition from background sync configuration", async () => {
+  it("creates a definition with database-backed default configuration", async () => {
     const { createBillingPriceCatalogSyncTaskDefinition } =
       await import("@/lib/services/billing-price-background-sync");
-
-    mockConfig.billingPriceSyncEnabled = false;
-    mockConfig.billingPriceSyncIntervalSeconds = 3_600;
-    mockConfig.backgroundSyncStartupDelaySeconds = 15;
 
     const definition = createBillingPriceCatalogSyncTaskDefinition();
 
     expect(definition.taskName).toBe("billing_price_catalog_sync");
     expect(definition.displayName).toBe("Price catalog sync");
-    expect(definition.enabled).toBe(false);
-    expect(definition.intervalSeconds).toBe(3_600);
-    expect(definition.startupDelaySeconds).toBe(15);
+    expect(definition.defaultEnabled).toBe(true);
+    expect(definition.defaultIntervalSeconds).toBe(86_400);
+    expect(definition.defaultStartupDelaySeconds).toBe(60);
   });
 
   it("converts successful billing sync results into background task results", async () => {
@@ -173,12 +182,11 @@ describe("billing price catalog background sync task", () => {
     });
   });
 
-  it("executes once after the configured startup delay", async () => {
+  it("executes once after the default startup delay", async () => {
     const { BackgroundSyncScheduler } = await import("@/lib/services/background-sync-scheduler");
     const { createBillingPriceCatalogSyncTaskDefinition } =
       await import("@/lib/services/billing-price-background-sync");
 
-    mockConfig.backgroundSyncStartupDelaySeconds = 10;
     syncBillingModelPricesMock.mockResolvedValue({
       status: "success",
       source: "litellm",
@@ -194,7 +202,7 @@ describe("billing price catalog background sync task", () => {
     );
     await scheduler.start();
 
-    await vi.advanceTimersByTimeAsync(9_999);
+    await vi.advanceTimersByTimeAsync(59_999);
     expect(syncBillingModelPricesMock).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1);

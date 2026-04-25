@@ -1,4 +1,3 @@
-import { config } from "@/lib/utils/config";
 import { loadActiveUpstreams, refreshUpstreamCatalog } from "@/lib/services/upstream-service";
 import type { Upstream } from "@/lib/db";
 import {
@@ -11,6 +10,8 @@ import type {
 } from "./background-sync-types";
 
 export const UPSTREAM_MODEL_CATALOG_SYNC_TASK_NAME = "upstream_model_catalog_sync";
+const DEFAULT_MODEL_CATALOG_SYNC_INTERVAL_SECONDS = 86_400;
+const DEFAULT_BACKGROUND_SYNC_STARTUP_DELAY_SECONDS = 60;
 
 function isUpstreamEligibleForBackgroundCatalogRefresh(upstream: Upstream): boolean {
   if (!upstream.isActive || !upstream.modelDiscovery) {
@@ -82,9 +83,9 @@ export function createUpstreamModelCatalogSyncTaskDefinition(): BackgroundSyncTa
   return {
     taskName: UPSTREAM_MODEL_CATALOG_SYNC_TASK_NAME,
     displayName: "Model catalog auto refresh",
-    enabled: config.modelCatalogSyncEnabled ?? true,
-    intervalSeconds: config.modelCatalogSyncIntervalSeconds,
-    startupDelaySeconds: config.backgroundSyncStartupDelaySeconds,
+    defaultEnabled: true,
+    defaultIntervalSeconds: DEFAULT_MODEL_CATALOG_SYNC_INTERVAL_SECONDS,
+    defaultStartupDelaySeconds: DEFAULT_BACKGROUND_SYNC_STARTUP_DELAY_SECONDS,
     run: runUpstreamModelCatalogSyncTask,
   };
 }

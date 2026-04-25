@@ -6,16 +6,6 @@ import type {
   BackgroundSyncTaskStore,
 } from "@/lib/services/background-sync-types";
 
-const { mockConfig } = vi.hoisted(() => ({
-  mockConfig: {
-    backgroundSyncEnabled: true,
-  },
-}));
-
-vi.mock("@/lib/utils/config", () => ({
-  config: mockConfig,
-}));
-
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({
     info: vi.fn(),
@@ -28,16 +18,15 @@ class MemoryBackgroundSyncTaskStore implements BackgroundSyncTaskStore {
   runs: BackgroundSyncTaskRunRecord[] = [];
 
   async ensureTaskDefinition(
-    definition: BackgroundSyncTaskDefinition,
-    nextRunAt: Date | null
-  ): Promise<void> {
+    definition: BackgroundSyncTaskDefinition
+  ): Promise<BackgroundSyncTaskState> {
     const existing = this.states.get(definition.taskName);
-    this.states.set(definition.taskName, {
+    const state = {
       taskName: definition.taskName,
       displayName: definition.displayName,
-      enabled: definition.enabled,
-      intervalSeconds: definition.intervalSeconds,
-      startupDelaySeconds: definition.startupDelaySeconds,
+      enabled: existing?.enabled ?? definition.defaultEnabled,
+      intervalSeconds: existing?.intervalSeconds ?? definition.defaultIntervalSeconds,
+      startupDelaySeconds: existing?.startupDelaySeconds ?? definition.defaultStartupDelaySeconds,
       isRunning: false,
       lastStartedAt: existing?.lastStartedAt ?? null,
       lastFinishedAt: existing?.lastFinishedAt ?? null,
@@ -48,9 +37,36 @@ class MemoryBackgroundSyncTaskStore implements BackgroundSyncTaskStore {
       lastDurationMs: existing?.lastDurationMs ?? null,
       lastSuccessCount: existing?.lastSuccessCount ?? 0,
       lastFailureCount: existing?.lastFailureCount ?? 0,
-      nextRunAt,
+      nextRunAt: existing?.nextRunAt ?? null,
+      updatedAt: existing?.updatedAt ?? new Date(),
+    };
+    this.states.set(definition.taskName, state);
+    return state;
+  }
+
+  async updateTaskConfig(
+    taskName: string,
+    update: {
+      enabled?: boolean;
+      intervalSeconds?: number;
+      startupDelaySeconds?: number;
+      nextRunAt?: Date | null;
+    }
+  ): Promise<BackgroundSyncTaskState | null> {
+    const state = this.states.get(taskName);
+    if (!state) return null;
+    const nextState = {
+      ...state,
+      ...(update.enabled !== undefined ? { enabled: update.enabled } : {}),
+      ...(update.intervalSeconds !== undefined ? { intervalSeconds: update.intervalSeconds } : {}),
+      ...(update.startupDelaySeconds !== undefined
+        ? { startupDelaySeconds: update.startupDelaySeconds }
+        : {}),
+      ...(update.nextRunAt !== undefined ? { nextRunAt: update.nextRunAt } : {}),
       updatedAt: new Date(),
-    });
+    };
+    this.states.set(taskName, nextState);
+    return nextState;
   }
 
   async markTaskStarted(taskName: string, startedAt: Date): Promise<void> {
@@ -100,9 +116,9 @@ class MemoryBackgroundSyncTaskStore implements BackgroundSyncTaskStore {
         ...(state ?? {
           taskName: definition.taskName,
           displayName: definition.displayName,
-          enabled: definition.enabled,
-          intervalSeconds: definition.intervalSeconds,
-          startupDelaySeconds: definition.startupDelaySeconds,
+          enabled: definition.defaultEnabled,
+          intervalSeconds: definition.defaultIntervalSeconds,
+          startupDelaySeconds: definition.defaultStartupDelaySeconds,
           isRunning: false,
           lastStartedAt: null,
           lastFinishedAt: null,
@@ -128,9 +144,9 @@ function createTask(
   return {
     taskName: "test_sync",
     displayName: "Test Sync",
-    enabled: true,
-    intervalSeconds: 60,
-    startupDelaySeconds: 5,
+    defaultEnabled: true,
+    defaultIntervalSeconds: 60,
+    defaultStartupDelaySeconds: 5,
     run: vi.fn(async () => ({
       status: "success",
       successCount: 1,
@@ -145,7 +161,6 @@ describe("BackgroundSyncScheduler", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-25T00:00:00.000Z"));
-    mockConfig.backgroundSyncEnabled = true;
   });
 
   afterEach(() => {
@@ -176,10 +191,9 @@ describe("BackgroundSyncScheduler", () => {
     scheduler.stop();
   });
 
-  it("does not start timers when global background sync is disabled", async () => {
+  it("does not start timers when a task is disabled dynamically", async () => {
     const { BackgroundSyncScheduler } = await import("@/lib/services/background-sync-scheduler");
-    mockConfig.backgroundSyncEnabled = false;
-    const task = createTask();
+    const task = createTask({ defaultEnabled: false });
     const store = new MemoryBackgroundSyncTaskStore();
     const scheduler = new BackgroundSyncScheduler([task], store);
 
@@ -187,7 +201,34 @@ describe("BackgroundSyncScheduler", () => {
     await vi.runOnlyPendingTimersAsync();
 
     expect(task.run).not.toHaveBeenCalled();
-    expect(store.states.has("test_sync")).toBe(false);
+    expect(store.states.get("test_sync")?.enabled).toBe(false);
+    expect(store.states.get("test_sync")?.nextRunAt).toBeNull();
+  });
+
+  it("updates task config and reschedules the timer", async () => {
+    const { BackgroundSyncScheduler } = await import("@/lib/services/background-sync-scheduler");
+    const task = createTask({ defaultIntervalSeconds: 60, defaultStartupDelaySeconds: 5 });
+    const store = new MemoryBackgroundSyncTaskStore();
+    const scheduler = new BackgroundSyncScheduler([task], store);
+
+    await scheduler.start();
+    const updated = await scheduler.updateTaskConfig("test_sync", {
+      enabled: true,
+      intervalSeconds: 120,
+    });
+
+    expect(updated.intervalSeconds).toBe(120);
+    expect(store.states.get("test_sync")?.nextRunAt?.toISOString()).toBe(
+      "2026-04-25T00:02:00.000Z"
+    );
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(task.run).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(115_000);
+    expect(task.run).toHaveBeenCalledWith("scheduled");
+
+    scheduler.stop();
   });
 
   it("clears scheduled timers when stopped", async () => {
