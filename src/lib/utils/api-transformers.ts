@@ -96,6 +96,7 @@ export interface UpstreamApiResponse {
     mode: import("@/types/api").UpstreamModelDiscoveryMode;
     custom_endpoint: string | null;
     enable_lite_llm_fallback: boolean;
+    auto_refresh_enabled: boolean;
   } | null;
   model_catalog:
     | {
@@ -173,6 +174,7 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
           mode: upstream.modelDiscovery.mode,
           custom_endpoint: upstream.modelDiscovery.customEndpoint,
           enable_lite_llm_fallback: upstream.modelDiscovery.enableLiteLlmFallback,
+          auto_refresh_enabled: upstream.modelDiscovery.autoRefreshEnabled,
         }
       : null,
     model_catalog:

@@ -173,6 +173,7 @@ const modelDiscoverySchema = z.object({
   mode: z.enum(MODEL_DISCOVERY_MODE_VALUES),
   custom_endpoint: z.string(),
   enable_lite_llm_fallback: z.boolean(),
+  auto_refresh_enabled: z.boolean(),
 });
 
 const modelRuleSchema = z
@@ -422,6 +423,8 @@ function toFormModelDiscoveryValue(
     custom_endpoint: modelDiscovery?.custom_endpoint ?? inferred?.customEndpoint ?? "",
     enable_lite_llm_fallback:
       modelDiscovery?.enable_lite_llm_fallback ?? inferred?.enableLiteLlmFallback ?? false,
+    auto_refresh_enabled:
+      modelDiscovery?.auto_refresh_enabled ?? inferred?.autoRefreshEnabled ?? false,
   };
 }
 
@@ -432,6 +435,7 @@ function toApiModelDiscoveryValue(
     mode: modelDiscovery.mode,
     custom_endpoint: modelDiscovery.custom_endpoint.trim() || null,
     enable_lite_llm_fallback: modelDiscovery.enable_lite_llm_fallback,
+    auto_refresh_enabled: modelDiscovery.auto_refresh_enabled,
   };
 }
 
@@ -521,6 +525,7 @@ function buildCatalogRefreshDependencySnapshot(
           mode: values.model_discovery.mode ?? "openai_compatible",
           custom_endpoint: values.model_discovery.custom_endpoint?.trim() || "",
           enable_lite_llm_fallback: values.model_discovery.enable_lite_llm_fallback ?? false,
+          auto_refresh_enabled: values.model_discovery.auto_refresh_enabled ?? false,
         }
       : null,
     api_key_changed: Boolean(values?.api_key?.trim()),

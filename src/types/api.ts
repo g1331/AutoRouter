@@ -166,6 +166,7 @@ export interface UpstreamModelDiscoveryConfig {
   mode: UpstreamModelDiscoveryMode;
   custom_endpoint: string | null;
   enable_lite_llm_fallback: boolean;
+  auto_refresh_enabled: boolean;
 }
 
 export interface UpstreamModelCatalogEntry {

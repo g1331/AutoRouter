@@ -55,6 +55,7 @@ const modelDiscoverySchema = z.object({
   ]),
   custom_endpoint: z.string().trim().min(1).nullable().optional(),
   enable_lite_llm_fallback: z.boolean().default(false),
+  auto_refresh_enabled: z.boolean().default(false),
 });
 
 const modelCatalogEntrySchema = z.object({
@@ -210,6 +211,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
             mode: validated.model_discovery.mode,
             customEndpoint: validated.model_discovery.custom_endpoint ?? null,
             enableLiteLlmFallback: validated.model_discovery.enable_lite_llm_fallback,
+            autoRefreshEnabled: validated.model_discovery.auto_refresh_enabled,
           }
         : null;
     }

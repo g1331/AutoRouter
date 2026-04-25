@@ -315,6 +315,7 @@ describe("UpstreamFormDialog", () => {
             mode: "openai_compatible",
             custom_endpoint: null,
             enable_lite_llm_fallback: false,
+            auto_refresh_enabled: false,
           },
           model_rules: null,
           circuit_breaker_config: null,
@@ -697,6 +698,7 @@ describe("UpstreamFormDialog", () => {
               mode: "openai_compatible",
               custom_endpoint: null,
               enable_lite_llm_fallback: false,
+              auto_refresh_enabled: false,
             },
             model_rules: [
               {
@@ -746,6 +748,7 @@ describe("UpstreamFormDialog", () => {
               mode: "openai_compatible",
               custom_endpoint: null,
               enable_lite_llm_fallback: false,
+              auto_refresh_enabled: false,
             },
             model_rules: [
               {
