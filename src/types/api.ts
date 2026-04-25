@@ -143,6 +143,12 @@ export interface AffinityMigrationConfig {
   threshold: number;
 }
 
+export interface UpstreamQueuePolicy {
+  enabled: boolean;
+  timeout_ms: number;
+  max_queue_length?: number | null;
+}
+
 export type UpstreamModelDiscoveryMode =
   | "openai_compatible"
   | "anthropic_native"
@@ -184,6 +190,7 @@ export interface UpstreamCreate {
   is_default?: boolean;
   timeout?: number;
   max_concurrency?: number | null;
+  queue_policy?: UpstreamQueuePolicy | null;
   weight?: number; // Load balancing weight (default: 1)
   priority?: number; // Priority tier (default: 0, lower = higher priority)
   route_capabilities?: RouteCapability[] | null; // Path routing capability set
@@ -215,6 +222,7 @@ export interface UpstreamUpdate {
   timeout?: number;
   is_active?: boolean;
   max_concurrency?: number | null;
+  queue_policy?: UpstreamQueuePolicy | null;
   weight?: number; // Load balancing weight
   priority?: number; // Priority tier (lower = higher priority)
   route_capabilities?: RouteCapability[] | null; // Path routing capability set
@@ -248,6 +256,7 @@ export interface UpstreamResponse {
   is_active: boolean;
   current_concurrency?: number;
   max_concurrency?: number | null;
+  queue_policy?: UpstreamQueuePolicy | null;
   weight: number; // Load balancing weight
   priority: number; // Priority tier (lower = higher priority)
   health_status?: UpstreamHealthResponse | null; // Health status (populated when requested)
@@ -466,6 +475,18 @@ export interface RoutingExcluded {
   reason: ExclusionReason;
 }
 
+export type RoutingQueueStatus = "waiting" | "resumed" | "timed_out" | "aborted";
+
+export interface RoutingQueueLog {
+  status: RoutingQueueStatus;
+  upstream_id: string;
+  entered_at: string;
+  resumed_at?: string | null;
+  wait_duration_ms?: number | null;
+  timeout_ms?: number | null;
+  is_stream?: boolean | null;
+}
+
 /**
  * Complete routing decision log stored in database
  */
@@ -499,6 +520,7 @@ export interface RoutingDecisionLog {
   did_send_upstream?: boolean;
   failure_stage?: RoutingFailureStage | null;
   final_selection_reason?: RoutingSelectionReason | null;
+  queue?: RoutingQueueLog | null;
   selection_strategy: string; // lb_strategy
 }
 

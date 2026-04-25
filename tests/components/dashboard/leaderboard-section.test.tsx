@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
+import type { ReactNode } from "react";
 import { LeaderboardSection } from "@/components/dashboard/leaderboard-section";
 import type { StatsLeaderboardResponse } from "@/types/api";
 
@@ -18,6 +19,25 @@ vi.mock("lucide-react", () => ({
   ),
 }));
 
+vi.mock("recharts", () => ({
+  PieChart: ({
+    children,
+    width,
+    height,
+  }: {
+    children: ReactNode;
+    width?: number;
+    height?: number;
+  }) => (
+    <svg data-testid="mini-pie-chart" data-width={width} data-height={height}>
+      {children}
+    </svg>
+  ),
+  Pie: ({ children }: { children: ReactNode }) => <g data-testid="mini-pie">{children}</g>,
+  Cell: () => <path data-testid="mini-pie-cell" />,
+  Tooltip: () => <g data-testid="mini-pie-tooltip" />,
+}));
+
 describe("LeaderboardSection", () => {
   const mockData: StatsLeaderboardResponse = {
     api_keys: [
@@ -28,7 +48,10 @@ describe("LeaderboardSection", () => {
         request_count: 15000,
         total_tokens: 500000,
         total_cost_usd: 12.5,
-        model_distribution: [],
+        model_distribution: [
+          { name: "primary-model", count: 12000 },
+          { name: "secondary-model", count: 3000 },
+        ],
       },
       {
         id: "key-2",
@@ -172,6 +195,13 @@ describe("LeaderboardSection", () => {
       expect(screen.getByText("15.0K")).toBeInTheDocument();
       expect(screen.getByText("12.0K")).toBeInTheDocument();
       expect(screen.getByText("10.0K")).toBeInTheDocument();
+    });
+
+    it("renders distribution pie charts with fixed dimensions", () => {
+      render(<LeaderboardSection data={mockData} isLoading={false} />);
+
+      expect(screen.getByTestId("mini-pie-chart")).toHaveAttribute("data-width", "40");
+      expect(screen.getByTestId("mini-pie-chart")).toHaveAttribute("data-height", "40");
     });
 
     it("renders key prefixes as subtitles", () => {

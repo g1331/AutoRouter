@@ -97,7 +97,7 @@ describe("db:migrate:sqlite", () => {
     });
 
     expect(firstRun.status).toBe(0);
-    expect(firstRun.stdout).toContain("Applied 5 migration(s)");
+    expect(firstRun.stdout).toContain("Applied 6 migration(s)");
 
     const migrations = await queryRows<{ hash: string }>(
       dbPath,
@@ -109,6 +109,7 @@ describe("db:migrate:sqlite", () => {
       "0002_api_keys_access_mode",
       "0003_medical_rattler",
       "0004_simple_donald_blake",
+      "0005_cloudy_mesmero",
     ]);
 
     const upstreamColumns = await queryRows<{ name: string }>(
@@ -117,6 +118,7 @@ describe("db:migrate:sqlite", () => {
     );
     expect(upstreamColumns.map((row) => row.name)).toContain("model_discovery");
     expect(upstreamColumns.map((row) => row.name)).toContain("model_rules");
+    expect(upstreamColumns.map((row) => row.name)).toContain("queue_policy");
 
     const secondRun = spawnSync(process.execPath, ["scripts/db/migrate-sqlite.mjs"], {
       cwd: process.cwd(),

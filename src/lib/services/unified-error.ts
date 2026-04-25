@@ -16,6 +16,7 @@ export type UnifiedErrorCode =
   | "NO_UPSTREAMS_CONFIGURED"
   | "API_KEY_QUOTA_EXCEEDED"
   | "SERVICE_UNAVAILABLE"
+  | "QUEUE_WAIT_TIMEOUT"
   | "REQUEST_TIMEOUT"
   | "CLIENT_DISCONNECTED"
   | "STREAM_ERROR";
@@ -32,6 +33,8 @@ export type UnifiedErrorReason =
   | "API_KEY_QUOTA_EXCEEDED"
   | "NO_AUTHORIZED_UPSTREAMS"
   | "CLIENT_DISCONNECTED"
+  | "QUEUE_WAIT_TIMEOUT"
+  | "QUEUE_WAIT_ABORTED"
   | "NO_HEALTHY_CANDIDATES"
   | "CONCURRENCY_FULL"
   | "UPSTREAM_HTTP_ERROR"
@@ -69,6 +72,7 @@ const ERROR_MESSAGES: Record<UnifiedErrorCode, string> = {
   NO_UPSTREAMS_CONFIGURED: "服务暂时不可用，请稍后重试",
   API_KEY_QUOTA_EXCEEDED: "当前密钥已达到消费限额，请稍后重试",
   SERVICE_UNAVAILABLE: "服务暂时不可用，请稍后重试",
+  QUEUE_WAIT_TIMEOUT: "请求在等待可用上游槽位时超时，请稍后重试",
   REQUEST_TIMEOUT: "请求超时，请稍后重试",
   CLIENT_DISCONNECTED: "客户端已断开连接",
   STREAM_ERROR: "流式响应中断，请重试",
@@ -83,6 +87,7 @@ const ERROR_TYPES: Record<UnifiedErrorCode, UnifiedErrorType> = {
   NO_UPSTREAMS_CONFIGURED: "service_unavailable",
   API_KEY_QUOTA_EXCEEDED: "client_error",
   SERVICE_UNAVAILABLE: "service_unavailable",
+  QUEUE_WAIT_TIMEOUT: "timeout",
   REQUEST_TIMEOUT: "timeout",
   CLIENT_DISCONNECTED: "client_error",
   STREAM_ERROR: "stream_error",
@@ -97,6 +102,7 @@ const HTTP_STATUS_CODES: Record<UnifiedErrorCode, number> = {
   NO_UPSTREAMS_CONFIGURED: 503,
   API_KEY_QUOTA_EXCEEDED: 429,
   SERVICE_UNAVAILABLE: 503,
+  QUEUE_WAIT_TIMEOUT: 504,
   REQUEST_TIMEOUT: 504,
   CLIENT_DISCONNECTED: 499, // Client Closed Request (nginx convention)
   STREAM_ERROR: 502,

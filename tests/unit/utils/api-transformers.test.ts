@@ -54,6 +54,7 @@ describe("api-transformers", () => {
         isActive: true,
         currentConcurrency: 3,
         maxConcurrency: 10,
+        queuePolicy: { enabled: true, timeout_ms: 30000, max_queue_length: 20 },
         config: '{"model": "gpt-4"}',
         affinityMigration: null,
         lastUsedAt: new Date("2024-01-15T11:00:00.000Z"),
@@ -74,6 +75,7 @@ describe("api-transformers", () => {
         is_active: true,
         current_concurrency: 3,
         max_concurrency: 10,
+        queue_policy: { enabled: true, timeout_ms: 30000, max_queue_length: 20 },
         config: '{"model": "gpt-4"}',
         last_used_at: "2024-01-15T11:00:00.000Z",
         created_at: "2024-01-15T10:00:00.000Z",
@@ -111,6 +113,7 @@ describe("api-transformers", () => {
         isActive: false,
         currentConcurrency: 0,
         maxConcurrency: null,
+        queuePolicy: null,
         config: null,
         affinityMigration: null,
         lastUsedAt: null,
@@ -125,6 +128,7 @@ describe("api-transformers", () => {
       expect(result.is_active).toBe(false);
       expect(result.official_website_url).toBeNull();
       expect(result.max_concurrency).toBeNull();
+      expect(result.queue_policy).toBeNull();
       expect(result.last_used_at).toBeNull();
     });
   });
@@ -764,6 +768,61 @@ describe("api-transformers", () => {
         first_token_ms: null,
         generation_ms: null,
         gateway_processing_ms: null,
+      });
+    });
+
+    it("preserves routingDecision.queue payload in API responses", () => {
+      const log = {
+        id: "log-queue",
+        apiKeyId: "key-1",
+        upstreamId: "upstream-1",
+        upstreamName: "queued-upstream",
+        method: "POST",
+        path: "/v1/messages",
+        model: "claude-test",
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+        statusCode: 200,
+        durationMs: 450,
+        routingDurationMs: 200,
+        errorMessage: null,
+        routingType: "direct",
+        groupName: null,
+        lbStrategy: null,
+        failoverAttempts: 0,
+        failoverHistory: null,
+        routingDecision: {
+          did_send_upstream: true,
+          failure_stage: null,
+          queue: {
+            status: "resumed",
+            upstream_id: "upstream-1",
+            entered_at: "2024-01-15T10:30:00.000Z",
+            resumed_at: "2024-01-15T10:30:00.150Z",
+            wait_duration_ms: 150,
+            timeout_ms: 30000,
+            is_stream: true,
+          },
+        },
+        isStream: true,
+        createdAt: new Date("2024-01-15T10:30:00.000Z"),
+      };
+
+      const result = transformRequestLogToApi(log as never);
+
+      expect(result.routing_decision?.queue).toEqual({
+        status: "resumed",
+        upstream_id: "upstream-1",
+        entered_at: "2024-01-15T10:30:00.000Z",
+        resumed_at: "2024-01-15T10:30:00.150Z",
+        wait_duration_ms: 150,
+        timeout_ms: 30000,
+        is_stream: true,
       });
     });
 

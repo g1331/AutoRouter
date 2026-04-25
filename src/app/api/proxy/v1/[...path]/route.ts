@@ -28,10 +28,14 @@ import {
 import { calculateAndPersistRequestBillingSnapshot } from "@/lib/services/billing-cost-service";
 import {
   selectFromUpstreamCandidates,
+  decideQueuedUpstreamResume,
+  reselectQueuedUpstreamOnce,
   releaseConnection,
   AllCandidatesConcurrencyFullError,
   NoHealthyUpstreamsError,
   NoAuthorizedUpstreamsError,
+  type WaitableUpstreamCandidate,
+  type ConcurrencyExcludedCandidate,
 } from "@/lib/services/load-balancer";
 import { markHealthy, markUnhealthy } from "@/lib/services/health-checker";
 import {
@@ -39,6 +43,11 @@ import {
   recordFailure,
   CircuitBreakerOpenError,
 } from "@/lib/services/circuit-breaker";
+import {
+  upstreamQueueAdmission,
+  UpstreamQueueWaitTimeoutError,
+  UpstreamQueueWaitAbortedError,
+} from "@/lib/services/upstream-queue-admission";
 import { randomUUID } from "crypto";
 import {
   type CapabilityProvider,
@@ -79,6 +88,7 @@ import type {
   RoutingCandidate,
   RoutingExcluded,
   RoutingFailureStage,
+  RoutingQueueLog,
   RoutingSelectionReason,
 } from "@/types/api";
 import {
@@ -263,6 +273,7 @@ interface RoutingDecisionDiagnostics {
   didSendUpstream?: boolean;
   failureStage?: RoutingFailureStage | null;
   finalSelectionReason?: RoutingSelectionReason | null;
+  queue?: RoutingQueueLog | null;
 }
 
 type CandidateCircuitStateMap = Record<string, RoutingCandidate["circuit_state"]>;
@@ -355,6 +366,7 @@ function transformPathRoutingDecisionLog(
       : {}),
     ...(diagnostics?.failureStage !== undefined ? { failure_stage: diagnostics.failureStage } : {}),
     final_selection_reason: diagnostics?.finalSelectionReason ?? null,
+    ...(diagnostics?.queue !== undefined ? { queue: diagnostics.queue } : {}),
     selection_strategy: "weighted",
   };
 }
@@ -573,6 +585,7 @@ interface FailoverErrorWithHistory extends Error {
   concurrencyExcludedCandidates?: RoutingExcluded[];
   didSendUpstream?: boolean;
   headerDiff?: HeaderDiff | null;
+  queue?: RoutingQueueLog | null;
 }
 
 function attachFailoverContext<T extends Error>(
@@ -580,14 +593,30 @@ function attachFailoverContext<T extends Error>(
   failoverHistory: FailoverAttempt[],
   didSendUpstream: boolean,
   concurrencyExcludedCandidates: RoutingExcluded[] = [],
-  headerDiff: HeaderDiff | null = null
+  headerDiff: HeaderDiff | null = null,
+  queue: RoutingQueueLog | null = null
 ): T & FailoverErrorWithHistory {
   const enrichedError = error as T & FailoverErrorWithHistory;
   enrichedError.failoverHistory = [...failoverHistory];
   enrichedError.concurrencyExcludedCandidates = [...concurrencyExcludedCandidates];
   enrichedError.didSendUpstream = didSendUpstream;
   enrichedError.headerDiff = headerDiff;
+  enrichedError.queue = queue ?? enrichedError.queue ?? null;
   return enrichedError;
+}
+
+function withQueueStreamFlag(
+  queue: RoutingQueueLog | null | undefined,
+  isStream: boolean
+): RoutingQueueLog | null {
+  if (!queue) {
+    return null;
+  }
+
+  return {
+    ...queue,
+    is_stream: isStream,
+  };
 }
 
 function extractHeaderDiffFromError(error: unknown): HeaderDiff | null {
@@ -693,6 +722,14 @@ function isAllCandidatesConcurrencyFullError(error: unknown): boolean {
   return error.message.toLowerCase().includes("max concurrency");
 }
 
+function isQueueWaitTimeoutError(error: unknown): error is UpstreamQueueWaitTimeoutError {
+  return error instanceof UpstreamQueueWaitTimeoutError;
+}
+
+function isQueueWaitAbortedError(error: unknown): error is UpstreamQueueWaitAbortedError {
+  return error instanceof UpstreamQueueWaitAbortedError;
+}
+
 function isDownstreamStreamingError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
@@ -734,6 +771,12 @@ function resolveFailureReason(
 ): UnifiedErrorReason {
   if (isNoAuthorizedUpstreamsError(error)) {
     return "NO_AUTHORIZED_UPSTREAMS";
+  }
+  if (isQueueWaitTimeoutError(error)) {
+    return "QUEUE_WAIT_TIMEOUT";
+  }
+  if (isQueueWaitAbortedError(error)) {
+    return "QUEUE_WAIT_ABORTED";
   }
   if (error instanceof ClientDisconnectedError) {
     return "CLIENT_DISCONNECTED";
@@ -788,6 +831,12 @@ function getUserHint(
   }
   if (reason === "CONCURRENCY_FULL") {
     return "当前所有可选上游均已达到并发上限，请提高上游并发配置或增加可用上游后重试";
+  }
+  if (reason === "QUEUE_WAIT_TIMEOUT") {
+    return "请求已进入等待队列，但在获得可用槽位前超过等待时限，请调整队列超时或补充上游容量";
+  }
+  if (reason === "QUEUE_WAIT_ABORTED") {
+    return "调用方在等待队列期间中断了连接，请检查客户端超时配置、网络链路或重试策略";
   }
   if (reason === "API_KEY_QUOTA_EXCEEDED") {
     return "当前密钥已达到消费限额，请等待额度窗口恢复或联系管理员调整额度规则";
@@ -1089,6 +1138,7 @@ async function forwardWithFailover(
     contentLength: number;
   } | null,
   compensationHeaders: import("@/lib/services/proxy-client").CompensationHeader[],
+  onQueueStateChange?: (queue: RoutingQueueLog) => void | Promise<void>,
   config: FailoverConfig = DEFAULT_FAILOVER_CONFIG
 ): Promise<{
   result: ProxyResult;
@@ -1099,6 +1149,7 @@ async function forwardWithFailover(
   affinityHit: boolean;
   affinityMigrated: boolean;
   finalSelectionReason: RoutingSelectionReason | null;
+  queue: RoutingQueueLog | null;
 }> {
   const failedUpstreamIds: string[] = [];
   const failoverHistory: FailoverAttempt[] = [];
@@ -1108,6 +1159,7 @@ async function forwardWithFailover(
   let affinityHit = false;
   let affinityMigrated = false;
   let finalSelectionReason: RoutingSelectionReason | null = null;
+  let queueLifecycle: RoutingQueueLog | null = null;
 
   const appendConcurrencyExclusions = (
     excludedCandidates: NonNullable<
@@ -1189,8 +1241,53 @@ async function forwardWithFailover(
       }
       if (error instanceof AllCandidatesConcurrencyFullError) {
         appendConcurrencyExclusions(error.excludedCandidates);
-        lastError = error;
-        hasMoreUpstreams = false;
+        if (error.waitableCandidate) {
+          try {
+            const resumedSelection = await resumeQueuedUpstreamSelection({
+              request,
+              requestId,
+              candidateUpstreamIds,
+              failedUpstreamIds,
+              failoverHistory,
+              waitableCandidate: error.waitableCandidate,
+              onQueueStateChange,
+            });
+            appendConcurrencyExclusions(resumedSelection.concurrencyExcludedCandidates);
+            selectedUpstream = resumedSelection.selectedUpstream;
+            finalSelectionReason = resumedSelection.selectionReason;
+            queueLifecycle = resumedSelection.queue;
+          } catch (resumeError) {
+            if (resumeError instanceof AllCandidatesConcurrencyFullError) {
+              appendConcurrencyExclusions(resumeError.excludedCandidates);
+              lastError = resumeError;
+              hasMoreUpstreams = false;
+            } else if (resumeError instanceof NoHealthyUpstreamsError) {
+              lastError = resumeError;
+              hasMoreUpstreams = false;
+            } else if (resumeError instanceof ClientDisconnectedError) {
+              throw attachFailoverContext(
+                resumeError,
+                failoverHistory,
+                didSendUpstream,
+                concurrencyExcludedCandidates,
+                null,
+                (resumeError as FailoverErrorWithHistory).queue ?? null
+              );
+            } else {
+              throw attachFailoverContext(
+                resumeError instanceof Error ? resumeError : new Error(String(resumeError)),
+                failoverHistory,
+                didSendUpstream,
+                concurrencyExcludedCandidates,
+                null,
+                (resumeError as FailoverErrorWithHistory).queue ?? null
+              );
+            }
+          }
+        } else {
+          lastError = error;
+          hasMoreUpstreams = false;
+        }
       } else if (error instanceof NoHealthyUpstreamsError) {
         hasMoreUpstreams = false;
       } else {
@@ -1198,7 +1295,9 @@ async function forwardWithFailover(
           error instanceof Error ? error : new Error(String(error)),
           failoverHistory,
           didSendUpstream,
-          concurrencyExcludedCandidates
+          concurrencyExcludedCandidates,
+          null,
+          queueLifecycle
         );
       }
     }
@@ -1230,6 +1329,7 @@ async function forwardWithFailover(
     attemptCount++;
 
     let attemptUpstreamBaseUrl = selectedUpstream.baseUrl;
+    const releaseSelectedConnectionOnce = createReleaseConnectionOnce(selectedUpstream.id);
 
     try {
       // Create a new request with the buffered body
@@ -1255,7 +1355,7 @@ async function forwardWithFailover(
         const failedResponse = await captureFailedResponse(result);
         const errorType = getErrorType(null, result.statusCode);
         // Release connection and mark as unhealthy
-        releaseConnection(selectedUpstream.id);
+        releaseSelectedConnectionOnce();
         void markUnhealthy(selectedUpstream.id, `HTTP ${result.statusCode} error`);
         // Record failure in circuit breaker when this route should affect upstream reliability.
         if (shouldRecordCircuitBreakerFailure(path)) {
@@ -1282,8 +1382,6 @@ async function forwardWithFailover(
         continue;
       }
 
-      // Success! Record success in circuit breaker and update health status
-      void recordSuccess(selectedUpstream.id);
       if (affinityContext?.sessionId) {
         affinityStore.set(
           affinityContext.apiKeyId,
@@ -1296,9 +1394,10 @@ async function forwardWithFailover(
 
       // For streaming responses, we track the connection until the stream ends
       if (!result.isStream) {
-        releaseConnection(selectedUpstream.id);
+        releaseSelectedConnectionOnce();
         // Mark healthy with a reasonable latency estimate
         void markHealthy(selectedUpstream.id, 100);
+        void recordSuccess(selectedUpstream.id);
       } else {
         // For streaming, wrap the stream to release connection when done
         // and handle mid-stream errors
@@ -1306,6 +1405,7 @@ async function forwardWithFailover(
         const wrappedStream = wrapStreamWithConnectionTracking(
           originalStream,
           selectedUpstream.id,
+          releaseSelectedConnectionOnce,
           request.signal
         );
         return {
@@ -1317,6 +1417,7 @@ async function forwardWithFailover(
           affinityHit,
           affinityMigrated,
           finalSelectionReason,
+          queue: withQueueStreamFlag(queueLifecycle, result.isStream),
         };
       }
 
@@ -1329,10 +1430,11 @@ async function forwardWithFailover(
         affinityHit,
         affinityMigrated,
         finalSelectionReason,
+        queue: withQueueStreamFlag(queueLifecycle, result.isStream),
       };
     } catch (error) {
       // Release connection on error
-      releaseConnection(selectedUpstream.id);
+      releaseSelectedConnectionOnce();
       const errorHeaderDiff = extractHeaderDiffFromError(error);
 
       // Check if client disconnected
@@ -1342,7 +1444,9 @@ async function forwardWithFailover(
           new ClientDisconnectedError("Client disconnected during request"),
           failoverHistory,
           didSendUpstream,
-          concurrencyExcludedCandidates
+          concurrencyExcludedCandidates,
+          null,
+          queueLifecycle
         );
       }
 
@@ -1390,10 +1494,161 @@ async function forwardWithFailover(
         failoverHistory,
         didSendUpstream,
         concurrencyExcludedCandidates,
-        errorHeaderDiff
+        errorHeaderDiff,
+        queueLifecycle
       );
     }
   }
+}
+
+function createReleaseConnectionOnce(upstreamId: string): () => void {
+  let released = false;
+
+  return () => {
+    if (released) {
+      return;
+    }
+    released = true;
+    releaseConnection(upstreamId);
+  };
+}
+
+async function resumeQueuedUpstreamSelection(options: {
+  request: NextRequest;
+  requestId: string;
+  candidateUpstreamIds: string[];
+  failedUpstreamIds: string[];
+  failoverHistory: FailoverAttempt[];
+  waitableCandidate: WaitableUpstreamCandidate;
+  onQueueStateChange?: (queue: RoutingQueueLog) => void | Promise<void>;
+}): Promise<{
+  selectedUpstream: Upstream;
+  selectionReason: RoutingSelectionReason | null;
+  concurrencyExcludedCandidates: ConcurrencyExcludedCandidate[];
+  queue: RoutingQueueLog | null;
+}> {
+  const {
+    request,
+    requestId,
+    candidateUpstreamIds,
+    failedUpstreamIds,
+    failoverHistory,
+    waitableCandidate,
+    onQueueStateChange,
+  } = options;
+  const queuePolicy = waitableCandidate.upstream.queuePolicy;
+
+  if (!queuePolicy?.enabled) {
+    throw new AllCandidatesConcurrencyFullError([], null);
+  }
+
+  const enteredAt = new Date().toISOString();
+  const waitingQueue: RoutingQueueLog = {
+    status: "waiting",
+    upstream_id: waitableCandidate.upstream.id,
+    entered_at: enteredAt,
+    resumed_at: null,
+    wait_duration_ms: null,
+    timeout_ms: queuePolicy.timeout_ms,
+    is_stream: null,
+  };
+
+  const queued = upstreamQueueAdmission.enqueueWait({
+    upstreamId: waitableCandidate.upstream.id,
+    requestId,
+    maxQueueLength: queuePolicy.max_queue_length ?? null,
+    timeoutMs: queuePolicy.timeout_ms,
+    signal: request.signal,
+  });
+
+  if (!queued.accepted) {
+    if (queued.reason === "aborted") {
+      const abortError = new UpstreamQueueWaitAbortedError(
+        waitableCandidate.upstream.id,
+        requestId,
+        0
+      );
+      (abortError as FailoverErrorWithHistory).queue = {
+        ...waitingQueue,
+        status: "aborted",
+        wait_duration_ms: 0,
+      };
+      throw abortError;
+    }
+    throw new AllCandidatesConcurrencyFullError([], waitableCandidate);
+  }
+
+  if (onQueueStateChange) {
+    void Promise.resolve(onQueueStateChange(waitingQueue)).catch((error) =>
+      log.error(
+        { err: error, requestId, upstreamId: waitableCandidate.upstream.id },
+        "failed to persist queue waiting state"
+      )
+    );
+  }
+
+  let waitGrant: Awaited<typeof queued.waitPromise>;
+  try {
+    waitGrant = await queued.waitPromise;
+  } catch (error) {
+    if (isQueueWaitTimeoutError(error)) {
+      (error as FailoverErrorWithHistory).queue = {
+        ...waitingQueue,
+        status: "timed_out",
+        wait_duration_ms: error.waitDurationMs,
+      };
+      throw error;
+    }
+    if (isQueueWaitAbortedError(error)) {
+      (error as FailoverErrorWithHistory).queue = {
+        ...waitingQueue,
+        status: "aborted",
+        wait_duration_ms: error.waitDurationMs,
+      };
+      throw error;
+    }
+    throw error;
+  }
+
+  const excludeIds = failedUpstreamIds.length > 0 ? failedUpstreamIds : undefined;
+  const resumeDecision = await decideQueuedUpstreamResume(
+    waitableCandidate.upstream.id,
+    candidateUpstreamIds,
+    excludeIds
+  );
+
+  if (resumeDecision.action === "resume" && resumeDecision.upstream) {
+    return {
+      selectedUpstream: resumeDecision.upstream,
+      selectionReason: attachRetryReason(null, failoverHistory),
+      concurrencyExcludedCandidates: [],
+      queue: {
+        ...waitingQueue,
+        status: "resumed",
+        resumed_at: new Date().toISOString(),
+        wait_duration_ms: waitGrant.waitDurationMs,
+      },
+    };
+  }
+
+  releaseConnection(waitableCandidate.upstream.id);
+  const reselection = await reselectQueuedUpstreamOnce(
+    waitableCandidate.upstream.id,
+    candidateUpstreamIds,
+    resumeDecision.excludeIds
+  );
+
+  return {
+    selectedUpstream: reselection.upstream,
+    selectionReason: attachRetryReason(reselection.selectionReason ?? null, failoverHistory),
+    concurrencyExcludedCandidates: reselection.concurrencyExcluded ?? [],
+    queue: {
+      ...waitingQueue,
+      status: "resumed",
+      resumed_at: new Date().toISOString(),
+      wait_duration_ms: waitGrant.waitDurationMs,
+    },
+  };
 }
 
 /**
@@ -1418,20 +1673,13 @@ class ClientDisconnectedError extends Error {
 function wrapStreamWithConnectionTracking(
   stream: ReadableStream<Uint8Array>,
   upstreamId: string,
+  releaseConnectionOnce: () => void,
   abortSignal?: AbortSignal
 ): ReadableStream<Uint8Array> {
   let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   let streamCompleted = false;
   let disconnectWarnLogged = false;
-  let connectionReleased = false;
   const encoder = new TextEncoder();
-
-  const releaseConnectionOnce = () => {
-    if (!connectionReleased) {
-      releaseConnection(upstreamId);
-      connectionReleased = true;
-    }
-  };
 
   const warnDownstreamDisconnect = (message: string) => {
     if (!disconnectWarnLogged) {
@@ -2315,6 +2563,40 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     log.error({ err: e, requestId }, "failed to create in-progress request log");
   }
 
+  const persistQueueWaitingState = (queue: RoutingQueueLog) => {
+    if (!requestLogId) {
+      return;
+    }
+
+    const waitingRoutingDecisionLog = transformPathRoutingDecisionLog(
+      {
+        matchedRouteCapability,
+        routeMatchSource,
+        originalModel: model,
+        resolvedModel,
+        modelRedirectApplied,
+        capabilityCandidates,
+        finalCandidates: finalCapabilityCandidates,
+        excludedCandidates: excludedCapabilityCandidates,
+        candidateCircuitStates,
+      },
+      queue.upstream_id,
+      {
+        candidateUpstreamId: queue.upstream_id,
+        actualUpstreamId: null,
+        didSendUpstream: false,
+        failureStage: null,
+        queue: withQueueStreamFlag(queue, requestedStream),
+      }
+    );
+
+    return updateRequestLog(requestLogId, {
+      routingDecision: waitingRoutingDecisionLog,
+      isStream: requestedStream,
+      thinkingConfig,
+    }).then(() => undefined);
+  };
+
   // Forward request to upstream
   let compensationHeaders: import("@/lib/services/proxy-client").CompensationHeader[] = [];
   try {
@@ -2348,7 +2630,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         requestId,
         candidateUpstreamIds,
         affinityContext,
-        compensationHeaders
+        compensationHeaders,
+        persistQueueWaitingState
       );
     } catch (error) {
       if (
@@ -2401,7 +2684,8 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           requestId,
           candidateUpstreamIds,
           affinityContext,
-          compensationHeaders
+          compensationHeaders,
+          persistQueueWaitingState
         );
       } else {
         throw error;
@@ -2416,6 +2700,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       affinityHit: afHit,
       affinityMigrated: afMigrated,
       finalSelectionReason,
+      queue: queueLifecycle,
     } = proxySelection;
     const result: ProxyResult = proxyResult;
     const upstreamForLogging: Upstream = selected;
@@ -2473,6 +2758,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         didSendUpstream: true,
         failureStage: null,
         finalSelectionReason,
+        queue: withQueueStreamFlag(queueLifecycle, result.isStream),
       }
     );
 
@@ -2999,17 +3285,23 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     const attributionFailoverAttempt = didSendUpstream
       ? (lastSentFailoverAttempt ?? lastFailoverAttempt)
       : lastFailoverAttempt;
+    const queueLifecycle = withQueueStreamFlag(
+      (error as FailoverErrorWithHistory | null)?.queue ?? null,
+      requestedStream
+    );
 
     // Determine error code for unified response
     let errorCode: UnifiedErrorCode = "SERVICE_UNAVAILABLE";
     if (isNoAuthorizedUpstreamsError(error)) {
       errorCode = "NO_AUTHORIZED_UPSTREAMS";
+    } else if (isQueueWaitTimeoutError(error)) {
+      errorCode = "QUEUE_WAIT_TIMEOUT";
     } else if (
       error instanceof NoHealthyUpstreamsError ||
       error instanceof CircuitBreakerOpenError
     ) {
       errorCode = "ALL_UPSTREAMS_UNAVAILABLE";
-    } else if (error instanceof ClientDisconnectedError) {
+    } else if (error instanceof ClientDisconnectedError || isQueueWaitAbortedError(error)) {
       errorCode = "CLIENT_DISCONNECTED";
     } else if (error instanceof Error && error.message.includes("timed out")) {
       errorCode = "REQUEST_TIMEOUT";
@@ -3070,6 +3362,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         didSendUpstream,
         failureStage,
         finalSelectionReason: attributionFailoverAttempt?.selection_reason ?? null,
+        queue: queueLifecycle,
       }
     );
 

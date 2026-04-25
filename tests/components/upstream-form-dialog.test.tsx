@@ -109,6 +109,7 @@ describe("UpstreamFormDialog", () => {
     affinity_migration: null,
     billing_input_multiplier: 1,
     billing_output_multiplier: 1,
+    queue_policy: null,
     spending_rules: null,
     current_concurrency: 0,
     max_concurrency: null,
@@ -307,6 +308,7 @@ describe("UpstreamFormDialog", () => {
           weight: 1,
           billing_input_multiplier: 1,
           billing_output_multiplier: 1,
+          queue_policy: null,
           spending_rules: null,
           route_capabilities: [],
           model_discovery: {
@@ -995,7 +997,7 @@ describe("UpstreamFormDialog", () => {
         .getByText("billingOutputMultiplier")
         .parentElement?.querySelector("input") as HTMLInputElement;
 
-      fireEvent.click(screen.getAllByRole("switch")[1]);
+      fireEvent.click(screen.getByRole("switch", { name: "affinityMigrationEnabled" }));
       const affinityThresholdInput = screen.getByPlaceholderText("50000") as HTMLInputElement;
 
       fireEvent.change(priorityInput, { target: { value: "30" } });
@@ -1302,7 +1304,120 @@ describe("UpstreamFormDialog", () => {
       });
 
       const callArgs = mockCreateMutateAsync.mock.calls[0][0];
+      expect(callArgs.queue_policy).toBeNull();
       expect(callArgs.spending_rules).toEqual([{ period_type: "daily", limit: 50 }]);
+    });
+
+    it("preserves existing queue policy on edit submit", async () => {
+      mockUpdateMutateAsync.mockResolvedValue({});
+
+      render(
+        <UpstreamFormDialog
+          open={true}
+          onOpenChange={mockOnOpenChange}
+          upstream={{
+            ...mockUpstream,
+            queue_policy: {
+              enabled: true,
+              timeout_ms: 45000,
+              max_queue_length: 8,
+            },
+          }}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      fireEvent.change(screen.getByPlaceholderText("upstreamNamePlaceholder"), {
+        target: { value: "OpenAI Production Updated" },
+      });
+
+      fireEvent.click(screen.getByText("save"));
+
+      await waitFor(() => {
+        expect(mockUpdateMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id: "upstream-1",
+            data: expect.objectContaining({
+              name: "OpenAI Production Updated",
+              queue_policy: {
+                enabled: true,
+                timeout_ms: 45000,
+                max_queue_length: 8,
+              },
+            }),
+          })
+        );
+      });
+    });
+
+    it("reveals queue policy fields and submits queue settings in create mode", async () => {
+      mockCreateMutateAsync.mockResolvedValue({});
+
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("upstreamNamePlaceholder"), {
+        target: { value: "Queued Upstream" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("baseUrlPlaceholder"), {
+        target: { value: "https://api.example.com/v1" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("apiKeyPlaceholder"), {
+        target: { value: "sk-queued-key" },
+      });
+
+      expect(
+        screen.queryByPlaceholderText("queuePolicyTimeoutPlaceholder")
+      ).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("switch", { name: "queuePolicyEnabled" }));
+
+      fireEvent.change(screen.getByPlaceholderText("queuePolicyTimeoutPlaceholder"), {
+        target: { value: "45000" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("queuePolicyMaxQueueLengthPlaceholder"), {
+        target: { value: "8" },
+      });
+
+      fireEvent.click(screen.getByText("create"));
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            queue_policy: {
+              enabled: true,
+              timeout_ms: 45000,
+              max_queue_length: 8,
+            },
+          })
+        );
+      });
+    });
+
+    it("rehydrates queue policy fields in edit mode", () => {
+      render(
+        <UpstreamFormDialog
+          open={true}
+          onOpenChange={mockOnOpenChange}
+          upstream={{
+            ...mockUpstream,
+            queue_policy: {
+              enabled: true,
+              timeout_ms: 45000,
+              max_queue_length: 8,
+            },
+          }}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      expect(screen.getByRole("switch", { name: "queuePolicyEnabled" })).toHaveAttribute(
+        "data-state",
+        "checked"
+      );
+      expect(screen.getByDisplayValue("45000")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("8")).toBeInTheDocument();
     });
 
     it("shows localized error when spending limit is not greater than zero", async () => {

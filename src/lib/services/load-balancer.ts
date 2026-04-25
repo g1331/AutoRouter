@@ -17,6 +17,7 @@ import {
 import { getPrimaryProviderByCapabilities } from "@/lib/route-capabilities";
 import type { RoutingSelectionReason } from "@/types/api";
 import { quotaTracker } from "./upstream-quota-tracker";
+import { upstreamQueueAdmission } from "./upstream-queue-admission";
 
 // Re-export for convenience
 export { VALID_PROVIDER_TYPES };
@@ -47,11 +48,16 @@ export class NoAuthorizedUpstreamsError extends NoHealthyUpstreamsError {
  */
 export class AllCandidatesConcurrencyFullError extends NoHealthyUpstreamsError {
   excludedCandidates: ConcurrencyExcludedCandidate[];
+  waitableCandidate: WaitableUpstreamCandidate | null;
 
-  constructor(excludedCandidates: ConcurrencyExcludedCandidate[]) {
+  constructor(
+    excludedCandidates: ConcurrencyExcludedCandidate[],
+    waitableCandidate: WaitableUpstreamCandidate | null = null
+  ) {
     super("All candidate upstreams reached max concurrency");
     this.name = "AllCandidatesConcurrencyFullError";
     this.excludedCandidates = excludedCandidates;
+    this.waitableCandidate = waitableCandidate;
   }
 }
 
@@ -98,11 +104,37 @@ export interface SelectFromProviderOptions {
   affinityScope?: AffinityScope;
 }
 
+export interface ResumeQueuedUpstreamDecision {
+  action: "resume" | "reselect_once";
+  reason:
+    | "bound_available"
+    | "bound_excluded"
+    | "bound_missing"
+    | "bound_over_quota"
+    | "bound_unavailable";
+  upstream: Upstream | null;
+  excludeIds: string[];
+}
+
 export interface ConcurrencyExcludedCandidate {
   upstreamId: string;
   upstreamName: string;
   upstreamBaseUrl: string;
   upstreamProviderType: ProviderType | null;
+  tier: number;
+  currentConcurrency: number;
+  maxConcurrency: number;
+}
+
+export interface WaitableUpstreamCandidate {
+  upstream: Upstream;
+  tier: number;
+  currentConcurrency: number;
+  maxConcurrency: number;
+}
+
+interface WaitableUpstreamEntry {
+  entry: UpstreamWithCircuitBreaker;
   tier: number;
   currentConcurrency: number;
   maxConcurrency: number;
@@ -150,43 +182,42 @@ function createSelectionReason(options: {
 /**
  * Active connection counts per upstream.
  */
-const connectionCounts = new Map<string, number>();
-
 /**
  * Get current active connections for an upstream.
  */
 export function getConnectionCount(upstreamId: string): number {
-  return connectionCounts.get(upstreamId) ?? 0;
+  return upstreamQueueAdmission.getActiveCount(upstreamId);
 }
 
 /**
  * Get a shallow snapshot of current active connections keyed by upstream ID.
  */
 export function getConnectionCountsSnapshot(): Record<string, number> {
-  return Object.fromEntries(connectionCounts.entries());
+  return upstreamQueueAdmission.getActiveCountsSnapshot();
 }
 
 /**
  * Record a new connection to an upstream (increment counter).
  */
 export function recordConnection(upstreamId: string): void {
-  const current = connectionCounts.get(upstreamId) ?? 0;
-  connectionCounts.set(upstreamId, current + 1);
+  upstreamQueueAdmission.tryReserveImmediate({
+    upstreamId,
+    maxConcurrency: null,
+  });
 }
 
 /**
  * Release a connection from an upstream (decrement counter).
  */
 export function releaseConnection(upstreamId: string): void {
-  const current = connectionCounts.get(upstreamId) ?? 0;
-  connectionCounts.set(upstreamId, Math.max(0, current - 1));
+  upstreamQueueAdmission.releaseReservation(upstreamId);
 }
 
 /**
  * Reset all connection counts (useful for testing).
  */
 export function resetConnectionCounts(): void {
-  connectionCounts.clear();
+  upstreamQueueAdmission.reset();
 }
 
 /**
@@ -341,6 +372,52 @@ function toConcurrencyExcludedCandidate(
   };
 }
 
+function toWaitableUpstreamEntry(
+  entry: UpstreamWithCircuitBreaker,
+  tier: number,
+  currentConcurrency: number,
+  maxConcurrency: number
+): WaitableUpstreamEntry | null {
+  if (entry.upstream.queuePolicy?.enabled !== true) {
+    return null;
+  }
+
+  return {
+    entry,
+    tier,
+    currentConcurrency,
+    maxConcurrency,
+  };
+}
+
+function selectWaitableUpstreamCandidate(
+  candidates: WaitableUpstreamEntry[]
+): WaitableUpstreamCandidate | null {
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const highestPriorityTier = Math.min(...candidates.map((candidate) => candidate.tier));
+  const tierCandidates = candidates.filter((candidate) => candidate.tier === highestPriorityTier);
+  const selected = selectWeightedWithHealthScore(
+    tierCandidates.map((candidate) => candidate.entry)
+  );
+  const selectedCandidate =
+    tierCandidates.find((candidate) => candidate.entry.upstream.id === selected.upstream.id) ??
+    null;
+
+  if (!selectedCandidate) {
+    return null;
+  }
+
+  return {
+    upstream: selectedCandidate.entry.upstream,
+    tier: selectedCandidate.tier,
+    currentConcurrency: selectedCandidate.currentConcurrency,
+    maxConcurrency: selectedCandidate.maxConcurrency,
+  };
+}
+
 function tryReserveConnectionSlot(upstream: Upstream): {
   reserved: boolean;
   current: number;
@@ -350,7 +427,10 @@ function tryReserveConnectionSlot(upstream: Upstream): {
   const max = upstream.maxConcurrency;
 
   if (max === null || max === undefined || max <= 0) {
-    connectionCounts.set(upstream.id, current + 1);
+    upstreamQueueAdmission.tryReserveImmediate({
+      upstreamId: upstream.id,
+      maxConcurrency: null,
+    });
     return { reserved: true, current, max: null };
   }
 
@@ -358,7 +438,10 @@ function tryReserveConnectionSlot(upstream: Upstream): {
     return { reserved: false, current, max };
   }
 
-  connectionCounts.set(upstream.id, current + 1);
+  upstreamQueueAdmission.tryReserveImmediate({
+    upstreamId: upstream.id,
+    maxConcurrency: max,
+  });
   return { reserved: true, current, max };
 }
 
@@ -609,6 +692,69 @@ export async function selectFromUpstreamCandidates(
   );
 }
 
+export async function decideQueuedUpstreamResume(
+  boundUpstreamId: string,
+  candidateUpstreamIds: string[],
+  excludeIds?: string[]
+): Promise<ResumeQueuedUpstreamDecision> {
+  const nextExcludeIds = Array.from(new Set([...(excludeIds ?? []), boundUpstreamId]));
+  const allUpstreams = await getUpstreamsByIds(candidateUpstreamIds);
+  const boundUpstream =
+    allUpstreams.find((candidate) => candidate.upstream.id === boundUpstreamId) ?? null;
+
+  if (!boundUpstream) {
+    return {
+      action: "reselect_once",
+      reason: "bound_missing",
+      upstream: null,
+      excludeIds: nextExcludeIds,
+    };
+  }
+
+  if (excludeIds?.includes(boundUpstreamId)) {
+    return {
+      action: "reselect_once",
+      reason: "bound_excluded",
+      upstream: null,
+      excludeIds: nextExcludeIds,
+    };
+  }
+
+  if (!isUpstreamAvailable(boundUpstream)) {
+    return {
+      action: "reselect_once",
+      reason: "bound_unavailable",
+      upstream: null,
+      excludeIds: nextExcludeIds,
+    };
+  }
+
+  if (!quotaTracker.isWithinQuota(boundUpstreamId)) {
+    return {
+      action: "reselect_once",
+      reason: "bound_over_quota",
+      upstream: null,
+      excludeIds: nextExcludeIds,
+    };
+  }
+
+  return {
+    action: "resume",
+    reason: "bound_available",
+    upstream: boundUpstream.upstream,
+    excludeIds: excludeIds ?? [],
+  };
+}
+
+export async function reselectQueuedUpstreamOnce(
+  boundUpstreamId: string,
+  candidateUpstreamIds: string[],
+  excludeIds?: string[]
+): Promise<UpstreamSelectionResult> {
+  const nextExcludeIds = Array.from(new Set([...(excludeIds ?? []), boundUpstreamId]));
+  return selectFromUpstreamCandidates(candidateUpstreamIds, nextExcludeIds);
+}
+
 async function selectFromUpstreamPool(
   allUpstreams: UpstreamWithCircuitBreaker[],
   excludeIds?: string[],
@@ -851,6 +997,7 @@ async function performTieredSelection(
   let totalConcurrencyFiltered = 0;
   let concurrencyScreenedCandidates = 0;
   const concurrencyExcluded: ConcurrencyExcludedCandidate[] = [];
+  const waitableCandidates: WaitableUpstreamEntry[] = [];
   let didResyncQuota = false;
 
   // Try each tier in priority order
@@ -886,6 +1033,22 @@ async function performTieredSelection(
     totalConcurrencyFiltered += afterConcurrency.excludedCount;
     if (afterConcurrency.excluded.length > 0) {
       concurrencyExcluded.push(...afterConcurrency.excluded);
+    }
+    for (const entry of afterExclusions.allowed) {
+      const concurrency = isConcurrencyFull(entry.upstream);
+      if (!concurrency.full || concurrency.max === null) {
+        continue;
+      }
+
+      const waitableEntry = toWaitableUpstreamEntry(
+        entry,
+        tier,
+        concurrency.current,
+        concurrency.max
+      );
+      if (waitableEntry) {
+        waitableCandidates.push(waitableEntry);
+      }
     }
 
     if (afterConcurrency.allowed.length > 0) {
@@ -962,7 +1125,10 @@ async function performTieredSelection(
     totalConcurrencyFiltered > 0 &&
     totalConcurrencyFiltered === concurrencyScreenedCandidates
   ) {
-    throw new AllCandidatesConcurrencyFullError(concurrencyExcluded);
+    throw new AllCandidatesConcurrencyFullError(
+      concurrencyExcluded,
+      selectWaitableUpstreamCandidate(waitableCandidates)
+    );
   }
 
   // All tiers exhausted

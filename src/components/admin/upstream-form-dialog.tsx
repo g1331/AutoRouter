@@ -79,6 +79,7 @@ import {
 import type {
   RouteCapability,
   Upstream,
+  UpstreamQueuePolicy,
   UpstreamModelCatalogEntry,
   UpstreamModelCatalogSource,
   UpstreamModelCatalogStatus,
@@ -134,7 +135,20 @@ const spendingRuleSchema = z.object({
   period_hours: z.number().int().min(1).max(8760).nullable(),
 });
 
+const queuePolicyFormSchema = z.object({
+  enabled: z.boolean(),
+  timeout_ms: z.preprocess(
+    (value) => coerceNumericInput(value, undefined),
+    z.number().int().positive()
+  ),
+  max_queue_length: z.preprocess(
+    (value) => coerceNumericInput(value, null),
+    z.number().int().positive().nullable()
+  ),
+});
+
 const ROLLING_DEFAULT_PERIOD_HOURS = 24;
+const DEFAULT_QUEUE_POLICY_TIMEOUT_MS = 30000;
 const MODEL_DISCOVERY_MODE_VALUES = [
   "openai_compatible",
   "anthropic_native",
@@ -208,6 +222,23 @@ function normalizeUpstreamFormValuesForDirtyCheck(
     weight: coerceNumericInput(values.weight, undefined),
     billing_input_multiplier: coerceNumericInput(values.billing_input_multiplier, undefined),
     billing_output_multiplier: coerceNumericInput(values.billing_output_multiplier, undefined),
+    queue_policy: values.queue_policy
+      ? values.queue_policy.enabled
+        ? {
+            ...values.queue_policy,
+            timeout_ms: coerceNumericInput(values.queue_policy.timeout_ms, undefined),
+            max_queue_length: coerceNumericInput(values.queue_policy.max_queue_length, null),
+          }
+        : {
+            enabled: false,
+            timeout_ms: DEFAULT_QUEUE_POLICY_TIMEOUT_MS,
+            max_queue_length: null,
+          }
+      : {
+          enabled: false,
+          timeout_ms: DEFAULT_QUEUE_POLICY_TIMEOUT_MS,
+          max_queue_length: null,
+        },
     spending_rules: values.spending_rules?.map((rule) =>
       rule
         ? {
@@ -273,6 +304,7 @@ const createUpstreamFormSchema = z
       (value) => coerceNumericInput(value, undefined),
       z.number().min(0).max(100)
     ),
+    queue_policy: queuePolicyFormSchema,
     spending_rules: z.array(spendingRuleSchema),
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
     model_discovery: modelDiscoverySchema,
@@ -314,6 +346,7 @@ const editUpstreamFormSchema = z
       (value) => coerceNumericInput(value, undefined),
       z.number().min(0).max(100)
     ),
+    queue_policy: queuePolicyFormSchema,
     spending_rules: z.array(spendingRuleSchema),
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
     model_discovery: modelDiscoverySchema,
@@ -333,6 +366,30 @@ const editUpstreamFormSchema = z
 type UpstreamFormValues = z.input<typeof editUpstreamFormSchema>;
 type UpstreamFormData = z.output<typeof editUpstreamFormSchema>;
 type CatalogSourceFilter = "all" | UpstreamModelCatalogSource;
+
+function buildQueuePolicyFormValue(
+  queuePolicy: Upstream["queue_policy"] | null | undefined
+): UpstreamFormValues["queue_policy"] {
+  return {
+    enabled: queuePolicy?.enabled ?? false,
+    timeout_ms: queuePolicy?.timeout_ms ?? DEFAULT_QUEUE_POLICY_TIMEOUT_MS,
+    max_queue_length: queuePolicy?.max_queue_length ?? null,
+  };
+}
+
+function normalizeQueuePolicyForSubmit(
+  queuePolicy: UpstreamFormData["queue_policy"]
+): UpstreamQueuePolicy | null {
+  if (!queuePolicy.enabled) {
+    return null;
+  }
+
+  return {
+    enabled: true,
+    timeout_ms: queuePolicy.timeout_ms,
+    max_queue_length: queuePolicy.max_queue_length ?? null,
+  };
+}
 
 interface CatalogWorkspaceState {
   modelCatalog: UpstreamModelCatalogEntry[];
@@ -428,6 +485,7 @@ function buildUpstreamFormDefaults(upstream?: Upstream | null): UpstreamFormValu
     weight: upstream?.weight ?? 1,
     billing_input_multiplier: upstream?.billing_input_multiplier ?? 1,
     billing_output_multiplier: upstream?.billing_output_multiplier ?? 1,
+    queue_policy: buildQueuePolicyFormValue(upstream?.queue_policy ?? null),
     spending_rules: (upstream?.spending_rules ?? []).map((rule) => ({
       period_type: rule.period_type as "daily" | "monthly" | "rolling",
       limit: rule.limit,
@@ -765,6 +823,10 @@ export function UpstreamFormDialog({
     control: form.control,
     name: "affinity_migration",
   });
+  const queuePolicy = useWatch({
+    control: form.control,
+    name: "queue_policy",
+  });
 
   // Field array for spending rules
   const {
@@ -809,6 +871,12 @@ export function UpstreamFormDialog({
     control: form.control,
     name: "model_rules",
   });
+  const queuePolicyTimeoutMs =
+    typeof queuePolicy?.timeout_ms === "number"
+      ? queuePolicy.timeout_ms
+      : DEFAULT_QUEUE_POLICY_TIMEOUT_MS;
+  const queuePolicyMaxQueueLength =
+    typeof queuePolicy?.max_queue_length === "number" ? queuePolicy.max_queue_length : null;
   const endpointPreview = useMemo(
     () => resolveEndpointPreview(watchedBaseUrl ?? "", watchedRouteCapabilities),
     [watchedBaseUrl, watchedRouteCapabilities]
@@ -878,7 +946,7 @@ export function UpstreamFormDialog({
       },
       {
         id: "advanced-capacity-control",
-        label: t("maxConcurrency"),
+        label: t("capacityAndQueue"),
         icon: Gauge,
         category: "configCategoryReliability",
       },
@@ -1221,6 +1289,7 @@ export function UpstreamFormDialog({
         ? data.official_website_url.trim()
         : null;
       const maxConcurrency = data.max_concurrency ?? null;
+      const queuePolicy = normalizeQueuePolicyForSubmit(data.queue_policy);
       if (isEdit) {
         // Only include api_key when provided
         const updateData: {
@@ -1230,6 +1299,7 @@ export function UpstreamFormDialog({
           api_key?: string;
           description: string | null;
           max_concurrency?: number | null;
+          queue_policy?: UpstreamQueuePolicy | null;
           priority?: number;
           weight?: number;
           billing_input_multiplier?: number;
@@ -1276,6 +1346,9 @@ export function UpstreamFormDialog({
         if (maxConcurrency !== null || upstream.max_concurrency != null) {
           updateData.max_concurrency = maxConcurrency;
         }
+        if (queuePolicy !== null || upstream.queue_policy != null) {
+          updateData.queue_policy = queuePolicy;
+        }
         if (data.api_key) {
           updateData.api_key = data.api_key;
         }
@@ -1290,6 +1363,7 @@ export function UpstreamFormDialog({
           api_key: string;
           official_website_url?: string | null;
           max_concurrency?: number | null;
+          queue_policy: UpstreamQueuePolicy | null;
           description: string | null;
           priority: number;
           weight: number;
@@ -1325,6 +1399,7 @@ export function UpstreamFormDialog({
           weight: data.weight,
           billing_input_multiplier: data.billing_input_multiplier,
           billing_output_multiplier: data.billing_output_multiplier,
+          queue_policy: queuePolicy,
           spending_rules: spendingRulesToApi(data.spending_rules),
           route_capabilities: data.route_capabilities,
           model_discovery: toApiModelDiscoveryValue(data.model_discovery),
@@ -2671,30 +2746,149 @@ export function UpstreamFormDialog({
                       id="advanced-capacity-control"
                       className={getSectionClassName("advanced-capacity-control")}
                     >
-                      <FormField
-                        control={form.control}
-                        name="max_concurrency"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{t("maxConcurrency")}</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                min={1}
-                                step={1}
-                                placeholder={t("maxConcurrencyPlaceholder")}
-                                value={field.value ?? ""}
-                                onChange={(e) => {
-                                  const rawValue = e.target.value.trim();
-                                  field.onChange(rawValue === "" ? null : Number(rawValue));
-                                }}
-                              />
-                            </FormControl>
-                            <FormDescription>{t("maxConcurrencyDesc")}</FormDescription>
-                            <FormMessage />
-                          </FormItem>
+                      <div className="space-y-4">
+                        <FormField
+                          control={form.control}
+                          name="max_concurrency"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{t("maxConcurrency")}</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  step={1}
+                                  placeholder={t("maxConcurrencyPlaceholder")}
+                                  value={field.value ?? ""}
+                                  onChange={(e) => {
+                                    const rawValue = e.target.value.trim();
+                                    field.onChange(rawValue === "" ? null : Number(rawValue));
+                                  }}
+                                />
+                              </FormControl>
+                              <FormDescription>{t("maxConcurrencyDesc")}</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="queue_policy.enabled"
+                          render={({ field }) => (
+                            <FormItem className="rounded-cf-sm border border-divider/50 bg-surface-200/35 px-3 py-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="space-y-1">
+                                  <FormLabel className="m-0 text-sm font-medium text-foreground">
+                                    {t("queuePolicyEnabled")}
+                                  </FormLabel>
+                                  <FormDescription className="m-0 text-xs">
+                                    {t("queuePolicyEnabledDesc")}
+                                  </FormDescription>
+                                </div>
+                                <FormControl>
+                                  <Switch
+                                    aria-label={t("queuePolicyEnabled")}
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                  />
+                                </FormControl>
+                              </div>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <Badge
+                                  variant="outline"
+                                  className={
+                                    field.value
+                                      ? "border-status-warning/45 text-status-warning"
+                                      : "border-divider text-muted-foreground"
+                                  }
+                                >
+                                  {field.value
+                                    ? t("queuePolicyEnabledBadge")
+                                    : t("queuePolicyDisabled")}
+                                </Badge>
+                                <Badge
+                                  variant="outline"
+                                  className="border-divider text-muted-foreground"
+                                >
+                                  {t("queuePolicySummaryTimeout", {
+                                    timeoutMs: queuePolicyTimeoutMs,
+                                  })}
+                                </Badge>
+                                <Badge
+                                  variant="outline"
+                                  className="border-divider text-muted-foreground"
+                                >
+                                  {queuePolicyMaxQueueLength == null
+                                    ? t("queuePolicySummaryLengthUnlimited")
+                                    : t("queuePolicySummaryLength", {
+                                        maxQueueLength: queuePolicyMaxQueueLength,
+                                      })}
+                                </Badge>
+                              </div>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        {queuePolicy?.enabled && (
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <FormField
+                              control={form.control}
+                              name="queue_policy.timeout_ms"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>{t("queuePolicyTimeout")}</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type="number"
+                                      min={1}
+                                      step={1}
+                                      inputMode="numeric"
+                                      placeholder={t("queuePolicyTimeoutPlaceholder")}
+                                      value={getNumericInputValue(field.value)}
+                                      onChange={(e) => {
+                                        const rawValue = e.target.value.trim();
+                                        field.onChange(rawValue === "" ? "" : Number(rawValue));
+                                      }}
+                                    />
+                                  </FormControl>
+                                  <FormDescription>{t("queuePolicyTimeoutDesc")}</FormDescription>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            <FormField
+                              control={form.control}
+                              name="queue_policy.max_queue_length"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>{t("queuePolicyMaxQueueLength")}</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type="number"
+                                      min={1}
+                                      step={1}
+                                      inputMode="numeric"
+                                      placeholder={t("queuePolicyMaxQueueLengthPlaceholder")}
+                                      value={getNumericInputValue(field.value)}
+                                      onChange={(e) => {
+                                        const rawValue = e.target.value.trim();
+                                        field.onChange(rawValue === "" ? null : Number(rawValue));
+                                      }}
+                                    />
+                                  </FormControl>
+                                  <FormDescription>
+                                    {t("queuePolicyMaxQueueLengthDesc")}
+                                  </FormDescription>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
                         )}
-                      />
+                      </div>
                     </div>
 
                     {/* Circuit Breaker Configuration Section */}
@@ -2825,6 +3019,7 @@ export function UpstreamFormDialog({
                             </p>
                           </div>
                           <Switch
+                            aria-label={t("affinityMigrationEnabled")}
                             checked={affinityMigration?.enabled ?? false}
                             onCheckedChange={(checked) => {
                               const currentConfig = form.getValues("affinity_migration");

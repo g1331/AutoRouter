@@ -18,8 +18,20 @@ vi.mock("next-themes", () => ({
 }));
 
 vi.mock("recharts", () => ({
-  ResponsiveContainer: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="responsive-container">{children}</div>
+  ResponsiveContainer: ({
+    children,
+    initialDimension,
+  }: {
+    children: React.ReactNode;
+    initialDimension?: { width: number; height: number };
+  }) => (
+    <div
+      data-testid="responsive-container"
+      data-initial-width={initialDimension?.width}
+      data-initial-height={initialDimension?.height}
+    >
+      {children}
+    </div>
   ),
   AreaChart: ({ children, data }: { children: React.ReactNode; data: unknown[] }) => (
     <svg data-testid="area-chart" data-points={data.length} data-chart={JSON.stringify(data)}>
@@ -206,6 +218,16 @@ describe("UsageChart", () => {
       expect(screen.getByTestId("cartesian-grid")).toBeInTheDocument();
       expect(screen.getByTestId("tooltip")).toBeInTheDocument();
       expect(screen.getByTestId("legend")).toBeInTheDocument();
+    });
+
+    it("starts the responsive chart with a positive initial dimension", () => {
+      renderChart();
+
+      expect(screen.getByTestId("responsive-container")).toHaveAttribute("data-initial-width", "1");
+      expect(screen.getByTestId("responsive-container")).toHaveAttribute(
+        "data-initial-height",
+        "280"
+      );
     });
 
     it("renders hourly data correctly", () => {

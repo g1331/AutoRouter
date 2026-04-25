@@ -8,6 +8,12 @@ import type {
   UpstreamModelRule,
 } from "@/lib/services/upstream-model-types";
 
+type UpstreamQueuePolicy = {
+  enabled: boolean;
+  timeout_ms: number;
+  max_queue_length?: number | null;
+};
+
 /**
  * API keys distributed to downstream clients.
  */
@@ -78,6 +84,7 @@ export const upstreams = sqliteTable(
     modelCatalogLastError: text("model_catalog_last_error"),
     modelCatalogLastFailedAt: integer("model_catalog_last_failed_at", { mode: "timestamp_ms" }),
     modelRules: text("model_rules", { mode: "json" }).$type<UpstreamModelRule[] | null>(),
+    queuePolicy: text("queue_policy", { mode: "json" }).$type<UpstreamQueuePolicy | null>(),
     affinityMigration: text("affinity_migration", { mode: "json" }).$type<{
       enabled: boolean;
       metric: "tokens" | "length";

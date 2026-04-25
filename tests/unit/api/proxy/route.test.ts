@@ -21,6 +21,18 @@ const { mockApiKeyQuotaTracker, mockResolveBillingModelPrice } = vi.hoisted(() =
   })),
 }));
 
+const {
+  mockSelectFromUpstreamCandidates,
+  mockDecideQueuedUpstreamResume,
+  mockReselectQueuedUpstreamOnce,
+  mockQueueEnqueueWait,
+} = vi.hoisted(() => ({
+  mockSelectFromUpstreamCandidates: vi.fn(),
+  mockDecideQueuedUpstreamResume: vi.fn(),
+  mockReselectQueuedUpstreamOnce: vi.fn(),
+  mockQueueEnqueueWait: vi.fn(),
+}));
+
 vi.mock("@/lib/utils/auth", () => ({
   extractApiKey: vi.fn((authHeader: string | null) => {
     if (!authHeader) return null;
@@ -132,8 +144,6 @@ vi.mock("@/lib/services/api-key-quota-tracker", () => ({
 
 // Mock load-balancer module
 vi.mock("@/lib/services/load-balancer", () => {
-  const selectFromUpstreamCandidates = vi.fn();
-
   class NoHealthyUpstreamsError extends Error {
     constructor(message: string) {
       super(message);
@@ -168,7 +178,13 @@ vi.mock("@/lib/services/load-balancer", () => {
         tier: number;
         currentConcurrency: number;
         maxConcurrency: number;
-      }>
+      }>,
+      public waitableCandidate: {
+        upstream: Record<string, unknown>;
+        tier: number;
+        currentConcurrency: number;
+        maxConcurrency: number;
+      } | null = null
     ) {
       super("All candidate upstreams reached max concurrency");
       this.name = "AllCandidatesConcurrencyFullError";
@@ -177,13 +193,61 @@ vi.mock("@/lib/services/load-balancer", () => {
   }
 
   return {
-    selectFromProviderType: selectFromUpstreamCandidates,
-    selectFromUpstreamCandidates,
+    selectFromProviderType: mockSelectFromUpstreamCandidates,
+    selectFromUpstreamCandidates: mockSelectFromUpstreamCandidates,
+    decideQueuedUpstreamResume: mockDecideQueuedUpstreamResume,
+    reselectQueuedUpstreamOnce: mockReselectQueuedUpstreamOnce,
     recordConnection: vi.fn(),
     releaseConnection: vi.fn(),
     NoHealthyUpstreamsError,
     NoAuthorizedUpstreamsError,
     AllCandidatesConcurrencyFullError,
+  };
+});
+
+vi.mock("@/lib/services/upstream-queue-admission", () => {
+  class UpstreamQueueWaitTimeoutError extends Error {
+    upstreamId: string;
+    requestId: string;
+    waitDurationMs: number;
+
+    constructor(
+      upstreamId: string = "unknown",
+      requestId: string = "unknown",
+      waitDurationMs: number = 0
+    ) {
+      super(`Queue wait timed out for upstream ${upstreamId}`);
+      this.name = "UpstreamQueueWaitTimeoutError";
+      this.upstreamId = upstreamId;
+      this.requestId = requestId;
+      this.waitDurationMs = waitDurationMs;
+    }
+  }
+
+  class UpstreamQueueWaitAbortedError extends Error {
+    upstreamId: string;
+    requestId: string;
+    waitDurationMs: number;
+
+    constructor(
+      upstreamId: string = "unknown",
+      requestId: string = "unknown",
+      waitDurationMs: number = 0
+    ) {
+      super(`Queue wait aborted for upstream ${upstreamId}`);
+      this.name = "UpstreamQueueWaitAbortedError";
+      this.upstreamId = upstreamId;
+      this.requestId = requestId;
+      this.waitDurationMs = waitDurationMs;
+    }
+  }
+
+  return {
+    upstreamQueueAdmission: {
+      enqueueWait: mockQueueEnqueueWait,
+    },
+    UpstreamQueueWaitTimeoutError,
+    UpstreamQueueWaitAbortedError,
   };
 });
 
@@ -2835,6 +2899,852 @@ describe("proxy route upstream selection", () => {
     expect(updateLogPayload?.routingDecision?.excluded).toEqual(
       expect.arrayContaining([expect.objectContaining({ reason: "concurrency_full" })])
     );
+  });
+
+  it("should wait for a queue-enabled upstream and resume forwarding when capacity is handed off", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+    const {
+      selectFromProviderType,
+      decideQueuedUpstreamResume,
+      AllCandidatesConcurrencyFullError,
+      releaseConnection,
+    } = await import("@/lib/services/load-balancer");
+    const { upstreamQueueAdmission } = await import("@/lib/services/upstream-queue-admission");
+
+    const waitableUpstream = {
+      ...DEFAULT_ACTIVE_UPSTREAMS[0],
+      id: "up-queued",
+      name: "queued-upstream",
+      providerType: "anthropic",
+      routeCapabilities: ["anthropic_messages"],
+      baseUrl: "https://api.anthropic.com",
+      queuePolicy: {
+        enabled: true,
+        timeout_ms: 30000,
+        max_queue_length: 4,
+      },
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([waitableUpstream]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-queued" },
+    ]);
+
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream: waitableUpstream,
+      providerType: "anthropic",
+      resolvedModel: "claude-test",
+      candidateUpstreams: [],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "claude-test",
+        resolvedModel: "claude-test",
+        providerType: "anthropic",
+        upstreamName: "queued-upstream",
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 1,
+        finalCandidateCount: 0,
+      },
+    });
+
+    vi.mocked(selectFromProviderType).mockRejectedValueOnce(
+      new AllCandidatesConcurrencyFullError(
+        [
+          {
+            upstreamId: "up-queued",
+            upstreamName: "queued-upstream",
+            upstreamBaseUrl: "https://api.anthropic.com",
+            upstreamProviderType: "anthropic",
+            tier: 0,
+            currentConcurrency: 1,
+            maxConcurrency: 1,
+          },
+        ],
+        {
+          upstream: waitableUpstream,
+          tier: 0,
+          currentConcurrency: 1,
+          maxConcurrency: 1,
+        }
+      )
+    );
+    vi.mocked(upstreamQueueAdmission.enqueueWait).mockReturnValueOnce({
+      accepted: true,
+      reason: "queued",
+      position: 1,
+      queueLength: 1,
+      waitPromise: Promise.resolve({
+        upstreamId: "up-queued",
+        requestId: "req-queued",
+        waitDurationMs: 25,
+        activeCount: 1,
+        queueLengthRemaining: 0,
+      }),
+    });
+    vi.mocked(decideQueuedUpstreamResume).mockResolvedValueOnce({
+      action: "resume",
+      reason: "bound_available",
+      upstream: waitableUpstream,
+      excludeIds: [],
+    });
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: null,
+      headerDiff: null,
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-test",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(upstreamQueueAdmission.enqueueWait)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        upstreamId: "up-queued",
+        timeoutMs: 30000,
+        maxQueueLength: 4,
+      })
+    );
+    expect(vi.mocked(decideQueuedUpstreamResume)).toHaveBeenCalledWith(
+      "up-queued",
+      ["up-queued"],
+      undefined
+    );
+    expect(forwardRequest).toHaveBeenCalled();
+    expect(releaseConnection).toHaveBeenCalledWith("up-queued");
+    expect(
+      vi
+        .mocked(updateRequestLog)
+        .mock.calls.some(([, payload]) => payload?.routingDecision?.queue?.status === "waiting")
+    ).toBe(true);
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload?.routingDecision?.queue).toEqual(
+      expect.objectContaining({
+        status: "resumed",
+        upstream_id: "up-queued",
+        wait_duration_ms: 25,
+        timeout_ms: 30000,
+      })
+    );
+  });
+
+  it("should release the resumed slot and reselect once when the queued upstream disappears", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const {
+      selectFromProviderType,
+      decideQueuedUpstreamResume,
+      reselectQueuedUpstreamOnce,
+      AllCandidatesConcurrencyFullError,
+      releaseConnection,
+    } = await import("@/lib/services/load-balancer");
+    const { upstreamQueueAdmission } = await import("@/lib/services/upstream-queue-admission");
+
+    const waitableUpstream = {
+      ...DEFAULT_ACTIVE_UPSTREAMS[0],
+      id: "up-queued",
+      name: "queued-upstream",
+      providerType: "anthropic",
+      routeCapabilities: ["anthropic_messages"],
+      baseUrl: "https://api.anthropic.com",
+      queuePolicy: {
+        enabled: true,
+        timeout_ms: 30000,
+        max_queue_length: 4,
+      },
+    };
+    const fallbackUpstream = {
+      ...DEFAULT_ACTIVE_UPSTREAMS[1],
+      id: "up-fallback",
+      name: "fallback-upstream",
+      providerType: "anthropic",
+      routeCapabilities: ["anthropic_messages"],
+      baseUrl: "https://api.anthropic.com",
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      waitableUpstream,
+      fallbackUpstream,
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-queued" },
+      { upstreamId: "up-fallback" },
+    ]);
+
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream: waitableUpstream,
+      providerType: "anthropic",
+      resolvedModel: "claude-test",
+      candidateUpstreams: [],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "claude-test",
+        resolvedModel: "claude-test",
+        providerType: "anthropic",
+        upstreamName: "queued-upstream",
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 2,
+        finalCandidateCount: 0,
+      },
+    });
+
+    vi.mocked(selectFromProviderType).mockRejectedValueOnce(
+      new AllCandidatesConcurrencyFullError(
+        [
+          {
+            upstreamId: "up-queued",
+            upstreamName: "queued-upstream",
+            upstreamBaseUrl: "https://api.anthropic.com",
+            upstreamProviderType: "anthropic",
+            tier: 0,
+            currentConcurrency: 1,
+            maxConcurrency: 1,
+          },
+        ],
+        {
+          upstream: waitableUpstream,
+          tier: 0,
+          currentConcurrency: 1,
+          maxConcurrency: 1,
+        }
+      )
+    );
+    vi.mocked(upstreamQueueAdmission.enqueueWait).mockReturnValueOnce({
+      accepted: true,
+      reason: "queued",
+      position: 1,
+      queueLength: 1,
+      waitPromise: Promise.resolve({
+        upstreamId: "up-queued",
+        requestId: "req-queued",
+        waitDurationMs: 25,
+        activeCount: 1,
+        queueLengthRemaining: 0,
+      }),
+    });
+    vi.mocked(decideQueuedUpstreamResume).mockResolvedValueOnce({
+      action: "reselect_once",
+      reason: "bound_missing",
+      upstream: null,
+      excludeIds: ["up-queued"],
+    });
+    vi.mocked(reselectQueuedUpstreamOnce).mockResolvedValueOnce({
+      upstream: fallbackUpstream,
+      selectedTier: 1,
+      circuitBreakerFiltered: 0,
+      quotaFiltered: 0,
+      concurrencyFiltered: 0,
+      concurrencyExcluded: [],
+      totalCandidates: 2,
+      affinityHit: false,
+      affinityMigrated: false,
+      selectionReason: null,
+    });
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers(),
+      body: new Uint8Array(),
+      isStream: false,
+      usage: null,
+      headerDiff: null,
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-test",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(reselectQueuedUpstreamOnce)).toHaveBeenCalledWith(
+      "up-queued",
+      ["up-queued", "up-fallback"],
+      ["up-queued"]
+    );
+    expect(vi.mocked(releaseConnection).mock.calls.map(([upstreamId]) => upstreamId)).toEqual([
+      "up-queued",
+      "up-fallback",
+    ]);
+  });
+
+  it("should classify queue wait timeout separately from upstream timeout", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+    const { markUnhealthy } = await import("@/lib/services/health-checker");
+    const { recordFailure } = await import("@/lib/services/circuit-breaker");
+    const { selectFromProviderType, AllCandidatesConcurrencyFullError } =
+      await import("@/lib/services/load-balancer");
+    const { upstreamQueueAdmission, UpstreamQueueWaitTimeoutError } =
+      await import("@/lib/services/upstream-queue-admission");
+
+    const waitableUpstream = {
+      ...DEFAULT_ACTIVE_UPSTREAMS[0],
+      id: "up-queued",
+      name: "queued-upstream",
+      providerType: "anthropic",
+      routeCapabilities: ["anthropic_messages"],
+      baseUrl: "https://api.anthropic.com",
+      queuePolicy: {
+        enabled: true,
+        timeout_ms: 30000,
+        max_queue_length: 4,
+      },
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([waitableUpstream]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-queued" },
+    ]);
+
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream: waitableUpstream,
+      providerType: "anthropic",
+      resolvedModel: "claude-test",
+      candidateUpstreams: [],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "claude-test",
+        resolvedModel: "claude-test",
+        providerType: "anthropic",
+        upstreamName: "queued-upstream",
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 1,
+        finalCandidateCount: 0,
+      },
+    });
+    vi.mocked(selectFromProviderType).mockRejectedValueOnce(
+      new AllCandidatesConcurrencyFullError(
+        [
+          {
+            upstreamId: "up-queued",
+            upstreamName: "queued-upstream",
+            upstreamBaseUrl: "https://api.anthropic.com",
+            upstreamProviderType: "anthropic",
+            tier: 0,
+            currentConcurrency: 1,
+            maxConcurrency: 1,
+          },
+        ],
+        {
+          upstream: waitableUpstream,
+          tier: 0,
+          currentConcurrency: 1,
+          maxConcurrency: 1,
+        }
+      )
+    );
+    vi.mocked(upstreamQueueAdmission.enqueueWait).mockReturnValueOnce({
+      accepted: true,
+      reason: "queued",
+      position: 1,
+      queueLength: 1,
+      waitPromise: Promise.reject(
+        new UpstreamQueueWaitTimeoutError("up-queued", "req-queued", 30000)
+      ),
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-test",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
+    const data = await response.json();
+
+    expect(response.status).toBe(504);
+    expect(data).toEqual({
+      error: expect.objectContaining({
+        code: "QUEUE_WAIT_TIMEOUT",
+        reason: "QUEUE_WAIT_TIMEOUT",
+        did_send_upstream: false,
+      }),
+    });
+    expect(data.error.user_hint).toContain("等待队列");
+    expect(forwardRequest).not.toHaveBeenCalled();
+    expect(markUnhealthy).not.toHaveBeenCalled();
+    expect(recordFailure).not.toHaveBeenCalled();
+    expect(
+      vi
+        .mocked(updateRequestLog)
+        .mock.calls.some(([, payload]) => payload?.routingDecision?.queue?.status === "waiting")
+    ).toBe(true);
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload?.routingDecision).toEqual(
+      expect.objectContaining({
+        did_send_upstream: false,
+        failure_stage: "candidate_selection",
+      })
+    );
+    expect(updateLogPayload?.routingDecision?.queue).toEqual(
+      expect.objectContaining({
+        status: "timed_out",
+        upstream_id: "up-queued",
+        wait_duration_ms: 30000,
+        timeout_ms: 30000,
+      })
+    );
+  });
+
+  it("should classify queue wait abort separately from downstream disconnect after send", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+    const { markUnhealthy } = await import("@/lib/services/health-checker");
+    const { recordFailure } = await import("@/lib/services/circuit-breaker");
+    const { selectFromProviderType, AllCandidatesConcurrencyFullError } =
+      await import("@/lib/services/load-balancer");
+    const { upstreamQueueAdmission, UpstreamQueueWaitAbortedError } =
+      await import("@/lib/services/upstream-queue-admission");
+
+    const waitableUpstream = {
+      ...DEFAULT_ACTIVE_UPSTREAMS[0],
+      id: "up-queued",
+      name: "queued-upstream",
+      providerType: "anthropic",
+      routeCapabilities: ["anthropic_messages"],
+      baseUrl: "https://api.anthropic.com",
+      queuePolicy: {
+        enabled: true,
+        timeout_ms: 30000,
+        max_queue_length: 4,
+      },
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([waitableUpstream]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-queued" },
+    ]);
+
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream: waitableUpstream,
+      providerType: "anthropic",
+      resolvedModel: "claude-test",
+      candidateUpstreams: [],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "claude-test",
+        resolvedModel: "claude-test",
+        providerType: "anthropic",
+        upstreamName: "queued-upstream",
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 1,
+        finalCandidateCount: 0,
+      },
+    });
+    vi.mocked(selectFromProviderType).mockRejectedValueOnce(
+      new AllCandidatesConcurrencyFullError(
+        [
+          {
+            upstreamId: "up-queued",
+            upstreamName: "queued-upstream",
+            upstreamBaseUrl: "https://api.anthropic.com",
+            upstreamProviderType: "anthropic",
+            tier: 0,
+            currentConcurrency: 1,
+            maxConcurrency: 1,
+          },
+        ],
+        {
+          upstream: waitableUpstream,
+          tier: 0,
+          currentConcurrency: 1,
+          maxConcurrency: 1,
+        }
+      )
+    );
+    vi.mocked(upstreamQueueAdmission.enqueueWait).mockReturnValueOnce({
+      accepted: true,
+      reason: "queued",
+      position: 1,
+      queueLength: 1,
+      waitPromise: Promise.reject(
+        new UpstreamQueueWaitAbortedError("up-queued", "req-queued", 1200)
+      ),
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-test",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
+    const data = await response.json();
+
+    expect(response.status).toBe(499);
+    expect(data).toEqual({
+      error: expect.objectContaining({
+        code: "CLIENT_DISCONNECTED",
+        reason: "QUEUE_WAIT_ABORTED",
+        did_send_upstream: false,
+      }),
+    });
+    expect(data.error.user_hint).toContain("等待队列期间");
+    expect(forwardRequest).not.toHaveBeenCalled();
+    expect(markUnhealthy).not.toHaveBeenCalled();
+    expect(recordFailure).not.toHaveBeenCalled();
+    expect(
+      vi
+        .mocked(updateRequestLog)
+        .mock.calls.some(([, payload]) => payload?.routingDecision?.queue?.status === "waiting")
+    ).toBe(true);
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload?.routingDecision).toEqual(
+      expect.objectContaining({
+        did_send_upstream: false,
+        failure_stage: "candidate_selection",
+      })
+    );
+    expect(updateLogPayload?.routingDecision?.queue).toEqual(
+      expect.objectContaining({
+        status: "aborted",
+        upstream_id: "up-queued",
+        wait_duration_ms: 1200,
+        timeout_ms: 30000,
+      })
+    );
+  });
+
+  it("should release a reserved slot exactly once after successful non-stream forwarding", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType, releaseConnection } =
+      await import("@/lib/services/load-balancer");
+    const { markHealthy } = await import("@/lib/services/health-checker");
+    const { recordSuccess } = await import("@/lib/services/circuit-breaker");
+
+    const upstream = {
+      ...DEFAULT_ACTIVE_UPSTREAMS[0],
+      id: "up-release-success",
+      name: "release-success",
+      providerType: "openai",
+      routeCapabilities: ["openai_chat_compatible"],
+      baseUrl: "https://api.openai.com/v1",
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([upstream]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: upstream.id },
+    ]);
+
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      resolvedModel: "gpt-5.2",
+      candidateUpstreams: [upstream],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "gpt-5.2",
+        resolvedModel: "gpt-5.2",
+        providerType: "openai",
+        upstreamName: upstream.name,
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 1,
+        finalCandidateCount: 1,
+      },
+    });
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+      selectionReason: null,
+    });
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      body: new TextEncoder().encode(JSON.stringify({ id: "resp-1" })),
+      isStream: false,
+      usage: null,
+      headerDiff: null,
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.2",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["v1", "chat", "completions"] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(releaseConnection).mock.calls.map(([upstreamId]) => upstreamId)).toEqual([
+      "up-release-success",
+    ]);
+    expect(markHealthy).toHaveBeenCalledTimes(1);
+    expect(markHealthy).toHaveBeenCalledWith("up-release-success", 100);
+    expect(recordSuccess).toHaveBeenCalledTimes(1);
+    expect(recordSuccess).toHaveBeenCalledWith("up-release-success");
+  });
+
+  it("should release a reserved slot exactly once when forwarding throws before a response is returned", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType, releaseConnection } =
+      await import("@/lib/services/load-balancer");
+    const { markUnhealthy } = await import("@/lib/services/health-checker");
+    const { recordFailure } = await import("@/lib/services/circuit-breaker");
+
+    const upstream = {
+      ...DEFAULT_ACTIVE_UPSTREAMS[0],
+      id: "up-release-error",
+      name: "release-error",
+      providerType: "openai",
+      routeCapabilities: ["openai_chat_compatible"],
+      baseUrl: "https://api.openai.com/v1",
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([upstream]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: upstream.id },
+    ]);
+
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      resolvedModel: "gpt-5.2",
+      candidateUpstreams: [upstream],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "gpt-5.2",
+        resolvedModel: "gpt-5.2",
+        providerType: "openai",
+        upstreamName: upstream.name,
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 1,
+        finalCandidateCount: 1,
+      },
+    });
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+      selectionReason: null,
+    });
+    vi.mocked(forwardRequest).mockRejectedValueOnce(new Error("fetch failed"));
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.2",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["v1", "chat", "completions"] }),
+    });
+
+    expect(response.status).toBe(503);
+    expect(vi.mocked(releaseConnection).mock.calls.map(([upstreamId]) => upstreamId)).toEqual([
+      "up-release-error",
+    ]);
+    expect(markUnhealthy).toHaveBeenCalledTimes(1);
+    expect(markUnhealthy).toHaveBeenCalledWith("up-release-error", "fetch failed");
+    expect(recordFailure).toHaveBeenCalledTimes(1);
+  });
+
+  it("should release a reserved slot exactly once after streaming completes", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType, releaseConnection } =
+      await import("@/lib/services/load-balancer");
+    const { markHealthy } = await import("@/lib/services/health-checker");
+    const { recordSuccess } = await import("@/lib/services/circuit-breaker");
+
+    const upstream = {
+      ...DEFAULT_ACTIVE_UPSTREAMS[0],
+      id: "up-release-stream",
+      name: "release-stream",
+      providerType: "openai",
+      routeCapabilities: ["openai_chat_compatible"],
+      baseUrl: "https://api.openai.com/v1",
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([upstream]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: upstream.id },
+    ]);
+
+    vi.mocked(routeByModel).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      resolvedModel: "gpt-5.2",
+      candidateUpstreams: [upstream],
+      excludedUpstreams: [],
+      routingDecision: {
+        originalModel: "gpt-5.2",
+        resolvedModel: "gpt-5.2",
+        providerType: "openai",
+        upstreamName: upstream.name,
+        allowedModelsFilter: false,
+        modelRedirectApplied: false,
+        circuitBreakerFilter: false,
+        routingType: "provider_type",
+        candidateCount: 1,
+        finalCandidateCount: 1,
+      },
+    });
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+      selectionReason: null,
+    });
+
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode("data: hello\n\n"));
+        controller.close();
+      },
+    });
+
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers({ "content-type": "text/event-stream" }),
+      body: stream,
+      isStream: true,
+      usage: null,
+      headerDiff: null,
+      streamMetricsPromise: Promise.resolve({ usage: null, ttftMs: null }),
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.2",
+        messages: [{ role: "user", content: "hi" }],
+        stream: true,
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["v1", "chat", "completions"] }),
+    });
+
+    expect(response.status).toBe(200);
+    const reader = response.body?.getReader();
+    expect(reader).toBeDefined();
+    while (true) {
+      const chunk = await reader!.read();
+      if (chunk.done) {
+        break;
+      }
+    }
+
+    await expect.poll(() => vi.mocked(releaseConnection).mock.calls.length).toBe(1);
+    expect(vi.mocked(releaseConnection).mock.calls.map(([upstreamId]) => upstreamId)).toEqual([
+      "up-release-stream",
+    ]);
+    expect(markHealthy).toHaveBeenCalledTimes(1);
+    expect(markHealthy).toHaveBeenCalledWith("up-release-stream", 100);
+    expect(recordSuccess).toHaveBeenCalledTimes(1);
+    expect(recordSuccess).toHaveBeenCalledWith("up-release-stream");
   });
 
   it("should attribute failed upstream to last sent attempt when final exclusion is concurrency_full", async () => {
@@ -5558,7 +6468,8 @@ describe("proxy route upstream selection", () => {
     it("should persist an unbilled snapshot when downstream streaming disconnect settles the log", async () => {
       const { db } = await import("@/lib/db");
       const { forwardRequest } = await import("@/lib/services/proxy-client");
-      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+      const { selectFromProviderType, releaseConnection } =
+        await import("@/lib/services/load-balancer");
       const { calculateAndPersistRequestBillingSnapshot } =
         await import("@/lib/services/billing-cost-service");
 
@@ -5639,10 +6550,14 @@ describe("proxy route upstream selection", () => {
       expect(firstChunk.done).toBe(false);
 
       await reader!.cancel("Client disconnected");
+      await expect.poll(() => vi.mocked(releaseConnection).mock.calls.length).toBe(1);
       await expect
         .poll(() => vi.mocked(calculateAndPersistRequestBillingSnapshot).mock.calls.length)
         .toBe(1);
 
+      expect(vi.mocked(releaseConnection).mock.calls.map(([upstreamId]) => upstreamId)).toEqual([
+        "up-openai",
+      ]);
       expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledTimes(1);
       expect(calculateAndPersistRequestBillingSnapshot).toHaveBeenCalledWith(
         expect.objectContaining({

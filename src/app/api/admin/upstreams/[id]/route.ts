@@ -38,6 +38,12 @@ const affinityMigrationConfigSchema = z.object({
   threshold: z.number().int().min(1).max(10000000),
 });
 
+const queuePolicySchema = z.object({
+  enabled: z.boolean(),
+  timeout_ms: z.number().int().positive(),
+  max_queue_length: z.number().int().positive().nullable().optional(),
+});
+
 const modelDiscoverySchema = z.object({
   mode: z.enum([
     "openai_compatible",
@@ -90,6 +96,7 @@ const updateUpstreamSchema = z
     is_active: z.boolean().optional(),
     config: z.string().nullable().optional(),
     max_concurrency: z.number().int().positive().nullable().optional(),
+    queue_policy: queuePolicySchema.nullable().optional(),
     weight: z.number().int().min(1).max(100).optional(),
     priority: z.number().int().min(0).optional(),
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)).nullable().optional(),
@@ -189,6 +196,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     if (validated.is_active !== undefined) input.isActive = validated.is_active;
     if (validated.config !== undefined) input.config = validated.config;
     if (validated.max_concurrency !== undefined) input.maxConcurrency = validated.max_concurrency;
+    if (validated.queue_policy !== undefined) input.queuePolicy = validated.queue_policy ?? null;
     if (validated.weight !== undefined) input.weight = validated.weight;
     if (validated.priority !== undefined) input.priority = validated.priority;
     if (validated.route_capabilities !== undefined) {

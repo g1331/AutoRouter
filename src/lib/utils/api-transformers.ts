@@ -20,6 +20,7 @@ import type {
   RoutingDecisionLog,
   RoutingFailureStage,
   RequestLifecycleStatus,
+  UpstreamQueuePolicy,
 } from "@/types/api";
 import type {
   StatsOverview,
@@ -84,6 +85,7 @@ export interface UpstreamApiResponse {
   is_active: boolean;
   current_concurrency: number;
   max_concurrency: number | null;
+  queue_policy: UpstreamQueuePolicy | null;
   config: string | null;
   weight: number;
   priority: number;
@@ -159,6 +161,7 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
     is_active: upstream.isActive,
     current_concurrency: upstream.currentConcurrency,
     max_concurrency: upstream.maxConcurrency ?? null,
+    queue_policy: upstream.queuePolicy ?? null,
     config: upstream.config,
     weight: upstream.weight,
     priority: upstream.priority,

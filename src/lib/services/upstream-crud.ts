@@ -37,6 +37,11 @@ type SpendingRuleItem = {
   period_hours?: number;
 };
 type SpendingRules = SpendingRuleItem[] | null;
+type UpstreamQueuePolicy = {
+  enabled: boolean;
+  timeout_ms: number;
+  max_queue_length?: number | null;
+};
 
 /**
  * Circuit breaker status for upstream response
@@ -81,6 +86,7 @@ export interface UpstreamCreateInput {
   timeout?: number;
   config?: string | null;
   maxConcurrency?: number | null;
+  queuePolicy?: UpstreamQueuePolicy | null;
   weight?: number;
   priority?: number;
   routeCapabilities?: RouteCapability[] | null;
@@ -121,6 +127,7 @@ export interface UpstreamUpdateInput {
   isActive?: boolean;
   config?: string | null;
   maxConcurrency?: number | null;
+  queuePolicy?: UpstreamQueuePolicy | null;
   weight?: number;
   priority?: number;
   routeCapabilities?: RouteCapability[] | null;
@@ -162,6 +169,7 @@ export interface UpstreamResponse {
   isActive: boolean;
   currentConcurrency: number;
   maxConcurrency: number | null;
+  queuePolicy?: UpstreamQueuePolicy | null;
   config: string | null;
   weight: number;
   priority: number;
@@ -364,6 +372,7 @@ function mapUpstreamRecordToResponse(
     isActive: upstream.isActive,
     currentConcurrency,
     maxConcurrency: upstream.maxConcurrency,
+    queuePolicy: upstream.queuePolicy ?? null,
     config: upstream.config,
     weight: upstream.weight,
     priority: upstream.priority,
@@ -404,6 +413,7 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     timeout = 60,
     config,
     maxConcurrency = null,
+    queuePolicy = null,
     weight = 1,
     priority = 0,
     routeCapabilities,
@@ -456,6 +466,7 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
       timeout,
       isActive: true,
       maxConcurrency,
+      queuePolicy,
       config: config ?? null,
       weight,
       priority,
@@ -538,6 +549,7 @@ export async function updateUpstream(
   if (input.timeout !== undefined) updateValues.timeout = input.timeout;
   if (input.isActive !== undefined) updateValues.isActive = input.isActive;
   if (input.maxConcurrency !== undefined) updateValues.maxConcurrency = input.maxConcurrency;
+  if (input.queuePolicy !== undefined) updateValues.queuePolicy = input.queuePolicy;
   if (input.config !== undefined) updateValues.config = input.config;
   if (input.weight !== undefined) updateValues.weight = input.weight;
   if (input.priority !== undefined) updateValues.priority = input.priority;
