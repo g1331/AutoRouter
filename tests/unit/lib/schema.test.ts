@@ -5,6 +5,8 @@ import {
   upstreams,
   apiKeyUpstreams,
   requestLogs,
+  backgroundSyncTasks,
+  backgroundSyncTaskRuns,
   apiKeysRelations,
   upstreamsRelations,
   apiKeyUpstreamsRelations,
@@ -17,6 +19,10 @@ import {
   type NewApiKeyUpstream,
   type RequestLog,
   type NewRequestLog,
+  type BackgroundSyncTask,
+  type NewBackgroundSyncTask,
+  type BackgroundSyncTaskRun,
+  type NewBackgroundSyncTaskRun,
 } from "@/lib/db/schema";
 
 describe("lib/db/schema", () => {
@@ -358,6 +364,45 @@ describe("lib/db/schema", () => {
     });
   });
 
+  describe("background sync tables", () => {
+    it("has backgroundSyncTasks status columns and indexes", () => {
+      expect(backgroundSyncTasks.taskName).toBeDefined();
+      expect(backgroundSyncTasks.taskName.name).toBe("task_name");
+      expect(backgroundSyncTasks.enabled).toBeDefined();
+      expect(backgroundSyncTasks.enabled.name).toBe("enabled");
+      expect(backgroundSyncTasks.intervalSeconds).toBeDefined();
+      expect(backgroundSyncTasks.intervalSeconds.name).toBe("interval_seconds");
+      expect(backgroundSyncTasks.lastStatus).toBeDefined();
+      expect(backgroundSyncTasks.lastStatus.name).toBe("last_status");
+      expect(backgroundSyncTasks.nextRunAt).toBeDefined();
+      expect(backgroundSyncTasks.nextRunAt.name).toBe("next_run_at");
+
+      const tableConfig = getTableConfig(backgroundSyncTasks);
+      const indexNames = tableConfig.indexes.map((i) => i.config.name);
+      expect(indexNames).toContain("background_sync_tasks_enabled_idx");
+      expect(indexNames).toContain("background_sync_tasks_next_run_at_idx");
+    });
+
+    it("has backgroundSyncTaskRuns history columns and indexes", () => {
+      expect(backgroundSyncTaskRuns.id).toBeDefined();
+      expect(backgroundSyncTaskRuns.id.name).toBe("id");
+      expect(backgroundSyncTaskRuns.taskName).toBeDefined();
+      expect(backgroundSyncTaskRuns.taskName.name).toBe("task_name");
+      expect(backgroundSyncTaskRuns.triggerType).toBeDefined();
+      expect(backgroundSyncTaskRuns.triggerType.name).toBe("trigger_type");
+      expect(backgroundSyncTaskRuns.status).toBeDefined();
+      expect(backgroundSyncTaskRuns.status.name).toBe("status");
+      expect(backgroundSyncTaskRuns.durationMs).toBeDefined();
+      expect(backgroundSyncTaskRuns.durationMs.name).toBe("duration_ms");
+
+      const tableConfig = getTableConfig(backgroundSyncTaskRuns);
+      const indexNames = tableConfig.indexes.map((i) => i.config.name);
+      expect(indexNames).toContain("background_sync_task_runs_task_name_idx");
+      expect(indexNames).toContain("background_sync_task_runs_started_at_idx");
+      expect(indexNames).toContain("background_sync_task_runs_status_idx");
+    });
+  });
+
   describe("Relations", () => {
     it("exports apiKeysRelations", () => {
       expect(apiKeysRelations).toBeDefined();
@@ -416,6 +461,18 @@ describe("lib/db/schema", () => {
     it("exports NewRequestLog type", () => {
       const _typeCheck: NewRequestLog | null = null;
       expect(_typeCheck).toBeNull();
+    });
+
+    it("exports background sync task types", () => {
+      const _task: BackgroundSyncTask | null = null;
+      const _newTask: NewBackgroundSyncTask | null = null;
+      const _run: BackgroundSyncTaskRun | null = null;
+      const _newRun: NewBackgroundSyncTaskRun | null = null;
+
+      expect(_task).toBeNull();
+      expect(_newTask).toBeNull();
+      expect(_run).toBeNull();
+      expect(_newRun).toBeNull();
     });
   });
 });
