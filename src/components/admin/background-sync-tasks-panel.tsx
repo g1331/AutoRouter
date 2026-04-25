@@ -61,7 +61,7 @@ function StatusIcon({ status }: { status: BackgroundSyncTaskLastStatus | null })
 function TaskStatusBadge({ status }: { status: BackgroundSyncTaskLastStatus | null }) {
   const t = useTranslations("backgroundSync");
   return (
-    <Badge variant={getStatusVariant(status)} className="gap-1">
+    <Badge variant={getStatusVariant(status)} className="gap-1 whitespace-nowrap">
       <StatusIcon status={status} />
       {t(`status_${status ?? "never"}`)}
     </Badge>
@@ -79,6 +79,29 @@ function TaskMetrics({ task }: { task: BackgroundSyncTaskResponse }) {
   );
 }
 
+function getTaskTitle(task: BackgroundSyncTaskResponse, t: ReturnType<typeof useTranslations>) {
+  if (task.task_name === "billing_price_catalog_sync") {
+    return t("taskBillingPriceCatalogSync");
+  }
+  if (task.task_name === "upstream_model_catalog_sync") {
+    return t("taskUpstreamModelCatalogSync");
+  }
+  return task.display_name;
+}
+
+function getTaskDescription(
+  task: BackgroundSyncTaskResponse,
+  t: ReturnType<typeof useTranslations>
+) {
+  if (task.task_name === "billing_price_catalog_sync") {
+    return t("taskBillingPriceCatalogSyncDesc");
+  }
+  if (task.task_name === "upstream_model_catalog_sync") {
+    return t("taskUpstreamModelCatalogSyncDesc");
+  }
+  return task.task_name;
+}
+
 function TaskConfigControls({ task }: { task: BackgroundSyncTaskResponse }) {
   const t = useTranslations("backgroundSync");
   const updateTask = useUpdateBackgroundSyncTask();
@@ -92,8 +115,8 @@ function TaskConfigControls({ task }: { task: BackgroundSyncTaskResponse }) {
     (enabled !== task.enabled || intervalValue !== task.interval_seconds);
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+    <div className="flex min-w-[15.5rem] flex-wrap items-center gap-2 sm:flex-nowrap">
+      <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
         <Switch
           checked={enabled}
           onCheckedChange={setEnabled}
@@ -102,8 +125,8 @@ function TaskConfigControls({ task }: { task: BackgroundSyncTaskResponse }) {
         />
         <span>{enabled ? t("enabled") : t("disabled")}</span>
       </label>
-      <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <span>{t("intervalSeconds")}</span>
+      <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+        <span>{t("intervalShort")}</span>
         <Input
           className="h-8 w-24 text-xs tabular-nums"
           inputMode="numeric"
@@ -115,6 +138,9 @@ function TaskConfigControls({ task }: { task: BackgroundSyncTaskResponse }) {
       <Button
         size="sm"
         variant="secondary"
+        className="h-8 w-8 shrink-0 px-0"
+        title={t("saveConfig")}
+        aria-label={t("saveConfig")}
         disabled={!canSave || updateTask.isPending}
         onClick={() =>
           updateTask.mutate({
@@ -124,7 +150,6 @@ function TaskConfigControls({ task }: { task: BackgroundSyncTaskResponse }) {
         }
       >
         <Check className="h-4 w-4" />
-        {t("saveConfig")}
       </Button>
     </div>
   );
@@ -136,6 +161,8 @@ export function BackgroundSyncTasksPanel() {
   const runTask = useRunBackgroundSyncTask();
   const formatDate = useDateFormatter();
   const rows = tasks.data?.items ?? [];
+  const getTitle = (task: BackgroundSyncTaskResponse) => getTaskTitle(task, t);
+  const getDescription = (task: BackgroundSyncTaskResponse) => getTaskDescription(task, t);
 
   if (tasks.isLoading) {
     return (
@@ -172,40 +199,48 @@ export function BackgroundSyncTasksPanel() {
           </div>
         </div>
 
-        <div className="hidden overflow-hidden rounded-cf-sm border border-divider md:block">
-          <Table>
+        <div className="hidden md:block">
+          <Table className="min-w-[1120px] table-fixed" containerClassName="rounded-cf-sm">
             <TableHeader>
               <TableRow>
-                <TableHead>{t("task")}</TableHead>
-                <TableHead>{t("config")}</TableHead>
-                <TableHead>{t("state")}</TableHead>
-                <TableHead>{t("lastFinished")}</TableHead>
-                <TableHead>{t("nextRun")}</TableHead>
-                <TableHead>{t("result")}</TableHead>
-                <TableHead className="text-right">{t("action")}</TableHead>
+                <TableHead className="w-[260px]">{t("task")}</TableHead>
+                <TableHead className="w-[290px]">{t("config")}</TableHead>
+                <TableHead className="w-[90px]">{t("state")}</TableHead>
+                <TableHead className="w-[100px]">{t("lastFinished")}</TableHead>
+                <TableHead className="w-[100px]">{t("nextRun")}</TableHead>
+                <TableHead className="w-[160px]">{t("result")}</TableHead>
+                <TableHead className="w-[120px] text-right">{t("action")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map((task) => (
                 <TableRow key={task.task_name}>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <p className="font-medium text-foreground">{task.display_name}</p>
-                      <p className="font-mono text-xs text-muted-foreground">{task.task_name}</p>
+                  <TableCell className="py-4">
+                    <div className="min-w-0 space-y-1.5" title={task.task_name}>
+                      <p className="truncate text-sm font-medium leading-5 text-foreground">
+                        {getTitle(task)}
+                      </p>
+                      <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
+                        {getDescription(task)}
+                      </p>
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="py-4">
                     <TaskConfigControls
                       key={`${task.task_name}:${task.enabled}:${task.interval_seconds}`}
                       task={task}
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="py-4">
                     <TaskStatusBadge status={task.last_status} />
                   </TableCell>
-                  <TableCell>{formatDate(task.last_finished_at)}</TableCell>
-                  <TableCell>{formatDate(task.next_run_at)}</TableCell>
-                  <TableCell>
+                  <TableCell className="whitespace-nowrap py-4 tabular-nums">
+                    {formatDate(task.last_finished_at)}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap py-4 tabular-nums">
+                    {formatDate(task.next_run_at)}
+                  </TableCell>
+                  <TableCell className="py-4">
                     <div className="space-y-1">
                       <TaskMetrics task={task} />
                       {task.last_error && (
@@ -215,14 +250,15 @@ export function BackgroundSyncTasksPanel() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="py-4 text-right">
                     <Button
                       size="sm"
                       variant="outline"
+                      className="min-w-[6.75rem] whitespace-nowrap"
                       disabled={runTask.isPending || task.is_running}
                       onClick={() => runTask.mutate(task.task_name)}
                     >
-                      <Play className="h-4 w-4" />
+                      <Play className="h-4 w-4 shrink-0" />
                       {task.is_running ? t("running") : t("runNow")}
                     </Button>
                   </TableCell>
@@ -236,11 +272,9 @@ export function BackgroundSyncTasksPanel() {
           {rows.map((task) => (
             <div key={task.task_name} className="rounded-cf-sm border border-divider p-3">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 space-y-1">
-                  <p className="font-medium text-foreground">{task.display_name}</p>
-                  <p className="truncate font-mono text-xs text-muted-foreground">
-                    {task.task_name}
-                  </p>
+                <div className="min-w-0 space-y-1.5">
+                  <p className="text-sm font-medium leading-5 text-foreground">{getTitle(task)}</p>
+                  <p className="text-xs leading-5 text-muted-foreground">{getDescription(task)}</p>
                 </div>
                 <TaskStatusBadge status={task.last_status} />
               </div>

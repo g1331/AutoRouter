@@ -69,12 +69,13 @@ describe("BackgroundSyncTasksPanel", () => {
     render(<BackgroundSyncTasksPanel />);
 
     expect(screen.getByText("panelTitle")).toBeInTheDocument();
-    expect(screen.getAllByText("Model catalog auto refresh").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("taskUpstreamModelCatalogSync").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("taskUpstreamModelCatalogSyncDesc").length).toBeGreaterThan(0);
     expect(screen.getAllByText("status_partial").length).toBeGreaterThan(0);
     expect(screen.getAllByText("OpenAI: HTTP 500").length).toBeGreaterThan(0);
     expect(screen.getAllByText("successCount:2").length).toBeGreaterThan(0);
     expect(screen.getAllByText("failureCount:1").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("intervalSeconds").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("intervalShort").length).toBeGreaterThan(0);
   });
 
   it("runs a task from the panel action", () => {
@@ -149,7 +150,7 @@ describe("BackgroundSyncTasksPanel", () => {
     fireEvent.change(screen.getAllByDisplayValue("86400")[0], {
       target: { value: "7200" },
     });
-    fireEvent.click(screen.getAllByText("saveConfig")[0]);
+    fireEvent.click(screen.getAllByLabelText("saveConfig")[0]);
 
     expect(updateMutateMock).toHaveBeenCalledWith({
       taskName: "billing_price_catalog_sync",
