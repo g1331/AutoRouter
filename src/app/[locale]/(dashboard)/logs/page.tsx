@@ -38,7 +38,11 @@ function LogsLoadingSkeleton({ loadingLabel }: LogsLoadingSkeletonProps) {
       className="border-divider bg-surface-200/70 overflow-hidden"
     >
       <span className="sr-only">{loadingLabel}</span>
-      <Table aria-hidden="true">
+      <Table
+        aria-hidden="true"
+        frame="none"
+        containerClassName="rounded-none border-0 bg-transparent"
+      >
         <TableHeader>
           <TableRow>
             <TableHead className="w-9 px-1.5"></TableHead>
