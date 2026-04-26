@@ -634,6 +634,148 @@ describe("UpstreamFormDialog", () => {
       expect(screen.getByText("refreshCatalog")).toBeEnabled();
     });
 
+    it("clears LiteLLM fallback catalog entries without removing native entries", async () => {
+      const litellmCatalogUpstream: Upstream = {
+        ...mockUpstream,
+        model_catalog: [
+          { model: "gpt-4.1", source: "native" },
+          { model: "claude-3-7-sonnet", source: "litellm" },
+          { model: "gemini-2.5-pro", source: "litellm" },
+        ],
+      };
+      mockUpdateMutateAsync.mockResolvedValueOnce({
+        ...litellmCatalogUpstream,
+        model_catalog: [{ model: "gpt-4.1", source: "native" }],
+      });
+
+      render(
+        <UpstreamFormDialog
+          upstream={litellmCatalogUpstream}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      expect(screen.getByText("catalogSourceCountLiteLlm")).toBeInTheDocument();
+      fireEvent.click(screen.getByText("clearLiteLlmCatalogEntries"));
+
+      await waitFor(() => {
+        expect(mockUpdateMutateAsync).toHaveBeenCalledWith({
+          id: "upstream-1",
+          data: {
+            model_catalog: [{ model: "gpt-4.1", source: "native" }],
+            model_catalog_updated_at: litellmCatalogUpstream.model_catalog_updated_at,
+            model_catalog_last_status: "success",
+            model_catalog_last_error: null,
+            model_catalog_last_failed_at: null,
+          },
+        });
+      });
+
+      expect(screen.queryByText("claude-3-7-sonnet")).not.toBeInTheDocument();
+      expect(screen.getByText("gpt-4.1")).toBeInTheDocument();
+    });
+
+    it("clears legacy inferred LiteLLM fallback catalog entries", async () => {
+      const legacyLiteLlmFallbackUpstream: Upstream = {
+        ...mockUpstream,
+        model_discovery: {
+          mode: "openai_compatible",
+          custom_endpoint: null,
+          enable_lite_llm_fallback: true,
+          auto_refresh_enabled: false,
+        },
+        model_catalog: [
+          { model: "claude-3-7-sonnet", source: "inferred" },
+          { model: "gemini-2.5-pro", source: "inferred" },
+        ],
+      };
+      mockUpdateMutateAsync.mockResolvedValueOnce({
+        ...legacyLiteLlmFallbackUpstream,
+        model_catalog: null,
+        model_catalog_updated_at: null,
+        model_catalog_last_status: null,
+      });
+
+      render(
+        <UpstreamFormDialog
+          upstream={legacyLiteLlmFallbackUpstream}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      expect(screen.getByText("catalogSourceCountLiteLlm")).toBeInTheDocument();
+      expect(screen.queryByText("catalogSourceCountInferred")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByText("clearLiteLlmCatalogEntries"));
+
+      await waitFor(() => {
+        expect(mockUpdateMutateAsync).toHaveBeenCalledWith({
+          id: "upstream-1",
+          data: {
+            model_catalog: null,
+            model_catalog_updated_at: null,
+            model_catalog_last_status: null,
+            model_catalog_last_error: null,
+            model_catalog_last_failed_at: null,
+          },
+        });
+      });
+
+      expect(screen.queryByText("claude-3-7-sonnet")).not.toBeInTheDocument();
+      expect(screen.queryByText("gemini-2.5-pro")).not.toBeInTheDocument();
+    });
+
+    it("clears legacy inferred LiteLLM mode entries without removing native entries", async () => {
+      const legacyLiteLlmModeUpstream: Upstream = {
+        ...mockUpstream,
+        model_discovery: {
+          mode: "litellm",
+          custom_endpoint: null,
+          enable_lite_llm_fallback: false,
+          auto_refresh_enabled: false,
+        },
+        model_catalog: [
+          { model: "gpt-4.1", source: "native" },
+          { model: "claude-3-7-sonnet", source: "inferred" },
+        ],
+      };
+      mockUpdateMutateAsync.mockResolvedValueOnce({
+        ...legacyLiteLlmModeUpstream,
+        model_catalog: [{ model: "gpt-4.1", source: "native" }],
+      });
+
+      render(
+        <UpstreamFormDialog
+          upstream={legacyLiteLlmModeUpstream}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      expect(screen.getByText("catalogSourceCountLiteLlm")).toBeInTheDocument();
+      fireEvent.click(screen.getByText("clearLiteLlmCatalogEntries"));
+
+      await waitFor(() => {
+        expect(mockUpdateMutateAsync).toHaveBeenCalledWith({
+          id: "upstream-1",
+          data: {
+            model_catalog: [{ model: "gpt-4.1", source: "native" }],
+            model_catalog_updated_at: legacyLiteLlmModeUpstream.model_catalog_updated_at,
+            model_catalog_last_status: "success",
+            model_catalog_last_error: null,
+            model_catalog_last_failed_at: null,
+          },
+        });
+      });
+
+      expect(screen.queryByText("claude-3-7-sonnet")).not.toBeInTheDocument();
+      expect(screen.getByText("gpt-4.1")).toBeInTheDocument();
+    });
+
     it("keeps the compact status bar ahead of a desktop-secondary workspace", () => {
       render(
         <UpstreamFormDialog upstream={mockUpstream} open={true} onOpenChange={mockOnOpenChange} />,

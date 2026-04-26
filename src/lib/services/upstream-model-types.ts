@@ -15,13 +15,13 @@ export const UPSTREAM_MODEL_DISCOVERY_MODES = [
 
 export type UpstreamModelDiscoveryMode = (typeof UPSTREAM_MODEL_DISCOVERY_MODES)[number];
 
-export const UPSTREAM_MODEL_CATALOG_SOURCES = ["native", "inferred"] as const;
+export const UPSTREAM_MODEL_CATALOG_SOURCES = ["native", "inferred", "litellm"] as const;
 export type UpstreamModelCatalogSource = (typeof UPSTREAM_MODEL_CATALOG_SOURCES)[number];
 
 export const UPSTREAM_MODEL_RULE_TYPES = ["exact", "regex", "alias"] as const;
 export type UpstreamModelRuleType = (typeof UPSTREAM_MODEL_RULE_TYPES)[number];
 
-export const UPSTREAM_MODEL_RULE_SOURCES = ["manual", "native", "inferred"] as const;
+export const UPSTREAM_MODEL_RULE_SOURCES = ["manual", "native", "inferred", "litellm"] as const;
 export type UpstreamModelRuleSource = (typeof UPSTREAM_MODEL_RULE_SOURCES)[number];
 
 export const UPSTREAM_MODEL_CATALOG_STATUSES = ["success", "failed"] as const;
@@ -79,7 +79,7 @@ export function normalizeModelRuleDisplayLabel(
 export function normalizeModelRuleSource(
   source: string | null | undefined
 ): UpstreamModelRuleSource {
-  if (source === "native" || source === "inferred") {
+  if (source === "native" || source === "inferred" || source === "litellm") {
     return source;
   }
   return "manual";
@@ -88,6 +88,9 @@ export function normalizeModelRuleSource(
 export function normalizeModelCatalogSource(
   source: string | null | undefined
 ): UpstreamModelCatalogSource {
+  if (source === "litellm") {
+    return "litellm";
+  }
   return source === "inferred" ? "inferred" : "native";
 }
 

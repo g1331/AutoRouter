@@ -160,10 +160,10 @@ export type UpstreamModelDiscoveryMode =
   | "custom"
   | "litellm";
 
-export type UpstreamModelCatalogSource = "native" | "inferred";
+export type UpstreamModelCatalogSource = "native" | "inferred" | "litellm";
 export type UpstreamModelCatalogStatus = "success" | "failed";
 export type UpstreamModelRuleType = "exact" | "regex" | "alias";
-export type UpstreamModelRuleSource = "manual" | "native" | "inferred";
+export type UpstreamModelRuleSource = "manual" | "native" | "inferred" | "litellm";
 
 export interface UpstreamModelDiscoveryConfig {
   mode: UpstreamModelDiscoveryMode;

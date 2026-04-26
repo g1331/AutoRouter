@@ -281,8 +281,8 @@ describe("upstream-model-discovery", () => {
       });
 
       expect(result.modelCatalog).toEqual([
-        { model: "claude-3-7-sonnet", source: "inferred" },
-        { model: "gpt-4.1", source: "inferred" },
+        { model: "claude-3-7-sonnet", source: "litellm" },
+        { model: "gpt-4.1", source: "litellm" },
       ]);
       expect(result.modelCatalogLastStatus).toBe("success");
       expect(result.modelCatalogLastError).toBeNull();
@@ -316,8 +316,8 @@ describe("upstream-model-discovery", () => {
       });
 
       expect(result.modelCatalog).toEqual([
-        { model: "claude-3-7-sonnet", source: "inferred" },
-        { model: "gpt-4.1", source: "inferred" },
+        { model: "claude-3-7-sonnet", source: "litellm" },
+        { model: "gpt-4.1", source: "litellm" },
       ]);
       expect(result.modelCatalogLastStatus).toBe("success");
       expect(result.modelDiscovery).toEqual({
