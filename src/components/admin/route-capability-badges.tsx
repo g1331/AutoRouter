@@ -209,7 +209,7 @@ export function RouteCapabilityBadges({
   }
 
   return (
-    <div className={cn("flex min-w-0 max-w-full flex-nowrap gap-1.5 overflow-hidden", className)}>
+    <div className={cn("flex min-w-0 max-w-full flex-wrap gap-1.5 overflow-visible", className)}>
       {capabilities.map((capability) => (
         <RouteCapabilityBadge key={capability} capability={capability} className={badgeClassName} />
       ))}

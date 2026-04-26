@@ -3402,10 +3402,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
               </div>
             </TooltipProvider>
           ) : (
-            <div
-              ref={setDesktopTableContainerElement}
-              className="overflow-x-auto rounded-cf-md border border-divider bg-card"
-            >
+            <div ref={setDesktopTableContainerElement} className="overflow-x-auto bg-card">
               <TooltipProvider>
                 {desktopSections.map((section, sectionIndex) => (
                   <Fragment key={section.key}>

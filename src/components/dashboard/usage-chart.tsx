@@ -441,7 +441,7 @@ export function UsageChart({
           </div>
         </div>
 
-        <div className="rounded-cf-md border border-divider/75 bg-surface-200/25 px-3 py-2.5">
+        <div className="border-y border-divider/60 bg-surface-200/20 py-2.5">
           <div className="flex flex-wrap items-center gap-3 lg:gap-4">
             <div className="inline-flex w-fit lg:shrink-0">
               <button

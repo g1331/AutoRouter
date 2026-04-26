@@ -31,7 +31,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
 import {
   useAllUpstreams,
   useUpstreams,
@@ -252,10 +251,10 @@ export default function UpstreamsPage() {
     <>
       <Topbar title={t("pageTitle")} />
 
-      <div className="min-w-0 space-y-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-7 xl:px-10">
+      <div className="min-w-0 max-w-full space-y-6 overflow-x-hidden px-3 py-5 sm:px-6 lg:px-8 lg:py-7 xl:px-10">
         <Card
           variant="outlined"
-          className="border-surface-400/65 bg-surface-300/38 shadow-[var(--vr-shadow-sm)] backdrop-blur supports-[backdrop-filter]:bg-surface-300/32"
+          className="w-full max-w-full overflow-hidden border-surface-400/65 bg-surface-300/38 shadow-[var(--vr-shadow-sm)] backdrop-blur supports-[backdrop-filter]:bg-surface-300/32"
         >
           <CardContent className="space-y-4 p-4 sm:p-5 lg:p-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -277,7 +276,7 @@ export default function UpstreamsPage() {
               </Button>
             </div>
 
-            <div className="rounded-cf-md border border-surface-400/65 bg-surface-400/28 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] sm:p-4">
+            <div className="border-t border-divider/70 pt-4">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
                 <div className="relative flex-1">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -290,7 +289,7 @@ export default function UpstreamsPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:w-[460px]">
+                <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:w-[460px]">
                   <Select
                     value={statusFilter}
                     onValueChange={(value) => setStatusFilter(value as UpstreamStatusFilter)}
@@ -354,39 +353,31 @@ export default function UpstreamsPage() {
               </div>
 
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2 rounded-cf-sm border border-divider/80 bg-surface-300/42 px-2.5 py-1.5">
-                  <Badge
-                    variant="outline"
-                    className="border-surface-400/70 bg-surface-200/45 text-muted-foreground"
-                  >
+                <div className="flex min-w-0 max-w-full flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                  <span className="whitespace-nowrap">
                     {t("overviewTotal", { count: overview.total })}
-                  </Badge>
-                  <Badge
-                    variant="outline"
-                    className="border-surface-400/70 bg-surface-200/45 text-muted-foreground"
-                  >
+                  </span>
+                  <span className="h-3 w-px bg-divider/70" aria-hidden="true" />
+                  <span className="whitespace-nowrap">
                     {t("overviewHealthy", { count: overview.healthy })}
-                  </Badge>
-                  <Badge
-                    variant="outline"
+                  </span>
+                  <span className="h-3 w-px bg-divider/70" aria-hidden="true" />
+                  <span
                     className={cn(
-                      "border-surface-400/70 bg-surface-200/45 text-muted-foreground",
-                      overview.fullConcurrency > 0 &&
-                        "border-status-warning/45 bg-status-warning-muted text-status-warning"
+                      "whitespace-nowrap",
+                      overview.fullConcurrency > 0 && "text-status-warning"
                     )}
                   >
                     {t("overviewConcurrencyFull", { count: overview.fullConcurrency })}
-                  </Badge>
-                  <Badge
-                    variant="outline"
-                    className="border-surface-400/70 bg-surface-200/45 text-muted-foreground"
-                  >
+                  </span>
+                  <span className="h-3 w-px bg-divider/70" aria-hidden="true" />
+                  <span className="whitespace-nowrap">
                     {t("overviewFiltered", { count: overview.filtered })}
-                  </Badge>
+                  </span>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-end gap-3">
-                  <div className="inline-flex items-center rounded-cf-sm border border-surface-400/70 bg-surface-200/70 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-3">
+                  <div className="inline-flex max-w-full items-center rounded-cf-sm border border-surface-400/70 bg-surface-200/70 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
                     <span className="px-2 text-[11px] text-muted-foreground">
                       {t("densityLabel")}
                     </span>

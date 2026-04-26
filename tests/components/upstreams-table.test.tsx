@@ -286,6 +286,24 @@ describe("UpstreamsTable", () => {
     expect(screen.getByText("OpenAI Main")).toBeInTheDocument();
   });
 
+  it("keeps expanded tier content unconstrained so long mobile lists are not clipped", () => {
+    const { container } = render(
+      <UpstreamsTable
+        upstreams={[baseUpstream]}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onTest={onTest}
+      />
+    );
+
+    const expandedTier = container.querySelector('[data-state="open"]');
+
+    expect(expandedTier).toBeInTheDocument();
+    expect(expandedTier?.className).toContain("max-h-none");
+    expect(expandedTier?.className).toContain("overflow-visible");
+    expect(expandedTier?.className).not.toContain("max-h-[2400px]");
+  });
+
   it("calls toggle mutation when active switch changes", async () => {
     mockToggleUpstreamActive.mockResolvedValueOnce(undefined);
 

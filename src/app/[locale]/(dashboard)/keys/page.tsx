@@ -20,42 +20,38 @@ interface KeysLoadingSkeletonProps {
 
 function KeysLoadingSkeleton({ loadingLabel }: KeysLoadingSkeletonProps) {
   return (
-    <Card variant="outlined" className="border-divider bg-surface-200/70">
-      <CardContent className="p-0">
-        <div
-          role="status"
-          aria-label={loadingLabel}
-          className="overflow-hidden rounded-cf-md border border-divider/85 bg-surface-200/55"
-        >
-          <div className="border-b border-divider bg-surface-300/70 px-4 py-2.5">
-            <div className="grid grid-cols-12 gap-3">
-              <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
-              <div className="col-span-3 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
-              <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
-              <div className="col-span-1 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
-              <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
-              <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
-            </div>
-          </div>
-
-          <div className="divide-y divide-divider/70">
-            {Array.from({ length: 7 }).map((_, index) => (
-              <div
-                key={`keys-loading-row-${index}`}
-                className="grid grid-cols-12 items-center gap-3 px-4 py-3"
-              >
-                <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
-                <div className="col-span-3 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
-                <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
-                <div className="col-span-1 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
-                <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
-                <div className="col-span-2 h-8 animate-pulse rounded-cf-sm bg-surface-300/80" />
-              </div>
-            ))}
-          </div>
+    <div
+      role="status"
+      aria-label={loadingLabel}
+      className="overflow-hidden rounded-cf-md border border-divider/85 bg-surface-200/55"
+    >
+      <div className="border-b border-divider bg-surface-300/70 px-4 py-2.5">
+        <div className="grid grid-cols-12 gap-3">
+          <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
+          <div className="col-span-3 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
+          <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
+          <div className="col-span-1 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
+          <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
+          <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-400/70" />
         </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      <div className="divide-y divide-divider/70">
+        {Array.from({ length: 7 }).map((_, index) => (
+          <div
+            key={`keys-loading-row-${index}`}
+            className="grid grid-cols-12 items-center gap-3 px-4 py-3"
+          >
+            <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
+            <div className="col-span-3 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
+            <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
+            <div className="col-span-1 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
+            <div className="col-span-2 h-3 animate-pulse rounded-cf-sm bg-surface-300/80" />
+            <div className="col-span-2 h-8 animate-pulse rounded-cf-sm bg-surface-300/80" />
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

@@ -31,6 +31,25 @@ describe("RouteCapabilityBadges", () => {
     const { container } = render(<RouteCapabilityBadges capabilities={[]} />);
     expect(container.firstChild).toBeNull();
   });
+
+  it("allows capability badges to wrap instead of clipping on narrow screens", () => {
+    const { container } = render(
+      <RouteCapabilityBadges
+        capabilities={[
+          "openai_chat_compatible",
+          "codex_cli_responses",
+          "openai_responses",
+          "anthropic_messages",
+        ]}
+      />
+    );
+
+    const badgeList = container.firstChild as HTMLElement;
+    expect(badgeList.className).toContain("flex-wrap");
+    expect(badgeList.className).toContain("overflow-visible");
+    expect(badgeList.className).not.toContain("flex-nowrap");
+    expect(badgeList.className).not.toContain("overflow-hidden");
+  });
 });
 
 describe("RouteCapabilityMultiSelect", () => {

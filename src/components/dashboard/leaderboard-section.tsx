@@ -47,7 +47,7 @@ function formatCost(usd: number): string {
 }
 
 const RANK_ROW_BASE =
-  "flex items-center gap-3 rounded-cf-sm border-l-2 px-2.5 py-1.5 transition-colors border border-divider-subtle/60 bg-surface-300/50 hover:bg-surface-400/60";
+  "flex items-center gap-3 rounded-cf-sm border-l-2 px-2.5 py-1.5 transition-colors bg-surface-300/42 hover:bg-surface-400/55";
 
 function getRankRowClass(index: number): string {
   if (index < RANK_LEFT_BORDERS.length) {

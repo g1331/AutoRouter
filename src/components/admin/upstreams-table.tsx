@@ -413,7 +413,7 @@ export function UpstreamsTable({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="w-full max-w-full space-y-4 overflow-hidden">
       {tieredData.map((tier) => {
         const isCollapsed = collapsedTiers.has(tier.priority);
         const isClosing = closingTiers.has(tier.priority);
@@ -431,7 +431,7 @@ export function UpstreamsTable({
         return (
           <section
             key={`tier-${tier.priority}`}
-            className="rounded-cf-md border border-surface-400/55 bg-surface-400/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]"
+            className="w-full max-w-full overflow-hidden rounded-cf-md border border-surface-400/55 bg-surface-300/24"
           >
             <button
               type="button"
@@ -492,16 +492,16 @@ export function UpstreamsTable({
               <div
                 data-state={isClosing ? "closed" : "open"}
                 className={cn(
-                  "origin-top overflow-hidden motion-reduce:transition-none",
+                  "origin-top motion-reduce:transition-none",
                   "transition-[max-height,opacity,transform] duration-[260ms] ease-cf-standard",
                   isClosing || isOpening
                     ? "max-h-0 -translate-y-1 opacity-0"
-                    : "max-h-[2400px] translate-y-0 opacity-100"
+                    : "max-h-none overflow-visible translate-y-0 opacity-100"
                 )}
               >
                 <div
                   className={cn(
-                    "grid gap-3 rounded-b-cf-md bg-surface-200/62 ring-1 ring-inset ring-surface-100/35",
+                    "grid min-w-0 gap-3 bg-transparent [&>*]:min-w-0",
                     isCompactDensity
                       ? "p-3 sm:p-3.5 md:grid-cols-2 2xl:grid-cols-3"
                       : "p-3 sm:p-4 xl:grid-cols-2"
@@ -567,7 +567,7 @@ export function UpstreamsTable({
                       <article
                         key={upstream.id}
                         className={cn(
-                          "rounded-cf-md border bg-card shadow-[var(--vr-shadow-sm)]",
+                          "w-full min-w-0 max-w-full overflow-hidden rounded-cf-md border bg-card shadow-[var(--vr-shadow-sm)]",
                           "transition-[transform,box-shadow,border-color,opacity,filter] duration-300 ease-cf-standard",
                           isCompactDensity ? "p-2.5 sm:p-3" : "p-3 sm:p-4",
                           upstream.is_active
@@ -587,7 +587,7 @@ export function UpstreamsTable({
                               isCompactDensity ? "space-y-1.5" : "space-y-2"
                             )}
                           >
-                            <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
                               <Badge
                                 variant="outline"
                                 className={cn(
@@ -638,7 +638,7 @@ export function UpstreamsTable({
                             <RouteCapabilityBadges
                               capabilities={upstream.route_capabilities}
                               className={cn(
-                                "max-w-full items-start gap-1.5",
+                                "max-w-full flex-wrap items-start gap-1.5 overflow-visible",
                                 !upstream.is_active && "opacity-75"
                               )}
                               badgeClassName={cn(
@@ -722,7 +722,7 @@ export function UpstreamsTable({
                         >
                           <section
                             className={cn(
-                              "rounded-cf-sm border border-divider bg-surface-300/45",
+                              "min-w-0 overflow-hidden rounded-cf-sm bg-surface-300/35",
                               isCompactDensity ? "p-2.5" : "p-3"
                             )}
                           >
@@ -761,7 +761,7 @@ export function UpstreamsTable({
 
                           <section
                             className={cn(
-                              "rounded-cf-sm border border-divider bg-surface-300/45",
+                              "min-w-0 overflow-hidden rounded-cf-sm bg-surface-300/35",
                               isCompactDensity ? "p-2.5" : "p-3"
                             )}
                           >
@@ -806,7 +806,7 @@ export function UpstreamsTable({
                             {!concurrency.unlimited && (
                               <div
                                 className={cn(
-                                  "mt-2 flex items-center justify-between gap-2 rounded-cf-sm border border-divider bg-surface-200 px-2",
+                                  "mt-2 flex items-center justify-between gap-2 rounded-cf-sm bg-surface-200/75 px-2",
                                   isCompactDensity ? "py-1" : "py-1.5"
                                 )}
                               >
@@ -838,7 +838,7 @@ export function UpstreamsTable({
 
                         <section
                           className={cn(
-                            "rounded-cf-sm border border-divider bg-surface-300/45",
+                            "min-w-0 overflow-hidden rounded-cf-sm bg-surface-300/35",
                             isCompactDensity ? "mt-2.5 p-2.5" : "mt-3 p-3"
                           )}
                         >
