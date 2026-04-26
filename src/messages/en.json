@@ -22,6 +22,12 @@
     "back": "Back",
     "next": "Next",
     "previous": "Previous",
+    "nextPage": "Next page",
+    "previousPage": "Previous page",
+    "jumpToPage": "Go to page",
+    "jumpToPageAria": "Go to a specific page",
+    "pageSuffix": "",
+    "goToPage": "Go",
     "page": "Page",
     "of": "of",
     "items": "items",
@@ -38,6 +44,8 @@
     "sysOk": "SYS::OK",
     "expand": "Expand",
     "collapse": "Collapse",
+    "showSensitiveInput": "Show input value",
+    "hideSensitiveInput": "Hide input value",
     "logout": "Sign out of your account"
   },
   "nav": {

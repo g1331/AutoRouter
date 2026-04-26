@@ -2,13 +2,13 @@
 
 import { useState, useCallback } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronLeft, ChevronRight, ScrollText } from "lucide-react";
+import { ScrollText } from "lucide-react";
 
 import { LogsTable } from "@/components/admin/logs-table";
+import { PaginationControls } from "@/components/admin/pagination-controls";
 import { RefreshIntervalSelect } from "@/components/admin/refresh-interval-select";
 import { Topbar } from "@/components/admin/topbar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -220,38 +220,13 @@ export default function LogsPage() {
                 className={cn("border border-divider", LOGS_SECTION_ENTER_CLASS)}
                 style={{ animationDelay: "140ms" }}
               >
-                <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="type-body-small text-muted-foreground">
-                    {tCommon("items")}{" "}
-                    <span className="font-semibold text-foreground">{data.total}</span> ·{" "}
-                    {tCommon("page")}{" "}
-                    <span className="font-semibold text-foreground">{data.page}</span>{" "}
-                    {tCommon("of")}{" "}
-                    <span className="font-semibold text-foreground">{data.total_pages}</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setPage(page - 1)}
-                      disabled={page === 1}
-                      className="gap-1"
-                    >
-                      <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                      {tCommon("previous")}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setPage(page + 1)}
-                      disabled={page === data.total_pages}
-                      className="gap-1"
-                    >
-                      {tCommon("next")}
-                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                  </div>
-                </CardContent>
+                <PaginationControls
+                  total={data.total}
+                  page={page}
+                  totalPages={data.total_pages}
+                  onPageChange={setPage}
+                  className="p-4"
+                />
               </Card>
             )}
           </>

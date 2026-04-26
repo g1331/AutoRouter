@@ -3,8 +3,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import {
-  ChevronLeft,
-  ChevronRight,
   Filter,
   LayoutGrid,
   Plus,
@@ -16,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { DeleteUpstreamDialog } from "@/components/admin/delete-upstream-dialog";
+import { PaginationControls } from "@/components/admin/pagination-controls";
 import { TestUpstreamDialog } from "@/components/admin/test-upstream-dialog";
 import { Topbar } from "@/components/admin/topbar";
 import { UpstreamFormDialog } from "@/components/admin/upstream-form-dialog";
@@ -449,40 +448,13 @@ export default function UpstreamsPage() {
                 variant="filled"
                 className="border border-surface-400/65 bg-surface-300/35 shadow-[var(--vr-shadow-xs)]"
               >
-                <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="type-body-small text-muted-foreground">
-                    {tCommon("items")}{" "}
-                    <span className="font-semibold text-foreground">{upstreamsData.total}</span> ·{" "}
-                    {tCommon("page")}{" "}
-                    <span className="font-semibold text-foreground">{upstreamsData.page}</span>{" "}
-                    {tCommon("of")}{" "}
-                    <span className="font-semibold text-foreground">
-                      {upstreamsData.total_pages}
-                    </span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setUpstreamPage(upstreamPage - 1)}
-                      disabled={upstreamPage === 1}
-                      className="gap-1"
-                    >
-                      <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                      {tCommon("previous")}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setUpstreamPage(upstreamPage + 1)}
-                      disabled={upstreamPage === upstreamsData.total_pages}
-                      className="gap-1"
-                    >
-                      {tCommon("next")}
-                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                  </div>
-                </CardContent>
+                <PaginationControls
+                  total={upstreamsData.total}
+                  page={upstreamPage}
+                  totalPages={upstreamsData.total_pages}
+                  onPageChange={setUpstreamPage}
+                  className="p-4"
+                />
               </Card>
             )}
           </div>
