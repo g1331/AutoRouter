@@ -5925,6 +5925,9 @@ describe("proxy route upstream selection", () => {
         allowedModels: ["gpt-4.1", "gpt-5.2"],
       },
     ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-openai" },
+    ]);
 
     const request = new NextRequest("http://localhost/api/proxy/v1/models", {
       method: "GET",
@@ -5947,9 +5950,9 @@ describe("proxy route upstream selection", () => {
       ],
     });
     expect(response.headers.get("content-type")).toBe("application/json");
-    expect(mockApiKeyQuotaTracker.initialize).not.toHaveBeenCalled();
-    expect(db.query.apiKeyUpstreams.findMany).not.toHaveBeenCalled();
-    expect(db.query.upstreams.findMany).not.toHaveBeenCalled();
+    expect(mockApiKeyQuotaTracker.initialize).toHaveBeenCalledTimes(1);
+    expect(db.query.apiKeyUpstreams.findMany).toHaveBeenCalledTimes(1);
+    expect(db.query.upstreams.findMany).toHaveBeenCalledTimes(1);
     expect(selectFromProviderType).not.toHaveBeenCalled();
     expect(forwardRequest).not.toHaveBeenCalled();
     expect(logRequest).toHaveBeenCalledWith(
@@ -5967,6 +5970,114 @@ describe("proxy route upstream selection", () => {
         }),
       })
     );
+  });
+
+  it("should intersect API key model list with authorized upstream model rules", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      {
+        id: "key-1",
+        keyHash: "hash-1",
+        keyPrefix: "sk-test",
+        name: "Restricted Model List Key",
+        expiresAt: null,
+        isActive: true,
+        allowedModels: ["gpt-4.1", "gpt-5.2", "gpt-5.3"],
+      },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-openai" },
+      { upstreamId: "up-alias" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-openai",
+        name: "openai-main",
+        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        modelRules: [
+          {
+            type: "exact",
+            value: "gpt-4.1",
+            targetModel: null,
+            source: "manual",
+            displayLabel: null,
+          },
+        ],
+        allowedModels: null,
+        modelRedirects: null,
+      },
+      {
+        id: "up-alias",
+        name: "openai-alias",
+        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        modelRules: [
+          {
+            type: "alias",
+            value: "gpt-5.2",
+            targetModel: "gpt-5.2-internal",
+            source: "manual",
+            displayLabel: null,
+          },
+        ],
+        allowedModels: null,
+        modelRedirects: null,
+      },
+      {
+        id: "up-hidden",
+        name: "openai-hidden",
+        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        modelRules: [
+          {
+            type: "exact",
+            value: "gpt-5.3",
+            targetModel: null,
+            source: "manual",
+            displayLabel: null,
+          },
+        ],
+        allowedModels: null,
+        modelRedirects: null,
+      },
+    ]);
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/models", {
+      method: "GET",
+      headers: {
+        authorization: "Bearer sk-test",
+      },
+    });
+
+    const response = await GET(request, {
+      params: Promise.resolve({ path: ["models"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.data.map((item: { id: string }) => item.id)).toEqual(["gpt-4.1", "gpt-5.2"]);
+    expect(forwardRequest).not.toHaveBeenCalled();
   });
 
   it("should reject when API key not authorized for selected upstream", async () => {

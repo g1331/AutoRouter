@@ -1,6 +1,15 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState, type ReactNode, type UIEvent } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+  type ReactNode,
+  type UIEvent,
+} from "react";
 import { ArrowDownToLine, Plus, Search, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
@@ -23,21 +32,46 @@ function mergeModels(current: string[], additions: string[]): string[] {
   return normalizeApiKeyAllowedModels([...current, ...additions]) ?? [];
 }
 
-function useVirtualModelRows(itemCount: number) {
+function useVirtualModelRows(
+  itemCount: number,
+  resetKey: string,
+  scrollRef: RefObject<HTMLDivElement | null>
+) {
   const [viewport, setViewport] = useState({
     scrollTop: 0,
     height: DEFAULT_MODEL_LIST_HEIGHT,
+    resetKey,
   });
+  const currentViewport =
+    viewport.resetKey === resetKey
+      ? viewport
+      : {
+          scrollTop: 0,
+          height: DEFAULT_MODEL_LIST_HEIGHT,
+          resetKey,
+        };
+
+  useEffect(() => {
+    const viewportElement = scrollRef.current;
+    if (viewportElement) {
+      viewportElement.scrollTop = 0;
+    }
+  }, [resetKey, scrollRef]);
+
   const startIndex =
     itemCount === 0
       ? 0
       : Math.min(
-          Math.max(0, Math.floor(viewport.scrollTop / MODEL_ROW_HEIGHT) - MODEL_LIST_OVERSCAN),
+          Math.max(
+            0,
+            Math.floor(currentViewport.scrollTop / MODEL_ROW_HEIGHT) - MODEL_LIST_OVERSCAN
+          ),
           itemCount - 1
         );
   const endIndex = Math.min(
     itemCount,
-    Math.ceil((viewport.scrollTop + viewport.height) / MODEL_ROW_HEIGHT) + MODEL_LIST_OVERSCAN
+    Math.ceil((currentViewport.scrollTop + currentViewport.height) / MODEL_ROW_HEIGHT) +
+      MODEL_LIST_OVERSCAN
   );
 
   return {
@@ -48,6 +82,7 @@ function useVirtualModelRows(itemCount: number) {
       setViewport({
         scrollTop: event.currentTarget.scrollTop,
         height: event.currentTarget.clientHeight || DEFAULT_MODEL_LIST_HEIGHT,
+        resetKey,
       });
     },
   };
@@ -64,11 +99,14 @@ function VirtualModelList({
   onToggle: (model: string, checked: boolean) => void;
   trailingAction?: (model: string) => ReactNode;
 }) {
-  const virtualRows = useVirtualModelRows(models.length);
+  const resetKey = models.join("\u0000");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtualRows = useVirtualModelRows(models.length, resetKey, scrollRef);
   const visibleModels = models.slice(virtualRows.startIndex, virtualRows.endIndex);
 
   return (
     <div
+      ref={scrollRef}
       className="max-h-40 overflow-auto rounded-cf-sm border border-divider/70"
       onScroll={virtualRows.onScroll}
     >
