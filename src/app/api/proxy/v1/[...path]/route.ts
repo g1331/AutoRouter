@@ -61,6 +61,7 @@ import {
 } from "@/lib/route-capabilities";
 import {
   extractGeminiModelFromPath,
+  isOpenAIModelListRequest,
   resolveRouteCapability,
 } from "@/lib/services/route-capability-matcher";
 import { ensureRouteCapabilityMigration } from "@/lib/services/route-capability-migration";
@@ -109,6 +110,12 @@ import { createLogger } from "@/lib/utils/logger";
 import { extractRequestThinkingConfig } from "@/lib/utils/request-thinking-config";
 import { apiKeyQuotaTracker } from "@/lib/services/api-key-quota-tracker";
 import { resolveBillingModelPrice } from "@/lib/services/billing-price-service";
+import {
+  createApiKeyModelListResponseBody,
+  filterApiKeyModelListResponseBody,
+  isModelAllowedByApiKey,
+  normalizeApiKeyAllowedModels,
+} from "@/lib/api-key-models";
 
 const log = createLogger("proxy-route");
 
@@ -258,6 +265,137 @@ async function logApiKeyQuotaRejectedRequest(input: {
     routingDecision,
     thinkingConfig: input.thinkingConfig,
     sessionId: input.sessionId,
+    affinityHit: false,
+    affinityMigrated: false,
+    isStream: false,
+  });
+}
+
+async function logApiKeyModelRejectedRequest(input: {
+  apiKeyId: string;
+  apiKeyName: string | null;
+  apiKeyPrefix: string | null;
+  request: NextRequest;
+  path: string;
+  model: string | null;
+  reasoningEffort: ReasoningEffort | null;
+  thinkingConfig: import("@/types/api").RequestThinkingConfig | null;
+  requestId: string;
+  startTime: number;
+  sessionId: string | null;
+  matchedRouteCapability: RouteCapability | null;
+  routeMatchSource: RouteMatchSource | null;
+  errorMessage: string;
+}): Promise<void> {
+  const routingDecision: RoutingDecisionLog = {
+    original_model: input.model ?? "(path-based)",
+    resolved_model: input.model ?? "(path-based)",
+    model_redirect_applied: false,
+    provider_type: input.matchedRouteCapability
+      ? getProviderByRouteCapability(input.matchedRouteCapability)
+      : null,
+    routing_type: "none",
+    matched_route_capability: input.matchedRouteCapability,
+    route_match_source: input.routeMatchSource,
+    capability_candidates_count: 0,
+    candidates: [],
+    excluded: [],
+    candidate_count: 0,
+    final_candidate_count: 0,
+    selected_upstream_id: null,
+    candidate_upstream_id: null,
+    actual_upstream_id: null,
+    did_send_upstream: false,
+    failure_stage: "auth_filter",
+    selection_strategy: "weighted",
+  };
+
+  await logRequest({
+    apiKeyId: input.apiKeyId,
+    apiKeyName: input.apiKeyName,
+    apiKeyPrefix: input.apiKeyPrefix,
+    upstreamId: null,
+    method: input.request.method,
+    path: input.path,
+    model: input.model,
+    reasoningEffort: input.reasoningEffort,
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+    statusCode: getHttpStatusForError("API_KEY_MODEL_NOT_ALLOWED"),
+    durationMs: Date.now() - input.startTime,
+    routingDurationMs: null,
+    errorMessage: input.errorMessage,
+    routingType: null,
+    priorityTier: null,
+    failoverAttempts: 0,
+    failoverHistory: null,
+    routingDecision,
+    thinkingConfig: input.thinkingConfig,
+    sessionId: input.sessionId,
+    affinityHit: false,
+    affinityMigrated: false,
+    isStream: false,
+  });
+}
+
+async function logLocalApiKeyModelListRequest(input: {
+  apiKeyId: string;
+  apiKeyName: string | null;
+  apiKeyPrefix: string | null;
+  request: NextRequest;
+  path: string;
+  requestId: string;
+  startTime: number;
+  matchedRouteCapability: RouteCapability | null;
+  routeMatchSource: RouteMatchSource | null;
+}): Promise<void> {
+  const routingDecision: RoutingDecisionLog = {
+    original_model: "(model-list)",
+    resolved_model: "(model-list)",
+    model_redirect_applied: false,
+    provider_type: input.matchedRouteCapability
+      ? getProviderByRouteCapability(input.matchedRouteCapability)
+      : null,
+    routing_type: "none",
+    matched_route_capability: input.matchedRouteCapability,
+    route_match_source: input.routeMatchSource,
+    capability_candidates_count: 0,
+    candidates: [],
+    excluded: [],
+    candidate_count: 0,
+    final_candidate_count: 0,
+    selected_upstream_id: null,
+    candidate_upstream_id: null,
+    actual_upstream_id: null,
+    did_send_upstream: false,
+    failure_stage: null,
+    selection_strategy: "weighted",
+  };
+
+  await logRequest({
+    apiKeyId: input.apiKeyId,
+    apiKeyName: input.apiKeyName,
+    apiKeyPrefix: input.apiKeyPrefix,
+    upstreamId: null,
+    method: input.request.method,
+    path: input.path,
+    model: "(model-list)",
+    reasoningEffort: null,
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+    statusCode: 200,
+    durationMs: Date.now() - input.startTime,
+    routingDurationMs: 0,
+    errorMessage: null,
+    routingType: null,
+    priorityTier: null,
+    failoverAttempts: 0,
+    failoverHistory: null,
+    routingDecision,
+    thinkingConfig: null,
+    sessionId: null,
     affinityHit: false,
     affinityMigrated: false,
     isStream: false,
@@ -2156,6 +2294,69 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   const matchedRouteMatchSource = matchedRouteCapabilityDetails?.routeMatchSource ?? null;
   const thinkingConfig = extractRequestThinkingConfig(matchedRouteCapability, bodyJson);
 
+  if (!isModelAllowedByApiKey(model, validApiKey.allowedModels)) {
+    const errorCode: UnifiedErrorCode = "API_KEY_MODEL_NOT_ALLOWED";
+    const errorReason: UnifiedErrorReason = "API_KEY_MODEL_NOT_ALLOWED";
+    const errorMessage = `API key is not allowed to request model: ${model}`;
+    const errorDetails = {
+      reason: errorReason,
+      did_send_upstream: false,
+      request_id: requestId,
+      user_hint: model
+        ? `当前密钥未允许模型 ${model}，请在密钥配置中添加该模型`
+        : "当前密钥未允许该请求模型，请检查密钥模型权限",
+    } as const;
+
+    try {
+      await logApiKeyModelRejectedRequest({
+        apiKeyId: validApiKey.id,
+        apiKeyName: apiKeySnapshot.apiKeyName,
+        apiKeyPrefix: apiKeySnapshot.apiKeyPrefix,
+        request,
+        path,
+        model,
+        reasoningEffort,
+        thinkingConfig,
+        requestId,
+        startTime,
+        sessionId: null,
+        matchedRouteCapability,
+        routeMatchSource: matchedRouteMatchSource,
+        errorMessage,
+      });
+    } catch (error) {
+      log.error({ err: error, requestId, model }, "failed to log API key model rejection");
+    }
+
+    return createUnifiedErrorResponse(errorCode, errorDetails);
+  }
+
+  const apiKeyAllowedModels = normalizeApiKeyAllowedModels(validApiKey.allowedModels);
+  if (isOpenAIModelListRequest(request.method, path) && apiKeyAllowedModels) {
+    try {
+      await logLocalApiKeyModelListRequest({
+        apiKeyId: validApiKey.id,
+        apiKeyName: apiKeySnapshot.apiKeyName,
+        apiKeyPrefix: apiKeySnapshot.apiKeyPrefix,
+        request,
+        path,
+        requestId,
+        startTime,
+        matchedRouteCapability,
+        routeMatchSource: matchedRouteMatchSource,
+      });
+    } catch (error) {
+      log.error({ err: error, requestId }, "failed to log local API key model list request");
+    }
+
+    return new Response(Buffer.from(createApiKeyModelListResponseBody(apiKeyAllowedModels)), {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+      },
+    });
+  }
+
   await apiKeyQuotaTracker.initialize();
   const apiKeyQuotaStatus = apiKeyQuotaTracker.getQuotaStatus(validApiKey.id);
 
@@ -3068,7 +3269,15 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       });
     } else {
       // Regular response
-      const bodyBytes = result.body as Uint8Array;
+      let bodyBytes = result.body as Uint8Array;
+      const modelListFilter = isOpenAIModelListRequest(request.method, path)
+        ? filterApiKeyModelListResponseBody(bodyBytes, validApiKey.allowedModels)
+        : { bodyBytes, filtered: false };
+      if (modelListFilter.filtered) {
+        bodyBytes = modelListFilter.bodyBytes;
+        responseHeaders.set("content-type", "application/json");
+        responseHeaders.delete("content-length");
+      }
       const durationMs = Date.now() - startTime;
 
       // Try to extract usage from response

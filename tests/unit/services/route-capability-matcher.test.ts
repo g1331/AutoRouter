@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   extractGeminiModelFromPath,
+  isOpenAIModelListRequest,
   matchRouteCapability,
   resolveRouteCapability,
 } from "@/lib/services/route-capability-matcher";
@@ -63,6 +64,13 @@ describe("matchRouteCapability", () => {
     expect(matchRouteCapability("POST", "/v1/chat/completions/stream")).toBe(
       "openai_chat_compatible"
     );
+  });
+
+  it("should match openai model list route for GET requests", () => {
+    expect(matchRouteCapability("GET", "/v1/models")).toBe("openai_chat_compatible");
+    expect(matchRouteCapability("GET", "models")).toBe("openai_chat_compatible");
+    expect(isOpenAIModelListRequest("GET", "/v1/models")).toBe(true);
+    expect(isOpenAIModelListRequest("GET", "/v1/models/../responses")).toBe(false);
   });
 
   it("should match openai extended routes", () => {

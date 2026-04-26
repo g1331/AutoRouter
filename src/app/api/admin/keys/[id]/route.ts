@@ -71,6 +71,7 @@ const updateApiKeySchema = z
     access_mode: z.enum(["unrestricted", "restricted"]).optional(),
     expires_at: z.string().datetime().nullable().optional(),
     upstream_ids: z.array(z.string().uuid()).optional(),
+    allowed_models: z.array(z.string()).nullable().optional(),
     spending_rules: nullableSpendingRulesSchema,
   })
   .strict()
@@ -130,6 +131,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
     if (validated.upstream_ids !== undefined) {
       input.upstreamIds = validated.upstream_ids;
+    }
+    if (validated.allowed_models !== undefined) {
+      input.allowedModels = validated.allowed_models ?? null;
     }
     if (validated.spending_rules !== undefined) {
       input.spendingRules = validated.spending_rules ?? null;

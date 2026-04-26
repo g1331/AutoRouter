@@ -1467,13 +1467,14 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
     };
 
     const requestSignature = [log.method, log.path].filter(Boolean).join(" ");
-    const candidateSummary = routingDecision
-      ? String(routingDecision.final_candidate_count) +
-        "/" +
-        String(routingDecision.candidate_count) +
-        " " +
-        t("tooltipCandidates").toLowerCase()
-      : null;
+    const candidateSummary =
+      routingDecision && didSendUpstream !== false
+        ? String(routingDecision.final_candidate_count) +
+          "/" +
+          String(routingDecision.candidate_count) +
+          " " +
+          t("tooltipCandidates").toLowerCase()
+        : null;
     const requestArrivedSummary = (modelDisplay ?? log.model ?? requestSignature) || "-";
     const requestArrivedMeta = [requestSignature || null, requestModeLabel, groupName]
       .filter(Boolean)
@@ -1751,7 +1752,7 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
         metrics: (
           <>
             {routingTypeLabel ? renderMetricPill(routingTypeLabel, "", "neutral") : null}
-            {routingDecision
+            {routingDecision && didSendUpstream !== false
               ? renderMetricPill(
                   t("tooltipCandidates"),
                   String(routingDecision.final_candidate_count) +

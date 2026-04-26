@@ -57,6 +57,7 @@ describe("KeysTable", () => {
     description: "Test description",
     access_mode: "restricted",
     upstream_ids: ["upstream-1", "upstream-2"],
+    allowed_models: null,
     spending_rules: null,
     spending_rule_statuses: [],
     is_quota_exceeded: false,
@@ -146,7 +147,7 @@ describe("KeysTable", () => {
     it("shows unrestricted badge when key can access all upstreams", () => {
       render(
         <KeysTable
-          keys={[{ ...mockKey, access_mode: "unrestricted", upstream_ids: [] }]}
+          keys={[{ ...mockKey, access_mode: "unrestricted", upstream_ids: [], allowed_models: [] }]}
           onRevoke={mockOnRevoke}
           onEdit={mockOnEdit}
         />
@@ -417,6 +418,7 @@ describe("KeysTable", () => {
         description: "Production environment",
         access_mode: "restricted",
         upstream_ids: ["upstream-1"],
+        allowed_models: null,
         is_active: true,
         expires_at: null,
         created_at: "2024-06-01T10:00:00Z",
@@ -429,6 +431,7 @@ describe("KeysTable", () => {
         description: "Development environment",
         access_mode: "restricted",
         upstream_ids: ["upstream-2"],
+        allowed_models: null,
         is_active: true,
         expires_at: null,
         created_at: "2024-06-02T10:00:00Z",
@@ -441,6 +444,7 @@ describe("KeysTable", () => {
         description: "For testing purposes",
         access_mode: "restricted",
         upstream_ids: ["upstream-3"],
+        allowed_models: null,
         is_active: true,
         expires_at: null,
         created_at: "2024-06-03T10:00:00Z",

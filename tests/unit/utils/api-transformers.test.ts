@@ -217,6 +217,7 @@ describe("api-transformers", () => {
         description: "Main production API key",
         accessMode: "restricted",
         upstreamIds: ["upstream-1", "upstream-2"],
+        allowedModels: ["gpt-4.1", "claude-3-7-sonnet"],
         spendingRules: [{ period_type: "daily", limit: 25 }],
         spendingRuleStatuses: [
           {
@@ -246,6 +247,7 @@ describe("api-transformers", () => {
         description: "Main production API key",
         access_mode: "restricted",
         upstream_ids: ["upstream-1", "upstream-2"],
+        allowed_models: ["gpt-4.1", "claude-3-7-sonnet"],
         spending_rules: [{ period_type: "daily", limit: 25 }],
         spending_rule_statuses: [
           {
@@ -275,6 +277,7 @@ describe("api-transformers", () => {
         description: null,
         accessMode: "unrestricted",
         upstreamIds: [],
+        allowedModels: null,
         spendingRules: null,
         spendingRuleStatuses: [],
         isQuotaExceeded: false,
@@ -304,6 +307,7 @@ describe("api-transformers", () => {
         description: "Newly created key",
         accessMode: "restricted",
         upstreamIds: ["upstream-1"],
+        allowedModels: ["gpt-4.1"],
         spendingRules: [{ period_type: "rolling", limit: 10, period_hours: 6 }],
         spendingRuleStatuses: [
           {
@@ -334,6 +338,7 @@ describe("api-transformers", () => {
         description: "Newly created key",
         access_mode: "restricted",
         upstream_ids: ["upstream-1"],
+        allowed_models: ["gpt-4.1"],
         spending_rules: [{ period_type: "rolling", limit: 10, period_hours: 6 }],
         spending_rule_statuses: [
           {
@@ -364,6 +369,7 @@ describe("api-transformers", () => {
         description: null,
         accessMode: "unrestricted",
         upstreamIds: [],
+        allowedModels: null,
         spendingRules: null,
         spendingRuleStatuses: [],
         isQuotaExceeded: false,
@@ -412,6 +418,7 @@ describe("api-transformers", () => {
             description: "First key",
             accessMode: "restricted",
             upstreamIds: ["upstream-1"],
+            allowedModels: ["gpt-4.1"],
             spendingRules: [{ period_type: "monthly", limit: 100 }],
             spendingRuleStatuses: [
               {
@@ -446,6 +453,7 @@ describe("api-transformers", () => {
       expect(result.page_size).toBe(15);
       expect(result.total_pages).toBe(4);
       expect(result.items[0].key_prefix).toBe("ar_live_");
+      expect(result.items[0].allowed_models).toEqual(["gpt-4.1"]);
       expect(result.items[0].spending_rules).toEqual([{ period_type: "monthly", limit: 100 }]);
       expect(result.items[0].is_quota_exceeded).toBe(false);
     });

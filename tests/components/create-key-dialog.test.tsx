@@ -40,12 +40,45 @@ const mockUpstreams = [
     name: "OpenAI",
     provider: "openai",
     description: "OpenAI API",
+    is_active: true,
+    model_catalog: [{ model: "gpt-4.1", source: "native" }],
+    allowed_models: null,
+    model_rules: null,
   },
   {
     id: "upstream-2",
     name: "Anthropic",
     provider: "anthropic",
     description: null,
+    is_active: true,
+    model_catalog: null,
+    allowed_models: ["claude-3-7-sonnet"],
+    model_rules: null,
+  },
+  {
+    id: "upstream-3",
+    name: "Google",
+    provider: "google",
+    description: "Google AI",
+    is_active: true,
+    model_catalog: null,
+    allowed_models: null,
+    model_rules: [
+      {
+        type: "exact",
+        value: "gemini-2.5-pro",
+        target_model: null,
+        source: "manual",
+        display_label: null,
+      },
+      {
+        type: "regex",
+        value: "^gemini-2\\.5-.*$",
+        target_model: null,
+        source: "manual",
+        display_label: null,
+      },
+    ],
   },
 ];
 
@@ -164,6 +197,7 @@ describe("CreateKeyDialog", () => {
         description: null,
         access_mode: "restricted",
         upstream_ids: ["upstream-2"],
+        allowed_models: null,
         spending_rules: null,
         spending_rule_statuses: [],
         is_quota_exceeded: false,
@@ -199,6 +233,7 @@ describe("CreateKeyDialog", () => {
           description: null,
           access_mode: "restricted",
           upstream_ids: ["upstream-2"],
+          allowed_models: null,
           expires_at: null,
           spending_rules: null,
         });
@@ -225,6 +260,7 @@ describe("CreateKeyDialog", () => {
         description: null,
         access_mode: "unrestricted",
         upstream_ids: [],
+        allowed_models: null,
         spending_rules: [{ period_type: "daily", limit: 12.5 }],
         spending_rule_statuses: [],
         is_quota_exceeded: false,
@@ -252,8 +288,96 @@ describe("CreateKeyDialog", () => {
           description: null,
           access_mode: "unrestricted",
           upstream_ids: [],
+          allowed_models: null,
           expires_at: null,
           spending_rules: [{ period_type: "daily", limit: 12.5 }],
+        });
+      });
+    });
+
+    it("imports candidate models from all enabled upstream sources in unrestricted mode", async () => {
+      mockCreateMutateAsync.mockResolvedValueOnce({
+        id: "key-models",
+        key_value: "sk-auto-models",
+        key_prefix: "sk-auto-models",
+        name: "Model Key",
+        description: null,
+        access_mode: "unrestricted",
+        upstream_ids: [],
+        allowed_models: ["claude-3-7-sonnet", "gemini-2.5-pro", "gpt-4.1"],
+        spending_rules: null,
+        spending_rule_statuses: [],
+        is_quota_exceeded: false,
+        is_active: true,
+        expires_at: null,
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-01T00:00:00Z",
+      });
+
+      render(<CreateKeyDialog />, { wrapper: Wrapper });
+
+      fireEvent.click(screen.getByText("createKey"));
+      fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
+        target: { value: "Model Key" },
+      });
+      fireEvent.click(screen.getByText("selectVisibleModelCandidates"));
+      fireEvent.click(screen.getByText("importSelectedModelCandidates"));
+      fireEvent.click(screen.getByText("create"));
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalledWith({
+          name: "Model Key",
+          description: null,
+          access_mode: "unrestricted",
+          upstream_ids: [],
+          allowed_models: ["claude-3-7-sonnet", "gemini-2.5-pro", "gpt-4.1"],
+          expires_at: null,
+          spending_rules: null,
+        });
+      });
+    });
+
+    it("imports only selected candidate models after filtering", async () => {
+      mockCreateMutateAsync.mockResolvedValueOnce({
+        id: "key-filtered-models",
+        key_value: "sk-auto-filtered-models",
+        key_prefix: "sk-auto-filtered",
+        name: "Filtered Model Key",
+        description: null,
+        access_mode: "unrestricted",
+        upstream_ids: [],
+        allowed_models: ["gemini-2.5-pro"],
+        spending_rules: null,
+        spending_rule_statuses: [],
+        is_quota_exceeded: false,
+        is_active: true,
+        expires_at: null,
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-01T00:00:00Z",
+      });
+
+      render(<CreateKeyDialog />, { wrapper: Wrapper });
+
+      fireEvent.click(screen.getByText("createKey"));
+      fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
+        target: { value: "Filtered Model Key" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("searchModelCandidates"), {
+        target: { value: "gemini" },
+      });
+      fireEvent.click(screen.getByText("selectVisibleModelCandidates"));
+      fireEvent.click(screen.getByText("importSelectedModelCandidates"));
+      fireEvent.click(screen.getByText("create"));
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalledWith({
+          name: "Filtered Model Key",
+          description: null,
+          access_mode: "unrestricted",
+          upstream_ids: [],
+          allowed_models: ["gemini-2.5-pro"],
+          expires_at: null,
+          spending_rules: null,
         });
       });
     });
@@ -267,6 +391,7 @@ describe("CreateKeyDialog", () => {
         description: null,
         access_mode: "unrestricted",
         upstream_ids: [],
+        allowed_models: null,
         spending_rules: [{ period_type: "rolling", limit: 5, period_hours: 5 }],
         spending_rule_statuses: [],
         is_quota_exceeded: false,
@@ -320,6 +445,7 @@ describe("CreateKeyDialog", () => {
           description: null,
           access_mode: "unrestricted",
           upstream_ids: [],
+          allowed_models: null,
           expires_at: null,
           spending_rules: [{ period_type: "rolling", limit: 5, period_hours: 5 }],
         });
@@ -379,6 +505,7 @@ describe("CreateKeyDialog", () => {
         description: null,
         access_mode: "unrestricted",
         upstream_ids: [],
+        allowed_models: null,
         spending_rules: null,
         spending_rule_statuses: [],
         is_quota_exceeded: false,
@@ -407,6 +534,7 @@ describe("CreateKeyDialog", () => {
           description: null,
           access_mode: "unrestricted",
           upstream_ids: [],
+          allowed_models: null,
           expires_at: null,
           spending_rules: null,
         });
@@ -443,6 +571,7 @@ describe("CreateKeyDialog", () => {
         description: null,
         access_mode: "restricted",
         upstream_ids: ["upstream-1"],
+        allowed_models: null,
         spending_rules: null,
         spending_rule_statuses: [],
         is_quota_exceeded: false,
@@ -476,6 +605,7 @@ describe("CreateKeyDialog", () => {
           description: null,
           access_mode: "restricted",
           upstream_ids: ["upstream-1"],
+          allowed_models: null,
           expires_at: null,
           spending_rules: null,
         });

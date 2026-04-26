@@ -30,6 +30,7 @@ export const apiKeys = sqliteTable(
     description: text("description"),
     userId: text("user_id"), // Reserved for future user system
     accessMode: text("access_mode").notNull().default("unrestricted"),
+    allowedModels: text("allowed_models", { mode: "json" }).$type<string[] | null>(),
     spendingRules: text("spending_rules", { mode: "json" }).$type<
       | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
       | null

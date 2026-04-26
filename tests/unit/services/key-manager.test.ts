@@ -58,7 +58,13 @@ vi.mock("@/lib/db", () => {
         }
       ),
     },
-    apiKeys: { id: "id", keyPrefix: "keyPrefix", createdAt: "createdAt", updatedAt: "updatedAt" },
+    apiKeys: {
+      id: "id",
+      keyPrefix: "keyPrefix",
+      allowedModels: "allowedModels",
+      createdAt: "createdAt",
+      updatedAt: "updatedAt",
+    },
     apiKeyUpstreams: { apiKeyId: "apiKeyId" },
     upstreams: { id: "id" },
   };
@@ -258,6 +264,48 @@ describe("key-manager", () => {
       expect(result.name).toBe("Test Key");
       expect(result.keyValue).toMatch(/^sk-auto-/);
       expect(result.upstreamIds).toEqual(["upstream-1"]);
+    });
+
+    it("should normalize allowed models when creating API key", async () => {
+      const { db } = await import("@/lib/db");
+      const { createApiKey } = await import("@/lib/services/key-manager");
+
+      const mockApiKey = {
+        id: "key-models",
+        keyHash: "hashed-key",
+        keyValueEncrypted: "encrypted:sk-auto-test123",
+        keyPrefix: "sk-auto-test",
+        name: "Model Key",
+        description: null,
+        accessMode: "unrestricted",
+        allowedModels: ["gpt-4.1"],
+        spendingRules: null,
+        isActive: true,
+        expiresAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      const mockValues = vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue([mockApiKey]),
+      });
+
+      vi.mocked(db.insert).mockReturnValue({
+        values: mockValues,
+      } as unknown as ReturnType<typeof db.insert>);
+
+      const result = await createApiKey({
+        name: "Model Key",
+        accessMode: "unrestricted",
+        upstreamIds: [],
+        allowedModels: [" gpt-4.1 ", "", "gpt-4.1"],
+      });
+
+      expect(mockValues).toHaveBeenCalledWith(
+        expect.objectContaining({
+          allowedModels: ["gpt-4.1"],
+        })
+      );
+      expect(result.allowedModels).toEqual(["gpt-4.1"]);
     });
 
     it("should still return the created key when quota tracker sync fails after persistence", async () => {
@@ -905,6 +953,96 @@ describe("key-manager", () => {
 
       expect(result.name).toBe("New Name");
       expect(db.update).toHaveBeenCalled();
+    });
+
+    it("should update allowed models", async () => {
+      const { db } = await import("@/lib/db");
+      const { updateApiKey } = await import("@/lib/services/key-manager");
+
+      const mockExistingKey = {
+        id: "key-1",
+        keyPrefix: "sk-auto-test",
+        name: "Test Key",
+        description: null,
+        accessMode: "unrestricted",
+        allowedModels: null,
+        spendingRules: null,
+        isActive: true,
+        expiresAt: null,
+        createdAt: new Date("2024-01-01"),
+        updatedAt: new Date("2024-01-01"),
+      };
+      const mockUpdatedKey = {
+        ...mockExistingKey,
+        allowedModels: ["claude-3-7-sonnet"],
+        updatedAt: new Date(),
+      };
+
+      vi.mocked(db.query.apiKeys.findFirst).mockResolvedValueOnce(mockExistingKey as never);
+
+      const mockReturning = vi.fn().mockResolvedValue([mockUpdatedKey]);
+      const mockWhere = vi.fn(() => ({ returning: mockReturning }));
+      const mockSet = vi.fn(() => ({ where: mockWhere }));
+      vi.mocked(db.update).mockReturnValue({ set: mockSet } as unknown as ReturnType<
+        typeof db.update
+      >);
+
+      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([] as never);
+
+      const result = await updateApiKey("key-1", {
+        allowedModels: [" claude-3-7-sonnet ", "", "claude-3-7-sonnet"],
+      });
+
+      expect(mockSet).toHaveBeenCalledWith(
+        expect.objectContaining({
+          allowedModels: ["claude-3-7-sonnet"],
+        })
+      );
+      expect(result.allowedModels).toEqual(["claude-3-7-sonnet"]);
+    });
+
+    it("should clear allowed models when updating with an empty list", async () => {
+      const { db } = await import("@/lib/db");
+      const { updateApiKey } = await import("@/lib/services/key-manager");
+
+      const mockExistingKey = {
+        id: "key-1",
+        keyPrefix: "sk-auto-test",
+        name: "Test Key",
+        description: null,
+        accessMode: "unrestricted",
+        allowedModels: ["gpt-4.1"],
+        spendingRules: null,
+        isActive: true,
+        expiresAt: null,
+        createdAt: new Date("2024-01-01"),
+        updatedAt: new Date("2024-01-01"),
+      };
+      const mockUpdatedKey = {
+        ...mockExistingKey,
+        allowedModels: null,
+        updatedAt: new Date(),
+      };
+
+      vi.mocked(db.query.apiKeys.findFirst).mockResolvedValueOnce(mockExistingKey as never);
+
+      const mockReturning = vi.fn().mockResolvedValue([mockUpdatedKey]);
+      const mockWhere = vi.fn(() => ({ returning: mockReturning }));
+      const mockSet = vi.fn(() => ({ where: mockWhere }));
+      vi.mocked(db.update).mockReturnValue({ set: mockSet } as unknown as ReturnType<
+        typeof db.update
+      >);
+
+      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([] as never);
+
+      const result = await updateApiKey("key-1", { allowedModels: [] });
+
+      expect(mockSet).toHaveBeenCalledWith(
+        expect.objectContaining({
+          allowedModels: null,
+        })
+      );
+      expect(result.allowedModels).toBeNull();
     });
 
     it("should persist inferred restricted access mode when only upstreamIds are provided", async () => {

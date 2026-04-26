@@ -140,7 +140,8 @@ export function RoutingDecisionTimeline({
       redirect: routingDecision.model_redirect_applied,
       failover: failoverAttempts > 0,
       excluded: routingDecision.excluded.length > 0,
-      lowCandidates: routingDecision.final_candidate_count <= 1,
+      lowCandidates:
+        routingDecision.did_send_upstream !== false && routingDecision.final_candidate_count <= 1,
       affinityHit: affinityHit === true,
       affinityMigrated: affinityMigrated === true,
     };
@@ -208,9 +209,13 @@ export function RoutingDecisionTimeline({
             <span className="text-[11px] font-mono text-muted-foreground">{groupName}</span>
           )}
           {routingDecision && (
-            <span className="text-[11px] font-mono text-muted-foreground">
-              {routingDecision.final_candidate_count}/{routingDecision.candidate_count}
-            </span>
+            <>
+              {didSendUpstream !== false ? (
+                <span className="text-[11px] font-mono text-muted-foreground">
+                  {routingDecision.final_candidate_count}/{routingDecision.candidate_count}
+                </span>
+              ) : null}
+            </>
           )}
           {hasConcurrencyFullSignal && (
             <Badge
@@ -361,10 +366,12 @@ export function RoutingDecisionTimeline({
             <div className="mb-1 text-muted-foreground">
               {t("tooltipStrategy")}: {routingDecision.selection_strategy} (
               {routingDecision.routing_type})
-              <span className="ml-2">
-                {routingDecision.final_candidate_count}/{routingDecision.candidate_count}{" "}
-                {t("tooltipCandidates").toLowerCase()}
-              </span>
+              {didSendUpstream !== false ? (
+                <span className="ml-2">
+                  {routingDecision.final_candidate_count}/{routingDecision.candidate_count}{" "}
+                  {t("tooltipCandidates").toLowerCase()}
+                </span>
+              ) : null}
             </div>
             {routingDecision.matched_route_capability && (
               <div className="mb-1 text-muted-foreground">

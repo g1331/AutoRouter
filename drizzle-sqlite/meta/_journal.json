@@ -50,6 +50,13 @@
       "when": 1777096644847,
       "tag": "0006_dapper_bucky",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1777174562463,
+      "tag": "0007_rare_psynapse",
+      "breakpoints": true
     }
   ]
 }

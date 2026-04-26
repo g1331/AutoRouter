@@ -39,6 +39,7 @@ export const apiKeys = pgTable(
     description: text("description"),
     userId: uuid("user_id"), // Reserved for future user system
     accessMode: varchar("access_mode", { length: 16 }).notNull().default("unrestricted"),
+    allowedModels: json("allowed_models").$type<string[] | null>(),
     spendingRules: json("spending_rules").$type<
       | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
       | null

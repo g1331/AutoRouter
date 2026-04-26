@@ -155,4 +155,33 @@ describe("RoutingDecisionTimeline", () => {
     expect(screen.getByTitle("indicatorFailover")).toBeInTheDocument();
     expect(screen.getByTitle("indicatorExcluded")).toBeInTheDocument();
   });
+
+  it("does not show low-candidate signal for local no-upstream requests", () => {
+    render(
+      <RoutingDecisionTimeline
+        routingDecision={{
+          ...baseRoutingDecision,
+          original_model: "(model-list)",
+          resolved_model: "(model-list)",
+          routing_type: "none",
+          candidates: [],
+          candidate_count: 0,
+          final_candidate_count: 0,
+          selected_upstream_id: null,
+          did_send_upstream: false,
+          candidate_upstream_id: null,
+          actual_upstream_id: null,
+          failure_stage: null,
+        }}
+        upstreamName={null}
+        routingType={null}
+        groupName={null}
+        failoverAttempts={0}
+      />
+    );
+
+    expect(screen.getByText("timelineNoUpstreamSent")).toBeInTheDocument();
+    expect(screen.queryByTitle("indicatorLowCandidates")).not.toBeInTheDocument();
+    expect(screen.queryByText("0/0")).not.toBeInTheDocument();
+  });
 });

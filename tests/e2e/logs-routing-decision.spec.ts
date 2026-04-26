@@ -83,7 +83,7 @@ test.describe("Logs routing diagnostics", () => {
     await page.goto("/en/logs");
 
     await expect(page.getByRole("table")).toBeVisible();
-    await expect(page.getByText("Not sent to upstream")).toBeVisible();
+    await expect(page.getByText("Not outbound")).toBeVisible();
 
     await page.getByRole("button", { name: "Expand failover details" }).first().click();
     await page.getByRole("button", { name: "Decision" }).first().click();

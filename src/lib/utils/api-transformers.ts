@@ -245,6 +245,7 @@ export interface ApiKeyApiResponse {
   description: string | null;
   access_mode: "unrestricted" | "restricted";
   upstream_ids: string[];
+  allowed_models: string[] | null;
   spending_rules:
     | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
     | null;
@@ -298,6 +299,7 @@ export function transformApiKeyToApi(apiKey: ApiKeyListItem): ApiKeyApiResponse 
     description: apiKey.description,
     access_mode: apiKey.accessMode,
     upstream_ids: apiKey.upstreamIds,
+    allowed_models: apiKey.allowedModels,
     spending_rules: apiKey.spendingRules,
     spending_rule_statuses: apiKey.spendingRuleStatuses.map((rule) => ({
       period_type: rule.periodType,
@@ -330,6 +332,7 @@ export function transformApiKeyCreateToApi(result: ApiKeyCreateResult): ApiKeyCr
     description: result.description,
     access_mode: result.accessMode,
     upstream_ids: result.upstreamIds,
+    allowed_models: result.allowedModels,
     spending_rules: result.spendingRules,
     spending_rule_statuses: result.spendingRuleStatuses.map((rule) => ({
       period_type: rule.periodType,
