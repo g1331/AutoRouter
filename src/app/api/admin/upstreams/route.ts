@@ -56,7 +56,7 @@ const modelDiscoverySchema = z.object({
 
 const modelCatalogEntrySchema = z.object({
   model: z.string().trim().min(1),
-  source: z.enum(["native", "inferred"]),
+  source: z.enum(["native", "inferred", "litellm"]),
 });
 
 const modelRuleSchema = z
@@ -64,7 +64,7 @@ const modelRuleSchema = z
     type: z.enum(["exact", "regex", "alias"]),
     value: z.string().trim().min(1),
     target_model: z.string().trim().min(1).nullable().optional(),
-    source: z.enum(["manual", "native", "inferred"]).default("manual"),
+    source: z.enum(["manual", "native", "inferred", "litellm"]).default("manual"),
     display_label: z.string().trim().min(1).nullable().optional(),
   })
   .refine((rule) => rule.type !== "alias" || Boolean(rule.target_model), {

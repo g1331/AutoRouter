@@ -354,11 +354,14 @@ export function UpstreamsTable({
     }
 
     if ((upstream.model_catalog?.length ?? 0) > 0) {
+      const hasLiteLlmEntries = upstream.model_catalog?.some((entry) => entry.source === "litellm");
       return {
         label: t("catalogSignalReady"),
-        variant: upstream.model_catalog?.some((entry) => entry.source === "inferred")
-          ? "info"
-          : "success",
+        variant: hasLiteLlmEntries
+          ? "outline"
+          : upstream.model_catalog?.some((entry) => entry.source === "inferred")
+            ? "info"
+            : "success",
         title: t("catalogSignalReadyHint", { count: upstream.model_catalog?.length ?? 0 }),
       };
     }

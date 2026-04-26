@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState, type ReactNode, type UIEvent } from "react";
 import { ArrowDownToLine, Plus, Search, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
@@ -15,8 +15,90 @@ interface KeyModelAllowlistSectionProps {
   onChange: (models: string[]) => void;
 }
 
+const MODEL_ROW_HEIGHT = 42;
+const MODEL_LIST_OVERSCAN = 8;
+const DEFAULT_MODEL_LIST_HEIGHT = 160;
+
 function mergeModels(current: string[], additions: string[]): string[] {
   return normalizeApiKeyAllowedModels([...current, ...additions]) ?? [];
+}
+
+function useVirtualModelRows(itemCount: number) {
+  const [viewport, setViewport] = useState({
+    scrollTop: 0,
+    height: DEFAULT_MODEL_LIST_HEIGHT,
+  });
+  const startIndex =
+    itemCount === 0
+      ? 0
+      : Math.min(
+          Math.max(0, Math.floor(viewport.scrollTop / MODEL_ROW_HEIGHT) - MODEL_LIST_OVERSCAN),
+          itemCount - 1
+        );
+  const endIndex = Math.min(
+    itemCount,
+    Math.ceil((viewport.scrollTop + viewport.height) / MODEL_ROW_HEIGHT) + MODEL_LIST_OVERSCAN
+  );
+
+  return {
+    startIndex,
+    endIndex,
+    totalHeight: itemCount * MODEL_ROW_HEIGHT,
+    onScroll: (event: UIEvent<HTMLDivElement>) => {
+      setViewport({
+        scrollTop: event.currentTarget.scrollTop,
+        height: event.currentTarget.clientHeight || DEFAULT_MODEL_LIST_HEIGHT,
+      });
+    },
+  };
+}
+
+function VirtualModelList({
+  models,
+  selectedModels,
+  onToggle,
+  trailingAction,
+}: {
+  models: string[];
+  selectedModels: ReadonlySet<string>;
+  onToggle: (model: string, checked: boolean) => void;
+  trailingAction?: (model: string) => ReactNode;
+}) {
+  const virtualRows = useVirtualModelRows(models.length);
+  const visibleModels = models.slice(virtualRows.startIndex, virtualRows.endIndex);
+
+  return (
+    <div
+      className="max-h-40 overflow-auto rounded-cf-sm border border-divider/70"
+      onScroll={virtualRows.onScroll}
+    >
+      <div className="relative" style={{ height: virtualRows.totalHeight }}>
+        {visibleModels.map((model, index) => {
+          const checked = selectedModels.has(model);
+          return (
+            <label
+              key={model}
+              className="absolute left-0 flex min-w-full cursor-pointer items-center gap-3 px-2.5 transition-colors hover:bg-surface-200/55"
+              style={{
+                top: (virtualRows.startIndex + index) * MODEL_ROW_HEIGHT,
+                height: MODEL_ROW_HEIGHT,
+                width: "max-content",
+              }}
+            >
+              <Checkbox
+                checked={checked}
+                onCheckedChange={(nextChecked) => onToggle(model, nextChecked === true)}
+              />
+              <span className="min-w-0 flex-1 whitespace-nowrap font-mono text-sm text-foreground">
+                {model}
+              </span>
+              {trailingAction ? trailingAction(model) : null}
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export function KeyModelAllowlistSection({
@@ -28,6 +110,8 @@ export function KeyModelAllowlistSection({
   const [draft, setDraft] = useState("");
   const [candidateSearchQuery, setCandidateSearchQuery] = useState("");
   const [currentModelSearchQuery, setCurrentModelSearchQuery] = useState("");
+  const deferredCandidateSearchQuery = useDeferredValue(candidateSearchQuery);
+  const deferredCurrentModelSearchQuery = useDeferredValue(currentModelSearchQuery);
   const [selectedCandidateModels, setSelectedCandidateModels] = useState<string[]>([]);
   const [selectedCurrentModels, setSelectedCurrentModels] = useState<string[]>([]);
   const modelSet = useMemo(() => new Set(value), [value]);
@@ -35,8 +119,9 @@ export function KeyModelAllowlistSection({
     () => candidates.filter((model) => !modelSet.has(model)),
     [candidates, modelSet]
   );
-  const normalizedCandidateSearchQuery = candidateSearchQuery.trim().toLowerCase();
-  const normalizedCurrentModelSearchQuery = currentModelSearchQuery.trim().toLowerCase();
+  const availableCandidateSet = useMemo(() => new Set(availableCandidates), [availableCandidates]);
+  const normalizedCandidateSearchQuery = deferredCandidateSearchQuery.trim().toLowerCase();
+  const normalizedCurrentModelSearchQuery = deferredCurrentModelSearchQuery.trim().toLowerCase();
   const filteredCandidates = useMemo(
     () =>
       availableCandidates.filter(
@@ -55,15 +140,27 @@ export function KeyModelAllowlistSection({
       ),
     [normalizedCurrentModelSearchQuery, value]
   );
-  const selectedAvailableCandidates = selectedCandidateModels.filter((model) =>
-    availableCandidates.includes(model)
+  const selectedAvailableCandidates = useMemo(
+    () => selectedCandidateModels.filter((model) => availableCandidateSet.has(model)),
+    [availableCandidateSet, selectedCandidateModels]
   );
-  const selectedExistingModels = selectedCurrentModels.filter((model) => value.includes(model));
+  const selectedExistingModels = useMemo(
+    () => selectedCurrentModels.filter((model) => modelSet.has(model)),
+    [modelSet, selectedCurrentModels]
+  );
+  const selectedAvailableCandidateSet = useMemo(
+    () => new Set(selectedAvailableCandidates),
+    [selectedAvailableCandidates]
+  );
+  const selectedExistingModelSet = useMemo(
+    () => new Set(selectedExistingModels),
+    [selectedExistingModels]
+  );
   const selectedVisibleCandidateCount = filteredCandidates.filter((model) =>
-    selectedAvailableCandidates.includes(model)
+    selectedAvailableCandidateSet.has(model)
   ).length;
   const selectedVisibleCurrentCount = filteredCurrentModels.filter((model) =>
-    selectedExistingModels.includes(model)
+    selectedExistingModelSet.has(model)
   ).length;
 
   const addDraftModels = () => {
@@ -199,13 +296,13 @@ export function KeyModelAllowlistSection({
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span>
+          <div className="space-y-0.5">
             {t("modelCandidateSelectionSummary", {
               selected: selectedAvailableCandidates.length,
               visible: selectedVisibleCandidateCount,
               total: availableCandidates.length,
             })}
-          </span>
+          </div>
           <Button
             type="button"
             variant="outline"
@@ -228,29 +325,11 @@ export function KeyModelAllowlistSection({
             {t("noMatchingModelCandidates")}
           </div>
         ) : (
-          <div className="max-h-40 overflow-auto rounded-cf-sm border border-divider/70">
-            <div className="divide-y divide-divider/70">
-              {filteredCandidates.map((model) => {
-                const checked = selectedAvailableCandidates.includes(model);
-                return (
-                  <label
-                    key={model}
-                    className="flex cursor-pointer items-center gap-3 px-2.5 py-2.5 transition-colors hover:bg-surface-200/55"
-                  >
-                    <Checkbox
-                      checked={checked}
-                      onCheckedChange={(nextChecked) =>
-                        toggleCandidate(model, nextChecked === true)
-                      }
-                    />
-                    <span className="min-w-0 flex-1 truncate font-mono text-sm text-foreground">
-                      {model}
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
+          <VirtualModelList
+            models={filteredCandidates}
+            selectedModels={selectedAvailableCandidateSet}
+            onToggle={toggleCandidate}
+          />
         )}
       </div>
 
@@ -317,7 +396,7 @@ export function KeyModelAllowlistSection({
             </Button>
           </div>
 
-          <div className="text-xs text-muted-foreground">
+          <div className="space-y-0.5 text-xs text-muted-foreground">
             {t("allowedModelSelectionSummary", {
               selected: selectedExistingModels.length,
               visible: selectedVisibleCurrentCount,
@@ -330,40 +409,24 @@ export function KeyModelAllowlistSection({
               {t("noMatchingAllowedModels")}
             </div>
           ) : (
-            <div className="max-h-40 overflow-auto rounded-cf-sm border border-divider/70">
-              <div className="divide-y divide-divider/70">
-                {filteredCurrentModels.map((model) => {
-                  const checked = selectedExistingModels.includes(model);
-                  return (
-                    <label
-                      key={model}
-                      className="flex cursor-pointer items-center gap-3 px-2.5 py-2.5 transition-colors hover:bg-surface-200/55"
-                    >
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={(nextChecked) =>
-                          toggleCurrentModel(model, nextChecked === true)
-                        }
-                      />
-                      <span className="min-w-0 flex-1 truncate font-mono text-sm text-foreground">
-                        {model}
-                      </span>
-                      <button
-                        type="button"
-                        className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                        onClick={(event) => {
-                          event.preventDefault();
-                          removeModel(model);
-                        }}
-                        aria-label={t("removeAllowedModel", { model })}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
+            <VirtualModelList
+              models={filteredCurrentModels}
+              selectedModels={selectedExistingModelSet}
+              onToggle={toggleCurrentModel}
+              trailingAction={(model) => (
+                <button
+                  type="button"
+                  className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    removeModel(model);
+                  }}
+                  aria-label={t("removeAllowedModel", { model })}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            />
           )}
         </div>
       ) : (

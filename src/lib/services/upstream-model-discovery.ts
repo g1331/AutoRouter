@@ -161,7 +161,7 @@ export function buildUpstreamModelDiscoveryRequest(
 
 function normalizeCatalogEntries(
   models: string[],
-  source: "native" | "inferred"
+  source: "native" | "inferred" | "litellm"
 ): UpstreamModelCatalogEntry[] {
   const unique = new Set<string>();
   for (const model of models) {
@@ -268,7 +268,7 @@ async function fetchLiteLlmCatalog(timeoutMs: number): Promise<UpstreamModelCata
     throw new Error("LiteLLM catalog did not contain any model entries");
   }
 
-  return normalizeCatalogEntries(modelNames, "inferred");
+  return normalizeCatalogEntries(modelNames, "litellm");
 }
 
 export async function refreshUpstreamModelCatalog(

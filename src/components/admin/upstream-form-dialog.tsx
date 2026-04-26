@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import { useForm, useWatch, useFieldArray, type DeepPartial } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -166,7 +166,11 @@ const MODEL_RULE_SOURCE_VALUES = [
   "manual",
   "native",
   "inferred",
+  "litellm",
 ] as const satisfies readonly UpstreamModelRuleSource[];
+const MODEL_ROW_HEIGHT = 42;
+const MODEL_LIST_OVERSCAN = 8;
+const DEFAULT_MODEL_LIST_HEIGHT = 436;
 const MODEL_RULE_ALIAS_TARGET_REQUIRED_MESSAGE = "modelRuleAliasTargetRequired";
 
 const modelDiscoverySchema = z.object({
@@ -468,8 +472,19 @@ function toApiModelRulesValue(
 }
 
 function buildCatalogWorkspaceState(upstream?: Upstream | null): CatalogWorkspaceState {
+  const modelCatalog = upstream?.model_catalog ?? [];
+  const legacyLiteLlmCatalog =
+    modelCatalog.some((entry) => entry.source === "inferred") &&
+    (upstream?.model_discovery?.mode === "litellm" ||
+      (upstream?.model_discovery?.enable_lite_llm_fallback === true &&
+        modelCatalog.every((entry) => entry.source === "inferred" || entry.source === "litellm")));
+
   return {
-    modelCatalog: upstream?.model_catalog ?? [],
+    modelCatalog: legacyLiteLlmCatalog
+      ? modelCatalog.map((entry) =>
+          entry.source === "inferred" ? { ...entry, source: "litellm" } : entry
+        )
+      : modelCatalog,
     modelCatalogUpdatedAt: upstream?.model_catalog_updated_at ?? null,
     modelCatalogLastStatus: upstream?.model_catalog_last_status ?? null,
     modelCatalogLastError: upstream?.model_catalog_last_error ?? null,
@@ -752,10 +767,79 @@ function formatCatalogTimestamp(value: string | null): string | null {
   return parsed.toLocaleString();
 }
 
-function getCatalogSourceBadgeVariant(
-  source: UpstreamModelCatalogSource
-): NonNullable<React.ComponentProps<typeof Badge>["variant"]> {
-  return source === "inferred" ? "info" : "neutral";
+function useVirtualCatalogRows(itemCount: number) {
+  const [viewport, setViewport] = useState({
+    scrollTop: 0,
+    height: DEFAULT_MODEL_LIST_HEIGHT,
+  });
+  const startIndex =
+    itemCount === 0
+      ? 0
+      : Math.min(
+          Math.max(0, Math.floor(viewport.scrollTop / MODEL_ROW_HEIGHT) - MODEL_LIST_OVERSCAN),
+          itemCount - 1
+        );
+  const endIndex = Math.min(
+    itemCount,
+    Math.ceil((viewport.scrollTop + viewport.height) / MODEL_ROW_HEIGHT) + MODEL_LIST_OVERSCAN
+  );
+
+  return {
+    startIndex,
+    endIndex,
+    totalHeight: itemCount * MODEL_ROW_HEIGHT,
+    onScroll: (event: UIEvent<HTMLDivElement>) => {
+      setViewport({
+        scrollTop: event.currentTarget.scrollTop,
+        height: event.currentTarget.clientHeight || DEFAULT_MODEL_LIST_HEIGHT,
+      });
+    },
+  };
+}
+
+function VirtualCatalogEntryList({
+  entries,
+  selectedModels,
+  onToggle,
+}: {
+  entries: UpstreamModelCatalogEntry[];
+  selectedModels: ReadonlySet<string>;
+  onToggle: (model: string, checked: boolean) => void;
+}) {
+  const virtualRows = useVirtualCatalogRows(entries.length);
+  const visibleEntries = entries.slice(virtualRows.startIndex, virtualRows.endIndex);
+
+  return (
+    <div
+      className="min-h-0 flex-1 overflow-auto rounded-cf-sm border border-divider/70 bg-card/15"
+      onScroll={virtualRows.onScroll}
+    >
+      <div className="relative" style={{ height: virtualRows.totalHeight }}>
+        {visibleEntries.map((entry, index) => {
+          const checked = selectedModels.has(entry.model);
+          return (
+            <label
+              key={entry.model}
+              className="absolute left-0 flex min-w-full cursor-pointer items-center gap-3 px-2.5 transition-colors hover:bg-surface-200/55"
+              style={{
+                top: (virtualRows.startIndex + index) * MODEL_ROW_HEIGHT,
+                height: MODEL_ROW_HEIGHT,
+                width: "max-content",
+              }}
+            >
+              <Checkbox
+                checked={checked}
+                onCheckedChange={(nextChecked) => onToggle(entry.model, nextChecked === true)}
+              />
+              <span className="whitespace-nowrap font-mono text-sm text-foreground">
+                {entry.model}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function getRuleSourceBadgeVariant(
@@ -766,6 +850,9 @@ function getRuleSourceBadgeVariant(
   }
   if (source === "inferred") {
     return "info";
+  }
+  if (source === "litellm") {
+    return "warning";
   }
   return "secondary";
 }
@@ -806,6 +893,7 @@ export function UpstreamFormDialog({
   const [highlightedSectionId, setHighlightedSectionId] = useState<ConfigSectionId | null>(null);
   const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState(false);
   const [catalogSearchQuery, setCatalogSearchQuery] = useState("");
+  const deferredCatalogSearchQuery = useDeferredValue(catalogSearchQuery);
   const [catalogSourceFilter, setCatalogSourceFilter] = useState<CatalogSourceFilter>("all");
   const [selectedCatalogModels, setSelectedCatalogModels] = useState<string[]>([]);
   const [selectedModelRuleIds, setSelectedModelRuleIds] = useState<string[]>([]);
@@ -996,13 +1084,13 @@ export function UpstreamFormDialog({
     [filteredConfigSections]
   );
   const filteredCatalogEntries = useMemo(() => {
-    const query = catalogSearchQuery.trim().toLowerCase();
+    const query = deferredCatalogSearchQuery.trim().toLowerCase();
     return catalogState.modelCatalog.filter((entry) => {
       const matchesQuery = !query || entry.model.toLowerCase().includes(query);
       const matchesSource = catalogSourceFilter === "all" || entry.source === catalogSourceFilter;
       return matchesQuery && matchesSource;
     });
-  }, [catalogSearchQuery, catalogSourceFilter, catalogState.modelCatalog]);
+  }, [deferredCatalogSearchQuery, catalogSourceFilter, catalogState.modelCatalog]);
   const catalogSourceCounts = useMemo(
     () =>
       catalogState.modelCatalog.reduce(
@@ -1010,7 +1098,7 @@ export function UpstreamFormDialog({
           counts[entry.source] += 1;
           return counts;
         },
-        { native: 0, inferred: 0 } satisfies Record<UpstreamModelCatalogSource, number>
+        { native: 0, inferred: 0, litellm: 0 } satisfies Record<UpstreamModelCatalogSource, number>
       ),
     [catalogState.modelCatalog]
   );
@@ -1268,6 +1356,33 @@ export function UpstreamFormDialog({
     }
   };
 
+  const handleClearLiteLlmCatalogEntries = async () => {
+    if (!upstream || catalogSourceCounts.litellm === 0) {
+      return;
+    }
+
+    const retainedCatalog = catalogState.modelCatalog.filter((entry) => entry.source !== "litellm");
+    const retainedModelSet = new Set(retainedCatalog.map((entry) => entry.model));
+
+    try {
+      const updatedUpstream = await updateMutation.mutateAsync({
+        id: upstream.id,
+        data: {
+          model_catalog: retainedCatalog.length > 0 ? retainedCatalog : null,
+          model_catalog_updated_at:
+            retainedCatalog.length > 0 ? catalogState.modelCatalogUpdatedAt : null,
+          model_catalog_last_status: retainedCatalog.length > 0 ? "success" : null,
+          model_catalog_last_error: null,
+          model_catalog_last_failed_at: null,
+        },
+      });
+      setSelectedCatalogModels((current) => current.filter((model) => retainedModelSet.has(model)));
+      syncWorkspaceFromRemoteUpstream(updatedUpstream);
+    } catch {
+      // Update errors are surfaced by the mutation toast.
+    }
+  };
+
   const handleImportCatalog = async () => {
     if (!upstream || selectedCatalogModels.length === 0) {
       return;
@@ -1493,8 +1608,12 @@ export function UpstreamFormDialog({
     );
   };
 
+  const selectedCatalogModelSet = useMemo(
+    () => new Set(selectedCatalogModels),
+    [selectedCatalogModels]
+  );
   const selectedVisibleCatalogCount = filteredCatalogEntries.filter((entry) =>
-    selectedCatalogModels.includes(entry.model)
+    selectedCatalogModelSet.has(entry.model)
   ).length;
   const catalogUpdatedAtLabel = formatCatalogTimestamp(catalogState.modelCatalogUpdatedAt);
   const catalogFailedAtLabel = formatCatalogTimestamp(catalogState.modelCatalogLastFailedAt);
@@ -1921,6 +2040,13 @@ export function UpstreamFormDialog({
                                   })}
                                 </Badge>
                               )}
+                              {catalogSourceCounts.litellm > 0 && (
+                                <Badge variant="warning">
+                                  {t("catalogSourceCountLiteLlm", {
+                                    count: catalogSourceCounts.litellm,
+                                  })}
+                                </Badge>
+                              )}
                               <span className="text-xs text-muted-foreground">
                                 {catalogUpdatedAtLabel
                                   ? t("catalogUpdatedAtLabel", { time: catalogUpdatedAtLabel })
@@ -1934,23 +2060,40 @@ export function UpstreamFormDialog({
                             </p>
                           </div>
 
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="gap-2 self-start xl:self-auto"
-                            onClick={() => {
-                              void handleRefreshCatalog();
-                            }}
-                            disabled={catalogRefreshBlocked || catalogIsRefreshing}
-                          >
-                            {catalogIsRefreshing ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <RefreshCw className="h-4 w-4" />
-                            )}
-                            {t("refreshCatalog")}
-                          </Button>
+                          <div className="flex flex-wrap gap-2 self-start xl:self-auto">
+                            {catalogSourceCounts.litellm > 0 ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="gap-2"
+                                onClick={() => {
+                                  void handleClearLiteLlmCatalogEntries();
+                                }}
+                                disabled={updateMutation.isPending}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                {t("clearLiteLlmCatalogEntries")}
+                              </Button>
+                            ) : null}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="gap-2"
+                              onClick={() => {
+                                void handleRefreshCatalog();
+                              }}
+                              disabled={catalogRefreshBlocked || catalogIsRefreshing}
+                            >
+                              {catalogIsRefreshing ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <RefreshCw className="h-4 w-4" />
+                              )}
+                              {t("refreshCatalog")}
+                            </Button>
+                          </div>
                         </div>
 
                         <div className="grid gap-4 xl:h-[min(62vh,720px)] xl:grid-cols-[minmax(0,1.02fr)_minmax(340px,0.98fr)]">
@@ -2064,8 +2207,8 @@ export function UpstreamFormDialog({
                                     {t("modelDiscoveryPreviewEmpty")}
                                   </p>
                                 ) : (
-                                  <div className="space-y-2 text-xs">
-                                    <div className="flex flex-wrap items-center gap-2">
+                                  <div className="min-w-0 space-y-2 text-xs">
+                                    <div className="flex min-w-0 flex-wrap items-center gap-2">
                                       <Badge variant="outline">
                                         {t(
                                           `modelDiscoveryAuthProfile_${discoveryPreview.authProfile}`
@@ -2074,11 +2217,11 @@ export function UpstreamFormDialog({
                                       <span className="text-muted-foreground">
                                         {t("modelDiscoveryPreviewApiRoot")}
                                       </span>
-                                      <code className="rounded-cf-sm bg-surface-200/75 px-2 py-1 font-mono text-[11px] text-foreground ring-1 ring-divider/50">
+                                      <code className="inline-block max-w-full overflow-x-auto whitespace-nowrap rounded-cf-sm bg-surface-200/75 px-2 py-1 font-mono text-[11px] text-foreground ring-1 ring-divider/50">
                                         {discoveryPreview.apiRoot}
                                       </code>
                                     </div>
-                                    <div className="rounded-cf-sm bg-surface-200/75 px-3 py-2 font-mono text-[11px] text-foreground ring-1 ring-divider/50">
+                                    <div className="max-w-full overflow-x-auto whitespace-nowrap rounded-cf-sm bg-surface-200/75 px-3 py-2 font-mono text-[11px] text-foreground ring-1 ring-divider/50">
                                       {discoveryPreview.requestUrl ??
                                         t("customDiscoveryEndpointRequired")}
                                     </div>
@@ -2376,6 +2519,9 @@ export function UpstreamFormDialog({
                                       <SelectItem value="inferred">
                                         {t("modelRuleSource_inferred")}
                                       </SelectItem>
+                                      <SelectItem value="litellm">
+                                        {t("modelRuleSource_litellm")}
+                                      </SelectItem>
                                     </SelectContent>
                                   </Select>
                                 </div>
@@ -2442,50 +2588,17 @@ export function UpstreamFormDialog({
                                     </div>
                                   </div>
 
-                                  <div className="min-h-0 flex-1 overflow-auto rounded-cf-sm border border-divider/70 bg-card/15">
-                                    {filteredCatalogEntries.length === 0 ? (
-                                      <div className="p-4 text-sm text-muted-foreground">
-                                        {t("catalogNoMatchingModels")}
-                                      </div>
-                                    ) : (
-                                      <div className="divide-y divide-divider/70">
-                                        {filteredCatalogEntries.map((entry) => {
-                                          const checked = selectedCatalogModels.includes(
-                                            entry.model
-                                          );
-                                          return (
-                                            <label
-                                              key={entry.model}
-                                              className="flex cursor-pointer items-center justify-between gap-3 px-2.5 py-2.5 transition-colors hover:bg-surface-200/55"
-                                            >
-                                              <div className="flex min-w-0 items-center gap-3">
-                                                <Checkbox
-                                                  checked={checked}
-                                                  onCheckedChange={(nextChecked) =>
-                                                    toggleCatalogModelSelection(
-                                                      entry.model,
-                                                      nextChecked === true
-                                                    )
-                                                  }
-                                                />
-                                                <div className="min-w-0">
-                                                  <div className="truncate font-mono text-sm text-foreground">
-                                                    {entry.model}
-                                                  </div>
-                                                </div>
-                                              </div>
-                                              <Badge
-                                                variant={getCatalogSourceBadgeVariant(entry.source)}
-                                                className="shrink-0 whitespace-nowrap px-2 text-[11px]"
-                                              >
-                                                {t(`modelRuleSource_${entry.source}`)}
-                                              </Badge>
-                                            </label>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
-                                  </div>
+                                  {filteredCatalogEntries.length === 0 ? (
+                                    <div className="min-h-0 flex-1 rounded-cf-sm border border-divider/70 bg-card/15 p-4 text-sm text-muted-foreground">
+                                      {t("catalogNoMatchingModels")}
+                                    </div>
+                                  ) : (
+                                    <VirtualCatalogEntryList
+                                      entries={filteredCatalogEntries}
+                                      selectedModels={selectedCatalogModelSet}
+                                      onToggle={toggleCatalogModelSelection}
+                                    />
+                                  )}
 
                                   <div className="flex flex-col gap-3 border-t border-divider/70 pt-3 sm:flex-row sm:items-center sm:justify-between">
                                     <span className="text-xs text-muted-foreground">
