@@ -34,56 +34,6 @@ export function createApiKeyModelListResponseBody(models: string[]): Uint8Array 
   );
 }
 
-export function filterApiKeyModelListResponseBody(
-  bodyBytes: Uint8Array,
-  allowedModels: string[] | null | undefined
-): { bodyBytes: Uint8Array; filtered: boolean } {
-  const normalizedAllowedModels = normalizeApiKeyAllowedModels(allowedModels);
-  if (!normalizedAllowedModels) {
-    return { bodyBytes, filtered: false };
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(new TextDecoder().decode(bodyBytes));
-  } catch {
-    parsed = { object: "list" };
-  }
-
-  const payload =
-    parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as { object?: unknown; data?: unknown })
-      : { object: "list" };
-  const upstreamModelsById = new Map<string, Record<string, unknown>>();
-  if (Array.isArray(payload.data)) {
-    for (const item of payload.data) {
-      if (!item || typeof item !== "object" || Array.isArray(item)) {
-        continue;
-      }
-
-      const id = (item as { id?: unknown }).id;
-      if (typeof id === "string") {
-        upstreamModelsById.set(id, item as Record<string, unknown>);
-      }
-    }
-  }
-
-  const filteredData = normalizedAllowedModels.map(
-    (model) => upstreamModelsById.get(model) ?? createOpenAIModelListItem(model)
-  );
-
-  return {
-    bodyBytes: new TextEncoder().encode(
-      JSON.stringify({
-        ...payload,
-        object: typeof payload.object === "string" ? payload.object : "list",
-        data: filteredData,
-      })
-    ),
-    filtered: true,
-  };
-}
-
 function createOpenAIModelListItem(model: string): Record<string, unknown> {
   return {
     id: model,

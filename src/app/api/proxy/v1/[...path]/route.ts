@@ -112,7 +112,6 @@ import { apiKeyQuotaTracker } from "@/lib/services/api-key-quota-tracker";
 import { resolveBillingModelPrice } from "@/lib/services/billing-price-service";
 import {
   createApiKeyModelListResponseBody,
-  filterApiKeyModelListResponseBody,
   isModelAllowedByApiKey,
   normalizeApiKeyAllowedModels,
 } from "@/lib/api-key-models";
@@ -613,6 +612,15 @@ function filterCandidatesByModelRules(
   }
 
   return { allowed, excluded };
+}
+
+function getApiKeyVisibleModelList(
+  apiKeyAllowedModels: string[],
+  candidates: Upstream[]
+): string[] {
+  return apiKeyAllowedModels.filter((model) =>
+    candidates.some((candidate) => resolvePathRoutingModelForUpstream(model, candidate).matched)
+  );
 }
 
 function mergeExcludedCandidates(
@@ -2331,32 +2339,6 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     return createUnifiedErrorResponse(errorCode, errorDetails);
   }
 
-  const apiKeyAllowedModels = normalizeApiKeyAllowedModels(validApiKey.allowedModels);
-  if (isOpenAIModelListRequest(request.method, path) && apiKeyAllowedModels) {
-    try {
-      await logLocalApiKeyModelListRequest({
-        apiKeyId: validApiKey.id,
-        apiKeyName: apiKeySnapshot.apiKeyName,
-        apiKeyPrefix: apiKeySnapshot.apiKeyPrefix,
-        request,
-        path,
-        requestId,
-        startTime,
-        matchedRouteCapability,
-        routeMatchSource: matchedRouteMatchSource,
-      });
-    } catch (error) {
-      log.error({ err: error, requestId }, "failed to log local API key model list request");
-    }
-
-    return new Response(Buffer.from(createApiKeyModelListResponseBody(apiKeyAllowedModels)), {
-      status: 200,
-      headers: {
-        "content-type": "application/json",
-      },
-    });
-  }
-
   await apiKeyQuotaTracker.initialize();
   const apiKeyQuotaStatus = apiKeyQuotaTracker.getQuotaStatus(validApiKey.id);
 
@@ -2629,6 +2611,34 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     }
 
     return rejectedResponse;
+  }
+
+  const apiKeyAllowedModels = normalizeApiKeyAllowedModels(validApiKey.allowedModels);
+  if (isOpenAIModelListRequest(request.method, path) && apiKeyAllowedModels) {
+    const visibleModels = getApiKeyVisibleModelList(apiKeyAllowedModels, finalCapabilityCandidates);
+
+    try {
+      await logLocalApiKeyModelListRequest({
+        apiKeyId: validApiKey.id,
+        apiKeyName: apiKeySnapshot.apiKeyName,
+        apiKeyPrefix: apiKeySnapshot.apiKeyPrefix,
+        request,
+        path,
+        requestId,
+        startTime,
+        matchedRouteCapability,
+        routeMatchSource: matchedRouteMatchSource,
+      });
+    } catch (error) {
+      log.error({ err: error, requestId }, "failed to log local API key model list request");
+    }
+
+    return new Response(Buffer.from(createApiKeyModelListResponseBody(visibleModels)), {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+      },
+    });
   }
 
   let selectedCandidate = finalCapabilityCandidates[0];
@@ -3269,15 +3279,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       });
     } else {
       // Regular response
-      let bodyBytes = result.body as Uint8Array;
-      const modelListFilter = isOpenAIModelListRequest(request.method, path)
-        ? filterApiKeyModelListResponseBody(bodyBytes, validApiKey.allowedModels)
-        : { bodyBytes, filtered: false };
-      if (modelListFilter.filtered) {
-        bodyBytes = modelListFilter.bodyBytes;
-        responseHeaders.set("content-type", "application/json");
-        responseHeaders.delete("content-length");
-      }
+      const bodyBytes = result.body as Uint8Array;
       const durationMs = Date.now() - startTime;
 
       // Try to extract usage from response

@@ -1,6 +1,14 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState, type UIEvent } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+  type UIEvent,
+} from "react";
 import { useForm, useWatch, useFieldArray, type DeepPartial } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -767,21 +775,46 @@ function formatCatalogTimestamp(value: string | null): string | null {
   return parsed.toLocaleString();
 }
 
-function useVirtualCatalogRows(itemCount: number) {
+function useVirtualCatalogRows(
+  itemCount: number,
+  resetKey: string,
+  scrollRef: RefObject<HTMLDivElement | null>
+) {
   const [viewport, setViewport] = useState({
     scrollTop: 0,
     height: DEFAULT_MODEL_LIST_HEIGHT,
+    resetKey,
   });
+  const currentViewport =
+    viewport.resetKey === resetKey
+      ? viewport
+      : {
+          scrollTop: 0,
+          height: DEFAULT_MODEL_LIST_HEIGHT,
+          resetKey,
+        };
+
+  useEffect(() => {
+    const viewportElement = scrollRef.current;
+    if (viewportElement) {
+      viewportElement.scrollTop = 0;
+    }
+  }, [resetKey, scrollRef]);
+
   const startIndex =
     itemCount === 0
       ? 0
       : Math.min(
-          Math.max(0, Math.floor(viewport.scrollTop / MODEL_ROW_HEIGHT) - MODEL_LIST_OVERSCAN),
+          Math.max(
+            0,
+            Math.floor(currentViewport.scrollTop / MODEL_ROW_HEIGHT) - MODEL_LIST_OVERSCAN
+          ),
           itemCount - 1
         );
   const endIndex = Math.min(
     itemCount,
-    Math.ceil((viewport.scrollTop + viewport.height) / MODEL_ROW_HEIGHT) + MODEL_LIST_OVERSCAN
+    Math.ceil((currentViewport.scrollTop + currentViewport.height) / MODEL_ROW_HEIGHT) +
+      MODEL_LIST_OVERSCAN
   );
 
   return {
@@ -792,6 +825,7 @@ function useVirtualCatalogRows(itemCount: number) {
       setViewport({
         scrollTop: event.currentTarget.scrollTop,
         height: event.currentTarget.clientHeight || DEFAULT_MODEL_LIST_HEIGHT,
+        resetKey,
       });
     },
   };
@@ -806,11 +840,14 @@ function VirtualCatalogEntryList({
   selectedModels: ReadonlySet<string>;
   onToggle: (model: string, checked: boolean) => void;
 }) {
-  const virtualRows = useVirtualCatalogRows(entries.length);
+  const resetKey = entries.map((entry) => `${entry.model}:${entry.source}`).join("\u0000");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtualRows = useVirtualCatalogRows(entries.length, resetKey, scrollRef);
   const visibleEntries = entries.slice(virtualRows.startIndex, virtualRows.endIndex);
 
   return (
     <div
+      ref={scrollRef}
       className="min-h-0 flex-1 overflow-auto rounded-cf-sm border border-divider/70 bg-card/15"
       onScroll={virtualRows.onScroll}
     >
