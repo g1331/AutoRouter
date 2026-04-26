@@ -2547,7 +2547,7 @@ export function UpstreamFormDialog({
                                   {t("catalogCreateHint")}
                                 </div>
                               ) : catalogIsRefreshing ? (
-                                <div className="flex min-h-[180px] items-center gap-2 rounded-cf-sm bg-card/15 px-3 py-4 text-sm text-muted-foreground ring-1 ring-divider/50">
+                                <div className="flex min-h-[180px] items-center justify-center gap-2 rounded-cf-sm bg-card/15 px-3 py-4 text-sm text-muted-foreground ring-1 ring-divider/50">
                                   <Loader2 className="h-4 w-4 animate-spin" />
                                   {t("catalogLoading")}
                                 </div>
