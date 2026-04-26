@@ -71,7 +71,11 @@ export function PaginationControls({
         {tCommon("of")} <span className="font-semibold text-foreground">{totalPages}</span>
       </div>
 
-      <form className="flex flex-wrap items-center gap-2 sm:justify-end" onSubmit={handleSubmit}>
+      <form
+        className="flex flex-wrap items-center gap-2 sm:justify-end"
+        onSubmit={handleSubmit}
+        noValidate
+      >
         {actionPrefix}
 
         <div className="flex items-center gap-2">
