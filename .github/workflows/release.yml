@@ -113,16 +113,69 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64
 
+      - name: Resolve release notes baseline
+        id: notes_baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --tags origin
+
+          ACTUAL_TAG="${GITHUB_REF_NAME}"
+          RELEASE_COMMIT="${{ steps.validate.outputs.release_commit }}"
+          PREVIOUS_TAG=""
+
+          find_previous_stable_tag() {
+            git tag --merged "${RELEASE_COMMIT}" --sort=v:refname |
+              grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' |
+              grep -v -F "${ACTUAL_TAG}" |
+              tail -n 1 || true
+          }
+
+          if [[ "${ACTUAL_TAG}" =~ ^(v[0-9]+\.[0-9]+\.[0-9]+)-((alpha|beta)\.[0-9]+)$ ]]; then
+            BASE_VERSION="${BASH_REMATCH[1]}"
+            BASE_VERSION_REGEX="${BASE_VERSION//./\\.}"
+            CHANNEL="${BASH_REMATCH[3]}"
+            PREVIOUS_TAG="$(
+              git tag --merged "${RELEASE_COMMIT}" --sort=v:refname |
+                grep -E "^${BASE_VERSION_REGEX}-${CHANNEL}\.[0-9]+$" |
+                grep -v -F "${ACTUAL_TAG}" |
+                tail -n 1 || true
+            )"
+          fi
+
+          if [ -z "${PREVIOUS_TAG}" ]; then
+            PREVIOUS_TAG="$(find_previous_stable_tag)"
+          fi
+
+          {
+            echo "previous_tag=${PREVIOUS_TAG}"
+            if [ -n "${PREVIOUS_TAG}" ]; then
+              echo "previous_tag_label=${PREVIOUS_TAG}"
+              echo "compare_range=${PREVIOUS_TAG}...${ACTUAL_TAG}"
+            else
+              echo "previous_tag_label=none"
+              echo "compare_range=${ACTUAL_TAG}"
+            fi
+          } >> "${GITHUB_OUTPUT}"
+
       - name: Generate release notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
+          NOTES_ARGS=(
+            -f tag_name="${GITHUB_REF_NAME}"
+            -f target_commitish="${{ steps.validate.outputs.release_commit }}"
+          )
+
+          if [ -n "${{ steps.notes_baseline.outputs.previous_tag }}" ]; then
+            NOTES_ARGS+=(-f previous_tag_name="${{ steps.notes_baseline.outputs.previous_tag }}")
+          fi
+
           gh api \
             "repos/${{ github.repository }}/releases/generate-notes" \
-            -f tag_name="${GITHUB_REF_NAME}" \
-            -f target_commitish="${GITHUB_SHA}" \
+            "${NOTES_ARGS[@]}" \
             --jq .body > generated-release-notes.md
 
       - name: Build release body and metadata
@@ -136,6 +189,8 @@ jobs:
           - Release version: \`${{ steps.validate.outputs.release_version }}\`
           - Package version: \`${{ steps.validate.outputs.package_version }}\`
           - Commit: \`${{ steps.validate.outputs.release_commit }}\`
+          - Previous tag: \`${{ steps.notes_baseline.outputs.previous_tag_label }}\`
+          - Compare range: \`${{ steps.notes_baseline.outputs.compare_range }}\`
           - Image: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${GITHUB_REF_NAME}\`
           - Image digest: \`${{ steps.build_push.outputs.digest }}\`
 
@@ -147,6 +202,8 @@ jobs:
           cat > release-metadata.json <<EOF
           {
             "tag": "${GITHUB_REF_NAME}",
+            "previousTag": "${{ steps.notes_baseline.outputs.previous_tag }}",
+            "compareRange": "${{ steps.notes_baseline.outputs.compare_range }}",
             "releaseVersion": "${{ steps.validate.outputs.release_version }}",
             "packageVersion": "${{ steps.validate.outputs.package_version }}",
             "commitSha": "${{ steps.validate.outputs.release_commit }}",
@@ -183,6 +240,8 @@ jobs:
             echo "- Tag: \`${GITHUB_REF_NAME}\`"
             echo "- Release version: \`${{ steps.validate.outputs.release_version }}\`"
             echo "- Commit: \`${{ steps.validate.outputs.release_commit }}\`"
+            echo "- Previous tag: \`${{ steps.notes_baseline.outputs.previous_tag_label }}\`"
+            echo "- Compare range: \`${{ steps.notes_baseline.outputs.compare_range }}\`"
             echo "- Image: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${GITHUB_REF_NAME}\`"
             echo "- Digest: \`${{ steps.build_push.outputs.digest }}\`"
             echo "- Release URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${GITHUB_REF_NAME}"
