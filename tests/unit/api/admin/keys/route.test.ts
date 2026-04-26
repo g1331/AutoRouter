@@ -32,6 +32,7 @@ function buildServiceApiKey(overrides?: Record<string, unknown>) {
     description: "quota aware",
     accessMode: "restricted" as const,
     upstreamIds: [UPSTREAM_ID],
+    allowedModels: ["gpt-4.1"],
     spendingRules: [QUOTA_RULE],
     spendingRuleStatuses: [
       {
@@ -73,6 +74,7 @@ describe("admin keys routes spending rules", () => {
         name: "Quota Key",
         access_mode: "restricted",
         upstream_ids: [UPSTREAM_ID],
+        allowed_models: ["gpt-4.1"],
         spending_rules: [QUOTA_RULE],
       }),
     });
@@ -86,6 +88,7 @@ describe("admin keys routes spending rules", () => {
         name: "Quota Key",
         accessMode: "restricted",
         upstreamIds: [UPSTREAM_ID],
+        allowedModels: ["gpt-4.1"],
         spendingRules: [QUOTA_RULE],
       })
     );
@@ -160,6 +163,7 @@ describe("admin keys routes spending rules", () => {
       body: JSON.stringify({
         access_mode: "restricted",
         upstream_ids: [UPSTREAM_ID],
+        allowed_models: ["gpt-4.1"],
         spending_rules: [QUOTA_RULE],
       }),
     });
@@ -175,6 +179,7 @@ describe("admin keys routes spending rules", () => {
       expect.objectContaining({
         accessMode: "restricted",
         upstreamIds: [UPSTREAM_ID],
+        allowedModels: ["gpt-4.1"],
         spendingRules: [QUOTA_RULE],
       })
     );

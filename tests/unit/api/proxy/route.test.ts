@@ -400,6 +400,10 @@ describe("proxy route upstream selection", () => {
     request: NextRequest,
     context: { params: Promise<{ path: string[] }> }
   ) => Promise<Response>;
+  let GET: (
+    request: NextRequest,
+    context: { params: Promise<{ path: string[] }> }
+  ) => Promise<Response>;
 
   beforeEach(async () => {
     vi.resetAllMocks();
@@ -424,6 +428,7 @@ describe("proxy route upstream selection", () => {
     const routeModule = await import("@/app/api/proxy/v1/[...path]/route");
     const { db } = await import("@/lib/db");
     POST = routeModule.POST;
+    GET = routeModule.GET;
     vi.mocked(db.query.upstreams.findMany).mockResolvedValue(DEFAULT_ACTIVE_UPSTREAMS);
     vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValue([]);
     vi.mocked(db.query.circuitBreakerStates.findMany).mockResolvedValue([]);
@@ -2016,6 +2021,71 @@ describe("proxy route upstream selection", () => {
               reason: "model_not_allowed",
             }),
           ]),
+        }),
+      })
+    );
+  });
+
+  it("should reject requests when API key model allowlist does not include requested model", async () => {
+    const { db } = await import("@/lib/db");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { logRequest } = await import("@/lib/services/request-logger");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      {
+        id: "key-1",
+        keyHash: "hash-1",
+        keyPrefix: "sk-test",
+        name: "Restricted Model Key",
+        expiresAt: null,
+        isActive: true,
+        allowedModels: ["gpt-4.1"],
+      },
+    ]);
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-3-7-sonnet",
+        messages: [{ role: "user", content: "hello" }],
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["chat", "completions"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(data).toEqual({
+      error: expect.objectContaining({
+        code: "API_KEY_MODEL_NOT_ALLOWED",
+        reason: "API_KEY_MODEL_NOT_ALLOWED",
+        did_send_upstream: false,
+      }),
+    });
+    expect(mockApiKeyQuotaTracker.initialize).not.toHaveBeenCalled();
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(forwardRequest).not.toHaveBeenCalled();
+    expect(logRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKeyId: "key-1",
+        apiKeyName: "Restricted Model Key",
+        apiKeyPrefix: "sk-test",
+        upstreamId: null,
+        model: "claude-3-7-sonnet",
+        statusCode: 403,
+        errorMessage: "API key is not allowed to request model: claude-3-7-sonnet",
+        routingDecision: expect.objectContaining({
+          failure_stage: "auth_filter",
+          did_send_upstream: false,
+          routing_type: "none",
+          excluded: [],
         }),
       })
     );
@@ -5758,6 +5828,145 @@ describe("proxy route upstream selection", () => {
     expect(routeByModel).not.toHaveBeenCalled();
     expect(selectFromProviderType).toHaveBeenCalledWith(["up-openai"], undefined, undefined);
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(genericResponsesUpstream);
+  });
+
+  it("should proxy OpenAI-compatible model list requests through chat-compatible upstreams", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { routeByModel } = await import("@/lib/services/model-router");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+
+    const openaiUpstream = {
+      id: "up-openai",
+      name: "openai-main",
+      providerType: "openai",
+      baseUrl: "https://api.openai.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+      priority: 0,
+      weight: 1,
+      routeCapabilities: ["openai_chat_compatible"],
+    };
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      {
+        id: "key-1",
+        keyHash: "hash-1",
+        keyPrefix: "sk-test",
+        name: "Model List Key",
+        expiresAt: null,
+        isActive: true,
+        allowedModels: null,
+      },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-openai" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([openaiUpstream]);
+    vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+    vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+      upstream: openaiUpstream,
+      providerType: "openai",
+      selectedTier: 0,
+      circuitBreakerFiltered: 0,
+      totalCandidates: 1,
+    });
+
+    vi.mocked(forwardRequest).mockResolvedValueOnce({
+      statusCode: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      body: new TextEncoder().encode(
+        JSON.stringify({
+          object: "list",
+          data: [{ id: "gpt-4.1" }, { id: "gpt-5.2" }],
+        })
+      ),
+      isStream: false,
+      usage: null,
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/v1/models", {
+      method: "GET",
+      headers: {
+        authorization: "Bearer sk-test",
+      },
+    });
+
+    const response = await GET(request, {
+      params: Promise.resolve({ path: ["v1", "models"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data).toEqual({
+      object: "list",
+      data: [{ id: "gpt-4.1" }, { id: "gpt-5.2" }],
+    });
+    expect(routeByModel).not.toHaveBeenCalled();
+    expect(selectFromProviderType).toHaveBeenCalledWith(["up-openai"], undefined, undefined);
+    expect(forwardRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("should return OpenAI-compatible model list from API key allowed models", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { logRequest } = await import("@/lib/services/request-logger");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      {
+        id: "key-1",
+        keyHash: "hash-1",
+        keyPrefix: "sk-test",
+        name: "Restricted Model List Key",
+        expiresAt: null,
+        isActive: true,
+        allowedModels: ["gpt-4.1", "gpt-5.2"],
+      },
+    ]);
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/models", {
+      method: "GET",
+      headers: {
+        authorization: "Bearer sk-test",
+      },
+    });
+
+    const response = await GET(request, {
+      params: Promise.resolve({ path: ["models"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data).toEqual({
+      object: "list",
+      data: [
+        { id: "gpt-4.1", object: "model", created: 0, owned_by: "autorouter" },
+        { id: "gpt-5.2", object: "model", created: 0, owned_by: "autorouter" },
+      ],
+    });
+    expect(response.headers.get("content-type")).toBe("application/json");
+    expect(mockApiKeyQuotaTracker.initialize).not.toHaveBeenCalled();
+    expect(db.query.apiKeyUpstreams.findMany).not.toHaveBeenCalled();
+    expect(db.query.upstreams.findMany).not.toHaveBeenCalled();
+    expect(selectFromProviderType).not.toHaveBeenCalled();
+    expect(forwardRequest).not.toHaveBeenCalled();
+    expect(logRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKeyId: "key-1",
+        upstreamId: null,
+        method: "GET",
+        path: "models",
+        model: "(model-list)",
+        statusCode: 200,
+        routingDecision: expect.objectContaining({
+          matched_route_capability: "openai_chat_compatible",
+          did_send_upstream: false,
+          actual_upstream_id: null,
+        }),
+      })
+    );
   });
 
   it("should reject when API key not authorized for selected upstream", async () => {

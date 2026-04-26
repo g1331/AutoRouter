@@ -6,6 +6,7 @@ import { encrypt, decrypt, EncryptionError } from "../utils/encryption";
 import { createLogger } from "../utils/logger";
 import { apiKeyQuotaTracker } from "@/lib/services/api-key-quota-tracker";
 import { parseSpendingRules } from "@/lib/services/spending-rules";
+import { normalizeApiKeyAllowedModels } from "@/lib/api-key-models";
 import type { SpendingRule } from "@/lib/services/upstream-quota-tracker";
 
 const log = createLogger("key-manager");
@@ -39,6 +40,7 @@ export interface ApiKeyCreateInput {
   description?: string | null;
   expiresAt?: Date | null;
   spendingRules?: SpendingRule[] | null;
+  allowedModels?: string[] | null;
 }
 
 export interface ApiKeySpendingRuleStatus {
@@ -60,6 +62,7 @@ export interface ApiKeyCreateResult {
   description: string | null;
   accessMode: ApiKeyAccessMode;
   upstreamIds: string[];
+  allowedModels: string[] | null;
   spendingRules: SpendingRule[] | null;
   spendingRuleStatuses: ApiKeySpendingRuleStatus[];
   isQuotaExceeded: boolean;
@@ -76,6 +79,7 @@ export interface ApiKeyListItem {
   description: string | null;
   accessMode: ApiKeyAccessMode;
   upstreamIds: string[];
+  allowedModels: string[] | null;
   spendingRules: SpendingRule[] | null;
   spendingRuleStatuses: ApiKeySpendingRuleStatus[];
   isQuotaExceeded: boolean;
@@ -108,6 +112,7 @@ export interface ApiKeyUpdateInput {
   expiresAt?: Date | null;
   upstreamIds?: string[];
   spendingRules?: SpendingRule[] | null;
+  allowedModels?: string[] | null;
 }
 
 function normalizeAccessMode(
@@ -212,6 +217,7 @@ async function buildApiKeyListItem(
     | "name"
     | "description"
     | "accessMode"
+    | "allowedModels"
     | "spendingRules"
     | "isActive"
     | "expiresAt"
@@ -231,6 +237,7 @@ async function buildApiKeyListItem(
     description: key.description,
     accessMode,
     upstreamIds: accessMode === "restricted" ? upstreamIds : [],
+    allowedModels: normalizeApiKeyAllowedModels(key.allowedModels),
     spendingRules,
     spendingRuleStatuses: quotaState.spendingRuleStatuses,
     isQuotaExceeded: quotaState.isQuotaExceeded,
@@ -257,6 +264,7 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
   const normalizedUpstreamIds = Array.from(new Set(upstreamIds));
   const normalizedAccessMode = normalizeAccessMode(accessMode, normalizedUpstreamIds);
   const spendingRules = parseSpendingRules(input.spendingRules);
+  const allowedModels = normalizeApiKeyAllowedModels(input.allowedModels);
 
   if (normalizedAccessMode === "restricted" && normalizedUpstreamIds.length === 0) {
     throw new Error("At least one upstream must be specified");
@@ -296,6 +304,7 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
       name,
       description: description ?? null,
       accessMode: normalizedAccessMode,
+      allowedModels,
       spendingRules,
       isActive: true,
       expiresAt: expiresAt ?? null,
@@ -321,6 +330,7 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
       name,
       accessMode: normalizedAccessMode,
       upstreams: normalizedUpstreamIds.length,
+      allowedModels: allowedModels?.length ?? 0,
       spendingRules: spendingRules?.length ?? 0,
     },
     "created API key"
@@ -337,6 +347,7 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
     description: newKey.description,
     accessMode: normalizeAccessMode(newKey.accessMode, normalizedUpstreamIds),
     upstreamIds: normalizedAccessMode === "restricted" ? normalizedUpstreamIds : [],
+    allowedModels: normalizeApiKeyAllowedModels(newKey.allowedModels),
     spendingRules,
     spendingRuleStatuses: quotaState.spendingRuleStatuses,
     isQuotaExceeded: quotaState.isQuotaExceeded,
@@ -509,6 +520,10 @@ export async function updateApiKey(
   const now = new Date();
   const parsedSpendingRules =
     input.spendingRules !== undefined ? parseSpendingRules(input.spendingRules) : undefined;
+  const parsedAllowedModels =
+    input.allowedModels !== undefined
+      ? normalizeApiKeyAllowedModels(input.allowedModels)
+      : undefined;
 
   const updatedResult = await db.transaction(async (tx) => {
     // Check if key exists
@@ -565,6 +580,7 @@ export async function updateApiKey(
       description: string | null;
       isActive: boolean;
       accessMode: ApiKeyAccessMode;
+      allowedModels: string[] | null;
       expiresAt: Date | null;
       spendingRules:
         | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
@@ -583,6 +599,9 @@ export async function updateApiKey(
     }
     if (shouldUpdateAccess) {
       updateData.accessMode = nextAccessMode;
+    }
+    if (parsedAllowedModels !== undefined) {
+      updateData.allowedModels = parsedAllowedModels;
     }
     if (expiresAt !== undefined) {
       updateData.expiresAt = expiresAt;
@@ -637,6 +656,10 @@ export async function updateApiKey(
       {
         keyPrefix: updatedKey.keyPrefix,
         name: updatedKey.name,
+        allowedModels:
+          parsedAllowedModels !== undefined
+            ? (parsedAllowedModels?.length ?? 0)
+            : (existing.allowedModels?.length ?? 0),
         spendingRules:
           parsedSpendingRules !== undefined
             ? (parsedSpendingRules?.length ?? 0)
@@ -654,6 +677,7 @@ export async function updateApiKey(
       description: updatedKey.description,
       accessMode: resolvedAccessMode,
       upstreamIds: resolvedAccessMode === "restricted" ? currentUpstreamIds : [],
+      allowedModels: normalizeApiKeyAllowedModels(updatedKey.allowedModels),
       spendingRules: parseSpendingRules(updatedKey.spendingRules),
       isActive: updatedKey.isActive,
       expiresAt: updatedKey.expiresAt,
@@ -675,6 +699,7 @@ export async function updateApiKey(
       name: updatedResult.name,
       description: updatedResult.description,
       accessMode: updatedResult.accessMode,
+      allowedModels: updatedResult.allowedModels,
       spendingRules: updatedResult.spendingRules,
       isActive: updatedResult.isActive,
       expiresAt: updatedResult.expiresAt,

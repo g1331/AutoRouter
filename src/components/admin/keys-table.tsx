@@ -37,6 +37,22 @@ function formatAccessModeLabel(key: APIKey, t: ReturnType<typeof useTranslations
   return t("restrictedAccessCount", { count: key.upstream_ids.length });
 }
 
+function formatAllowedModelsLabel(key: APIKey, t: ReturnType<typeof useTranslations>): string {
+  if (!key.allowed_models || key.allowed_models.length === 0) {
+    return t("allowedModelsOpen");
+  }
+
+  return t("allowedModelsLimited", { count: key.allowed_models.length });
+}
+
+function getAccessModeBadgeVariant(key: APIKey): "success" | "info" {
+  return key.access_mode === "unrestricted" ? "success" : "info";
+}
+
+function getAllowedModelsBadgeVariant(key: APIKey): "warning" | "neutral" {
+  return key.allowed_models?.length ? "warning" : "neutral";
+}
+
 function formatQuotaPeriodLabel(
   rule: APIKey["spending_rule_statuses"][number],
   t: ReturnType<typeof useTranslations>
@@ -308,7 +324,7 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
   if (filteredKeys.length === 0) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center gap-3 rounded-cf-md border border-divider bg-surface-200/70 px-4 py-3">
+        <div className="flex items-center gap-3">
           <Input
             type="text"
             placeholder={t("searchKeys")}
@@ -333,7 +349,7 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3 rounded-cf-md border border-divider bg-surface-200/70 px-4 py-3">
+      <div className="flex items-center gap-3">
         <Input
           type="text"
           placeholder={t("searchKeys")}
@@ -415,10 +431,16 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
                 <div className="space-y-1">
                   <p className="type-caption text-muted-foreground">{t("tableUpstreams")}</p>
                   <Badge
-                    variant={key.access_mode === "unrestricted" ? "success" : "info"}
-                    className="shrink-0 whitespace-nowrap"
+                    variant={getAccessModeBadgeVariant(key)}
+                    className="shrink-0 whitespace-nowrap px-2 py-1"
                   >
                     {formatAccessModeLabel(key, t)}
+                  </Badge>
+                  <Badge
+                    variant={getAllowedModelsBadgeVariant(key)}
+                    className="mt-1 shrink-0 whitespace-nowrap px-2 py-1"
+                  >
+                    {formatAllowedModelsLabel(key, t)}
                   </Badge>
                 </div>
                 <div className="space-y-1">
@@ -599,17 +621,21 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
                       <TableCell className="hidden max-w-[180px] truncate xl:table-cell">
                         {key.description || <span className="text-muted-foreground">-</span>}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        <span
-                          className={cn(
-                            "type-body-small",
-                            key.access_mode === "unrestricted"
-                              ? "text-muted-foreground"
-                              : "text-foreground"
-                          )}
-                        >
-                          {formatAccessModeLabel(key, t)}
-                        </span>
+                      <TableCell className="whitespace-nowrap py-3">
+                        <div className="flex flex-col items-start gap-1.5">
+                          <Badge
+                            variant={getAccessModeBadgeVariant(key)}
+                            className="whitespace-nowrap px-2 py-1"
+                          >
+                            {formatAccessModeLabel(key, t)}
+                          </Badge>
+                          <Badge
+                            variant={getAllowedModelsBadgeVariant(key)}
+                            className="whitespace-nowrap px-2 py-1"
+                          >
+                            {formatAllowedModelsLabel(key, t)}
+                          </Badge>
+                        </div>
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
                         {formatExpiry(key.expires_at)}

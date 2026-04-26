@@ -32,6 +32,7 @@ export interface APIKeyCreate {
   description?: string | null;
   access_mode?: APIKeyAccessMode;
   upstream_ids: string[]; // UUID[]
+  allowed_models?: string[] | null;
   expires_at?: string | null; // ISO 8601 date string
   spending_rules?: APIKeySpendingRule[] | null;
 }
@@ -43,6 +44,7 @@ export interface APIKeyUpdate {
   access_mode?: APIKeyAccessMode;
   expires_at?: string | null; // ISO 8601 date string
   upstream_ids?: string[]; // UUID[]
+  allowed_models?: string[] | null;
   spending_rules?: APIKeySpendingRule[] | null;
 }
 
@@ -53,6 +55,7 @@ export interface APIKeyResponse {
   description: string | null;
   access_mode: APIKeyAccessMode;
   upstream_ids: string[]; // UUID[]
+  allowed_models: string[] | null;
   spending_rules: APIKeySpendingRule[] | null;
   spending_rule_statuses: APIKeySpendingRuleStatus[];
   is_quota_exceeded: boolean;

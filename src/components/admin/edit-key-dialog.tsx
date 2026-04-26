@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -36,10 +36,14 @@ import { useUpdateAPIKey } from "@/hooks/use-api-keys";
 import { useAllUpstreams } from "@/hooks/use-upstreams";
 import type { APIKeyResponse } from "@/types/api";
 import { getDateLocale } from "@/lib/date-locale";
+import { collectApiKeyModelCandidates } from "@/lib/api-key-models";
+import { KeyModelAllowlistSection } from "@/components/admin/key-model-allowlist-section";
 
 function getSpendingRuleDraftKey(ruleId: string, fieldName: "limit" | "period_hours") {
   return `${ruleId}:${fieldName}`;
 }
+
+const EMPTY_UPSTREAM_IDS: string[] = [];
 
 function getSpendingRuleInputValue(
   drafts: Record<string, string>,
@@ -84,6 +88,7 @@ export function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps
       is_active: z.boolean(),
       access_mode: z.enum(["unrestricted", "restricted"]),
       upstream_ids: z.array(z.string()),
+      allowed_models: z.array(z.string()),
       expires_at: z.date().nullable().optional(),
       spending_rules: z.array(
         z
@@ -123,6 +128,7 @@ export function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps
       is_active: apiKey.is_active,
       access_mode: apiKey.access_mode,
       upstream_ids: apiKey.upstream_ids,
+      allowed_models: apiKey.allowed_models ?? [],
       expires_at: apiKey.expires_at ? new Date(apiKey.expires_at) : null,
       spending_rules: apiKey.spending_rules ?? [],
     },
@@ -139,11 +145,20 @@ export function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps
     control: form.control,
     name: "access_mode",
   });
-  const selectedUpstreamIds =
-    useWatch({
-      control: form.control,
-      name: "upstream_ids",
-    }) ?? [];
+  const watchedUpstreamIds = useWatch({
+    control: form.control,
+    name: "upstream_ids",
+  });
+  const selectedUpstreamIds = watchedUpstreamIds ?? EMPTY_UPSTREAM_IDS;
+  const modelCandidates = useMemo(
+    () =>
+      collectApiKeyModelCandidates({
+        upstreams: upstreams ?? [],
+        accessMode,
+        upstreamIds: selectedUpstreamIds,
+      }),
+    [accessMode, selectedUpstreamIds, upstreams]
+  );
   const normalizedUpstreamSearchQuery = upstreamSearchQuery.trim().toLowerCase();
   const filteredUpstreams = (upstreams ?? []).filter((upstream) => {
     if (!normalizedUpstreamSearchQuery) {
@@ -169,6 +184,7 @@ export function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps
       is_active: apiKey.is_active,
       access_mode: apiKey.access_mode,
       upstream_ids: apiKey.upstream_ids,
+      allowed_models: apiKey.allowed_models ?? [],
       expires_at: apiKey.expires_at ? new Date(apiKey.expires_at) : null,
       spending_rules: apiKey.spending_rules ?? [],
     });
@@ -217,6 +233,7 @@ export function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps
           is_active: data.is_active,
           access_mode: data.access_mode,
           upstream_ids: data.access_mode === "restricted" ? data.upstream_ids : [],
+          allowed_models: data.allowed_models.length > 0 ? data.allowed_models : null,
           expires_at: data.expires_at ? data.expires_at.toISOString() : null,
           spending_rules: data.spending_rules.length > 0 ? data.spending_rules : null,
         },
@@ -257,7 +274,14 @@ export function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-2xl flex-col overflow-hidden p-0">
+      <DialogContent
+        className="flex max-h-[calc(100vh-2rem)] max-w-2xl flex-col overflow-hidden p-0"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          (event.currentTarget as HTMLElement).focus();
+        }}
+        tabIndex={-1}
+      >
         <DialogHeader className="shrink-0 px-6 pb-0 pr-12 pt-6">
           <DialogTitle>{t("editKeyTitle")}</DialogTitle>
           <DialogDescription>{t("editKeyDesc")}</DialogDescription>
@@ -481,6 +505,21 @@ export function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps
                   />
                 </div>
               </div>
+
+              <FormField
+                control={form.control}
+                name="allowed_models"
+                render={({ field }) => (
+                  <FormItem>
+                    <KeyModelAllowlistSection
+                      value={field.value ?? []}
+                      candidates={modelCandidates}
+                      onChange={(models) => field.onChange(models)}
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <div className="space-y-3 rounded-[var(--shape-corner-medium)] border border-[rgb(var(--md-sys-color-outline-variant))] bg-[rgb(var(--md-sys-color-surface-container-low))] p-4">
                 <div className="flex items-start justify-between gap-3">

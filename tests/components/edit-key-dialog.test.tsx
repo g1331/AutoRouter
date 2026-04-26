@@ -41,18 +41,38 @@ const mockUpstreams = [
     name: "OpenAI",
     provider: "openai",
     description: "OpenAI API",
+    is_active: true,
+    model_catalog: [{ model: "gpt-4.1", source: "native" }],
+    allowed_models: null,
+    model_rules: null,
   },
   {
     id: "upstream-2",
     name: "Anthropic",
     provider: "anthropic",
     description: null,
+    is_active: true,
+    model_catalog: null,
+    allowed_models: ["claude-3-7-sonnet"],
+    model_rules: null,
   },
   {
     id: "upstream-3",
     name: "Google",
     provider: "google",
     description: "Google AI",
+    is_active: true,
+    model_catalog: null,
+    allowed_models: null,
+    model_rules: [
+      {
+        type: "exact",
+        value: "gemini-2.5-pro",
+        target_model: null,
+        source: "manual",
+        display_label: null,
+      },
+    ],
   },
 ];
 
@@ -73,6 +93,7 @@ describe("EditKeyDialog", () => {
     description: "Test description",
     access_mode: "restricted",
     upstream_ids: ["upstream-1", "upstream-2"],
+    allowed_models: null,
     spending_rules: null,
     spending_rule_statuses: [],
     is_quota_exceeded: false,
@@ -132,6 +153,15 @@ describe("EditKeyDialog", () => {
         "keyDescriptionPlaceholder"
       ) as HTMLTextAreaElement;
       expect(descInput.value).toBe("Test description");
+    });
+
+    it("does not focus the name input when the dialog opens", () => {
+      render(<EditKeyDialog apiKey={mockApiKey} open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      const nameInput = screen.getByPlaceholderText("keyNamePlaceholder");
+      expect(document.activeElement).not.toBe(nameInput);
     });
 
     it("renders active status checkbox", () => {
@@ -197,6 +227,7 @@ describe("EditKeyDialog", () => {
           data: expect.objectContaining({
             access_mode: "restricted",
             upstream_ids: ["upstream-1", "upstream-2", "upstream-3"],
+            allowed_models: null,
             spending_rules: null,
           }),
         });
@@ -267,6 +298,7 @@ describe("EditKeyDialog", () => {
         expect(mockUpdateMutateAsync).toHaveBeenCalledWith({
           id: "key-123",
           data: expect.objectContaining({
+            allowed_models: null,
             spending_rules: [{ period_type: "rolling", limit: 15, period_hours: 6 }],
           }),
         });
@@ -326,6 +358,7 @@ describe("EditKeyDialog", () => {
         expect(mockUpdateMutateAsync).toHaveBeenCalledWith({
           id: "key-123",
           data: expect.objectContaining({
+            allowed_models: null,
             spending_rules: [{ period_type: "rolling", limit: 5, period_hours: 5 }],
           }),
         });
@@ -421,6 +454,7 @@ describe("EditKeyDialog", () => {
           data: expect.objectContaining({
             access_mode: "unrestricted",
             upstream_ids: [],
+            allowed_models: null,
             spending_rules: null,
           }),
         });
@@ -452,7 +486,65 @@ describe("EditKeyDialog", () => {
             is_active: true,
             access_mode: "restricted",
             upstream_ids: ["upstream-1", "upstream-2"],
+            allowed_models: null,
             spending_rules: null,
+          }),
+        });
+      });
+    });
+
+    it("imports selected candidate models from currently selected upstreams", async () => {
+      mockUpdateMutateAsync.mockResolvedValueOnce({});
+
+      render(<EditKeyDialog apiKey={mockApiKey} open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("searchModelCandidates"), {
+        target: { value: "gpt" },
+      });
+      fireEvent.click(screen.getByText("selectVisibleModelCandidates"));
+      fireEvent.click(screen.getByText("importSelectedModelCandidates"));
+      fireEvent.click(screen.getByText("save"));
+
+      await waitFor(() => {
+        expect(mockUpdateMutateAsync).toHaveBeenCalledWith({
+          id: "key-123",
+          data: expect.objectContaining({
+            access_mode: "restricted",
+            upstream_ids: ["upstream-1", "upstream-2"],
+            allowed_models: ["gpt-4.1"],
+            spending_rules: null,
+          }),
+        });
+      });
+    });
+
+    it("removes selected allowed models from filtered results", async () => {
+      mockUpdateMutateAsync.mockResolvedValueOnce({});
+
+      const apiKeyWithModels: APIKeyResponse = {
+        ...mockApiKey,
+        allowed_models: ["gpt-4.1", "gpt-4.1-mini", "claude-3-7-sonnet"],
+      };
+
+      render(
+        <EditKeyDialog apiKey={apiKeyWithModels} open={true} onOpenChange={mockOnOpenChange} />,
+        { wrapper: Wrapper }
+      );
+
+      fireEvent.change(screen.getByPlaceholderText("searchAllowedModels"), {
+        target: { value: "gpt" },
+      });
+      fireEvent.click(screen.getByText("selectVisibleAllowedModels"));
+      fireEvent.click(screen.getByText("removeSelectedAllowedModels"));
+      fireEvent.click(screen.getByText("save"));
+
+      await waitFor(() => {
+        expect(mockUpdateMutateAsync).toHaveBeenCalledWith({
+          id: "key-123",
+          data: expect.objectContaining({
+            allowed_models: ["claude-3-7-sonnet"],
           }),
         });
       });

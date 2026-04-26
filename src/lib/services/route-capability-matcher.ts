@@ -78,6 +78,10 @@ function matchesPathFamily(path: string, familyRoot: string): boolean {
   return path === familyRoot || path.startsWith(`${familyRoot}/`);
 }
 
+function isOpenAIModelListNormalizedPath(path: string): boolean {
+  return removeV1Prefix(path) === "models";
+}
+
 function extractGeminiModelFromNormalizedPath(path: string): string | null {
   const match = path.match(GEMINI_NATIVE_PATTERN);
   if (!match?.[1]) {
@@ -165,12 +169,17 @@ function isClaudeCodeRequest(headers: RouteMatchHeaders | undefined): boolean {
 }
 
 function matchProtocolFamily(method: string, path: string): RouteProtocolFamily | null {
-  if (method.toUpperCase() !== "POST") {
+  const methodUpper = method.toUpperCase();
+  const normalizedPath = normalizeProxyPath(path);
+  if (hasDotSegments(normalizedPath)) {
     return null;
   }
 
-  const normalizedPath = normalizeProxyPath(path);
-  if (hasDotSegments(normalizedPath)) {
+  if (methodUpper === "GET" && isOpenAIModelListNormalizedPath(normalizedPath)) {
+    return "openai_chat_compatible";
+  }
+
+  if (methodUpper !== "POST") {
     return null;
   }
 
@@ -274,6 +283,22 @@ export function extractGeminiModelFromPath(path: string): string | null {
   }
 
   return extractGeminiModelFromNormalizedPath(normalizedPath);
+}
+
+/**
+ * Match OpenAI-compatible model list requests that do not carry a request body model.
+ */
+export function isOpenAIModelListRequest(method: string, path: string): boolean {
+  if (method.toUpperCase() !== "GET") {
+    return false;
+  }
+
+  const normalizedPath = normalizeProxyPath(path);
+  if (hasDotSegments(normalizedPath)) {
+    return false;
+  }
+
+  return isOpenAIModelListNormalizedPath(normalizedPath);
 }
 
 /**
