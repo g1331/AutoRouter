@@ -23,23 +23,6 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     branches: [master]
-    paths:
-      - "src/**"
-      - "tests/**"
-      - "scripts/**"
-      - "drizzle/**"
-      - "drizzle-sqlite/**"
-      - ".github/workflows/**"
-      - "*.ts"
-      - "*.mts"
-      - "*.js"
-      - "*.mjs"
-      - "*.cjs"
-      - "*.json"
-      - "*.yaml"
-      - "*.yml"
-      - ".env.example"
-      - "Dockerfile"
 
 concurrency:
   group: verify-${{ github.head_ref || github.run_id }}
