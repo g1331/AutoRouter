@@ -515,6 +515,11 @@ html.theme-switching::before {
     font: inherit;
     color: inherit;
   }
+
+  .password-input__field::-ms-reveal,
+  .password-input__field::-ms-clear {
+    display: none;
+  }
 }
 
 @layer utilities {

@@ -8,7 +8,7 @@ import { ArrowRight, Cpu, KeyRound, Shield, Terminal } from "lucide-react";
 
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { createApiClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useRouter } from "@/i18n/navigation";
@@ -231,9 +231,10 @@ export default function LoginPage() {
                       className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
                       aria-hidden="true"
                     />
-                    <Input
+                    <PasswordInput
                       id="admin-token"
-                      type="password"
+                      allowPasswordManager
+                      autoComplete="current-password"
                       placeholder={t("tokenPlaceholder")}
                       value={inputValue}
                       onChange={(e) => setInputValue(e.target.value)}

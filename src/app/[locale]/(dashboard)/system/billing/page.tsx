@@ -2,20 +2,11 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
-import {
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Plus,
-  RotateCcw,
-  Trash2,
-  Wallet,
-  X,
-} from "lucide-react";
+import { Check, ChevronDown, Plus, RotateCcw, Trash2, Wallet, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
+import { PaginationControls } from "@/components/admin/pagination-controls";
 import { Topbar } from "@/components/admin/topbar";
 import {
   AlertDialog,
@@ -3613,21 +3604,18 @@ export default function BillingPage() {
                 </div>
 
                 {modelPrices.data && modelPrices.data.total_pages > 1 && (
-                  <div className="mt-3 flex flex-col gap-3 border-t border-divider/70 bg-surface-200/45 pt-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="type-body-small text-muted-foreground">
-                      {tCommon("items")}{" "}
-                      <span className="font-semibold text-foreground">
-                        {modelPrices.data.total}
-                      </span>{" "}
-                      · {tCommon("page")}{" "}
-                      <span className="font-semibold text-foreground">{modelPrices.data.page}</span>{" "}
-                      {tCommon("of")}{" "}
-                      <span className="font-semibold text-foreground">
-                        {modelPrices.data.total_pages}
-                      </span>
-                    </div>
-                    <div className="flex gap-2">
-                      <div className="flex items-center gap-2">
+                  <PaginationControls
+                    total={modelPrices.data.total}
+                    page={modelPricePage}
+                    totalPages={modelPrices.data.total_pages}
+                    onPageChange={(nextPage) => {
+                      setModelPricePage(nextPage);
+                      setExpandedPriceRows(new Set());
+                      if (editTarget) setEditTarget(null);
+                    }}
+                    className="mt-3 border-t border-divider/70 bg-surface-200/45 pt-3"
+                    actionPrefix={
+                      <div className="flex items-center gap-2 pr-0 sm:pr-1">
                         <span className="text-xs text-muted-foreground">
                           {t("priceCatalogPageSize")}
                         </span>
@@ -3658,38 +3646,8 @@ export default function BillingPage() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          setModelPricePage((prev) => Math.max(1, prev - 1));
-                          setExpandedPriceRows(new Set());
-                          if (editTarget) setEditTarget(null);
-                        }}
-                        disabled={modelPricePage === 1}
-                        className="gap-1"
-                      >
-                        <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                        {tCommon("previous")}
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          setModelPricePage((prev) =>
-                            Math.min(modelPrices.data?.total_pages ?? prev, prev + 1)
-                          );
-                          setExpandedPriceRows(new Set());
-                          if (editTarget) setEditTarget(null);
-                        }}
-                        disabled={modelPricePage === modelPrices.data.total_pages}
-                        className="gap-1"
-                      >
-                        {tCommon("next")}
-                        <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                      </Button>
-                    </div>
-                  </div>
+                    }
+                  />
                 )}
               </div>
             )}

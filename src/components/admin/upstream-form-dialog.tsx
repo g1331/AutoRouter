@@ -77,6 +77,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   useCreateUpstream,
@@ -1942,9 +1943,8 @@ export function UpstreamFormDialog({
                           <FormItem>
                             <FormLabel>{t("apiKey")} *</FormLabel>
                             <FormControl>
-                              <Input
+                              <PasswordInput
                                 {...field}
-                                type="password"
                                 autoComplete="new-password"
                                 autoCapitalize="none"
                                 autoCorrect="off"

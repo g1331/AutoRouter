@@ -2,15 +2,15 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronLeft, ChevronRight, Key } from "lucide-react";
+import { Key } from "lucide-react";
 
 import { CreateKeyDialog } from "@/components/admin/create-key-dialog";
 import { EditKeyDialog } from "@/components/admin/edit-key-dialog";
 import { KeysTable } from "@/components/admin/keys-table";
+import { PaginationControls } from "@/components/admin/pagination-controls";
 import { RevokeKeyDialog } from "@/components/admin/revoke-key-dialog";
 import { Topbar } from "@/components/admin/topbar";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { useAPIKeys } from "@/hooks/use-api-keys";
 import type { APIKey } from "@/types/api";
 
@@ -86,38 +86,13 @@ export default function KeysPage() {
 
             {data && data.total_pages > 1 && (
               <Card variant="filled" className="border border-divider">
-                <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="type-body-small text-muted-foreground">
-                    {tCommon("items")}{" "}
-                    <span className="font-semibold text-foreground">{data.total}</span> ·{" "}
-                    {tCommon("page")}{" "}
-                    <span className="font-semibold text-foreground">{data.page}</span>{" "}
-                    {tCommon("of")}{" "}
-                    <span className="font-semibold text-foreground">{data.total_pages}</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setPage(page - 1)}
-                      disabled={page === 1}
-                      className="gap-1"
-                    >
-                      <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                      {tCommon("previous")}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setPage(page + 1)}
-                      disabled={page === data.total_pages}
-                      className="gap-1"
-                    >
-                      {tCommon("next")}
-                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                  </div>
-                </CardContent>
+                <PaginationControls
+                  total={data.total}
+                  page={page}
+                  totalPages={data.total_pages}
+                  onPageChange={setPage}
+                  className="p-4"
+                />
               </Card>
             )}
           </>
