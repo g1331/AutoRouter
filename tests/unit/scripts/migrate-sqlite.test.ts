@@ -130,6 +130,39 @@ describe("db:migrate:sqlite", () => {
     );
     expect(apiKeyColumns.map((row) => row.name)).toContain("allowed_models");
 
+    const probeColumns = await queryRows<{ name: string }>(
+      dbPath,
+      "PRAGMA table_info('upstream_probe_results')"
+    );
+    expect(probeColumns.map((row) => row.name)).toEqual(
+      expect.arrayContaining([
+        "upstream_id",
+        "route_capability",
+        "client_profile",
+        "probe_template_id",
+        "status",
+        "latency_ms",
+        "response_body",
+        "checked_at",
+      ])
+    );
+
+    const probeIndexes = await queryRows<{ name: string; unique: number }>(
+      dbPath,
+      "PRAGMA index_list('upstream_probe_results')"
+    );
+    expect(probeIndexes.map((row) => row.name)).toEqual(
+      expect.arrayContaining([
+        "upstream_probe_results_identity_unique",
+        "upstream_probe_results_upstream_id_idx",
+        "upstream_probe_results_status_idx",
+        "upstream_probe_results_checked_at_idx",
+      ])
+    );
+    expect(
+      probeIndexes.find((row) => row.name === "upstream_probe_results_identity_unique")?.unique
+    ).toBe(1);
+
     const secondRun = spawnSync(process.execPath, ["scripts/db/migrate-sqlite.mjs"], {
       cwd: process.cwd(),
       env: {
