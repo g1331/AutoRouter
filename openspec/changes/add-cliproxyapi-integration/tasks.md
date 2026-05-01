@@ -47,7 +47,7 @@
 
 ## 7. 质量门禁与提交节点
 
-- [ ] 7.1 每个阶段完成后运行相关单元测试或组件测试，并在同一提交中更新对应任务勾选状态
-- [ ] 7.2 完成后运行 `pnpm exec tsc --noEmit`、`pnpm test:run` 和 `pnpm build`
-- [ ] 7.3 运行 `openspec validate add-cliproxyapi-integration --strict`，确认 proposal、design、specs 和 tasks 均可归档
-- [ ] 7.4 检查 `git diff`，确认无乱码、无敏感信息明文、无无关格式化改动
+- [x] 7.1 每个阶段完成后运行相关单元测试或组件测试，并在同一提交中更新对应任务勾选状态
+- [x] 7.2 完成后运行 `pnpm exec tsc --noEmit`、`pnpm test:run` 和 `pnpm build`
+- [x] 7.3 运行 `openspec validate add-cliproxyapi-integration --strict`，确认 proposal、design、specs 和 tasks 均可归档
+- [x] 7.4 检查 `git diff`，确认无乱码、无敏感信息明文、无无关格式化改动

@@ -1,12 +1,19 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createClient } from "@libsql/client";
 
 const cleanupPaths = new Set<string>();
+
+function getExpectedSqliteMigrationHashes(): string[] {
+  return readdirSync(path.join(process.cwd(), "drizzle-sqlite"))
+    .filter((fileName) => /^\d{4}_.+\.sql$/.test(fileName))
+    .sort()
+    .map((fileName) => fileName.replace(/\.sql$/, ""));
+}
 
 async function removeFileWithRetry(filePath: string): Promise<void> {
   for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -97,22 +104,14 @@ describe("db:migrate:sqlite", () => {
     });
 
     expect(firstRun.status).toBe(0);
-    expect(firstRun.stdout).toContain("Applied 8 migration(s)");
+    const expectedMigrationHashes = getExpectedSqliteMigrationHashes();
+    expect(firstRun.stdout).toContain(`Applied ${expectedMigrationHashes.length} migration(s)`);
 
     const migrations = await queryRows<{ hash: string }>(
       dbPath,
       "SELECT hash FROM __drizzle_migrations ORDER BY id"
     );
-    expect(migrations.map((row) => row.hash)).toEqual([
-      "0000_broken_post",
-      "0001_known_prima",
-      "0002_api_keys_access_mode",
-      "0003_medical_rattler",
-      "0004_simple_donald_blake",
-      "0005_cloudy_mesmero",
-      "0006_dapper_bucky",
-      "0007_rare_psynapse",
-    ]);
+    expect(migrations.map((row) => row.hash)).toEqual(expectedMigrationHashes);
 
     const upstreamColumns = await queryRows<{ name: string }>(
       dbPath,
@@ -127,6 +126,12 @@ describe("db:migrate:sqlite", () => {
       "PRAGMA table_info('api_keys')"
     );
     expect(apiKeyColumns.map((row) => row.name)).toContain("allowed_models");
+
+    const tables = await queryRows<{ name: string }>(
+      dbPath,
+      "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"
+    );
+    expect(tables.map((row) => row.name)).toContain("cliproxyapi_connections");
 
     const secondRun = spawnSync(process.execPath, ["scripts/db/migrate-sqlite.mjs"], {
       cwd: process.cwd(),
