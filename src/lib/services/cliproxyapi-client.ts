@@ -200,7 +200,8 @@ export class CliproxyApiManagementClient {
         status: getString(file, "status") ?? "unknown",
         error: getString(file, "error"),
         cooldown_until: getString(file, "cooldown_until"),
-        metadata: file,
+        // CPA auth-file payloads may include OAuth tokens or headers; expose only normalized fields.
+        metadata: null,
       };
     });
   }

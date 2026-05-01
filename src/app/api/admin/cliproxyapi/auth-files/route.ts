@@ -8,6 +8,9 @@ import {
   handleCliproxyApiRouteError,
   resolveCliproxyApiConnectionSecrets,
 } from "../_utils";
+import type { CliproxyApiAccount } from "@/types/api";
+
+type PublicCliproxyApiAccount = Omit<CliproxyApiAccount, "metadata">;
 
 const authFilesQuerySchema = z.object({
   connection_id: connectionIdSchema,
@@ -28,6 +31,11 @@ const updateAuthFileSchema = z.object({
     .optional(),
 });
 
+function toPublicCliproxyApiAccount(account: CliproxyApiAccount): PublicCliproxyApiAccount {
+  const { metadata: _metadata, ...publicAccount } = account;
+  return publicAccount;
+}
+
 /**
  * GET /api/admin/cliproxyapi/auth-files - List OAuth auth files from CLIProxyAPI.
  */
@@ -43,7 +51,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     });
     const connection = await resolveCliproxyApiConnectionSecrets(query.connection_id);
     const accounts = await buildCliproxyApiClient(connection).listAuthFiles();
-    return NextResponse.json({ items: accounts });
+    return NextResponse.json({ items: accounts.map(toPublicCliproxyApiAccount) });
   } catch (error) {
     return handleCliproxyApiRouteError(error);
   }

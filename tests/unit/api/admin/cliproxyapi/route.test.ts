@@ -91,7 +91,16 @@ describe("admin cliproxyapi routes", () => {
       tested_at: "2026-05-01T00:00:00.000Z",
     });
     client.listAuthFiles.mockResolvedValue([
-      { id: "auth-1", provider: "codex", name: "codex.json" },
+      {
+        id: "auth-1",
+        provider: "codex",
+        name: "codex.json",
+        metadata: {
+          access_token: "oauth-access-token",
+          refresh_token: "oauth-refresh-token",
+          headers: { Authorization: "Bearer oauth-access-token" },
+        },
+      },
     ]);
     client.listAuthFileModels.mockResolvedValue([{ model: "gpt-5-codex", provider: "codex" }]);
     client.getAuthUrl.mockResolvedValue({
@@ -200,9 +209,12 @@ describe("admin cliproxyapi routes", () => {
       )
     );
 
-    expect(await authFilesResponse.json()).toEqual({
+    const authFilesData = await authFilesResponse.json();
+    expect(authFilesData).toEqual({
       items: [{ id: "auth-1", provider: "codex", name: "codex.json" }],
     });
+    expect(JSON.stringify(authFilesData)).not.toContain("oauth-access-token");
+    expect(JSON.stringify(authFilesData)).not.toContain("oauth-refresh-token");
     expect(client.listAuthFileModels).toHaveBeenCalledWith("codex.json");
     expect(await modelsResponse.json()).toEqual({
       items: [{ model: "gpt-5-codex", provider: "codex" }],

@@ -51,6 +51,9 @@ describe("CliproxyApiManagementClient", () => {
             disabled: false,
             status: "ready",
             model_count: 3,
+            access_token: "oauth-access-token",
+            refresh_token: "oauth-refresh-token",
+            headers: { Authorization: "Bearer oauth-access-token" },
           },
         ],
       })
@@ -75,8 +78,11 @@ describe("CliproxyApiManagementClient", () => {
         enabled: true,
         model_count: 3,
         status: "ready",
+        metadata: null,
       }),
     ]);
+    expect(JSON.stringify(accounts)).not.toContain("oauth-access-token");
+    expect(JSON.stringify(accounts)).not.toContain("oauth-refresh-token");
   });
 
   it("lists auth file models with normalized provider names", async () => {
