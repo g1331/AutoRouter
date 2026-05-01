@@ -21,6 +21,7 @@ import type {
   RoutingFailureStage,
   RequestLifecycleStatus,
   UpstreamQueuePolicy,
+  CliproxyApiUpstreamConfig,
 } from "@/types/api";
 import type {
   StatsOverview,
@@ -131,6 +132,7 @@ export interface UpstreamApiResponse {
   spending_rules:
     | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
     | null;
+  cliproxyapi: CliproxyApiUpstreamConfig | null;
   last_used_at: string | null;
   created_at: string;
   updated_at: string;
@@ -202,6 +204,7 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
     billing_input_multiplier: upstream.billingInputMultiplier ?? 1,
     billing_output_multiplier: upstream.billingOutputMultiplier ?? 1,
     spending_rules: upstream.spendingRules ?? null,
+    cliproxyapi: upstream.cliproxyapi,
     last_used_at: upstream.lastUsedAt?.toISOString() ?? null,
     created_at: upstream.createdAt.toISOString(),
     updated_at: upstream.updatedAt.toISOString(),

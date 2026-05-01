@@ -51,6 +51,38 @@ export {
   type UpstreamModelRuleMatchResult,
 } from "./upstream-model-rules";
 
+export {
+  createCliproxyApiConnection,
+  deleteCliproxyApiConnection,
+  getCliproxyApiConnection,
+  getCliproxyApiConnectionWithSecrets,
+  getDefaultCliproxyApiConnection,
+  listCliproxyApiConnections,
+  maskCliproxyApiSecret,
+  updateCliproxyApiConnection,
+  CliproxyApiConnectionNotFoundError,
+  type CliproxyApiConnectionInput,
+  type CliproxyApiConnectionResponse,
+  type CliproxyApiConnectionSecrets,
+  type CliproxyApiConnectionUpdateInput,
+} from "./cliproxyapi-config";
+
+export {
+  mergeCliproxyApiUpstreamConfig,
+  parseCliproxyApiUpstreamConfig,
+} from "./cliproxyapi-upstream-config";
+
+export {
+  createCliproxyApiManagementClient,
+  CliproxyApiClientError,
+  CliproxyApiManagementClient,
+  type CliproxyApiApiCallInput,
+  type CliproxyApiApiCallResult,
+  type CliproxyApiAuthFileFieldUpdate,
+  type CliproxyApiAuthUrlOptions,
+  type CliproxyApiClientConfig,
+} from "./cliproxyapi-client";
+
 // Re-export model router functions and types
 export {
   // Model router functions

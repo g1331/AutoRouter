@@ -108,6 +108,35 @@ export const upstreams = pgTable(
 );
 
 /**
+ * CLIProxyAPI service connections used by OAuth upstream presets.
+ */
+export const cliproxyapiConnections = pgTable(
+  "cliproxyapi_connections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 64 }).notNull().unique(),
+    mode: varchar("mode", { length: 32 }).notNull().default("external"),
+    baseUrl: text("base_url").notNull(),
+    clientApiKeyEncrypted: text("client_api_key_encrypted"),
+    managementUrl: text("management_url").notNull(),
+    managementSecretEncrypted: text("management_secret_encrypted"),
+    outboundProxyUrl: text("outbound_proxy_url"),
+    isEnabled: boolean("is_enabled").notNull().default(true),
+    isDefault: boolean("is_default").notNull().default(false),
+    lastTestedAt: timestamp("last_tested_at", { withTimezone: true }),
+    lastStatus: varchar("last_status", { length: 16 }),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("cliproxyapi_connections_name_idx").on(table.name),
+    index("cliproxyapi_connections_is_default_idx").on(table.isDefault),
+    index("cliproxyapi_connections_is_enabled_idx").on(table.isEnabled),
+  ]
+);
+
+/**
  * Health status tracking for upstreams.
  */
 export const upstreamHealth = pgTable(

@@ -6,6 +6,7 @@ const schema = (config.dbType === "sqlite" ? sqliteSchema : pgSchema) as typeof 
 
 export const apiKeys = schema.apiKeys;
 export const upstreams = schema.upstreams;
+export const cliproxyapiConnections = schema.cliproxyapiConnections;
 export const upstreamHealth = schema.upstreamHealth;
 export const apiKeyUpstreams = schema.apiKeyUpstreams;
 export const circuitBreakerStates = schema.circuitBreakerStates;
@@ -31,6 +32,8 @@ export type ApiKey = typeof apiKeys.$inferSelect;
 export type NewApiKey = typeof apiKeys.$inferInsert;
 export type Upstream = typeof upstreams.$inferSelect;
 export type NewUpstream = typeof upstreams.$inferInsert;
+export type CliproxyApiConnection = typeof cliproxyapiConnections.$inferSelect;
+export type NewCliproxyApiConnection = typeof cliproxyapiConnections.$inferInsert;
 export type UpstreamHealth = typeof upstreamHealth.$inferSelect;
 export type NewUpstreamHealth = typeof upstreamHealth.$inferInsert;
 export type ApiKeyUpstream = typeof apiKeyUpstreams.$inferSelect;

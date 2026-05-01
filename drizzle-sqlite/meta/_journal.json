@@ -57,6 +57,13 @@
       "when": 1777174562463,
       "tag": "0007_rare_psynapse",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1777627186399,
+      "tag": "0008_broken_nicolaos",
+      "breakpoints": true
     }
   ]
 }

@@ -25,6 +25,11 @@ import {
   type UpstreamModelDiscoveryConfig,
   type UpstreamModelRule,
 } from "./upstream-model-types";
+import {
+  mergeCliproxyApiUpstreamConfig,
+  parseCliproxyApiUpstreamConfig,
+} from "./cliproxyapi-upstream-config";
+import type { CliproxyApiUpstreamConfig } from "@/types/api";
 import { refreshUpstreamModelCatalog as refreshUpstreamModelCatalogData } from "./upstream-model-discovery";
 
 const log = createLogger("upstream-crud");
@@ -115,6 +120,7 @@ export interface UpstreamCreateInput {
   spendingRules?:
     | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
     | null;
+  cliproxyapi?: CliproxyApiUpstreamConfig | null;
 }
 
 export interface UpstreamUpdateInput {
@@ -156,6 +162,7 @@ export interface UpstreamUpdateInput {
   spendingRules?:
     | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
     | null;
+  cliproxyapi?: CliproxyApiUpstreamConfig | null;
 }
 
 export interface UpstreamResponse {
@@ -193,6 +200,7 @@ export interface UpstreamResponse {
   spendingRules:
     | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
     | null;
+  cliproxyapi: CliproxyApiUpstreamConfig | null;
   lastUsedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -393,6 +401,7 @@ function mapUpstreamRecordToResponse(
     billingInputMultiplier: upstream.billingInputMultiplier,
     billingOutputMultiplier: upstream.billingOutputMultiplier,
     spendingRules: upstream.spendingRules as SpendingRules,
+    cliproxyapi: parseCliproxyApiUpstreamConfig(upstream.config),
     lastUsedAt,
     createdAt: upstream.createdAt,
     updatedAt: upstream.updatedAt,
@@ -467,7 +476,7 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
       isActive: true,
       maxConcurrency,
       queuePolicy,
-      config: config ?? null,
+      config: mergeCliproxyApiUpstreamConfig(config ?? null, input.cliproxyapi),
       weight,
       priority,
       routeCapabilities: normalizedRouteCapabilities,
@@ -550,7 +559,12 @@ export async function updateUpstream(
   if (input.isActive !== undefined) updateValues.isActive = input.isActive;
   if (input.maxConcurrency !== undefined) updateValues.maxConcurrency = input.maxConcurrency;
   if (input.queuePolicy !== undefined) updateValues.queuePolicy = input.queuePolicy;
-  if (input.config !== undefined) updateValues.config = input.config;
+  if (input.config !== undefined || input.cliproxyapi !== undefined) {
+    updateValues.config = mergeCliproxyApiUpstreamConfig(
+      input.config !== undefined ? input.config : existing.config,
+      input.cliproxyapi
+    );
+  }
   if (input.weight !== undefined) updateValues.weight = input.weight;
   if (input.priority !== undefined) updateValues.priority = input.priority;
   if (input.routeCapabilities !== undefined) {

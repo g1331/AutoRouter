@@ -108,6 +108,37 @@ export const upstreams = sqliteTable(
 );
 
 /**
+ * CLIProxyAPI service connections used by OAuth upstream presets.
+ */
+export const cliproxyapiConnections = sqliteTable(
+  "cliproxyapi_connections",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    name: text("name").notNull().unique(),
+    mode: text("mode").notNull().default("external"),
+    baseUrl: text("base_url").notNull(),
+    clientApiKeyEncrypted: text("client_api_key_encrypted"),
+    managementUrl: text("management_url").notNull(),
+    managementSecretEncrypted: text("management_secret_encrypted"),
+    outboundProxyUrl: text("outbound_proxy_url"),
+    isEnabled: integer("is_enabled", { mode: "boolean" }).notNull().default(true),
+    isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+    lastTestedAt: integer("last_tested_at", { mode: "timestamp_ms" }),
+    lastStatus: text("last_status"),
+    lastError: text("last_error"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("cliproxyapi_connections_name_idx").on(table.name),
+    index("cliproxyapi_connections_is_default_idx").on(table.isDefault),
+    index("cliproxyapi_connections_is_enabled_idx").on(table.isEnabled),
+  ]
+);
+
+/**
  * Health status tracking for upstreams.
  */
 export const upstreamHealth = sqliteTable(

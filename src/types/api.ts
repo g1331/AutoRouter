@@ -185,6 +185,99 @@ export interface UpstreamModelRule {
   display_label: string | null;
 }
 
+export type CliproxyApiConnectionMode = "external" | "managed_sidecar";
+export type CliproxyApiProvider = "codex" | "claude" | "gemini";
+export type CliproxyApiConnectionStatus = "untested" | "success" | "failed";
+export type CliproxyApiOauthLoginStatus = "pending" | "success" | "failed" | "expired";
+export type CliproxyApiEndpointKind = "proxy" | "management" | "outbound_proxy";
+export type CliproxyApiUpstreamPoolMode = "pool" | "account";
+
+export interface CliproxyApiConnectionConfig {
+  id: string;
+  name: string;
+  mode: CliproxyApiConnectionMode;
+  base_url: string;
+  client_api_key_masked: string | null;
+  client_api_key_configured: boolean;
+  management_url: string;
+  management_secret_masked: string | null;
+  management_secret_configured: boolean;
+  outbound_proxy_url: string | null;
+  is_enabled: boolean;
+  is_default: boolean;
+  last_tested_at: string | null;
+  last_status: CliproxyApiConnectionStatus;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CliproxyApiConnectionUpsertRequest {
+  name: string;
+  mode: CliproxyApiConnectionMode;
+  base_url: string;
+  client_api_key?: string | null;
+  management_url: string;
+  management_secret?: string | null;
+  outbound_proxy_url?: string | null;
+  is_enabled?: boolean;
+  is_default?: boolean;
+}
+
+export interface CliproxyApiAccount {
+  id: string;
+  provider: CliproxyApiProvider;
+  name: string;
+  prefix: string | null;
+  enabled: boolean;
+  model_count: number;
+  status: string;
+  error: string | null;
+  cooldown_until: string | null;
+  metadata: Record<string, unknown> | null;
+}
+
+export interface CliproxyApiModel {
+  model: string;
+  provider: CliproxyApiProvider;
+  account_id: string | null;
+  account_prefix: string | null;
+}
+
+export interface CliproxyApiOauthLoginResponse {
+  provider: CliproxyApiProvider;
+  status: CliproxyApiOauthLoginStatus;
+  auth_url: string | null;
+  device_code: string | null;
+  expires_at: string | null;
+  message: string | null;
+}
+
+export interface CliproxyApiConnectionTestResult {
+  endpoint: CliproxyApiEndpointKind;
+  ok: boolean;
+  status_code: number | null;
+  latency_ms: number;
+  message: string;
+  tested_at: string;
+}
+
+export interface CliproxyApiUpstreamConfig {
+  connection_id: string;
+  provider: CliproxyApiProvider;
+  pool_mode: CliproxyApiUpstreamPoolMode;
+  account_prefix: string | null;
+}
+
+export interface CliproxyApiUpstreamPreset {
+  id: CliproxyApiProvider;
+  name: string;
+  base_url: string;
+  route_capabilities: RouteCapability[];
+  model_discovery: UpstreamModelDiscoveryConfig;
+  config: CliproxyApiUpstreamConfig;
+}
+
 export interface UpstreamCreate {
   name: string;
   base_url: string;
@@ -214,6 +307,7 @@ export interface UpstreamCreate {
   spending_rules?:
     | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
     | null;
+  cliproxyapi?: CliproxyApiUpstreamConfig | null;
 }
 
 export interface UpstreamUpdate {
@@ -246,6 +340,7 @@ export interface UpstreamUpdate {
   spending_rules?:
     | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
     | null;
+  cliproxyapi?: CliproxyApiUpstreamConfig | null;
 }
 
 export interface UpstreamResponse {
@@ -281,6 +376,7 @@ export interface UpstreamResponse {
   spending_rules?:
     | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
     | null;
+  cliproxyapi: CliproxyApiUpstreamConfig | null;
   last_used_at?: string | null;
   created_at: string; // ISO 8601 date string
   updated_at: string; // ISO 8601 date string

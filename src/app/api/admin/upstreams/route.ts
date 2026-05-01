@@ -72,6 +72,13 @@ const modelRuleSchema = z
     path: ["target_model"],
   });
 
+const cliproxyapiUpstreamConfigSchema = z.object({
+  connection_id: z.string().trim().min(1),
+  provider: z.enum(["codex", "claude", "gemini"]),
+  pool_mode: z.enum(["pool", "account"]),
+  account_prefix: z.string().trim().min(1).nullable().optional(),
+});
+
 function normalizeDurationToMs(
   value: number | undefined,
   kind: "open_duration" | "probe_interval"
@@ -119,6 +126,7 @@ const createUpstreamSchema = z
       )
       .nullable()
       .optional(),
+    cliproxyapi: cliproxyapiUpstreamConfigSchema.nullable().optional(),
   })
   .refine(
     (data) =>
@@ -243,6 +251,14 @@ export async function POST(request: NextRequest) {
       billingInputMultiplier: validated.billing_input_multiplier,
       billingOutputMultiplier: validated.billing_output_multiplier,
       spendingRules: validated.spending_rules ?? null,
+      cliproxyapi: validated.cliproxyapi
+        ? {
+            connection_id: validated.cliproxyapi.connection_id,
+            provider: validated.cliproxyapi.provider,
+            pool_mode: validated.cliproxyapi.pool_mode,
+            account_prefix: validated.cliproxyapi.account_prefix ?? null,
+          }
+        : null,
     };
 
     const result = await createUpstream(input);
