@@ -93,6 +93,12 @@ export function handleCliproxyApiRouteError(error: unknown): NextResponse {
     return errorResponse("CLIProxyAPI connection not found", 404);
   }
   if (error instanceof CliproxyApiClientError) {
+    if (error.statusCode === 404) {
+      return errorResponse(
+        "CLIProxyAPI management endpoint returned 404. Confirm the Management URL points to a CPA instance with remote management enabled.",
+        502
+      );
+    }
     return errorResponse(error.message, 502);
   }
   if (error instanceof z.ZodError) {

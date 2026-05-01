@@ -56,6 +56,16 @@ vi.mock("@/lib/services/upstream-service", () => {
   class MockClientError extends Error {
     statusCode: number | null = null;
     responseBody: string | null = null;
+
+    constructor(
+      message: string,
+      statusCode: number | null = null,
+      responseBody: string | null = null
+    ) {
+      super(message);
+      this.statusCode = statusCode;
+      this.responseBody = responseBody;
+    }
   }
 
   return {
@@ -274,6 +284,25 @@ describe("admin cliproxyapi routes", () => {
     expect(response.status).toBe(400);
     const data = await response.json();
     expect(data.error).toContain("provider or state is required");
+  });
+
+  it("returns a management-route hint when CLIProxyAPI returns 404", async () => {
+    const { CliproxyApiClientError } = await import("@/lib/services/upstream-service");
+    client.getAuthUrl.mockRejectedValueOnce(
+      new CliproxyApiClientError("CLIProxyAPI request failed with status 404", 404)
+    );
+    const { GET } = await import("@/app/api/admin/cliproxyapi/oauth/route");
+
+    const response = await GET(
+      new NextRequest(
+        "http://localhost/api/admin/cliproxyapi/oauth?connection_id=conn-1&provider=codex"
+      )
+    );
+
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toMatchObject({
+      error: expect.stringContaining("remote management enabled"),
+    });
   });
 
   it("returns OAuth pool and fixed-account upstream presets", async () => {
