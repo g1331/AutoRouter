@@ -60,7 +60,7 @@
     "headerCompensation": "Header Compensation",
     "backgroundSync": "Background Tasks",
     "billing": "Billing",
-    "cliproxyapi": "CLI OAuth"
+    "cliproxyapi": "CLI Login"
   },
   "repository": {
     "title": "Project Repository",
@@ -1003,7 +1003,7 @@
     "cliproxyapi": "CLI OAuth"
   },
   "cliproxyapi": {
-    "pageTitle": "CLI OAUTH MANAGEMENT",
+    "pageTitle": "CLI OAuth Management",
     "title": "CLIProxyAPI Connections and Accounts",
     "description": "Manage external CLIProxyAPI services, OAuth accounts, login entry points, and connectivity checks. AutoRouter stores only encrypted CPA access secrets; OAuth tokens remain in the CPA auth-dir.",
     "connectionSelect": "Select connection",
@@ -1027,7 +1027,23 @@
       "management": "Test Management",
       "outbound_proxy": "Test Outbound Proxy"
     },
-    "oauthTitle": "OAuth Login",
+    "connectionChecksTitle": "Connection checks",
+    "connectionChecksDesc": "Each item represents a different CPA capability. Proxy reachability only means the proxy service is running; OAuth login and account lists require Management API availability.",
+    "endpointStatus": {
+      "proxy": "Proxy API",
+      "management": "Management API",
+      "outbound_proxy": "OAuth outbound proxy"
+    },
+    "endpointStatusDesc": {
+      "proxy": "Main proxy API for model requests and /v1/models.",
+      "management": "Required before account lists, OAuth login, and account status changes can work.",
+      "outbound_proxy": "Network exit used by CPA while opening OAuth authorization pages."
+    },
+    "statusReachable": "Reachable",
+    "statusUnavailable": "Unavailable",
+    "endpointStatusUntested": "Not tested",
+    "endpointStatusDetail": "HTTP {code} · {message}",
+    "oauthTitle": "Account login",
     "oauthDesc": "Open the authorization URL returned by CPA, complete CLI account login, then refresh accounts to inspect status.",
     "provider": {
       "codex": "Codex",
@@ -1035,11 +1051,14 @@
       "gemini": "Gemini"
     },
     "oauthResult": "{provider} login status: {status}",
+    "oauthFailed": "OAuth login request failed",
+    "managementUnavailableHint": "Management API is unavailable. Set remote-management.secret-key in CPA config.yaml, restart CPA, then test Management again.",
     "deviceCode": "Device code: {code}",
     "expiresAt": "Expires at: {time}",
-    "accountsTitle": "Auth Files",
+    "accountsTitle": "Account files",
     "accountsDesc": "Shows CPA auth-dir account files, prefixes, model counts, and enablement state.",
     "refreshHint": "Refresh Accounts",
+    "accountsLoadFailed": "Failed to load accounts",
     "accountsEmpty": "No accounts returned for this connection. Complete OAuth login, then refresh the list.",
     "accountMeta": "prefix: {prefix} · models: {count} · status: {status}",
     "enableAccount": "Enable account",

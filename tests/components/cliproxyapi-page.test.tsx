@@ -14,10 +14,36 @@ vi.mock("@/components/admin/topbar", () => ({
 
 const mockSaveMutate = vi.fn();
 const mockTestMutate = vi.fn();
+const mockTestMutateAsync = vi.fn();
 const mockStartOauth = vi.fn();
 const mockUpdateAccount = vi.fn();
 const mockBuildPreset = vi.fn();
 const mockRefetchAccounts = vi.fn();
+
+const mockConfigData = {
+  items: [
+    {
+      id: "conn-1",
+      name: "Local CPA",
+      mode: "external",
+      base_url: "http://localhost:8317/v1",
+      client_api_key_masked: "cpa-***1234",
+      client_api_key_configured: true,
+      management_url: "http://localhost:8317/v0/management",
+      management_secret_masked: "mgmt-***1234",
+      management_secret_configured: true,
+      outbound_proxy_url: null,
+      is_enabled: true,
+      is_default: true,
+      last_tested_at: null,
+      last_status: "success",
+      last_error: null,
+      created_at: "2026-01-01T00:00:00.000Z",
+      updated_at: "2026-01-01T00:00:00.000Z",
+    },
+  ],
+  default_connection: null,
+};
 
 vi.mock("@/components/admin/upstream-form-dialog", () => ({
   UpstreamFormDialog: ({
@@ -53,30 +79,7 @@ vi.mock("@/components/ui/switch", () => ({
 
 vi.mock("@/hooks/use-cliproxyapi", () => ({
   useCliproxyApiConfig: () => ({
-    data: {
-      items: [
-        {
-          id: "conn-1",
-          name: "Local CPA",
-          mode: "external",
-          base_url: "http://localhost:8317/v1",
-          client_api_key_masked: "cpa-***1234",
-          client_api_key_configured: true,
-          management_url: "http://localhost:8317/v0/management",
-          management_secret_masked: "mgmt-***1234",
-          management_secret_configured: true,
-          outbound_proxy_url: null,
-          is_enabled: true,
-          is_default: true,
-          last_tested_at: null,
-          last_status: "success",
-          last_error: null,
-          created_at: "2026-01-01T00:00:00.000Z",
-          updated_at: "2026-01-01T00:00:00.000Z",
-        },
-      ],
-      default_connection: null,
-    },
+    data: mockConfigData,
   }),
   useCliproxyApiStatus: () => ({ data: null }),
   useCliproxyApiAccounts: () => ({
@@ -97,6 +100,8 @@ vi.mock("@/hooks/use-cliproxyapi", () => ({
       ],
     },
     isLoading: false,
+    isError: false,
+    error: null,
     refetch: mockRefetchAccounts,
   }),
   useCliproxyApiAccountModels: () => ({
@@ -108,7 +113,11 @@ vi.mock("@/hooks/use-cliproxyapi", () => ({
     isFetching: false,
   }),
   useSaveCliproxyApiConfig: () => ({ mutate: mockSaveMutate, isPending: false }),
-  useTestCliproxyApiConnection: () => ({ mutate: mockTestMutate, isPending: false }),
+  useTestCliproxyApiConnection: () => ({
+    mutate: mockTestMutate,
+    mutateAsync: mockTestMutateAsync,
+    isPending: false,
+  }),
   useStartCliproxyApiOauth: () => ({ mutateAsync: mockStartOauth, isPending: false }),
   useUpdateCliproxyApiAccount: () => ({ mutate: mockUpdateAccount, isPending: false }),
   useBuildCliproxyApiAccountPreset: () => ({ mutateAsync: mockBuildPreset, isPending: false }),
@@ -118,10 +127,12 @@ describe("CliproxyApiPage", () => {
   beforeEach(() => {
     mockSaveMutate.mockReset();
     mockTestMutate.mockReset();
+    mockTestMutateAsync.mockReset();
     mockStartOauth.mockReset();
     mockUpdateAccount.mockReset();
     mockBuildPreset.mockReset();
     mockRefetchAccounts.mockReset();
+    mockConfigData.items[0].last_status = "success";
     vi.spyOn(window, "open").mockImplementation(() => null);
     mockStartOauth.mockResolvedValue({
       provider: "codex",
@@ -130,6 +141,16 @@ describe("CliproxyApiPage", () => {
       device_code: "ABCD",
       expires_at: "2026-01-01T00:10:00.000Z",
       message: null,
+    });
+    mockTestMutateAsync.mockResolvedValue({
+      result: {
+        endpoint: "management",
+        ok: true,
+        status_code: 200,
+        latency_ms: 10,
+        message: "Connection succeeded",
+        tested_at: "2026-01-01T00:00:00.000Z",
+      },
     });
     mockBuildPreset.mockResolvedValue({ name: "CLIProxyAPI codex.json Account" });
   });
@@ -157,6 +178,40 @@ describe("CliproxyApiPage", () => {
     );
     expect(screen.getByText("oauthResult:provider.codex:pending")).toBeInTheDocument();
     expect(screen.getByText("deviceCode:ABCD")).toBeInTheDocument();
+  });
+
+  it("renders OAuth request failures without throwing a runtime error", async () => {
+    mockStartOauth.mockRejectedValueOnce(new Error("management endpoint returned 404"));
+
+    render(<CliproxyApiPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "provider.codex" }));
+
+    expect(await screen.findByText("oauthResult:provider.codex:failed")).toBeInTheDocument();
+    expect(screen.getByText("management endpoint returned 404")).toHaveClass("text-status-error");
+  });
+
+  it("shows separate management status and disables OAuth when management is unavailable", async () => {
+    mockTestMutateAsync.mockResolvedValueOnce({
+      result: {
+        endpoint: "management",
+        ok: false,
+        status_code: 404,
+        latency_ms: 12,
+        message: "Management endpoint returned 404",
+        tested_at: "2026-01-01T00:00:00.000Z",
+      },
+    });
+
+    render(<CliproxyApiPage />);
+
+    expect(screen.getByText("connectionChecksTitle")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("testEndpoint.management"));
+
+    expect(await screen.findByText("statusUnavailable")).toHaveClass("text-status-error");
+    expect(screen.getByText("managementUnavailableHint")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "provider.codex" })).toBeDisabled();
   });
 
   it("builds a fixed-account upstream preset from account models", async () => {
