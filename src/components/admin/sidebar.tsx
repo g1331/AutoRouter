@@ -21,6 +21,7 @@ import {
   Sun,
   Wrench,
   ArrowLeftRight,
+  Cable,
   Wallet,
 } from "lucide-react";
 
@@ -57,7 +58,7 @@ type NavigationItem = {
 type SystemNavigationItem = {
   href: string;
   icon: typeof LayoutDashboard;
-  labelKey: "headerCompensation" | "billing" | "backgroundSync";
+  labelKey: "headerCompensation" | "billing" | "backgroundSync" | "cliproxyapi";
 };
 
 const navigation: NavigationItem[] = [
@@ -68,6 +69,7 @@ const navigation: NavigationItem[] = [
 ];
 
 const systemNavigation: SystemNavigationItem[] = [
+  { href: "/system/cliproxyapi", icon: Cable, labelKey: "cliproxyapi" },
   { href: "/system/billing", icon: Wallet, labelKey: "billing" },
   { href: "/system/background-sync", icon: RefreshCw, labelKey: "backgroundSync" },
   { href: "/system/header-compensation", icon: ArrowLeftRight, labelKey: "headerCompensation" },

@@ -59,7 +59,8 @@
     "system": "System",
     "headerCompensation": "Header Compensation",
     "backgroundSync": "Background Tasks",
-    "billing": "Billing"
+    "billing": "Billing",
+    "cliproxyapi": "CLI OAuth"
   },
   "repository": {
     "title": "Project Repository",
@@ -675,6 +676,12 @@
     "configCategoryBasic": "Basics",
     "configCategoryStrategy": "Routing and Billing",
     "configCategoryReliability": "Reliability",
+    "cliproxyApiPresetTitle": "CLIProxyAPI upstream presets",
+    "cliproxyApiPresetHelp": "Generate Codex, Claude, or Gemini OAuth pool upstream defaults from a saved CLIProxyAPI connection. The preset fills URL, capabilities, discovery, and CPA metadata. Enter the API key before saving.",
+    "cliproxyApiConnectionSelect": "Select CLIProxyAPI connection",
+    "cliproxyApiPresetEmpty": "No CLIProxyAPI connection is configured yet. Save one from System > CLI OAuth, then return here to use presets.",
+    "cliproxyApiPresetApplied": "CLIProxyAPI preset applied",
+    "cliproxyApiPresetDescription": "Created from the {provider} preset. Routing, model rules, and quotas remain editable before saving.",
     "backToConfigQuickJump": "Back to quick jump",
     "previousSection": "Previous section",
     "nextSection": "Next section",
@@ -992,7 +999,52 @@
     "title": "System",
     "headerCompensation": "Header Compensation",
     "backgroundSync": "Background Tasks",
-    "billing": "Billing"
+    "billing": "Billing",
+    "cliproxyapi": "CLI OAuth"
+  },
+  "cliproxyapi": {
+    "pageTitle": "CLI OAUTH MANAGEMENT",
+    "title": "CLIProxyAPI Connections and Accounts",
+    "description": "Manage external CLIProxyAPI services, OAuth accounts, login entry points, and connectivity checks. AutoRouter stores only encrypted CPA access secrets; OAuth tokens remain in the CPA auth-dir.",
+    "connectionSelect": "Select connection",
+    "connectionTitle": "Connection Configuration",
+    "connectionDesc": "Configure how AutoRouter reaches the CPA proxy and management API.",
+    "name": "Name",
+    "baseUrl": "Proxy Base URL",
+    "clientApiKey": "Client API Key",
+    "managementUrl": "Management URL",
+    "managementSecret": "Management Secret",
+    "outboundProxyUrl": "OAuth Outbound Proxy",
+    "secretUnchanged": "Leave blank to keep existing secret",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "defaultConnection": "Default connection",
+    "saveConnection": "Save Connection",
+    "loading": "Loading...",
+    "untested": "untested",
+    "testEndpoint": {
+      "proxy": "Test Proxy",
+      "management": "Test Management",
+      "outbound_proxy": "Test Outbound Proxy"
+    },
+    "oauthTitle": "OAuth Login",
+    "oauthDesc": "Open the authorization URL returned by CPA, complete CLI account login, then refresh accounts to inspect status.",
+    "provider": {
+      "codex": "Codex",
+      "claude": "Claude Code",
+      "gemini": "Gemini"
+    },
+    "oauthResult": "{provider} login status: {status}",
+    "deviceCode": "Device code: {code}",
+    "expiresAt": "Expires at: {time}",
+    "accountsTitle": "Auth Files",
+    "accountsDesc": "Shows CPA auth-dir account files, prefixes, model counts, and enablement state.",
+    "refreshHint": "Refresh Accounts",
+    "accountsEmpty": "No accounts returned for this connection. Complete OAuth login, then refresh the list.",
+    "accountMeta": "prefix: {prefix} · models: {count} · status: {status}",
+    "enableAccount": "Enable account",
+    "disableAccount": "Disable account",
+    "createAccountUpstream": "Create fixed-account upstream"
   },
   "billing": {
     "title": "Billing",

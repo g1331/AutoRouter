@@ -50,6 +50,7 @@ vi.mock("lucide-react", () => ({
   Monitor: () => <svg data-testid="icon-monitor" />,
   Wrench: () => <svg data-testid="icon-wrench" />,
   ArrowLeftRight: () => <svg data-testid="icon-arrow-left-right" />,
+  Cable: () => <svg data-testid="icon-cable" />,
   Wallet: () => <svg data-testid="icon-wallet" />,
   RefreshCw: () => <svg data-testid="icon-refresh-cw" />,
   Github: () => <svg data-testid="icon-github" />,
@@ -146,6 +147,7 @@ describe("Sidebar", () => {
       expect(screen.getAllByText("apiKeys").length).toBeGreaterThan(0);
       expect(screen.getAllByText("upstreams").length).toBeGreaterThan(0);
       expect(screen.getAllByText("settings").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("cliproxyapi").length).toBeGreaterThan(0);
       expect(screen.getAllByText("billing").length).toBeGreaterThan(0);
     });
 
@@ -157,6 +159,7 @@ describe("Sidebar", () => {
       expect(screen.getAllByTestId("icon-key").length).toBeGreaterThan(0);
       expect(screen.getAllByTestId("icon-server").length).toBeGreaterThan(0);
       expect(screen.getAllByTestId("icon-settings").length).toBeGreaterThan(0);
+      expect(screen.getAllByTestId("icon-cable").length).toBeGreaterThan(0);
       expect(screen.getAllByTestId("icon-wallet").length).toBeGreaterThan(0);
     });
 

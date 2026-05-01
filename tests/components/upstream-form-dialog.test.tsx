@@ -50,6 +50,74 @@ vi.mock("@/hooks/use-upstreams", () => ({
   }),
 }));
 
+vi.mock("@/hooks/use-cliproxyapi", () => ({
+  useCliproxyApiConfig: () => ({
+    data: {
+      items: [
+        {
+          id: "conn-1",
+          name: "Local CPA",
+          base_url: "http://localhost:8317/v1",
+          client_api_key_masked: "cpa-***1234",
+          management_url: "http://localhost:8317/v0/management",
+          management_secret_masked: "mgmt-***1234",
+          outbound_proxy_url: null,
+          mode: "external",
+          is_enabled: true,
+          is_default: true,
+          last_tested_at: null,
+          last_status: "untested",
+          last_error: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ],
+      default_connection: {
+        id: "conn-1",
+        name: "Local CPA",
+        base_url: "http://localhost:8317/v1",
+        client_api_key_masked: "cpa-***1234",
+        management_url: "http://localhost:8317/v0/management",
+        management_secret_masked: "mgmt-***1234",
+        outbound_proxy_url: null,
+        mode: "external",
+        is_enabled: true,
+        is_default: true,
+        last_tested_at: null,
+        last_status: "untested",
+        last_error: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    },
+  }),
+  useCliproxyApiUpstreamPresets: () => ({
+    data: {
+      items: [
+        {
+          id: "codex",
+          name: "CLIProxyAPI Codex OAuth Pool",
+          base_url: "http://localhost:8317/v1",
+          route_capabilities: ["codex_cli_responses", "openai_responses"],
+          model_discovery: {
+            mode: "openai_compatible",
+            custom_endpoint: null,
+            enable_lite_llm_fallback: false,
+            auto_refresh_enabled: false,
+          },
+          config: {
+            connection_id: "conn-1",
+            provider: "codex",
+            pool_mode: "pool",
+            account_prefix: null,
+          },
+        },
+      ],
+    },
+    isLoading: false,
+  }),
+}));
+
 describe("UpstreamFormDialog", () => {
   let queryClient: QueryClient;
 
@@ -112,6 +180,7 @@ describe("UpstreamFormDialog", () => {
     billing_output_multiplier: 1,
     queue_policy: null,
     spending_rules: null,
+    cliproxyapi: null,
     current_concurrency: 0,
     max_concurrency: null,
     official_website_url: null,
@@ -165,6 +234,36 @@ describe("UpstreamFormDialog", () => {
       expect(screen.getByText("configCategoryBasic")).toBeInTheDocument();
       expect(screen.getByText("configCategoryStrategy")).toBeInTheDocument();
       expect(screen.getByText("configCategoryReliability")).toBeInTheDocument();
+    });
+
+    it("applies CLIProxyAPI upstream preset metadata before create submit", async () => {
+      mockCreateMutateAsync.mockResolvedValueOnce({});
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: /CLIProxyAPI Codex OAuth Pool/ }));
+      fireEvent.change(screen.getByPlaceholderText("apiKeyPlaceholder"), {
+        target: { value: "cpa-client-key" },
+      });
+      fireEvent.click(screen.getByText("create"));
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: "CLIProxyAPI Codex OAuth Pool",
+            base_url: "http://localhost:8317/v1",
+            api_key: "cpa-client-key",
+            route_capabilities: ["codex_cli_responses", "openai_responses"],
+            cliproxyapi: {
+              connection_id: "conn-1",
+              provider: "codex",
+              pool_mode: "pool",
+              account_prefix: null,
+            },
+          })
+        );
+      });
     });
 
     it("renders the model discovery workspace instead of legacy routing inputs", () => {
@@ -312,6 +411,7 @@ describe("UpstreamFormDialog", () => {
           billing_output_multiplier: 1,
           queue_policy: null,
           spending_rules: null,
+          cliproxyapi: null,
           route_capabilities: [],
           model_discovery: {
             mode: "openai_compatible",
@@ -872,6 +972,7 @@ describe("UpstreamFormDialog", () => {
             billing_input_multiplier: 1,
             billing_output_multiplier: 1,
             spending_rules: null,
+            cliproxyapi: null,
             route_capabilities: [],
             model_discovery: {
               mode: "openai_compatible",
@@ -922,6 +1023,7 @@ describe("UpstreamFormDialog", () => {
             billing_input_multiplier: 1,
             billing_output_multiplier: 1,
             spending_rules: null,
+            cliproxyapi: null,
             route_capabilities: [],
             model_discovery: {
               mode: "openai_compatible",

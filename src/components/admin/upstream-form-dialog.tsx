@@ -17,6 +17,7 @@ import {
   ArrowDownToLine,
   CircleAlert,
   Coins,
+  Cable,
   FileText,
   Gauge,
   CheckCircle2,
@@ -85,7 +86,10 @@ import {
   useRefreshUpstreamCatalog,
   useUpdateUpstream,
 } from "@/hooks/use-upstreams";
+import { useCliproxyApiConfig, useCliproxyApiUpstreamPresets } from "@/hooks/use-cliproxyapi";
 import type {
+  CliproxyApiUpstreamConfig,
+  CliproxyApiUpstreamPreset,
   RouteCapability,
   Upstream,
   UpstreamQueuePolicy,
@@ -111,6 +115,9 @@ import { cn } from "@/lib/utils";
 
 interface UpstreamFormDialogProps {
   upstream?: Upstream | null;
+  initialCliproxyApiPreset?:
+    | (CliproxyApiUpstreamPreset & { model_rules?: UpstreamModelRule[] })
+    | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   trigger?: React.ReactNode;
@@ -201,6 +208,15 @@ const modelRuleSchema = z
     message: MODEL_RULE_ALIAS_TARGET_REQUIRED_MESSAGE,
     path: ["target_model"],
   });
+
+const cliproxyApiUpstreamConfigSchema = z
+  .object({
+    connection_id: z.string().trim().min(1),
+    provider: z.enum(["codex", "claude", "gemini"]),
+    pool_mode: z.enum(["pool", "account"]),
+    account_prefix: z.string().trim().nullable(),
+  })
+  .nullable();
 
 // Preserve transient empty-string edits in the input, and only coerce to numbers at validation time.
 function coerceNumericInput(
@@ -323,6 +339,7 @@ const createUpstreamFormSchema = z
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
     model_discovery: modelDiscoverySchema,
     model_rules: z.array(modelRuleSchema),
+    cliproxyapi: cliproxyApiUpstreamConfigSchema,
     circuit_breaker_config: circuitBreakerConfigSchema,
     affinity_migration: affinityMigrationConfigSchema,
   })
@@ -365,6 +382,7 @@ const editUpstreamFormSchema = z
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
     model_discovery: modelDiscoverySchema,
     model_rules: z.array(modelRuleSchema),
+    cliproxyapi: cliproxyApiUpstreamConfigSchema,
     circuit_breaker_config: circuitBreakerConfigSchema,
     affinity_migration: affinityMigrationConfigSchema,
   })
@@ -526,6 +544,7 @@ function buildUpstreamFormDefaults(upstream?: Upstream | null): UpstreamFormValu
       upstream?.route_capabilities ?? []
     ),
     model_rules: toFormModelRulesValue(upstream?.model_rules),
+    cliproxyapi: upstream?.cliproxyapi ?? null,
     circuit_breaker_config: upstream?.circuit_breaker?.config
       ? {
           failure_threshold: upstream.circuit_breaker.config.failure_threshold,
@@ -913,6 +932,7 @@ function spendingRulesToApi(
  */
 export function UpstreamFormDialog({
   upstream,
+  initialCliproxyApiPreset,
   open,
   onOpenChange,
   trigger,
@@ -923,6 +943,7 @@ export function UpstreamFormDialog({
   const refreshCatalogMutation = useRefreshUpstreamCatalog();
   const importCatalogMutation = useImportUpstreamCatalogModels();
   const updateMutation = useUpdateUpstream();
+  const { data: cliproxyApiConfig } = useCliproxyApiConfig();
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
   const circuitBreakerUseDefaultPlaceholder = t("circuitBreakerUseDefaultPlaceholder");
@@ -936,6 +957,7 @@ export function UpstreamFormDialog({
   const [selectedCatalogModels, setSelectedCatalogModels] = useState<string[]>([]);
   const [selectedModelRuleIds, setSelectedModelRuleIds] = useState<string[]>([]);
   const [workspaceUpstream, setWorkspaceUpstream] = useState<Upstream | null>(null);
+  const [selectedCliproxyApiConnectionId, setSelectedCliproxyApiConnectionId] = useState("");
   const contentScrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   const form = useForm<UpstreamFormValues>({
@@ -1008,6 +1030,23 @@ export function UpstreamFormDialog({
       : DEFAULT_QUEUE_POLICY_TIMEOUT_MS;
   const queuePolicyMaxQueueLength =
     typeof queuePolicy?.max_queue_length === "number" ? queuePolicy.max_queue_length : null;
+  const cliproxyApiConnections = useMemo(
+    () => cliproxyApiConfig?.items ?? [],
+    [cliproxyApiConfig?.items]
+  );
+  const effectiveCliproxyApiConnectionId =
+    selectedCliproxyApiConnectionId || cliproxyApiConfig?.default_connection?.id || "";
+  const { data: cliproxyApiPresets, isLoading: isCliproxyApiPresetsLoading } =
+    useCliproxyApiUpstreamPresets(effectiveCliproxyApiConnectionId, {
+      enabled: !isEdit && open && Boolean(effectiveCliproxyApiConnectionId),
+    });
+  const initialCliproxyApiPresetDescription = useMemo(
+    () =>
+      initialCliproxyApiPreset
+        ? t("cliproxyApiPresetDescription", { provider: initialCliproxyApiPreset.name })
+        : "",
+    [initialCliproxyApiPreset, t]
+  );
   const endpointPreview = useMemo(
     () => resolveEndpointPreview(watchedBaseUrl ?? "", watchedRouteCapabilities),
     [watchedBaseUrl, watchedRouteCapabilities]
@@ -1178,14 +1217,39 @@ export function UpstreamFormDialog({
 
   useEffect(() => {
     if (open) {
-      form.reset(buildUpstreamFormDefaults(upstream));
-      replaceModelRules(toFormModelRulesValue(upstream?.model_rules));
+      const initialModelRules = initialCliproxyApiPreset?.model_rules ?? upstream?.model_rules;
+      const defaults = buildUpstreamFormDefaults(upstream);
+      form.reset(
+        initialCliproxyApiPreset
+          ? {
+              ...defaults,
+              name: initialCliproxyApiPreset.name,
+              base_url: initialCliproxyApiPreset.base_url,
+              description: initialCliproxyApiPresetDescription,
+              route_capabilities: initialCliproxyApiPreset.route_capabilities,
+              model_discovery: {
+                ...initialCliproxyApiPreset.model_discovery,
+                custom_endpoint: initialCliproxyApiPreset.model_discovery.custom_endpoint ?? "",
+              },
+              cliproxyapi: initialCliproxyApiPreset.config,
+              model_rules: toFormModelRulesValue(initialModelRules),
+            }
+          : defaults
+      );
+      replaceModelRules(toFormModelRulesValue(initialModelRules));
       return;
     }
 
     form.reset(buildUpstreamFormDefaults(null));
     replaceModelRules([]);
-  }, [form, open, replaceModelRules, upstream]);
+  }, [
+    form,
+    initialCliproxyApiPreset,
+    initialCliproxyApiPresetDescription,
+    open,
+    replaceModelRules,
+    upstream,
+  ]);
 
   const resetDialogUiState = () => {
     setConfigSearchQuery("");
@@ -1195,6 +1259,7 @@ export function UpstreamFormDialog({
     setSelectedModelRuleIds([]);
     setActiveSectionId("basic-name");
     setHighlightedSectionId(null);
+    setSelectedCliproxyApiConnectionId("");
   };
 
   const closeDialog = () => {
@@ -1438,6 +1503,35 @@ export function UpstreamFormDialog({
     }
   };
 
+  const applyCliproxyApiPreset = (preset: CliproxyApiUpstreamPreset) => {
+    const presetDescription = t("cliproxyApiPresetDescription", { provider: preset.name });
+
+    form.setValue("name", preset.name, { shouldDirty: true, shouldValidate: true });
+    form.setValue("base_url", preset.base_url, { shouldDirty: true, shouldValidate: true });
+    form.setValue("description", presetDescription, { shouldDirty: true });
+    form.setValue("route_capabilities", preset.route_capabilities, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    form.setValue(
+      "model_discovery",
+      {
+        ...preset.model_discovery,
+        custom_endpoint: preset.model_discovery.custom_endpoint ?? "",
+      },
+      {
+        shouldDirty: true,
+        shouldValidate: true,
+      }
+    );
+    // Visible fields stay editable; this hidden metadata records which CPA connection created them.
+    form.setValue("cliproxyapi", preset.config, { shouldDirty: true, shouldValidate: true });
+    replaceModelRules([]);
+    setActiveSectionId("basic-api-key");
+    setHighlightedSectionId("basic-api-key");
+    toast.success(t("cliproxyApiPresetApplied"));
+  };
+
   const onSubmit = async (values: UpstreamFormValues) => {
     try {
       const data = activeSchema.parse(values) as UpstreamFormData;
@@ -1469,6 +1563,7 @@ export function UpstreamFormDialog({
                 period_hours?: number;
               }[]
             | null;
+          cliproxyapi?: CliproxyApiUpstreamConfig | null;
           route_capabilities?: RouteCapability[] | null;
           model_discovery?: UpstreamModelDiscoveryConfig | null;
           model_rules?: UpstreamModelRule[] | null;
@@ -1492,6 +1587,7 @@ export function UpstreamFormDialog({
           billing_input_multiplier: data.billing_input_multiplier,
           billing_output_multiplier: data.billing_output_multiplier,
           spending_rules: spendingRulesToApi(data.spending_rules),
+          cliproxyapi: data.cliproxyapi ?? null,
           route_capabilities: data.route_capabilities,
           model_discovery: toApiModelDiscoveryValue(data.model_discovery),
           model_rules: toApiModelRulesValue(data.model_rules),
@@ -1534,6 +1630,7 @@ export function UpstreamFormDialog({
                 period_hours?: number;
               }[]
             | null;
+          cliproxyapi: CliproxyApiUpstreamConfig | null;
           route_capabilities: RouteCapability[] | null;
           model_discovery: UpstreamModelDiscoveryConfig | null;
           model_rules: UpstreamModelRule[] | null;
@@ -1559,6 +1656,7 @@ export function UpstreamFormDialog({
           billing_output_multiplier: data.billing_output_multiplier,
           queue_policy: queuePolicy,
           spending_rules: spendingRulesToApi(data.spending_rules),
+          cliproxyapi: data.cliproxyapi ?? null,
           route_capabilities: data.route_capabilities,
           model_discovery: toApiModelDiscoveryValue(data.model_discovery),
           model_rules: toApiModelRulesValue(data.model_rules),
@@ -1805,6 +1903,68 @@ export function UpstreamFormDialog({
                         </p>
                       )}
                     </div>
+
+                    {!isEdit && (
+                      <div className="mb-4 rounded-cf-sm border border-amber-500/30 bg-amber-500/5 p-4 shadow-[var(--vr-shadow-xs)]">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex items-center gap-2 text-amber-500">
+                              <Cable className="h-4 w-4" aria-hidden="true" />
+                              <p className="type-label-medium">{t("cliproxyApiPresetTitle")}</p>
+                            </div>
+                            <p className="type-body-small text-muted-foreground">
+                              {t("cliproxyApiPresetHelp")}
+                            </p>
+                          </div>
+
+                          {cliproxyApiConnections.length > 0 && (
+                            <Select
+                              value={effectiveCliproxyApiConnectionId}
+                              onValueChange={setSelectedCliproxyApiConnectionId}
+                            >
+                              <SelectTrigger className="w-full border-surface-400/70 bg-surface-200/70 lg:w-64">
+                                <SelectValue placeholder={t("cliproxyApiConnectionSelect")} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {cliproxyApiConnections.map((connection) => (
+                                  <SelectItem key={connection.id} value={connection.id}>
+                                    {connection.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        </div>
+
+                        {cliproxyApiConnections.length === 0 ? (
+                          <p className="mt-3 rounded-cf-sm border border-divider/70 bg-surface-200/70 px-3 py-2 text-xs text-muted-foreground">
+                            {t("cliproxyApiPresetEmpty")}
+                          </p>
+                        ) : (
+                          <div className="mt-3 grid gap-2 md:grid-cols-3">
+                            {(cliproxyApiPresets?.items ?? []).map((preset) => (
+                              <Button
+                                key={preset.id}
+                                type="button"
+                                variant="outline"
+                                className="h-auto justify-start border-surface-400/75 bg-surface-200/65 px-3 py-2 text-left hover:border-amber-500/45 hover:bg-amber-500/10"
+                                disabled={isCliproxyApiPresetsLoading}
+                                onClick={() => applyCliproxyApiPreset(preset)}
+                              >
+                                <span className="min-w-0 space-y-1">
+                                  <span className="block truncate text-sm font-medium">
+                                    {preset.name}
+                                  </span>
+                                  <span className="block truncate text-xs text-muted-foreground">
+                                    {preset.base_url}
+                                  </span>
+                                </span>
+                              </Button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     <div id="basic-name" className={getSectionClassName("basic-name")}>
                       <FormField

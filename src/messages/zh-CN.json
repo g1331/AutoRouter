@@ -59,7 +59,8 @@
     "system": "系统",
     "headerCompensation": "请求头补偿",
     "backgroundSync": "后台任务",
-    "billing": "计费"
+    "billing": "计费",
+    "cliproxyapi": "CLI OAuth"
   },
   "repository": {
     "title": "项目仓库",
@@ -680,6 +681,12 @@
     "configCategoryBasic": "基础配置",
     "configCategoryStrategy": "路由与计费策略",
     "configCategoryReliability": "稳定性策略",
+    "cliproxyApiPresetTitle": "CLIProxyAPI 上游预设",
+    "cliproxyApiPresetHelp": "从已保存的 CLIProxyAPI 连接生成 Codex、Claude 或 Gemini OAuth 池上游初始值。预设会填充地址、能力标签、模型发现和 CPA 元数据，API Key 仍需在保存前填写。",
+    "cliproxyApiConnectionSelect": "选择 CLIProxyAPI 连接",
+    "cliproxyApiPresetEmpty": "尚未配置 CLIProxyAPI 连接。可先到系统中的 CLI OAuth 页面保存连接，再回到此处使用预设。",
+    "cliproxyApiPresetApplied": "CLIProxyAPI 预设已应用",
+    "cliproxyApiPresetDescription": "由 {provider} 预设创建，可在保存前继续调整路由、模型规则和限额。",
     "backToConfigQuickJump": "返回快速定位",
     "previousSection": "上一项",
     "nextSection": "下一项",
@@ -997,7 +1004,52 @@
     "title": "系统",
     "headerCompensation": "请求头补偿",
     "backgroundSync": "后台任务",
-    "billing": "计费"
+    "billing": "计费",
+    "cliproxyapi": "CLI OAuth"
+  },
+  "cliproxyapi": {
+    "pageTitle": "CLI OAUTH 管理",
+    "title": "CLIProxyAPI 连接与账号",
+    "description": "管理外部 CLIProxyAPI 服务、OAuth 账号、登录入口和连通性测试。AutoRouter 只保存加密后的 CPA 访问密钥，OAuth token 仍由 CPA auth-dir 管理。",
+    "connectionSelect": "选择连接",
+    "connectionTitle": "连接配置",
+    "connectionDesc": "配置 AutoRouter 访问 CPA proxy 与 management API 的地址和密钥。",
+    "name": "名称",
+    "baseUrl": "Proxy Base URL",
+    "clientApiKey": "Client API Key",
+    "managementUrl": "Management URL",
+    "managementSecret": "Management Secret",
+    "outboundProxyUrl": "OAuth 出站代理",
+    "secretUnchanged": "留空表示保持原密钥",
+    "enabled": "启用",
+    "disabled": "停用",
+    "defaultConnection": "默认连接",
+    "saveConnection": "保存连接",
+    "loading": "加载中...",
+    "untested": "untested",
+    "testEndpoint": {
+      "proxy": "测试 Proxy",
+      "management": "测试管理接口",
+      "outbound_proxy": "测试出站代理"
+    },
+    "oauthTitle": "OAuth 登录",
+    "oauthDesc": "打开 CPA 返回的授权地址完成 CLI 账号登录，完成后刷新账号列表查看状态。",
+    "provider": {
+      "codex": "Codex",
+      "claude": "Claude Code",
+      "gemini": "Gemini"
+    },
+    "oauthResult": "{provider} 登录状态：{status}",
+    "deviceCode": "Device code: {code}",
+    "expiresAt": "过期时间：{time}",
+    "accountsTitle": "Auth 文件",
+    "accountsDesc": "展示 CPA auth-dir 中的账号文件、prefix、模型数量和启用状态。",
+    "refreshHint": "刷新账号",
+    "accountsEmpty": "当前连接尚未返回账号。完成 OAuth 登录后刷新列表。",
+    "accountMeta": "prefix: {prefix} · models: {count} · status: {status}",
+    "enableAccount": "启用账号",
+    "disableAccount": "停用账号",
+    "createAccountUpstream": "创建固定账号上游"
   },
   "billing": {
     "title": "计费",
