@@ -26,6 +26,8 @@ interface UpstreamsTableProps {
   onEdit: (upstream: Upstream) => void;
   onDelete: (upstream: Upstream) => void;
   onTest: (upstream: Upstream) => void;
+  onProbe?: (upstream: Upstream) => void;
+  probingUpstreamId?: string | null;
   density?: "comfortable" | "compact";
   hasActiveFilters?: boolean;
 }
@@ -61,6 +63,8 @@ export function UpstreamsTable({
   upstreams,
   onEdit,
   onDelete,
+  onProbe,
+  probingUpstreamId = null,
   density = "comfortable",
   hasActiveFilters = false,
 }: UpstreamsTableProps) {
@@ -238,9 +242,19 @@ export function UpstreamsTable({
     return upstream.health_status.is_healthy ? "healthy" : "offline";
   };
 
-  const getHealthLabel = (upstream: Upstream): string => {
-    if (!upstream.health_status) return t("healthUnknown");
-    return upstream.health_status.is_healthy ? t("healthHealthy") : t("healthUnhealthy");
+  const getLatestProbe = (upstream: Upstream) => upstream.probe_results?.[0] ?? null;
+
+  const getProbeLedStatus = (upstream: Upstream): LedStatus => {
+    const probe = getLatestProbe(upstream);
+    if (!probe) return getHealthLedStatus(upstream);
+    return probe.success ? "healthy" : "offline";
+  };
+
+  const getProbeLabel = (upstream: Upstream): string => {
+    const probe = getLatestProbe(upstream);
+    if (!probe) return t("probeUnknown");
+    const latency = probe.latency_ms == null ? "--" : `${probe.latency_ms}ms`;
+    return `${t(`probeStatus.${probe.status}`)} · ${latency}`;
   };
 
   const getCircuitLedStatus = (upstream: Upstream): LedStatus => {
@@ -770,9 +784,9 @@ export function UpstreamsTable({
                             </div>
                             <div className="flex flex-wrap gap-2">
                               <StatusLed
-                                status={getHealthLedStatus(upstream)}
+                                status={getProbeLedStatus(upstream)}
                                 showLabel
-                                label={getHealthLabel(upstream)}
+                                label={getProbeLabel(upstream)}
                               />
                               <StatusLed
                                 status={getCircuitLedStatus(upstream)}
@@ -801,6 +815,21 @@ export function UpstreamsTable({
                               >
                                 {t("queuePolicyStatus")}: {queuePolicy.statusLabel}
                               </Badge>
+                              {onProbe ? (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  type="button"
+                                  className="h-6 gap-1.5 border-divider bg-surface-200 px-2 text-[11px]"
+                                  onClick={() => onProbe(upstream)}
+                                  disabled={probingUpstreamId === upstream.id}
+                                >
+                                  <Server className="h-3 w-3" aria-hidden="true" />
+                                  {probingUpstreamId === upstream.id
+                                    ? t("probeRunning")
+                                    : t("runProbe")}
+                                </Button>
+                              ) : null}
                             </div>
 
                             {!concurrency.unlimited && (
@@ -833,6 +862,15 @@ export function UpstreamsTable({
                               {t("lastUsed")}:{" "}
                               <span className="text-foreground">{formatLastUsed(upstream)}</span>
                             </div>
+                            {getLatestProbe(upstream) ? (
+                              <div className="mt-2 text-[11px] text-muted-foreground">
+                                {t("probeDetails")}:{" "}
+                                <span className="text-foreground">
+                                  {getLatestProbe(upstream)?.client_profile} /{" "}
+                                  {getLatestProbe(upstream)?.route_capability}
+                                </span>
+                              </div>
+                            ) : null}
                           </section>
                         </div>
 

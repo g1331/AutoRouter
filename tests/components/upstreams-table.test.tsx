@@ -29,6 +29,8 @@ const mockUseUpstreams = vi.fn();
 const mockUseAllUpstreams = vi.fn();
 const mockUseUpstreamHealth = vi.fn();
 const mockUseTestUpstream = vi.fn();
+const mockUseUpstreamProbes = vi.fn();
+const mockExecuteProbe = vi.fn();
 vi.mock("@/hooks/use-upstreams", () => ({
   useToggleUpstreamActive: () => ({
     mutateAsync: mockToggleUpstreamActive,
@@ -43,6 +45,12 @@ vi.mock("@/hooks/use-upstreams", () => ({
   useAllUpstreams: (...args: unknown[]) => mockUseAllUpstreams(...args),
   useUpstreamHealth: (...args: unknown[]) => mockUseUpstreamHealth(...args),
   useTestUpstream: (...args: unknown[]) => mockUseTestUpstream(...args),
+  useUpstreamProbes: (...args: unknown[]) => mockUseUpstreamProbes(...args),
+  useExecuteUpstreamProbe: () => ({
+    mutate: mockExecuteProbe,
+    isPending: false,
+    variables: undefined,
+  }),
 }));
 
 vi.mock("@/components/admin/topbar", () => ({
@@ -129,6 +137,7 @@ describe("UpstreamsTable", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUpstreamQuotaData = undefined;
+    mockUseUpstreamProbes.mockReturnValue({ data: { data: [], total: 0 } });
   });
 
   it("renders empty state", () => {
@@ -167,6 +176,46 @@ describe("UpstreamsTable", () => {
     expect(screen.getByText("OpenAI Main")).toBeInTheDocument();
     expect(screen.getByText("https://api.openai.com/v1")).toBeInTheDocument();
     expect(screen.getByText("runtimeStatus")).toBeInTheDocument();
+  });
+
+  it("renders latest diagnostic probe result in runtime status", () => {
+    render(
+      <UpstreamsTable
+        upstreams={[
+          {
+            ...baseUpstream,
+            probe_results: [
+              {
+                id: "probe-1",
+                upstream_id: "upstream-1",
+                route_capability: "codex_cli_responses",
+                client_profile: "codex_cli",
+                probe_template_id: "codex_cli_responses_stream_v1",
+                probe_kind: "cli_real_request",
+                status: "ok",
+                layer: "business",
+                success: true,
+                latency_ms: 88,
+                first_byte_latency_ms: 40,
+                completed_latency_ms: 88,
+                status_code: 200,
+                error_type: null,
+                error_message: null,
+                probe_url: "https://api.openai.com/v1/responses",
+                model: "gpt-5.1",
+                checked_at: new Date().toISOString(),
+              },
+            ],
+          },
+        ]}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onTest={onTest}
+      />
+    );
+
+    expect(screen.getByText("probeStatus.ok · 88ms")).toBeInTheDocument();
+    expect(screen.getByText("codex_cli / codex_cli_responses")).toBeInTheDocument();
   });
 
   it("renders queue policy summary in runtime status", () => {

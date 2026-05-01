@@ -7,6 +7,7 @@ import type {
   UpstreamModelDiscoveryConfig,
   UpstreamModelRule,
 } from "@/lib/services/upstream-model-types";
+import type { RouteCapability } from "@/lib/route-capabilities";
 
 type UpstreamQueuePolicy = {
   enabled: boolean;
@@ -130,6 +131,50 @@ export const upstreamHealth = sqliteTable(
   (table) => [
     index("upstream_health_upstream_id_idx").on(table.upstreamId),
     index("upstream_health_is_healthy_idx").on(table.isHealthy),
+  ]
+);
+
+/**
+ * Diagnostic probe results for upstream route capabilities and client profiles.
+ */
+export const upstreamProbeResults = sqliteTable(
+  "upstream_probe_results",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    upstreamId: text("upstream_id")
+      .notNull()
+      .references(() => upstreams.id, { onDelete: "cascade" }),
+    routeCapability: text("route_capability").$type<RouteCapability>().notNull(),
+    clientProfile: text("client_profile").notNull(),
+    probeTemplateId: text("probe_template_id").notNull(),
+    probeKind: text("probe_kind").notNull(),
+    status: text("status").notNull(),
+    layer: text("layer").notNull(),
+    success: integer("success", { mode: "boolean" }).notNull().default(false),
+    latencyMs: integer("latency_ms"),
+    firstByteLatencyMs: integer("first_byte_latency_ms"),
+    completedLatencyMs: integer("completed_latency_ms"),
+    statusCode: integer("status_code"),
+    errorType: text("error_type"),
+    errorMessage: text("error_message"),
+    probeUrl: text("probe_url"),
+    model: text("model"),
+    checkedAt: integer("checked_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("upstream_probe_results_identity_unique").on(
+      table.upstreamId,
+      table.routeCapability,
+      table.clientProfile,
+      table.probeTemplateId
+    ),
+    index("upstream_probe_results_upstream_id_idx").on(table.upstreamId),
+    index("upstream_probe_results_status_idx").on(table.status),
+    index("upstream_probe_results_checked_at_idx").on(table.checkedAt),
   ]
 );
 
@@ -505,6 +550,7 @@ export const upstreamsRelations = relations(upstreams, ({ one, many }) => ({
     fields: [upstreams.id],
     references: [upstreamHealth.upstreamId],
   }),
+  probeResults: many(upstreamProbeResults),
   circuitBreaker: one(circuitBreakerStates, {
     fields: [upstreams.id],
     references: [circuitBreakerStates.upstreamId],
@@ -517,6 +563,13 @@ export const upstreamsRelations = relations(upstreams, ({ one, many }) => ({
 export const upstreamHealthRelations = relations(upstreamHealth, ({ one }) => ({
   upstream: one(upstreams, {
     fields: [upstreamHealth.upstreamId],
+    references: [upstreams.id],
+  }),
+}));
+
+export const upstreamProbeResultsRelations = relations(upstreamProbeResults, ({ one }) => ({
+  upstream: one(upstreams, {
+    fields: [upstreamProbeResults.upstreamId],
     references: [upstreams.id],
   }),
 }));
@@ -576,6 +629,8 @@ export type Upstream = typeof upstreams.$inferSelect;
 export type NewUpstream = typeof upstreams.$inferInsert;
 export type UpstreamHealth = typeof upstreamHealth.$inferSelect;
 export type NewUpstreamHealth = typeof upstreamHealth.$inferInsert;
+export type UpstreamProbeResult = typeof upstreamProbeResults.$inferSelect;
+export type NewUpstreamProbeResult = typeof upstreamProbeResults.$inferInsert;
 export type ApiKeyUpstream = typeof apiKeyUpstreams.$inferSelect;
 export type NewApiKeyUpstream = typeof apiKeyUpstreams.$inferInsert;
 export type RequestLog = typeof requestLogs.$inferSelect;

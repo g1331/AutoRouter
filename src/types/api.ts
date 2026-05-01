@@ -138,6 +138,61 @@ export interface CircuitBreakerDetailResponse {
 // Type alias for convenience
 export type UpstreamHealth = UpstreamHealthResponse;
 
+// ========== Upstream Probe Types ==========
+
+export type UpstreamProbeClientProfile =
+  | "generic_openai"
+  | "generic_anthropic"
+  | "codex_cli"
+  | "claude_code";
+
+export type UpstreamProbeStatus =
+  | "ok"
+  | "transport_failed"
+  | "auth_failed"
+  | "rate_limited"
+  | "quota_exhausted"
+  | "model_unavailable"
+  | "protocol_mismatch"
+  | "business_failed"
+  | "upstream_error"
+  | "configuration_error";
+
+export type UpstreamProbeLayer = "configuration" | "transport" | "auth" | "protocol" | "business";
+
+export interface UpstreamProbeResponse {
+  id: string;
+  upstream_id: string;
+  upstream_name?: string;
+  route_capability: RouteCapability;
+  client_profile: UpstreamProbeClientProfile;
+  probe_template_id: string;
+  probe_kind: string;
+  status: UpstreamProbeStatus;
+  layer: UpstreamProbeLayer;
+  success: boolean;
+  latency_ms: number | null;
+  first_byte_latency_ms: number | null;
+  completed_latency_ms: number | null;
+  status_code: number | null;
+  error_type: string | null;
+  error_message: string | null;
+  probe_url: string | null;
+  model: string | null;
+  checked_at: string;
+}
+
+export interface UpstreamProbeListResponse {
+  data: UpstreamProbeResponse[];
+  total: number;
+}
+
+export interface ExecuteUpstreamProbeRequest {
+  route_capability?: RouteCapability;
+  client_profile?: UpstreamProbeClientProfile;
+  model?: string;
+}
+
 // ========== Upstream Types ==========
 
 export interface AffinityMigrationConfig {
@@ -264,6 +319,7 @@ export interface UpstreamResponse {
   weight: number; // Load balancing weight
   priority: number; // Priority tier (lower = higher priority)
   health_status?: UpstreamHealthResponse | null; // Health status (populated when requested)
+  probe_results?: UpstreamProbeResponse[];
   circuit_breaker?: CircuitBreakerStatus | null; // Circuit breaker status
   route_capabilities: RouteCapability[]; // Path routing capability set
   allowed_models: string[] | null; // List of supported model names

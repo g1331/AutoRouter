@@ -97,7 +97,7 @@ describe("db:migrate:sqlite", () => {
     });
 
     expect(firstRun.status).toBe(0);
-    expect(firstRun.stdout).toContain("Applied 8 migration(s)");
+    expect(firstRun.stdout).toContain("Applied 9 migration(s)");
 
     const migrations = await queryRows<{ hash: string }>(
       dbPath,
@@ -112,6 +112,7 @@ describe("db:migrate:sqlite", () => {
       "0005_cloudy_mesmero",
       "0006_dapper_bucky",
       "0007_rare_psynapse",
+      "0008_cloudy_photon",
     ]);
 
     const upstreamColumns = await queryRows<{ name: string }>(

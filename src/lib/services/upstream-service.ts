@@ -42,6 +42,17 @@ export {
 } from "./upstream-model-discovery";
 
 export {
+  executeUpstreamProbe,
+  listUpstreamProbeResults,
+  type ExecuteUpstreamProbeInput,
+  type UpstreamProbeClientProfile,
+  type UpstreamProbeLayer,
+  type UpstreamProbeListResponse,
+  type UpstreamProbeResponse,
+  type UpstreamProbeStatus,
+} from "./upstream-probe-service";
+
+export {
   matchUpstreamModelRules,
   normalizeUpstreamModelRules,
   validateUpstreamModelRules,

@@ -8,6 +8,9 @@ import type {
   PaginatedUpstreamsResponse,
   TestUpstreamResponse,
   UpstreamHealthResponse,
+  UpstreamProbeListResponse,
+  UpstreamProbeResponse,
+  ExecuteUpstreamProbeRequest,
   UpstreamQuotaStatusResponse,
 } from "@/types/api";
 import { toast } from "sonner";
@@ -281,6 +284,38 @@ export function useTestUpstream() {
   return useMutation({
     mutationFn: (id: string) =>
       apiClient.post<TestUpstreamResponse>(`/admin/upstreams/${id}/test`, {}),
+  });
+}
+
+/**
+ * Fetch diagnostic upstream probe results.
+ */
+export function useUpstreamProbes() {
+  const { apiClient } = useAuth();
+
+  return useQuery({
+    queryKey: ["upstreams", "probes"],
+    queryFn: () => apiClient.get<UpstreamProbeListResponse>("/admin/upstreams/probes"),
+  });
+}
+
+/**
+ * Execute a diagnostic upstream probe.
+ */
+export function useExecuteUpstreamProbe() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data?: ExecuteUpstreamProbeRequest }) =>
+      apiClient.post<UpstreamProbeResponse>(`/admin/upstreams/${id}/probes`, data ?? {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["upstreams", "probes"] });
+      toast.success("诊断探测已完成");
+    },
+    onError: (error: Error) => {
+      toast.error(`诊断探测失败: ${error.message}`);
+    },
   });
 }
 

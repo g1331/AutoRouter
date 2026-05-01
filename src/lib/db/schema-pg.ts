@@ -18,6 +18,7 @@ import type {
   UpstreamModelDiscoveryConfig,
   UpstreamModelRule,
 } from "@/lib/services/upstream-model-types";
+import type { RouteCapability } from "@/lib/route-capabilities";
 
 type UpstreamQueuePolicy = {
   enabled: boolean;
@@ -128,6 +129,48 @@ export const upstreamHealth = pgTable(
   (table) => [
     index("upstream_health_upstream_id_idx").on(table.upstreamId),
     index("upstream_health_is_healthy_idx").on(table.isHealthy),
+  ]
+);
+
+/**
+ * Diagnostic probe results for upstream route capabilities and client profiles.
+ */
+export const upstreamProbeResults = pgTable(
+  "upstream_probe_results",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    upstreamId: uuid("upstream_id")
+      .notNull()
+      .references(() => upstreams.id, { onDelete: "cascade" }),
+    routeCapability: varchar("route_capability", { length: 64 }).$type<RouteCapability>().notNull(),
+    clientProfile: varchar("client_profile", { length: 64 }).notNull(),
+    probeTemplateId: varchar("probe_template_id", { length: 96 }).notNull(),
+    probeKind: varchar("probe_kind", { length: 64 }).notNull(),
+    status: varchar("status", { length: 64 }).notNull(),
+    layer: varchar("layer", { length: 64 }).notNull(),
+    success: boolean("success").notNull().default(false),
+    latencyMs: integer("latency_ms"),
+    firstByteLatencyMs: integer("first_byte_latency_ms"),
+    completedLatencyMs: integer("completed_latency_ms"),
+    statusCode: integer("status_code"),
+    errorType: varchar("error_type", { length: 64 }),
+    errorMessage: text("error_message"),
+    probeUrl: text("probe_url"),
+    model: text("model"),
+    checkedAt: timestamp("checked_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("upstream_probe_results_identity_unique").on(
+      table.upstreamId,
+      table.routeCapability,
+      table.clientProfile,
+      table.probeTemplateId
+    ),
+    index("upstream_probe_results_upstream_id_idx").on(table.upstreamId),
+    index("upstream_probe_results_status_idx").on(table.status),
+    index("upstream_probe_results_checked_at_idx").on(table.checkedAt),
   ]
 );
 
@@ -481,6 +524,7 @@ export const upstreamsRelations = relations(upstreams, ({ one, many }) => ({
     fields: [upstreams.id],
     references: [upstreamHealth.upstreamId],
   }),
+  probeResults: many(upstreamProbeResults),
   circuitBreaker: one(circuitBreakerStates, {
     fields: [upstreams.id],
     references: [circuitBreakerStates.upstreamId],
@@ -493,6 +537,13 @@ export const upstreamsRelations = relations(upstreams, ({ one, many }) => ({
 export const upstreamHealthRelations = relations(upstreamHealth, ({ one }) => ({
   upstream: one(upstreams, {
     fields: [upstreamHealth.upstreamId],
+    references: [upstreams.id],
+  }),
+}));
+
+export const upstreamProbeResultsRelations = relations(upstreamProbeResults, ({ one }) => ({
+  upstream: one(upstreams, {
+    fields: [upstreamProbeResults.upstreamId],
     references: [upstreams.id],
   }),
 }));
@@ -552,6 +603,8 @@ export type Upstream = typeof upstreams.$inferSelect;
 export type NewUpstream = typeof upstreams.$inferInsert;
 export type UpstreamHealth = typeof upstreamHealth.$inferSelect;
 export type NewUpstreamHealth = typeof upstreamHealth.$inferInsert;
+export type UpstreamProbeResult = typeof upstreamProbeResults.$inferSelect;
+export type NewUpstreamProbeResult = typeof upstreamProbeResults.$inferInsert;
 export type ApiKeyUpstream = typeof apiKeyUpstreams.$inferSelect;
 export type NewApiKeyUpstream = typeof apiKeyUpstreams.$inferInsert;
 export type RequestLog = typeof requestLogs.$inferSelect;
