@@ -289,6 +289,71 @@ describe("upstream-crud", () => {
       expect(result.modelRedirects).toEqual({ "gpt-4-turbo": "gpt-4" });
     });
 
+    it("should create upstream with CLIProxyAPI metadata in config", async () => {
+      const { createUpstream } = await import("@/lib/services/upstream-crud");
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.upstreams.findFirst).mockResolvedValue(null);
+
+      const cpaConfig = {
+        cliproxyapi: {
+          connection_id: "conn-1",
+          provider: "codex",
+          pool_mode: "pool",
+          account_prefix: null,
+        },
+      };
+      const values = vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue([
+          {
+            id: "test-id",
+            name: "cpa-codex",
+            baseUrl: "http://localhost:8317/v1",
+            apiKeyEncrypted: "encrypted:sk-test-key",
+            isDefault: false,
+            timeout: 60,
+            isActive: true,
+            config: JSON.stringify(cpaConfig),
+            priority: 0,
+            weight: 1,
+            routeCapabilities: ["codex_cli_responses", "openai_responses"],
+            allowedModels: null,
+            modelRedirects: null,
+            modelDiscovery: null,
+            modelCatalog: null,
+            modelCatalogUpdatedAt: null,
+            modelCatalogLastStatus: null,
+            modelCatalogLastError: null,
+            modelCatalogLastFailedAt: null,
+            modelRules: null,
+            affinityMigration: null,
+            billingInputMultiplier: 1,
+            billingOutputMultiplier: 1,
+            spendingRules: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ]),
+      });
+
+      vi.mocked(db.insert).mockReturnValue({ values } as unknown as MockInsertChain);
+
+      const result = await createUpstream({
+        name: "cpa-codex",
+        baseUrl: "http://localhost:8317/v1",
+        apiKey: "sk-test-key",
+        routeCapabilities: ["codex_cli_responses", "openai_responses"],
+        cliproxyapi: cpaConfig.cliproxyapi,
+      });
+
+      expect(values).toHaveBeenCalledWith(
+        expect.objectContaining({
+          config: JSON.stringify(cpaConfig),
+        })
+      );
+      expect(result.cliproxyapi).toEqual(cpaConfig.cliproxyapi);
+    });
+
     it("should persist normalized model discovery and unified model rules", async () => {
       const { createUpstream } = await import("@/lib/services/upstream-crud");
       const { db } = await import("@/lib/db");

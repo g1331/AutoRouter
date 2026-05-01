@@ -8,6 +8,8 @@ const mockUpdateConnection = vi.fn();
 const mockGetDefaultConnection = vi.fn();
 const mockGetConnectionWithSecrets = vi.fn();
 const mockCreateClient = vi.fn();
+const mockBuildPoolPresets = vi.fn();
+const mockBuildAccountPreset = vi.fn();
 
 const connection = {
   id: "conn-1",
@@ -63,6 +65,8 @@ vi.mock("@/lib/services/upstream-service", () => {
     getDefaultCliproxyApiConnection: mockGetDefaultConnection,
     getCliproxyApiConnectionWithSecrets: mockGetConnectionWithSecrets,
     createCliproxyApiManagementClient: mockCreateClient,
+    buildCliproxyApiUpstreamPresets: mockBuildPoolPresets,
+    buildCliproxyApiAccountUpstreamPreset: mockBuildAccountPreset,
     CliproxyApiConnectionNotFoundError: MockConnectionNotFoundError,
     CliproxyApiClientError: MockClientError,
   };
@@ -96,6 +100,12 @@ describe("admin cliproxyapi routes", () => {
       auth_url: "https://oauth",
     });
     client.getAuthStatus.mockResolvedValue({ provider: "codex", status: "pending" });
+    mockBuildPoolPresets.mockReturnValue([{ id: "codex", base_url: "http://localhost:8317/v1" }]);
+    mockBuildAccountPreset.mockReturnValue({
+      id: "codex",
+      name: "CLIProxyAPI codex.json Account",
+      model_rules: [{ type: "exact", value: "gpt-5-codex" }],
+    });
   });
 
   it("rejects unauthorized config access", async () => {
@@ -252,5 +262,43 @@ describe("admin cliproxyapi routes", () => {
     expect(response.status).toBe(400);
     const data = await response.json();
     expect(data.error).toContain("provider or state is required");
+  });
+
+  it("returns OAuth pool and fixed-account upstream presets", async () => {
+    const { GET, POST } = await import("@/app/api/admin/cliproxyapi/presets/route");
+
+    const poolResponse = await GET(
+      new NextRequest("http://localhost/api/admin/cliproxyapi/presets?connection_id=conn-1")
+    );
+    const accountResponse = await POST(
+      new NextRequest("http://localhost/api/admin/cliproxyapi/presets", {
+        method: "POST",
+        body: JSON.stringify({
+          connection_id: "conn-1",
+          provider: "codex",
+          account_name: "codex.json",
+          account_prefix: "main",
+          models: ["gpt-5-codex"],
+        }),
+      })
+    );
+
+    expect(mockBuildPoolPresets).toHaveBeenCalledWith("conn-1", "http://localhost:8317/v1");
+    expect(await poolResponse.json()).toEqual({
+      items: [{ id: "codex", base_url: "http://localhost:8317/v1" }],
+    });
+    expect(mockBuildAccountPreset).toHaveBeenCalledWith({
+      connectionId: "conn-1",
+      connectionBaseUrl: "http://localhost:8317/v1",
+      provider: "codex",
+      accountName: "codex.json",
+      accountPrefix: "main",
+      models: ["gpt-5-codex"],
+    });
+    expect(await accountResponse.json()).toEqual({
+      id: "codex",
+      name: "CLIProxyAPI codex.json Account",
+      model_rules: [{ type: "exact", value: "gpt-5-codex" }],
+    });
   });
 });

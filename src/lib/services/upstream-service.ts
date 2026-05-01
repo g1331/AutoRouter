@@ -83,6 +83,12 @@ export {
   type CliproxyApiClientConfig,
 } from "./cliproxyapi-client";
 
+export {
+  buildCliproxyApiAccountModelRules,
+  buildCliproxyApiAccountUpstreamPreset,
+  buildCliproxyApiUpstreamPresets,
+} from "./cliproxyapi-presets";
+
 // Re-export model router functions and types
 export {
   // Model router functions

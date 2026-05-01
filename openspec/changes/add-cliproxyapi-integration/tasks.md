@@ -22,11 +22,11 @@
 
 ## 4. 上游预设与代理接入
 
-- [ ] 4.1 定义 Codex OAuth、Claude OAuth、Gemini OAuth 池上游预设，输出 base URL、route capabilities、模型发现配置和默认名称
-- [ ] 4.2 扩展上游创建与更新契约，保存 CLIProxyAPI 上游级元数据，包括 connection id、provider、账号 prefix 和池模式
-- [ ] 4.3 支持从 CLIProxyAPI 单账号生成固定账号上游初始值，并创建对应模型规则初始值
-- [ ] 4.4 确认代理主流程继续按能力过滤、授权过滤、模型规则、负载选择、日志和计费执行，补充必要回归测试
-- [ ] 4.5 补充上游 CRUD、模型规则和连接测试回归，覆盖 CLIProxyAPI 池上游、固定账号上游和未配置 CPA 的普通上游
+- [x] 4.1 定义 Codex OAuth、Claude OAuth、Gemini OAuth 池上游预设，输出 base URL、route capabilities、模型发现配置和默认名称
+- [x] 4.2 扩展上游创建与更新契约，保存 CLIProxyAPI 上游级元数据，包括 connection id、provider、账号 prefix 和池模式
+- [x] 4.3 支持从 CLIProxyAPI 单账号生成固定账号上游初始值，并创建对应模型规则初始值
+- [x] 4.4 确认代理主流程继续按能力过滤、授权过滤、模型规则、负载选择、日志和计费执行，补充必要回归测试
+- [x] 4.5 补充上游 CRUD、模型规则和连接测试回归，覆盖 CLIProxyAPI 池上游、固定账号上游和未配置 CPA 的普通上游
 
 ## 5. 管理端界面
 
