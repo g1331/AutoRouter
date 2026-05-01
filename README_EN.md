@@ -272,32 +272,69 @@ pnpm dev
 
 Note: the packaged Drizzle CLI scripts currently target PostgreSQL by default. SQLite is supported at runtime, but this README no longer claims that `pnpm db:push` is a general SQLite initialization flow.
 
+#### CLIProxyAPI Local Testing
+
+CLI OAuth integration is disabled by default. When no CLIProxyAPI connection is saved, existing release and personal deployment flows keep their current behavior.
+
+Use these steps with an external CLIProxyAPI service:
+
+```bash
+# 1. Start CLIProxyAPI by following its own project instructions. Port 8317 is used here.
+# 2. Start AutoRouter
+pnpm dev
+```
+
+Open System / CLI OAuth in the admin console, create a connection, and use these local values:
+
+| Field                | Local example                                 |
+| -------------------- | --------------------------------------------- |
+| Proxy Base URL       | `http://localhost:8317/v1`                    |
+| Management URL       | `http://localhost:8317/v0/management`         |
+| Client API Key       | Same as the CLIProxyAPI proxy access key      |
+| Management Secret    | Same as the CLIProxyAPI management secret     |
+| OAuth Outbound Proxy | Optional, for example `http://127.0.0.1:7890` |
+
+After saving, test Proxy, Management, and Outbound Proxy in order. Then start Codex, Claude Code, or Gemini OAuth login from the same page and refresh the account list after authorization. Verify pool upstreams by using the CLIProxyAPI preset in the upstream creation dialog. Verify fixed-account routing from the account list and confirm that the initialized model rules rewrite to `prefix/model` targets.
+
+For Docker-based local testing, use the optional profile:
+
+```bash
+docker compose -f docker-compose.yaml --profile cliproxyapi up -d
+```
+
+Before enabling that profile, set `CLIPROXYAPI_IMAGE`, `CLIPROXYAPI_CLIENT_API_KEY`, and `CLIPROXYAPI_MANAGEMENT_SECRET` in `.env`. Inside the Compose network, use `http://cliproxyapi:8317/v1` and `http://cliproxyapi:8317/v0/management`.
+
 ---
 
 ## Configuration
 
 ### Environment Variables (`.env` or `.env.local`)
 
-| Variable                    |  Required   | Description                                                                                                                     |
-| --------------------------- | :---------: | ------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`              | Conditional | Required in PostgreSQL mode; when `DB_TYPE` is unset, providing this value makes the app choose PostgreSQL automatically        |
-| `DB_TYPE`                   |             | Database backend: `postgres` or `sqlite`; when unset, the app auto-detects based on whether `DATABASE_URL` exists               |
-| `SQLITE_DB_PATH`            |             | SQLite file path (used when `DB_TYPE=sqlite`)                                                                                   |
-| `ENCRYPTION_KEY`            |    Yes\*    | Fernet key (either this or `ENCRYPTION_KEY_FILE`)                                                                               |
-| `ENCRYPTION_KEY_FILE`       |    Yes\*    | Load Fernet key from file (either this or `ENCRYPTION_KEY`)                                                                     |
-| `ADMIN_TOKEN`               |     Yes     | Admin console login token                                                                                                       |
-| `ALLOW_KEY_REVEAL`          |             | Allow revealing full API keys, default `false`                                                                                  |
-| `LOG_RETENTION_DAYS`        |             | Request log retention days, default `90`                                                                                        |
-| `LOG_LEVEL`                 |             | Log level: `fatal`/`error`/`warn`/`info`/`debug`/`trace`                                                                        |
-| `DEBUG_LOG_HEADERS`         |             | Debug header logging switch, default `false`                                                                                    |
-| `HEALTH_CHECK_INTERVAL`     |             | Upstream health check interval in seconds, default `30`                                                                         |
-| `HEALTH_CHECK_TIMEOUT`      |             | Upstream health check timeout in seconds, default `10`                                                                          |
-| `CORS_ORIGINS`              |             | CORS allowlist, comma-separated                                                                                                 |
-| `PORT`                      |             | Service port, default `3000`                                                                                                    |
-| `RECORDER_ENABLED`          |             | Enable traffic recording. Code defaults to off, while the repository compose file enables it by default                         |
-| `RECORDER_MODE`             |             | Recorder mode: `all` / `success` / `failure`                                                                                    |
-| `RECORDER_FIXTURES_DIR`     |             | Fixture output directory, default `tests/fixtures`                                                                              |
-| `RECORDER_REDACT_SENSITIVE` |             | Redact sensitive fields in fixtures. Code default is `true`, but the repository's production deployment template writes `false` |
+| Variable                         |  Required   | Description                                                                                                                     |
+| -------------------------------- | :---------: | ------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                   | Conditional | Required in PostgreSQL mode; when `DB_TYPE` is unset, providing this value makes the app choose PostgreSQL automatically        |
+| `DB_TYPE`                        |             | Database backend: `postgres` or `sqlite`; when unset, the app auto-detects based on whether `DATABASE_URL` exists               |
+| `SQLITE_DB_PATH`                 |             | SQLite file path (used when `DB_TYPE=sqlite`)                                                                                   |
+| `ENCRYPTION_KEY`                 |    Yes\*    | Fernet key (either this or `ENCRYPTION_KEY_FILE`)                                                                               |
+| `ENCRYPTION_KEY_FILE`            |    Yes\*    | Load Fernet key from file (either this or `ENCRYPTION_KEY`)                                                                     |
+| `ADMIN_TOKEN`                    |     Yes     | Admin console login token                                                                                                       |
+| `ALLOW_KEY_REVEAL`               |             | Allow revealing full API keys, default `false`                                                                                  |
+| `LOG_RETENTION_DAYS`             |             | Request log retention days, default `90`                                                                                        |
+| `LOG_LEVEL`                      |             | Log level: `fatal`/`error`/`warn`/`info`/`debug`/`trace`                                                                        |
+| `DEBUG_LOG_HEADERS`              |             | Debug header logging switch, default `false`                                                                                    |
+| `HEALTH_CHECK_INTERVAL`          |             | Upstream health check interval in seconds, default `30`                                                                         |
+| `HEALTH_CHECK_TIMEOUT`           |             | Upstream health check timeout in seconds, default `10`                                                                          |
+| `CORS_ORIGINS`                   |             | CORS allowlist, comma-separated                                                                                                 |
+| `PORT`                           |             | Service port, default `3000`                                                                                                    |
+| `RECORDER_ENABLED`               |             | Enable traffic recording. Code defaults to off, while the repository compose file enables it by default                         |
+| `RECORDER_MODE`                  |             | Recorder mode: `all` / `success` / `failure`                                                                                    |
+| `RECORDER_FIXTURES_DIR`          |             | Fixture output directory, default `tests/fixtures`                                                                              |
+| `RECORDER_REDACT_SENSITIVE`      |             | Redact sensitive fields in fixtures. Code default is `true`, but the repository's production deployment template writes `false` |
+| `CLIPROXYAPI_IMAGE`              |             | Optional CLIProxyAPI sidecar image, used only when the compose profile is enabled                                               |
+| `CLIPROXYAPI_CLIENT_API_KEY`     |             | Optional CLIProxyAPI sidecar proxy access key                                                                                   |
+| `CLIPROXYAPI_MANAGEMENT_SECRET`  |             | Optional CLIProxyAPI sidecar management secret                                                                                  |
+| `CLIPROXYAPI_OUTBOUND_PROXY_URL` |             | Optional outbound proxy URL for CLIProxyAPI OAuth traffic                                                                       |
+| `CLIPROXYAPI_PORT`               |             | Optional exposed sidecar port, default `8317`                                                                                   |
 
 ---
 

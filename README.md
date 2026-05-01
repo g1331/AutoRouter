@@ -279,32 +279,69 @@ pnpm dev
 
 注意：仓库当前封装的 Drizzle CLI 脚本默认面向 PostgreSQL。SQLite 运行时是受支持的，但 README 不再把 `pnpm db:push` 宣传为 SQLite 的通用初始化命令。
 
+#### CLIProxyAPI 本地联调
+
+CLI OAuth 集成默认关闭。未保存 CLIProxyAPI 连接时，现有发布和个人部署流程保持原有行为。
+
+外部 CLIProxyAPI 服务联调步骤如下：
+
+```bash
+# 1. 按 CLIProxyAPI 项目说明启动服务，示例端口为 8317
+# 2. 启动 AutoRouter
+pnpm dev
+```
+
+在管理台进入「系统 / CLI OAuth」，新增连接并填写：
+
+| 字段              | 本地示例                               |
+| ----------------- | -------------------------------------- |
+| Proxy Base URL    | `http://localhost:8317/v1`             |
+| Management URL    | `http://localhost:8317/v0/management`  |
+| Client API Key    | 与 CLIProxyAPI proxy 访问密钥一致      |
+| Management Secret | 与 CLIProxyAPI management secret 一致  |
+| OAuth 出站代理    | 按需填写，例如 `http://127.0.0.1:7890` |
+
+保存后依次测试 Proxy、管理接口和出站代理。随后从同一页面启动 Codex、Claude Code 或 Gemini OAuth 登录，完成授权后刷新账号列表。池上游验证方式是在上游创建弹窗使用 CLIProxyAPI 预设创建 OAuth 池上游；固定账号验证方式是在账号列表中创建固定账号上游，并确认模型规则被初始化为 `prefix/model` 目标。
+
+Docker 本地联调可使用可选 profile：
+
+```bash
+docker compose -f docker-compose.yaml --profile cliproxyapi up -d
+```
+
+启用该 profile 前，需要在 `.env` 中设置 `CLIPROXYAPI_IMAGE`、`CLIPROXYAPI_CLIENT_API_KEY` 和 `CLIPROXYAPI_MANAGEMENT_SECRET`。容器网络内连接地址使用 `http://cliproxyapi:8317/v1` 与 `http://cliproxyapi:8317/v0/management`。
+
 ---
 
 ## 配置说明
 
 ### 环境变量 (`.env` 或 `.env.local`)
 
-| 变量                        |   必填   | 说明                                                                                  |
-| --------------------------- | :------: | ------------------------------------------------------------------------------------- |
-| `DATABASE_URL`              | 条件必填 | PostgreSQL 模式下必填；未设置 `DB_TYPE` 时，只要提供它就会自动选择 PostgreSQL         |
-| `DB_TYPE`                   |          | 数据库类型，支持 `postgres` 或 `sqlite`；未设置时会按 `DATABASE_URL` 是否存在自动判断 |
-| `SQLITE_DB_PATH`            |          | SQLite 文件路径（`DB_TYPE=sqlite` 时使用）                                            |
-| `ENCRYPTION_KEY`            |   ✓\*    | Fernet 加密密钥（与 `ENCRYPTION_KEY_FILE` 二选一）                                    |
-| `ENCRYPTION_KEY_FILE`       |   ✓\*    | 从文件读取加密密钥（与 `ENCRYPTION_KEY` 二选一）                                      |
-| `ADMIN_TOKEN`               |    ✓     | 管理后台登录令牌                                                                      |
-| `ALLOW_KEY_REVEAL`          |          | 是否允许展示完整 API Key，默认 `false`                                                |
-| `LOG_RETENTION_DAYS`        |          | 日志保留天数，默认 `90`                                                               |
-| `LOG_LEVEL`                 |          | 日志级别：`fatal` / `error` / `warn` / `info` / `debug` / `trace`                     |
-| `DEBUG_LOG_HEADERS`         |          | 是否输出请求头调试日志，默认 `false`                                                  |
-| `HEALTH_CHECK_INTERVAL`     |          | 上游健康检查间隔（秒），默认 `30`                                                     |
-| `HEALTH_CHECK_TIMEOUT`      |          | 上游健康检查超时（秒），默认 `10`                                                     |
-| `CORS_ORIGINS`              |          | CORS 白名单，逗号分隔                                                                 |
-| `PORT`                      |          | 服务端口，默认 `3000`                                                                 |
-| `RECORDER_ENABLED`          |          | 是否开启流量录制。代码默认关闭，仓库提供的 compose 默认开启                           |
-| `RECORDER_MODE`             |          | 录制模式：`all` / `success` / `failure`                                               |
-| `RECORDER_FIXTURES_DIR`     |          | 录制文件目录，默认 `tests/fixtures`                                                   |
-| `RECORDER_REDACT_SENSITIVE` |          | 是否脱敏录制内容。代码默认 `true`，但仓库提供的生产部署模板默认写入 `false`           |
+| 变量                             |   必填   | 说明                                                                                  |
+| -------------------------------- | :------: | ------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                   | 条件必填 | PostgreSQL 模式下必填；未设置 `DB_TYPE` 时，只要提供它就会自动选择 PostgreSQL         |
+| `DB_TYPE`                        |          | 数据库类型，支持 `postgres` 或 `sqlite`；未设置时会按 `DATABASE_URL` 是否存在自动判断 |
+| `SQLITE_DB_PATH`                 |          | SQLite 文件路径（`DB_TYPE=sqlite` 时使用）                                            |
+| `ENCRYPTION_KEY`                 |   ✓\*    | Fernet 加密密钥（与 `ENCRYPTION_KEY_FILE` 二选一）                                    |
+| `ENCRYPTION_KEY_FILE`            |   ✓\*    | 从文件读取加密密钥（与 `ENCRYPTION_KEY` 二选一）                                      |
+| `ADMIN_TOKEN`                    |    ✓     | 管理后台登录令牌                                                                      |
+| `ALLOW_KEY_REVEAL`               |          | 是否允许展示完整 API Key，默认 `false`                                                |
+| `LOG_RETENTION_DAYS`             |          | 日志保留天数，默认 `90`                                                               |
+| `LOG_LEVEL`                      |          | 日志级别：`fatal` / `error` / `warn` / `info` / `debug` / `trace`                     |
+| `DEBUG_LOG_HEADERS`              |          | 是否输出请求头调试日志，默认 `false`                                                  |
+| `HEALTH_CHECK_INTERVAL`          |          | 上游健康检查间隔（秒），默认 `30`                                                     |
+| `HEALTH_CHECK_TIMEOUT`           |          | 上游健康检查超时（秒），默认 `10`                                                     |
+| `CORS_ORIGINS`                   |          | CORS 白名单，逗号分隔                                                                 |
+| `PORT`                           |          | 服务端口，默认 `3000`                                                                 |
+| `RECORDER_ENABLED`               |          | 是否开启流量录制。代码默认关闭，仓库提供的 compose 默认开启                           |
+| `RECORDER_MODE`                  |          | 录制模式：`all` / `success` / `failure`                                               |
+| `RECORDER_FIXTURES_DIR`          |          | 录制文件目录，默认 `tests/fixtures`                                                   |
+| `RECORDER_REDACT_SENSITIVE`      |          | 是否脱敏录制内容。代码默认 `true`，但仓库提供的生产部署模板默认写入 `false`           |
+| `CLIPROXYAPI_IMAGE`              |          | 可选 CLIProxyAPI sidecar 镜像，只有启用 compose profile 时使用                        |
+| `CLIPROXYAPI_CLIENT_API_KEY`     |          | 可选 CLIProxyAPI sidecar 的 proxy 访问密钥                                            |
+| `CLIPROXYAPI_MANAGEMENT_SECRET`  |          | 可选 CLIProxyAPI sidecar 的 management secret                                         |
+| `CLIPROXYAPI_OUTBOUND_PROXY_URL` |          | 可选 CLIProxyAPI OAuth 出站代理地址                                                   |
+| `CLIPROXYAPI_PORT`               |          | 可选 CLIProxyAPI sidecar 暴露端口，默认 `8317`                                        |
 
 ---
 

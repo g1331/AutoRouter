@@ -40,10 +40,10 @@
 
 ## 6. 部署与本地测试
 
-- [ ] 6.1 更新 `.env.example`，补充 CLIProxyAPI 外部服务、management secret、client API key、出站代理和 sidecar 相关配置说明
-- [ ] 6.2 更新 Docker Compose 模板，加入可选 CLIProxyAPI sidecar、auth-dir 持久化、config 持久化和必要 OAuth 回调端口说明
-- [ ] 6.3 更新本地测试说明，覆盖外部 CLIProxyAPI 启动、连接测试、OAuth 登录、池上游请求和固定账号路由验证
-- [ ] 6.4 确认发布与个人部署流程在未启用 CLIProxyAPI 时保持原部署行为
+- [x] 6.1 更新 `.env.example`，补充 CLIProxyAPI 外部服务、management secret、client API key、出站代理和 sidecar 相关配置说明
+- [x] 6.2 更新 Docker Compose 模板，加入可选 CLIProxyAPI sidecar、auth-dir 持久化、config 持久化和必要 OAuth 回调端口说明
+- [x] 6.3 更新本地测试说明，覆盖外部 CLIProxyAPI 启动、连接测试、OAuth 登录、池上游请求和固定账号路由验证
+- [x] 6.4 确认发布与个人部署流程在未启用 CLIProxyAPI 时保持原部署行为
 
 ## 7. 质量门禁与提交节点
 

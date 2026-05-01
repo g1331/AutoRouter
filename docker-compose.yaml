@@ -32,5 +32,26 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # Optional local CLIProxyAPI sidecar. It is disabled unless the profile is selected:
+  #   docker compose -f docker-compose.yaml --profile cliproxyapi up -d
+  # Set CLIPROXYAPI_IMAGE to the image built from the upstream CLIProxyAPI project.
+  # app connects through the Docker network at http://cliproxyapi:8317/v1 and
+  # http://cliproxyapi:8317/v0/management after the admin connection is saved.
+  # cliproxyapi:
+  #   image: ${CLIPROXYAPI_IMAGE}
+  #   profiles: ["cliproxyapi"]
+  #   ports:
+  #     - "${CLIPROXYAPI_PORT:-8317}:8317"
+  #   environment:
+  #     - CLIENT_API_KEY=${CLIPROXYAPI_CLIENT_API_KEY}
+  #     - MANAGEMENT_SECRET=${CLIPROXYAPI_MANAGEMENT_SECRET}
+  #     - OUTBOUND_PROXY_URL=${CLIPROXYAPI_OUTBOUND_PROXY_URL:-}
+  #   volumes:
+  #     - cliproxyapi_auth:/app/auth-dir
+  #     - cliproxyapi_config:/app/config
+  #   restart: unless-stopped
+
 volumes:
   postgres_data:
+  # cliproxyapi_auth:
+  # cliproxyapi_config:

@@ -63,9 +63,33 @@ services:
     # ports:
     #   - "5432:5432"
 
+  # Optional CLIProxyAPI sidecar. It is disabled unless the `cliproxyapi` profile is selected:
+  #   docker compose --profile cliproxyapi up -d
+  # Set CLIPROXYAPI_IMAGE to the image built from the upstream CLIProxyAPI project.
+  # Then create an AutoRouter connection with proxy URL `http://cliproxyapi:8317/v1`
+  # and management URL `http://cliproxyapi:8317/v0/management`.
+  # cliproxyapi:
+  #   image: ${CLIPROXYAPI_IMAGE}
+  #   container_name: autorouter-cliproxyapi
+  #   restart: unless-stopped
+  #   profiles: ["cliproxyapi"]
+  #   networks:
+  #     - autorouter-net
+  #   ports:
+  #     - "${CLIPROXYAPI_PORT:-8317}:8317"
+  #   environment:
+  #     - CLIENT_API_KEY=${CLIPROXYAPI_CLIENT_API_KEY}
+  #     - MANAGEMENT_SECRET=${CLIPROXYAPI_MANAGEMENT_SECRET}
+  #     - OUTBOUND_PROXY_URL=${CLIPROXYAPI_OUTBOUND_PROXY_URL:-}
+  #   volumes:
+  #     - cliproxyapi-auth:/app/auth-dir
+  #     - cliproxyapi-config:/app/config
+
 volumes:
   autorouter-data:
   postgres-data:
+  # cliproxyapi-auth:
+  # cliproxyapi-config:
 
 networks:
   autorouter-net:
