@@ -29,8 +29,6 @@ const mockUseUpstreams = vi.fn();
 const mockUseAllUpstreams = vi.fn();
 const mockUseUpstreamHealth = vi.fn();
 const mockUseTestUpstream = vi.fn();
-const mockUseUpstreamProbes = vi.fn();
-const mockExecuteProbe = vi.fn();
 vi.mock("@/hooks/use-upstreams", () => ({
   useToggleUpstreamActive: () => ({
     mutateAsync: mockToggleUpstreamActive,
@@ -45,12 +43,6 @@ vi.mock("@/hooks/use-upstreams", () => ({
   useAllUpstreams: (...args: unknown[]) => mockUseAllUpstreams(...args),
   useUpstreamHealth: (...args: unknown[]) => mockUseUpstreamHealth(...args),
   useTestUpstream: (...args: unknown[]) => mockUseTestUpstream(...args),
-  useUpstreamProbes: (...args: unknown[]) => mockUseUpstreamProbes(...args),
-  useExecuteUpstreamProbe: () => ({
-    mutate: mockExecuteProbe,
-    isPending: false,
-    variables: undefined,
-  }),
 }));
 
 vi.mock("@/components/admin/topbar", () => ({
@@ -137,7 +129,6 @@ describe("UpstreamsTable", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUpstreamQuotaData = undefined;
-    mockUseUpstreamProbes.mockReturnValue({ data: { data: [], total: 0 } });
   });
 
   it("renders empty state", () => {
@@ -178,7 +169,7 @@ describe("UpstreamsTable", () => {
     expect(screen.getByText("runtimeStatus")).toBeInTheDocument();
   });
 
-  it("renders latest diagnostic probe result in runtime status", () => {
+  it("does not render diagnostic probe result in runtime status", () => {
     render(
       <UpstreamsTable
         upstreams={[
@@ -201,6 +192,7 @@ describe("UpstreamsTable", () => {
                 status_code: 200,
                 error_type: null,
                 error_message: null,
+                response_body: "event: response.completed",
                 probe_url: "https://api.openai.com/v1/responses",
                 model: "gpt-5.1",
                 checked_at: new Date().toISOString(),
@@ -214,8 +206,9 @@ describe("UpstreamsTable", () => {
       />
     );
 
-    expect(screen.getByText("probeStatus.ok · 88ms")).toBeInTheDocument();
-    expect(screen.getByText("codex_cli / codex_cli_responses")).toBeInTheDocument();
+    expect(screen.queryByText("probeStatus.ok · 88ms")).not.toBeInTheDocument();
+    expect(screen.queryByText("codex_cli / codex_cli_responses")).not.toBeInTheDocument();
+    expect(screen.getByText("healthHealthy")).toBeInTheDocument();
   });
 
   it("renders queue policy summary in runtime status", () => {

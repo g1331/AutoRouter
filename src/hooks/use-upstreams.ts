@@ -290,12 +290,16 @@ export function useTestUpstream() {
 /**
  * Fetch diagnostic upstream probe results.
  */
-export function useUpstreamProbes() {
+export function useUpstreamProbes(upstreamId?: string, enabled: boolean = true) {
   const { apiClient } = useAuth();
 
   return useQuery({
-    queryKey: ["upstreams", "probes"],
-    queryFn: () => apiClient.get<UpstreamProbeListResponse>("/admin/upstreams/probes"),
+    queryKey: upstreamId ? ["upstreams", "probes", upstreamId] : ["upstreams", "probes"],
+    queryFn: () =>
+      apiClient.get<UpstreamProbeListResponse>(
+        upstreamId ? `/admin/upstreams/${upstreamId}/probes` : "/admin/upstreams/probes"
+      ),
+    enabled,
   });
 }
 
@@ -309,8 +313,9 @@ export function useExecuteUpstreamProbe() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data?: ExecuteUpstreamProbeRequest }) =>
       apiClient.post<UpstreamProbeResponse>(`/admin/upstreams/${id}/probes`, data ?? {}),
-    onSuccess: () => {
+    onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: ["upstreams", "probes"] });
+      queryClient.invalidateQueries({ queryKey: ["upstreams", "probes", variables.id] });
       toast.success("诊断探测已完成");
     },
     onError: (error: Error) => {

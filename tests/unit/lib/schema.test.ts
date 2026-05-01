@@ -241,6 +241,7 @@ describe("lib/db/schema", () => {
       expect(upstreamProbeResults.latencyMs.name).toBe("latency_ms");
       expect(upstreamProbeResults.statusCode.name).toBe("status_code");
       expect(upstreamProbeResults.errorMessage.name).toBe("error_message");
+      expect(upstreamProbeResults.responseBody.name).toBe("response_body");
       expect(upstreamProbeResults.checkedAt.name).toBe("checked_at");
     });
 

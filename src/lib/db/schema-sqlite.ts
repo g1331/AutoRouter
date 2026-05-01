@@ -159,6 +159,7 @@ export const upstreamProbeResults = sqliteTable(
     statusCode: integer("status_code"),
     errorType: text("error_type"),
     errorMessage: text("error_message"),
+    responseBody: text("response_body"),
     probeUrl: text("probe_url"),
     model: text("model"),
     checkedAt: integer("checked_at", { mode: "timestamp_ms" }).notNull().defaultNow(),

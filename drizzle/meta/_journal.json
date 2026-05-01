@@ -218,6 +218,13 @@
       "when": 1777649487288,
       "tag": "0030_blue_blindfold",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1777650647858,
+      "tag": "0031_next_tana_nile",
+      "breakpoints": true
     }
   ]
 }

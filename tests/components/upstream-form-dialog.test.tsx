@@ -14,11 +14,14 @@ const mockCreateMutateAsync = vi.fn();
 const mockUpdateMutateAsync = vi.fn();
 const mockRefreshCatalogMutateAsync = vi.fn();
 const mockImportCatalogMutateAsync = vi.fn();
+const mockExecuteProbeMutateAsync = vi.fn();
 const upstreamHookState = {
   createPending: false,
   updatePending: false,
   refreshPending: false,
   importPending: false,
+  probePending: false,
+  probeData: null as unknown,
 };
 const { mockToastError } = vi.hoisted(() => ({
   mockToastError: vi.fn(),
@@ -47,6 +50,14 @@ vi.mock("@/hooks/use-upstreams", () => ({
   useImportUpstreamCatalogModels: () => ({
     mutateAsync: mockImportCatalogMutateAsync,
     isPending: upstreamHookState.importPending,
+  }),
+  useUpstreamProbes: () => ({
+    data: upstreamHookState.probeData,
+  }),
+  useExecuteUpstreamProbe: () => ({
+    mutateAsync: mockExecuteProbeMutateAsync,
+    isPending: upstreamHookState.probePending,
+    data: null,
   }),
 }));
 
@@ -131,12 +142,15 @@ describe("UpstreamFormDialog", () => {
     mockUpdateMutateAsync.mockReset();
     mockRefreshCatalogMutateAsync.mockReset();
     mockImportCatalogMutateAsync.mockReset();
+    mockExecuteProbeMutateAsync.mockReset();
     mockOnOpenChange.mockReset();
     mockToastError.mockReset();
     upstreamHookState.createPending = false;
     upstreamHookState.updatePending = false;
     upstreamHookState.refreshPending = false;
     upstreamHookState.importPending = false;
+    upstreamHookState.probePending = false;
+    upstreamHookState.probeData = { data: [], total: 0 };
   });
 
   describe("Create Mode", () => {
@@ -515,8 +529,10 @@ describe("UpstreamFormDialog", () => {
         { wrapper: Wrapper }
       );
 
-      expect(screen.getByText("capabilityCodexCliResponses")).toBeInTheDocument();
-      expect(screen.getByText("capabilityOpenAIChatCompatible")).toBeInTheDocument();
+      expect(screen.getAllByText("capabilityCodexCliResponses").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("capabilityOpenAIChatCompatible").length).toBeGreaterThanOrEqual(
+        1
+      );
       expect(screen.getAllByText("selected").length).toBeGreaterThanOrEqual(2);
     });
 
@@ -557,6 +573,95 @@ describe("UpstreamFormDialog", () => {
       );
 
       expect(screen.getByText("apiKeyEditHint")).toBeInTheDocument();
+    });
+
+    it("shows diagnostic probe result inside edit dialog", () => {
+      upstreamHookState.probeData = {
+        data: [
+          {
+            id: "probe-1",
+            upstream_id: "upstream-1",
+            route_capability: "codex_cli_responses",
+            client_profile: "codex_cli",
+            probe_template_id: "codex_cli_responses_stream_v1",
+            probe_kind: "cli_real_request",
+            status: "ok",
+            layer: "business",
+            success: true,
+            latency_ms: 88,
+            first_byte_latency_ms: 40,
+            completed_latency_ms: 88,
+            status_code: 200,
+            error_type: null,
+            error_message: null,
+            response_body: "event: response.completed",
+            probe_url: "https://api.openai.com/v1/responses",
+            model: "gpt-5.1",
+            checked_at: new Date().toISOString(),
+          },
+        ],
+        total: 1,
+      };
+
+      render(
+        <UpstreamFormDialog
+          upstream={{ ...mockUpstream, route_capabilities: ["codex_cli_responses"] }}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      expect(screen.getAllByText("probeDiagnostics").length).toBeGreaterThanOrEqual(1);
+      expect(
+        screen.getAllByText("probeClientProfileValue.codex_cli").length
+      ).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText("probeStatus.ok")).toBeInTheDocument();
+      expect(screen.getByText("codex_cli / codex_cli_responses")).toBeInTheDocument();
+      expect(screen.getByText("event: response.completed")).toBeInTheDocument();
+    });
+
+    it("runs diagnostic probe from edit dialog", async () => {
+      mockExecuteProbeMutateAsync.mockResolvedValueOnce({ id: "probe-1", success: true });
+
+      render(
+        <UpstreamFormDialog
+          upstream={{ ...mockUpstream, route_capabilities: ["codex_cli_responses"] }}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      fireEvent.click(screen.getByText("runProbe"));
+
+      await waitFor(() => {
+        expect(mockExecuteProbeMutateAsync).toHaveBeenCalledWith({
+          id: "upstream-1",
+          data: {
+            route_capability: "codex_cli_responses",
+            client_profile: "codex_cli",
+          },
+        });
+      });
+    });
+
+    it("blocks diagnostic probe when saved configuration is stale", () => {
+      render(
+        <UpstreamFormDialog
+          upstream={{ ...mockUpstream, route_capabilities: ["codex_cli_responses"] }}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      fireEvent.change(screen.getByDisplayValue("https://api.openai.com/v1"), {
+        target: { value: "https://gateway.example.com/codex/v1" },
+      });
+
+      expect(screen.getByText("probeSaveBeforeRun")).toBeInTheDocument();
+      expect(screen.getByText("runProbe")).toBeDisabled();
     });
 
     it("blocks catalog refresh when discovery dependencies are edited but not saved", () => {

@@ -177,6 +177,7 @@ export interface UpstreamProbeResponse {
   status_code: number | null;
   error_type: string | null;
   error_message: string | null;
+  response_body: string | null;
   probe_url: string | null;
   model: string | null;
   checked_at: string;

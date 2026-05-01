@@ -28,6 +28,7 @@ const sampleProbe = {
   status_code: 200,
   error_type: null,
   error_message: null,
+  response_body: "event: response.completed",
   probe_url: "https://api.openai.com/v1/responses",
   model: "gpt-5.1",
   checked_at: "2026-05-01T00:00:00.000Z",

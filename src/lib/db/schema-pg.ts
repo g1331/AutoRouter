@@ -155,6 +155,7 @@ export const upstreamProbeResults = pgTable(
     statusCode: integer("status_code"),
     errorType: varchar("error_type", { length: 64 }),
     errorMessage: text("error_message"),
+    responseBody: text("response_body"),
     probeUrl: text("probe_url"),
     model: text("model"),
     checkedAt: timestamp("checked_at", { withTimezone: true }).notNull().defaultNow(),

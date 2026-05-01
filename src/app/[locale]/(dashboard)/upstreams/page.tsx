@@ -32,13 +32,11 @@ import {
 import { Switch } from "@/components/ui/switch";
 import {
   useAllUpstreams,
-  useExecuteUpstreamProbe,
-  useUpstreamProbes,
   useUpstreams,
   useTestUpstream,
   useUpstreamHealth,
 } from "@/hooks/use-upstreams";
-import type { RouteCapability, Upstream, UpstreamProbeResponse } from "@/types/api";
+import type { RouteCapability, Upstream } from "@/types/api";
 import { ROUTE_CAPABILITY_DEFINITIONS } from "@/lib/route-capabilities";
 import { ROUTE_CAPABILITY_ICON_META } from "@/components/admin/route-capability-badges";
 import { cn } from "@/lib/utils";
@@ -130,8 +128,6 @@ export default function UpstreamsPage() {
   );
   const { data: allUpstreamsData } = useAllUpstreams();
   const { data: healthData } = useUpstreamHealth();
-  const { data: probeData } = useUpstreamProbes();
-  const executeProbeMutation = useExecuteUpstreamProbe();
   const {
     mutate: testUpstreamMutation,
     data: testResult,
@@ -140,18 +136,12 @@ export default function UpstreamsPage() {
 
   const upstreamsWithHealth = useMemo(() => {
     const items = upstreamsData?.items || [];
-    if (!healthData?.data && !probeData?.data) return items;
+    if (!healthData?.data) return items;
     const healthMap = new Map((healthData?.data ?? []).map((h) => [h.upstream_id, h]));
-    const probeMap = new Map<string, UpstreamProbeResponse[]>();
-    for (const probe of probeData?.data ?? []) {
-      const current = probeMap.get(probe.upstream_id) ?? [];
-      probeMap.set(probe.upstream_id, [...current, probe]);
-    }
 
     return items.map((upstream) => {
       const health = healthMap.get(upstream.id);
-      const probeResults = probeMap.get(upstream.id);
-      if (!health && !probeResults) return upstream;
+      if (!health) return upstream;
       return {
         ...upstream,
         health_status: health
@@ -166,10 +156,9 @@ export default function UpstreamsPage() {
               error_message: health.error_message,
             }
           : upstream.health_status,
-        probe_results: probeResults ?? upstream.probe_results,
       };
     });
-  }, [upstreamsData, healthData, probeData]);
+  }, [upstreamsData, healthData]);
 
   const overviewUpstreamsWithHealth = useMemo(() => {
     const items = allUpstreamsData ?? upstreamsData?.items ?? [];
@@ -452,10 +441,6 @@ export default function UpstreamsPage() {
               onEdit={setEditUpstream}
               onDelete={setDeleteUpstream}
               onTest={setTestUpstream}
-              onProbe={(upstream) => executeProbeMutation.mutate({ id: upstream.id })}
-              probingUpstreamId={
-                executeProbeMutation.isPending ? executeProbeMutation.variables?.id : null
-              }
               density={workbenchDensity}
               hasActiveFilters={hasActiveFilters}
             />

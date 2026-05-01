@@ -55,6 +55,7 @@ export interface UpstreamProbeResponse {
   status_code: number | null;
   error_type: string | null;
   error_message: string | null;
+  response_body: string | null;
   probe_url: string | null;
   model: string | null;
   checked_at: string;
@@ -88,6 +89,15 @@ interface ProbeExecutionResult {
   statusCode: number | null;
   errorType: string | null;
   errorMessage: string | null;
+  responseBody: string | null;
+}
+
+function truncateProbeResponseBody(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed.slice(0, 4000);
 }
 
 const PROBE_TEMPLATES: ProbeTemplate[] = [
@@ -294,6 +304,7 @@ async function executeTemplateRequest(
     if (!response.ok) {
       const failure = classifyHttpFailure(response.status);
       const responseText = await response.text().catch(() => "");
+      const responseBody = truncateProbeResponseBody(responseText);
       return {
         status: failure.status,
         layer: failure.layer,
@@ -303,7 +314,8 @@ async function executeTemplateRequest(
         completedLatencyMs: null,
         statusCode: response.status,
         errorType: failure.errorType,
-        errorMessage: responseText ? responseText.slice(0, 500) : `HTTP ${response.status}`,
+        errorMessage: responseBody ? responseBody.slice(0, 500) : `HTTP ${response.status}`,
+        responseBody,
       };
     }
 
@@ -318,6 +330,7 @@ async function executeTemplateRequest(
         statusCode: response.status,
         errorType: "missing_stream",
         errorMessage: "Probe response did not include a readable stream",
+        responseBody: null,
       };
     }
 
@@ -332,6 +345,7 @@ async function executeTemplateRequest(
       buffered += decoder.decode(value, { stream: true });
       const events = parseSseEvents(buffered);
       if (events.some((event) => template.failureEvents.includes(event))) {
+        const responseBody = truncateProbeResponseBody(buffered);
         return {
           status: "business_failed",
           layer: "business",
@@ -342,6 +356,7 @@ async function executeTemplateRequest(
           statusCode: response.status,
           errorType: "failure_event",
           errorMessage: `Probe stream returned failure event: ${events.find((event) => template.failureEvents.includes(event))}`,
+          responseBody,
         };
       }
       if (events.includes(template.completeEvent)) {
@@ -356,6 +371,7 @@ async function executeTemplateRequest(
           statusCode: response.status,
           errorType: null,
           errorMessage: null,
+          responseBody: truncateProbeResponseBody(buffered),
         };
       }
     }
@@ -370,6 +386,7 @@ async function executeTemplateRequest(
       statusCode: response.status,
       errorType: "stream_incomplete",
       errorMessage: `Probe stream ended before ${template.completeEvent}`,
+      responseBody: truncateProbeResponseBody(buffered),
     };
   } catch (error) {
     const aborted = error instanceof Error && error.name === "AbortError";
@@ -387,6 +404,7 @@ async function executeTemplateRequest(
         : error instanceof Error
           ? error.message
           : String(error),
+      responseBody: null,
     };
   } finally {
     clearTimeout(timeoutId);
@@ -414,6 +432,7 @@ function formatProbeResult(
     status_code: record.statusCode ?? null,
     error_type: record.errorType ?? null,
     error_message: record.errorMessage ?? null,
+    response_body: record.responseBody ?? null,
     probe_url: record.probeUrl ?? null,
     model: record.model ?? null,
     checked_at: record.checkedAt.toISOString(),
@@ -452,6 +471,7 @@ async function persistProbeResult(
     statusCode: result.statusCode,
     errorType: result.errorType,
     errorMessage: result.errorMessage,
+    responseBody: result.responseBody,
     probeUrl,
     model,
     checkedAt: now,
@@ -515,6 +535,7 @@ export async function executeUpstreamProbe(
         statusCode: null,
         errorType: "unsafe_url",
         errorMessage: invalidReason,
+        responseBody: null,
       }
     : await executeTemplateRequest(template, probeUrl, apiKey, model, upstream.timeout ?? 10);
 

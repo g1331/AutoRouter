@@ -736,6 +736,19 @@ describe("upstream probe hooks", () => {
     expect(mockGet).toHaveBeenCalledWith("/admin/upstreams/probes");
   });
 
+  it("fetches diagnostic probe results for one upstream", async () => {
+    mockGet.mockResolvedValueOnce({ data: [], total: 0 });
+
+    const { useUpstreamProbes } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useUpstreamProbes("upstream-1"), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(mockGet).toHaveBeenCalledWith("/admin/upstreams/upstream-1/probes");
+  });
+
   it("executes an upstream diagnostic probe and invalidates probe cache", async () => {
     mockPost.mockResolvedValueOnce({ id: "probe-1", success: true });
 
@@ -757,5 +770,6 @@ describe("upstream probe hooks", () => {
       client_profile: "codex_cli",
     });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["upstreams", "probes"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["upstreams", "probes", "upstream-1"] });
   });
 });
