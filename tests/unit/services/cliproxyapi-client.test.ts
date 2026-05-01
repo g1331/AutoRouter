@@ -177,6 +177,16 @@ describe("CliproxyApiManagementClient", () => {
     });
   });
 
+  it("uses the official Codex OAuth management endpoint", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ status: "ok", url: "https://oauth" }));
+
+    await createClient(fetchMock).getAuthUrl("codex", { isWebUi: true });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "http://localhost:8317/v0/management/codex-auth-url?is_webui=true"
+    );
+  });
+
   it("maps auth status errors", async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ status: "error", error: "Authentication failed" })
