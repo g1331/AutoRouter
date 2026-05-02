@@ -1,5 +1,11 @@
 import { eq } from "drizzle-orm";
 import { db, circuitBreakerStates, type CircuitBreakerState } from "../db";
+import {
+  DEFAULT_CIRCUIT_BREAKER_CONFIG,
+  type CircuitBreakerConfig,
+} from "../circuit-breaker-defaults";
+
+export type { CircuitBreakerConfig };
 
 /**
  * Circuit breaker states
@@ -11,24 +17,9 @@ export enum CircuitBreakerStateEnum {
 }
 
 /**
- * Circuit breaker configuration
- */
-export interface CircuitBreakerConfig {
-  failureThreshold: number;
-  successThreshold: number;
-  openDuration: number; // milliseconds
-  probeInterval: number; // milliseconds
-}
-
-/**
  * Default circuit breaker configuration
  */
-export const DEFAULT_CONFIG: CircuitBreakerConfig = {
-  failureThreshold: 5,
-  successThreshold: 2,
-  openDuration: 5 * 60_000,
-  probeInterval: 30_000,
-};
+export const DEFAULT_CONFIG: CircuitBreakerConfig = DEFAULT_CIRCUIT_BREAKER_CONFIG;
 
 /**
  * Error thrown when circuit breaker is open
