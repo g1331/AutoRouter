@@ -103,12 +103,19 @@ interface ProbeExecutionResult {
   responseBody: string | null;
 }
 
+const PROBE_EVENT_BUFFER_LIMIT = 8192;
+
 function normalizeProbeResponseBody(value: string): string | null {
   const trimmed = value.trim();
   if (!trimmed) {
     return null;
   }
   return trimmed;
+}
+
+function appendProbeEventBuffer(current: string, chunk: string): string {
+  const next = current + chunk;
+  return next.length > PROBE_EVENT_BUFFER_LIMIT ? next.slice(-PROBE_EVENT_BUFFER_LIMIT) : next;
 }
 
 const PROBE_TEMPLATES: ProbeTemplate[] = [
@@ -147,7 +154,7 @@ const PROBE_TEMPLATES: ProbeTemplate[] = [
     }),
     completeEvent: "response.completed",
     failureEvents: ["response.failed", "response.incomplete", "error"],
-    defaultModel: "gpt-5.4-mini",
+    defaultModel: "gpt-5.5",
   },
   {
     id: "openai_responses_stream_v1",
@@ -174,7 +181,7 @@ const PROBE_TEMPLATES: ProbeTemplate[] = [
     }),
     completeEvent: "response.completed",
     failureEvents: ["response.failed", "response.incomplete", "error"],
-    defaultModel: "gpt-5.4-mini",
+    defaultModel: "gpt-5.5",
   },
   {
     id: "claude_code_messages_stream_v1",
@@ -400,16 +407,19 @@ async function executeTemplateRequest(
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    let buffered = "";
+    let responseBody = "";
+    let eventBuffer = "";
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
-      buffered += decoder.decode(value, { stream: true });
-      const events = parseSseEvents(buffered);
+      const decoded = decoder.decode(value, { stream: true });
+      responseBody += decoded;
+      eventBuffer = appendProbeEventBuffer(eventBuffer, decoded);
+      const events = parseSseEvents(eventBuffer);
       if (events.some((event) => template.failureEvents.includes(event))) {
-        const responseBody = normalizeProbeResponseBody(buffered);
+        const normalizedResponseBody = normalizeProbeResponseBody(responseBody);
         return {
           status: "business_failed",
           layer: "business",
@@ -420,7 +430,7 @@ async function executeTemplateRequest(
           statusCode: response.status,
           errorType: "failure_event",
           errorMessage: `Probe stream returned failure event: ${events.find((event) => template.failureEvents.includes(event))}`,
-          responseBody,
+          responseBody: normalizedResponseBody,
         };
       }
       if (events.includes(template.completeEvent)) {
@@ -435,7 +445,7 @@ async function executeTemplateRequest(
           statusCode: response.status,
           errorType: null,
           errorMessage: null,
-          responseBody: normalizeProbeResponseBody(buffered),
+          responseBody: normalizeProbeResponseBody(responseBody),
         };
       }
     }
@@ -450,7 +460,7 @@ async function executeTemplateRequest(
       statusCode: response.status,
       errorType: "stream_incomplete",
       errorMessage: `Probe stream ended before ${template.completeEvent}`,
-      responseBody: normalizeProbeResponseBody(buffered),
+      responseBody: normalizeProbeResponseBody(responseBody),
     };
   } catch (error) {
     const aborted = error instanceof Error && error.name === "AbortError";
