@@ -677,6 +677,9 @@
     "probeUrl": "请求地址",
     "probeErrorMessage": "错误信息",
     "probeUpstreamResponse": "上游响应",
+    "probeUpstreamResponsePreview": "响应内容较长，默认显示前 {count} 个字符，展开后可查看完整内容。",
+    "probeExpandResponse": "展开完整响应",
+    "probeCollapseResponse": "收起响应",
     "probeUpstreamResponseEmpty": "本次探测没有可展示的上游响应内容。",
     "probeDetails": "探测目标",
     "probeStatus": {

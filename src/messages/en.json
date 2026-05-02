@@ -672,6 +672,9 @@
     "probeUrl": "Request URL",
     "probeErrorMessage": "Error message",
     "probeUpstreamResponse": "Upstream response",
+    "probeUpstreamResponsePreview": "The response is long. Showing the first {count} characters by default; expand to view the full content.",
+    "probeExpandResponse": "Expand full response",
+    "probeCollapseResponse": "Collapse response",
     "probeUpstreamResponseEmpty": "No upstream response content was captured for this probe.",
     "probeDetails": "Probe target",
     "probeStatus": {

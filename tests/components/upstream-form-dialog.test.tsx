@@ -621,6 +621,54 @@ describe("UpstreamFormDialog", () => {
       expect(screen.getByText("event: response.completed")).toBeInTheDocument();
     });
 
+    it("keeps long diagnostic probe responses bounded until expanded", () => {
+      const longResponse = `${"long-response ".repeat(140)}tail-marker`;
+      upstreamHookState.probeData = {
+        data: [
+          {
+            id: "probe-1",
+            upstream_id: "upstream-1",
+            route_capability: "codex_cli_responses",
+            client_profile: "codex_cli",
+            probe_template_id: "codex_cli_responses_stream_v1",
+            probe_kind: "cli_real_request",
+            status: "ok",
+            layer: "business",
+            success: true,
+            latency_ms: 88,
+            first_byte_latency_ms: 40,
+            completed_latency_ms: 88,
+            status_code: 200,
+            error_type: null,
+            error_message: null,
+            response_body: longResponse,
+            probe_url: "https://api.openai.com/v1/responses",
+            model: "gpt-5.1",
+            checked_at: new Date().toISOString(),
+          },
+        ],
+        total: 1,
+      };
+
+      render(
+        <UpstreamFormDialog
+          upstream={{ ...mockUpstream, route_capabilities: ["codex_cli_responses"] }}
+          open={true}
+          onOpenChange={mockOnOpenChange}
+        />,
+        { wrapper: Wrapper }
+      );
+
+      expect(screen.getByText("probeUpstreamResponsePreview")).toBeInTheDocument();
+      expect(screen.getByText("probeExpandResponse")).toBeInTheDocument();
+      expect(screen.queryByText(/tail-marker/)).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByText("probeExpandResponse"));
+
+      expect(screen.getByText("probeCollapseResponse")).toBeInTheDocument();
+      expect(screen.getByText((content) => content.includes("tail-marker"))).toBeInTheDocument();
+    });
+
     it("runs diagnostic probe from edit dialog", async () => {
       mockExecuteProbeMutateAsync.mockResolvedValueOnce({ id: "probe-1", success: true });
 

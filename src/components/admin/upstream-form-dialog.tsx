@@ -20,6 +20,7 @@ import {
   FileText,
   Gauge,
   CheckCircle2,
+  Copy,
   KeyRound,
   Loader2,
   Link2,
@@ -163,6 +164,7 @@ const queuePolicyFormSchema = z.object({
 
 const ROLLING_DEFAULT_PERIOD_HOURS = 24;
 const DEFAULT_QUEUE_POLICY_TIMEOUT_MS = 30000;
+const PROBE_RESPONSE_PREVIEW_LIMIT = 1600;
 const MODEL_DISCOVERY_MODE_VALUES = [
   "openai_compatible",
   "anthropic_native",
@@ -974,6 +976,8 @@ export function UpstreamFormDialog({
     UpstreamProbeClientProfile | ""
   >("");
   const [probeModel, setProbeModel] = useState("");
+  const [expandedProbeResponseId, setExpandedProbeResponseId] = useState<string | null>(null);
+  const [copiedProbeResponseId, setCopiedProbeResponseId] = useState<string | null>(null);
   const [workspaceUpstream, setWorkspaceUpstream] = useState<Upstream | null>(null);
   const contentScrollContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -1287,6 +1291,15 @@ export function UpstreamFormDialog({
 
   const latestProbe: UpstreamProbeResponse | null =
     executeProbeMutation.data ?? probeData?.data?.[0] ?? upstream?.probe_results?.[0] ?? null;
+  const showFullProbeResponse = !!latestProbe && expandedProbeResponseId === latestProbe.id;
+  const copiedProbeResponse = !!latestProbe && copiedProbeResponseId === latestProbe.id;
+  const probeResponseText = latestProbe?.response_body || t("probeUpstreamResponseEmpty");
+  const hasProbeResponseBody = !!latestProbe?.response_body;
+  const probeResponseIsLong = probeResponseText.length > PROBE_RESPONSE_PREVIEW_LIMIT;
+  const visibleProbeResponseText =
+    probeResponseIsLong && !showFullProbeResponse
+      ? `${probeResponseText.slice(0, PROBE_RESPONSE_PREVIEW_LIMIT).trimEnd()}\n…`
+      : probeResponseText;
   const probeConfigDirty = isEdit && hasUnsavedChanges();
   const probeDisabled =
     !upstream ||
@@ -1294,6 +1307,23 @@ export function UpstreamFormDialog({
     !effectiveProbeClientProfile ||
     probeConfigDirty ||
     executeProbeMutation.isPending;
+
+  const handleCopyProbeResponse = async () => {
+    if (!latestProbe?.response_body) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(latestProbe.response_body);
+      setCopiedProbeResponseId(latestProbe.id);
+      toast.success(tCommon("copied"));
+      setTimeout(() => {
+        setCopiedProbeResponseId((current) => (current === latestProbe.id ? null : current));
+      }, 2000);
+    } catch {
+      toast.error(tCommon("error"));
+    }
+  };
 
   const handleExecuteProbe = async () => {
     if (
@@ -2196,7 +2226,7 @@ export function UpstreamFormDialog({
                         )}
 
                         {latestProbe ? (
-                          <div className="mt-4 space-y-3 rounded-cf-sm border border-divider bg-surface-200/45 p-3">
+                          <div className="mt-4 min-w-0 space-y-3 overflow-hidden rounded-cf-sm border border-divider bg-surface-200/45 p-3">
                             <div className="flex flex-wrap items-center gap-2">
                               <Badge variant={latestProbe.success ? "success" : "destructive"}>
                                 {t(`probeStatus.${latestProbe.status}`)}
@@ -2236,12 +2266,62 @@ export function UpstreamFormDialog({
                               )}
                             </div>
 
-                            <div>
-                              <div className="text-xs font-medium text-muted-foreground">
-                                {t("probeUpstreamResponse")}
+                            <div className="min-w-0">
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="text-xs font-medium text-muted-foreground">
+                                  {t("probeUpstreamResponse")}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {probeResponseIsLong && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 px-2 text-xs"
+                                      onClick={() =>
+                                        setExpandedProbeResponseId((current) =>
+                                          current === latestProbe.id ? null : latestProbe.id
+                                        )
+                                      }
+                                      aria-expanded={showFullProbeResponse}
+                                    >
+                                      {showFullProbeResponse
+                                        ? t("probeCollapseResponse")
+                                        : t("probeExpandResponse")}
+                                    </Button>
+                                  )}
+                                  {hasProbeResponseBody && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 gap-1.5 px-2 text-xs"
+                                      onClick={() => {
+                                        void handleCopyProbeResponse();
+                                      }}
+                                      aria-label={
+                                        copiedProbeResponse ? tCommon("copied") : tCommon("copy")
+                                      }
+                                    >
+                                      {copiedProbeResponse ? (
+                                        <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                      ) : (
+                                        <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                                      )}
+                                      {copiedProbeResponse ? tCommon("copied") : tCommon("copy")}
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
-                              <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-cf-sm border border-divider bg-surface-300/65 p-2 font-mono text-[11px] text-foreground">
-                                {latestProbe.response_body || t("probeUpstreamResponseEmpty")}
+                              {probeResponseIsLong && !showFullProbeResponse && (
+                                <p className="mt-1 text-[11px] text-muted-foreground">
+                                  {t("probeUpstreamResponsePreview", {
+                                    count: PROBE_RESPONSE_PREVIEW_LIMIT,
+                                  })}
+                                </p>
+                              )}
+                              <pre className="mt-2 max-h-56 w-full max-w-full overflow-auto overscroll-contain whitespace-pre-wrap break-all rounded-cf-sm border border-divider bg-surface-300/65 p-3 font-mono text-[11px] leading-relaxed text-foreground">
+                                {visibleProbeResponseText}
                               </pre>
                             </div>
                           </div>
