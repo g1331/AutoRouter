@@ -3,6 +3,7 @@
 import {
   useDeferredValue,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -592,6 +593,15 @@ const PROBE_CAPABILITY_CLIENT_PROFILES: Partial<
   anthropic_messages: ["generic_anthropic"],
 };
 
+const PROBE_TEMPLATE_DEFAULT_MODELS: Partial<
+  Record<RouteCapability, Partial<Record<UpstreamProbeClientProfile, string>>>
+> = {
+  codex_cli_responses: { codex_cli: "gpt-5.5" },
+  openai_responses: { generic_openai: "gpt-5.5" },
+  claude_code_messages: { claude_code: "claude-sonnet-4-5-20250929" },
+  anthropic_messages: { generic_anthropic: "claude-sonnet-4-5-20250929" },
+};
+
 function isProbeSupportedCapability(capability: RouteCapability): boolean {
   return Boolean(PROBE_CAPABILITY_CLIENT_PROFILES[capability]);
 }
@@ -603,6 +613,22 @@ function getDefaultProbeClientProfile(
     return "";
   }
   return PROBE_CAPABILITY_CLIENT_PROFILES[capability]?.[0] ?? "";
+}
+
+function getDefaultProbeModel(
+  capability: RouteCapability | "",
+  clientProfile: UpstreamProbeClientProfile | ""
+): string {
+  if (!capability || !clientProfile) {
+    return "";
+  }
+  return PROBE_TEMPLATE_DEFAULT_MODELS[capability]?.[clientProfile] ?? "";
+}
+
+function getUniqueCatalogModels(catalog: readonly UpstreamModelCatalogEntry[]): string[] {
+  return Array.from(new Set(catalog.map((entry) => entry.model))).sort((left, right) =>
+    left.localeCompare(right)
+  );
 }
 
 type AdvancedSectionId =
@@ -958,7 +984,9 @@ export function UpstreamFormDialog({
   const importCatalogMutation = useImportUpstreamCatalogModels();
   const updateMutation = useUpdateUpstream();
   const executeProbeMutation = useExecuteUpstreamProbe();
+  const resetExecuteProbeMutation = executeProbeMutation.reset;
   const { data: probeData } = useUpstreamProbes(upstream?.id, open && isEdit && !!upstream?.id);
+  const probeModelListId = useId();
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
   const circuitBreakerUseDefaultPlaceholder = t("circuitBreakerUseDefaultPlaceholder");
@@ -985,6 +1013,10 @@ export function UpstreamFormDialog({
     resolver: zodResolver(activeSchema),
     defaultValues: buildUpstreamFormDefaults(upstream),
   });
+
+  useEffect(() => {
+    resetExecuteProbeMutation();
+  }, [resetExecuteProbeMutation, open, upstream?.id]);
 
   // Watch circuit_breaker_config for controlled inputs
   const circuitBreakerConfig = useWatch({
@@ -1189,6 +1221,15 @@ export function UpstreamFormDialog({
       ),
     [catalogState.modelCatalog]
   );
+  const catalogModelOptions = useMemo(
+    () =>
+      getUniqueCatalogModels(
+        catalogState.modelCatalog.length > 0
+          ? catalogState.modelCatalog
+          : (upstream?.model_catalog ?? [])
+      ),
+    [catalogState.modelCatalog, upstream?.model_catalog]
+  );
   const savedProbeCapabilities = useMemo(
     () => resolveRouteCapabilities(upstream?.route_capabilities).filter(isProbeSupportedCapability),
     [upstream?.route_capabilities]
@@ -1206,6 +1247,10 @@ export function UpstreamFormDialog({
   )
     ? selectedProbeClientProfile
     : getDefaultProbeClientProfile(effectiveProbeCapability);
+  const defaultProbeModel = getDefaultProbeModel(
+    effectiveProbeCapability,
+    effectiveProbeClientProfile
+  );
   const selectedProbeCapabilityDefinition = effectiveProbeCapability
     ? ROUTE_CAPABILITY_DEFINITIONS.find(
         (definition) => definition.value === effectiveProbeCapability
@@ -1289,8 +1334,10 @@ export function UpstreamFormDialog({
     return JSON.stringify(currentValues) !== JSON.stringify(normalizedDefaultValues);
   };
 
+  const mutationProbe =
+    executeProbeMutation.data?.upstream_id === upstream?.id ? executeProbeMutation.data : null;
   const latestProbe: UpstreamProbeResponse | null =
-    executeProbeMutation.data ?? probeData?.data?.[0] ?? upstream?.probe_results?.[0] ?? null;
+    mutationProbe ?? probeData?.data?.[0] ?? upstream?.probe_results?.[0] ?? null;
   const showFullProbeResponse = !!latestProbe && expandedProbeResponseId === latestProbe.id;
   const copiedProbeResponse = !!latestProbe && copiedProbeResponseId === latestProbe.id;
   const probeResponseText = latestProbe?.response_body || t("probeUpstreamResponseEmpty");
@@ -1336,12 +1383,13 @@ export function UpstreamFormDialog({
     }
 
     try {
+      const selectedModel = probeModel.trim() || defaultProbeModel;
       await executeProbeMutation.mutateAsync({
         id: upstream.id,
         data: {
           route_capability: effectiveProbeCapability,
           client_profile: effectiveProbeClientProfile,
-          ...(probeModel.trim() ? { model: probeModel.trim() } : {}),
+          ...(selectedModel ? { model: selectedModel } : {}),
         },
       });
     } catch {
@@ -2195,8 +2243,16 @@ export function UpstreamFormDialog({
                             <Input
                               value={probeModel}
                               onChange={(event) => setProbeModel(event.target.value)}
-                              placeholder={t("probeModelPlaceholder")}
+                              placeholder={t("probeModelPlaceholder", { model: defaultProbeModel })}
+                              list={catalogModelOptions.length > 0 ? probeModelListId : undefined}
                             />
+                            {catalogModelOptions.length > 0 && (
+                              <datalist id={probeModelListId}>
+                                {catalogModelOptions.map((model) => (
+                                  <option key={model} value={model} />
+                                ))}
+                              </datalist>
+                            )}
                           </div>
                         </div>
 

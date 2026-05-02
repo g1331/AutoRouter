@@ -660,7 +660,7 @@
       "generic_anthropic": "Generic Anthropic request"
     },
     "probeModel": "Probe model",
-    "probeModelPlaceholder": "Leave empty to use the template default model",
+    "probeModelPlaceholder": "Defaults to {model}",
     "probeNoSupportedCapability": "This upstream has no saved request capability that supports probing.",
     "probeSelectedRequestProfile": "This probe will use {profile} for {capability}.",
     "probeSaveBeforeRun": "Save current configuration changes before probing to avoid testing stale settings.",

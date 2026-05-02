@@ -665,7 +665,7 @@
       "generic_anthropic": "Anthropic 通用请求"
     },
     "probeModel": "探测模型",
-    "probeModelPlaceholder": "留空使用模板默认模型",
+    "probeModelPlaceholder": "默认使用 {model}",
     "probeNoSupportedCapability": "当前上游没有可探测的已保存请求能力。",
     "probeSelectedRequestProfile": "本次将使用 {profile} 探测 {capability}。",
     "probeSaveBeforeRun": "当前配置存在未保存修改，保存后再执行探测，避免使用旧配置产生误导。",
