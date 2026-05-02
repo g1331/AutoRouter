@@ -12,6 +12,7 @@ vi.mock("dns", () => ({
   promises: {
     resolve4: vi.fn(),
     resolve6: vi.fn(),
+    lookup: vi.fn(),
   },
 }));
 
@@ -502,6 +503,7 @@ describe("upstream-ssrf-validator", () => {
   describe("resolveAndValidateHostname", () => {
     beforeEach(() => {
       vi.clearAllMocks();
+      vi.mocked(dns.promises.lookup).mockRejectedValue(new Error("No OS lookup"));
     });
 
     describe("Safe hostnames", () => {
@@ -541,6 +543,17 @@ describe("upstream-ssrf-validator", () => {
         const result = await resolveAndValidateHostname("dual-stack.example.com");
         expect(result.safe).toBe(true);
         expect(result.reason).toBeUndefined();
+      });
+
+      it("should fall back to OS lookup when explicit DNS resolution fails", async () => {
+        vi.mocked(dns.promises.resolve4).mockRejectedValue(new Error("ECONNREFUSED"));
+        vi.mocked(dns.promises.resolve6).mockRejectedValue(new Error("ECONNREFUSED"));
+        vi.mocked(dns.promises.lookup).mockResolvedValue([{ address: "198.18.0.144", family: 4 }]);
+
+        const result = await resolveAndValidateHostname("www.right.codes");
+        expect(result.safe).toBe(true);
+        expect(result.reason).toBeUndefined();
+        expect(dns.promises.lookup).toHaveBeenCalledWith("www.right.codes", { all: true });
       });
     });
 
@@ -592,6 +605,17 @@ describe("upstream-ssrf-validator", () => {
         const result = await resolveAndValidateHostname("mixed.example.com");
         expect(result.safe).toBe(false);
         expect(result.reason).toContain("Hostname resolves to blocked IP");
+      });
+
+      it("should block unsafe addresses from OS lookup fallback", async () => {
+        vi.mocked(dns.promises.resolve4).mockRejectedValue(new Error("No IPv4"));
+        vi.mocked(dns.promises.resolve6).mockRejectedValue(new Error("No IPv6"));
+        vi.mocked(dns.promises.lookup).mockResolvedValue([{ address: "192.168.1.10", family: 4 }]);
+
+        const result = await resolveAndValidateHostname("internal-proxy.example.com");
+        expect(result.safe).toBe(false);
+        expect(result.reason).toContain("Hostname resolves to blocked IP");
+        expect(result.reason).toContain("Private IP addresses are not allowed");
       });
     });
 

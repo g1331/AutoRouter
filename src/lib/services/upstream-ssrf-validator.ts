@@ -117,6 +117,15 @@ export async function resolveAndValidateHostname(
       // IPv6 resolution may fail if only IPv4 is available
     }
 
+    if (addresses.length === 0) {
+      try {
+        const lookupAddresses = await dns.promises.lookup(hostname, { all: true });
+        addresses.push(...lookupAddresses.map(({ address }) => address));
+      } catch {
+        // OS-level lookup may still fail for genuinely unresolvable hosts
+      }
+    }
+
     // If no addresses resolved, treat as DNS failure
     if (addresses.length === 0) {
       return { safe: false, reason: "DNS resolution failed" };

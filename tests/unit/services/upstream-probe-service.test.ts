@@ -160,14 +160,30 @@ describe("upstream-probe-service", () => {
       Authorization: "Bearer sk-probe",
       Accept: "text/event-stream",
       originator: "codex_cli_rs",
+      "User-Agent": "codex_cli_rs/diagnostic-probe",
+      session_id: "autorouter-diagnostic-probe",
+      "x-codex-beta-features": "collab",
+    });
+    expect(requestInit?.headers).toMatchObject({
+      "x-codex-turn-metadata": JSON.stringify({ source: "autorouter-diagnostic-probe" }),
     });
     expect(body).toMatchObject({
       model: "gpt-5.1",
-      input: "Reply with exactly: OK",
-      max_output_tokens: 8,
+      tools: [],
+      tool_choice: "auto",
+      parallel_tool_calls: false,
+      reasoning: null,
       stream: true,
       store: false,
+      include: [],
     });
+    expect(body.input).toEqual([
+      {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text: "Reply with exactly: OK" }],
+      },
+    ]);
     expect(result).toMatchObject({
       status: "ok",
       success: true,
@@ -209,13 +225,35 @@ describe("upstream-probe-service", () => {
     expect(requestInit?.headers).toMatchObject({
       "x-api-key": "sk-probe",
       "anthropic-version": "2023-06-01",
+      "anthropic-beta":
+        "claude-code-20250219,adaptive-thinking-2026-01-28,prompt-caching-scope-2026-01-05,effort-2025-11-24",
+      "anthropic-dangerous-direct-browser-access": "true",
+      Accept: "application/json",
+      "Accept-Encoding": "gzip, deflate",
+      "Accept-Language": "*",
+      "Sec-Fetch-Mode": "cors",
       "X-App": "cli",
-      "User-Agent": "claude-cli/diagnostic-probe",
+      "User-Agent": "claude-cli/diagnostic-probe (external, cli)",
     });
     expect(body).toMatchObject({
       model: "claude-custom",
-      max_tokens: 8,
-      messages: [{ role: "user", content: "Reply with exactly: OK" }],
+      max_tokens: 64,
+      messages: [
+        {
+          role: "user",
+          content: [{ type: "text", text: "Reply with exactly: OK" }],
+        },
+      ],
+      system: [
+        {
+          type: "text",
+          text: "AutoRouter diagnostic probe. Verify upstream protocol compatibility.",
+        },
+      ],
+      tools: [],
+      metadata: { user_id: "autorouter-diagnostic-probe" },
+      temperature: 1,
+      output_config: { type: "text" },
       stream: true,
     });
     expect(result).toMatchObject({
