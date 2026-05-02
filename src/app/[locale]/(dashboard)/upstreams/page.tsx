@@ -30,12 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import {
-  useAllUpstreams,
-  useUpstreams,
-  useTestUpstream,
-  useUpstreamHealth,
-} from "@/hooks/use-upstreams";
+import { useAllUpstreams, useUpstreams, useTestUpstream } from "@/hooks/use-upstreams";
 import type { RouteCapability, Upstream } from "@/types/api";
 import { ROUTE_CAPABILITY_DEFINITIONS } from "@/lib/route-capabilities";
 import { ROUTE_CAPABILITY_ICON_META } from "@/components/admin/route-capability-badges";
@@ -74,20 +69,12 @@ function UpstreamsLoadingSkeleton({ loadingLabel }: UpstreamsLoadingSkeletonProp
   );
 }
 
-type UpstreamStatusFilter =
-  | "all"
-  | "healthy"
-  | "unhealthy"
-  | "concurrency_full"
-  | "circuit_open"
-  | "inactive";
+type UpstreamStatusFilter = "all" | "concurrency_full" | "circuit_open" | "inactive";
 
 type WorkbenchDensity = "compact" | "comfortable";
 
 const STATUS_FILTERS: UpstreamStatusFilter[] = [
   "all",
-  "healthy",
-  "unhealthy",
   "concurrency_full",
   "circuit_open",
   "inactive",
@@ -95,8 +82,6 @@ const STATUS_FILTERS: UpstreamStatusFilter[] = [
 
 function matchesStatusFilter(upstream: Upstream, statusFilter: UpstreamStatusFilter): boolean {
   if (statusFilter === "all") return true;
-  if (statusFilter === "healthy") return upstream.health_status?.is_healthy === true;
-  if (statusFilter === "unhealthy") return upstream.health_status?.is_healthy === false;
   if (statusFilter === "inactive") return !upstream.is_active;
   if (statusFilter === "circuit_open") return upstream.circuit_breaker?.state === "open";
   if (statusFilter === "concurrency_full") {
@@ -127,65 +112,19 @@ export default function UpstreamsPage() {
     pageSize
   );
   const { data: allUpstreamsData } = useAllUpstreams();
-  const { data: healthData } = useUpstreamHealth();
   const {
     mutate: testUpstreamMutation,
     data: testResult,
     isPending: isTestLoading,
   } = useTestUpstream();
 
-  const upstreamsWithHealth = useMemo(() => {
-    const items = upstreamsData?.items || [];
-    if (!healthData?.data) return items;
-    const healthMap = new Map(healthData.data.map((h) => [h.upstream_id, h]));
-
-    return items.map((upstream) => {
-      const health = healthMap.get(upstream.id);
-      if (!health) return upstream;
-      return {
-        ...upstream,
-        health_status: {
-          upstream_id: health.upstream_id,
-          upstream_name: health.upstream_name,
-          is_healthy: health.is_healthy,
-          last_check_at: health.last_check_at,
-          last_success_at: health.last_success_at,
-          failure_count: health.failure_count,
-          latency_ms: health.latency_ms,
-          error_message: health.error_message,
-        },
-      };
-    });
-  }, [upstreamsData, healthData]);
-
-  const overviewUpstreamsWithHealth = useMemo(() => {
-    const items = allUpstreamsData ?? upstreamsData?.items ?? [];
-    if (!healthData?.data) return items;
-    const healthMap = new Map(healthData.data.map((h) => [h.upstream_id, h]));
-
-    return items.map((upstream) => {
-      const health = healthMap.get(upstream.id);
-      if (!health) return upstream;
-      return {
-        ...upstream,
-        health_status: {
-          upstream_id: health.upstream_id,
-          upstream_name: health.upstream_name,
-          is_healthy: health.is_healthy,
-          last_check_at: health.last_check_at,
-          last_success_at: health.last_success_at,
-          failure_count: health.failure_count,
-          latency_ms: health.latency_ms,
-          error_message: health.error_message,
-        },
-      };
-    });
-  }, [allUpstreamsData, healthData, upstreamsData?.items]);
+  const upstreams = useMemo(() => upstreamsData?.items || [], [upstreamsData?.items]);
+  const overviewUpstreams = allUpstreamsData ?? upstreams;
 
   const filteredUpstreams = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
-    return upstreamsWithHealth.filter((upstream) => {
+    return upstreams.filter((upstream) => {
       if (!includeInactive && !upstream.is_active) {
         return false;
       }
@@ -207,25 +146,23 @@ export default function UpstreamsPage() {
 
       return true;
     });
-  }, [capabilityFilter, includeInactive, searchQuery, statusFilter, upstreamsWithHealth]);
+  }, [capabilityFilter, includeInactive, searchQuery, statusFilter, upstreams]);
 
   const overview = useMemo(() => {
-    const total = upstreamsData?.total ?? overviewUpstreamsWithHealth.length;
-    const healthy = overviewUpstreamsWithHealth.filter(
-      (upstream) => upstream.health_status?.is_healthy
-    ).length;
-    const fullConcurrency = overviewUpstreamsWithHealth.filter((upstream) => {
+    const total = upstreamsData?.total ?? overviewUpstreams.length;
+    const active = overviewUpstreams.filter((upstream) => upstream.is_active).length;
+    const fullConcurrency = overviewUpstreams.filter((upstream) => {
       if (upstream.max_concurrency == null) return false;
       return (upstream.current_concurrency ?? 0) >= upstream.max_concurrency;
     }).length;
 
     return {
       total,
-      healthy,
+      active,
       fullConcurrency,
       filtered: filteredUpstreams.length,
     };
-  }, [filteredUpstreams.length, overviewUpstreamsWithHealth, upstreamsData?.total]);
+  }, [filteredUpstreams.length, overviewUpstreams, upstreamsData?.total]);
 
   const hasActiveFilters =
     searchQuery.trim().length > 0 ||
@@ -358,7 +295,7 @@ export default function UpstreamsPage() {
                   </span>
                   <span className="h-3 w-px bg-divider/70" aria-hidden="true" />
                   <span className="whitespace-nowrap">
-                    {t("overviewHealthy", { count: overview.healthy })}
+                    {t("overviewActive", { count: overview.active })}
                   </span>
                   <span className="h-3 w-px bg-divider/70" aria-hidden="true" />
                   <span

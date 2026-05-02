@@ -42,7 +42,7 @@ interface QuotaRule {
 }
 
 interface TierSummary {
-  healthy: number;
+  operational: number;
   total: number;
   active: number;
   concurrencyFull: number;
@@ -115,7 +115,17 @@ export function UpstreamsTable({
       .sort((a, b) => a[0] - b[0])
       .map(([priority, tierUpstreams]) => {
         const summary: TierSummary = {
-          healthy: tierUpstreams.filter((upstream) => upstream.health_status?.is_healthy).length,
+          operational: tierUpstreams.filter((upstream) => {
+            const concurrencyFull =
+              upstream.max_concurrency != null &&
+              (upstream.current_concurrency ?? 0) >= upstream.max_concurrency;
+            return (
+              upstream.is_active &&
+              upstream.circuit_breaker?.state !== "open" &&
+              !concurrencyFull &&
+              !quotaMap.get(upstream.id)?.is_exceeded
+            );
+          }).length,
           total: tierUpstreams.length,
           active: tierUpstreams.filter((upstream) => upstream.is_active).length,
           concurrencyFull: tierUpstreams.filter((upstream) => {
@@ -233,14 +243,24 @@ export function UpstreamsTable({
     collapseTimersRef.current.set(priority, timer);
   };
 
-  const getHealthLedStatus = (upstream: Upstream): LedStatus => {
-    if (!upstream.health_status) return "degraded";
-    return upstream.health_status.is_healthy ? "healthy" : "offline";
+  const getRuntimeLedStatus = (upstream: Upstream): LedStatus => {
+    const concurrencyFull =
+      upstream.max_concurrency != null &&
+      (upstream.current_concurrency ?? 0) >= upstream.max_concurrency;
+    if (!upstream.is_active || upstream.circuit_breaker?.state === "open") return "offline";
+    if (concurrencyFull || quotaMap.get(upstream.id)?.is_exceeded) return "degraded";
+    return "healthy";
   };
 
-  const getHealthLabel = (upstream: Upstream): string => {
-    if (!upstream.health_status) return t("healthUnknown");
-    return upstream.health_status.is_healthy ? t("healthHealthy") : t("healthUnhealthy");
+  const getRuntimeLabel = (upstream: Upstream): string => {
+    const concurrencyFull =
+      upstream.max_concurrency != null &&
+      (upstream.current_concurrency ?? 0) >= upstream.max_concurrency;
+    if (!upstream.is_active) return t("inactive");
+    if (upstream.circuit_breaker?.state === "open") return t("circuitBreakerOpen");
+    if (quotaMap.get(upstream.id)?.is_exceeded) return t("quotaExceeded");
+    if (concurrencyFull) return t("concurrencyFullStatus");
+    return t("runtimeAvailable");
   };
 
   const getCircuitLedStatus = (upstream: Upstream): LedStatus => {
@@ -257,9 +277,9 @@ export function UpstreamsTable({
     return t("circuitBreakerHalfOpen");
   };
 
-  const getTierHealthLedStatus = (summary: TierSummary): LedStatus => {
-    if (summary.healthy === summary.total) return "healthy";
-    if (summary.healthy === 0) return "offline";
+  const getTierRuntimeLedStatus = (summary: TierSummary): LedStatus => {
+    if (summary.operational === summary.total) return "healthy";
+    if (summary.operational === 0) return "offline";
     return "degraded";
   };
 
@@ -420,7 +440,7 @@ export function UpstreamsTable({
         const isOpening = openingTiers.has(tier.priority);
         const showTierContent = !isCollapsed || isClosing || isOpening;
         const isCollapsedOrClosing = isCollapsed || isClosing;
-        const tierLedStatus = getTierHealthLedStatus(tier.summary);
+        const tierLedStatus = getTierRuntimeLedStatus(tier.summary);
         const tierLedLabel =
           tierLedStatus === "healthy"
             ? t("tierLedHealthy")
@@ -463,7 +483,7 @@ export function UpstreamsTable({
                 <div className="flex flex-wrap items-center gap-2 text-xs">
                   <StatusLed status={tierLedStatus} showLabel label={tierLedLabel} />
                   <Badge variant="outline" className="border-divider text-muted-foreground">
-                    {t("tierHealthy")} {tier.summary.healthy}/{tier.summary.total}
+                    {t("tierOperational")} {tier.summary.operational}/{tier.summary.total}
                   </Badge>
                   <Badge variant="outline" className="border-divider text-muted-foreground">
                     {t("active")} {tier.summary.active}/{tier.summary.total}
@@ -770,9 +790,9 @@ export function UpstreamsTable({
                             </div>
                             <div className="flex flex-wrap gap-2">
                               <StatusLed
-                                status={getHealthLedStatus(upstream)}
+                                status={getRuntimeLedStatus(upstream)}
                                 showLabel
-                                label={getHealthLabel(upstream)}
+                                label={getRuntimeLabel(upstream)}
                               />
                               <StatusLed
                                 status={getCircuitLedStatus(upstream)}

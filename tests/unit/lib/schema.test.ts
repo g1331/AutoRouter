@@ -3,6 +3,7 @@ import { getTableConfig } from "drizzle-orm/pg-core";
 import {
   apiKeys,
   upstreams,
+  upstreamProbeResults,
   apiKeyUpstreams,
   requestLogs,
   backgroundSyncTasks,
@@ -15,6 +16,8 @@ import {
   type NewApiKey,
   type Upstream,
   type NewUpstream,
+  type UpstreamProbeResult,
+  type NewUpstreamProbeResult,
   type ApiKeyUpstream,
   type NewApiKeyUpstream,
   type RequestLog,
@@ -219,6 +222,35 @@ describe("lib/db/schema", () => {
       expect(indexNames).toContain("api_key_upstreams_api_key_id_idx");
       expect(indexNames).toContain("api_key_upstreams_upstream_id_idx");
       // Unique constraint
+      expect(tableConfig.uniqueConstraints.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("upstreamProbeResults table", () => {
+    it("has diagnostic probe identity columns", () => {
+      expect(upstreamProbeResults.upstreamId.name).toBe("upstream_id");
+      expect(upstreamProbeResults.routeCapability.name).toBe("route_capability");
+      expect(upstreamProbeResults.clientProfile.name).toBe("client_profile");
+      expect(upstreamProbeResults.probeTemplateId.name).toBe("probe_template_id");
+    });
+
+    it("has diagnostic result columns", () => {
+      expect(upstreamProbeResults.status.name).toBe("status");
+      expect(upstreamProbeResults.layer.name).toBe("layer");
+      expect(upstreamProbeResults.success.name).toBe("success");
+      expect(upstreamProbeResults.latencyMs.name).toBe("latency_ms");
+      expect(upstreamProbeResults.statusCode.name).toBe("status_code");
+      expect(upstreamProbeResults.errorMessage.name).toBe("error_message");
+      expect(upstreamProbeResults.responseBody.name).toBe("response_body");
+      expect(upstreamProbeResults.checkedAt.name).toBe("checked_at");
+    });
+
+    it("has correct indexes and unique identity", () => {
+      const tableConfig = getTableConfig(upstreamProbeResults);
+      const indexNames = tableConfig.indexes.map((i) => i.config.name);
+      expect(indexNames).toContain("upstream_probe_results_upstream_id_idx");
+      expect(indexNames).toContain("upstream_probe_results_status_idx");
+      expect(indexNames).toContain("upstream_probe_results_checked_at_idx");
       expect(tableConfig.uniqueConstraints.length).toBeGreaterThan(0);
     });
   });
@@ -446,6 +478,13 @@ describe("lib/db/schema", () => {
     it("exports NewUpstream type", () => {
       const _typeCheck: NewUpstream | null = null;
       expect(_typeCheck).toBeNull();
+    });
+
+    it("exports upstream probe result types", () => {
+      const _probe: UpstreamProbeResult | null = null;
+      const _newProbe: NewUpstreamProbeResult | null = null;
+      expect(_probe).toBeNull();
+      expect(_newProbe).toBeNull();
     });
 
     it("exports ApiKeyUpstream type", () => {

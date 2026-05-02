@@ -717,3 +717,59 @@ describe("useUpstreamHealth", () => {
     expect(mockGet).toHaveBeenCalledWith("/admin/upstreams/health?active_only=false");
   });
 });
+
+describe("upstream probe hooks", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("fetches diagnostic probe results", async () => {
+    mockGet.mockResolvedValueOnce({ data: [], total: 0 });
+
+    const { useUpstreamProbes } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useUpstreamProbes(), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(mockGet).toHaveBeenCalledWith("/admin/upstreams/probes");
+  });
+
+  it("fetches diagnostic probe results for one upstream", async () => {
+    mockGet.mockResolvedValueOnce({ data: [], total: 0 });
+
+    const { useUpstreamProbes } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useUpstreamProbes("upstream-1"), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(mockGet).toHaveBeenCalledWith("/admin/upstreams/upstream-1/probes");
+  });
+
+  it("executes an upstream diagnostic probe and invalidates probe cache", async () => {
+    mockPost.mockResolvedValueOnce({ id: "probe-1", success: true });
+
+    const { useExecuteUpstreamProbe } = await import("@/hooks/use-upstreams");
+    const { queryClient, wrapper } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    const { result } = renderHook(() => useExecuteUpstreamProbe(), { wrapper });
+
+    result.current.mutate({
+      id: "upstream-1",
+      data: { route_capability: "codex_cli_responses", client_profile: "codex_cli" },
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(mockPost).toHaveBeenCalledWith("/admin/upstreams/upstream-1/probes", {
+      route_capability: "codex_cli_responses",
+      client_profile: "codex_cli",
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["upstreams", "probes"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["upstreams", "probes", "upstream-1"] });
+  });
+});

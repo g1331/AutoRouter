@@ -3,6 +3,7 @@
 import {
   useDeferredValue,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -20,6 +21,7 @@ import {
   FileText,
   Gauge,
   CheckCircle2,
+  Copy,
   KeyRound,
   Loader2,
   Link2,
@@ -81,8 +83,10 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   useCreateUpstream,
+  useExecuteUpstreamProbe,
   useImportUpstreamCatalogModels,
   useRefreshUpstreamCatalog,
+  useUpstreamProbes,
   useUpdateUpstream,
 } from "@/hooks/use-upstreams";
 import type {
@@ -97,10 +101,13 @@ import type {
   UpstreamModelRule,
   UpstreamModelRuleSource,
   UpstreamModelRuleType,
+  UpstreamProbeClientProfile,
+  UpstreamProbeResponse,
 } from "@/types/api";
 import { Switch } from "@/components/ui/switch";
 import {
   ROUTE_CAPABILITY_VALUES,
+  ROUTE_CAPABILITY_DEFINITIONS,
   areSingleProviderCapabilities,
   getPrimaryProviderByCapabilities,
   resolveRouteCapabilities,
@@ -158,6 +165,7 @@ const queuePolicyFormSchema = z.object({
 
 const ROLLING_DEFAULT_PERIOD_HOURS = 24;
 const DEFAULT_QUEUE_POLICY_TIMEOUT_MS = 30000;
+const PROBE_RESPONSE_PREVIEW_LIMIT = 1600;
 const MODEL_DISCOVERY_MODE_VALUES = [
   "openai_compatible",
   "anthropic_native",
@@ -576,6 +584,53 @@ const CAPABILITY_PREVIEW_PATHS: Record<RouteCapability, string> = {
   gemini_code_assist_internal: "v1internal:generateContent",
 };
 
+const PROBE_CAPABILITY_CLIENT_PROFILES: Partial<
+  Record<RouteCapability, readonly UpstreamProbeClientProfile[]>
+> = {
+  codex_cli_responses: ["codex_cli"],
+  openai_responses: ["generic_openai"],
+  claude_code_messages: ["claude_code"],
+  anthropic_messages: ["generic_anthropic"],
+};
+
+const PROBE_TEMPLATE_DEFAULT_MODELS: Partial<
+  Record<RouteCapability, Partial<Record<UpstreamProbeClientProfile, string>>>
+> = {
+  codex_cli_responses: { codex_cli: "gpt-5.4-mini" },
+  openai_responses: { generic_openai: "gpt-5.4-mini" },
+  claude_code_messages: { claude_code: "claude-sonnet-4-5-20250929" },
+  anthropic_messages: { generic_anthropic: "claude-sonnet-4-5-20250929" },
+};
+
+function isProbeSupportedCapability(capability: RouteCapability): boolean {
+  return Boolean(PROBE_CAPABILITY_CLIENT_PROFILES[capability]);
+}
+
+function getDefaultProbeClientProfile(
+  capability: RouteCapability | ""
+): UpstreamProbeClientProfile | "" {
+  if (!capability) {
+    return "";
+  }
+  return PROBE_CAPABILITY_CLIENT_PROFILES[capability]?.[0] ?? "";
+}
+
+function getDefaultProbeModel(
+  capability: RouteCapability | "",
+  clientProfile: UpstreamProbeClientProfile | ""
+): string {
+  if (!capability || !clientProfile) {
+    return "";
+  }
+  return PROBE_TEMPLATE_DEFAULT_MODELS[capability]?.[clientProfile] ?? "";
+}
+
+function getUniqueCatalogModels(catalog: readonly UpstreamModelCatalogEntry[]): string[] {
+  return Array.from(new Set(catalog.map((entry) => entry.model))).sort((left, right) =>
+    left.localeCompare(right)
+  );
+}
+
 type AdvancedSectionId =
   | "advanced-priority-weight"
   | "advanced-model-routing"
@@ -585,7 +640,12 @@ type AdvancedSectionId =
   | "advanced-circuit-breaker"
   | "advanced-affinity-migration";
 
-type BasicSectionId = "basic-name" | "basic-profile" | "basic-route-endpoint" | "basic-api-key";
+type BasicSectionId =
+  | "basic-name"
+  | "basic-profile"
+  | "basic-route-endpoint"
+  | "basic-api-key"
+  | "basic-diagnostics";
 type ConfigSectionId = BasicSectionId | AdvancedSectionId;
 type ConfigCategoryKey =
   | "configCategoryBasic"
@@ -923,6 +983,10 @@ export function UpstreamFormDialog({
   const refreshCatalogMutation = useRefreshUpstreamCatalog();
   const importCatalogMutation = useImportUpstreamCatalogModels();
   const updateMutation = useUpdateUpstream();
+  const executeProbeMutation = useExecuteUpstreamProbe();
+  const resetExecuteProbeMutation = executeProbeMutation.reset;
+  const { data: probeData } = useUpstreamProbes(upstream?.id, open && isEdit && !!upstream?.id);
+  const probeModelListId = useId();
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
   const circuitBreakerUseDefaultPlaceholder = t("circuitBreakerUseDefaultPlaceholder");
@@ -935,6 +999,13 @@ export function UpstreamFormDialog({
   const [catalogSourceFilter, setCatalogSourceFilter] = useState<CatalogSourceFilter>("all");
   const [selectedCatalogModels, setSelectedCatalogModels] = useState<string[]>([]);
   const [selectedModelRuleIds, setSelectedModelRuleIds] = useState<string[]>([]);
+  const [selectedProbeCapability, setSelectedProbeCapability] = useState<RouteCapability | "">("");
+  const [selectedProbeClientProfile, setSelectedProbeClientProfile] = useState<
+    UpstreamProbeClientProfile | ""
+  >("");
+  const [probeModel, setProbeModel] = useState("");
+  const [expandedProbeResponseId, setExpandedProbeResponseId] = useState<string | null>(null);
+  const [copiedProbeResponseId, setCopiedProbeResponseId] = useState<string | null>(null);
   const [workspaceUpstream, setWorkspaceUpstream] = useState<Upstream | null>(null);
   const contentScrollContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -942,6 +1013,10 @@ export function UpstreamFormDialog({
     resolver: zodResolver(activeSchema),
     defaultValues: buildUpstreamFormDefaults(upstream),
   });
+
+  useEffect(() => {
+    resetExecuteProbeMutation();
+  }, [resetExecuteProbeMutation, open, upstream?.id]);
 
   // Watch circuit_breaker_config for controlled inputs
   const circuitBreakerConfig = useWatch({
@@ -1052,6 +1127,12 @@ export function UpstreamFormDialog({
         category: "configCategoryBasic",
       },
       {
+        id: "basic-diagnostics",
+        label: t("probeDiagnostics"),
+        icon: CheckCircle2,
+        category: "configCategoryBasic",
+      },
+      {
         id: "advanced-priority-weight",
         label: t("priorityAndWeight"),
         icon: SlidersHorizontal,
@@ -1140,6 +1221,41 @@ export function UpstreamFormDialog({
       ),
     [catalogState.modelCatalog]
   );
+  const catalogModelOptions = useMemo(
+    () =>
+      getUniqueCatalogModels(
+        catalogState.modelCatalog.length > 0
+          ? catalogState.modelCatalog
+          : (upstream?.model_catalog ?? [])
+      ),
+    [catalogState.modelCatalog, upstream?.model_catalog]
+  );
+  const savedProbeCapabilities = useMemo(
+    () => resolveRouteCapabilities(upstream?.route_capabilities).filter(isProbeSupportedCapability),
+    [upstream?.route_capabilities]
+  );
+  const effectiveProbeCapability = savedProbeCapabilities.includes(
+    selectedProbeCapability as RouteCapability
+  )
+    ? selectedProbeCapability
+    : (savedProbeCapabilities[0] ?? "");
+  const selectableProbeClientProfiles = effectiveProbeCapability
+    ? (PROBE_CAPABILITY_CLIENT_PROFILES[effectiveProbeCapability] ?? [])
+    : [];
+  const effectiveProbeClientProfile = selectableProbeClientProfiles.includes(
+    selectedProbeClientProfile as UpstreamProbeClientProfile
+  )
+    ? selectedProbeClientProfile
+    : getDefaultProbeClientProfile(effectiveProbeCapability);
+  const defaultProbeModel = getDefaultProbeModel(
+    effectiveProbeCapability,
+    effectiveProbeClientProfile
+  );
+  const selectedProbeCapabilityDefinition = effectiveProbeCapability
+    ? ROUTE_CAPABILITY_DEFINITIONS.find(
+        (definition) => definition.value === effectiveProbeCapability
+      )
+    : null;
   const catalogRefreshDependencyDirty = useMemo(() => {
     const defaultValues = form.formState.defaultValues;
     if (!defaultValues) {
@@ -1193,6 +1309,9 @@ export function UpstreamFormDialog({
     setCatalogSourceFilter("all");
     setSelectedCatalogModels([]);
     setSelectedModelRuleIds([]);
+    setSelectedProbeCapability("");
+    setSelectedProbeClientProfile("");
+    setProbeModel("");
     setActiveSectionId("basic-name");
     setHighlightedSectionId(null);
   };
@@ -1213,6 +1332,69 @@ export function UpstreamFormDialog({
     const normalizedDefaultValues = normalizeUpstreamFormValuesForDirtyCheck(defaultValues);
 
     return JSON.stringify(currentValues) !== JSON.stringify(normalizedDefaultValues);
+  };
+
+  const mutationProbe =
+    executeProbeMutation.data?.upstream_id === upstream?.id ? executeProbeMutation.data : null;
+  const latestProbe: UpstreamProbeResponse | null =
+    mutationProbe ?? probeData?.data?.[0] ?? upstream?.probe_results?.[0] ?? null;
+  const showFullProbeResponse = !!latestProbe && expandedProbeResponseId === latestProbe.id;
+  const copiedProbeResponse = !!latestProbe && copiedProbeResponseId === latestProbe.id;
+  const probeResponseText = latestProbe?.response_body || t("probeUpstreamResponseEmpty");
+  const hasProbeResponseBody = !!latestProbe?.response_body;
+  const probeResponseIsLong = probeResponseText.length > PROBE_RESPONSE_PREVIEW_LIMIT;
+  const visibleProbeResponseText =
+    probeResponseIsLong && !showFullProbeResponse
+      ? `${probeResponseText.slice(0, PROBE_RESPONSE_PREVIEW_LIMIT).trimEnd()}\n…`
+      : probeResponseText;
+  const probeConfigDirty = isEdit && hasUnsavedChanges();
+  const probeDisabled =
+    !upstream ||
+    !effectiveProbeCapability ||
+    !effectiveProbeClientProfile ||
+    probeConfigDirty ||
+    executeProbeMutation.isPending;
+
+  const handleCopyProbeResponse = async () => {
+    if (!latestProbe?.response_body) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(latestProbe.response_body);
+      setCopiedProbeResponseId(latestProbe.id);
+      toast.success(tCommon("copied"));
+      setTimeout(() => {
+        setCopiedProbeResponseId((current) => (current === latestProbe.id ? null : current));
+      }, 2000);
+    } catch {
+      toast.error(tCommon("error"));
+    }
+  };
+
+  const handleExecuteProbe = async () => {
+    if (
+      !upstream ||
+      !effectiveProbeCapability ||
+      !effectiveProbeClientProfile ||
+      probeConfigDirty
+    ) {
+      return;
+    }
+
+    try {
+      const selectedModel = probeModel.trim() || defaultProbeModel;
+      await executeProbeMutation.mutateAsync({
+        id: upstream.id,
+        data: {
+          route_capability: effectiveProbeCapability,
+          client_profile: effectiveProbeClientProfile,
+          ...(selectedModel ? { model: selectedModel } : {}),
+        },
+      });
+    } catch {
+      // Probe errors are surfaced by the mutation toast.
+    }
   };
 
   const handleDialogOpenChange = (nextOpen: boolean) => {
@@ -1962,6 +2144,255 @@ export function UpstreamFormDialog({
                         )}
                       />
                     </div>
+
+                    {isEdit && (
+                      <div
+                        id="basic-diagnostics"
+                        className={getSectionClassName("basic-diagnostics", "mt-4")}
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <h3 className="text-sm font-medium text-foreground">
+                              {t("probeDiagnostics")}
+                            </h3>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {t("probeDiagnosticsDescription")}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              void handleExecuteProbe();
+                            }}
+                            disabled={probeDisabled}
+                            className="shrink-0 gap-2"
+                          >
+                            {executeProbeMutation.isPending ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                            ) : (
+                              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                            )}
+                            {executeProbeMutation.isPending ? t("probeRunning") : t("runProbe")}
+                          </Button>
+                        </div>
+
+                        <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_1fr]">
+                          <div className="space-y-1.5">
+                            <label className="text-sm font-medium text-foreground">
+                              {t("probeRouteCapability")}
+                            </label>
+                            <Select
+                              value={effectiveProbeCapability}
+                              onValueChange={(value) => {
+                                const nextCapability = value as RouteCapability;
+                                setSelectedProbeCapability(nextCapability);
+                                setSelectedProbeClientProfile(
+                                  getDefaultProbeClientProfile(nextCapability)
+                                );
+                              }}
+                              disabled={savedProbeCapabilities.length === 0}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={t("probeRouteCapabilityPlaceholder")} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {savedProbeCapabilities.map((capability) => {
+                                  const definition = ROUTE_CAPABILITY_DEFINITIONS.find(
+                                    (item) => item.value === capability
+                                  );
+                                  return (
+                                    <SelectItem key={capability} value={capability}>
+                                      {definition ? t(definition.labelKey) : capability}
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-sm font-medium text-foreground">
+                              {t("probeClientProfile")}
+                            </label>
+                            <Select
+                              value={effectiveProbeClientProfile}
+                              onValueChange={(value) =>
+                                setSelectedProbeClientProfile(value as UpstreamProbeClientProfile)
+                              }
+                              disabled={selectableProbeClientProfiles.length === 0}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={t("probeClientProfilePlaceholder")} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {selectableProbeClientProfiles.map((profile) => (
+                                  <SelectItem key={profile} value={profile}>
+                                    {t(`probeClientProfileValue.${profile}`)}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-sm font-medium text-foreground">
+                              {t("probeModel")}
+                            </label>
+                            <Input
+                              value={probeModel}
+                              onChange={(event) => setProbeModel(event.target.value)}
+                              placeholder={t("probeModelPlaceholder", { model: defaultProbeModel })}
+                              list={catalogModelOptions.length > 0 ? probeModelListId : undefined}
+                            />
+                            {catalogModelOptions.length > 0 && (
+                              <datalist id={probeModelListId}>
+                                {catalogModelOptions.map((model) => (
+                                  <option key={model} value={model} />
+                                ))}
+                              </datalist>
+                            )}
+                          </div>
+                        </div>
+
+                        {savedProbeCapabilities.length === 0 ? (
+                          <p className="mt-3 rounded-cf-sm border border-divider bg-surface-200/45 px-3 py-2 text-xs text-muted-foreground">
+                            {t("probeNoSupportedCapability")}
+                          </p>
+                        ) : selectedProbeCapabilityDefinition ? (
+                          <p className="mt-2 text-[11px] text-muted-foreground">
+                            {t("probeSelectedRequestProfile", {
+                              capability: t(selectedProbeCapabilityDefinition.labelKey),
+                              profile: effectiveProbeClientProfile
+                                ? t(`probeClientProfileValue.${effectiveProbeClientProfile}`)
+                                : "--",
+                            })}
+                          </p>
+                        ) : null}
+
+                        {probeConfigDirty && (
+                          <div className="mt-3 flex items-start gap-2 rounded-cf-sm border border-status-warning/40 bg-status-warning-muted px-3 py-2 text-xs text-status-warning">
+                            <AlertTriangle
+                              className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                              aria-hidden="true"
+                            />
+                            <span>{t("probeSaveBeforeRun")}</span>
+                          </div>
+                        )}
+
+                        {latestProbe ? (
+                          <div className="mt-4 min-w-0 space-y-3 overflow-hidden rounded-cf-sm border border-divider bg-surface-200/45 p-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant={latestProbe.success ? "success" : "destructive"}>
+                                {t(`probeStatus.${latestProbe.status}`)}
+                              </Badge>
+                              <Badge variant="outline">
+                                {latestProbe.client_profile} / {latestProbe.route_capability}
+                              </Badge>
+                              {latestProbe.latency_ms !== null && (
+                                <Badge variant="outline">
+                                  {t("probeLatency")}: {latestProbe.latency_ms}ms
+                                </Badge>
+                              )}
+                              {latestProbe.status_code !== null && (
+                                <Badge variant="outline">
+                                  {t("probeStatusCode")}: {latestProbe.status_code}
+                                </Badge>
+                              )}
+                            </div>
+
+                            <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                              <div>
+                                {t("probeCheckedAt")}:{" "}
+                                {formatCatalogTimestamp(latestProbe.checked_at)}
+                              </div>
+                              <div>
+                                {t("probeLayer")}: {latestProbe.layer}
+                              </div>
+                              {latestProbe.probe_url && (
+                                <div className="break-all sm:col-span-2">
+                                  {t("probeUrl")}: {latestProbe.probe_url}
+                                </div>
+                              )}
+                              {latestProbe.error_message && (
+                                <div className="break-words text-status-error sm:col-span-2">
+                                  {t("probeErrorMessage")}: {latestProbe.error_message}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="min-w-0">
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="text-xs font-medium text-muted-foreground">
+                                  {t("probeUpstreamResponse")}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {probeResponseIsLong && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 px-2 text-xs"
+                                      onClick={() =>
+                                        setExpandedProbeResponseId((current) =>
+                                          current === latestProbe.id ? null : latestProbe.id
+                                        )
+                                      }
+                                      aria-expanded={showFullProbeResponse}
+                                    >
+                                      {showFullProbeResponse
+                                        ? t("probeCollapseResponse")
+                                        : t("probeExpandResponse")}
+                                    </Button>
+                                  )}
+                                  {hasProbeResponseBody && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 gap-1.5 px-2 text-xs"
+                                      onClick={() => {
+                                        void handleCopyProbeResponse();
+                                      }}
+                                      aria-label={
+                                        copiedProbeResponse ? tCommon("copied") : tCommon("copy")
+                                      }
+                                    >
+                                      {copiedProbeResponse ? (
+                                        <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                      ) : (
+                                        <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                                      )}
+                                      {copiedProbeResponse ? tCommon("copied") : tCommon("copy")}
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                              {probeResponseIsLong && !showFullProbeResponse && (
+                                <p className="mt-1 text-[11px] text-muted-foreground">
+                                  {t("probeUpstreamResponsePreview", {
+                                    count: PROBE_RESPONSE_PREVIEW_LIMIT,
+                                  })}
+                                </p>
+                              )}
+                              {probeResponseIsLong && showFullProbeResponse && (
+                                <p className="mt-1 text-[11px] text-muted-foreground">
+                                  {t("probeUpstreamResponseFullHint")}
+                                </p>
+                              )}
+                              <pre className="mt-2 max-h-56 w-full max-w-full overflow-auto overscroll-contain whitespace-pre-wrap break-all rounded-cf-sm border border-divider bg-surface-300/65 p-3 font-mono text-[11px] leading-relaxed text-foreground">
+                                {visibleProbeResponseText}
+                              </pre>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="mt-3 rounded-cf-sm border border-divider bg-surface-200/45 px-3 py-2 text-xs text-muted-foreground">
+                            {t("probeNoResult")}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div id="upstream-advanced-config" className="mt-4 space-y-6 px-4">
