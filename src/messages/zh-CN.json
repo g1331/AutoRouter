@@ -889,7 +889,7 @@
     "targetModel": "目标模型",
     "modelRedirectsDescription": "将请求中的模型名称映射为上游支持的模型名称",
     "circuitBreakerConfig": "熔断器配置",
-    "circuitBreakerUseDefaultPlaceholder": "留空使用系统默认",
+    "circuitBreakerUseDefaultPlaceholder": "默认值：{value}",
     "failureThreshold": "失败阈值",
     "failureThresholdDesc": "触发熔断的连续失败次数 (1-100)",
     "successThreshold": "成功阈值",

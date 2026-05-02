@@ -884,7 +884,7 @@
     "targetModel": "Target Model",
     "modelRedirectsDescription": "Map requested model names to upstream-supported model names",
     "circuitBreakerConfig": "Circuit Breaker Configuration",
-    "circuitBreakerUseDefaultPlaceholder": "Leave empty to use system default",
+    "circuitBreakerUseDefaultPlaceholder": "Default: {value}",
     "failureThreshold": "Failure Threshold",
     "failureThresholdDesc": "Consecutive failures to trigger circuit open (1-100)",
     "successThreshold": "Success Threshold",
