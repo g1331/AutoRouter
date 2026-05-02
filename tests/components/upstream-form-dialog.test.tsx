@@ -6,7 +6,10 @@ import type { Upstream, UpstreamProbeResponse } from "@/types/api";
 
 // Mock next-intl
 vi.mock("next-intl", () => ({
-  useTranslations: () => (key: string) => key,
+  useTranslations: () => (key: string, values?: Record<string, string | number>) =>
+    key === "circuitBreakerUseDefaultPlaceholder" && values
+      ? `circuitBreakerUseDefaultPlaceholder:${values.value}`
+      : key,
 }));
 
 // Mock hooks
@@ -1032,6 +1035,7 @@ describe("UpstreamFormDialog", () => {
 
       expect(workspaceContainer).toBeTruthy();
       expect(workspaceContainer?.className).toContain("grid");
+      expect(workspaceContainer?.className).toContain("xl:h-[min(76vh,860px)]");
     });
 
     it("imports selected catalog entries and echoes returned model rules", async () => {
@@ -1355,6 +1359,27 @@ describe("UpstreamFormDialog", () => {
       ensureAdvancedConfigExpanded();
       const priorityInput = screen.getByPlaceholderText("priorityPlaceholder");
       expect(priorityInput).toHaveValue(3);
+    });
+
+    it("shows concrete circuit breaker defaults in empty override inputs", () => {
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      ensureAdvancedConfigExpanded();
+
+      expect(
+        screen.getByPlaceholderText("circuitBreakerUseDefaultPlaceholder:5")
+      ).toBeInTheDocument();
+      expect(
+        screen.getByPlaceholderText("circuitBreakerUseDefaultPlaceholder:2")
+      ).toBeInTheDocument();
+      expect(
+        screen.getByPlaceholderText("circuitBreakerUseDefaultPlaceholder:300")
+      ).toBeInTheDocument();
+      expect(
+        screen.getByPlaceholderText("circuitBreakerUseDefaultPlaceholder:30")
+      ).toBeInTheDocument();
     });
 
     it("submits edited upstream with updated priority", async () => {
