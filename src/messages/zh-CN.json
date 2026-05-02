@@ -678,6 +678,7 @@
     "probeErrorMessage": "错误信息",
     "probeUpstreamResponse": "上游响应",
     "probeUpstreamResponsePreview": "响应内容较长，默认显示前 {count} 个字符，展开后可查看完整内容。",
+    "probeUpstreamResponseFullHint": "当前为完整响应；内容较长时可在响应框内滚动查看结尾。",
     "probeExpandResponse": "展开完整响应",
     "probeCollapseResponse": "收起响应",
     "probeUpstreamResponseEmpty": "本次探测没有可展示的上游响应内容。",

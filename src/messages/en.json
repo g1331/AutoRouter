@@ -673,6 +673,7 @@
     "probeErrorMessage": "Error message",
     "probeUpstreamResponse": "Upstream response",
     "probeUpstreamResponsePreview": "The response is long. Showing the first {count} characters by default; expand to view the full content.",
+    "probeUpstreamResponseFullHint": "Full response is shown; scroll inside the response box to view the end when content is long.",
     "probeExpandResponse": "Expand full response",
     "probeCollapseResponse": "Collapse response",
     "probeUpstreamResponseEmpty": "No upstream response content was captured for this probe.",

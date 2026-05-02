@@ -742,6 +742,7 @@ describe("UpstreamFormDialog", () => {
       fireEvent.click(screen.getByText("probeExpandResponse"));
 
       expect(screen.getByText("probeCollapseResponse")).toBeInTheDocument();
+      expect(screen.getByText("probeUpstreamResponseFullHint")).toBeInTheDocument();
       expect(screen.getByText((content) => content.includes("tail-marker"))).toBeInTheDocument();
     });
 

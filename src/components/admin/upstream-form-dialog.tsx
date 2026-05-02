@@ -2376,6 +2376,11 @@ export function UpstreamFormDialog({
                                   })}
                                 </p>
                               )}
+                              {probeResponseIsLong && showFullProbeResponse && (
+                                <p className="mt-1 text-[11px] text-muted-foreground">
+                                  {t("probeUpstreamResponseFullHint")}
+                                </p>
+                              )}
                               <pre className="mt-2 max-h-56 w-full max-w-full overflow-auto overscroll-contain whitespace-pre-wrap break-all rounded-cf-sm border border-divider bg-surface-300/65 p-3 font-mono text-[11px] leading-relaxed text-foreground">
                                 {visibleProbeResponseText}
                               </pre>
