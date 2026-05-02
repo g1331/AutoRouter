@@ -622,7 +622,7 @@ describe("UpstreamFormDialog", () => {
     });
 
     it("keeps long diagnostic probe responses bounded until expanded", () => {
-      const longResponse = `${"long-response ".repeat(140)}tail-marker`;
+      const longResponse = `${"x".repeat(1700)}tail-marker`;
       upstreamHookState.probeData = {
         data: [
           {

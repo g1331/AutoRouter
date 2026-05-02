@@ -113,6 +113,13 @@ function createSseResponse(events: string[], status = 200): Response {
   });
 }
 
+function createSseTextResponse(body: string, status = 200): Response {
+  return new Response(body, {
+    status,
+    headers: { "Content-Type": "text/event-stream" },
+  });
+}
+
 describe("upstream-probe-service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -297,6 +304,24 @@ describe("upstream-probe-service", () => {
       error_type: "failure_event",
     });
     expect(result.error_message).toContain("response.failed");
+  });
+
+  it("preserves complete long probe response bodies", async () => {
+    const longPayload = "x".repeat(4800);
+    const responseBody = `event: response.output_text.delta\ndata: ${longPayload}\n\nevent: response.completed\ndata: {}\n\n`;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(createSseTextResponse(responseBody)));
+    const { executeUpstreamProbe } = await import("@/lib/services/upstream-probe-service");
+
+    const result = await executeUpstreamProbe({ upstreamId: "upstream-1" });
+
+    expect(result).toMatchObject({
+      status: "ok",
+      success: true,
+      response_body: responseBody.trim(),
+    });
+    expect(result.response_body).toContain(longPayload);
+    expect(result.response_body).toContain("event: response.completed");
+    expect(lastInsertedValues?.responseBody).toBe(responseBody.trim());
   });
 
   it("classifies incomplete streams as protocol mismatches", async () => {

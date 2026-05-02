@@ -103,12 +103,12 @@ interface ProbeExecutionResult {
   responseBody: string | null;
 }
 
-function truncateProbeResponseBody(value: string): string | null {
+function normalizeProbeResponseBody(value: string): string | null {
   const trimmed = value.trim();
   if (!trimmed) {
     return null;
   }
-  return trimmed.slice(0, 4000);
+  return trimmed;
 }
 
 const PROBE_TEMPLATES: ProbeTemplate[] = [
@@ -363,7 +363,7 @@ async function executeTemplateRequest(
     if (!response.ok) {
       const failure = classifyHttpFailure(response.status);
       const responseText = await response.text().catch(() => "");
-      const responseBody = truncateProbeResponseBody(responseText);
+      const responseBody = normalizeProbeResponseBody(responseText);
       return {
         status: failure.status,
         layer: failure.layer,
@@ -404,7 +404,7 @@ async function executeTemplateRequest(
       buffered += decoder.decode(value, { stream: true });
       const events = parseSseEvents(buffered);
       if (events.some((event) => template.failureEvents.includes(event))) {
-        const responseBody = truncateProbeResponseBody(buffered);
+        const responseBody = normalizeProbeResponseBody(buffered);
         return {
           status: "business_failed",
           layer: "business",
@@ -430,7 +430,7 @@ async function executeTemplateRequest(
           statusCode: response.status,
           errorType: null,
           errorMessage: null,
-          responseBody: truncateProbeResponseBody(buffered),
+          responseBody: normalizeProbeResponseBody(buffered),
         };
       }
     }
@@ -445,7 +445,7 @@ async function executeTemplateRequest(
       statusCode: response.status,
       errorType: "stream_incomplete",
       errorMessage: `Probe stream ended before ${template.completeEvent}`,
-      responseBody: truncateProbeResponseBody(buffered),
+      responseBody: normalizeProbeResponseBody(buffered),
     };
   } catch (error) {
     const aborted = error instanceof Error && error.name === "AbortError";
