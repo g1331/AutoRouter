@@ -154,7 +154,7 @@ const PROBE_TEMPLATES: ProbeTemplate[] = [
     }),
     completeEvent: "response.completed",
     failureEvents: ["response.failed", "response.incomplete", "error"],
-    defaultModel: "gpt-5.5",
+    defaultModel: "gpt-5.4-mini",
   },
   {
     id: "openai_responses_stream_v1",
@@ -181,7 +181,7 @@ const PROBE_TEMPLATES: ProbeTemplate[] = [
     }),
     completeEvent: "response.completed",
     failureEvents: ["response.failed", "response.incomplete", "error"],
-    defaultModel: "gpt-5.5",
+    defaultModel: "gpt-5.4-mini",
   },
   {
     id: "claude_code_messages_stream_v1",

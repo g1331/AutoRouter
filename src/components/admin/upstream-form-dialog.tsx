@@ -596,8 +596,8 @@ const PROBE_CAPABILITY_CLIENT_PROFILES: Partial<
 const PROBE_TEMPLATE_DEFAULT_MODELS: Partial<
   Record<RouteCapability, Partial<Record<UpstreamProbeClientProfile, string>>>
 > = {
-  codex_cli_responses: { codex_cli: "gpt-5.5" },
-  openai_responses: { generic_openai: "gpt-5.5" },
+  codex_cli_responses: { codex_cli: "gpt-5.4-mini" },
+  openai_responses: { generic_openai: "gpt-5.4-mini" },
   claude_code_messages: { claude_code: "claude-sonnet-4-5-20250929" },
   anthropic_messages: { generic_anthropic: "claude-sonnet-4-5-20250929" },
 };

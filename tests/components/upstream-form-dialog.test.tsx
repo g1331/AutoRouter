@@ -601,7 +601,7 @@ describe("UpstreamFormDialog", () => {
             error_message: null,
             response_body: "event: response.completed",
             probe_url: "https://api.openai.com/v1/responses",
-            model: "gpt-5.5",
+            model: "gpt-5.4-mini",
             checked_at: new Date().toISOString(),
           },
         ],
@@ -645,7 +645,7 @@ describe("UpstreamFormDialog", () => {
         error_message: null,
         response_body: "old upstream response",
         probe_url: "https://api.openai.com/v1/responses",
-        model: "gpt-5.5",
+        model: "gpt-5.4-mini",
         checked_at: new Date().toISOString(),
       };
 
@@ -719,7 +719,7 @@ describe("UpstreamFormDialog", () => {
             error_message: null,
             response_body: longResponse,
             probe_url: "https://api.openai.com/v1/responses",
-            model: "gpt-5.5",
+            model: "gpt-5.4-mini",
             checked_at: new Date().toISOString(),
           },
         ],
@@ -765,7 +765,7 @@ describe("UpstreamFormDialog", () => {
           data: {
             route_capability: "codex_cli_responses",
             client_profile: "codex_cli",
-            model: "gpt-5.5",
+            model: "gpt-5.4-mini",
           },
         });
       });

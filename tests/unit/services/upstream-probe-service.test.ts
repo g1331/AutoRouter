@@ -175,7 +175,7 @@ describe("upstream-probe-service", () => {
       "x-codex-turn-metadata": JSON.stringify({ source: "autorouter-diagnostic-probe" }),
     });
     expect(body).toMatchObject({
-      model: "gpt-5.5",
+      model: "gpt-5.4-mini",
       tools: [],
       tool_choice: "auto",
       parallel_tool_calls: false,
@@ -225,7 +225,7 @@ describe("upstream-probe-service", () => {
       expect.objectContaining({ method: "POST", redirect: "error" })
     );
     expect(body).toMatchObject({
-      model: "gpt-5.5",
+      model: "gpt-5.4-mini",
       max_output_tokens: 8,
       stream: true,
       store: false,
@@ -241,7 +241,7 @@ describe("upstream-probe-service", () => {
       success: true,
       route_capability: "openai_responses",
       client_profile: "generic_openai",
-      model: "gpt-5.5",
+      model: "gpt-5.4-mini",
     });
   });
 
