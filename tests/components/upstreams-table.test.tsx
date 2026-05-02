@@ -208,7 +208,7 @@ describe("UpstreamsTable", () => {
 
     expect(screen.queryByText("probeStatus.ok · 88ms")).not.toBeInTheDocument();
     expect(screen.queryByText("codex_cli / codex_cli_responses")).not.toBeInTheDocument();
-    expect(screen.getByText("healthHealthy")).toBeInTheDocument();
+    expect(screen.getByText("runtimeAvailable")).toBeInTheDocument();
   });
 
   it("renders queue policy summary in runtime status", () => {
@@ -266,29 +266,21 @@ describe("UpstreamsTable", () => {
       ...baseUpstream,
       id: "p0-unhealthy",
       priority: 0,
-      health_status: {
+      circuit_breaker: {
         upstream_id: "p0-unhealthy",
-        is_healthy: false,
-        last_check_at: new Date().toISOString(),
-        last_success_at: null,
+        state: "open",
         failure_count: 2,
-        latency_ms: null,
-        error_message: "timeout",
+        success_count: 0,
+        next_attempt_at: null,
+        last_failure_at: new Date().toISOString(),
+        last_success_at: null,
       },
     };
     const unhealthyInP5: Upstream = {
       ...baseUpstream,
       id: "p5-unhealthy",
       priority: 5,
-      health_status: {
-        upstream_id: "p5-unhealthy",
-        is_healthy: false,
-        last_check_at: new Date().toISOString(),
-        last_success_at: null,
-        failure_count: 3,
-        latency_ms: null,
-        error_message: "timeout",
-      },
+      is_active: false,
     };
 
     render(
@@ -465,7 +457,7 @@ describe("UpstreamsTable", () => {
       <UpstreamsTable upstreams={[full]} onEdit={onEdit} onDelete={onDelete} onTest={onTest} />
     );
 
-    expect(screen.getByText("concurrencyFullStatus")).toBeInTheDocument();
+    expect(screen.getAllByText("concurrencyFullStatus").length).toBeGreaterThanOrEqual(1);
   });
 
   it("uses last_used_at and shows neverUsed for idle upstream", () => {

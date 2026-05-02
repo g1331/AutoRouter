@@ -27,9 +27,17 @@ export type UpstreamProbeStatus =
   | "protocol_mismatch"
   | "business_failed"
   | "upstream_error"
-  | "configuration_error";
+  | "configuration_error"
+  | "route_unavailable"
+  | "template_unavailable";
 
-export type UpstreamProbeLayer = "configuration" | "transport" | "auth" | "protocol" | "business";
+export type UpstreamProbeLayer =
+  | "configuration"
+  | "transport"
+  | "auth"
+  | "protocol"
+  | "business"
+  | "router";
 
 export interface ExecuteUpstreamProbeInput {
   upstreamId: string;
@@ -66,11 +74,14 @@ export interface UpstreamProbeListResponse {
   total: number;
 }
 
-interface ProbeTemplate {
+interface ProbeResultIdentity {
   id: string;
   routeCapability: RouteCapability;
   clientProfile: UpstreamProbeClientProfile;
-  probeKind: "cli_real_request" | "openai_responses" | "anthropic_messages";
+  probeKind: "cli_real_request" | "openai_responses" | "anthropic_messages" | "router";
+}
+
+interface ProbeTemplate extends ProbeResultIdentity {
   path: string;
   headers: (apiKey: string) => Record<string, string>;
   body: (model: string) => Record<string, unknown>;
@@ -211,6 +222,19 @@ function resolveProbeTemplate(
         template.routeCapability === routeCapability && template.clientProfile === clientProfile
     ) ?? null
   );
+}
+
+function createRouterProbeIdentity(
+  routeCapability: RouteCapability,
+  clientProfile: UpstreamProbeClientProfile,
+  reason: "route_unavailable" | "template_unavailable"
+): ProbeResultIdentity {
+  return {
+    id: `${reason}_${routeCapability}_${clientProfile}_v1`,
+    routeCapability,
+    clientProfile,
+    probeKind: "router",
+  };
 }
 
 function selectRouteCapability(
@@ -441,27 +465,27 @@ function formatProbeResult(
 
 async function persistProbeResult(
   upstreamId: string,
-  template: ProbeTemplate,
-  probeUrl: string,
-  model: string,
+  identity: ProbeResultIdentity,
+  probeUrl: string | null,
+  model: string | null,
   result: ProbeExecutionResult
 ): Promise<UpstreamProbeResult> {
   const now = new Date();
   const existing = await db.query.upstreamProbeResults.findFirst({
     where: and(
       eq(upstreamProbeResults.upstreamId, upstreamId),
-      eq(upstreamProbeResults.routeCapability, template.routeCapability),
-      eq(upstreamProbeResults.clientProfile, template.clientProfile),
-      eq(upstreamProbeResults.probeTemplateId, template.id)
+      eq(upstreamProbeResults.routeCapability, identity.routeCapability),
+      eq(upstreamProbeResults.clientProfile, identity.clientProfile),
+      eq(upstreamProbeResults.probeTemplateId, identity.id)
     ),
   });
 
   const values = {
     upstreamId,
-    routeCapability: template.routeCapability,
-    clientProfile: template.clientProfile,
-    probeTemplateId: template.id,
-    probeKind: template.probeKind,
+    routeCapability: identity.routeCapability,
+    clientProfile: identity.clientProfile,
+    probeTemplateId: identity.id,
+    probeKind: identity.probeKind,
     status: result.status,
     layer: result.layer,
     success: result.success,
@@ -508,22 +532,71 @@ export async function executeUpstreamProbe(
   }
 
   const routeCapability = selectRouteCapability(upstream.routeCapabilities, input.routeCapability);
-  if (!routeCapability || (input.routeCapability && !isRouteCapability(input.routeCapability))) {
-    throw new Error("Requested route capability is not available for this upstream");
+  if (!routeCapability) {
+    if (!input.routeCapability || !isRouteCapability(input.routeCapability)) {
+      throw new Error("Requested route capability is not available for this upstream");
+    }
+
+    const clientProfile = input.clientProfile ?? inferClientProfile(input.routeCapability);
+    const identity = createRouterProbeIdentity(
+      input.routeCapability,
+      clientProfile,
+      "route_unavailable"
+    );
+    const record = await persistProbeResult(
+      upstream.id,
+      identity,
+      null,
+      input.model?.trim() || null,
+      {
+        status: "route_unavailable",
+        layer: "router",
+        success: false,
+        latencyMs: null,
+        firstByteLatencyMs: null,
+        completedLatencyMs: null,
+        statusCode: null,
+        errorType: "route_capability_unavailable",
+        errorMessage: "Requested route capability is not enabled for this upstream",
+        responseBody: null,
+      }
+    );
+    return formatProbeResult(record, upstream.name);
   }
 
   const clientProfile = input.clientProfile ?? inferClientProfile(routeCapability);
   const template = resolveProbeTemplate(routeCapability, clientProfile);
   if (!template) {
-    throw new Error(
-      "No probe template is available for the selected capability and client profile"
+    const identity = createRouterProbeIdentity(
+      routeCapability,
+      clientProfile,
+      "template_unavailable"
     );
+    const record = await persistProbeResult(
+      upstream.id,
+      identity,
+      null,
+      input.model?.trim() || null,
+      {
+        status: "template_unavailable",
+        layer: "router",
+        success: false,
+        latencyMs: null,
+        firstByteLatencyMs: null,
+        completedLatencyMs: null,
+        statusCode: null,
+        errorType: "probe_template_unavailable",
+        errorMessage:
+          "No probe template is available for the selected capability and client profile",
+        responseBody: null,
+      }
+    );
+    return formatProbeResult(record, upstream.name);
   }
 
   const probeUrl = buildProbeUrl(upstream.baseUrl, template.path);
   const model = input.model?.trim() || template.defaultModel;
   const invalidReason = await validateProbeUrl(probeUrl);
-  const apiKey = getDecryptedApiKey(upstream);
   const result: ProbeExecutionResult = invalidReason
     ? {
         status: "configuration_error",
@@ -537,7 +610,13 @@ export async function executeUpstreamProbe(
         errorMessage: invalidReason,
         responseBody: null,
       }
-    : await executeTemplateRequest(template, probeUrl, apiKey, model, upstream.timeout ?? 10);
+    : await executeTemplateRequest(
+        template,
+        probeUrl,
+        getDecryptedApiKey(upstream),
+        model,
+        upstream.timeout ?? 10
+      );
 
   const record = await persistProbeResult(upstream.id, template, probeUrl, model, result);
   return formatProbeResult(record, upstream.name);

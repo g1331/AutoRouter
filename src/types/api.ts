@@ -156,9 +156,17 @@ export type UpstreamProbeStatus =
   | "protocol_mismatch"
   | "business_failed"
   | "upstream_error"
-  | "configuration_error";
+  | "configuration_error"
+  | "route_unavailable"
+  | "template_unavailable";
 
-export type UpstreamProbeLayer = "configuration" | "transport" | "auth" | "protocol" | "business";
+export type UpstreamProbeLayer =
+  | "configuration"
+  | "transport"
+  | "auth"
+  | "protocol"
+  | "business"
+  | "router";
 
 export interface UpstreamProbeResponse {
   id: string;

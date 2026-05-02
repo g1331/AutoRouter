@@ -284,6 +284,7 @@ describe("upstream-probe-service", () => {
     const result = await executeUpstreamProbe({ upstreamId: "upstream-1" });
 
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(mockGetDecryptedApiKey).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       status: "configuration_error",
       layer: "configuration",
@@ -294,6 +295,65 @@ describe("upstream-probe-service", () => {
     expect(lastInsertedValues).toMatchObject({
       status: "configuration_error",
       responseBody: null,
+    });
+  });
+
+  it("persists router failures when the requested route capability is not enabled", async () => {
+    mockFindUpstream.mockResolvedValue(
+      createMockUpstream({ routeCapabilities: ["openai_chat_compatible"] })
+    );
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { executeUpstreamProbe } = await import("@/lib/services/upstream-probe-service");
+
+    const result = await executeUpstreamProbe({
+      upstreamId: "upstream-1",
+      routeCapability: "codex_cli_responses",
+      clientProfile: "codex_cli",
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      status: "route_unavailable",
+      layer: "router",
+      success: false,
+      route_capability: "codex_cli_responses",
+      client_profile: "codex_cli",
+      probe_template_id: "route_unavailable_codex_cli_responses_codex_cli_v1",
+      error_type: "route_capability_unavailable",
+    });
+    expect(lastInsertedValues).toMatchObject({
+      probeKind: "router",
+      status: "route_unavailable",
+      layer: "router",
+    });
+  });
+
+  it("persists router failures when no template exists for the selected provider profile", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { executeUpstreamProbe } = await import("@/lib/services/upstream-probe-service");
+
+    const result = await executeUpstreamProbe({
+      upstreamId: "upstream-1",
+      routeCapability: "codex_cli_responses",
+      clientProfile: "generic_openai",
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      status: "template_unavailable",
+      layer: "router",
+      success: false,
+      route_capability: "codex_cli_responses",
+      client_profile: "generic_openai",
+      probe_template_id: "template_unavailable_codex_cli_responses_generic_openai_v1",
+      error_type: "probe_template_unavailable",
+    });
+    expect(lastInsertedValues).toMatchObject({
+      probeKind: "router",
+      status: "template_unavailable",
+      layer: "router",
     });
   });
 
