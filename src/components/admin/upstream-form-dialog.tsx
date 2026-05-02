@@ -113,6 +113,7 @@ import {
   resolveRouteCapabilities,
 } from "@/lib/route-capabilities";
 import { RouteCapabilityMultiSelect } from "@/components/admin/route-capability-badges";
+import { DEFAULT_CIRCUIT_BREAKER_CONFIG } from "@/lib/circuit-breaker-defaults";
 import { inferDefaultModelDiscoveryConfig } from "@/lib/services/upstream-model-types";
 import { cn } from "@/lib/utils";
 
@@ -989,7 +990,12 @@ export function UpstreamFormDialog({
   const probeModelListId = useId();
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
-  const circuitBreakerUseDefaultPlaceholder = t("circuitBreakerUseDefaultPlaceholder");
+  const circuitBreakerDefaults = {
+    failureThreshold: DEFAULT_CIRCUIT_BREAKER_CONFIG.failureThreshold,
+    successThreshold: DEFAULT_CIRCUIT_BREAKER_CONFIG.successThreshold,
+    openDuration: Math.round(DEFAULT_CIRCUIT_BREAKER_CONFIG.openDuration / 1000),
+    probeInterval: Math.round(DEFAULT_CIRCUIT_BREAKER_CONFIG.probeInterval / 1000),
+  };
   const [configSearchQuery, setConfigSearchQuery] = useState("");
   const [activeSectionId, setActiveSectionId] = useState<ConfigSectionId>("basic-name");
   const [highlightedSectionId, setHighlightedSectionId] = useState<ConfigSectionId | null>(null);
@@ -2564,7 +2570,7 @@ export function UpstreamFormDialog({
                           </div>
                         </div>
 
-                        <div className="grid gap-4 xl:h-[min(62vh,720px)] xl:grid-cols-[minmax(0,1.02fr)_minmax(340px,0.98fr)]">
+                        <div className="grid gap-4 xl:h-[min(76vh,860px)] xl:grid-cols-[minmax(0,1.02fr)_minmax(340px,0.98fr)]">
                           <div className="flex min-h-0 flex-col gap-4 xl:border-r xl:border-divider/70 xl:pr-5">
                             <section className="space-y-3">
                               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -3509,7 +3515,9 @@ export function UpstreamFormDialog({
                             type="number"
                             min={1}
                             max={100}
-                            placeholder={circuitBreakerUseDefaultPlaceholder}
+                            placeholder={t("circuitBreakerUseDefaultPlaceholder", {
+                              value: circuitBreakerDefaults.failureThreshold,
+                            })}
                             value={circuitBreakerConfig?.failure_threshold ?? ""}
                             onChange={(e) => {
                               const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
@@ -3534,7 +3542,9 @@ export function UpstreamFormDialog({
                             type="number"
                             min={1}
                             max={100}
-                            placeholder={circuitBreakerUseDefaultPlaceholder}
+                            placeholder={t("circuitBreakerUseDefaultPlaceholder", {
+                              value: circuitBreakerDefaults.successThreshold,
+                            })}
                             value={circuitBreakerConfig?.success_threshold ?? ""}
                             onChange={(e) => {
                               const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
@@ -3560,7 +3570,9 @@ export function UpstreamFormDialog({
                             min={1}
                             max={300}
                             step={1}
-                            placeholder={circuitBreakerUseDefaultPlaceholder}
+                            placeholder={t("circuitBreakerUseDefaultPlaceholder", {
+                              value: circuitBreakerDefaults.openDuration,
+                            })}
                             value={circuitBreakerConfig?.open_duration ?? ""}
                             onChange={(e) => {
                               const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
@@ -3582,7 +3594,9 @@ export function UpstreamFormDialog({
                             min={1}
                             max={60}
                             step={1}
-                            placeholder={circuitBreakerUseDefaultPlaceholder}
+                            placeholder={t("circuitBreakerUseDefaultPlaceholder", {
+                              value: circuitBreakerDefaults.probeInterval,
+                            })}
                             value={circuitBreakerConfig?.probe_interval ?? ""}
                             onChange={(e) => {
                               const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
