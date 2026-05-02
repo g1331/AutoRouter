@@ -147,7 +147,7 @@ const PROBE_TEMPLATES: ProbeTemplate[] = [
     }),
     completeEvent: "response.completed",
     failureEvents: ["response.failed", "response.incomplete", "error"],
-    defaultModel: "gpt-5.1",
+    defaultModel: "gpt-5.4-mini",
   },
   {
     id: "openai_responses_stream_v1",
@@ -162,14 +162,19 @@ const PROBE_TEMPLATES: ProbeTemplate[] = [
     }),
     body: (model) => ({
       model,
-      input: "Reply with exactly: OK",
+      input: [
+        {
+          role: "user",
+          content: "Reply with exactly: OK",
+        },
+      ],
       max_output_tokens: 8,
       stream: true,
       store: false,
     }),
     completeEvent: "response.completed",
     failureEvents: ["response.failed", "response.incomplete", "error"],
-    defaultModel: "gpt-5.1",
+    defaultModel: "gpt-5.4-mini",
   },
   {
     id: "claude_code_messages_stream_v1",

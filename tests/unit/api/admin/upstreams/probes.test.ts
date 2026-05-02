@@ -30,7 +30,7 @@ const sampleProbe = {
   error_message: null,
   response_body: "event: response.completed",
   probe_url: "https://api.openai.com/v1/responses",
-  model: "gpt-5.1",
+  model: "gpt-5.4-mini",
   checked_at: "2026-05-01T00:00:00.000Z",
 };
 
@@ -69,7 +69,7 @@ describe("upstream probe admin routes", () => {
       body: JSON.stringify({
         route_capability: "codex_cli_responses",
         client_profile: "codex_cli",
-        model: "gpt-5.1",
+        model: "gpt-5.4-mini",
       }),
     });
     const response = await POST(request, { params: Promise.resolve({ id: "upstream-1" }) });
@@ -80,7 +80,7 @@ describe("upstream probe admin routes", () => {
       upstreamId: "upstream-1",
       routeCapability: "codex_cli_responses",
       clientProfile: "codex_cli",
-      model: "gpt-5.1",
+      model: "gpt-5.4-mini",
     });
   });
 

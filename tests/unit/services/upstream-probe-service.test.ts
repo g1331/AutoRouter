@@ -175,7 +175,7 @@ describe("upstream-probe-service", () => {
       "x-codex-turn-metadata": JSON.stringify({ source: "autorouter-diagnostic-probe" }),
     });
     expect(body).toMatchObject({
-      model: "gpt-5.1",
+      model: "gpt-5.4-mini",
       tools: [],
       tool_choice: "auto",
       parallel_tool_calls: false,
@@ -203,6 +203,45 @@ describe("upstream-probe-service", () => {
       probeKind: "cli_real_request",
       status: "ok",
       success: true,
+    });
+  });
+
+  it("executes a generic OpenAI responses probe with list-shaped input", async () => {
+    mockFindUpstream.mockResolvedValue(
+      createMockUpstream({ routeCapabilities: ["openai_responses"] })
+    );
+    const { executeUpstreamProbe } = await import("@/lib/services/upstream-probe-service");
+
+    const result = await executeUpstreamProbe({
+      upstreamId: "upstream-1",
+      routeCapability: "openai_responses",
+      clientProfile: "generic_openai",
+    });
+    const [, requestInit] = vi.mocked(fetch).mock.calls[0];
+    const body = JSON.parse(requestInit?.body as string) as Record<string, unknown>;
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://api.openai.com/v1/responses",
+      expect.objectContaining({ method: "POST", redirect: "error" })
+    );
+    expect(body).toMatchObject({
+      model: "gpt-5.4-mini",
+      max_output_tokens: 8,
+      stream: true,
+      store: false,
+    });
+    expect(body.input).toEqual([
+      {
+        role: "user",
+        content: "Reply with exactly: OK",
+      },
+    ]);
+    expect(result).toMatchObject({
+      status: "ok",
+      success: true,
+      route_capability: "openai_responses",
+      client_profile: "generic_openai",
+      model: "gpt-5.4-mini",
     });
   });
 

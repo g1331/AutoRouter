@@ -194,7 +194,7 @@ describe("UpstreamsTable", () => {
                 error_message: null,
                 response_body: "event: response.completed",
                 probe_url: "https://api.openai.com/v1/responses",
-                model: "gpt-5.1",
+                model: "gpt-5.4-mini",
                 checked_at: new Date().toISOString(),
               },
             ],
