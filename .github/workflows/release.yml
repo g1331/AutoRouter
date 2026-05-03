@@ -175,11 +175,17 @@ jobs:
             CLIFF_RANGE="${{ steps.notes_baseline.outputs.previous_tag }}..${GITHUB_REF_NAME}"
           fi
 
-          git-cliff \
-            --config cliff.toml \
-            --output generated-release-notes.md \
-            --github-repo "${{ github.repository }}" \
-            "${CLIFF_RANGE}"
+          CLIFF_ARGS=(
+            --config cliff.toml
+            --output generated-release-notes.md
+            --github-repo "${{ github.repository }}"
+          )
+
+          if [[ ! "${GITHUB_REF_NAME}" =~ - ]]; then
+            CLIFF_ARGS+=(--ignore-tags '.*-(alpha|beta)\.[0-9]+$')
+          fi
+
+          git-cliff "${CLIFF_ARGS[@]}" "${CLIFF_RANGE}"
 
       - name: Build release body and metadata
         shell: bash

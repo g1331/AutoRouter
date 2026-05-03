@@ -10,10 +10,13 @@ https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}
 {% if commits | length == 0 -%}
 No notable changes.
 {% else -%}
-{% for group, commits in commits | group_by(attribute="group") %}
+{% set ordered_groups = ["New Features", "Bug Fixes", "Security", "Performance", "Documentation", "Tests", "Maintenance", "Other Changes"] %}
+{% set grouped_commits = commits | group_by(attribute="group") %}
+{% for group in ordered_groups -%}
+{% if group in grouped_commits -%}
 ## {{ group }}
 
-{% for commit in commits -%}
+{% for commit in grouped_commits[group] -%}
 {% if commit.remote.pr_title -%}
 {%- set commit_message = commit.remote.pr_title -%}
 {%- else -%}
@@ -21,6 +24,7 @@ No notable changes.
 {%- endif -%}
 - {{ commit_message | split(pat="\n") | first | trim }}{% if commit.remote.pr_number %} ([#{{ commit.remote.pr_number }}]({{ self::remote_url() }}/pull/{{ commit.remote.pr_number }})){% endif %}
 {% endfor %}
+{% endif -%}
 {% endfor %}
 {% endif -%}
 
@@ -43,10 +47,10 @@ commit_parsers = [
   { message = "^feat", group = "New Features" },
   { message = "^fix", group = "Bug Fixes" },
   { message = "^security", group = "Security" },
-  { message = "^docs?", group = "Documentation" },
   { message = "^perf", group = "Performance" },
-  { message = "^refactor", group = "Maintenance" },
+  { message = "^docs?", group = "Documentation" },
   { message = "^test", group = "Tests" },
+  { message = "^refactor", group = "Maintenance" },
   { message = "^(ci|build|chore)", group = "Maintenance" },
   { message = ".*", group = "Other Changes" },
 ]
