@@ -76,6 +76,29 @@ function normalizeContentType(value) {
   return typeof value === "string" ? value.toLowerCase() : "";
 }
 
+const smokeFailureContext = {
+  phase: "initializing",
+  scenario: "startup",
+  detail: null,
+};
+
+function recordSmokeStep(phase, scenario, detail = null) {
+  smokeFailureContext.phase = phase;
+  smokeFailureContext.scenario = scenario;
+  smokeFailureContext.detail = detail;
+}
+
+function formatSmokeFailure() {
+  return [
+    "Proxy stability smoke checks failed.",
+    `Last phase: ${smokeFailureContext.phase}`,
+    `Last scenario: ${smokeFailureContext.scenario}`,
+    smokeFailureContext.detail ? `Last detail: ${smokeFailureContext.detail}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 async function readJsonResponse(response) {
   const contentType = normalizeContentType(response.headers.get("content-type"));
   const bodyText = await response.text();
@@ -497,13 +520,9 @@ async function sendProxyChatCompletion(baseUrl, apiKey, payload) {
   });
 }
 
-async function runSmokeChecks(baseUrl, mockPort, adminToken) {
+async function runSmokeChecks(baseUrl, mockPort, adminToken, resources) {
   const prefix = `ci-smoke-${Date.now()}`;
   const admin = createAdminClient(baseUrl, adminToken);
-  const resources = {
-    apiKeyIds: [],
-    upstreamIds: [],
-  };
 
   const registerUpstream = (upstream) => {
     resources.upstreamIds.unshift(upstream.id);
@@ -514,165 +533,179 @@ async function runSmokeChecks(baseUrl, mockPort, adminToken) {
     return apiKey;
   };
 
-  try {
-    const stableUpstream = registerUpstream(
-      await admin.createUpstream({
-        name: `${prefix}-stable`,
-        base_url: `http://${LOCALHOST}:${mockPort}/stable/v1`,
-        api_key: "smoke-upstream-stable",
-        timeout: 2,
-        weight: 1,
-        priority: 0,
-        route_capabilities: ["openai_chat_compatible"],
-      })
-    );
+  recordSmokeStep("resource setup", "create stable upstream");
+  const stableUpstream = registerUpstream(
+    await admin.createUpstream({
+      name: `${prefix}-stable`,
+      base_url: `http://${LOCALHOST}:${mockPort}/stable/v1`,
+      api_key: "smoke-upstream-stable",
+      timeout: 2,
+      weight: 1,
+      priority: 0,
+      route_capabilities: ["openai_chat_compatible"],
+    })
+  );
 
-    const failUpstream = registerUpstream(
-      await admin.createUpstream({
-        name: `${prefix}-fail`,
-        base_url: `http://${LOCALHOST}:${mockPort}/fail/v1`,
-        api_key: "smoke-upstream-fail",
-        timeout: 2,
-        weight: 1,
-        priority: 0,
-        route_capabilities: ["openai_chat_compatible"],
-      })
-    );
+  recordSmokeStep("resource setup", "create failing upstream");
+  const failUpstream = registerUpstream(
+    await admin.createUpstream({
+      name: `${prefix}-fail`,
+      base_url: `http://${LOCALHOST}:${mockPort}/fail/v1`,
+      api_key: "smoke-upstream-fail",
+      timeout: 2,
+      weight: 1,
+      priority: 0,
+      route_capabilities: ["openai_chat_compatible"],
+    })
+  );
 
-    const fallbackUpstream = registerUpstream(
-      await admin.createUpstream({
-        name: `${prefix}-fallback`,
-        base_url: `http://${LOCALHOST}:${mockPort}/fallback/v1`,
-        api_key: "smoke-upstream-fallback",
-        timeout: 2,
-        weight: 1,
-        priority: 1,
-        route_capabilities: ["openai_chat_compatible"],
-      })
-    );
+  recordSmokeStep("resource setup", "create fallback upstream");
+  const fallbackUpstream = registerUpstream(
+    await admin.createUpstream({
+      name: `${prefix}-fallback`,
+      base_url: `http://${LOCALHOST}:${mockPort}/fallback/v1`,
+      api_key: "smoke-upstream-fallback",
+      timeout: 2,
+      weight: 1,
+      priority: 1,
+      route_capabilities: ["openai_chat_compatible"],
+    })
+  );
 
-    const timeoutUpstream = registerUpstream(
-      await admin.createUpstream({
-        name: `${prefix}-timeout`,
-        base_url: `http://${LOCALHOST}:${mockPort}/timeout/v1`,
-        api_key: "smoke-upstream-timeout",
-        timeout: 1,
-        weight: 1,
-        priority: 0,
-        route_capabilities: ["openai_chat_compatible"],
-      })
-    );
+  recordSmokeStep("resource setup", "create timeout upstream");
+  const timeoutUpstream = registerUpstream(
+    await admin.createUpstream({
+      name: `${prefix}-timeout`,
+      base_url: `http://${LOCALHOST}:${mockPort}/timeout/v1`,
+      api_key: "smoke-upstream-timeout",
+      timeout: 1,
+      weight: 1,
+      priority: 0,
+      route_capabilities: ["openai_chat_compatible"],
+    })
+  );
 
-    const stableKey = registerApiKey(
-      await admin.createApiKey({
-        name: `${prefix}-stable-key`,
-        access_mode: "restricted",
-        upstream_ids: [stableUpstream.id],
-      })
-    );
+  recordSmokeStep("resource setup", "create stable API key");
+  const stableKey = registerApiKey(
+    await admin.createApiKey({
+      name: `${prefix}-stable-key`,
+      access_mode: "restricted",
+      upstream_ids: [stableUpstream.id],
+    })
+  );
 
-    const failoverKey = registerApiKey(
-      await admin.createApiKey({
-        name: `${prefix}-failover-key`,
-        access_mode: "restricted",
-        upstream_ids: [failUpstream.id, fallbackUpstream.id],
-      })
-    );
+  recordSmokeStep("resource setup", "create failover API key");
+  const failoverKey = registerApiKey(
+    await admin.createApiKey({
+      name: `${prefix}-failover-key`,
+      access_mode: "restricted",
+      upstream_ids: [failUpstream.id, fallbackUpstream.id],
+    })
+  );
 
-    const timeoutKey = registerApiKey(
-      await admin.createApiKey({
-        name: `${prefix}-timeout-key`,
-        access_mode: "restricted",
-        upstream_ids: [timeoutUpstream.id],
-      })
-    );
+  recordSmokeStep("resource setup", "create timeout API key");
+  const timeoutKey = registerApiKey(
+    await admin.createApiKey({
+      name: `${prefix}-timeout-key`,
+      access_mode: "restricted",
+      upstream_ids: [timeoutUpstream.id],
+    })
+  );
 
-    const stableResponse = await sendProxyChatCompletion(baseUrl, stableKey.key_value, {
-      model: SMOKE_MODEL,
-      messages: [{ role: "user", content: "return stable completion" }],
-    });
-    assert(stableResponse.status === 200, `Stable proxy request returned ${stableResponse.status}`);
-    const stableBody = await readJsonResponse(stableResponse);
-    assert(
-      stableBody?.choices?.[0]?.message?.content === "stable completion ok",
-      "Stable proxy response body mismatch"
-    );
+  recordSmokeStep("proxy request", "stable completion");
+  const stableResponse = await sendProxyChatCompletion(baseUrl, stableKey.key_value, {
+    model: SMOKE_MODEL,
+    messages: [{ role: "user", content: "return stable completion" }],
+  });
+  recordSmokeStep("response validation", "stable completion", `status ${stableResponse.status}`);
+  assert(stableResponse.status === 200, `Stable proxy request returned ${stableResponse.status}`);
+  const stableBody = await readJsonResponse(stableResponse);
+  assert(
+    stableBody?.choices?.[0]?.message?.content === "stable completion ok",
+    "Stable proxy response body mismatch"
+  );
 
-    const streamResponse = await sendProxyChatCompletion(baseUrl, stableKey.key_value, {
-      model: SMOKE_MODEL,
-      stream: true,
-      messages: [{ role: "user", content: "return stable stream" }],
-    });
-    assert(streamResponse.status === 200, `Stream proxy request returned ${streamResponse.status}`);
-    assert(
-      normalizeContentType(streamResponse.headers.get("content-type")).includes(
-        "text/event-stream"
-      ),
-      "Stream proxy response did not expose SSE content type"
-    );
-    const streamText = await streamResponse.text();
-    assert(streamText.includes("stable stream ok"), "Stream proxy response body mismatch");
-    assert(streamText.includes("[DONE]"), "Stream proxy response did not contain [DONE]");
+  recordSmokeStep("proxy request", "stable stream");
+  const streamResponse = await sendProxyChatCompletion(baseUrl, stableKey.key_value, {
+    model: SMOKE_MODEL,
+    stream: true,
+    messages: [{ role: "user", content: "return stable stream" }],
+  });
+  recordSmokeStep("response validation", "stable stream", `status ${streamResponse.status}`);
+  assert(streamResponse.status === 200, `Stream proxy request returned ${streamResponse.status}`);
+  assert(
+    normalizeContentType(streamResponse.headers.get("content-type")).includes("text/event-stream"),
+    "Stream proxy response did not expose SSE content type"
+  );
+  const streamText = await streamResponse.text();
+  assert(streamText.includes("stable stream ok"), "Stream proxy response body mismatch");
+  assert(streamText.includes("[DONE]"), "Stream proxy response did not contain [DONE]");
 
-    const failoverResponse = await sendProxyChatCompletion(baseUrl, failoverKey.key_value, {
-      model: SMOKE_MODEL,
-      messages: [{ role: "user", content: "force failover" }],
-    });
-    assert(
-      failoverResponse.status === 200,
-      `Failover proxy request returned ${failoverResponse.status}`
-    );
-    const failoverBody = await readJsonResponse(failoverResponse);
-    assert(
-      failoverBody?.choices?.[0]?.message?.content === "fallback completion ok",
-      "Failover proxy response did not use fallback upstream"
-    );
+  recordSmokeStep("proxy request", "failover completion");
+  const failoverResponse = await sendProxyChatCompletion(baseUrl, failoverKey.key_value, {
+    model: SMOKE_MODEL,
+    messages: [{ role: "user", content: "force failover" }],
+  });
+  recordSmokeStep(
+    "response validation",
+    "failover completion",
+    `status ${failoverResponse.status}`
+  );
+  assert(
+    failoverResponse.status === 200,
+    `Failover proxy request returned ${failoverResponse.status}`
+  );
+  const failoverBody = await readJsonResponse(failoverResponse);
+  assert(
+    failoverBody?.choices?.[0]?.message?.content === "fallback completion ok",
+    "Failover proxy response did not use fallback upstream"
+  );
 
-    const concurrentResults = await Promise.all(
-      Array.from({ length: 5 }, (_, index) =>
-        sendProxyChatCompletion(baseUrl, stableKey.key_value, {
-          model: SMOKE_MODEL,
-          messages: [{ role: "user", content: `repeat stable request ${index}` }],
-        }).then(async (response) => ({
-          status: response.status,
-          body: await readJsonResponse(response),
-        }))
-      )
-    );
-    assert(
-      concurrentResults.every((result) => result.status === 200),
-      "At least one repeated stable proxy request failed"
-    );
-    assert(
-      concurrentResults.every(
-        (result) => result.body?.choices?.[0]?.message?.content === "stable completion ok"
-      ),
-      "Repeated stable proxy response body mismatch"
-    );
+  recordSmokeStep("proxy request", "concurrent stable completions");
+  const concurrentResults = await Promise.all(
+    Array.from({ length: 5 }, (_, index) =>
+      sendProxyChatCompletion(baseUrl, stableKey.key_value, {
+        model: SMOKE_MODEL,
+        messages: [{ role: "user", content: `repeat stable request ${index}` }],
+      }).then(async (response) => ({
+        status: response.status,
+        body: await readJsonResponse(response),
+      }))
+    )
+  );
+  recordSmokeStep("response validation", "concurrent stable completions");
+  assert(
+    concurrentResults.every((result) => result.status === 200),
+    "At least one repeated stable proxy request failed"
+  );
+  assert(
+    concurrentResults.every(
+      (result) => result.body?.choices?.[0]?.message?.content === "stable completion ok"
+    ),
+    "Repeated stable proxy response body mismatch"
+  );
 
-    const timeoutResponse = await sendProxyChatCompletion(baseUrl, timeoutKey.key_value, {
-      model: SMOKE_MODEL,
-      messages: [{ role: "user", content: "force timeout" }],
-    });
-    assert(
-      timeoutResponse.status === 503,
-      `Timeout proxy request returned ${timeoutResponse.status}, expected 503`
-    );
-    const timeoutBody = await readJsonResponse(timeoutResponse);
-    assert(
-      timeoutBody?.error?.code === "ALL_UPSTREAMS_UNAVAILABLE",
-      "Timeout proxy response did not return the expected unified error code"
-    );
-    assert(
-      timeoutBody?.error?.did_send_upstream === true,
-      "Timeout proxy response should record that an upstream request was attempted"
-    );
+  recordSmokeStep("proxy request", "timeout completion");
+  const timeoutResponse = await sendProxyChatCompletion(baseUrl, timeoutKey.key_value, {
+    model: SMOKE_MODEL,
+    messages: [{ role: "user", content: "force timeout" }],
+  });
+  recordSmokeStep("response validation", "timeout completion", `status ${timeoutResponse.status}`);
+  assert(
+    timeoutResponse.status === 503,
+    `Timeout proxy request returned ${timeoutResponse.status}, expected 503`
+  );
+  const timeoutBody = await readJsonResponse(timeoutResponse);
+  assert(
+    timeoutBody?.error?.code === "ALL_UPSTREAMS_UNAVAILABLE",
+    "Timeout proxy response did not return the expected unified error code"
+  );
+  assert(
+    timeoutBody?.error?.did_send_upstream === true,
+    "Timeout proxy response should record that an upstream request was attempted"
+  );
 
-    return resources;
-  } catch (error) {
-    error.resources = resources;
-    throw error;
-  }
+  return resources;
 }
 
 async function cleanupSmokeResources(baseUrl, adminToken, resources) {
@@ -696,10 +729,12 @@ async function cleanupSmokeResources(baseUrl, adminToken, resources) {
 }
 
 async function main() {
+  recordSmokeStep("startup", "read environment");
   const baseUrlFromEnv = process.env.AUTOROUTER_BASE_URL?.trim() || null;
   const manageServer = !baseUrlFromEnv;
   const adminToken = process.env.AUTOROUTER_ADMIN_TOKEN?.trim() || "ci-admin-token";
 
+  recordSmokeStep("startup", "start mock upstream");
   const mockPort = await getFreePort();
   const mockServer = createMockUpstreamServer();
   await mockServer.start(mockPort);
@@ -710,28 +745,35 @@ async function main() {
 
   try {
     if (manageServer) {
+      recordSmokeStep("startup", "start local AutoRouter");
       const appPort = await getFreePort();
       serverHandle = await startLocalAutorouter(adminToken, appPort);
       baseUrl = serverHandle.baseUrl;
     }
 
+    recordSmokeStep("startup", "validate AutoRouter base URL");
     assert(baseUrl, "AutoRouter base URL is required");
-    resources = await runSmokeChecks(baseUrl, mockPort, adminToken);
+    resources = await runSmokeChecks(baseUrl, mockPort, adminToken, resources);
 
+    recordSmokeStep("mock verification", "stable upstream request count");
     const { requests } = mockServer;
     assert(requests.stable.length >= 7, "Stable upstream did not receive the expected requests");
+    recordSmokeStep("mock verification", "stable upstream authorization rewrite");
     assert(
       requests.stable[0]?.authorization === "Bearer smoke-upstream-stable",
       "Stable upstream auth header was not rewritten to the upstream credential"
     );
+    recordSmokeStep("mock verification", "failover source request count");
     assert(
       requests.fail.length === 1,
       "Failover scenario did not hit the failing upstream exactly once"
     );
+    recordSmokeStep("mock verification", "failover fallback request count");
     assert(
       requests.fallback.length === 1,
       "Failover scenario did not reach the fallback upstream exactly once"
     );
+    recordSmokeStep("mock verification", "timeout upstream request count");
     assert(requests.timeout.length === 1, "Timeout scenario did not hit the timeout upstream");
 
     console.log("Proxy stability smoke checks passed.");
@@ -748,7 +790,7 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.stack || error.message : String(error));
+main().catch(() => {
+  console.error(formatSmokeFailure());
   process.exit(1);
 });
