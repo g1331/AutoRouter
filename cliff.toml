@@ -38,6 +38,8 @@ tag_pattern = "v[0-9].*"
 sort_commits = "oldest"
 
 commit_parsers = [
+  { message = "^Merge pull request", skip = true },
+  { message = "^Merge branch", skip = true },
   { message = "^feat", group = "New Features" },
   { message = "^fix", group = "Bug Fixes" },
   { message = "^security", group = "Security" },
