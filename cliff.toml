@@ -1,0 +1,50 @@
+# git-cliff configuration for GitHub Release notes.
+# https://git-cliff.org/docs/configuration
+
+[changelog]
+body = """
+{%- macro remote_url() -%}
+https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}
+{%- endmacro -%}
+
+{% if commits | length == 0 -%}
+No notable changes.
+{% else -%}
+{% for group, commits in commits | group_by(attribute="group") %}
+## {{ group }}
+
+{% for commit in commits -%}
+{% if commit.remote.pr_title -%}
+{%- set commit_message = commit.remote.pr_title -%}
+{%- else -%}
+{%- set commit_message = commit.message -%}
+{%- endif -%}
+- {{ commit_message | split(pat="\n") | first | trim }}{% if commit.remote.pr_number %} ([#{{ commit.remote.pr_number }}]({{ self::remote_url() }}/pull/{{ commit.remote.pr_number }})){% endif %}
+{% endfor %}
+{% endfor %}
+{% endif -%}
+
+"""
+trim = true
+postprocessors = [
+  { pattern = "(?m)^- (feat|fix|docs?|security|perf|refactor|test|ci|build|chore)(\\([^)]+\\))?!?:\\s*", replace = "- " },
+]
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+filter_commits = false
+tag_pattern = "v[0-9].*"
+sort_commits = "oldest"
+
+commit_parsers = [
+  { message = "^feat", group = "New Features" },
+  { message = "^fix", group = "Bug Fixes" },
+  { message = "^security", group = "Security" },
+  { message = "^docs?", group = "Documentation" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Maintenance" },
+  { message = "^test", group = "Tests" },
+  { message = "^(ci|build|chore)", group = "Maintenance" },
+  { message = ".*", group = "Other Changes" },
+]

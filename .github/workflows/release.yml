@@ -158,25 +158,28 @@ jobs:
             fi
           } >> "${GITHUB_OUTPUT}"
 
+      - name: Install git-cliff
+        uses: taiki-e/install-action@v2
+        with:
+          tool: git-cliff
+
       - name: Generate release notes
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          NOTES_ARGS=(
-            -f tag_name="${GITHUB_REF_NAME}"
-            -f target_commitish="${{ steps.validate.outputs.release_commit }}"
-          )
+          CLIFF_RANGE="${GITHUB_REF_NAME}"
 
           if [ -n "${{ steps.notes_baseline.outputs.previous_tag }}" ]; then
-            NOTES_ARGS+=(-f previous_tag_name="${{ steps.notes_baseline.outputs.previous_tag }}")
+            CLIFF_RANGE="${{ steps.notes_baseline.outputs.previous_tag }}..${GITHUB_REF_NAME}"
           fi
 
-          gh api \
-            "repos/${{ github.repository }}/releases/generate-notes" \
-            "${NOTES_ARGS[@]}" \
-            --jq .body > generated-release-notes.md
+          git-cliff \
+            --config cliff.toml \
+            --output generated-release-notes.md \
+            --github-repo "${{ github.repository }}" \
+            "${CLIFF_RANGE}"
 
       - name: Build release body and metadata
         shell: bash
@@ -198,6 +201,14 @@ jobs:
 
           EOF
           cat generated-release-notes.md >> release-body.md
+          if [ -n "${{ steps.notes_baseline.outputs.previous_tag }}" ]; then
+            cat >> release-body.md <<EOF
+
+          ## Changelog
+
+          Full Changelog: ${{ github.server_url }}/${{ github.repository }}/compare/${{ steps.notes_baseline.outputs.compare_range }}
+          EOF
+          fi
 
           cat > release-metadata.json <<EOF
           {
