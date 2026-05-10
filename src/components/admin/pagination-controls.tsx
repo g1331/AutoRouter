@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, type ReactNode, useEffect, useState } from "react";
+import { type FormEvent, type ReactNode, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -21,6 +21,11 @@ function clampPage(value: number, totalPages: number) {
   return Math.min(Math.max(Math.trunc(value), 1), totalPages);
 }
 
+interface PageDraftState {
+  page: number;
+  value: string;
+}
+
 export function PaginationControls({
   total,
   page,
@@ -31,11 +36,20 @@ export function PaginationControls({
 }: PaginationControlsProps) {
   const tCommon = useTranslations("common");
   const currentPage = clampPage(page, totalPages);
-  const [pageDraft, setPageDraft] = useState(String(currentPage));
+  const [pageDraftState, setPageDraftState] = useState<PageDraftState>(() => ({
+    page: currentPage,
+    value: String(currentPage),
+  }));
 
-  useEffect(() => {
-    setPageDraft(String(currentPage));
-  }, [currentPage]);
+  if (pageDraftState.page !== currentPage) {
+    setPageDraftState({ page: currentPage, value: String(currentPage) });
+  }
+
+  const pageDraft =
+    pageDraftState.page === currentPage ? pageDraftState.value : String(currentPage);
+  const setPageDraft = (value: string) => {
+    setPageDraftState({ page: currentPage, value });
+  };
 
   const parsedDraft = Number(pageDraft);
   const canSubmit = Number.isFinite(parsedDraft) && pageDraft.trim() !== "";
