@@ -20,13 +20,13 @@ const INVALIDATE_DEBOUNCE_MS = 250;
 export function useRequestLogLive(options?: UseRequestLogLiveOptions): UseRequestLogLiveResult {
   const { token } = useAuth();
   const queryClient = useQueryClient();
+  const liveEnabled = Boolean(options?.enabled && token);
   const [connectionState, setConnectionState] = useState<LiveConnectionState>("connecting");
   const reconnectTimerRef = useRef<number | null>(null);
   const invalidateTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!options?.enabled || !token) {
-      setConnectionState("fallback");
+    if (!liveEnabled || !token) {
       return;
     }
 
@@ -139,13 +139,16 @@ export function useRequestLogLive(options?: UseRequestLogLiveOptions): UseReques
       abortController?.abort();
       clearTimers();
     };
-  }, [options?.enabled, queryClient, token]);
+  }, [liveEnabled, queryClient, token]);
+
+  const effectiveConnectionState = liveEnabled ? connectionState : "fallback";
 
   return useMemo(
     () => ({
-      connectionState,
-      fallbackRefetchIntervalMs: connectionState === "live" ? false : FALLBACK_REFETCH_INTERVAL_MS,
+      connectionState: effectiveConnectionState,
+      fallbackRefetchIntervalMs:
+        effectiveConnectionState === "live" ? false : FALLBACK_REFETCH_INTERVAL_MS,
     }),
-    [connectionState]
+    [effectiveConnectionState]
   );
 }
