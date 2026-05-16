@@ -692,6 +692,9 @@ export async function selectFromUpstreamCandidates(
   );
 }
 
+/**
+ * Decides whether a queued request can resume on its bound upstream.
+ */
 export async function decideQueuedUpstreamResume(
   boundUpstreamId: string,
   candidateUpstreamIds: string[],
@@ -746,6 +749,9 @@ export async function decideQueuedUpstreamResume(
   };
 }
 
+/**
+ * Selects another candidate after a queued upstream can no longer be used.
+ */
 export async function reselectQueuedUpstreamOnce(
   boundUpstreamId: string,
   candidateUpstreamIds: string[],

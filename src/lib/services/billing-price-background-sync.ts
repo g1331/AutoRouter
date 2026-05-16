@@ -11,6 +11,9 @@ export const BILLING_PRICE_CATALOG_SYNC_TASK_NAME = "billing_price_catalog_sync"
 const DEFAULT_BILLING_PRICE_SYNC_INTERVAL_SECONDS = 86_400;
 const DEFAULT_BACKGROUND_SYNC_STARTUP_DELAY_SECONDS = 60;
 
+/**
+ * Converts a billing price sync summary into a background task result.
+ */
 export function toBillingPriceCatalogSyncTaskResult(
   summary: BillingSyncSummary
 ): BackgroundSyncTaskRunResult {
@@ -22,11 +25,17 @@ export function toBillingPriceCatalogSyncTaskResult(
   };
 }
 
+/**
+ * Runs the billing price catalog background sync task.
+ */
 export async function runBillingPriceCatalogSyncTask(): Promise<BackgroundSyncTaskRunResult> {
   const summary = await syncBillingModelPrices();
   return toBillingPriceCatalogSyncTaskResult(summary);
 }
 
+/**
+ * Creates the billing price catalog sync task definition.
+ */
 export function createBillingPriceCatalogSyncTaskDefinition(): BackgroundSyncTaskDefinition {
   return {
     taskName: BILLING_PRICE_CATALOG_SYNC_TASK_NAME,

@@ -30,6 +30,9 @@ const updateFailureRuleSchema = z.object({
   match: failureRuleMatchSchema.optional(),
 });
 
+/**
+ * Updates a global or upstream-local failure rule.
+ */
 export async function PUT(request: NextRequest, context: RouteContext): Promise<Response> {
   const authHeader = request.headers.get("authorization");
   if (!validateAdminAuth(authHeader)) {
@@ -65,6 +68,9 @@ export async function PUT(request: NextRequest, context: RouteContext): Promise<
   }
 }
 
+/**
+ * Deletes a global or upstream-local failure rule.
+ */
 export async function DELETE(request: NextRequest, context: RouteContext): Promise<Response> {
   const authHeader = request.headers.get("authorization");
   if (!validateAdminAuth(authHeader)) {

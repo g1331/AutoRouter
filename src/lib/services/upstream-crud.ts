@@ -826,6 +826,9 @@ export async function getUpstreamById(upstreamId: string): Promise<UpstreamRespo
   );
 }
 
+/**
+ * Refreshes and persists the cached model catalog for an upstream.
+ */
 export async function refreshUpstreamCatalog(upstreamId: string): Promise<UpstreamResponse> {
   const existing = await db.query.upstreams.findFirst({
     where: eq(upstreams.id, upstreamId),
@@ -884,6 +887,9 @@ export async function previewUpstreamCatalog(
   });
 }
 
+/**
+ * Imports selected cached catalog models into an upstream's model rules.
+ */
 export async function importUpstreamCatalogModels(
   upstreamId: string,
   selectedModels: string[]

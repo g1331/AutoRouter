@@ -183,6 +183,9 @@ function resolveAliasTarget(
   return currentModel;
 }
 
+/**
+ * Normalizes upstream model rules and legacy model allowlists.
+ */
 export function normalizeUpstreamModelRules(
   input: UpstreamModelRuleSetInput
 ): UpstreamModelRule[] | null {
@@ -226,6 +229,9 @@ export function normalizeUpstreamModelRules(
   return [...deduped.values()];
 }
 
+/**
+ * Derives legacy allowed model values from exact model rules.
+ */
 export function deriveAllowedModelsFromRules(
   modelRules: UpstreamModelRule[] | null | undefined
 ): string[] | null {
@@ -236,6 +242,9 @@ export function deriveAllowedModelsFromRules(
   return exactRules.length > 0 ? exactRules : null;
 }
 
+/**
+ * Derives legacy model redirects from alias model rules.
+ */
 export function deriveModelRedirectsFromRules(
   modelRules: UpstreamModelRule[] | null | undefined
 ): Record<string, string> | null {
@@ -248,10 +257,16 @@ export function deriveModelRedirectsFromRules(
   return Object.keys(redirects).length > 0 ? redirects : null;
 }
 
+/**
+ * Checks whether an upstream has explicit model rules.
+ */
 export function hasExplicitModelRules(modelRules: UpstreamModelRule[] | null | undefined): boolean {
   return Boolean(modelRules && modelRules.length > 0);
 }
 
+/**
+ * Validates model rule values before persistence.
+ */
 export function validateUpstreamModelRules(
   modelRules: UpstreamModelRule[] | null | undefined
 ): string[] {
@@ -291,6 +306,9 @@ export function validateUpstreamModelRules(
   return [...new Set(errors)];
 }
 
+/**
+ * Resolves a model through alias rules when applicable.
+ */
 export function resolveModelWithRedirects(
   model: string,
   modelRules: UpstreamModelRule[] | null | undefined
@@ -302,6 +320,9 @@ export function resolveModelWithRedirects(
   };
 }
 
+/**
+ * Matches a requested model against upstream model rules.
+ */
 export function matchUpstreamModelRules(
   model: string,
   modelRules: UpstreamModelRule[] | null | undefined
@@ -374,6 +395,9 @@ export function matchUpstreamModelRules(
   };
 }
 
+/**
+ * Converts selected catalog entries into exact model rules.
+ */
 export function importCatalogEntriesToModelRules(
   input: ImportCatalogRulesInput
 ): UpstreamModelRule[] {

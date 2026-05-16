@@ -43,6 +43,9 @@ export interface MatchedFailureRule {
   scope: "global" | "upstream";
 }
 
+/**
+ * Error raised when a failure rule cannot be saved or evaluated.
+ */
 export class InvalidFailureRuleError extends Error {
   constructor(message: string) {
     super(message);
@@ -154,6 +157,9 @@ function ruleMatchesEvidence(rule: UpstreamFailureRule, evidence: FailureEvidenc
   return hasMatchCondition(match);
 }
 
+/**
+ * Formats a stored failure rule for Admin API responses.
+ */
 export function formatFailureRule(rule: UpstreamFailureRule): {
   id: string;
   upstream_id: string | null;
@@ -189,6 +195,9 @@ export function formatFailureRule(rule: UpstreamFailureRule): {
   };
 }
 
+/**
+ * Parses Admin API failure-rule match fields into service fields.
+ */
 export function parseFailureRuleMatch(input: {
   status_codes?: number[] | null;
   error_types?: string[] | null;
@@ -205,6 +214,9 @@ export function parseFailureRuleMatch(input: {
   };
 }
 
+/**
+ * Lists global rules, local rules, or all failure rules by scope.
+ */
 export async function listFailureRules(upstreamId?: string | null): Promise<UpstreamFailureRule[]> {
   return db.query.upstreamFailureRules.findMany({
     where:
@@ -217,6 +229,9 @@ export async function listFailureRules(upstreamId?: string | null): Promise<Upst
   });
 }
 
+/**
+ * Creates a global or upstream-local failure rule.
+ */
 export async function createFailureRule(
   input: UpstreamFailureRuleInput
 ): Promise<UpstreamFailureRule> {
@@ -249,6 +264,9 @@ export async function createFailureRule(
   return created;
 }
 
+/**
+ * Updates an existing failure rule.
+ */
 export async function updateFailureRule(
   id: string,
   input: UpstreamFailureRuleUpdateInput
@@ -275,11 +293,17 @@ export async function updateFailureRule(
   return updated ?? null;
 }
 
+/**
+ * Deletes a failure rule by id.
+ */
 export async function deleteFailureRule(id: string): Promise<boolean> {
   const deleted = await db.delete(upstreamFailureRules).where(eq(upstreamFailureRules.id, id));
   return Array.isArray(deleted) ? deleted.length > 0 : true;
 }
 
+/**
+ * Finds the first enabled failure rule matching captured upstream evidence.
+ */
 export async function matchFailureRule(
   evidence: FailureEvidence
 ): Promise<MatchedFailureRule | null> {

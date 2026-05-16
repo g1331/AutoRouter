@@ -30,6 +30,9 @@ const createFailureRuleSchema = z.object({
   match: failureRuleMatchSchema,
 });
 
+/**
+ * Lists failure rules scoped to one upstream.
+ */
 export async function GET(request: NextRequest, context: RouteContext): Promise<Response> {
   const authHeader = request.headers.get("authorization");
   if (!validateAdminAuth(authHeader)) {
@@ -46,6 +49,9 @@ export async function GET(request: NextRequest, context: RouteContext): Promise<
   }
 }
 
+/**
+ * Creates a failure rule scoped to one upstream.
+ */
 export async function POST(request: NextRequest, context: RouteContext): Promise<Response> {
   const authHeader = request.headers.get("authorization");
   if (!validateAdminAuth(authHeader)) {

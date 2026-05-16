@@ -25,6 +25,9 @@ function maybeUnref(timer: ReturnType<typeof setTimeout>): void {
   }
 }
 
+/**
+ * Schedules and executes registered background synchronization tasks.
+ */
 export class BackgroundSyncScheduler {
   private readonly definitions = new Map<string, BackgroundSyncTaskDefinition>();
   private readonly taskStates = new Map<string, BackgroundSyncTaskState>();

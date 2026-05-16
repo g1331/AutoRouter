@@ -28,6 +28,9 @@ const createFailureRuleSchema = z.object({
   match: failureRuleMatchSchema,
 });
 
+/**
+ * Lists global upstream failure rules.
+ */
 export async function GET(request: NextRequest): Promise<Response> {
   const authHeader = request.headers.get("authorization");
   if (!validateAdminAuth(authHeader)) {
@@ -43,6 +46,9 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
 }
 
+/**
+ * Creates a global upstream failure rule.
+ */
 export async function POST(request: NextRequest): Promise<Response> {
   const authHeader = request.headers.get("authorization");
   if (!validateAdminAuth(authHeader)) {

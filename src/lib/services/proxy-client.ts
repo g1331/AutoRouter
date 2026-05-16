@@ -67,6 +67,9 @@ export interface HeaderDiff {
 
 type ProxyRequestErrorWithHeaderDiff = Error & { headerDiff?: HeaderDiff };
 
+/**
+ * Error raised when a streaming upstream does not emit usable content in time.
+ */
 export class FirstByteTimeoutError extends Error {
   constructor(public readonly timeoutMs: number) {
     super(`Upstream first byte timed out after ${Math.round(timeoutMs / 1000)}s`);
@@ -74,6 +77,9 @@ export class FirstByteTimeoutError extends Error {
   }
 }
 
+/**
+ * Error raised when an active upstream stream stops producing chunks.
+ */
 export class StreamIdleTimeoutError extends Error {
   constructor(public readonly timeoutMs: number) {
     super(`Upstream stream was idle for ${Math.round(timeoutMs / 1000)}s`);

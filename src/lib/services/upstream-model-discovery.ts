@@ -56,6 +56,9 @@ function stripTrailingModelsPath(pathname: string): string {
   return pathname || "/";
 }
 
+/**
+ * Normalizes a provider base URL into the API root used for model discovery.
+ */
 export function normalizeApiRoot(baseUrl: string): string {
   const url = new URL(baseUrl);
   url.hash = "";
@@ -90,6 +93,9 @@ function resolveCustomDiscoveryUrl(customEndpoint: string, apiRoot: string): URL
   return resolvedUrl;
 }
 
+/**
+ * Builds the HTTP request target for upstream model discovery.
+ */
 export function buildUpstreamModelDiscoveryRequest(
   input: RefreshUpstreamModelCatalogInput
 ): DiscoveryRequest {
@@ -271,6 +277,9 @@ async function fetchLiteLlmCatalog(timeoutMs: number): Promise<UpstreamModelCata
   return normalizeCatalogEntries(modelNames, "litellm");
 }
 
+/**
+ * Refreshes an upstream model catalog from its configured discovery source.
+ */
 export async function refreshUpstreamModelCatalog(
   input: RefreshUpstreamModelCatalogInput
 ): Promise<RefreshUpstreamModelCatalogResult> {

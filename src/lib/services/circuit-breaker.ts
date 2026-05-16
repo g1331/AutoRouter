@@ -81,6 +81,9 @@ function getEffectiveConfig(storedConfig: CircuitBreakerState["config"]): Circui
   };
 }
 
+/**
+ * Gets circuit breaker configuration after applying default values.
+ */
 export async function getEffectiveCircuitBreakerConfig(
   upstreamId: string
 ): Promise<CircuitBreakerConfig> {

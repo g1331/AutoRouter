@@ -17,6 +17,9 @@ const importCatalogSchema = z.object({
   models: z.array(z.string().trim().min(1)).min(1),
 });
 
+/**
+ * Imports selected cached catalog models into upstream model rules.
+ */
 export async function POST(request: NextRequest, context: RouteContext) {
   const authHeader = request.headers.get("authorization");
   if (!validateAdminAuth(authHeader)) {

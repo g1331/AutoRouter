@@ -166,7 +166,7 @@ export function useUpdateUpstreamFailureRule() {
 
   return useMutation({
     mutationFn: ({
-      upstreamId,
+      upstreamId: _upstreamId,
       ruleId,
       data,
     }: {
@@ -187,7 +187,7 @@ export function useDeleteUpstreamFailureRule() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ upstreamId, ruleId }: { upstreamId: string; ruleId: string }) =>
+    mutationFn: ({ upstreamId: _upstreamId, ruleId }: { upstreamId: string; ruleId: string }) =>
       apiClient.delete<{ success: boolean }>(`/admin/upstream-failure-rules/${ruleId}`),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
