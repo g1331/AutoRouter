@@ -84,8 +84,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   useCreateUpstream,
   useExecuteUpstreamProbe,
-  useImportUpstreamCatalogModels,
-  useRefreshUpstreamCatalog,
+  usePreviewUpstreamCatalog,
   useUpstreamProbes,
   useUpdateUpstream,
 } from "@/hooks/use-upstreams";
@@ -101,6 +100,7 @@ import type {
   UpstreamModelRule,
   UpstreamModelRuleSource,
   UpstreamModelRuleType,
+  UpstreamCatalogPreviewResponse,
   UpstreamProbeClientProfile,
   UpstreamProbeResponse,
 } from "@/types/api";
@@ -508,6 +508,65 @@ function buildCatalogWorkspaceState(upstream?: Upstream | null): CatalogWorkspac
     modelCatalogLastError: upstream?.model_catalog_last_error ?? null,
     modelCatalogLastFailedAt: upstream?.model_catalog_last_failed_at ?? null,
   };
+}
+
+function applyCatalogPreviewToUpstream(
+  upstream: Upstream,
+  preview: UpstreamCatalogPreviewResponse
+): Upstream {
+  return {
+    ...upstream,
+    model_discovery: preview.model_discovery,
+    model_catalog: preview.model_catalog,
+    model_catalog_updated_at: preview.model_catalog_updated_at,
+    model_catalog_last_status: preview.model_catalog_last_status,
+    model_catalog_last_error: preview.model_catalog_last_error,
+    model_catalog_last_failed_at: preview.model_catalog_last_failed_at,
+  };
+}
+
+function areCatalogWorkspaceStatesEqual(
+  left: CatalogWorkspaceState,
+  right: CatalogWorkspaceState
+): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function importCatalogModelsIntoRules(
+  catalog: UpstreamModelCatalogEntry[],
+  selectedModels: string[],
+  currentRules: UpstreamFormValues["model_rules"]
+): UpstreamFormValues["model_rules"] {
+  const catalogByModel = new Map(catalog.map((entry) => [entry.model, entry]));
+  const nextRules = [...currentRules];
+
+  for (const model of selectedModels) {
+    const catalogEntry = catalogByModel.get(model);
+    if (!catalogEntry) {
+      continue;
+    }
+
+    const importedRule: UpstreamFormValues["model_rules"][number] = {
+      type: "exact",
+      value: catalogEntry.model,
+      target_model: null,
+      source: catalogEntry.source,
+      display_label: null,
+    };
+    const alreadyPresent = nextRules.some(
+      (rule) =>
+        rule.type === importedRule.type &&
+        rule.value === importedRule.value &&
+        (rule.target_model ?? null) === importedRule.target_model &&
+        rule.source === importedRule.source
+    );
+
+    if (!alreadyPresent) {
+      nextRules.push(importedRule);
+    }
+  }
+
+  return nextRules;
 }
 
 function buildUpstreamFormDefaults(upstream?: Upstream | null): UpstreamFormValues {
@@ -981,8 +1040,7 @@ export function UpstreamFormDialog({
   const isEdit = !!upstream;
   const activeSchema = isEdit ? editUpstreamFormSchema : createUpstreamFormSchema;
   const createMutation = useCreateUpstream();
-  const refreshCatalogMutation = useRefreshUpstreamCatalog();
-  const importCatalogMutation = useImportUpstreamCatalogModels();
+  const previewCatalogMutation = usePreviewUpstreamCatalog();
   const updateMutation = useUpdateUpstream();
   const executeProbeMutation = useExecuteUpstreamProbe();
   const resetExecuteProbeMutation = executeProbeMutation.reset;
@@ -1105,6 +1163,16 @@ export function UpstreamFormDialog({
   const catalogState = useMemo(
     () => buildCatalogWorkspaceState(workspaceUpstream ?? upstream),
     [upstream, workspaceUpstream]
+  );
+  const catalogWorkspaceDirty = useMemo(
+    () =>
+      isEdit &&
+      !!upstream &&
+      !areCatalogWorkspaceStatesEqual(
+        buildCatalogWorkspaceState(upstream),
+        buildCatalogWorkspaceState(workspaceUpstream ?? upstream)
+      ),
+    [isEdit, upstream, workspaceUpstream]
   );
   const configSections = useMemo<ConfigSectionEntry[]>(
     () => [
@@ -1337,7 +1405,10 @@ export function UpstreamFormDialog({
     const currentValues = normalizeUpstreamFormValuesForDirtyCheck(form.getValues());
     const normalizedDefaultValues = normalizeUpstreamFormValuesForDirtyCheck(defaultValues);
 
-    return JSON.stringify(currentValues) !== JSON.stringify(normalizedDefaultValues);
+    return (
+      catalogWorkspaceDirty ||
+      JSON.stringify(currentValues) !== JSON.stringify(normalizedDefaultValues)
+    );
   };
 
   const mutationProbe =
@@ -1570,13 +1641,29 @@ export function UpstreamFormDialog({
   };
 
   const handleRefreshCatalog = async () => {
-    if (!upstream || catalogRefreshDependencyDirty) {
+    if (!upstream) {
       return;
     }
 
     try {
-      const refreshedUpstream = await refreshCatalogMutation.mutateAsync(upstream.id);
-      syncWorkspaceFromRemoteUpstream(refreshedUpstream);
+      const preview = await previewCatalogMutation.mutateAsync({
+        id: upstream.id,
+        data: {
+          base_url: watchedBaseUrl ?? "",
+          ...(watchedApiKey?.trim() ? { api_key: watchedApiKey.trim() } : {}),
+          route_capabilities: watchedRouteCapabilities ?? [],
+          model_discovery: watchedModelDiscovery
+            ? toApiModelDiscoveryValue(watchedModelDiscovery)
+            : null,
+        },
+      });
+      setWorkspaceUpstream((current) =>
+        applyCatalogPreviewToUpstream(current ?? upstream, preview)
+      );
+      const refreshedModelSet = new Set((preview.model_catalog ?? []).map((entry) => entry.model));
+      setSelectedCatalogModels((current) =>
+        current.filter((model) => refreshedModelSet.has(model))
+      );
     } catch {
       // Refresh errors are surfaced by the mutation toast.
     }
@@ -1610,20 +1697,17 @@ export function UpstreamFormDialog({
   };
 
   const handleImportCatalog = async () => {
-    if (!upstream || selectedCatalogModels.length === 0) {
+    if (selectedCatalogModels.length === 0) {
       return;
     }
 
-    try {
-      const updatedUpstream = await importCatalogMutation.mutateAsync({
-        id: upstream.id,
-        models: selectedCatalogModels,
-      });
-      syncWorkspaceFromRemoteUpstream(updatedUpstream, { replaceRules: true });
-      setSelectedCatalogModels([]);
-    } catch {
-      // Import errors are surfaced by the mutation toast.
-    }
+    const nextRules = importCatalogModelsIntoRules(
+      catalogState.modelCatalog,
+      selectedCatalogModels,
+      form.getValues("model_rules")
+    );
+    replaceModelRules(nextRules);
+    setSelectedCatalogModels([]);
   };
 
   const onSubmit = async (values: UpstreamFormValues) => {
@@ -1659,6 +1743,11 @@ export function UpstreamFormDialog({
             | null;
           route_capabilities?: RouteCapability[] | null;
           model_discovery?: UpstreamModelDiscoveryConfig | null;
+          model_catalog?: UpstreamModelCatalogEntry[] | null;
+          model_catalog_updated_at?: string | null;
+          model_catalog_last_status?: UpstreamModelCatalogStatus | null;
+          model_catalog_last_error?: string | null;
+          model_catalog_last_failed_at?: string | null;
           model_rules?: UpstreamModelRule[] | null;
           circuit_breaker_config?: {
             failure_threshold?: number;
@@ -1697,6 +1786,13 @@ export function UpstreamFormDialog({
         }
         if (data.api_key) {
           updateData.api_key = data.api_key;
+        }
+        if (workspaceUpstream) {
+          updateData.model_catalog = workspaceUpstream.model_catalog;
+          updateData.model_catalog_updated_at = workspaceUpstream.model_catalog_updated_at;
+          updateData.model_catalog_last_status = workspaceUpstream.model_catalog_last_status;
+          updateData.model_catalog_last_error = workspaceUpstream.model_catalog_last_error;
+          updateData.model_catalog_last_failed_at = workspaceUpstream.model_catalog_last_failed_at;
         }
         await updateMutation.mutateAsync({
           id: upstream.id,
@@ -1844,8 +1940,8 @@ export function UpstreamFormDialog({
   const catalogUpdatedAtLabel = formatCatalogTimestamp(catalogState.modelCatalogUpdatedAt);
   const catalogFailedAtLabel = formatCatalogTimestamp(catalogState.modelCatalogLastFailedAt);
   const catalogHasEntries = catalogState.modelCatalog.length > 0;
-  const catalogIsRefreshing = refreshCatalogMutation.isPending;
-  const catalogRefreshBlocked = !isEdit || catalogRefreshDependencyDirty;
+  const catalogIsRefreshing = previewCatalogMutation.isPending;
+  const catalogRefreshBlocked = !isEdit || !watchedBaseUrl?.trim();
   const currentRuleCount = watchedModelRules?.length ?? 0;
   const selectedModelRuleIdSet = new Set(
     selectedModelRuleIds.filter((id) => modelRuleFields.some((field) => field.id === id))
@@ -3087,16 +3183,9 @@ export function UpstreamFormDialog({
                                       onClick={() => {
                                         void handleImportCatalog();
                                       }}
-                                      disabled={
-                                        importCatalogMutation.isPending ||
-                                        selectedCatalogModels.length === 0
-                                      }
+                                      disabled={selectedCatalogModels.length === 0}
                                     >
-                                      {importCatalogMutation.isPending ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <ArrowDownToLine className="h-4 w-4" />
-                                      )}
+                                      <ArrowDownToLine className="h-4 w-4" />
                                       {t("catalogImportScope", {
                                         count: selectedCatalogModels.length,
                                       })}

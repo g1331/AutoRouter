@@ -20,10 +20,12 @@ vi.mock("@/lib/utils/auth", () => ({
 
 const mockRefreshUpstreamCatalog = vi.fn();
 const mockImportUpstreamCatalogModels = vi.fn();
+const mockPreviewUpstreamCatalog = vi.fn();
 
 vi.mock("@/lib/services/upstream-service", () => ({
   refreshUpstreamCatalog: (...args: unknown[]) => mockRefreshUpstreamCatalog(...args),
   importUpstreamCatalogModels: (...args: unknown[]) => mockImportUpstreamCatalogModels(...args),
+  previewUpstreamCatalog: (...args: unknown[]) => mockPreviewUpstreamCatalog(...args),
   UpstreamNotFoundError: class UpstreamNotFoundError extends Error {},
 }));
 
@@ -149,5 +151,77 @@ describe("Admin Upstream Catalog API", () => {
       "gpt-4.1",
       "gpt-4.1-mini",
     ]);
+  });
+
+  it("should preview an upstream catalog without saving it", async () => {
+    const { POST } = await import("@/app/api/admin/upstreams/[id]/catalog/preview/route");
+    mockPreviewUpstreamCatalog.mockResolvedValueOnce({
+      modelDiscovery: {
+        mode: "openai_compatible",
+        customEndpoint: null,
+        enableLiteLlmFallback: false,
+        autoRefreshEnabled: false,
+      },
+      modelCatalog: [{ model: "codex-mini-latest", source: "native" }],
+      modelCatalogUpdatedAt: new Date("2026-05-14T12:00:00.000Z"),
+      modelCatalogLastStatus: "success",
+      modelCatalogLastError: null,
+      modelCatalogLastFailedAt: null,
+    });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/admin/upstreams/upstream-1/catalog/preview",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-admin-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          base_url: "https://gateway.example.com/codex/v1",
+          api_key: "sk-new-key",
+          route_capabilities: ["openai_chat_compatible"],
+          model_discovery: {
+            mode: "openai_compatible",
+            custom_endpoint: null,
+            enable_lite_llm_fallback: false,
+            auto_refresh_enabled: false,
+          },
+        }),
+      }
+    );
+
+    const response = await POST(request, {
+      params: Promise.resolve({ id: "upstream-1" }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data).toEqual({
+      model_discovery: {
+        mode: "openai_compatible",
+        custom_endpoint: null,
+        enable_lite_llm_fallback: false,
+        auto_refresh_enabled: false,
+      },
+      model_catalog: [{ model: "codex-mini-latest", source: "native" }],
+      model_catalog_updated_at: "2026-05-14T12:00:00.000Z",
+      model_catalog_last_status: "success",
+      model_catalog_last_error: null,
+      model_catalog_last_failed_at: null,
+    });
+    expect(mockPreviewUpstreamCatalog).toHaveBeenCalledWith("upstream-1", {
+      baseUrl: "https://gateway.example.com/codex/v1",
+      apiKey: "sk-new-key",
+      routeCapabilities: ["openai_chat_compatible"],
+      modelDiscovery: {
+        mode: "openai_compatible",
+        customEndpoint: null,
+        enableLiteLlmFallback: false,
+        autoRefreshEnabled: false,
+      },
+    });
+    expect(mockRefreshUpstreamCatalog).not.toHaveBeenCalled();
+    expect(mockImportUpstreamCatalogModels).not.toHaveBeenCalled();
   });
 });

@@ -763,7 +763,7 @@
     "catalogUpdatedAtLabel": "Updated {time}",
     "catalogNeverRefreshed": "Not refreshed yet",
     "catalogStatusBarHint": "Import only. Existing rules stay.",
-    "catalogSavedConfigHint": "Unsaved changes. Save before refresh.",
+    "catalogSavedConfigHint": "Refresh uses current form values and applies after save.",
     "refreshCatalog": "Refresh",
     "clearLiteLlmCatalogEntries": "Clear LiteLLM",
     "modelDiscoverySectionTitle": "Discovery",

@@ -579,6 +579,49 @@ describe("catalog mutations", () => {
       models: ["gpt-4.1", "gpt-4.1-mini"],
     });
   });
+
+  it("previews upstream catalog with unsaved form values", async () => {
+    const preview = {
+      model_discovery: {
+        mode: "openai_compatible",
+        custom_endpoint: null,
+        enable_lite_llm_fallback: false,
+        auto_refresh_enabled: false,
+      },
+      model_catalog: [{ model: "codex-mini-latest", source: "native" }],
+      model_catalog_updated_at: "2026-05-14T12:00:00.000Z",
+      model_catalog_last_status: "success",
+      model_catalog_last_error: null,
+      model_catalog_last_failed_at: null,
+    };
+    mockPost.mockResolvedValueOnce(preview);
+
+    const { usePreviewUpstreamCatalog } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => usePreviewUpstreamCatalog(), { wrapper });
+
+    result.current.mutate({
+      id: "upstream-1",
+      data: {
+        base_url: "https://gateway.example.com/codex/v1",
+        api_key: "sk-new-key",
+        route_capabilities: ["openai_chat_compatible"],
+        model_discovery: preview.model_discovery,
+      },
+    });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(mockPost).toHaveBeenCalledWith("/admin/upstreams/upstream-1/catalog/preview", {
+      base_url: "https://gateway.example.com/codex/v1",
+      api_key: "sk-new-key",
+      route_capabilities: ["openai_chat_compatible"],
+      model_discovery: preview.model_discovery,
+    });
+  });
 });
 
 describe("useToggleUpstreamActive", () => {
