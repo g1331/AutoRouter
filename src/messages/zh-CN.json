@@ -452,6 +452,13 @@
       "timed_out": "请求在等待队列中耗尽超时时间，流程在网关内结束。",
       "aborted": "请求仍在等待队列中时客户端已经断开连接。"
     },
+    "circuitBreakerRecorded": "计入熔断",
+    "circuitBreakerSkipped": "未计入熔断",
+    "matchedFailureRule": "{scope}规则：{name}",
+    "failureRuleScope": {
+      "global": "全局",
+      "upstream": "上游"
+    },
     "journeyRequestArrived": "请求进入网关",
     "journeySelectionBasis": "选择依据",
     "journeyCumulative": "累计至此",
@@ -898,6 +905,13 @@
     "openDurationDesc": "熔断状态持续时间，单位秒 (1-300)。例如：300=5分钟",
     "probeInterval": "探测间隔 (秒)",
     "probeIntervalDesc": "半开状态下的探测间隔，单位秒 (1-60)。例如：60=1分钟",
+    "firstByteTimeout": "首字超时 (秒)",
+    "firstByteTimeoutDesc": "等待首个有效流式内容的最长时间，超过后改试其他上游。",
+    "streamIdleTimeout": "流式空闲超时 (秒)",
+    "streamIdleTimeoutDesc": "开始输出后，上游流式分片之间允许的最长空闲时间。",
+    "failureRulesConfig": "失败规则",
+    "useGlobalFailureRules": "使用全局失败规则",
+    "useGlobalFailureRulesDesc": "此上游在记录熔断失败前应用全局忽略规则。",
     "affinityMigrationConfig": "会话亲和性迁移配置",
     "affinityMigrationEnabled": "启用迁移接收",
     "affinityMigrationEnabledDesc": "允许从低优先级上游迁移会话到此上游",

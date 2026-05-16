@@ -590,6 +590,8 @@ function RetryTimeline({
   const errorTypeIcon = (errorType: FailoverAttempt["error_type"]) => {
     switch (errorType) {
       case "timeout":
+      case "first_byte_timeout":
+      case "stream_idle_timeout":
         return <Clock className="w-3 h-3 text-status-warning" />;
       case "http_5xx":
         return <Zap className="w-3 h-3 text-status-error" />;
@@ -661,13 +663,34 @@ function RetryTimeline({
                   className={cn(
                     "tabular-nums",
                     attempt.error_type === "http_5xx" && "text-status-error",
-                    attempt.error_type === "timeout" && "text-status-warning",
+                    (attempt.error_type === "timeout" ||
+                      attempt.error_type === "first_byte_timeout" ||
+                      attempt.error_type === "stream_idle_timeout") &&
+                      "text-status-warning",
                     attempt.error_type === "http_429" && "text-orange-500",
                     attempt.error_type === "concurrency_full" && "text-status-warning"
                   )}
                 >
                   [{statusLabel}]
                 </span>
+                {typeof attempt.circuit_breaker_recorded === "boolean" ? (
+                  <Badge
+                    variant={attempt.circuit_breaker_recorded ? "warning" : "neutral"}
+                    className="px-1.5 py-0 text-[10px]"
+                  >
+                    {attempt.circuit_breaker_recorded
+                      ? t("circuitBreakerRecorded")
+                      : t("circuitBreakerSkipped")}
+                  </Badge>
+                ) : null}
+                {attempt.matched_failure_rule ? (
+                  <Badge variant="neutral" className="px-1.5 py-0 text-[10px]">
+                    {t("matchedFailureRule", {
+                      name: attempt.matched_failure_rule.name,
+                      scope: t("failureRuleScope." + attempt.matched_failure_rule.scope),
+                    })}
+                  </Badge>
+                ) : null}
                 <span className="text-muted-foreground">{t("retryFailoverTriggered")}</span>
               </div>
               {attempt.error_message && (

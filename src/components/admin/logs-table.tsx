@@ -2072,6 +2072,24 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
                           </Badge>
                         ) : null}
                         <span className="text-muted-foreground">[{attempt.error_type}]</span>
+                        {typeof attempt.circuit_breaker_recorded === "boolean" ? (
+                          <Badge
+                            variant={attempt.circuit_breaker_recorded ? "warning" : "neutral"}
+                            className="px-1.5 py-0 text-[10px]"
+                          >
+                            {attempt.circuit_breaker_recorded
+                              ? t("circuitBreakerRecorded")
+                              : t("circuitBreakerSkipped")}
+                          </Badge>
+                        ) : null}
+                        {attempt.matched_failure_rule ? (
+                          <Badge variant="neutral" className="px-1.5 py-0 text-[10px]">
+                            {t("matchedFailureRule", {
+                              name: attempt.matched_failure_rule.name,
+                              scope: t("failureRuleScope." + attempt.matched_failure_rule.scope),
+                            })}
+                          </Badge>
+                        ) : null}
                       </div>
                       {attempt.selection_reason
                         ? renderJourneyField({
