@@ -97,7 +97,7 @@ describe("db:migrate:sqlite", () => {
     });
 
     expect(firstRun.status).toBe(0);
-    expect(firstRun.stdout).toContain("Applied 10 migration(s)");
+    expect(firstRun.stdout).toContain("Applied 11 migration(s)");
 
     const migrations = await queryRows<{ hash: string }>(
       dbPath,
@@ -114,6 +114,7 @@ describe("db:migrate:sqlite", () => {
       "0007_rare_psynapse",
       "0008_cloudy_photon",
       "0009_numerous_night_thrasher",
+      "0010_confused_mister_fear",
     ]);
 
     const upstreamColumns = await queryRows<{ name: string }>(
@@ -123,6 +124,15 @@ describe("db:migrate:sqlite", () => {
     expect(upstreamColumns.map((row) => row.name)).toContain("model_discovery");
     expect(upstreamColumns.map((row) => row.name)).toContain("model_rules");
     expect(upstreamColumns.map((row) => row.name)).toContain("queue_policy");
+    expect(upstreamColumns.map((row) => row.name)).toContain("failure_rule_config");
+
+    const failureRuleColumns = await queryRows<{ name: string }>(
+      dbPath,
+      "PRAGMA table_info('upstream_failure_rules')"
+    );
+    expect(failureRuleColumns.map((row) => row.name)).toEqual(
+      expect.arrayContaining(["id", "upstream_id", "name", "enabled", "priority", "match"])
+    );
 
     const apiKeyColumns = await queryRows<{ name: string }>(
       dbPath,

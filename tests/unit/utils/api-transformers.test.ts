@@ -97,6 +97,7 @@ describe("api-transformers", () => {
         billing_output_multiplier: 1,
         spending_rules: null,
         circuit_breaker: null,
+        failure_rule_config: null,
       });
     });
 
