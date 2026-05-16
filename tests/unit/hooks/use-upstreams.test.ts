@@ -22,6 +22,11 @@ vi.mock("@/providers/auth-provider", () => ({
   }),
 }));
 
+vi.mock("next-intl", () => ({
+  useTranslations: () => (key: string, values?: Record<string, string | number | null>) =>
+    values?.message ? `${key}: ${values.message}` : key,
+}));
+
 /**
  * Mock sonner toast
  */
@@ -662,7 +667,7 @@ describe("useToggleUpstreamActive", () => {
     const updatedAll = queryClient.getQueryData<Upstream[]>(["upstreams", "all"]);
     expect(updatedAll?.[0]?.is_active).toBe(true);
 
-    expect(mockToastSuccess).toHaveBeenCalledWith("Upstream 已启用");
+    expect(mockToastSuccess).toHaveBeenCalledWith("enableSuccess");
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["upstreams"] });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["upstreams", "health"] });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["stats", "upstreams"] });
@@ -702,7 +707,7 @@ describe("useToggleUpstreamActive", () => {
     const restoredAll = queryClient.getQueryData<Upstream[]>(["upstreams", "all"]);
     expect(restoredAll).toEqual(initialAll);
 
-    expect(mockToastError).toHaveBeenCalledWith("更新失败: Toggle failed");
+    expect(mockToastError).toHaveBeenCalledWith("updateFailed: Toggle failed");
   });
 
   it("shows disable toast when disabling upstream", async () => {
@@ -725,7 +730,7 @@ describe("useToggleUpstreamActive", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(mockToastSuccess).toHaveBeenCalledWith("Upstream 已停用");
+    expect(mockToastSuccess).toHaveBeenCalledWith("disableSuccess");
   });
 });
 
