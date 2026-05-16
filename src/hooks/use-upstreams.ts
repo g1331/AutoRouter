@@ -149,7 +149,7 @@ export function usePreviewUpstreamCatalog() {
         data
       ),
     onSuccess: () => {
-      toast.success("Model catalog refreshed");
+      toast.success("模型目录已刷新");
     },
     onError: (error: Error) => {
       toast.error(`刷新目录失败: ${error.message}`);
