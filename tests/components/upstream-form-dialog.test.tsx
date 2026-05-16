@@ -18,6 +18,8 @@ const mockUpdateMutateAsync = vi.fn();
 const mockPreviewCatalogMutateAsync = vi.fn();
 const mockExecuteProbeMutateAsync = vi.fn();
 const mockExecuteProbeReset = vi.fn();
+const mockFailureRuleMutate = vi.fn();
+const mockFailureRuleMutateAsync = vi.fn();
 const upstreamHookState = {
   createPending: false,
   updatePending: false,
@@ -29,6 +31,12 @@ const upstreamHookState = {
 const { mockToastError } = vi.hoisted(() => ({
   mockToastError: vi.fn(),
 }));
+
+function findCircuitBreakerDefaultInput(value: string, max: string) {
+  return screen
+    .getAllByPlaceholderText(`circuitBreakerUseDefaultPlaceholder:${value}`)
+    .find((input) => input.getAttribute("max") === max);
+}
 
 vi.mock("sonner", () => ({
   toast: {
@@ -52,6 +60,20 @@ vi.mock("@/hooks/use-upstreams", () => ({
   }),
   useUpstreamProbes: () => ({
     data: upstreamHookState.probeData,
+  }),
+  useUpstreamFailureRules: () => ({
+    data: [],
+    isLoading: false,
+  }),
+  useCreateUpstreamFailureRule: () => ({
+    mutateAsync: mockFailureRuleMutateAsync,
+    isPending: false,
+  }),
+  useUpdateUpstreamFailureRule: () => ({
+    mutate: mockFailureRuleMutate,
+  }),
+  useDeleteUpstreamFailureRule: () => ({
+    mutate: mockFailureRuleMutate,
   }),
   useExecuteUpstreamProbe: () => ({
     mutateAsync: mockExecuteProbeMutateAsync,
@@ -143,6 +165,8 @@ describe("UpstreamFormDialog", () => {
     mockPreviewCatalogMutateAsync.mockReset();
     mockExecuteProbeMutateAsync.mockReset();
     mockExecuteProbeReset.mockReset();
+    mockFailureRuleMutate.mockReset();
+    mockFailureRuleMutateAsync.mockReset();
     mockOnOpenChange.mockReset();
     mockToastError.mockReset();
     upstreamHookState.createPending = false;
@@ -212,6 +236,7 @@ describe("UpstreamFormDialog", () => {
         "advanced-spending-quota",
         "advanced-capacity-control",
         "advanced-circuit-breaker",
+        "advanced-failure-rules",
         "advanced-affinity-migration",
       ];
 
@@ -335,8 +360,58 @@ describe("UpstreamFormDialog", () => {
           },
           model_rules: null,
           circuit_breaker_config: null,
+          failure_rule_config: {
+            use_global_rules: true,
+          },
           affinity_migration: null,
         });
+      });
+    });
+
+    it("submits circuit breaker timeout and failure rule config in create mode", async () => {
+      mockCreateMutateAsync.mockResolvedValueOnce({});
+
+      render(<UpstreamFormDialog open={true} onOpenChange={mockOnOpenChange} />, {
+        wrapper: Wrapper,
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("upstreamNamePlaceholder"), {
+        target: { value: "Failure Control Upstream" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("baseUrlPlaceholder"), {
+        target: { value: "https://api.example.com/v1" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("apiKeyPlaceholder"), {
+        target: { value: "sk-test-key" },
+      });
+
+      ensureAdvancedConfigExpanded();
+      const firstByteTimeoutInput = findCircuitBreakerDefaultInput("30", "300");
+      expect(firstByteTimeoutInput).toBeDefined();
+      fireEvent.change(firstByteTimeoutInput!, {
+        target: { value: "12" },
+      });
+      const streamIdleTimeoutInput = screen.getByPlaceholderText(
+        "circuitBreakerUseDefaultPlaceholder:60"
+      );
+      fireEvent.change(streamIdleTimeoutInput, {
+        target: { value: "45" },
+      });
+      fireEvent.click(screen.getByRole("switch", { name: "useGlobalFailureRules" }));
+      fireEvent.click(screen.getByText("create"));
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            circuit_breaker_config: {
+              first_byte_timeout: 12,
+              stream_idle_timeout: 45,
+            },
+            failure_rule_config: {
+              use_global_rules: false,
+            },
+          })
+        );
       });
     });
 
@@ -1166,6 +1241,9 @@ describe("UpstreamFormDialog", () => {
               },
             ],
             circuit_breaker_config: null,
+            failure_rule_config: {
+              use_global_rules: true,
+            },
             affinity_migration: null,
           },
         });
@@ -1216,6 +1294,9 @@ describe("UpstreamFormDialog", () => {
               },
             ],
             circuit_breaker_config: null,
+            failure_rule_config: {
+              use_global_rules: true,
+            },
             affinity_migration: null,
             // api_key should NOT be included when empty
           },
@@ -1419,8 +1500,10 @@ describe("UpstreamFormDialog", () => {
       expect(
         screen.getByPlaceholderText("circuitBreakerUseDefaultPlaceholder:300")
       ).toBeInTheDocument();
+      expect(findCircuitBreakerDefaultInput("30", "60")).toBeDefined();
+      expect(findCircuitBreakerDefaultInput("30", "300")).toBeDefined();
       expect(
-        screen.getByPlaceholderText("circuitBreakerUseDefaultPlaceholder:30")
+        screen.getByPlaceholderText("circuitBreakerUseDefaultPlaceholder:60")
       ).toBeInTheDocument();
     });
 

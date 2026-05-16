@@ -33,6 +33,34 @@ const {
   mockQueueEnqueueWait: vi.fn(),
 }));
 
+const { mockMatchFailureRule } = vi.hoisted(() => ({
+  mockMatchFailureRule: vi.fn(async () => null),
+}));
+
+const {
+  mockRecordSuccess,
+  mockRecordFailure,
+  mockGetCircuitBreakerState,
+  mockGetEffectiveCircuitBreakerConfig,
+} = vi.hoisted(() => ({
+  mockRecordSuccess: vi.fn(),
+  mockRecordFailure: vi.fn(),
+  mockGetCircuitBreakerState: vi.fn(async () => null),
+  mockGetEffectiveCircuitBreakerConfig: vi.fn(async () => ({
+    failureThreshold: 5,
+    successThreshold: 2,
+    openDuration: 300000,
+    probeInterval: 30000,
+    firstByteTimeout: 30000,
+    streamIdleTimeout: 60000,
+  })),
+}));
+
+const DEFAULT_CIRCUIT_BREAKER_TIMEOUTS = {
+  firstByteTimeout: 30000,
+  streamIdleTimeout: 60000,
+};
+
 vi.mock("@/lib/utils/auth", () => ({
   extractApiKey: vi.fn((authHeader: string | null) => {
     if (!authHeader) return null;
@@ -78,39 +106,59 @@ vi.mock("@/lib/services/route-capability-migration", () => ({
   ensureRouteCapabilityMigration: vi.fn(async () => {}),
 }));
 
-vi.mock("@/lib/services/proxy-client", () => ({
-  forwardRequest: vi.fn(),
-  prepareUpstreamForProxy: vi.fn((upstream) => ({
-    id: upstream.id,
-    name: upstream.name,
-    providerType: upstream.providerType,
-    baseUrl: upstream.baseUrl,
-    apiKey: "decrypted-key",
-    timeout: upstream.timeout ?? 60,
-  })),
-  filterHeaders: vi.fn((headers: Headers) => ({
-    filtered: Object.fromEntries(headers.entries()),
-    dropped: [],
-  })),
-  injectAuthHeader: vi.fn((headers: Record<string, string>) => headers),
-  applyCompensationHeaders: vi.fn(
-    (
-      headers: Record<string, string>,
-      compensationHeaders?: Array<{ header: string; value: string; source: string }>
-    ) => {
-      const applied: Array<{ header: string; source: string; value: string }> = [];
-      if (!compensationHeaders) return applied;
-      for (const comp of compensationHeaders) {
-        const lower = comp.header.toLowerCase();
-        const alreadyPresent = Object.keys(headers).some((k) => k.toLowerCase() === lower);
-        if (alreadyPresent) continue;
-        headers[comp.header] = comp.value;
-        applied.push({ header: comp.header, source: comp.source, value: comp.value });
-      }
-      return applied;
+vi.mock("@/lib/services/proxy-client", () => {
+  class FirstByteTimeoutError extends Error {
+    constructor(public readonly timeoutMs: number) {
+      super(`Upstream first byte timed out after ${Math.round(timeoutMs / 1000)}s`);
+      this.name = "FirstByteTimeoutError";
     }
-  ),
-}));
+  }
+
+  class StreamIdleTimeoutError extends Error {
+    constructor(public readonly timeoutMs: number) {
+      super(`Upstream stream was idle for ${Math.round(timeoutMs / 1000)}s`);
+      this.name = "StreamIdleTimeoutError";
+    }
+  }
+
+  return {
+    forwardRequest: vi.fn(),
+    prepareUpstreamForProxy: vi.fn((upstream, timeoutConfig) => ({
+      id: upstream.id,
+      name: upstream.name,
+      providerType: upstream.providerType,
+      baseUrl: upstream.baseUrl,
+      apiKey: "decrypted-key",
+      timeout: upstream.timeout ?? 60,
+      firstByteTimeout: timeoutConfig?.firstByteTimeout,
+      streamIdleTimeout: timeoutConfig?.streamIdleTimeout,
+    })),
+    filterHeaders: vi.fn((headers: Headers) => ({
+      filtered: Object.fromEntries(headers.entries()),
+      dropped: [],
+    })),
+    injectAuthHeader: vi.fn((headers: Record<string, string>) => headers),
+    applyCompensationHeaders: vi.fn(
+      (
+        headers: Record<string, string>,
+        compensationHeaders?: Array<{ header: string; value: string; source: string }>
+      ) => {
+        const applied: Array<{ header: string; source: string; value: string }> = [];
+        if (!compensationHeaders) return applied;
+        for (const comp of compensationHeaders) {
+          const lower = comp.header.toLowerCase();
+          const alreadyPresent = Object.keys(headers).some((k) => k.toLowerCase() === lower);
+          if (alreadyPresent) continue;
+          headers[comp.header] = comp.value;
+          applied.push({ header: comp.header, source: comp.source, value: comp.value });
+        }
+        return applied;
+      }
+    ),
+    FirstByteTimeoutError,
+    StreamIdleTimeoutError,
+  };
+});
 
 vi.mock("@/lib/services/compensation-service", () => ({
   buildCompensations: vi.fn(async () => []),
@@ -271,12 +319,17 @@ vi.mock("@/lib/services/circuit-breaker", () => {
   }
 
   return {
-    recordSuccess: vi.fn(),
-    recordFailure: vi.fn(),
-    getCircuitBreakerState: vi.fn(async () => null),
+    recordSuccess: mockRecordSuccess,
+    recordFailure: mockRecordFailure,
+    getCircuitBreakerState: mockGetCircuitBreakerState,
+    getEffectiveCircuitBreakerConfig: mockGetEffectiveCircuitBreakerConfig,
     CircuitBreakerOpenError,
   };
 });
+
+vi.mock("@/lib/services/upstream-failure-rules", () => ({
+  matchFailureRule: mockMatchFailureRule,
+}));
 
 // Mock model-router module
 vi.mock("@/lib/services/model-router", () => ({
@@ -410,6 +463,16 @@ describe("proxy route upstream selection", () => {
     vi.resetModules();
     mockApiKeyQuotaTracker.initialize.mockResolvedValue(undefined);
     mockApiKeyQuotaTracker.getQuotaStatus.mockReturnValue(null);
+    mockMatchFailureRule.mockResolvedValue(null);
+    mockGetCircuitBreakerState.mockResolvedValue(null);
+    mockGetEffectiveCircuitBreakerConfig.mockResolvedValue({
+      failureThreshold: 5,
+      successThreshold: 2,
+      openDuration: 300000,
+      probeInterval: 30000,
+      firstByteTimeout: 30000,
+      streamIdleTimeout: 60000,
+    });
     mockResolveBillingModelPrice.mockResolvedValue({
       model: "gpt-5.2",
       source: "manual",
@@ -1051,7 +1114,10 @@ describe("proxy route upstream selection", () => {
     expect(response.status).toBe(200);
     expect(routeByModel).not.toHaveBeenCalled();
     expect(selectFromProviderType).toHaveBeenCalledWith(["up-codex"], undefined, undefined);
-    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(codexUpstream);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
+      codexUpstream,
+      DEFAULT_CIRCUIT_BREAKER_TIMEOUTS
+    );
     expect(logRequestStart).toHaveBeenCalledWith(
       expect.objectContaining({
         apiKeyName: "Responses Key",
@@ -1158,7 +1224,10 @@ describe("proxy route upstream selection", () => {
     expect(response.status).toBe(200);
     expect(routeByModel).not.toHaveBeenCalled();
     expect(selectFromProviderType).toHaveBeenCalledWith(["up-codex-cli"], undefined, undefined);
-    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(codexCliUpstream);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
+      codexCliUpstream,
+      DEFAULT_CIRCUIT_BREAKER_TIMEOUTS
+    );
     expect(__mockLogger.debug).toHaveBeenCalledWith(
       expect.objectContaining({
         path: "responses",
@@ -1248,7 +1317,10 @@ describe("proxy route upstream selection", () => {
     expect(response.status).toBe(200);
     expect(routeByModel).not.toHaveBeenCalled();
     expect(selectFromProviderType).toHaveBeenCalledWith(["up-openai"], undefined, undefined);
-    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(genericResponsesUpstream);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
+      genericResponsesUpstream,
+      DEFAULT_CIRCUIT_BREAKER_TIMEOUTS
+    );
     expect(__mockLogger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
         path: "responses",
@@ -1362,7 +1434,10 @@ describe("proxy route upstream selection", () => {
     expect(response.status).toBe(200);
     expect(routeByModel).not.toHaveBeenCalled();
     expect(selectFromProviderType).toHaveBeenCalledWith(["up-google"], undefined, undefined);
-    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(googleUpstream);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
+      googleUpstream,
+      DEFAULT_CIRCUIT_BREAKER_TIMEOUTS
+    );
     expect(logRequestStart).toHaveBeenCalledWith(
       expect.objectContaining({
         path: "v1beta/models/gemini-2.5-flash-lite:generateContent",
@@ -1489,7 +1564,10 @@ describe("proxy route upstream selection", () => {
     expect(response.status).toBe(200);
     expect(routeByModel).not.toHaveBeenCalled();
     expect(selectFromProviderType).toHaveBeenCalledWith(["up-anthropic"], undefined, undefined);
-    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(anthropicUpstream);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
+      anthropicUpstream,
+      DEFAULT_CIRCUIT_BREAKER_TIMEOUTS
+    );
     expect(logRequestStart).toHaveBeenCalledWith(
       expect.objectContaining({
         path: "v1/messages",
@@ -1610,7 +1688,10 @@ describe("proxy route upstream selection", () => {
     expect(response.status).toBe(200);
     expect(routeByModel).not.toHaveBeenCalled();
     expect(selectFromProviderType).toHaveBeenCalledWith(["up-google"], undefined, undefined);
-    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(googleUpstream);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
+      googleUpstream,
+      DEFAULT_CIRCUIT_BREAKER_TIMEOUTS
+    );
     expect(logRequestStart).toHaveBeenCalledWith(
       expect.objectContaining({
         model: "gemini-from-body",
@@ -1719,7 +1800,10 @@ describe("proxy route upstream selection", () => {
       undefined,
       undefined
     );
-    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(googleUpstream);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
+      googleUpstream,
+      DEFAULT_CIRCUIT_BREAKER_TIMEOUTS
+    );
     expect(logRequestStart).toHaveBeenCalledWith(
       expect.objectContaining({
         model: "gemini-2.5-flash",
@@ -2441,9 +2525,11 @@ describe("proxy route upstream selection", () => {
     });
 
     const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
-
     expect(response.status).toBe(200);
-    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(anthropicUpstream);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
+      anthropicUpstream,
+      DEFAULT_CIRCUIT_BREAKER_TIMEOUTS
+    );
     expect(forwardRequest).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ providerType: "anthropic" }),
@@ -2559,7 +2645,6 @@ describe("proxy route upstream selection", () => {
     });
 
     const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
-
     expect(response.status).toBe(200);
 
     // First upstream was tried, failed, and marked unhealthy
@@ -2587,13 +2672,126 @@ describe("proxy route upstream selection", () => {
     );
 
     expect(forwardRequest).toHaveBeenCalledTimes(2);
-    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(healthyUpstream);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
+      healthyUpstream,
+      DEFAULT_CIRCUIT_BREAKER_TIMEOUTS
+    );
     expect(updateRequestLog).toHaveBeenCalled();
     const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
     expect(updateLogPayload?.routingDecision).toEqual(
       expect.objectContaining({
         candidate_upstream_id: "up-anthropic-2",
         actual_upstream_id: "up-anthropic-2",
+      })
+    );
+  });
+
+  it("should continue failover without recording circuit breaker when failure rule matches", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { recordFailure } = await import("@/lib/services/circuit-breaker");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-anthropic-1" },
+      { upstreamId: "up-anthropic-2" },
+    ]);
+
+    const firstUpstream = {
+      id: "up-anthropic-1",
+      name: "anthropic-1",
+      providerType: "anthropic",
+      baseUrl: "https://api.anthropic.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+    const secondUpstream = {
+      id: "up-anthropic-2",
+      name: "anthropic-2",
+      providerType: "anthropic",
+      baseUrl: "https://api.anthropic.com",
+      isDefault: false,
+      isActive: true,
+      timeout: 60,
+    };
+
+    vi.mocked(selectFromProviderType)
+      .mockResolvedValueOnce({
+        upstream: firstUpstream,
+        providerType: "anthropic",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 2,
+      })
+      .mockResolvedValueOnce({
+        upstream: secondUpstream,
+        providerType: "anthropic",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 2,
+      });
+
+    vi.mocked(forwardRequest)
+      .mockResolvedValueOnce({
+        statusCode: 429,
+        headers: new Headers({ "x-error-code": "rate_limited" }),
+        body: new TextEncoder().encode('{"error":{"message":"rate limited"}}'),
+        isStream: false,
+        usage: null,
+      })
+      .mockResolvedValueOnce({
+        statusCode: 200,
+        headers: new Headers(),
+        body: new Uint8Array(),
+        isStream: false,
+        usage: null,
+      });
+    mockMatchFailureRule.mockResolvedValueOnce({
+      id: "rule-1",
+      name: "Ignore rate limit",
+      scope: "upstream",
+    });
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-test",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["v1", "messages"] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(recordFailure).not.toHaveBeenCalledWith("up-anthropic-1", "http_429");
+    expect(mockMatchFailureRule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        upstreamId: "up-anthropic-1",
+        statusCode: 429,
+        errorType: "http_429",
+      })
+    );
+
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload?.failoverHistory?.[0]).toEqual(
+      expect.objectContaining({
+        circuit_breaker_recorded: false,
+        matched_failure_rule: {
+          id: "rule-1",
+          name: "Ignore rate limit",
+          scope: "upstream",
+        },
       })
     );
   });
@@ -5539,7 +5737,10 @@ describe("proxy route upstream selection", () => {
 
     // Final response served by tier 1 fallback upstream
     expect(forwardRequest).toHaveBeenCalledTimes(2);
-    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(tier1Upstream);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
+      tier1Upstream,
+      DEFAULT_CIRCUIT_BREAKER_TIMEOUTS
+    );
   });
 
   it("should return 403 when no authorized upstream matches path capability", async () => {
@@ -5679,7 +5880,8 @@ describe("proxy route upstream selection", () => {
     expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
       expect.objectContaining({
         id: "up-anthropic",
-      })
+      }),
+      DEFAULT_CIRCUIT_BREAKER_TIMEOUTS
     );
     expect(__mockLogger.warn).not.toHaveBeenCalledWith(
       expect.objectContaining({
@@ -5827,7 +6029,10 @@ describe("proxy route upstream selection", () => {
     expect(response.status).toBe(200);
     expect(routeByModel).not.toHaveBeenCalled();
     expect(selectFromProviderType).toHaveBeenCalledWith(["up-openai"], undefined, undefined);
-    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(genericResponsesUpstream);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
+      genericResponsesUpstream,
+      DEFAULT_CIRCUIT_BREAKER_TIMEOUTS
+    );
   });
 
   it("should proxy OpenAI-compatible model list requests through chat-compatible upstreams", async () => {
@@ -6458,7 +6663,10 @@ describe("proxy route upstream selection", () => {
     // Wait for async logging
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(healthyUpstream);
+    expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
+      healthyUpstream,
+      DEFAULT_CIRCUIT_BREAKER_TIMEOUTS
+    );
     expect(forwardRequest).toHaveBeenCalledTimes(2);
   });
 
@@ -6560,7 +6768,10 @@ describe("proxy route upstream selection", () => {
       // Verify selectFromProviderType was called with allowedUpstreamIds
       expect(selectFromProviderType).toHaveBeenCalledWith(["up-privnode"], undefined, undefined);
       // Verify the request was forwarded to privnode, not duck
-      expect(prepareUpstreamForProxy).toHaveBeenCalledWith(privnodeUpstream);
+      expect(prepareUpstreamForProxy).toHaveBeenCalledWith(
+        privnodeUpstream,
+        DEFAULT_CIRCUIT_BREAKER_TIMEOUTS
+      );
       expect(markHealthy).toHaveBeenCalledWith("up-privnode", 100);
     });
 

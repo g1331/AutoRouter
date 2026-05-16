@@ -24,6 +24,6 @@
 
 ## 5. 测试与校验
 
-- [ ] 5.1 增加失败规则服务、代理客户端和代理路由单元测试，覆盖规则命中、首字超时、空闲超时和熔断计数
-- [ ] 5.2 增加管理端组件测试，覆盖新增配置回显、编辑和提交 payload
+- [x] 5.1 增加失败规则服务、代理客户端和代理路由单元测试，覆盖规则命中、首字超时、空闲超时和熔断计数
+- [x] 5.2 增加管理端组件测试，覆盖新增配置回显、编辑和提交 payload
 - [ ] 5.3 运行 `pnpm format:check`、`git diff --check`、`pnpm lint`、`pnpm exec tsc --noEmit --pretty false`、`pnpm test:run` 和 `pnpm db:check:consistency`
