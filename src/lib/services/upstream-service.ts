@@ -21,6 +21,7 @@ export {
   listUpstreams,
   getUpstreamById,
   refreshUpstreamCatalog,
+  previewUpstreamCatalog,
   importUpstreamCatalogModels,
   loadActiveUpstreams,
   getDefaultUpstream,
@@ -30,6 +31,7 @@ export {
   // Upstream types
   type UpstreamCreateInput,
   type UpstreamUpdateInput,
+  type UpstreamCatalogPreviewInput,
   type UpstreamResponse,
   type PaginatedUpstreams,
 } from "./upstream-crud";

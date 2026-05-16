@@ -768,7 +768,7 @@
     "catalogUpdatedAtLabel": "更新：{time}",
     "catalogNeverRefreshed": "尚未刷新",
     "catalogStatusBarHint": "仅导入，不覆盖规则。",
-    "catalogSavedConfigHint": "有未保存改动，先保存后刷新。",
+    "catalogSavedConfigHint": "本次刷新将使用当前表单配置，保存后生效。",
     "refreshCatalog": "刷新",
     "clearLiteLlmCatalogEntries": "清理 LiteLLM",
     "modelDiscoverySectionTitle": "模型发现",

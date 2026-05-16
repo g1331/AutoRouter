@@ -158,6 +158,13 @@ export interface UpstreamUpdateInput {
     | null;
 }
 
+export interface UpstreamCatalogPreviewInput {
+  baseUrl: string;
+  apiKey?: string | null;
+  routeCapabilities?: RouteCapability[] | null;
+  modelDiscovery?: UpstreamModelDiscoveryConfig | null;
+}
+
 export interface UpstreamResponse {
   id: string;
   name: string;
@@ -821,6 +828,34 @@ export async function refreshUpstreamCatalog(upstreamId: string): Promise<Upstre
     modelCatalogLastStatus: refreshed.modelCatalogLastStatus,
     modelCatalogLastError: refreshed.modelCatalogLastError,
     modelCatalogLastFailedAt: refreshed.modelCatalogLastFailedAt,
+  });
+}
+
+/**
+ * Preview an upstream model catalog using unsaved form values without updating the record.
+ */
+export async function previewUpstreamCatalog(
+  upstreamId: string,
+  input: UpstreamCatalogPreviewInput
+) {
+  const existing = await db.query.upstreams.findFirst({
+    where: eq(upstreams.id, upstreamId),
+  });
+
+  if (!existing) {
+    throw new UpstreamNotFoundError(`Upstream not found: ${upstreamId}`);
+  }
+
+  const apiKey = input.apiKey?.trim() || decrypt(existing.apiKeyEncrypted);
+
+  return refreshUpstreamModelCatalogData({
+    baseUrl: input.baseUrl,
+    apiKey,
+    routeCapabilities: input.routeCapabilities ?? existing.routeCapabilities,
+    modelDiscovery: input.modelDiscovery ?? existing.modelDiscovery,
+    previousCatalog: existing.modelCatalog,
+    previousCatalogUpdatedAt: existing.modelCatalogUpdatedAt,
+    timeoutMs: existing.timeout * 1000,
   });
 }
 

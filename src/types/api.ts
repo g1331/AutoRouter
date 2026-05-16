@@ -312,6 +312,22 @@ export interface UpstreamUpdate {
     | null;
 }
 
+export interface UpstreamCatalogPreviewRequest {
+  base_url: string;
+  api_key?: string;
+  route_capabilities?: RouteCapability[] | null;
+  model_discovery?: UpstreamModelDiscoveryConfig | null;
+}
+
+export interface UpstreamCatalogPreviewResponse {
+  model_discovery: UpstreamModelDiscoveryConfig | null;
+  model_catalog: UpstreamModelCatalogEntry[] | null;
+  model_catalog_updated_at: string | null;
+  model_catalog_last_status: UpstreamModelCatalogStatus;
+  model_catalog_last_error: string | null;
+  model_catalog_last_failed_at: string | null;
+}
+
 export interface UpstreamResponse {
   id: string; // UUID
   name: string;

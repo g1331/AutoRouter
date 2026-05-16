@@ -15,15 +15,13 @@ vi.mock("next-intl", () => ({
 // Mock hooks
 const mockCreateMutateAsync = vi.fn();
 const mockUpdateMutateAsync = vi.fn();
-const mockRefreshCatalogMutateAsync = vi.fn();
-const mockImportCatalogMutateAsync = vi.fn();
+const mockPreviewCatalogMutateAsync = vi.fn();
 const mockExecuteProbeMutateAsync = vi.fn();
 const mockExecuteProbeReset = vi.fn();
 const upstreamHookState = {
   createPending: false,
   updatePending: false,
   refreshPending: false,
-  importPending: false,
   probePending: false,
   probeData: null as unknown,
   probeMutationData: null as UpstreamProbeResponse | null,
@@ -48,13 +46,9 @@ vi.mock("@/hooks/use-upstreams", () => ({
     mutateAsync: mockUpdateMutateAsync,
     isPending: upstreamHookState.updatePending,
   }),
-  useRefreshUpstreamCatalog: () => ({
-    mutateAsync: mockRefreshCatalogMutateAsync,
+  usePreviewUpstreamCatalog: () => ({
+    mutateAsync: mockPreviewCatalogMutateAsync,
     isPending: upstreamHookState.refreshPending,
-  }),
-  useImportUpstreamCatalogModels: () => ({
-    mutateAsync: mockImportCatalogMutateAsync,
-    isPending: upstreamHookState.importPending,
   }),
   useUpstreamProbes: () => ({
     data: upstreamHookState.probeData,
@@ -146,8 +140,7 @@ describe("UpstreamFormDialog", () => {
     });
     mockCreateMutateAsync.mockReset();
     mockUpdateMutateAsync.mockReset();
-    mockRefreshCatalogMutateAsync.mockReset();
-    mockImportCatalogMutateAsync.mockReset();
+    mockPreviewCatalogMutateAsync.mockReset();
     mockExecuteProbeMutateAsync.mockReset();
     mockExecuteProbeReset.mockReset();
     mockOnOpenChange.mockReset();
@@ -155,7 +148,6 @@ describe("UpstreamFormDialog", () => {
     upstreamHookState.createPending = false;
     upstreamHookState.updatePending = false;
     upstreamHookState.refreshPending = false;
-    upstreamHookState.importPending = false;
     upstreamHookState.probePending = false;
     upstreamHookState.probeData = { data: [], total: 0 };
     upstreamHookState.probeMutationData = null;
@@ -793,7 +785,21 @@ describe("UpstreamFormDialog", () => {
       expect(screen.getByText("runProbe")).toBeDisabled();
     });
 
-    it("blocks catalog refresh when discovery dependencies are edited but not saved", () => {
+    it("previews catalog refresh with unsaved discovery dependencies", async () => {
+      mockPreviewCatalogMutateAsync.mockResolvedValueOnce({
+        model_discovery: {
+          mode: "openai_compatible",
+          custom_endpoint: null,
+          enable_lite_llm_fallback: false,
+          auto_refresh_enabled: false,
+        },
+        model_catalog: [{ model: "codex-mini-latest", source: "native" }],
+        model_catalog_updated_at: new Date("2026-05-14T12:00:00.000Z").toISOString(),
+        model_catalog_last_status: "success",
+        model_catalog_last_error: null,
+        model_catalog_last_failed_at: null,
+      });
+
       render(
         <UpstreamFormDialog upstream={mockUpstream} open={true} onOpenChange={mockOnOpenChange} />,
         { wrapper: Wrapper }
@@ -804,7 +810,69 @@ describe("UpstreamFormDialog", () => {
       });
 
       expect(screen.getByText("catalogSavedConfigHint")).toBeInTheDocument();
-      expect(screen.getByText("refreshCatalog")).toBeDisabled();
+      fireEvent.click(screen.getByText("refreshCatalog"));
+
+      await waitFor(() => {
+        expect(mockPreviewCatalogMutateAsync).toHaveBeenCalledWith({
+          id: "upstream-1",
+          data: {
+            base_url: "https://gateway.example.com/codex/v1",
+            route_capabilities: [],
+            model_discovery: {
+              mode: "openai_compatible",
+              custom_endpoint: null,
+              enable_lite_llm_fallback: false,
+              auto_refresh_enabled: false,
+            },
+          },
+        });
+      });
+      expect(screen.getByText("codex-mini-latest")).toBeInTheDocument();
+    });
+
+    it("saves previewed catalog entries with the form update", async () => {
+      const previewedAt = new Date("2026-05-14T12:00:00.000Z").toISOString();
+      mockPreviewCatalogMutateAsync.mockResolvedValueOnce({
+        model_discovery: {
+          mode: "openai_compatible",
+          custom_endpoint: null,
+          enable_lite_llm_fallback: false,
+          auto_refresh_enabled: false,
+        },
+        model_catalog: [{ model: "codex-mini-latest", source: "native" }],
+        model_catalog_updated_at: previewedAt,
+        model_catalog_last_status: "success",
+        model_catalog_last_error: null,
+        model_catalog_last_failed_at: null,
+      });
+      mockUpdateMutateAsync.mockResolvedValueOnce({});
+
+      render(
+        <UpstreamFormDialog upstream={mockUpstream} open={true} onOpenChange={mockOnOpenChange} />,
+        { wrapper: Wrapper }
+      );
+
+      fireEvent.click(screen.getByText("refreshCatalog"));
+      await waitFor(() => {
+        expect(screen.getByText("codex-mini-latest")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText("save"));
+
+      await waitFor(() => {
+        expect(mockUpdateMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id: "upstream-1",
+            data: expect.objectContaining({
+              model_catalog: [{ model: "codex-mini-latest", source: "native" }],
+              model_catalog_updated_at: previewedAt,
+              model_catalog_last_status: "success",
+              model_catalog_last_error: null,
+              model_catalog_last_failed_at: null,
+            }),
+          })
+        );
+      });
     });
 
     it("shows catalog loading state without hiding the rules workspace", () => {
@@ -1038,27 +1106,7 @@ describe("UpstreamFormDialog", () => {
       expect(workspaceContainer?.className).toContain("xl:h-[min(76vh,860px)]");
     });
 
-    it("imports selected catalog entries and echoes returned model rules", async () => {
-      mockImportCatalogMutateAsync.mockResolvedValueOnce({
-        ...mockUpstream,
-        model_rules: [
-          {
-            type: "exact",
-            value: "gpt-4.1",
-            target_model: null,
-            source: "native",
-            display_label: "精确匹配",
-          },
-          {
-            type: "exact",
-            value: "gpt-4.1-mini",
-            target_model: null,
-            source: "inferred",
-            display_label: "精确匹配",
-          },
-        ],
-      });
-
+    it("imports selected catalog entries into local model rules", () => {
       render(
         <UpstreamFormDialog upstream={mockUpstream} open={true} onOpenChange={mockOnOpenChange} />,
         { wrapper: Wrapper }
@@ -1067,13 +1115,7 @@ describe("UpstreamFormDialog", () => {
       fireEvent.click(screen.getByText("gpt-4.1-mini"));
       fireEvent.click(screen.getByText("catalogImportScope"));
 
-      await waitFor(() => {
-        expect(mockImportCatalogMutateAsync).toHaveBeenCalledWith({
-          id: "upstream-1",
-          models: ["gpt-4.1-mini"],
-        });
-      });
-
+      expect(mockUpdateMutateAsync).not.toHaveBeenCalled();
       expect(screen.getAllByDisplayValue("gpt-4.1-mini").length).toBeGreaterThanOrEqual(1);
     });
 

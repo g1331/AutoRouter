@@ -12,6 +12,8 @@ import type {
   UpstreamProbeResponse,
   ExecuteUpstreamProbeRequest,
   UpstreamQuotaStatusResponse,
+  UpstreamCatalogPreviewRequest,
+  UpstreamCatalogPreviewResponse,
 } from "@/types/api";
 import { toast } from "sonner";
 
@@ -126,6 +128,27 @@ export function useRefreshUpstreamCatalog() {
     mutationFn: (id: string) => apiClient.post<Upstream>(`/admin/upstreams/${id}/catalog/refresh`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["upstreams"] });
+      toast.success("模型目录已刷新");
+    },
+    onError: (error: Error) => {
+      toast.error(`刷新目录失败: ${error.message}`);
+    },
+  });
+}
+
+/**
+ * Preview upstream model catalog with unsaved form values.
+ */
+export function usePreviewUpstreamCatalog() {
+  const { apiClient } = useAuth();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpstreamCatalogPreviewRequest }) =>
+      apiClient.post<UpstreamCatalogPreviewResponse>(
+        `/admin/upstreams/${id}/catalog/preview`,
+        data
+      ),
+    onSuccess: () => {
       toast.success("模型目录已刷新");
     },
     onError: (error: Error) => {
