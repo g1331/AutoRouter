@@ -156,6 +156,24 @@ export interface UpstreamFailureRule {
   updated_at: string;
 }
 
+export interface UpstreamFailureRuleCreate {
+  name: string;
+  enabled?: boolean;
+  priority?: number;
+  match: UpstreamFailureRuleMatch;
+}
+
+export interface UpstreamFailureRuleUpdate {
+  name?: string;
+  enabled?: boolean;
+  priority?: number;
+  match?: UpstreamFailureRuleMatch;
+}
+
+export interface UpstreamFailureRulesResponse {
+  data: UpstreamFailureRule[];
+}
+
 export interface UpstreamFailureRuleConfig {
   use_global_rules: boolean;
 }

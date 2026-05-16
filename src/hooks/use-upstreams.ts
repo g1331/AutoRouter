@@ -14,6 +14,10 @@ import type {
   UpstreamQuotaStatusResponse,
   UpstreamCatalogPreviewRequest,
   UpstreamCatalogPreviewResponse,
+  UpstreamFailureRule,
+  UpstreamFailureRuleCreate,
+  UpstreamFailureRuleUpdate,
+  UpstreamFailureRulesResponse,
 } from "@/types/api";
 import { toast } from "sonner";
 
@@ -113,6 +117,73 @@ export function useUpdateUpstream() {
     },
     onError: (error: Error) => {
       toast.error(`更新失败: ${error.message}`);
+    },
+  });
+}
+
+export function useUpstreamFailureRules(upstreamId: string | undefined, enabled: boolean = true) {
+  const { apiClient } = useAuth();
+
+  return useQuery({
+    queryKey: ["upstreams", upstreamId, "failure-rules"],
+    queryFn: async () => {
+      const response = await apiClient.get<UpstreamFailureRulesResponse>(
+        `/admin/upstreams/${upstreamId}/failure-rules`
+      );
+      return response.data;
+    },
+    enabled: enabled && !!upstreamId,
+  });
+}
+
+export function useCreateUpstreamFailureRule() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ upstreamId, data }: { upstreamId: string; data: UpstreamFailureRuleCreate }) =>
+      apiClient.post<UpstreamFailureRule>(`/admin/upstreams/${upstreamId}/failure-rules`, data),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["upstreams", variables.upstreamId, "failure-rules"],
+      });
+    },
+  });
+}
+
+export function useUpdateUpstreamFailureRule() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      upstreamId,
+      ruleId,
+      data,
+    }: {
+      upstreamId: string;
+      ruleId: string;
+      data: UpstreamFailureRuleUpdate;
+    }) => apiClient.put<UpstreamFailureRule>(`/admin/upstream-failure-rules/${ruleId}`, data),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["upstreams", variables.upstreamId, "failure-rules"],
+      });
+    },
+  });
+}
+
+export function useDeleteUpstreamFailureRule() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ upstreamId, ruleId }: { upstreamId: string; ruleId: string }) =>
+      apiClient.delete<{ success: boolean }>(`/admin/upstream-failure-rules/${ruleId}`),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["upstreams", variables.upstreamId, "failure-rules"],
+      });
     },
   });
 }

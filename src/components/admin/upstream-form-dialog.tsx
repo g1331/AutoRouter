@@ -113,6 +113,7 @@ import {
   resolveRouteCapabilities,
 } from "@/lib/route-capabilities";
 import { RouteCapabilityMultiSelect } from "@/components/admin/route-capability-badges";
+import { UpstreamFailureRulesEditor } from "@/components/admin/upstream-failure-rules-editor";
 import { DEFAULT_CIRCUIT_BREAKER_CONFIG } from "@/lib/circuit-breaker-defaults";
 import { inferDefaultModelDiscoveryConfig } from "@/lib/services/upstream-model-types";
 import { cn } from "@/lib/utils";
@@ -3853,6 +3854,10 @@ export function UpstreamFormDialog({
                           </FormItem>
                         )}
                       />
+
+                      <div className="mt-4">
+                        <UpstreamFailureRulesEditor upstreamId={upstream?.id} />
+                      </div>
                     </div>
 
                     {/* Session Affinity Migration Configuration Section */}
