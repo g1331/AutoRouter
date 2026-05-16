@@ -81,6 +81,13 @@ function getEffectiveConfig(storedConfig: CircuitBreakerState["config"]): Circui
   };
 }
 
+export async function getEffectiveCircuitBreakerConfig(
+  upstreamId: string
+): Promise<CircuitBreakerConfig> {
+  const state = await getOrCreateCircuitBreakerState(upstreamId);
+  return getEffectiveConfig(state.config);
+}
+
 /**
  * Check if request can pass through circuit breaker
  */

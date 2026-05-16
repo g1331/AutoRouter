@@ -145,6 +145,12 @@ export interface FailoverAttempt {
   response_body_json?: unknown | null;
   selection_reason?: RoutingSelectionReason | null;
   header_diff?: HeaderDiff | null;
+  circuit_breaker_recorded?: boolean | null;
+  matched_failure_rule?: {
+    id: string;
+    name: string;
+    scope: "global" | "upstream";
+  } | null;
 }
 
 export interface RequestLogResponse {

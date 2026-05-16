@@ -42,6 +42,9 @@ type UpstreamQueuePolicy = {
   timeout_ms: number;
   max_queue_length?: number | null;
 };
+type UpstreamFailureRuleConfig = {
+  useGlobalRules: boolean;
+};
 
 /**
  * Circuit breaker status for upstream response
@@ -52,6 +55,14 @@ export interface UpstreamCircuitBreakerStatus {
   successCount: number;
   lastFailureAt: Date | null;
   openedAt: Date | null;
+  config: {
+    failureThreshold?: number;
+    successThreshold?: number;
+    openDuration?: number;
+    probeInterval?: number;
+    firstByteTimeout?: number;
+    streamIdleTimeout?: number;
+  } | null;
 }
 
 /**
@@ -87,6 +98,7 @@ export interface UpstreamCreateInput {
   config?: string | null;
   maxConcurrency?: number | null;
   queuePolicy?: UpstreamQueuePolicy | null;
+  failureRuleConfig?: UpstreamFailureRuleConfig | null;
   weight?: number;
   priority?: number;
   routeCapabilities?: RouteCapability[] | null;
@@ -104,6 +116,8 @@ export interface UpstreamCreateInput {
     successThreshold?: number;
     openDuration?: number;
     probeInterval?: number;
+    firstByteTimeout?: number;
+    streamIdleTimeout?: number;
   } | null;
   affinityMigration?: {
     enabled: boolean;
@@ -128,6 +142,7 @@ export interface UpstreamUpdateInput {
   config?: string | null;
   maxConcurrency?: number | null;
   queuePolicy?: UpstreamQueuePolicy | null;
+  failureRuleConfig?: UpstreamFailureRuleConfig | null;
   weight?: number;
   priority?: number;
   routeCapabilities?: RouteCapability[] | null;
@@ -145,6 +160,8 @@ export interface UpstreamUpdateInput {
     successThreshold?: number;
     openDuration?: number;
     probeInterval?: number;
+    firstByteTimeout?: number;
+    streamIdleTimeout?: number;
   } | null;
   affinityMigration?: {
     enabled: boolean;
@@ -177,6 +194,7 @@ export interface UpstreamResponse {
   currentConcurrency: number;
   maxConcurrency: number | null;
   queuePolicy?: UpstreamQueuePolicy | null;
+  failureRuleConfig?: UpstreamFailureRuleConfig | null;
   config: string | null;
   weight: number;
   priority: number;
@@ -380,6 +398,7 @@ function mapUpstreamRecordToResponse(
     currentConcurrency,
     maxConcurrency: upstream.maxConcurrency,
     queuePolicy: upstream.queuePolicy ?? null,
+    failureRuleConfig: upstream.failureRuleConfig ?? null,
     config: upstream.config,
     weight: upstream.weight,
     priority: upstream.priority,
@@ -421,6 +440,7 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
     config,
     maxConcurrency = null,
     queuePolicy = null,
+    failureRuleConfig = null,
     weight = 1,
     priority = 0,
     routeCapabilities,
@@ -474,6 +494,7 @@ export async function createUpstream(input: UpstreamCreateInput): Promise<Upstre
       isActive: true,
       maxConcurrency,
       queuePolicy,
+      failureRuleConfig,
       config: config ?? null,
       weight,
       priority,
@@ -557,6 +578,9 @@ export async function updateUpstream(
   if (input.isActive !== undefined) updateValues.isActive = input.isActive;
   if (input.maxConcurrency !== undefined) updateValues.maxConcurrency = input.maxConcurrency;
   if (input.queuePolicy !== undefined) updateValues.queuePolicy = input.queuePolicy;
+  if (input.failureRuleConfig !== undefined) {
+    updateValues.failureRuleConfig = input.failureRuleConfig;
+  }
   if (input.config !== undefined) updateValues.config = input.config;
   if (input.weight !== undefined) updateValues.weight = input.weight;
   if (input.priority !== undefined) updateValues.priority = input.priority;
@@ -752,6 +776,7 @@ export async function listUpstreams(
             successCount: cbState.successCount,
             lastFailureAt: cbState.lastFailureAt,
             openedAt: cbState.openedAt,
+            config: cbState.config,
           }
         : null
     );

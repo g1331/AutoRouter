@@ -16,6 +16,8 @@ export interface UpstreamForProxy {
   baseUrl: string;
   apiKey: string; // Decrypted API key
   timeout: number;
+  firstByteTimeout?: number;
+  streamIdleTimeout?: number;
 }
 
 export interface TokenUsage {
@@ -64,6 +66,20 @@ export interface HeaderDiff {
 }
 
 type ProxyRequestErrorWithHeaderDiff = Error & { headerDiff?: HeaderDiff };
+
+export class FirstByteTimeoutError extends Error {
+  constructor(public readonly timeoutMs: number) {
+    super(`Upstream first byte timed out after ${Math.round(timeoutMs / 1000)}s`);
+    this.name = "FirstByteTimeoutError";
+  }
+}
+
+export class StreamIdleTimeoutError extends Error {
+  constructor(public readonly timeoutMs: number) {
+    super(`Upstream stream was idle for ${Math.round(timeoutMs / 1000)}s`);
+    this.name = "StreamIdleTimeoutError";
+  }
+}
 
 function maskSecretValue(value: string): string {
   const trimmed = value.trim();
@@ -870,6 +886,33 @@ function isStreamRequest(
   return bodyJson.stream === true || queryAlt === "sse" || path.includes(":streamGenerateContent");
 }
 
+async function waitForFirstStreamContent(options: {
+  timeoutMs: number | undefined;
+  onFirstContent: Promise<void>;
+  onStreamDone: Promise<void>;
+  abortController: AbortController;
+}): Promise<void> {
+  if (!options.timeoutMs || options.timeoutMs <= 0) {
+    return;
+  }
+
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      options.abortController.abort();
+      reject(new FirstByteTimeoutError(options.timeoutMs ?? 0));
+    }, options.timeoutMs);
+  });
+
+  try {
+    await Promise.race([options.onFirstContent, options.onStreamDone, timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 function summarizeRequestInfo(
   bodyJson: Record<string, unknown>,
   path: string,
@@ -1059,6 +1102,14 @@ export async function forwardRequest(
       // Streaming response - return stream directly for maximum performance
       let usage: TokenUsage | undefined;
       let ttftMs: number | undefined;
+      let resolveFirstContent!: () => void;
+      let resolveStreamDone!: () => void;
+      const firstContentPromise = new Promise<void>((resolve) => {
+        resolveFirstContent = resolve;
+      });
+      const streamDonePromise = new Promise<void>((resolve) => {
+        resolveStreamDone = resolve;
+      });
 
       const transformedStream = upstreamResponse.body.pipeThrough(
         createSSETransformer({
@@ -1072,6 +1123,7 @@ export async function forwardRequest(
           onFirstChunk: () => {
             ttftMs = Date.now() - upstreamSendTime;
             reqLog.debug({ ttftMs }, "time to first token");
+            resolveFirstContent();
           },
         })
       );
@@ -1082,10 +1134,19 @@ export async function forwardRequest(
           await drainStream(loggingStream);
         } catch {
           // Ignore stream consumption errors
+        } finally {
+          resolveStreamDone();
         }
 
         return { usage: usage ?? null, ttftMs };
       })();
+
+      await waitForFirstStreamContent({
+        timeoutMs: upstream.firstByteTimeout,
+        onFirstContent: firstContentPromise,
+        onStreamDone: streamDonePromise,
+        abortController: controller,
+      });
 
       return {
         statusCode: upstreamResponse.status,
@@ -1153,7 +1214,10 @@ export async function forwardRequest(
 /**
  * Prepare upstream for proxying by decrypting the API key.
  */
-export function prepareUpstreamForProxy(upstream: Upstream): UpstreamForProxy {
+export function prepareUpstreamForProxy(
+  upstream: Upstream,
+  timeoutConfig?: { firstByteTimeout?: number; streamIdleTimeout?: number } | null
+): UpstreamForProxy {
   return {
     id: upstream.id,
     name: upstream.name,
@@ -1161,5 +1225,7 @@ export function prepareUpstreamForProxy(upstream: Upstream): UpstreamForProxy {
     baseUrl: upstream.baseUrl,
     apiKey: decrypt(upstream.apiKeyEncrypted),
     timeout: upstream.timeout,
+    firstByteTimeout: timeoutConfig?.firstByteTimeout,
+    streamIdleTimeout: timeoutConfig?.streamIdleTimeout,
   };
 }

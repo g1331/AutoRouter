@@ -79,6 +79,14 @@ export async function GET(request: NextRequest, context: RouteContext): Promise<
               cbState.config.probeInterval !== undefined
                 ? Math.round(cbState.config.probeInterval / 1000)
                 : undefined,
+            first_byte_timeout:
+              cbState.config.firstByteTimeout !== undefined
+                ? Math.round(cbState.config.firstByteTimeout / 1000)
+                : undefined,
+            stream_idle_timeout:
+              cbState.config.streamIdleTimeout !== undefined
+                ? Math.round(cbState.config.streamIdleTimeout / 1000)
+                : undefined,
           }
         : null,
       created_at: cbState.createdAt.toISOString(),

@@ -26,6 +26,12 @@ const circuitBreakerConfigSchema = z.object({
   // seconds (preferred) or legacy milliseconds
   open_duration: z.number().int().min(1).max(300000).optional(),
   probe_interval: z.number().int().min(1).max(60000).optional(),
+  first_byte_timeout: z.number().int().min(1).max(300000).optional(),
+  stream_idle_timeout: z.number().int().min(1).max(300000).optional(),
+});
+
+const failureRuleConfigSchema = z.object({
+  use_global_rules: z.boolean(),
 });
 
 const affinityMigrationConfigSchema = z.object({
@@ -74,11 +80,11 @@ const modelRuleSchema = z
 
 function normalizeDurationToMs(
   value: number | undefined,
-  kind: "open_duration" | "probe_interval"
+  kind: "open_duration" | "probe_interval" | "first_byte_timeout" | "stream_idle_timeout"
 ): number | undefined {
   if (value === undefined) return undefined;
   // Backward compatible: if the value is within the old ms ranges, it will be > 300 (open) or > 60 (probe).
-  const secondsUpperBound = kind === "open_duration" ? 300 : 60;
+  const secondsUpperBound = kind === "probe_interval" ? 60 : 300;
   return value > secondsUpperBound ? value : value * 1000;
 }
 
@@ -93,6 +99,7 @@ const createUpstreamSchema = z
     config: z.string().nullable().optional(),
     max_concurrency: z.number().int().positive().nullable().optional(),
     queue_policy: queuePolicySchema.nullable().optional(),
+    failure_rule_config: failureRuleConfigSchema.nullable().optional(),
     weight: z.number().int().min(1).max(100).default(1),
     priority: z.number().int().min(0).default(0),
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)).nullable().optional(),
@@ -185,6 +192,9 @@ export async function POST(request: NextRequest) {
       config: validated.config ?? null,
       maxConcurrency: validated.max_concurrency ?? null,
       queuePolicy: validated.queue_policy ?? null,
+      failureRuleConfig: validated.failure_rule_config
+        ? { useGlobalRules: validated.failure_rule_config.use_global_rules }
+        : null,
       weight: validated.weight,
       priority: validated.priority,
       routeCapabilities:
@@ -236,6 +246,14 @@ export async function POST(request: NextRequest) {
             probeInterval: normalizeDurationToMs(
               validated.circuit_breaker_config.probe_interval,
               "probe_interval"
+            ),
+            firstByteTimeout: normalizeDurationToMs(
+              validated.circuit_breaker_config.first_byte_timeout,
+              "first_byte_timeout"
+            ),
+            streamIdleTimeout: normalizeDurationToMs(
+              validated.circuit_breaker_config.stream_idle_timeout,
+              "stream_idle_timeout"
             ),
           }
         : null,

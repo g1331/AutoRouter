@@ -71,6 +71,13 @@
       "when": 1777650315902,
       "tag": "0009_numerous_night_thrasher",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1778922152911,
+      "tag": "0010_confused_mister_fear",
+      "breakpoints": true
     }
   ]
 }

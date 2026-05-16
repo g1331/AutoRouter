@@ -15,6 +15,8 @@ import {
   filterHeaders,
   injectAuthHeader,
   applyCompensationHeaders,
+  FirstByteTimeoutError,
+  StreamIdleTimeoutError,
   type ProxyResult,
   type HeaderDiff,
 } from "@/lib/services/proxy-client";
@@ -41,6 +43,7 @@ import { markHealthy, markUnhealthy } from "@/lib/services/health-checker";
 import {
   recordSuccess,
   recordFailure,
+  getEffectiveCircuitBreakerConfig,
   CircuitBreakerOpenError,
 } from "@/lib/services/circuit-breaker";
 import {
@@ -48,6 +51,7 @@ import {
   UpstreamQueueWaitTimeoutError,
   UpstreamQueueWaitAbortedError,
 } from "@/lib/services/upstream-queue-admission";
+import { matchFailureRule } from "@/lib/services/upstream-failure-rules";
 import { randomUUID } from "crypto";
 import {
   type CapabilityProvider,
@@ -813,6 +817,8 @@ function getErrorType(
   statusCode: number | null
 ): FailoverAttempt["error_type"] {
   if (error instanceof CircuitBreakerOpenError) return "circuit_open";
+  if (error instanceof FirstByteTimeoutError) return "first_byte_timeout";
+  if (error instanceof StreamIdleTimeoutError) return "stream_idle_timeout";
   if (statusCode === 429) return "http_429";
   if (statusCode && statusCode >= 400 && statusCode < 500) return "http_4xx";
   if (statusCode && statusCode >= 500) return "http_5xx";
@@ -830,6 +836,9 @@ function getErrorType(
  */
 function isFailoverableError(error: unknown): boolean {
   if (error instanceof CircuitBreakerOpenError) {
+    return true;
+  }
+  if (error instanceof FirstByteTimeoutError || error instanceof StreamIdleTimeoutError) {
     return true;
   }
   if (error instanceof Error) {
@@ -1485,7 +1494,11 @@ async function forwardWithFailover(
         body: requestBodyBuffer.byteLength > 0 ? requestBodyBuffer : undefined,
       });
 
-      const upstreamForProxy = prepareUpstreamForProxy(selectedUpstream);
+      const circuitBreakerConfig = await getEffectiveCircuitBreakerConfig(selectedUpstream.id);
+      const upstreamForProxy = prepareUpstreamForProxy(selectedUpstream, {
+        firstByteTimeout: circuitBreakerConfig.firstByteTimeout,
+        streamIdleTimeout: circuitBreakerConfig.streamIdleTimeout,
+      });
       attemptUpstreamBaseUrl = upstreamForProxy.baseUrl;
       didSendUpstream = true;
       const result = await forwardRequest(
@@ -1500,11 +1513,21 @@ async function forwardWithFailover(
       if (shouldTriggerFailover(result.statusCode, config)) {
         const failedResponse = await captureFailedResponse(result);
         const errorType = getErrorType(null, result.statusCode);
+        const matchedFailureRule = await matchFailureRule({
+          upstreamId: selectedUpstream.id,
+          statusCode: result.statusCode,
+          errorType,
+          responseHeaders: failedResponse.headers,
+          responseBodyText: failedResponse.bodyText,
+          errorMessage: resolveFailedResponseErrorMessage(result.statusCode, failedResponse),
+        });
+        const circuitBreakerRecorded =
+          shouldRecordCircuitBreakerFailure(path) && matchedFailureRule === null;
         // Release connection and mark as unhealthy
         releaseSelectedConnectionOnce();
         void markUnhealthy(selectedUpstream.id, `HTTP ${result.statusCode} error`);
         // Record failure in circuit breaker when this route should affect upstream reliability.
-        if (shouldRecordCircuitBreakerFailure(path)) {
+        if (circuitBreakerRecorded) {
           void recordFailure(selectedUpstream.id, `http_${result.statusCode}`);
         }
         // Record failover attempt
@@ -1522,6 +1545,8 @@ async function forwardWithFailover(
           response_body_json: failedResponse.bodyJson,
           selection_reason: finalSelectionReason,
           header_diff: result.headerDiff ?? null,
+          circuit_breaker_recorded: circuitBreakerRecorded,
+          matched_failure_rule: matchedFailureRule,
         });
         failedUpstreamIds.push(selectedUpstream.id);
         lastError = new Error(`Upstream returned ${result.statusCode}`);
@@ -1552,7 +1577,8 @@ async function forwardWithFailover(
           originalStream,
           selectedUpstream.id,
           releaseSelectedConnectionOnce,
-          request.signal
+          request.signal,
+          upstreamForProxy.streamIdleTimeout
         );
         return {
           result: { ...result, body: wrappedStream },
@@ -1603,7 +1629,17 @@ async function forwardWithFailover(
           error instanceof Error ? error : null,
           errorEvidence.statusCode
         );
-        if (shouldRecordCircuitBreakerFailure(path)) {
+        const matchedFailureRule = await matchFailureRule({
+          upstreamId: selectedUpstream.id,
+          statusCode: errorEvidence.statusCode,
+          errorType,
+          responseHeaders: errorEvidence.responseHeaders,
+          responseBodyText: errorEvidence.responseBodyText,
+          errorMessage: errorEvidence.errorMessage,
+        });
+        const circuitBreakerRecorded =
+          shouldRecordCircuitBreakerFailure(path) && matchedFailureRule === null;
+        if (circuitBreakerRecorded) {
           void recordFailure(selectedUpstream.id, errorType);
         }
 
@@ -1625,6 +1661,8 @@ async function forwardWithFailover(
           response_body_json: errorEvidence.responseBodyJson,
           selection_reason: finalSelectionReason,
           header_diff: errorHeaderDiff,
+          circuit_breaker_recorded: circuitBreakerRecorded,
+          matched_failure_rule: matchedFailureRule,
         });
         failedUpstreamIds.push(selectedUpstream.id);
         lastError = error instanceof Error ? error : new Error(String(error));
@@ -1820,7 +1858,8 @@ function wrapStreamWithConnectionTracking(
   stream: ReadableStream<Uint8Array>,
   upstreamId: string,
   releaseConnectionOnce: () => void,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  streamIdleTimeoutMs?: number
 ): ReadableStream<Uint8Array> {
   let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   let streamCompleted = false;
@@ -1831,6 +1870,28 @@ function wrapStreamWithConnectionTracking(
     if (!disconnectWarnLogged) {
       log.warn({ upstreamId }, message);
       disconnectWarnLogged = true;
+    }
+  };
+
+  const readWithIdleTimeout = async () => {
+    if (!streamIdleTimeoutMs || streamIdleTimeoutMs <= 0) {
+      return reader!.read();
+    }
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const timeoutPromise = new Promise<never>((_resolve, reject) => {
+      timeoutId = setTimeout(() => {
+        void reader?.cancel("stream_idle_timeout").catch(() => undefined);
+        reject(new StreamIdleTimeoutError(streamIdleTimeoutMs));
+      }, streamIdleTimeoutMs);
+    });
+
+    try {
+      return await Promise.race([reader!.read(), timeoutPromise]);
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     }
   };
 
@@ -1869,7 +1930,7 @@ function wrapStreamWithConnectionTracking(
             break;
           }
 
-          const { done, value } = await reader.read();
+          const { done, value } = await readWithIdleTimeout();
           if (done) {
             streamCompleted = true;
             break;
@@ -1895,7 +1956,9 @@ function wrapStreamWithConnectionTracking(
 
         // Stream errored mid-way - send SSE error event to downstream
         try {
-          const sseErrorEvent = createSSEErrorEvent("STREAM_ERROR");
+          const errorCode =
+            error instanceof StreamIdleTimeoutError ? "REQUEST_TIMEOUT" : "STREAM_ERROR";
+          const sseErrorEvent = createSSEErrorEvent(errorCode);
           controller.enqueue(encoder.encode(sseErrorEvent));
           controller.close();
         } catch {
@@ -1906,7 +1969,10 @@ function wrapStreamWithConnectionTracking(
         // Release connection, mark unhealthy, record circuit breaker failure
         releaseConnectionOnce();
         void markUnhealthy(upstreamId, error instanceof Error ? error.message : "Stream error");
-        void recordFailure(upstreamId, "stream_error");
+        void recordFailure(
+          upstreamId,
+          error instanceof StreamIdleTimeoutError ? "stream_idle_timeout" : "stream_error"
+        );
       } finally {
         reader?.releaseLock();
         reader = null;

@@ -3,6 +3,8 @@ export interface CircuitBreakerConfig {
   successThreshold: number;
   openDuration: number;
   probeInterval: number;
+  firstByteTimeout: number;
+  streamIdleTimeout: number;
 }
 
 export const DEFAULT_CIRCUIT_BREAKER_CONFIG: CircuitBreakerConfig = {
@@ -10,4 +12,6 @@ export const DEFAULT_CIRCUIT_BREAKER_CONFIG: CircuitBreakerConfig = {
   successThreshold: 2,
   openDuration: 5 * 60_000,
   probeInterval: 30_000,
+  firstByteTimeout: 30_000,
+  streamIdleTimeout: 60_000,
 };

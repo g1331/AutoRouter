@@ -22,6 +22,8 @@ export interface CircuitBreakerStateResponse {
     success_threshold?: number;
     open_duration?: number; // seconds
     probe_interval?: number; // seconds
+    first_byte_timeout?: number; // seconds
+    stream_idle_timeout?: number; // seconds
   } | null;
   created_at: string;
   updated_at: string;
@@ -33,6 +35,8 @@ function formatCircuitBreakerConfigSeconds(
     successThreshold?: number;
     openDuration?: number;
     probeInterval?: number;
+    firstByteTimeout?: number;
+    streamIdleTimeout?: number;
   } | null
 ): CircuitBreakerStateResponse["config"] {
   if (!config) return null;
@@ -44,6 +48,14 @@ function formatCircuitBreakerConfigSeconds(
       config.openDuration !== undefined ? Math.round(config.openDuration / 1000) : undefined,
     probe_interval:
       config.probeInterval !== undefined ? Math.round(config.probeInterval / 1000) : undefined,
+    first_byte_timeout:
+      config.firstByteTimeout !== undefined
+        ? Math.round(config.firstByteTimeout / 1000)
+        : undefined,
+    stream_idle_timeout:
+      config.streamIdleTimeout !== undefined
+        ? Math.round(config.streamIdleTimeout / 1000)
+        : undefined,
   };
 }
 

@@ -15,6 +15,18 @@ type UpstreamQueuePolicy = {
   max_queue_length?: number | null;
 };
 
+type UpstreamFailureRuleConfig = {
+  useGlobalRules: boolean;
+};
+
+type UpstreamFailureRuleMatch = {
+  statusCodes?: number[] | null;
+  errorTypes?: string[] | null;
+  bodyPattern?: string | null;
+  headerName?: string | null;
+  headerPattern?: string | null;
+};
+
 /**
  * API keys distributed to downstream clients.
  */
@@ -87,6 +99,9 @@ export const upstreams = sqliteTable(
     modelCatalogLastFailedAt: integer("model_catalog_last_failed_at", { mode: "timestamp_ms" }),
     modelRules: text("model_rules", { mode: "json" }).$type<UpstreamModelRule[] | null>(),
     queuePolicy: text("queue_policy", { mode: "json" }).$type<UpstreamQueuePolicy | null>(),
+    failureRuleConfig: text("failure_rule_config", {
+      mode: "json",
+    }).$type<UpstreamFailureRuleConfig | null>(),
     affinityMigration: text("affinity_migration", { mode: "json" }).$type<{
       enabled: boolean;
       metric: "tokens" | "length";
@@ -227,6 +242,8 @@ export const circuitBreakerStates = sqliteTable(
       successThreshold?: number;
       openDuration?: number;
       probeInterval?: number;
+      firstByteTimeout?: number;
+      streamIdleTimeout?: number;
     } | null>(),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
@@ -234,6 +251,31 @@ export const circuitBreakerStates = sqliteTable(
   (table) => [
     index("circuit_breaker_states_upstream_id_idx").on(table.upstreamId),
     index("circuit_breaker_states_state_idx").on(table.state),
+  ]
+);
+
+/**
+ * Custom upstream failure rules that can suppress circuit-breaker failure counts.
+ * upstream_id = NULL means a global rule; non-NULL means an upstream-local rule.
+ */
+export const upstreamFailureRules = sqliteTable(
+  "upstream_failure_rules",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    upstreamId: text("upstream_id").references(() => upstreams.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    priority: integer("priority").notNull().default(0),
+    match: text("match", { mode: "json" }).$type<UpstreamFailureRuleMatch>().notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("upstream_failure_rules_upstream_id_idx").on(table.upstreamId),
+    index("upstream_failure_rules_enabled_idx").on(table.enabled),
+    index("upstream_failure_rules_priority_idx").on(table.priority),
   ]
 );
 
@@ -556,6 +598,7 @@ export const upstreamsRelations = relations(upstreams, ({ one, many }) => ({
     fields: [upstreams.id],
     references: [circuitBreakerStates.upstreamId],
   }),
+  failureRules: many(upstreamFailureRules),
   apiKeys: many(apiKeyUpstreams),
   requestLogs: many(requestLogs),
   requestBillingSnapshots: many(requestBillingSnapshots),
@@ -578,6 +621,13 @@ export const upstreamProbeResultsRelations = relations(upstreamProbeResults, ({ 
 export const circuitBreakerStatesRelations = relations(circuitBreakerStates, ({ one }) => ({
   upstream: one(upstreams, {
     fields: [circuitBreakerStates.upstreamId],
+    references: [upstreams.id],
+  }),
+}));
+
+export const upstreamFailureRulesRelations = relations(upstreamFailureRules, ({ one }) => ({
+  upstream: one(upstreams, {
+    fields: [upstreamFailureRules.upstreamId],
     references: [upstreams.id],
   }),
 }));
@@ -638,6 +688,8 @@ export type RequestLog = typeof requestLogs.$inferSelect;
 export type NewRequestLog = typeof requestLogs.$inferInsert;
 export type CircuitBreakerState = typeof circuitBreakerStates.$inferSelect;
 export type NewCircuitBreakerState = typeof circuitBreakerStates.$inferInsert;
+export type UpstreamFailureRule = typeof upstreamFailureRules.$inferSelect;
+export type NewUpstreamFailureRule = typeof upstreamFailureRules.$inferInsert;
 export type BillingModelPrice = typeof billingModelPrices.$inferSelect;
 export type NewBillingModelPrice = typeof billingModelPrices.$inferInsert;
 export type BillingManualPriceOverride = typeof billingManualPriceOverrides.$inferSelect;

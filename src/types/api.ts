@@ -109,6 +109,8 @@ export interface CircuitBreakerConfig {
   success_threshold?: number;
   open_duration?: number; // seconds
   probe_interval?: number; // seconds
+  first_byte_timeout?: number; // seconds
+  stream_idle_timeout?: number; // seconds
 }
 
 export interface CircuitBreakerStatus {
@@ -133,6 +135,29 @@ export interface CircuitBreakerDetailResponse {
   config: CircuitBreakerConfig | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface UpstreamFailureRuleMatch {
+  status_codes?: number[] | null;
+  error_types?: FailoverErrorType[] | null;
+  body_pattern?: string | null;
+  header_name?: string | null;
+  header_pattern?: string | null;
+}
+
+export interface UpstreamFailureRule {
+  id: string;
+  upstream_id: string | null;
+  name: string;
+  enabled: boolean;
+  priority: number;
+  match: UpstreamFailureRuleMatch;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UpstreamFailureRuleConfig {
+  use_global_rules: boolean;
 }
 
 // Type alias for convenience
@@ -259,6 +284,7 @@ export interface UpstreamCreate {
   timeout?: number;
   max_concurrency?: number | null;
   queue_policy?: UpstreamQueuePolicy | null;
+  failure_rule_config?: UpstreamFailureRuleConfig | null;
   weight?: number; // Load balancing weight (default: 1)
   priority?: number; // Priority tier (default: 0, lower = higher priority)
   route_capabilities?: RouteCapability[] | null; // Path routing capability set
@@ -291,6 +317,7 @@ export interface UpstreamUpdate {
   is_active?: boolean;
   max_concurrency?: number | null;
   queue_policy?: UpstreamQueuePolicy | null;
+  failure_rule_config?: UpstreamFailureRuleConfig | null;
   weight?: number; // Load balancing weight
   priority?: number; // Priority tier (lower = higher priority)
   route_capabilities?: RouteCapability[] | null; // Path routing capability set
@@ -341,6 +368,7 @@ export interface UpstreamResponse {
   current_concurrency?: number;
   max_concurrency?: number | null;
   queue_policy?: UpstreamQueuePolicy | null;
+  failure_rule_config?: UpstreamFailureRuleConfig | null;
   weight: number; // Load balancing weight
   priority: number; // Priority tier (lower = higher priority)
   health_status?: UpstreamHealthResponse | null; // Health status (populated when requested)
@@ -423,6 +451,9 @@ export interface TestUpstreamResponse {
 
 export type FailoverErrorType =
   | "timeout"
+  | "first_byte_timeout"
+  | "stream_idle_timeout"
+  | "stream_error"
   | "http_5xx"
   | "http_4xx"
   | "http_429"
@@ -471,6 +502,12 @@ export interface FailoverAttempt {
   response_body_json?: unknown | null;
   selection_reason?: RoutingSelectionReason | null;
   header_diff?: RequestLogResponse["header_diff"];
+  circuit_breaker_recorded?: boolean | null;
+  matched_failure_rule?: {
+    id: string;
+    name: string;
+    scope: "global" | "upstream";
+  } | null;
 }
 
 /**
