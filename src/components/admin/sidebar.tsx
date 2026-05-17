@@ -18,6 +18,7 @@ import {
   ScrollText,
   Server,
   Settings,
+  ShieldAlert,
   Sun,
   Wrench,
   ArrowLeftRight,
@@ -57,7 +58,7 @@ type NavigationItem = {
 type SystemNavigationItem = {
   href: string;
   icon: typeof LayoutDashboard;
-  labelKey: "headerCompensation" | "billing" | "backgroundSync";
+  labelKey: "headerCompensation" | "billing" | "backgroundSync" | "globalFailureRules";
 };
 
 const navigation: NavigationItem[] = [
@@ -70,6 +71,7 @@ const navigation: NavigationItem[] = [
 const systemNavigation: SystemNavigationItem[] = [
   { href: "/system/billing", icon: Wallet, labelKey: "billing" },
   { href: "/system/background-sync", icon: RefreshCw, labelKey: "backgroundSync" },
+  { href: "/system/failure-rules", icon: ShieldAlert, labelKey: "globalFailureRules" },
   { href: "/system/header-compensation", icon: ArrowLeftRight, labelKey: "headerCompensation" },
 ];
 

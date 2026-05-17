@@ -59,6 +59,7 @@
     "system": "系统",
     "headerCompensation": "请求头补偿",
     "backgroundSync": "后台任务",
+    "globalFailureRules": "全局失败规则",
     "billing": "计费"
   },
   "repository": {

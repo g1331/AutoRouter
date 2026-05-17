@@ -59,6 +59,7 @@
     "system": "System",
     "headerCompensation": "Header Compensation",
     "backgroundSync": "Background Tasks",
+    "globalFailureRules": "Global Failure Rules",
     "billing": "Billing"
   },
   "repository": {
