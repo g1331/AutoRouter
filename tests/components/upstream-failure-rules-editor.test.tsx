@@ -327,6 +327,54 @@ describe("UpstreamFailureRulesEditor", () => {
     expect(mockToastSuccess).toHaveBeenCalledWith("failureRuleCreated");
   });
 
+  it("previews regex matches and blocks invalid regex submissions", () => {
+    render(<UpstreamFailureRulesEditor upstreamId="upstream-1" />);
+
+    const addButton = screen.getByRole("button", { name: "addFailureRule" });
+    fireEvent.change(screen.getByPlaceholderText("failureRuleNamePlaceholder"), {
+      target: { value: "Regex rule" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("failureRuleBodyPatternPlaceholder"), {
+      target: { value: "quota" },
+    });
+
+    const [bodySample] = screen.getAllByPlaceholderText("failureRuleRegexSamplePlaceholder");
+    fireEvent.change(bodySample, {
+      target: { value: "insufficient_quota" },
+    });
+
+    expect(screen.getByText("failureRuleRegexMatched")).toBeInTheDocument();
+    expect(screen.getByText("failureRuleRegexPreviewMatched")).toBeInTheDocument();
+    expect(addButton).toBeEnabled();
+
+    fireEvent.change(screen.getByPlaceholderText("failureRuleBodyPatternPlaceholder"), {
+      target: { value: "[" },
+    });
+
+    expect(screen.getByText("failureRuleRegexInvalid")).toBeInTheDocument();
+    expect(screen.getByText(/failureRuleRegexInvalidDetail/)).toBeInTheDocument();
+    expect(addButton).toBeDisabled();
+  });
+
+  it("shows regex preview miss when the sample does not match", () => {
+    render(<UpstreamFailureRulesEditor upstreamId="upstream-1" />);
+
+    fireEvent.change(screen.getByPlaceholderText("failureRuleHeaderNamePlaceholder"), {
+      target: { value: "x-error-code" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("failureRuleHeaderPatternPlaceholder"), {
+      target: { value: "rate_limit" },
+    });
+
+    const [, headerSample] = screen.getAllByPlaceholderText("failureRuleRegexSamplePlaceholder");
+    fireEvent.change(headerSample, {
+      target: { value: "quota_exceeded" },
+    });
+
+    expect(screen.getByText("failureRuleRegexNotMatched")).toBeInTheDocument();
+    expect(screen.getByText("failureRuleRegexPreviewNotMatched")).toBeInTheDocument();
+  });
+
   it("allows a header-only draft only after both header fields are filled", () => {
     render(<UpstreamFailureRulesEditor upstreamId="upstream-1" />);
 
@@ -353,7 +401,7 @@ describe("UpstreamFailureRulesEditor", () => {
       target: { value: "Broken rule" },
     });
     fireEvent.change(screen.getByPlaceholderText("failureRuleBodyPatternPlaceholder"), {
-      target: { value: "[" },
+      target: { value: "valid-regex" },
     });
     fireEvent.click(screen.getByRole("button", { name: "addFailureRule" }));
 

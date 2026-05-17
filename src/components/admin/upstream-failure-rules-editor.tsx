@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import {
   useCreateGlobalUpstreamFailureRule,
   useCreateUpstreamFailureRule,
@@ -45,12 +46,15 @@ function buildMatch(input: {
   headerName: string;
   headerPattern: string;
 }): UpstreamFailureRuleMatch {
+  const normalizedHeaderName = input.headerName.trim();
+  const normalizedHeaderPattern = input.headerPattern.trim();
   return {
     status_codes: parseStatusCodes(input.statusCodes),
     error_types: parseCsvList(input.errorTypes) as FailoverErrorType[],
     body_pattern: input.bodyPattern.trim() || null,
-    header_name: input.headerName.trim() || null,
-    header_pattern: input.headerPattern.trim() || null,
+    header_name: normalizedHeaderName && normalizedHeaderPattern ? normalizedHeaderName : null,
+    header_pattern:
+      normalizedHeaderName && normalizedHeaderPattern ? normalizedHeaderPattern : null,
   };
 }
 
@@ -121,6 +125,111 @@ function buildRuleSearchText(rule: UpstreamFailureRule): string {
     .toLowerCase();
 }
 
+interface RegexValidationResult {
+  valid: boolean;
+  message: string | null;
+  regex: RegExp | null;
+}
+
+function validateRegexPattern(pattern: string): RegexValidationResult {
+  const trimmed = pattern.trim();
+  if (!trimmed) {
+    return { valid: true, message: null, regex: null };
+  }
+
+  try {
+    return { valid: true, message: null, regex: new RegExp(trimmed) };
+  } catch (error) {
+    return {
+      valid: false,
+      message: error instanceof Error ? error.message : "Invalid regular expression",
+      regex: null,
+    };
+  }
+}
+
+function getRegexPreviewMatch(regex: RegExp | null, sample: string): boolean | null {
+  if (!regex || !sample) {
+    return null;
+  }
+
+  regex.lastIndex = 0;
+  return regex.test(sample);
+}
+
+function RegexPreview({
+  label,
+  pattern,
+  sample,
+  onSampleChange,
+}: {
+  label: string;
+  pattern: string;
+  sample: string;
+  onSampleChange: (value: string) => void;
+}) {
+  const t = useTranslations("upstreams");
+  const validation = useMemo(() => validateRegexPattern(pattern), [pattern]);
+  const previewMatched = useMemo(
+    () => getRegexPreviewMatch(validation.regex, sample),
+    [sample, validation.regex]
+  );
+
+  return (
+    <div className="space-y-2 rounded-cf-sm border border-divider/60 bg-surface-300/35 px-3 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs font-medium text-foreground">{label}</div>
+        {pattern.trim() ? (
+          validation.valid ? (
+            previewMatched === null ? (
+              <Badge variant="outline" className="border-divider text-[10px]">
+                {t("failureRuleRegexWaitingForSample")}
+              </Badge>
+            ) : previewMatched ? (
+              <Badge variant="success" className="text-[10px]">
+                {t("failureRuleRegexMatched")}
+              </Badge>
+            ) : (
+              <Badge variant="warning" className="text-[10px]">
+                {t("failureRuleRegexNotMatched")}
+              </Badge>
+            )
+          ) : (
+            <Badge variant="error" className="text-[10px]">
+              {t("failureRuleRegexInvalid")}
+            </Badge>
+          )
+        ) : (
+          <Badge variant="outline" className="border-divider text-[10px]">
+            {t("failureRuleRegexNotConfigured")}
+          </Badge>
+        )}
+      </div>
+      <Textarea
+        value={sample}
+        onChange={(event) => onSampleChange(event.target.value)}
+        placeholder={t("failureRuleRegexSamplePlaceholder")}
+        className="min-h-[72px] px-3 py-2 font-mono text-xs"
+      />
+      {!validation.valid && validation.message ? (
+        <p className="text-xs text-status-error" role="alert">
+          {t("failureRuleRegexInvalidDetail", { message: validation.message })}
+        </p>
+      ) : pattern.trim() && sample ? (
+        <p
+          className={previewMatched ? "text-xs text-status-success" : "text-xs text-status-warning"}
+        >
+          {previewMatched
+            ? t("failureRuleRegexPreviewMatched")
+            : t("failureRuleRegexPreviewNotMatched")}
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground">{t("failureRuleRegexPreviewHint")}</p>
+      )}
+    </div>
+  );
+}
+
 export function UpstreamFailureRulesEditor({
   upstreamId,
   scope = "upstream",
@@ -144,6 +253,8 @@ export function UpstreamFailureRulesEditor({
   const [headerName, setHeaderName] = useState("");
   const [headerPattern, setHeaderPattern] = useState("");
   const [ruleSearch, setRuleSearch] = useState("");
+  const [bodyPreviewSample, setBodyPreviewSample] = useState("");
+  const [headerPreviewSample, setHeaderPreviewSample] = useState("");
 
   const draftMatch = useMemo(
     () => buildMatch({ statusCodes, errorTypes, bodyPattern, headerName, headerPattern }),
@@ -157,8 +268,14 @@ export function UpstreamFailureRulesEditor({
     }
     return rules.filter((rule) => buildRuleSearchText(rule).includes(normalizedRuleSearch));
   }, [normalizedRuleSearch, rules]);
+  const bodyRegexValidation = useMemo(() => validateRegexPattern(bodyPattern), [bodyPattern]);
+  const headerRegexValidation = useMemo(() => validateRegexPattern(headerPattern), [headerPattern]);
   const canCreate = Boolean(
-    (scope === "global" || upstreamId) && name.trim() && hasRuleCondition(draftMatch)
+    (scope === "global" || upstreamId) &&
+    name.trim() &&
+    hasRuleCondition(draftMatch) &&
+    bodyRegexValidation.valid &&
+    headerRegexValidation.valid
   );
 
   if (scope === "upstream" && !upstreamId) {
@@ -177,6 +294,8 @@ export function UpstreamFailureRulesEditor({
     setBodyPattern("");
     setHeaderName("");
     setHeaderPattern("");
+    setBodyPreviewSample("");
+    setHeaderPreviewSample("");
   };
 
   const handleCreate = async () => {
@@ -367,6 +486,7 @@ export function UpstreamFailureRulesEditor({
             value={bodyPattern}
             onChange={(event) => setBodyPattern(event.target.value)}
             placeholder={t("failureRuleBodyPatternPlaceholder")}
+            aria-invalid={!bodyRegexValidation.valid}
           />
           <div className="grid gap-2 sm:grid-cols-2">
             <Input
@@ -378,8 +498,23 @@ export function UpstreamFailureRulesEditor({
               value={headerPattern}
               onChange={(event) => setHeaderPattern(event.target.value)}
               placeholder={t("failureRuleHeaderPatternPlaceholder")}
+              aria-invalid={!headerRegexValidation.valid}
             />
           </div>
+        </div>
+        <div className="mt-3 grid gap-3 lg:grid-cols-2">
+          <RegexPreview
+            label={t("failureRuleBodyRegexPreview")}
+            pattern={bodyPattern}
+            sample={bodyPreviewSample}
+            onSampleChange={setBodyPreviewSample}
+          />
+          <RegexPreview
+            label={t("failureRuleHeaderRegexPreview")}
+            pattern={headerPattern}
+            sample={headerPreviewSample}
+            onSampleChange={setHeaderPreviewSample}
+          />
         </div>
         <div className="mt-3 flex justify-end">
           <Button
