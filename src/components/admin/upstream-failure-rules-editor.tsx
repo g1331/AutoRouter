@@ -10,8 +10,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
+  useCreateGlobalUpstreamFailureRule,
   useCreateUpstreamFailureRule,
   useDeleteUpstreamFailureRule,
+  useGlobalUpstreamFailureRules,
   useUpdateUpstreamFailureRule,
   useUpstreamFailureRules,
 } from "@/hooks/use-upstreams";
@@ -19,6 +21,7 @@ import type { FailoverErrorType, UpstreamFailureRuleMatch } from "@/types/api";
 
 interface UpstreamFailureRulesEditorProps {
   upstreamId?: string;
+  scope?: "upstream" | "global";
 }
 
 function parseCsvList(value: string): string[] {
@@ -71,10 +74,19 @@ function summarizeMatch(match: UpstreamFailureRuleMatch): string[] {
   return parts;
 }
 
-export function UpstreamFailureRulesEditor({ upstreamId }: UpstreamFailureRulesEditorProps) {
+export function UpstreamFailureRulesEditor({
+  upstreamId,
+  scope = "upstream",
+}: UpstreamFailureRulesEditorProps) {
   const t = useTranslations("upstreams");
-  const rulesQuery = useUpstreamFailureRules(upstreamId, Boolean(upstreamId));
+  const localRulesQuery = useUpstreamFailureRules(
+    upstreamId,
+    scope === "upstream" && Boolean(upstreamId)
+  );
+  const globalRulesQuery = useGlobalUpstreamFailureRules(scope === "global");
+  const rulesQuery = scope === "global" ? globalRulesQuery : localRulesQuery;
   const createRule = useCreateUpstreamFailureRule();
+  const createGlobalRule = useCreateGlobalUpstreamFailureRule();
   const updateRule = useUpdateUpstreamFailureRule();
   const deleteRule = useDeleteUpstreamFailureRule();
   const [name, setName] = useState("");
@@ -89,9 +101,11 @@ export function UpstreamFailureRulesEditor({ upstreamId }: UpstreamFailureRulesE
     () => buildMatch({ statusCodes, errorTypes, bodyPattern, headerName, headerPattern }),
     [bodyPattern, errorTypes, headerName, headerPattern, statusCodes]
   );
-  const canCreate = Boolean(upstreamId && name.trim() && hasRuleCondition(draftMatch));
+  const canCreate = Boolean(
+    (scope === "global" || upstreamId) && name.trim() && hasRuleCondition(draftMatch)
+  );
 
-  if (!upstreamId) {
+  if (scope === "upstream" && !upstreamId) {
     return (
       <div className="rounded-cf-sm border border-divider/50 bg-surface-200/35 px-3 py-3 text-xs text-muted-foreground">
         {t("localFailureRulesCreateModeHint")}
@@ -112,14 +126,19 @@ export function UpstreamFailureRulesEditor({ upstreamId }: UpstreamFailureRulesE
   const handleCreate = async () => {
     if (!canCreate) return;
     try {
-      await createRule.mutateAsync({
-        upstreamId,
-        data: {
-          name: name.trim(),
-          enabled,
-          match: draftMatch,
-        },
-      });
+      const data = {
+        name: name.trim(),
+        enabled,
+        match: draftMatch,
+      };
+      if (scope === "global") {
+        await createGlobalRule.mutateAsync({ data });
+      } else if (upstreamId) {
+        await createRule.mutateAsync({
+          upstreamId,
+          data,
+        });
+      }
       toast.success(t("failureRuleCreated"));
       resetDraft();
     } catch (error) {
@@ -159,6 +178,7 @@ export function UpstreamFailureRulesEditor({ upstreamId }: UpstreamFailureRulesE
                     onCheckedChange={(nextEnabled) => {
                       updateRule.mutate(
                         {
+                          ...(scope === "global" ? { scope } : {}),
                           upstreamId,
                           ruleId: rule.id,
                           data: { enabled: nextEnabled },
@@ -178,7 +198,11 @@ export function UpstreamFailureRulesEditor({ upstreamId }: UpstreamFailureRulesE
                     className="h-8 w-8 text-status-error hover:bg-status-error-muted"
                     onClick={() =>
                       deleteRule.mutate(
-                        { upstreamId, ruleId: rule.id },
+                        {
+                          ...(scope === "global" ? { scope } : {}),
+                          upstreamId,
+                          ruleId: rule.id,
+                        },
                         {
                           onSuccess: () => toast.success(t("failureRuleDeleted")),
                           onError: (error) =>
@@ -196,7 +220,7 @@ export function UpstreamFailureRulesEditor({ upstreamId }: UpstreamFailureRulesE
           ))
         ) : (
           <div className="rounded-cf-sm border border-dashed border-divider px-3 py-3 text-xs text-muted-foreground">
-            {t("localFailureRulesEmpty")}
+            {t(scope === "global" ? "globalFailureRulesEmpty" : "localFailureRulesEmpty")}
           </div>
         )}
       </div>
@@ -248,10 +272,10 @@ export function UpstreamFailureRulesEditor({ upstreamId }: UpstreamFailureRulesE
             type="button"
             variant="outline"
             size="sm"
-            disabled={!canCreate || createRule.isPending}
+            disabled={!canCreate || createRule.isPending || createGlobalRule.isPending}
             onClick={handleCreate}
           >
-            {createRule.isPending ? (
+            {createRule.isPending || createGlobalRule.isPending ? (
               <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
             ) : (
               <Plus className="mr-2 h-3.5 w-3.5" />

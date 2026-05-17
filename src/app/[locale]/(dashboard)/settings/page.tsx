@@ -8,6 +8,7 @@ import {
   LogOut,
   Moon,
   RefreshCw,
+  ShieldAlert,
   SlidersHorizontal,
   Wallet,
 } from "lucide-react";
@@ -33,6 +34,7 @@ export default function SettingsPage() {
   const tBilling = useTranslations("billing");
   const tBackgroundSync = useTranslations("backgroundSync");
   const tRepository = useTranslations("repository");
+  const tFailureRules = useTranslations("upstreamFailureRules");
 
   const settingsItems = [
     {
@@ -61,6 +63,12 @@ export default function SettingsPage() {
       icon: RefreshCw,
       title: tBackgroundSync("title"),
       description: tBackgroundSync("panelDescription"),
+    },
+    {
+      href: "/system/failure-rules",
+      icon: ShieldAlert,
+      title: tFailureRules("title"),
+      description: tFailureRules("settingsDescription"),
     },
     {
       href: "/system/header-compensation",

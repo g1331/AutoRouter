@@ -145,6 +145,21 @@ export function useUpstreamFailureRules(upstreamId: string | undefined, enabled:
   });
 }
 
+export function useGlobalUpstreamFailureRules(enabled: boolean = true) {
+  const { apiClient } = useAuth();
+
+  return useQuery({
+    queryKey: ["upstream-failure-rules", "global"],
+    queryFn: async () => {
+      const response = await apiClient.get<UpstreamFailureRulesResponse>(
+        "/admin/upstream-failure-rules"
+      );
+      return response.data;
+    },
+    enabled,
+  });
+}
+
 export function useCreateUpstreamFailureRule() {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
@@ -160,6 +175,21 @@ export function useCreateUpstreamFailureRule() {
   });
 }
 
+export function useCreateGlobalUpstreamFailureRule() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ data }: { data: UpstreamFailureRuleCreate }) =>
+      apiClient.post<UpstreamFailureRule>("/admin/upstream-failure-rules", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["upstream-failure-rules", "global"],
+      });
+    },
+  });
+}
+
 export function useUpdateUpstreamFailureRule() {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
@@ -170,14 +200,23 @@ export function useUpdateUpstreamFailureRule() {
       ruleId,
       data,
     }: {
-      upstreamId: string;
+      upstreamId?: string;
       ruleId: string;
       data: UpstreamFailureRuleUpdate;
+      scope?: "upstream" | "global";
     }) => apiClient.put<UpstreamFailureRule>(`/admin/upstream-failure-rules/${ruleId}`, data),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ["upstreams", variables.upstreamId, "failure-rules"],
-      });
+      if (variables.scope === "global") {
+        queryClient.invalidateQueries({
+          queryKey: ["upstream-failure-rules", "global"],
+        });
+        return;
+      }
+      if (variables.upstreamId) {
+        queryClient.invalidateQueries({
+          queryKey: ["upstreams", variables.upstreamId, "failure-rules"],
+        });
+      }
     },
   });
 }
@@ -187,12 +226,27 @@ export function useDeleteUpstreamFailureRule() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ upstreamId: _upstreamId, ruleId }: { upstreamId: string; ruleId: string }) =>
-      apiClient.delete<{ success: boolean }>(`/admin/upstream-failure-rules/${ruleId}`),
+    mutationFn: ({
+      upstreamId: _upstreamId,
+      ruleId,
+      scope: _scope,
+    }: {
+      upstreamId?: string;
+      ruleId: string;
+      scope?: "upstream" | "global";
+    }) => apiClient.delete<{ success: boolean }>(`/admin/upstream-failure-rules/${ruleId}`),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ["upstreams", variables.upstreamId, "failure-rules"],
-      });
+      if (variables.scope === "global") {
+        queryClient.invalidateQueries({
+          queryKey: ["upstream-failure-rules", "global"],
+        });
+        return;
+      }
+      if (variables.upstreamId) {
+        queryClient.invalidateQueries({
+          queryKey: ["upstreams", variables.upstreamId, "failure-rules"],
+        });
+      }
     },
   });
 }

@@ -915,6 +915,7 @@
     "useGlobalFailureRulesDesc": "Apply global ignore rules before recording circuit breaker failures for this upstream.",
     "localFailureRulesCreateModeHint": "Save the upstream first, then add local failure rules.",
     "localFailureRulesEmpty": "No local failure rules yet.",
+    "globalFailureRulesEmpty": "No global failure rules yet.",
     "failureRulesLoading": "Loading failure rules...",
     "failureRuleNamePlaceholder": "Rule name",
     "failureRuleEnabled": "Enabled",
@@ -1263,6 +1264,14 @@
     "runError": "Failed to run task: {message}",
     "configSaved": "Background task config saved",
     "configSaveError": "Failed to save task config: {message}"
+  },
+  "upstreamFailureRules": {
+    "title": "Global Failure Rules",
+    "settingsDescription": "Manage shared ignore rules for upstream circuit breaker failures.",
+    "description": "Global rules are checked before recording upstream circuit breaker failures for upstreams that use global failure rules.",
+    "editorLabel": "Global failure rules editor",
+    "editorTitle": "Rules",
+    "editorDescription": "Add shared rules for status codes, error types, response bodies, or response headers."
   },
   "compensation": {
     "title": "Header Compensation",

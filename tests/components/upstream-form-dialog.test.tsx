@@ -65,7 +65,15 @@ vi.mock("@/hooks/use-upstreams", () => ({
     data: [],
     isLoading: false,
   }),
+  useGlobalUpstreamFailureRules: () => ({
+    data: [],
+    isLoading: false,
+  }),
   useCreateUpstreamFailureRule: () => ({
+    mutateAsync: mockFailureRuleMutateAsync,
+    isPending: false,
+  }),
+  useCreateGlobalUpstreamFailureRule: () => ({
     mutateAsync: mockFailureRuleMutateAsync,
     isPending: false,
   }),

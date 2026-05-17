@@ -9,6 +9,7 @@ const { mockToastError, mockToastSuccess } = vi.hoisted(() => ({
 }));
 
 const mockCreateMutateAsync = vi.fn();
+const mockCreateGlobalMutateAsync = vi.fn();
 const mockUpdateMutate = vi.fn();
 const mockDeleteMutate = vi.fn();
 
@@ -35,8 +36,16 @@ vi.mock("@/hooks/use-upstreams", () => ({
     data: hookState.rules,
     isLoading: hookState.isLoading,
   }),
+  useGlobalUpstreamFailureRules: () => ({
+    data: hookState.rules,
+    isLoading: hookState.isLoading,
+  }),
   useCreateUpstreamFailureRule: () => ({
     mutateAsync: mockCreateMutateAsync,
+    isPending: hookState.createPending,
+  }),
+  useCreateGlobalUpstreamFailureRule: () => ({
+    mutateAsync: mockCreateGlobalMutateAsync,
     isPending: hookState.createPending,
   }),
   useUpdateUpstreamFailureRule: () => ({
@@ -75,6 +84,7 @@ describe("UpstreamFailureRulesEditor", () => {
     hookState.isLoading = false;
     hookState.createPending = false;
     mockCreateMutateAsync.mockReset();
+    mockCreateGlobalMutateAsync.mockReset();
     mockUpdateMutate.mockReset();
     mockDeleteMutate.mockReset();
     mockToastError.mockReset();
@@ -97,6 +107,13 @@ describe("UpstreamFailureRulesEditor", () => {
     rerender(<UpstreamFailureRulesEditor upstreamId="upstream-1" />);
 
     expect(screen.getByText("localFailureRulesEmpty")).toBeInTheDocument();
+  });
+
+  it("renders global empty state without save-upstream guidance", () => {
+    render(<UpstreamFailureRulesEditor scope="global" />);
+
+    expect(screen.queryByText("localFailureRulesCreateModeHint")).not.toBeInTheDocument();
+    expect(screen.getByText("globalFailureRulesEmpty")).toBeInTheDocument();
   });
 
   it("renders rule summaries and updates rule enabled state", () => {
@@ -156,6 +173,40 @@ describe("UpstreamFailureRulesEditor", () => {
     expect(mockToastError).toHaveBeenCalledWith("failureRuleDeleteFailed:delete failed");
   });
 
+  it("updates and deletes global rules with global scope", () => {
+    hookState.rules = [createRule({ upstream_id: null })];
+    render(<UpstreamFailureRulesEditor scope="global" />);
+
+    fireEvent.click(screen.getByRole("switch", { name: "failureRuleEnabled" }));
+
+    expect(mockUpdateMutate).toHaveBeenCalledWith(
+      {
+        scope: "global",
+        upstreamId: undefined,
+        ruleId: "rule-1",
+        data: { enabled: false },
+      },
+      expect.objectContaining({
+        onSuccess: expect.any(Function),
+        onError: expect.any(Function),
+      })
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "deleteFailureRule" }));
+
+    expect(mockDeleteMutate).toHaveBeenCalledWith(
+      {
+        scope: "global",
+        upstreamId: undefined,
+        ruleId: "rule-1",
+      },
+      expect.objectContaining({
+        onSuccess: expect.any(Function),
+        onError: expect.any(Function),
+      })
+    );
+  });
+
   it("creates a rule with normalized match values and resets the draft", async () => {
     mockCreateMutateAsync.mockResolvedValueOnce(createRule());
     render(<UpstreamFailureRulesEditor upstreamId="upstream-1" />);
@@ -203,6 +254,38 @@ describe("UpstreamFailureRulesEditor", () => {
     expect(mockToastSuccess).toHaveBeenCalledWith("failureRuleCreated");
     expect(screen.getByPlaceholderText("failureRuleNamePlaceholder")).toHaveValue("");
     expect(screen.getByPlaceholderText("failureRuleStatusCodesPlaceholder")).toHaveValue("");
+  });
+
+  it("creates a global rule with normalized match values", async () => {
+    mockCreateGlobalMutateAsync.mockResolvedValueOnce(createRule({ upstream_id: null }));
+    render(<UpstreamFailureRulesEditor scope="global" />);
+
+    fireEvent.change(screen.getByPlaceholderText("failureRuleNamePlaceholder"), {
+      target: { value: " Global rule " },
+    });
+    fireEvent.change(screen.getByPlaceholderText("failureRuleStatusCodesPlaceholder"), {
+      target: { value: " 500, 503 " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "addFailureRule" }));
+
+    await waitFor(() => {
+      expect(mockCreateGlobalMutateAsync).toHaveBeenCalledWith({
+        data: {
+          name: "Global rule",
+          enabled: true,
+          match: {
+            status_codes: [500, 503],
+            error_types: [],
+            body_pattern: null,
+            header_name: null,
+            header_pattern: null,
+          },
+        },
+      });
+    });
+
+    expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+    expect(mockToastSuccess).toHaveBeenCalledWith("failureRuleCreated");
   });
 
   it("allows a header-only draft only after both header fields are filled", () => {
