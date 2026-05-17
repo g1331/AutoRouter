@@ -1758,6 +1758,34 @@ describe("proxy-client", () => {
       await assertion;
     });
 
+    it("should fail first-byte validation when stream closes before content-bearing data", async () => {
+      const sseData = 'data: {"type":"response.created"}\n\ndata: [DONE]\n\n';
+      const mockResponse = new Response(sseData, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      });
+
+      global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+      const request = new Request("http://localhost/api", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "gpt-4", stream: true }),
+      });
+
+      await expect(
+        forwardRequest(
+          request,
+          { ...mockUpstream, firstByteTimeout: 1000 },
+          "chat/completions",
+          "req-123"
+        )
+      ).rejects.toMatchObject({
+        name: "FirstByteTimeoutError",
+        timeoutMs: 1000,
+      });
+    });
+
     it("should capture usage from streaming SSE events", async () => {
       const sseData =
         'data: {"usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}}\n\ndata: [DONE]\n\n';

@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createClient } from "@libsql/client";
+import { createClient } from "@libsql/client/sqlite3";
 
 const cleanupPaths = new Set<string>();
 

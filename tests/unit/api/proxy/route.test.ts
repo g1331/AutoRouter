@@ -6996,6 +6996,168 @@ describe("proxy route upstream selection", () => {
   });
 
   describe("billing snapshot integration", () => {
+    it("should settle logs and billing when stream idle timeout interrupts the response", async () => {
+      const { db } = await import("@/lib/db");
+      const { forwardRequest } = await import("@/lib/services/proxy-client");
+      const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+      const { updateRequestLog } = await import("@/lib/services/request-logger");
+      const { calculateAndPersistRequestBillingSnapshot } =
+        await import("@/lib/services/billing-cost-service");
+
+      mockGetEffectiveCircuitBreakerConfig.mockResolvedValueOnce({
+        ...DEFAULT_CIRCUIT_BREAKER_TIMEOUTS,
+        failureThreshold: 5,
+        successThreshold: 2,
+        openDuration: 300000,
+        probeInterval: 30000,
+        streamIdleTimeout: 5,
+      });
+
+      const openaiUpstream = {
+        id: "up-openai",
+        name: "openai-main",
+        providerType: "openai",
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+      };
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+      ]);
+      vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+        { upstreamId: "up-openai" },
+      ]);
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+        {
+          ...openaiUpstream,
+          routeCapabilities: ["openai_chat_compatible"],
+        },
+      ]);
+      vi.mocked(db.query.upstreamHealth.findMany).mockResolvedValueOnce([]);
+
+      vi.mocked(selectFromProviderType).mockResolvedValueOnce({
+        upstream: openaiUpstream,
+        providerType: "openai",
+        selectedTier: 0,
+        circuitBreakerFiltered: 0,
+        totalCandidates: 1,
+      });
+
+      vi.mocked(forwardRequest).mockResolvedValueOnce({
+        statusCode: 200,
+        headers: new Headers({ "content-type": "text/event-stream" }),
+        body: new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.close();
+          },
+        }),
+        isStream: true,
+        streamMetricsPromise: new Promise(() => undefined),
+        streamFailurePromise: Promise.resolve({
+          errorType: "stream_idle_timeout",
+          errorMessage: "Upstream stream was idle for 0s",
+          statusCode: 504,
+          matchedFailureRule: null,
+          circuitBreakerRecorded: true,
+          occurredAt: "2026-05-17T00:00:00.000Z",
+        }),
+      } as Awaited<ReturnType<typeof forwardRequest>>);
+
+      const abortController = new AbortController();
+      const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-test",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4.1",
+          messages: [{ role: "user", content: "hello" }],
+          stream: true,
+        }),
+        signal: abortController.signal,
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["chat", "completions"] }),
+      });
+
+      expect(response.status).toBe(200);
+
+      await expect
+        .poll(() =>
+          vi
+            .mocked(updateRequestLog)
+            .mock.calls.some(
+              ([, payload]) =>
+                payload.statusCode === 504 &&
+                payload.errorMessage === "Upstream stream was idle for 0s"
+            )
+        )
+        .toBe(true);
+      await expect
+        .poll(() => vi.mocked(calculateAndPersistRequestBillingSnapshot).mock.calls.length)
+        .toBe(1);
+
+      const failureLogPayload = vi
+        .mocked(updateRequestLog)
+        .mock.calls.find(([, payload]) => payload.statusCode === 504)?.[1];
+      expect(failureLogPayload?.routingDecision).toEqual(
+        expect.objectContaining({
+          failure_stage: "downstream_streaming",
+        })
+      );
+      expect(failureLogPayload?.failoverHistory?.[0]).toEqual(
+        expect.objectContaining({
+          upstream_id: "up-openai",
+          error_type: "stream_idle_timeout",
+          circuit_breaker_recorded: true,
+          matched_failure_rule: null,
+        })
+      );
+    });
+
+    it("should apply failure rules before recording stream idle timeout failures", async () => {
+      const { recordFailure } = await import("@/lib/services/circuit-breaker");
+      const { settleStreamRuntimeFailureForCircuitBreaker } =
+        await import("@/app/api/proxy/v1/[...path]/route");
+      mockMatchFailureRule.mockResolvedValueOnce({
+        id: "idle-rule",
+        name: "Ignore stream idle timeout",
+        scope: "upstream",
+      });
+
+      const settlement = await settleStreamRuntimeFailureForCircuitBreaker({
+        upstreamId: "up-openai",
+        path: "chat/completions",
+        errorType: "stream_idle_timeout",
+        errorMessage: "Upstream stream was idle for 0s",
+      });
+
+      expect(mockMatchFailureRule).toHaveBeenCalledWith({
+        upstreamId: "up-openai",
+        errorType: "stream_idle_timeout",
+        errorMessage: "Upstream stream was idle for 0s",
+      });
+      expect(recordFailure).not.toHaveBeenCalledWith("up-openai", "stream_idle_timeout");
+      expect(settlement).toEqual(
+        expect.objectContaining({
+          errorType: "stream_idle_timeout",
+          statusCode: 504,
+          circuitBreakerRecorded: false,
+          matchedFailureRule: {
+            id: "idle-rule",
+            name: "Ignore stream idle timeout",
+            scope: "upstream",
+          },
+        })
+      );
+    });
+
     it("should persist an unbilled snapshot when downstream streaming disconnect settles the log", async () => {
       const { db } = await import("@/lib/db");
       const { forwardRequest } = await import("@/lib/services/proxy-client");

@@ -897,6 +897,7 @@ async function waitForFirstStreamContent(options: {
   onFirstContent: Promise<void>;
   onStreamDone: Promise<void>;
   abortController: AbortController;
+  hasFirstContent: () => boolean;
 }): Promise<void> {
   if (!options.timeoutMs || options.timeoutMs <= 0) {
     return;
@@ -910,8 +911,14 @@ async function waitForFirstStreamContent(options: {
     }, options.timeoutMs);
   });
 
+  const streamDoneBeforeContentPromise = options.onStreamDone.then(() => {
+    if (!options.hasFirstContent()) {
+      throw new FirstByteTimeoutError(options.timeoutMs ?? 0);
+    }
+  });
+
   try {
-    await Promise.race([options.onFirstContent, options.onStreamDone, timeoutPromise]);
+    await Promise.race([options.onFirstContent, streamDoneBeforeContentPromise, timeoutPromise]);
   } finally {
     if (timeoutId) {
       clearTimeout(timeoutId);
@@ -1108,6 +1115,7 @@ export async function forwardRequest(
       // Streaming response - return stream directly for maximum performance
       let usage: TokenUsage | undefined;
       let ttftMs: number | undefined;
+      let firstContentReceived = false;
       let resolveFirstContent!: () => void;
       let resolveStreamDone!: () => void;
       const firstContentPromise = new Promise<void>((resolve) => {
@@ -1127,6 +1135,7 @@ export async function forwardRequest(
             );
           },
           onFirstChunk: () => {
+            firstContentReceived = true;
             ttftMs = Date.now() - upstreamSendTime;
             reqLog.debug({ ttftMs }, "time to first token");
             resolveFirstContent();
@@ -1152,6 +1161,7 @@ export async function forwardRequest(
         onFirstContent: firstContentPromise,
         onStreamDone: streamDonePromise,
         abortController: controller,
+        hasFirstContent: () => firstContentReceived,
       });
 
       return {
