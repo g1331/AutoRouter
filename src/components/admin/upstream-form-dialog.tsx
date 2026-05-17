@@ -113,6 +113,7 @@ import {
   resolveRouteCapabilities,
 } from "@/lib/route-capabilities";
 import { RouteCapabilityMultiSelect } from "@/components/admin/route-capability-badges";
+import { UpstreamFailureRulesEditor } from "@/components/admin/upstream-failure-rules-editor";
 import { DEFAULT_CIRCUIT_BREAKER_CONFIG } from "@/lib/circuit-breaker-defaults";
 import { inferDefaultModelDiscoveryConfig } from "@/lib/services/upstream-model-types";
 import { cn } from "@/lib/utils";
@@ -131,8 +132,14 @@ const circuitBreakerConfigSchema = z
     success_threshold: z.number().int().min(1).max(100).optional(),
     open_duration: z.number().int().min(1).max(300).optional(),
     probe_interval: z.number().int().min(1).max(60).optional(),
+    first_byte_timeout: z.number().int().min(1).max(300).optional(),
+    stream_idle_timeout: z.number().int().min(1).max(300).optional(),
   })
   .nullable();
+
+const failureRuleConfigSchema = z.object({
+  use_global_rules: z.boolean(),
+});
 
 // Affinity migration config schema
 const affinityMigrationConfigSchema = z
@@ -232,6 +239,10 @@ function getNumericInputValue(value: unknown): string | number {
   return typeof value === "string" || typeof value === "number" ? value : "";
 }
 
+function coerceOptionalNumber(value: unknown): number | undefined {
+  return coerceNumericInput(value, undefined) as number | undefined;
+}
+
 function normalizeUpstreamFormValuesForDirtyCheck(
   values: Readonly<DeepPartial<UpstreamFormValues>> | undefined
 ): Readonly<DeepPartial<UpstreamFormValues>> | undefined {
@@ -286,6 +297,25 @@ function normalizeUpstreamFormValuesForDirtyCheck(
           }
         : rule
     ),
+    circuit_breaker_config: values.circuit_breaker_config
+      ? {
+          failure_threshold: coerceOptionalNumber(values.circuit_breaker_config.failure_threshold),
+          success_threshold: coerceOptionalNumber(values.circuit_breaker_config.success_threshold),
+          open_duration: coerceOptionalNumber(values.circuit_breaker_config.open_duration),
+          probe_interval: coerceOptionalNumber(values.circuit_breaker_config.probe_interval),
+          first_byte_timeout: coerceOptionalNumber(
+            values.circuit_breaker_config.first_byte_timeout
+          ),
+          stream_idle_timeout: coerceOptionalNumber(
+            values.circuit_breaker_config.stream_idle_timeout
+          ),
+        }
+      : values.circuit_breaker_config,
+    failure_rule_config: values.failure_rule_config
+      ? {
+          use_global_rules: values.failure_rule_config.use_global_rules ?? true,
+        }
+      : { use_global_rules: true },
     affinity_migration: values.affinity_migration
       ? {
           ...values.affinity_migration,
@@ -333,6 +363,7 @@ const createUpstreamFormSchema = z
     model_discovery: modelDiscoverySchema,
     model_rules: z.array(modelRuleSchema),
     circuit_breaker_config: circuitBreakerConfigSchema,
+    failure_rule_config: failureRuleConfigSchema,
     affinity_migration: affinityMigrationConfigSchema,
   })
   .refine((data) => hasValidRollingPeriodHours(data.spending_rules), {
@@ -375,6 +406,7 @@ const editUpstreamFormSchema = z
     model_discovery: modelDiscoverySchema,
     model_rules: z.array(modelRuleSchema),
     circuit_breaker_config: circuitBreakerConfigSchema,
+    failure_rule_config: failureRuleConfigSchema,
     affinity_migration: affinityMigrationConfigSchema,
   })
   .refine((data) => hasValidRollingPeriodHours(data.spending_rules), {
@@ -600,8 +632,11 @@ function buildUpstreamFormDefaults(upstream?: Upstream | null): UpstreamFormValu
           success_threshold: upstream.circuit_breaker.config.success_threshold,
           open_duration: upstream.circuit_breaker.config.open_duration,
           probe_interval: upstream.circuit_breaker.config.probe_interval,
+          first_byte_timeout: upstream.circuit_breaker.config.first_byte_timeout,
+          stream_idle_timeout: upstream.circuit_breaker.config.stream_idle_timeout,
         }
       : null,
+    failure_rule_config: upstream?.failure_rule_config ?? { use_global_rules: true },
     affinity_migration: upstream?.affinity_migration ?? null,
   };
 }
@@ -698,6 +733,7 @@ type AdvancedSectionId =
   | "advanced-spending-quota"
   | "advanced-capacity-control"
   | "advanced-circuit-breaker"
+  | "advanced-failure-rules"
   | "advanced-affinity-migration";
 
 type BasicSectionId =
@@ -1053,6 +1089,8 @@ export function UpstreamFormDialog({
     successThreshold: DEFAULT_CIRCUIT_BREAKER_CONFIG.successThreshold,
     openDuration: Math.round(DEFAULT_CIRCUIT_BREAKER_CONFIG.openDuration / 1000),
     probeInterval: Math.round(DEFAULT_CIRCUIT_BREAKER_CONFIG.probeInterval / 1000),
+    firstByteTimeout: Math.round(DEFAULT_CIRCUIT_BREAKER_CONFIG.firstByteTimeout / 1000),
+    streamIdleTimeout: Math.round(DEFAULT_CIRCUIT_BREAKER_CONFIG.streamIdleTimeout / 1000),
   };
   const [configSearchQuery, setConfigSearchQuery] = useState("");
   const [activeSectionId, setActiveSectionId] = useState<ConfigSectionId>("basic-name");
@@ -1086,6 +1124,10 @@ export function UpstreamFormDialog({
   const circuitBreakerConfig = useWatch({
     control: form.control,
     name: "circuit_breaker_config",
+  });
+  const failureRuleConfig = useWatch({
+    control: form.control,
+    name: "failure_rule_config",
   });
 
   // Watch affinity_migration for controlled inputs
@@ -1240,6 +1282,12 @@ export function UpstreamFormDialog({
         id: "advanced-circuit-breaker",
         label: t("circuitBreakerConfig"),
         icon: Shield,
+        category: "configCategoryReliability",
+      },
+      {
+        id: "advanced-failure-rules",
+        label: t("failureRulesConfig"),
+        icon: CircleAlert,
         category: "configCategoryReliability",
       },
       {
@@ -1754,6 +1802,11 @@ export function UpstreamFormDialog({
             success_threshold?: number;
             open_duration?: number;
             probe_interval?: number;
+            first_byte_timeout?: number;
+            stream_idle_timeout?: number;
+          } | null;
+          failure_rule_config?: {
+            use_global_rules: boolean;
           } | null;
           affinity_migration?: {
             enabled: boolean;
@@ -1773,6 +1826,7 @@ export function UpstreamFormDialog({
           model_discovery: toApiModelDiscoveryValue(data.model_discovery),
           model_rules: toApiModelRulesValue(data.model_rules),
           circuit_breaker_config: data.circuit_breaker_config,
+          failure_rule_config: data.failure_rule_config,
           affinity_migration: data.affinity_migration,
         };
         if (officialWebsiteUrl !== null || upstream.official_website_url != null) {
@@ -1826,6 +1880,11 @@ export function UpstreamFormDialog({
             success_threshold?: number;
             open_duration?: number;
             probe_interval?: number;
+            first_byte_timeout?: number;
+            stream_idle_timeout?: number;
+          } | null;
+          failure_rule_config: {
+            use_global_rules: boolean;
           } | null;
           affinity_migration: {
             enabled: boolean;
@@ -1847,6 +1906,7 @@ export function UpstreamFormDialog({
           model_discovery: toApiModelDiscoveryValue(data.model_discovery),
           model_rules: toApiModelRulesValue(data.model_rules),
           circuit_breaker_config: data.circuit_breaker_config,
+          failure_rule_config: data.failure_rule_config,
           affinity_migration: data.affinity_migration,
         };
         if (officialWebsiteUrl) {
@@ -3701,6 +3761,102 @@ export function UpstreamFormDialog({
                           />
                           <p className="text-xs text-muted-foreground">{t("probeIntervalDesc")}</p>
                         </div>
+
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">{t("firstByteTimeout")}</label>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={300}
+                            step={1}
+                            placeholder={t("circuitBreakerUseDefaultPlaceholder", {
+                              value: circuitBreakerDefaults.firstByteTimeout,
+                            })}
+                            value={circuitBreakerConfig?.first_byte_timeout ?? ""}
+                            onChange={(e) => {
+                              const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                              const currentConfig = form.getValues("circuit_breaker_config") || {};
+                              form.setValue(
+                                "circuit_breaker_config",
+                                val !== undefined
+                                  ? { ...currentConfig, first_byte_timeout: val }
+                                  : null,
+                                { shouldValidate: true }
+                              );
+                            }}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            {t("firstByteTimeoutDesc")}
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">{t("streamIdleTimeout")}</label>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={300}
+                            step={1}
+                            placeholder={t("circuitBreakerUseDefaultPlaceholder", {
+                              value: circuitBreakerDefaults.streamIdleTimeout,
+                            })}
+                            value={circuitBreakerConfig?.stream_idle_timeout ?? ""}
+                            onChange={(e) => {
+                              const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                              const currentConfig = form.getValues("circuit_breaker_config") || {};
+                              form.setValue(
+                                "circuit_breaker_config",
+                                val !== undefined
+                                  ? { ...currentConfig, stream_idle_timeout: val }
+                                  : null,
+                                { shouldValidate: true }
+                              );
+                            }}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            {t("streamIdleTimeoutDesc")}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      id="advanced-failure-rules"
+                      className={getSectionClassName("advanced-failure-rules")}
+                    >
+                      <h3 className="mb-4 text-sm font-medium text-muted-foreground">
+                        {t("failureRulesConfig")}
+                      </h3>
+
+                      <FormField
+                        control={form.control}
+                        name="failure_rule_config.use_global_rules"
+                        render={({ field }) => (
+                          <FormItem className="rounded-cf-sm border border-divider/50 bg-surface-200/35 px-3 py-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="space-y-1">
+                                <FormLabel className="m-0 text-sm font-medium text-foreground">
+                                  {t("useGlobalFailureRules")}
+                                </FormLabel>
+                                <FormDescription className="m-0 text-xs">
+                                  {t("useGlobalFailureRulesDesc")}
+                                </FormDescription>
+                              </div>
+                              <FormControl>
+                                <Switch
+                                  aria-label={t("useGlobalFailureRules")}
+                                  checked={failureRuleConfig?.use_global_rules ?? true}
+                                  onCheckedChange={field.onChange}
+                                />
+                              </FormControl>
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <div className="mt-4">
+                        <UpstreamFailureRulesEditor upstreamId={upstream?.id} />
                       </div>
                     </div>
 

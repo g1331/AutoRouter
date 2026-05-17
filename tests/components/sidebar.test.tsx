@@ -50,6 +50,7 @@ vi.mock("lucide-react", () => ({
   Monitor: () => <svg data-testid="icon-monitor" />,
   Wrench: () => <svg data-testid="icon-wrench" />,
   ArrowLeftRight: () => <svg data-testid="icon-arrow-left-right" />,
+  ShieldAlert: () => <svg data-testid="icon-shield-alert" />,
   Wallet: () => <svg data-testid="icon-wallet" />,
   RefreshCw: () => <svg data-testid="icon-refresh-cw" />,
   Github: () => <svg data-testid="icon-github" />,
@@ -147,6 +148,7 @@ describe("Sidebar", () => {
       expect(screen.getAllByText("upstreams").length).toBeGreaterThan(0);
       expect(screen.getAllByText("settings").length).toBeGreaterThan(0);
       expect(screen.getAllByText("billing").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("globalFailureRules").length).toBeGreaterThan(0);
     });
 
     it("renders all navigation icons", () => {
@@ -158,6 +160,7 @@ describe("Sidebar", () => {
       expect(screen.getAllByTestId("icon-server").length).toBeGreaterThan(0);
       expect(screen.getAllByTestId("icon-settings").length).toBeGreaterThan(0);
       expect(screen.getAllByTestId("icon-wallet").length).toBeGreaterThan(0);
+      expect(screen.getAllByTestId("icon-shield-alert").length).toBeGreaterThan(0);
     });
 
     it("does not render deprecated system status label", () => {
@@ -193,6 +196,7 @@ describe("Sidebar", () => {
       expect(hrefs).toContain("/keys");
       expect(hrefs).toContain("/upstreams");
       expect(hrefs).toContain("/logs");
+      expect(hrefs).toContain("/system/failure-rules");
       expect(hrefs).toContain(APP_REPOSITORY_URL);
     });
   });

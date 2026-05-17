@@ -15,6 +15,8 @@ import {
   filterHeaders,
   injectAuthHeader,
   applyCompensationHeaders,
+  FirstByteTimeoutError,
+  StreamIdleTimeoutError,
   type ProxyResult,
   type HeaderDiff,
 } from "@/lib/services/proxy-client";
@@ -41,6 +43,7 @@ import { markHealthy, markUnhealthy } from "@/lib/services/health-checker";
 import {
   recordSuccess,
   recordFailure,
+  getEffectiveCircuitBreakerConfig,
   CircuitBreakerOpenError,
 } from "@/lib/services/circuit-breaker";
 import {
@@ -48,6 +51,7 @@ import {
   UpstreamQueueWaitTimeoutError,
   UpstreamQueueWaitAbortedError,
 } from "@/lib/services/upstream-queue-admission";
+import { matchFailureRule, type MatchedFailureRule } from "@/lib/services/upstream-failure-rules";
 import { randomUUID } from "crypto";
 import {
   type CapabilityProvider,
@@ -813,6 +817,8 @@ function getErrorType(
   statusCode: number | null
 ): FailoverAttempt["error_type"] {
   if (error instanceof CircuitBreakerOpenError) return "circuit_open";
+  if (error instanceof FirstByteTimeoutError) return "first_byte_timeout";
+  if (error instanceof StreamIdleTimeoutError) return "stream_idle_timeout";
   if (statusCode === 429) return "http_429";
   if (statusCode && statusCode >= 400 && statusCode < 500) return "http_4xx";
   if (statusCode && statusCode >= 500) return "http_5xx";
@@ -830,6 +836,9 @@ function getErrorType(
  */
 function isFailoverableError(error: unknown): boolean {
   if (error instanceof CircuitBreakerOpenError) {
+    return true;
+  }
+  if (error instanceof FirstByteTimeoutError || error instanceof StreamIdleTimeoutError) {
     return true;
   }
   if (error instanceof Error) {
@@ -1287,7 +1296,7 @@ async function forwardWithFailover(
   onQueueStateChange?: (queue: RoutingQueueLog) => void | Promise<void>,
   config: FailoverConfig = DEFAULT_FAILOVER_CONFIG
 ): Promise<{
-  result: ProxyResult;
+  result: ProxyResultWithStreamFailure;
   selectedUpstream: Upstream;
   failedUpstreamIds: string[];
   failoverHistory: FailoverAttempt[];
@@ -1485,7 +1494,11 @@ async function forwardWithFailover(
         body: requestBodyBuffer.byteLength > 0 ? requestBodyBuffer : undefined,
       });
 
-      const upstreamForProxy = prepareUpstreamForProxy(selectedUpstream);
+      const circuitBreakerConfig = await getEffectiveCircuitBreakerConfig(selectedUpstream.id);
+      const upstreamForProxy = prepareUpstreamForProxy(selectedUpstream, {
+        firstByteTimeout: circuitBreakerConfig.firstByteTimeout,
+        streamIdleTimeout: circuitBreakerConfig.streamIdleTimeout,
+      });
       attemptUpstreamBaseUrl = upstreamForProxy.baseUrl;
       didSendUpstream = true;
       const result = await forwardRequest(
@@ -1500,11 +1513,21 @@ async function forwardWithFailover(
       if (shouldTriggerFailover(result.statusCode, config)) {
         const failedResponse = await captureFailedResponse(result);
         const errorType = getErrorType(null, result.statusCode);
+        const matchedFailureRule = await matchFailureRule({
+          upstreamId: selectedUpstream.id,
+          statusCode: result.statusCode,
+          errorType,
+          responseHeaders: failedResponse.headers,
+          responseBodyText: failedResponse.bodyText,
+          errorMessage: resolveFailedResponseErrorMessage(result.statusCode, failedResponse),
+        });
+        const circuitBreakerRecorded =
+          shouldRecordCircuitBreakerFailure(path) && matchedFailureRule === null;
         // Release connection and mark as unhealthy
         releaseSelectedConnectionOnce();
         void markUnhealthy(selectedUpstream.id, `HTTP ${result.statusCode} error`);
         // Record failure in circuit breaker when this route should affect upstream reliability.
-        if (shouldRecordCircuitBreakerFailure(path)) {
+        if (circuitBreakerRecorded) {
           void recordFailure(selectedUpstream.id, `http_${result.statusCode}`);
         }
         // Record failover attempt
@@ -1522,6 +1545,8 @@ async function forwardWithFailover(
           response_body_json: failedResponse.bodyJson,
           selection_reason: finalSelectionReason,
           header_diff: result.headerDiff ?? null,
+          circuit_breaker_recorded: circuitBreakerRecorded,
+          matched_failure_rule: matchedFailureRule,
         });
         failedUpstreamIds.push(selectedUpstream.id);
         lastError = new Error(`Upstream returned ${result.statusCode}`);
@@ -1548,14 +1573,58 @@ async function forwardWithFailover(
         // For streaming, wrap the stream to release connection when done
         // and handle mid-stream errors
         const originalStream = result.body as ReadableStream<Uint8Array>;
+        const upstreamStreamFailurePromise = (result as ProxyResultWithStreamFailure)
+          .streamFailurePromise;
+        let resolveStreamFailure!: (settlement: StreamRuntimeFailureSettlement) => void;
+        const trackedStreamFailurePromise = new Promise<StreamRuntimeFailureSettlement>(
+          (resolve) => {
+            resolveStreamFailure = resolve;
+          }
+        );
+        const streamFailurePromise = upstreamStreamFailurePromise
+          ? Promise.race([trackedStreamFailurePromise, upstreamStreamFailurePromise])
+          : trackedStreamFailurePromise;
         const wrappedStream = wrapStreamWithConnectionTracking(
           originalStream,
           selectedUpstream.id,
           releaseSelectedConnectionOnce,
-          request.signal
+          request.signal,
+          upstreamForProxy.streamIdleTimeout,
+          async ({ errorType, errorMessage }) => {
+            let settlement: StreamRuntimeFailureSettlement;
+            try {
+              settlement = await settleStreamRuntimeFailureForCircuitBreaker({
+                upstreamId: selectedUpstream.id,
+                path,
+                errorType,
+                errorMessage,
+              });
+            } catch (handlerError) {
+              log.error(
+                { err: handlerError, upstreamId: selectedUpstream.id, errorType },
+                "failed to settle stream runtime failure"
+              );
+              const circuitBreakerRecorded = shouldRecordCircuitBreakerFailure(path);
+              if (circuitBreakerRecorded) {
+                void recordFailure(selectedUpstream.id, errorType);
+              }
+              settlement = {
+                errorType,
+                errorMessage,
+                statusCode: getHttpStatusForError(
+                  errorType === "stream_idle_timeout" ? "REQUEST_TIMEOUT" : "STREAM_ERROR"
+                ),
+                matchedFailureRule: null,
+                circuitBreakerRecorded,
+                occurredAt: new Date().toISOString(),
+              };
+            }
+            resolveStreamFailure(settlement);
+            return settlement;
+          }
         );
         return {
-          result: { ...result, body: wrappedStream },
+          result: { ...result, body: wrappedStream, streamFailurePromise },
           selectedUpstream,
           failedUpstreamIds,
           failoverHistory,
@@ -1603,7 +1672,17 @@ async function forwardWithFailover(
           error instanceof Error ? error : null,
           errorEvidence.statusCode
         );
-        if (shouldRecordCircuitBreakerFailure(path)) {
+        const matchedFailureRule = await matchFailureRule({
+          upstreamId: selectedUpstream.id,
+          statusCode: errorEvidence.statusCode,
+          errorType,
+          responseHeaders: errorEvidence.responseHeaders,
+          responseBodyText: errorEvidence.responseBodyText,
+          errorMessage: errorEvidence.errorMessage,
+        });
+        const circuitBreakerRecorded =
+          shouldRecordCircuitBreakerFailure(path) && matchedFailureRule === null;
+        if (circuitBreakerRecorded) {
           void recordFailure(selectedUpstream.id, errorType);
         }
 
@@ -1625,6 +1704,8 @@ async function forwardWithFailover(
           response_body_json: errorEvidence.responseBodyJson,
           selection_reason: finalSelectionReason,
           header_diff: errorHeaderDiff,
+          circuit_breaker_recorded: circuitBreakerRecorded,
+          matched_failure_rule: matchedFailureRule,
         });
         failedUpstreamIds.push(selectedUpstream.id);
         lastError = error instanceof Error ? error : new Error(String(error));
@@ -1807,6 +1888,56 @@ class ClientDisconnectedError extends Error {
   }
 }
 
+type StreamRuntimeFailureType = Extract<
+  FailoverAttempt["error_type"],
+  "stream_idle_timeout" | "stream_error"
+>;
+
+interface StreamRuntimeFailureSettlement {
+  errorType: StreamRuntimeFailureType;
+  errorMessage: string;
+  statusCode: number;
+  matchedFailureRule: MatchedFailureRule | null;
+  circuitBreakerRecorded: boolean;
+  occurredAt: string;
+}
+
+interface ProxyResultWithStreamFailure extends ProxyResult {
+  streamFailurePromise?: Promise<StreamRuntimeFailureSettlement>;
+}
+
+/**
+ * Applies failure-rule suppression before recording runtime stream failures.
+ */
+export async function settleStreamRuntimeFailureForCircuitBreaker(input: {
+  upstreamId: string;
+  path: string;
+  errorType: StreamRuntimeFailureType;
+  errorMessage: string;
+}): Promise<StreamRuntimeFailureSettlement> {
+  const matchedFailureRule = await matchFailureRule({
+    upstreamId: input.upstreamId,
+    errorType: input.errorType,
+    errorMessage: input.errorMessage,
+  });
+  const circuitBreakerRecorded =
+    shouldRecordCircuitBreakerFailure(input.path) && matchedFailureRule === null;
+  if (circuitBreakerRecorded) {
+    void recordFailure(input.upstreamId, input.errorType);
+  }
+
+  return {
+    errorType: input.errorType,
+    errorMessage: input.errorMessage,
+    statusCode: getHttpStatusForError(
+      input.errorType === "stream_idle_timeout" ? "REQUEST_TIMEOUT" : "STREAM_ERROR"
+    ),
+    matchedFailureRule,
+    circuitBreakerRecorded,
+    occurredAt: new Date().toISOString(),
+  };
+}
+
 /**
  * Wrap a ReadableStream to track and release connection when the stream ends.
  * Also records circuit breaker success/failure based on stream completion.
@@ -1820,7 +1951,12 @@ function wrapStreamWithConnectionTracking(
   stream: ReadableStream<Uint8Array>,
   upstreamId: string,
   releaseConnectionOnce: () => void,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  streamIdleTimeoutMs?: number,
+  onStreamFailure?: (failure: {
+    errorType: StreamRuntimeFailureType;
+    errorMessage: string;
+  }) => Promise<StreamRuntimeFailureSettlement>
 ): ReadableStream<Uint8Array> {
   let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   let streamCompleted = false;
@@ -1831,6 +1967,28 @@ function wrapStreamWithConnectionTracking(
     if (!disconnectWarnLogged) {
       log.warn({ upstreamId }, message);
       disconnectWarnLogged = true;
+    }
+  };
+
+  const readWithIdleTimeout = async () => {
+    if (!streamIdleTimeoutMs || streamIdleTimeoutMs <= 0) {
+      return reader!.read();
+    }
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const timeoutPromise = new Promise<never>((_resolve, reject) => {
+      timeoutId = setTimeout(() => {
+        void reader?.cancel("stream_idle_timeout").catch(() => undefined);
+        reject(new StreamIdleTimeoutError(streamIdleTimeoutMs));
+      }, streamIdleTimeoutMs);
+    });
+
+    try {
+      return await Promise.race([reader!.read(), timeoutPromise]);
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     }
   };
 
@@ -1869,7 +2027,7 @@ function wrapStreamWithConnectionTracking(
             break;
           }
 
-          const { done, value } = await reader.read();
+          const { done, value } = await readWithIdleTimeout();
           if (done) {
             streamCompleted = true;
             break;
@@ -1895,7 +2053,9 @@ function wrapStreamWithConnectionTracking(
 
         // Stream errored mid-way - send SSE error event to downstream
         try {
-          const sseErrorEvent = createSSEErrorEvent("STREAM_ERROR");
+          const errorCode =
+            error instanceof StreamIdleTimeoutError ? "REQUEST_TIMEOUT" : "STREAM_ERROR";
+          const sseErrorEvent = createSSEErrorEvent(errorCode);
           controller.enqueue(encoder.encode(sseErrorEvent));
           controller.close();
         } catch {
@@ -1903,10 +2063,26 @@ function wrapStreamWithConnectionTracking(
           controller.error(error);
         }
 
+        const errorType: StreamRuntimeFailureType =
+          error instanceof StreamIdleTimeoutError ? "stream_idle_timeout" : "stream_error";
+        const errorMessage = error instanceof Error ? error.message : "Stream error";
+
         // Release connection, mark unhealthy, record circuit breaker failure
         releaseConnectionOnce();
-        void markUnhealthy(upstreamId, error instanceof Error ? error.message : "Stream error");
-        void recordFailure(upstreamId, "stream_error");
+        void markUnhealthy(upstreamId, errorMessage);
+        if (onStreamFailure) {
+          try {
+            await onStreamFailure({ errorType, errorMessage });
+          } catch (handlerError) {
+            log.error(
+              { err: handlerError, upstreamId, errorType },
+              "failed to settle stream runtime failure"
+            );
+            void recordFailure(upstreamId, errorType);
+          }
+        } else {
+          void recordFailure(upstreamId, errorType);
+        }
       } finally {
         reader?.releaseLock();
         reader = null;
@@ -2913,7 +3089,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       finalSelectionReason,
       queue: queueLifecycle,
     } = proxySelection;
-    const result: ProxyResult = proxyResult;
+    const result: ProxyResultWithStreamFailure = proxyResult;
     const upstreamForLogging: Upstream = selected;
     failoverHistory = history;
     excludedCapabilityCandidates = mergeExcludedCandidates(
@@ -3002,6 +3178,15 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       const metricsPromise =
         result.streamMetricsPromise ??
         Promise.resolve({ usage: result.usage ?? null, ttftMs: result.ttftMs });
+      const streamOutcomePromise = result.streamFailurePromise
+        ? Promise.race([
+            metricsPromise.then((metrics) => ({ type: "metrics" as const, metrics })),
+            result.streamFailurePromise.then((failure) => ({
+              type: "failure" as const,
+              failure,
+            })),
+          ])
+        : metricsPromise.then((metrics) => ({ type: "metrics" as const, metrics }));
 
       const settleStreamingDisconnect = async () => {
         if (streamTerminalStateSettled) {
@@ -3097,11 +3282,125 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         });
       };
 
-      void metricsPromise
-        .then(async ({ usage, ttftMs }) => {
+      const settleStreamingFailure = async (failure: StreamRuntimeFailureSettlement) => {
+        if (streamTerminalStateSettled) {
+          return;
+        }
+        streamTerminalStateSettled = true;
+
+        const failureRoutingDecisionLog: RoutingDecisionLog = {
+          ...finalRoutingDecisionLog,
+          failure_stage: "downstream_streaming",
+        };
+        const failureDurationMs = Date.now() - startTime;
+        const failureAttempt: FailoverAttempt = {
+          upstream_id: upstreamForLogging.id,
+          upstream_name: upstreamForLogging.name,
+          upstream_provider_type: resolveUpstreamProvider(
+            upstreamForLogging,
+            matchedRouteCapability
+          ),
+          upstream_base_url: upstreamForLogging.baseUrl,
+          attempted_at: failure.occurredAt,
+          error_type: failure.errorType,
+          error_message: failure.errorMessage,
+          status_code: null,
+          selection_reason: finalSelectionReason,
+          header_diff: headerDiff,
+          circuit_breaker_recorded: failure.circuitBreakerRecorded,
+          matched_failure_rule: failure.matchedFailureRule,
+        };
+        const failureHistory = [...routingDecision.failoverHistory, failureAttempt];
+        const failureUsageForBilling = {
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+        };
+
+        if (requestLogId) {
+          const updatedLog = await updateRequestLog(requestLogId, {
+            ...apiKeySnapshot,
+            upstreamId: upstreamForLogging.id,
+            model: resolvedModel,
+            statusCode: failure.statusCode,
+            durationMs: failureDurationMs,
+            routingDurationMs,
+            errorMessage: failure.errorMessage,
+            routingType: routingDecision.routingType,
+            priorityTier: routingDecision.priorityTier,
+            failoverAttempts: failureHistory.length,
+            failoverHistory: failureHistory,
+            routingDecision: failureRoutingDecisionLog,
+            thinkingConfig,
+            affinityHit: isAffinityHit,
+            affinityMigrated: isAffinityMigrated,
+            isStream: true,
+            sessionIdCompensated,
+            headerDiff,
+          });
+
+          await persistBillingSnapshotSafely({
+            requestLogId: updatedLog?.id ?? requestLogId,
+            apiKeyId: validApiKey.id,
+            upstreamId: upstreamForLogging.id,
+            model: resolvedModel,
+            usage: failureUsageForBilling,
+            requestId,
+          });
+          return;
+        }
+
+        const createdLog = await logRequest({
+          apiKeyId: validApiKey.id,
+          ...apiKeySnapshot,
+          upstreamId: upstreamForLogging.id,
+          method: request.method,
+          path,
+          model: resolvedModel,
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          statusCode: failure.statusCode,
+          durationMs: failureDurationMs,
+          routingDurationMs,
+          errorMessage: failure.errorMessage,
+          routingType: routingDecision.routingType,
+          priorityTier: routingDecision.priorityTier,
+          failoverAttempts: failureHistory.length,
+          failoverHistory: failureHistory,
+          routingDecision: failureRoutingDecisionLog,
+          thinkingConfig,
+          sessionId,
+          affinityHit: isAffinityHit,
+          affinityMigrated: isAffinityMigrated,
+          isStream: true,
+          sessionIdCompensated,
+          headerDiff,
+        });
+
+        await persistBillingSnapshotSafely({
+          requestLogId: createdLog.id,
+          apiKeyId: validApiKey.id,
+          upstreamId: upstreamForLogging.id,
+          model: resolvedModel,
+          usage: failureUsageForBilling,
+          requestId,
+        });
+      };
+
+      void streamOutcomePromise
+        .then(async (outcome) => {
+          if (outcome.type === "failure") {
+            await settleStreamingFailure(outcome.failure);
+            return;
+          }
+
           if (streamTerminalStateSettled || request.signal.aborted) {
             return;
           }
+          const { usage, ttftMs } = outcome.metrics;
 
           // Update session affinity cumulative tokens if we have a session
           if (affinityContext?.sessionId && usage) {

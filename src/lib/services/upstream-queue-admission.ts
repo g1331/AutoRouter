@@ -83,6 +83,9 @@ function normalizePositiveLimit(value: number | null | undefined): number | null
   return value;
 }
 
+/**
+ * Error raised when a queued request waits longer than its limit.
+ */
 export class UpstreamQueueWaitTimeoutError extends Error {
   upstreamId: string;
   requestId: string;
@@ -97,6 +100,9 @@ export class UpstreamQueueWaitTimeoutError extends Error {
   }
 }
 
+/**
+ * Error raised when a queued request is aborted before admission.
+ */
 export class UpstreamQueueWaitAbortedError extends Error {
   upstreamId: string;
   requestId: string;
@@ -111,6 +117,9 @@ export class UpstreamQueueWaitAbortedError extends Error {
   }
 }
 
+/**
+ * Tracks upstream concurrency and queued admission requests.
+ */
 export class UpstreamQueueAdmissionService {
   private states = new Map<string, UpstreamQueueState>();
 

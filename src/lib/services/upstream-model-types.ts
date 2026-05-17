@@ -68,6 +68,9 @@ const INFERRED_DISCOVERY_MODE_BY_PROVIDER: Record<
   google: "gemini_native",
 };
 
+/**
+ * Normalizes a model rule display label.
+ */
 export function normalizeModelRuleDisplayLabel(
   type: UpstreamModelRuleType,
   displayLabel: string | null | undefined
@@ -76,6 +79,9 @@ export function normalizeModelRuleDisplayLabel(
   return normalized && normalized.length > 0 ? normalized : MODEL_RULE_DISPLAY_LABELS[type];
 }
 
+/**
+ * Normalizes a model rule source value.
+ */
 export function normalizeModelRuleSource(
   source: string | null | undefined
 ): UpstreamModelRuleSource {
@@ -85,6 +91,9 @@ export function normalizeModelRuleSource(
   return "manual";
 }
 
+/**
+ * Normalizes a model catalog source value.
+ */
 export function normalizeModelCatalogSource(
   source: string | null | undefined
 ): UpstreamModelCatalogSource {
@@ -94,6 +103,9 @@ export function normalizeModelCatalogSource(
   return source === "inferred" ? "inferred" : "native";
 }
 
+/**
+ * Normalizes upstream model discovery configuration.
+ */
 export function normalizeUpstreamModelDiscoveryConfig(
   config: Partial<UpstreamModelDiscoveryConfig> | null | undefined,
   fallbackMode: UpstreamModelDiscoveryMode = "openai_compatible"
@@ -109,6 +121,9 @@ export function normalizeUpstreamModelDiscoveryConfig(
   };
 }
 
+/**
+ * Infers a discovery mode from route capabilities.
+ */
 export function inferDiscoveryModeFromRouteCapabilities(
   routeCapabilities: readonly RouteCapability[] | readonly string[] | null | undefined
 ): UpstreamModelDiscoveryMode | null {
@@ -121,6 +136,9 @@ export function inferDiscoveryModeFromRouteCapabilities(
   return provider ? INFERRED_DISCOVERY_MODE_BY_PROVIDER[provider] : null;
 }
 
+/**
+ * Builds the default discovery config for route capabilities.
+ */
 export function inferDefaultModelDiscoveryConfig(
   routeCapabilities: readonly RouteCapability[] | readonly string[] | null | undefined
 ): UpstreamModelDiscoveryConfig | null {

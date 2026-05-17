@@ -22,6 +22,11 @@ vi.mock("@/providers/auth-provider", () => ({
   }),
 }));
 
+vi.mock("next-intl", () => ({
+  useTranslations: () => (key: string, values?: Record<string, string | number | null>) =>
+    values?.message ? `${key}: ${values.message}` : key,
+}));
+
 /**
  * Mock sonner toast
  */
@@ -624,6 +629,262 @@ describe("catalog mutations", () => {
   });
 });
 
+describe("upstream failure rule hooks", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("fetches upstream failure rules when enabled", async () => {
+    const response = {
+      data: [
+        {
+          id: "rule-1",
+          upstream_id: "upstream-1",
+          name: "Ignore rate limit",
+          enabled: true,
+          priority: 0,
+          match: { status_codes: [429] },
+          created_at: "2026-05-16T00:00:00.000Z",
+          updated_at: "2026-05-16T00:00:00.000Z",
+        },
+      ],
+    };
+    mockGet.mockResolvedValueOnce(response);
+
+    const { useUpstreamFailureRules } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useUpstreamFailureRules("upstream-1"), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(mockGet).toHaveBeenCalledWith("/admin/upstreams/upstream-1/failure-rules");
+    expect(result.current.data).toEqual(response.data);
+  });
+
+  it("does not fetch upstream failure rules without an upstream id", async () => {
+    const { useUpstreamFailureRules } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    renderHook(() => useUpstreamFailureRules(undefined), { wrapper });
+
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it("fetches global upstream failure rules when enabled", async () => {
+    const response = {
+      data: [
+        {
+          id: "rule-1",
+          upstream_id: null,
+          name: "Global timeout rule",
+          enabled: true,
+          priority: 0,
+          match: { error_types: ["timeout"] },
+          created_at: "2026-05-16T00:00:00.000Z",
+          updated_at: "2026-05-16T00:00:00.000Z",
+        },
+      ],
+    };
+    mockGet.mockResolvedValueOnce(response);
+
+    const { useGlobalUpstreamFailureRules } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useGlobalUpstreamFailureRules(), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(mockGet).toHaveBeenCalledWith("/admin/upstream-failure-rules");
+    expect(result.current.data).toEqual(response.data);
+  });
+
+  it("creates upstream failure rules and invalidates local rule cache", async () => {
+    mockPost.mockResolvedValueOnce({
+      id: "rule-1",
+      upstream_id: "upstream-1",
+      name: "Ignore rate limit",
+      enabled: true,
+      priority: 0,
+      match: { status_codes: [429] },
+      created_at: "2026-05-16T00:00:00.000Z",
+      updated_at: "2026-05-16T00:00:00.000Z",
+    });
+
+    const { useCreateUpstreamFailureRule } = await import("@/hooks/use-upstreams");
+    const { queryClient, wrapper } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    const { result } = renderHook(() => useCreateUpstreamFailureRule(), { wrapper });
+
+    result.current.mutate({
+      upstreamId: "upstream-1",
+      data: {
+        name: "Ignore rate limit",
+        match: { status_codes: [429] },
+      },
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(mockPost).toHaveBeenCalledWith("/admin/upstreams/upstream-1/failure-rules", {
+      name: "Ignore rate limit",
+      match: { status_codes: [429] },
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ["upstreams", "upstream-1", "failure-rules"],
+    });
+  });
+
+  it("creates global upstream failure rules and invalidates global rule cache", async () => {
+    mockPost.mockResolvedValueOnce({
+      id: "rule-1",
+      upstream_id: null,
+      name: "Global timeout rule",
+      enabled: true,
+      priority: 0,
+      match: { error_types: ["timeout"] },
+      created_at: "2026-05-16T00:00:00.000Z",
+      updated_at: "2026-05-16T00:00:00.000Z",
+    });
+
+    const { useCreateGlobalUpstreamFailureRule } = await import("@/hooks/use-upstreams");
+    const { queryClient, wrapper } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    const { result } = renderHook(() => useCreateGlobalUpstreamFailureRule(), { wrapper });
+
+    result.current.mutate({
+      data: {
+        name: "Global timeout rule",
+        match: { error_types: ["timeout"] },
+      },
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(mockPost).toHaveBeenCalledWith("/admin/upstream-failure-rules", {
+      name: "Global timeout rule",
+      match: { error_types: ["timeout"] },
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ["upstream-failure-rules", "global"],
+    });
+  });
+
+  it("updates upstream failure rules through the shared rule endpoint", async () => {
+    mockPut.mockResolvedValueOnce({
+      id: "rule-1",
+      upstream_id: "upstream-1",
+      name: "Ignore rate limit",
+      enabled: false,
+      priority: 0,
+      match: { status_codes: [429] },
+      created_at: "2026-05-16T00:00:00.000Z",
+      updated_at: "2026-05-16T00:00:00.000Z",
+    });
+
+    const { useUpdateUpstreamFailureRule } = await import("@/hooks/use-upstreams");
+    const { queryClient, wrapper } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    const { result } = renderHook(() => useUpdateUpstreamFailureRule(), { wrapper });
+
+    result.current.mutate({
+      upstreamId: "upstream-1",
+      ruleId: "rule-1",
+      data: { enabled: false },
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(mockPut).toHaveBeenCalledWith("/admin/upstream-failure-rules/rule-1", {
+      enabled: false,
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ["upstreams", "upstream-1", "failure-rules"],
+    });
+  });
+
+  it("updates global failure rules through the shared rule endpoint", async () => {
+    mockPut.mockResolvedValueOnce({
+      id: "rule-1",
+      upstream_id: null,
+      name: "Global timeout rule",
+      enabled: false,
+      priority: 0,
+      match: { error_types: ["timeout"] },
+      created_at: "2026-05-16T00:00:00.000Z",
+      updated_at: "2026-05-16T00:00:00.000Z",
+    });
+
+    const { useUpdateUpstreamFailureRule } = await import("@/hooks/use-upstreams");
+    const { queryClient, wrapper } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    const { result } = renderHook(() => useUpdateUpstreamFailureRule(), { wrapper });
+
+    result.current.mutate({
+      scope: "global",
+      ruleId: "rule-1",
+      data: { enabled: false },
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(mockPut).toHaveBeenCalledWith("/admin/upstream-failure-rules/rule-1", {
+      enabled: false,
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ["upstream-failure-rules", "global"],
+    });
+  });
+
+  it("deletes upstream failure rules through the shared rule endpoint", async () => {
+    mockDelete.mockResolvedValueOnce({ success: true });
+
+    const { useDeleteUpstreamFailureRule } = await import("@/hooks/use-upstreams");
+    const { queryClient, wrapper } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    const { result } = renderHook(() => useDeleteUpstreamFailureRule(), { wrapper });
+
+    result.current.mutate({
+      upstreamId: "upstream-1",
+      ruleId: "rule-1",
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(mockDelete).toHaveBeenCalledWith("/admin/upstream-failure-rules/rule-1");
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ["upstreams", "upstream-1", "failure-rules"],
+    });
+  });
+
+  it("deletes global failure rules through the shared rule endpoint", async () => {
+    mockDelete.mockResolvedValueOnce({ success: true });
+
+    const { useDeleteUpstreamFailureRule } = await import("@/hooks/use-upstreams");
+    const { queryClient, wrapper } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    const { result } = renderHook(() => useDeleteUpstreamFailureRule(), { wrapper });
+
+    result.current.mutate({
+      scope: "global",
+      ruleId: "rule-1",
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(mockDelete).toHaveBeenCalledWith("/admin/upstream-failure-rules/rule-1");
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ["upstream-failure-rules", "global"],
+    });
+  });
+});
+
 describe("useToggleUpstreamActive", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -662,7 +923,7 @@ describe("useToggleUpstreamActive", () => {
     const updatedAll = queryClient.getQueryData<Upstream[]>(["upstreams", "all"]);
     expect(updatedAll?.[0]?.is_active).toBe(true);
 
-    expect(mockToastSuccess).toHaveBeenCalledWith("Upstream 已启用");
+    expect(mockToastSuccess).toHaveBeenCalledWith("enableSuccess");
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["upstreams"] });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["upstreams", "health"] });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["stats", "upstreams"] });
@@ -702,7 +963,7 @@ describe("useToggleUpstreamActive", () => {
     const restoredAll = queryClient.getQueryData<Upstream[]>(["upstreams", "all"]);
     expect(restoredAll).toEqual(initialAll);
 
-    expect(mockToastError).toHaveBeenCalledWith("更新失败: Toggle failed");
+    expect(mockToastError).toHaveBeenCalledWith("updateFailed: Toggle failed");
   });
 
   it("shows disable toast when disabling upstream", async () => {
@@ -725,7 +986,7 @@ describe("useToggleUpstreamActive", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(mockToastSuccess).toHaveBeenCalledWith("Upstream 已停用");
+    expect(mockToastSuccess).toHaveBeenCalledWith("disableSuccess");
   });
 });
 

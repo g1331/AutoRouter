@@ -9,6 +9,9 @@ const log = createLogger("admin-upstream-catalog-refresh");
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+/**
+ * Refreshes an upstream model catalog from its provider endpoint.
+ */
 export async function POST(request: NextRequest, context: RouteContext) {
   const authHeader = request.headers.get("authorization");
   if (!validateAdminAuth(authHeader)) {

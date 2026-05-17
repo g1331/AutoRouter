@@ -1505,6 +1505,7 @@ describe("proxy-client", () => {
     });
 
     afterEach(() => {
+      vi.useRealTimers();
       global.fetch = originalFetch;
       vi.restoreAllMocks();
     });
@@ -1720,6 +1721,69 @@ describe("proxy-client", () => {
       );
       expect(typeof streamMetrics?.ttftMs).toBe("number");
       expect(streamMetrics?.ttftMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it("should time out when a stream never emits content-bearing data", async () => {
+      vi.useFakeTimers();
+      const encoder = new TextEncoder();
+      const metadataOnlyStream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"type":"response.created"}\n\n'));
+        },
+      });
+      const mockResponse = new Response(metadataOnlyStream, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      });
+      global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+      const request = new Request("http://localhost/api", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "gpt-4", stream: true }),
+      });
+
+      const result = forwardRequest(
+        request,
+        { ...mockUpstream, firstByteTimeout: 25 },
+        "chat/completions",
+        "req-123"
+      );
+      const assertion = expect(result).rejects.toMatchObject({
+        name: "FirstByteTimeoutError",
+        timeoutMs: 25,
+      });
+
+      await vi.runAllTimersAsync();
+      await assertion;
+    });
+
+    it("should fail first-byte validation when stream closes before content-bearing data", async () => {
+      const sseData = 'data: {"type":"response.created"}\n\ndata: [DONE]\n\n';
+      const mockResponse = new Response(sseData, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      });
+
+      global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+      const request = new Request("http://localhost/api", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "gpt-4", stream: true }),
+      });
+
+      await expect(
+        forwardRequest(
+          request,
+          { ...mockUpstream, firstByteTimeout: 1000 },
+          "chat/completions",
+          "req-123"
+        )
+      ).rejects.toMatchObject({
+        name: "FirstByteTimeoutError",
+        timeoutMs: 1000,
+      });
     });
 
     it("should capture usage from streaming SSE events", async () => {

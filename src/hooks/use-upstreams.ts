@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { useAuth } from "@/providers/auth-provider";
 import type {
   Upstream,
@@ -14,8 +15,18 @@ import type {
   UpstreamQuotaStatusResponse,
   UpstreamCatalogPreviewRequest,
   UpstreamCatalogPreviewResponse,
+  UpstreamFailureRule,
+  UpstreamFailureRuleCreate,
+  UpstreamFailureRuleUpdate,
+  UpstreamFailureRulesResponse,
 } from "@/types/api";
 import { toast } from "sonner";
+
+type UpstreamsTranslator = (key: string, values?: Record<string, string | number | null>) => string;
+
+function formatUpstreamError(t: UpstreamsTranslator, key: string, error: Error): string {
+  return t(key, { message: error.message });
+}
 
 /**
  * Response type for upstream health endpoint
@@ -81,6 +92,7 @@ export function useAllUpstreams() {
 export function useCreateUpstream() {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
+  const t = useTranslations("upstreams") as UpstreamsTranslator;
 
   return useMutation({
     mutationFn: (data: UpstreamCreate) => apiClient.post<Upstream>("/admin/upstreams", data),
@@ -88,10 +100,10 @@ export function useCreateUpstream() {
       queryClient.invalidateQueries({ queryKey: ["upstreams"] });
       queryClient.invalidateQueries({ queryKey: ["stats", "upstreams"] });
       queryClient.invalidateQueries({ queryKey: ["upstreams", "quota"] });
-      toast.success("Upstream 已创建");
+      toast.success(t("createSuccess"));
     },
     onError: (error: Error) => {
-      toast.error(`创建失败: ${error.message}`);
+      toast.error(formatUpstreamError(t, "createFailed", error));
     },
   });
 }
@@ -102,6 +114,7 @@ export function useCreateUpstream() {
 export function useUpdateUpstream() {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
+  const t = useTranslations("upstreams") as UpstreamsTranslator;
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpstreamUpdate }) =>
@@ -109,10 +122,131 @@ export function useUpdateUpstream() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["upstreams"] });
       queryClient.invalidateQueries({ queryKey: ["upstreams", "quota"] });
-      toast.success("Upstream 已更新");
+      toast.success(t("updateSuccess"));
     },
     onError: (error: Error) => {
-      toast.error(`更新失败: ${error.message}`);
+      toast.error(formatUpstreamError(t, "updateFailed", error));
+    },
+  });
+}
+
+export function useUpstreamFailureRules(upstreamId: string | undefined, enabled: boolean = true) {
+  const { apiClient } = useAuth();
+
+  return useQuery({
+    queryKey: ["upstreams", upstreamId, "failure-rules"],
+    queryFn: async () => {
+      const response = await apiClient.get<UpstreamFailureRulesResponse>(
+        `/admin/upstreams/${upstreamId}/failure-rules`
+      );
+      return response.data;
+    },
+    enabled: enabled && !!upstreamId,
+  });
+}
+
+export function useGlobalUpstreamFailureRules(enabled: boolean = true) {
+  const { apiClient } = useAuth();
+
+  return useQuery({
+    queryKey: ["upstream-failure-rules", "global"],
+    queryFn: async () => {
+      const response = await apiClient.get<UpstreamFailureRulesResponse>(
+        "/admin/upstream-failure-rules"
+      );
+      return response.data;
+    },
+    enabled,
+  });
+}
+
+export function useCreateUpstreamFailureRule() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ upstreamId, data }: { upstreamId: string; data: UpstreamFailureRuleCreate }) =>
+      apiClient.post<UpstreamFailureRule>(`/admin/upstreams/${upstreamId}/failure-rules`, data),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["upstreams", variables.upstreamId, "failure-rules"],
+      });
+    },
+  });
+}
+
+export function useCreateGlobalUpstreamFailureRule() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ data }: { data: UpstreamFailureRuleCreate }) =>
+      apiClient.post<UpstreamFailureRule>("/admin/upstream-failure-rules", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["upstream-failure-rules", "global"],
+      });
+    },
+  });
+}
+
+export function useUpdateUpstreamFailureRule() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      upstreamId: _upstreamId,
+      ruleId,
+      data,
+    }: {
+      upstreamId?: string;
+      ruleId: string;
+      data: UpstreamFailureRuleUpdate;
+      scope?: "upstream" | "global";
+    }) => apiClient.put<UpstreamFailureRule>(`/admin/upstream-failure-rules/${ruleId}`, data),
+    onSuccess: (_data, variables) => {
+      if (variables.scope === "global") {
+        queryClient.invalidateQueries({
+          queryKey: ["upstream-failure-rules", "global"],
+        });
+        return;
+      }
+      if (variables.upstreamId) {
+        queryClient.invalidateQueries({
+          queryKey: ["upstreams", variables.upstreamId, "failure-rules"],
+        });
+      }
+    },
+  });
+}
+
+export function useDeleteUpstreamFailureRule() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      upstreamId: _upstreamId,
+      ruleId,
+      scope: _scope,
+    }: {
+      upstreamId?: string;
+      ruleId: string;
+      scope?: "upstream" | "global";
+    }) => apiClient.delete<{ success: boolean }>(`/admin/upstream-failure-rules/${ruleId}`),
+    onSuccess: (_data, variables) => {
+      if (variables.scope === "global") {
+        queryClient.invalidateQueries({
+          queryKey: ["upstream-failure-rules", "global"],
+        });
+        return;
+      }
+      if (variables.upstreamId) {
+        queryClient.invalidateQueries({
+          queryKey: ["upstreams", variables.upstreamId, "failure-rules"],
+        });
+      }
     },
   });
 }
@@ -123,15 +257,16 @@ export function useUpdateUpstream() {
 export function useRefreshUpstreamCatalog() {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
+  const t = useTranslations("upstreams") as UpstreamsTranslator;
 
   return useMutation({
     mutationFn: (id: string) => apiClient.post<Upstream>(`/admin/upstreams/${id}/catalog/refresh`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["upstreams"] });
-      toast.success("模型目录已刷新");
+      toast.success(t("catalogRefreshSuccess"));
     },
     onError: (error: Error) => {
-      toast.error(`刷新目录失败: ${error.message}`);
+      toast.error(formatUpstreamError(t, "catalogRefreshFailed", error));
     },
   });
 }
@@ -141,6 +276,7 @@ export function useRefreshUpstreamCatalog() {
  */
 export function usePreviewUpstreamCatalog() {
   const { apiClient } = useAuth();
+  const t = useTranslations("upstreams") as UpstreamsTranslator;
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpstreamCatalogPreviewRequest }) =>
@@ -149,10 +285,10 @@ export function usePreviewUpstreamCatalog() {
         data
       ),
     onSuccess: () => {
-      toast.success("模型目录已刷新");
+      toast.success(t("catalogRefreshSuccess"));
     },
     onError: (error: Error) => {
-      toast.error(`刷新目录失败: ${error.message}`);
+      toast.error(formatUpstreamError(t, "catalogRefreshFailed", error));
     },
   });
 }
@@ -163,16 +299,17 @@ export function usePreviewUpstreamCatalog() {
 export function useImportUpstreamCatalogModels() {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
+  const t = useTranslations("upstreams") as UpstreamsTranslator;
 
   return useMutation({
     mutationFn: ({ id, models }: { id: string; models: string[] }) =>
       apiClient.post<Upstream>(`/admin/upstreams/${id}/catalog/import`, { models }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["upstreams"] });
-      toast.success("模型规则已导入");
+      toast.success(t("catalogImportSuccess"));
     },
     onError: (error: Error) => {
-      toast.error(`导入模型失败: ${error.message}`);
+      toast.error(formatUpstreamError(t, "catalogImportFailed", error));
     },
   });
 }
@@ -183,6 +320,7 @@ export function useImportUpstreamCatalogModels() {
 export function useToggleUpstreamActive() {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
+  const t = useTranslations("upstreams") as UpstreamsTranslator;
 
   return useMutation<
     Upstream,
@@ -241,10 +379,10 @@ export function useToggleUpstreamActive() {
       if (context?.previousAll) {
         queryClient.setQueryData(["upstreams", "all"], context.previousAll);
       }
-      toast.error(`更新失败: ${error.message}`);
+      toast.error(formatUpstreamError(t, "updateFailed", error));
     },
     onSuccess: (_data, variables) => {
-      toast.success(variables.nextActive ? "Upstream 已启用" : "Upstream 已停用");
+      toast.success(variables.nextActive ? t("enableSuccess") : t("disableSuccess"));
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["upstreams"] });
@@ -260,6 +398,7 @@ export function useToggleUpstreamActive() {
 export function useDeleteUpstream() {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
+  const t = useTranslations("upstreams") as UpstreamsTranslator;
 
   return useMutation({
     mutationFn: (id: string) => apiClient.delete(`/admin/upstreams/${id}`),
@@ -290,10 +429,10 @@ export function useDeleteUpstream() {
 
       queryClient.invalidateQueries({ queryKey: ["upstreams"] });
       queryClient.invalidateQueries({ queryKey: ["stats", "upstreams"] });
-      toast.success("Upstream 已删除");
+      toast.success(t("deleteSuccess"));
     },
     onError: (error: Error) => {
-      toast.error(`删除失败: ${error.message}`);
+      toast.error(formatUpstreamError(t, "deleteFailed", error));
     },
   });
 }
@@ -332,6 +471,7 @@ export function useUpstreamProbes(upstreamId?: string, enabled: boolean = true) 
 export function useExecuteUpstreamProbe() {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
+  const t = useTranslations("upstreams") as UpstreamsTranslator;
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data?: ExecuteUpstreamProbeRequest }) =>
@@ -339,10 +479,10 @@ export function useExecuteUpstreamProbe() {
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: ["upstreams", "probes"] });
       queryClient.invalidateQueries({ queryKey: ["upstreams", "probes", variables.id] });
-      toast.success("诊断探测已完成");
+      toast.success(t("probeSuccess"));
     },
     onError: (error: Error) => {
-      toast.error(`诊断探测失败: ${error.message}`);
+      toast.error(formatUpstreamError(t, "probeFailed", error));
     },
   });
 }

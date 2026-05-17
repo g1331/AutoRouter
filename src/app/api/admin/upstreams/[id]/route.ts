@@ -30,6 +30,12 @@ const circuitBreakerConfigSchema = z.object({
   // seconds (preferred) or legacy milliseconds
   open_duration: z.number().int().min(1).max(300000).optional(),
   probe_interval: z.number().int().min(1).max(60000).optional(),
+  first_byte_timeout: z.number().int().min(1).max(300000).optional(),
+  stream_idle_timeout: z.number().int().min(1).max(300000).optional(),
+});
+
+const failureRuleConfigSchema = z.object({
+  use_global_rules: z.boolean(),
 });
 
 const affinityMigrationConfigSchema = z.object({
@@ -78,11 +84,11 @@ const modelRuleSchema = z
 
 function normalizeDurationToMs(
   value: number | undefined,
-  kind: "open_duration" | "probe_interval"
+  kind: "open_duration" | "probe_interval" | "first_byte_timeout" | "stream_idle_timeout"
 ): number | undefined {
   if (value === undefined) return undefined;
   // Backward compatible: if the value is within the old ms ranges, it will be > 300 (open) or > 60 (probe).
-  const secondsUpperBound = kind === "open_duration" ? 300 : 60;
+  const secondsUpperBound = kind === "probe_interval" ? 60 : 300;
   return value > secondsUpperBound ? value : value * 1000;
 }
 
@@ -98,6 +104,7 @@ const updateUpstreamSchema = z
     config: z.string().nullable().optional(),
     max_concurrency: z.number().int().positive().nullable().optional(),
     queue_policy: queuePolicySchema.nullable().optional(),
+    failure_rule_config: failureRuleConfigSchema.nullable().optional(),
     weight: z.number().int().min(1).max(100).optional(),
     priority: z.number().int().min(0).optional(),
     route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)).nullable().optional(),
@@ -198,6 +205,11 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     if (validated.config !== undefined) input.config = validated.config;
     if (validated.max_concurrency !== undefined) input.maxConcurrency = validated.max_concurrency;
     if (validated.queue_policy !== undefined) input.queuePolicy = validated.queue_policy ?? null;
+    if (validated.failure_rule_config !== undefined) {
+      input.failureRuleConfig = validated.failure_rule_config
+        ? { useGlobalRules: validated.failure_rule_config.use_global_rules }
+        : null;
+    }
     if (validated.weight !== undefined) input.weight = validated.weight;
     if (validated.priority !== undefined) input.priority = validated.priority;
     if (validated.route_capabilities !== undefined) {
@@ -260,6 +272,14 @@ export async function PUT(request: NextRequest, context: RouteContext) {
             probeInterval: normalizeDurationToMs(
               validated.circuit_breaker_config.probe_interval,
               "probe_interval"
+            ),
+            firstByteTimeout: normalizeDurationToMs(
+              validated.circuit_breaker_config.first_byte_timeout,
+              "first_byte_timeout"
+            ),
+            streamIdleTimeout: normalizeDurationToMs(
+              validated.circuit_breaker_config.stream_idle_timeout,
+              "stream_idle_timeout"
             ),
           }
         : null;

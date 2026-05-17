@@ -13,6 +13,9 @@ export const UPSTREAM_MODEL_CATALOG_SYNC_TASK_NAME = "upstream_model_catalog_syn
 const DEFAULT_MODEL_CATALOG_SYNC_INTERVAL_SECONDS = 86_400;
 const DEFAULT_BACKGROUND_SYNC_STARTUP_DELAY_SECONDS = 60;
 
+/**
+ * Determines whether an upstream should refresh its model catalog automatically.
+ */
 function isUpstreamEligibleForBackgroundCatalogRefresh(upstream: Upstream): boolean {
   if (!upstream.isActive || !upstream.modelDiscovery) {
     return false;
@@ -39,6 +42,9 @@ function toTaskStatus(successCount: number, failureCount: number): BackgroundSyn
   };
 }
 
+/**
+ * Runs the upstream model catalog background sync task.
+ */
 export async function runUpstreamModelCatalogSyncTask(): Promise<BackgroundSyncTaskRunResult> {
   const activeUpstreams = await loadActiveUpstreams();
   const eligibleUpstreams = activeUpstreams.filter(isUpstreamEligibleForBackgroundCatalogRefresh);
@@ -79,6 +85,9 @@ export async function runUpstreamModelCatalogSyncTask(): Promise<BackgroundSyncT
   };
 }
 
+/**
+ * Creates the upstream model catalog sync task definition.
+ */
 export function createUpstreamModelCatalogSyncTaskDefinition(): BackgroundSyncTaskDefinition {
   return {
     taskName: UPSTREAM_MODEL_CATALOG_SYNC_TASK_NAME,

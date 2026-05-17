@@ -21,6 +21,8 @@ import type {
   RoutingFailureStage,
   RequestLifecycleStatus,
   UpstreamQueuePolicy,
+  UpstreamFailureRuleConfig,
+  CircuitBreakerConfig,
 } from "@/types/api";
 import type {
   StatsOverview,
@@ -72,6 +74,7 @@ export interface UpstreamCircuitBreakerApiResponse {
   success_count: number;
   last_failure_at: string | null;
   opened_at: string | null;
+  config: CircuitBreakerConfig | null;
 }
 
 /**
@@ -90,6 +93,7 @@ export interface UpstreamApiResponse {
   current_concurrency: number;
   max_concurrency: number | null;
   queue_policy: UpstreamQueuePolicy | null;
+  failure_rule_config: UpstreamFailureRuleConfig | null;
   config: string | null;
   weight: number;
   priority: number;
@@ -150,6 +154,33 @@ export interface PaginatedApiResponse<T> {
 
 // ========== Upstream Transformers ==========
 
+function formatCircuitBreakerConfigSeconds(
+  config: ServiceUpstreamResponse["circuitBreaker"] extends infer T
+    ? T extends { config: infer C }
+      ? C
+      : never
+    : never
+): CircuitBreakerConfig | null {
+  if (!config) return null;
+
+  return {
+    failure_threshold: config.failureThreshold,
+    success_threshold: config.successThreshold,
+    open_duration:
+      config.openDuration !== undefined ? Math.round(config.openDuration / 1000) : undefined,
+    probe_interval:
+      config.probeInterval !== undefined ? Math.round(config.probeInterval / 1000) : undefined,
+    first_byte_timeout:
+      config.firstByteTimeout !== undefined
+        ? Math.round(config.firstByteTimeout / 1000)
+        : undefined,
+    stream_idle_timeout:
+      config.streamIdleTimeout !== undefined
+        ? Math.round(config.streamIdleTimeout / 1000)
+        : undefined,
+  };
+}
+
 /**
  * Transform a service layer upstream response to API response format.
  * Converts camelCase properties to snake_case for API consistency.
@@ -167,6 +198,11 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
     current_concurrency: upstream.currentConcurrency,
     max_concurrency: upstream.maxConcurrency ?? null,
     queue_policy: upstream.queuePolicy ?? null,
+    failure_rule_config: upstream.failureRuleConfig
+      ? {
+          use_global_rules: upstream.failureRuleConfig.useGlobalRules,
+        }
+      : null,
     config: upstream.config,
     weight: upstream.weight,
     priority: upstream.priority,
@@ -212,6 +248,7 @@ export function transformUpstreamToApi(upstream: ServiceUpstreamResponse): Upstr
           success_count: upstream.circuitBreaker.successCount,
           last_failure_at: upstream.circuitBreaker.lastFailureAt?.toISOString() ?? null,
           opened_at: upstream.circuitBreaker.openedAt?.toISOString() ?? null,
+          config: formatCircuitBreakerConfigSeconds(upstream.circuitBreaker.config),
         }
       : null,
   };

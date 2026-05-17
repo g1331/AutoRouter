@@ -87,6 +87,7 @@ vi.mock("lucide-react", () => ({
   LogOut: () => <svg data-testid="icon-logout" />,
   Moon: () => <svg data-testid="icon-moon" />,
   RefreshCw: () => <svg data-testid="icon-refresh-cw" />,
+  ShieldAlert: () => <svg data-testid="icon-shield-alert" />,
   SlidersHorizontal: () => <svg data-testid="icon-sliders-horizontal" />,
   Wallet: () => <svg data-testid="icon-wallet" />,
 }));
@@ -109,5 +110,13 @@ describe("SettingsPage", () => {
     const backgroundSyncLink = screen.getByRole("link", { name: /backgroundSync.title/i });
     expect(backgroundSyncLink).toHaveAttribute("href", "/system/background-sync");
     expect(screen.getByText("backgroundSync.panelDescription")).toBeInTheDocument();
+  });
+
+  it("renders global failure rules settings entry", () => {
+    render(<SettingsPage />);
+
+    const failureRulesLink = screen.getByRole("link", { name: /upstreamFailureRules.title/i });
+    expect(failureRulesLink).toHaveAttribute("href", "/system/failure-rules");
+    expect(screen.getByText("upstreamFailureRules.settingsDescription")).toBeInTheDocument();
   });
 });

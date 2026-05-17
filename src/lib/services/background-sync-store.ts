@@ -48,6 +48,9 @@ function toTaskState(
   };
 }
 
+/**
+ * Persists background sync task state and run history in the database.
+ */
 export class DatabaseBackgroundSyncTaskStore implements BackgroundSyncTaskStore {
   async ensureTaskDefinition(
     definition: BackgroundSyncTaskDefinition
