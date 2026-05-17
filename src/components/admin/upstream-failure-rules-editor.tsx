@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, Search, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +17,7 @@ import {
   useUpdateUpstreamFailureRule,
   useUpstreamFailureRules,
 } from "@/hooks/use-upstreams";
-import type { FailoverErrorType, UpstreamFailureRuleMatch } from "@/types/api";
+import type { FailoverErrorType, UpstreamFailureRule, UpstreamFailureRuleMatch } from "@/types/api";
 
 interface UpstreamFailureRulesEditorProps {
   upstreamId?: string;
@@ -63,15 +63,62 @@ function hasRuleCondition(match: UpstreamFailureRuleMatch): boolean {
   );
 }
 
-function summarizeMatch(match: UpstreamFailureRuleMatch): string[] {
-  const parts: string[] = [];
-  if (match.status_codes?.length) parts.push(`HTTP ${match.status_codes.join(",")}`);
-  if (match.error_types?.length) parts.push(match.error_types.join(","));
-  if (match.body_pattern) parts.push(`body /${match.body_pattern}/`);
-  if (match.header_name && match.header_pattern) {
-    parts.push(`${match.header_name}: /${match.header_pattern}/`);
+interface RuleConditionDetail {
+  key: string;
+  label: string;
+  value: string;
+}
+
+function getRuleConditionDetails(
+  match: UpstreamFailureRuleMatch,
+  t: ReturnType<typeof useTranslations>
+): RuleConditionDetail[] {
+  const details: RuleConditionDetail[] = [];
+  if (match.status_codes?.length) {
+    details.push({
+      key: "status_codes",
+      label: t("failureRuleStatusCodes"),
+      value: match.status_codes.join(", "),
+    });
   }
-  return parts;
+  if (match.error_types?.length) {
+    details.push({
+      key: "error_types",
+      label: t("failureRuleErrorTypes"),
+      value: match.error_types.join(", "),
+    });
+  }
+  if (match.body_pattern) {
+    details.push({
+      key: "body_pattern",
+      label: t("failureRuleBodyPattern"),
+      value: `/${match.body_pattern}/`,
+    });
+  }
+  if (match.header_name && match.header_pattern) {
+    details.push({
+      key: "header_pattern",
+      label: t("failureRuleHeaderPattern"),
+      value: `${match.header_name}: /${match.header_pattern}/`,
+    });
+  }
+  return details;
+}
+
+function buildRuleSearchText(rule: UpstreamFailureRule): string {
+  const match = rule.match;
+  return [
+    rule.name,
+    rule.enabled ? "enabled" : "disabled",
+    match.status_codes?.join(" "),
+    match.error_types?.join(" "),
+    match.body_pattern,
+    match.header_name,
+    match.header_pattern,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
 }
 
 export function UpstreamFailureRulesEditor({
@@ -96,11 +143,20 @@ export function UpstreamFailureRulesEditor({
   const [bodyPattern, setBodyPattern] = useState("");
   const [headerName, setHeaderName] = useState("");
   const [headerPattern, setHeaderPattern] = useState("");
+  const [ruleSearch, setRuleSearch] = useState("");
 
   const draftMatch = useMemo(
     () => buildMatch({ statusCodes, errorTypes, bodyPattern, headerName, headerPattern }),
     [bodyPattern, errorTypes, headerName, headerPattern, statusCodes]
   );
+  const rules = useMemo(() => rulesQuery.data ?? [], [rulesQuery.data]);
+  const normalizedRuleSearch = ruleSearch.trim().toLowerCase();
+  const filteredRules = useMemo(() => {
+    if (!normalizedRuleSearch) {
+      return rules;
+    }
+    return rules.filter((rule) => buildRuleSearchText(rule).includes(normalizedRuleSearch));
+  }, [normalizedRuleSearch, rules]);
   const canCreate = Boolean(
     (scope === "global" || upstreamId) && name.trim() && hasRuleCondition(draftMatch)
   );
@@ -154,70 +210,128 @@ export function UpstreamFailureRulesEditor({
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             {t("failureRulesLoading")}
           </div>
-        ) : rulesQuery.data?.length ? (
-          rulesQuery.data.map((rule) => (
-            <div
-              key={rule.id}
-              className="rounded-cf-sm border border-divider bg-surface-300/55 px-3 py-2"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-foreground">{rule.name}</div>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {summarizeMatch(rule.match).map((part) => (
-                      <Badge key={part} variant="outline" className="px-1.5 py-0 text-[10px]">
-                        {part}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    aria-label={t("failureRuleEnabled")}
-                    checked={rule.enabled}
-                    onCheckedChange={(nextEnabled) => {
-                      updateRule.mutate(
-                        {
-                          ...(scope === "global" ? { scope } : {}),
-                          upstreamId,
-                          ruleId: rule.id,
-                          data: { enabled: nextEnabled },
-                        },
-                        {
-                          onSuccess: () => toast.success(t("failureRuleUpdated")),
-                          onError: (error) =>
-                            toast.error(t("failureRuleUpdateFailed", { message: error.message })),
-                        }
-                      );
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-status-error hover:bg-status-error-muted"
-                    onClick={() =>
-                      deleteRule.mutate(
-                        {
-                          ...(scope === "global" ? { scope } : {}),
-                          upstreamId,
-                          ruleId: rule.id,
-                        },
-                        {
-                          onSuccess: () => toast.success(t("failureRuleDeleted")),
-                          onError: (error) =>
-                            toast.error(t("failureRuleDeleteFailed", { message: error.message })),
-                        }
-                      )
-                    }
-                    aria-label={t("deleteFailureRule")}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
+        ) : rules.length ? (
+          <>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={ruleSearch}
+                onChange={(event) => setRuleSearch(event.target.value)}
+                placeholder={t("failureRuleSearchPlaceholder")}
+                className="pl-8"
+              />
             </div>
-          ))
+
+            {filteredRules.length ? (
+              filteredRules.map((rule) => {
+                const conditionDetails = getRuleConditionDetails(rule.match, t);
+                return (
+                  <div
+                    key={rule.id}
+                    className="rounded-cf-sm border border-divider bg-surface-300/55 px-3 py-3"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="truncate text-sm font-medium text-foreground">
+                            {rule.name}
+                          </div>
+                          <Badge
+                            variant="outline"
+                            className="border-divider px-1.5 py-0 text-[10px]"
+                          >
+                            {rule.upstream_id
+                              ? t("failureRuleScopeLocal")
+                              : t("failureRuleScopeGlobal")}
+                          </Badge>
+                          <Badge
+                            variant="outline"
+                            className="border-divider px-1.5 py-0 text-[10px]"
+                          >
+                            {rule.enabled
+                              ? t("failureRuleStatusEnabled")
+                              : t("failureRuleStatusDisabled")}
+                          </Badge>
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="type-caption text-muted-foreground">
+                            {t("failureRuleConditions")}
+                          </div>
+                          <div className="grid gap-1.5 sm:grid-cols-2">
+                            {conditionDetails.map((detail) => (
+                              <div
+                                key={detail.key}
+                                className="rounded-cf-sm border border-divider/70 bg-surface-200/45 px-2 py-1.5"
+                              >
+                                <div className="text-[10px] uppercase text-muted-foreground">
+                                  {detail.label}
+                                </div>
+                                <div className="mt-0.5 break-all font-mono text-xs text-foreground">
+                                  {detail.value}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          aria-label={t("failureRuleEnabled")}
+                          checked={rule.enabled}
+                          onCheckedChange={(nextEnabled) => {
+                            updateRule.mutate(
+                              {
+                                ...(scope === "global" ? { scope } : {}),
+                                upstreamId,
+                                ruleId: rule.id,
+                                data: { enabled: nextEnabled },
+                              },
+                              {
+                                onSuccess: () => toast.success(t("failureRuleUpdated")),
+                                onError: (error) =>
+                                  toast.error(
+                                    t("failureRuleUpdateFailed", { message: error.message })
+                                  ),
+                              }
+                            );
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-status-error hover:bg-status-error-muted"
+                          onClick={() =>
+                            deleteRule.mutate(
+                              {
+                                ...(scope === "global" ? { scope } : {}),
+                                upstreamId,
+                                ruleId: rule.id,
+                              },
+                              {
+                                onSuccess: () => toast.success(t("failureRuleDeleted")),
+                                onError: (error) =>
+                                  toast.error(
+                                    t("failureRuleDeleteFailed", { message: error.message })
+                                  ),
+                              }
+                            )
+                          }
+                          aria-label={t("deleteFailureRule")}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="rounded-cf-sm border border-dashed border-divider px-3 py-3 text-xs text-muted-foreground">
+                {t("failureRuleNoSearchResults")}
+              </div>
+            )}
+          </>
         ) : (
           <div className="rounded-cf-sm border border-dashed border-divider px-3 py-3 text-xs text-muted-foreground">
             {t(scope === "global" ? "globalFailureRulesEmpty" : "localFailureRulesEmpty")}

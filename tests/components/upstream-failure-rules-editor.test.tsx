@@ -121,10 +121,18 @@ describe("UpstreamFailureRulesEditor", () => {
     render(<UpstreamFailureRulesEditor upstreamId="upstream-1" />);
 
     expect(screen.getByText("Gateway timeout failures")).toBeInTheDocument();
-    expect(screen.getByText("HTTP 502,503")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("failureRuleSearchPlaceholder")).toBeInTheDocument();
+    expect(screen.getByText("failureRuleConditions")).toBeInTheDocument();
+    expect(screen.getByText("failureRuleStatusCodes")).toBeInTheDocument();
+    expect(screen.getByText("502, 503")).toBeInTheDocument();
+    expect(screen.getByText("failureRuleErrorTypes")).toBeInTheDocument();
     expect(screen.getByText("timeout")).toBeInTheDocument();
-    expect(screen.getByText("body /overloaded/")).toBeInTheDocument();
+    expect(screen.getByText("failureRuleBodyPattern")).toBeInTheDocument();
+    expect(screen.getByText("/overloaded/")).toBeInTheDocument();
+    expect(screen.getByText("failureRuleHeaderPattern")).toBeInTheDocument();
     expect(screen.getByText("x-router-error: /retry/")).toBeInTheDocument();
+    expect(screen.getByText("failureRuleScopeLocal")).toBeInTheDocument();
+    expect(screen.getByText("failureRuleStatusEnabled")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("switch", { name: "failureRuleEnabled" }));
 
@@ -146,6 +154,37 @@ describe("UpstreamFailureRulesEditor", () => {
 
     options.onError(new Error("update failed"));
     expect(mockToastError).toHaveBeenCalledWith("failureRuleUpdateFailed:update failed");
+  });
+
+  it("filters existing rules by name and match details", () => {
+    hookState.rules = [
+      createRule({ id: "rule-1", name: "Gateway timeout failures" }),
+      createRule({
+        id: "rule-2",
+        name: "Quota errors",
+        match: {
+          status_codes: [429],
+          error_types: ["http_429"],
+          body_pattern: "insufficient_quota",
+          header_name: null,
+          header_pattern: null,
+        },
+      }),
+    ];
+    render(<UpstreamFailureRulesEditor upstreamId="upstream-1" />);
+
+    fireEvent.change(screen.getByPlaceholderText("failureRuleSearchPlaceholder"), {
+      target: { value: "quota" },
+    });
+
+    expect(screen.getByText("Quota errors")).toBeInTheDocument();
+    expect(screen.queryByText("Gateway timeout failures")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("failureRuleSearchPlaceholder"), {
+      target: { value: "not-found" },
+    });
+
+    expect(screen.getByText("failureRuleNoSearchResults")).toBeInTheDocument();
   });
 
   it("deletes a rule and reports mutation outcomes", () => {
