@@ -943,6 +943,7 @@
     "failureRuleRegexPreviewHint": "Fill in a regex and sample text to see the match result.",
     "failureRuleNamePlaceholder": "Rule name",
     "failureRuleEnabled": "Enabled",
+    "failureRuleCreateEnabled": "Create as enabled",
     "failureRuleStatusCodesPlaceholder": "HTTP statuses, e.g. 400,429",
     "failureRuleErrorTypesPlaceholder": "Error types, e.g. http_4xx,timeout",
     "failureRuleBodyPatternPlaceholder": "Response body regex",

@@ -458,19 +458,19 @@ export function UpstreamFailureRulesEditor({
         )}
       </div>
 
-      <div className="rounded-cf-sm border border-divider/60 bg-surface-200/35 px-3 py-3">
+      <div className="space-y-3">
         <div className="grid gap-3 md:grid-cols-2">
           <Input
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder={t("failureRuleNamePlaceholder")}
           />
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <label className="flex h-11 items-center gap-2 rounded-cf-sm border border-divider/60 bg-surface-300/35 px-3 text-sm font-medium text-foreground">
             <Checkbox
               checked={enabled}
               onCheckedChange={(checked) => setEnabled(checked === true)}
             />
-            {t("failureRuleEnabled")}
+            {t("failureRuleCreateEnabled")}
           </label>
           <Input
             value={statusCodes}
@@ -502,7 +502,7 @@ export function UpstreamFailureRulesEditor({
             />
           </div>
         </div>
-        <div className="mt-3 grid gap-3 lg:grid-cols-2">
+        <div className="grid gap-3 lg:grid-cols-2">
           <RegexPreview
             label={t("failureRuleBodyRegexPreview")}
             pattern={bodyPattern}
@@ -516,7 +516,7 @@ export function UpstreamFailureRulesEditor({
             onSampleChange={setHeaderPreviewSample}
           />
         </div>
-        <div className="mt-3 flex justify-end">
+        <div className="flex justify-end">
           <Button
             type="button"
             variant="outline"

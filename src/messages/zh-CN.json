@@ -948,6 +948,7 @@
     "failureRuleRegexPreviewHint": "填写正则和示例文本后，将显示匹配结果。",
     "failureRuleNamePlaceholder": "规则名称",
     "failureRuleEnabled": "启用",
+    "failureRuleCreateEnabled": "创建后立即启用",
     "failureRuleStatusCodesPlaceholder": "HTTP 状态码，例如 400,429",
     "failureRuleErrorTypesPlaceholder": "错误类型，例如 http_4xx,timeout",
     "failureRuleBodyPatternPlaceholder": "响应体正则",
