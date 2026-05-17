@@ -22,10 +22,12 @@
 - [x] 4.2 更新日志表格、路由决策时间线和中英文文案，展示规则命中、失败类型和是否计入熔断
 - [x] 4.3 更新前端表单归一化和脏值比较，确保新增配置不会产生误报未保存状态
 - [x] 4.4 在系统设置中新增全局失败规则管理入口和页面，支持列表、新增、启用、停用和删除全局规则
+- [ ] 4.5 在失败规则编辑器中增加正则语法校验和示例文本匹配预览
 
 ## 5. 测试与校验
 
 - [x] 5.1 增加失败规则服务、代理客户端和代理路由单元测试，覆盖规则命中、首字超时、空闲超时和熔断计数
 - [x] 5.2 增加管理端组件测试，覆盖新增配置回显、编辑和提交 payload
 - [x] 5.3 增加全局失败规则管理页面、编辑器全局模式和 hooks 测试
-- [x] 5.4 运行 `pnpm format:check`、`git diff --check`、`pnpm lint`、`pnpm exec tsc --noEmit --pretty false`、`pnpm test:run --coverage` 和 `pnpm db:check:consistency`
+- [ ] 5.4 增加正则校验、预览匹配和禁用提交的组件测试
+- [x] 5.5 运行 `pnpm format:check`、`git diff --check`、`pnpm lint`、`pnpm exec tsc --noEmit --pretty false`、`pnpm test:run --coverage` 和 `pnpm db:check:consistency`
