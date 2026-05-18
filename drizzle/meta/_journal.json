@@ -232,6 +232,13 @@
       "when": 1778922127202,
       "tag": "0032_blue_peter_quill",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1779007329409,
+      "tag": "0033_shocking_emma_frost",
+      "breakpoints": true
     }
   ]
 }

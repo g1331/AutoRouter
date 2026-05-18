@@ -53,6 +53,13 @@ import type {
   BackgroundSyncExecuteResult,
   BackgroundSyncTaskState,
 } from "@/lib/services/background-sync-types";
+import type {
+  PaginatedTrafficRecordings,
+  TrafficRecordingDetail,
+  TrafficRecordingListItem,
+  TrafficRecordingSettingsValue,
+  TrafficRecordingStats,
+} from "@/lib/services/traffic-recording-service";
 
 // ========== Helper Utilities ==========
 
@@ -898,6 +905,114 @@ export function transformPaginatedRequestLogs(
     page: result.page,
     page_size: result.pageSize,
     total_pages: result.totalPages,
+  };
+}
+
+// ========== Traffic Recording API Response Types ==========
+
+export interface TrafficRecordingSettingsApiResponse {
+  enabled: boolean;
+  mode: "all" | "success" | "failure";
+  redact_sensitive: boolean;
+  retention_days: number;
+  updated_at: string;
+}
+
+export interface TrafficRecordingApiResponse {
+  id: string;
+  request_log_id: string | null;
+  api_key_id: string | null;
+  upstream_id: string | null;
+  method: string | null;
+  path: string | null;
+  model: string | null;
+  status_code: number | null;
+  outcome: "success" | "failure";
+  fixture_path: string;
+  fixture_size_bytes: number;
+  request_size_bytes: number;
+  response_size_bytes: number;
+  redacted: boolean;
+  created_at: string;
+}
+
+export interface TrafficRecordingDetailApiResponse extends TrafficRecordingApiResponse {
+  fixture: unknown;
+}
+
+export interface TrafficRecordingStatsApiResponse {
+  total: number;
+  total_size_bytes: number;
+  latest_created_at: string | null;
+}
+
+export interface PaginatedTrafficRecordingsApiResponse extends PaginatedApiResponse<TrafficRecordingApiResponse> {
+  stats: TrafficRecordingStatsApiResponse;
+}
+
+export function transformTrafficRecordingSettingsToApi(
+  settings: TrafficRecordingSettingsValue
+): TrafficRecordingSettingsApiResponse {
+  return {
+    enabled: settings.enabled,
+    mode: settings.mode,
+    redact_sensitive: settings.redactSensitive,
+    retention_days: settings.retentionDays,
+    updated_at: settings.updatedAt.toISOString(),
+  };
+}
+
+export function transformTrafficRecordingToApi(
+  recording: TrafficRecordingListItem
+): TrafficRecordingApiResponse {
+  return {
+    id: recording.id,
+    request_log_id: recording.requestLogId,
+    api_key_id: recording.apiKeyId,
+    upstream_id: recording.upstreamId,
+    method: recording.method,
+    path: recording.path,
+    model: recording.model,
+    status_code: recording.statusCode,
+    outcome: recording.outcome,
+    fixture_path: recording.fixturePath,
+    fixture_size_bytes: recording.fixtureSizeBytes,
+    request_size_bytes: recording.requestSizeBytes,
+    response_size_bytes: recording.responseSizeBytes,
+    redacted: recording.redacted,
+    created_at: recording.createdAt.toISOString(),
+  };
+}
+
+export function transformTrafficRecordingDetailToApi(
+  recording: TrafficRecordingDetail
+): TrafficRecordingDetailApiResponse {
+  return {
+    ...transformTrafficRecordingToApi(recording),
+    fixture: recording.fixture,
+  };
+}
+
+export function transformTrafficRecordingStatsToApi(
+  stats: TrafficRecordingStats
+): TrafficRecordingStatsApiResponse {
+  return {
+    total: stats.total,
+    total_size_bytes: stats.totalSizeBytes,
+    latest_created_at: toISOStringOrNull(stats.latestCreatedAt),
+  };
+}
+
+export function transformPaginatedTrafficRecordingsToApi(
+  result: PaginatedTrafficRecordings
+): PaginatedTrafficRecordingsApiResponse {
+  return {
+    items: result.items.map(transformTrafficRecordingToApi),
+    total: result.total,
+    page: result.page,
+    page_size: result.pageSize,
+    total_pages: result.totalPages,
+    stats: transformTrafficRecordingStatsToApi(result.stats),
   };
 }
 

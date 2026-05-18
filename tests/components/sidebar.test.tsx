@@ -44,6 +44,7 @@ vi.mock("lucide-react", () => ({
   LogOut: () => <svg data-testid="icon-logout" />,
   Settings: () => <svg data-testid="icon-settings" />,
   Check: () => <svg data-testid="icon-check" />,
+  DatabaseZap: () => <svg data-testid="icon-database-zap" />,
   Globe: () => <svg data-testid="icon-globe" />,
   Sun: () => <svg data-testid="icon-sun" />,
   Moon: () => <svg data-testid="icon-moon" />,
@@ -148,6 +149,7 @@ describe("Sidebar", () => {
       expect(screen.getAllByText("upstreams").length).toBeGreaterThan(0);
       expect(screen.getAllByText("settings").length).toBeGreaterThan(0);
       expect(screen.getAllByText("billing").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("trafficRecording").length).toBeGreaterThan(0);
       expect(screen.getAllByText("globalFailureRules").length).toBeGreaterThan(0);
     });
 
@@ -160,6 +162,7 @@ describe("Sidebar", () => {
       expect(screen.getAllByTestId("icon-server").length).toBeGreaterThan(0);
       expect(screen.getAllByTestId("icon-settings").length).toBeGreaterThan(0);
       expect(screen.getAllByTestId("icon-wallet").length).toBeGreaterThan(0);
+      expect(screen.getAllByTestId("icon-database-zap").length).toBeGreaterThan(0);
       expect(screen.getAllByTestId("icon-shield-alert").length).toBeGreaterThan(0);
     });
 
@@ -196,6 +199,7 @@ describe("Sidebar", () => {
       expect(hrefs).toContain("/keys");
       expect(hrefs).toContain("/upstreams");
       expect(hrefs).toContain("/logs");
+      expect(hrefs).toContain("/system/traffic-recording");
       expect(hrefs).toContain("/system/failure-rules");
       expect(hrefs).toContain(APP_REPOSITORY_URL);
     });

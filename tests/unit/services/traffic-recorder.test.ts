@@ -95,89 +95,41 @@ describe("traffic recorder", () => {
   });
 
   describe("isRecorderEnabled", () => {
-    it("returns true when RECORDER_ENABLED is 'true'", () => {
+    it("does not use RECORDER_ENABLED for runtime decisions", () => {
       process.env.RECORDER_ENABLED = "true";
-      expect(isRecorderEnabled()).toBe(true);
-    });
-
-    it("returns true when RECORDER_ENABLED is '1'", () => {
-      process.env.RECORDER_ENABLED = "1";
-      expect(isRecorderEnabled()).toBe(true);
-    });
-
-    it("returns false when RECORDER_ENABLED is not set", () => {
-      expect(isRecorderEnabled()).toBe(false);
-    });
-
-    it("returns false when RECORDER_ENABLED is 'false'", () => {
-      process.env.RECORDER_ENABLED = "false";
-      expect(isRecorderEnabled()).toBe(false);
-    });
-
-    it("returns false when RECORDER_ENABLED is '0'", () => {
-      process.env.RECORDER_ENABLED = "0";
-      expect(isRecorderEnabled()).toBe(false);
-    });
-
-    it("returns false when RECORDER_ENABLED is any other value", () => {
-      process.env.RECORDER_ENABLED = "yes";
       expect(isRecorderEnabled()).toBe(false);
     });
   });
 
   describe("getRecorderMode", () => {
-    it("defaults to all when RECORDER_MODE is not set", () => {
-      expect(getRecorderMode()).toBe("all");
-    });
-
-    it("returns success when RECORDER_MODE is success", () => {
-      process.env.RECORDER_MODE = "success";
-      expect(getRecorderMode()).toBe("success");
-    });
-
-    it("returns failure when RECORDER_MODE is failure", () => {
-      process.env.RECORDER_MODE = "failure";
+    it("keeps a static failure default for deprecated env accessors", () => {
+      process.env.RECORDER_MODE = "all";
       expect(getRecorderMode()).toBe("failure");
-    });
-
-    it("returns all for invalid RECORDER_MODE values", () => {
-      process.env.RECORDER_MODE = "unexpected";
-      expect(getRecorderMode()).toBe("all");
     });
   });
 
   describe("shouldRecordFixture", () => {
-    it("returns false when recorder is disabled", () => {
+    it("returns false without a runtime settings snapshot", () => {
       expect(shouldRecordFixture("success")).toBe(false);
       expect(shouldRecordFixture("failure")).toBe(false);
     });
 
     it("returns true for both outcomes in all mode", () => {
-      process.env.RECORDER_ENABLED = "true";
-      process.env.RECORDER_MODE = "all";
-      expect(shouldRecordFixture("success")).toBe(true);
-      expect(shouldRecordFixture("failure")).toBe(true);
+      const settings = { enabled: true, mode: "all" as const };
+      expect(shouldRecordFixture("success", settings)).toBe(true);
+      expect(shouldRecordFixture("failure", settings)).toBe(true);
     });
 
     it("returns true only for success in success mode", () => {
-      process.env.RECORDER_ENABLED = "true";
-      process.env.RECORDER_MODE = "success";
-      expect(shouldRecordFixture("success")).toBe(true);
-      expect(shouldRecordFixture("failure")).toBe(false);
+      const settings = { enabled: true, mode: "success" as const };
+      expect(shouldRecordFixture("success", settings)).toBe(true);
+      expect(shouldRecordFixture("failure", settings)).toBe(false);
     });
 
     it("returns true only for failure in failure mode", () => {
-      process.env.RECORDER_ENABLED = "true";
-      process.env.RECORDER_MODE = "failure";
-      expect(shouldRecordFixture("success")).toBe(false);
-      expect(shouldRecordFixture("failure")).toBe(true);
-    });
-
-    it("falls back to all mode for invalid values", () => {
-      process.env.RECORDER_ENABLED = "true";
-      process.env.RECORDER_MODE = "invalid-mode";
-      expect(shouldRecordFixture("success")).toBe(true);
-      expect(shouldRecordFixture("failure")).toBe(true);
+      const settings = { enabled: true, mode: "failure" as const };
+      expect(shouldRecordFixture("success", settings)).toBe(false);
+      expect(shouldRecordFixture("failure", settings)).toBe(true);
     });
   });
 
@@ -188,12 +140,12 @@ describe("traffic recorder", () => {
     });
 
     it("returns default directory when RECORDER_FIXTURES_DIR is not set", () => {
-      expect(getFixtureRoot()).toBe("tests/fixtures");
+      expect(getFixtureRoot()).toBe("data/traffic-recordings");
     });
 
     it("returns default directory when RECORDER_FIXTURES_DIR is empty", () => {
       process.env.RECORDER_FIXTURES_DIR = "";
-      expect(getFixtureRoot()).toBe("tests/fixtures");
+      expect(getFixtureRoot()).toBe("data/traffic-recordings");
     });
   });
 
@@ -207,14 +159,9 @@ describe("traffic recorder", () => {
       expect(isRecorderRedactionEnabled()).toBe(true);
     });
 
-    it("returns false when RECORDER_REDACT_SENSITIVE is 'false'", () => {
+    it("ignores RECORDER_REDACT_SENSITIVE because runtime settings control redaction", () => {
       process.env.RECORDER_REDACT_SENSITIVE = "false";
-      expect(isRecorderRedactionEnabled()).toBe(false);
-    });
-
-    it("returns false when RECORDER_REDACT_SENSITIVE is '0'", () => {
-      process.env.RECORDER_REDACT_SENSITIVE = "0";
-      expect(isRecorderRedactionEnabled()).toBe(false);
+      expect(isRecorderRedactionEnabled()).toBe(true);
     });
   });
 
@@ -222,39 +169,48 @@ describe("traffic recorder", () => {
     it("builds correct path with valid inputs", () => {
       const result = buildFixturePath("openai", "chat/completions", "2024-01-01T12-00-00");
       expect(result).toBe(
-        path.join("tests/fixtures", "openai", "chat_completions", "2024-01-01T12-00-00.json")
+        path.join(
+          "data/traffic-recordings",
+          "openai",
+          "chat_completions",
+          "2024-01-01T12-00-00.json"
+        )
       );
     });
 
     it("sanitizes special characters in provider and route", () => {
       const result = buildFixturePath("open@ai!", "chat/completions?v=1", "2024-01-01");
       expect(result).toBe(
-        path.join("tests/fixtures", "open_ai_", "chat_completions_v_1", "2024-01-01.json")
+        path.join("data/traffic-recordings", "open_ai_", "chat_completions_v_1", "2024-01-01.json")
       );
     });
 
     it("handles empty provider and route", () => {
       const result = buildFixturePath("", "", "2024-01-01");
-      expect(result).toBe(path.join("tests/fixtures", "unknown", "unknown", "2024-01-01.json"));
+      expect(result).toBe(
+        path.join("data/traffic-recordings", "unknown", "unknown", "2024-01-01.json")
+      );
     });
 
     it("sanitizes slashes in route", () => {
       const result = buildFixturePath("anthropic", "v1/messages", "2024-01-01");
       expect(result).toBe(
-        path.join("tests/fixtures", "anthropic", "v1_messages", "2024-01-01.json")
+        path.join("data/traffic-recordings", "anthropic", "v1_messages", "2024-01-01.json")
       );
     });
 
     it("handles null provider and route", () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = buildFixturePath(null as any, null as any, "2024-01-01");
-      expect(result).toBe(path.join("tests/fixtures", "unknown", "unknown", "2024-01-01.json"));
+      expect(result).toBe(
+        path.join("data/traffic-recordings", "unknown", "unknown", "2024-01-01.json")
+      );
     });
 
     it("preserves alphanumeric characters and common separators", () => {
       const result = buildFixturePath("provider-1.0", "route_v2.1", "2024-01-01");
       expect(result).toBe(
-        path.join("tests/fixtures", "provider-1.0", "route_v2.1", "2024-01-01.json")
+        path.join("data/traffic-recordings", "provider-1.0", "route_v2.1", "2024-01-01.json")
       );
     });
 
@@ -262,7 +218,7 @@ describe("traffic recorder", () => {
       const result = buildFixturePath("open@@@ai", "chat///completions", "2024-01-01");
       // The regex replaces consecutive special chars with a single underscore
       expect(result).toBe(
-        path.join("tests/fixtures", "open_ai", "chat_completions", "2024-01-01.json")
+        path.join("data/traffic-recordings", "open_ai", "chat_completions", "2024-01-01.json")
       );
     });
   });
@@ -347,7 +303,7 @@ describe("traffic recorder", () => {
     const baseParams = {
       requestId: "test-123",
       startTime: Date.now() - 100,
-      provider: "openai",
+      providerType: "openai",
       route: "responses",
       model: "gpt-4",
       inboundRequest: {
@@ -512,9 +468,8 @@ describe("traffic recorder", () => {
       expect(fixture.outbound.responseSource).toBe("gateway");
     });
 
-    it("preserves sensitive fields when RECORDER_REDACT_SENSITIVE=false", () => {
-      process.env.RECORDER_REDACT_SENSITIVE = "false";
-      const fixture = buildFixture(baseParams);
+    it("preserves sensitive fields when runtime redaction is disabled", () => {
+      const fixture = buildFixture({ ...baseParams, redactSensitive: false });
 
       expect(fixture.inbound.headers.authorization).toBe("Bearer sk-test");
       expect(fixture.outbound.request.headers.authorization).toBe("Bearer sk-upstream");
@@ -559,10 +514,10 @@ describe("traffic recorder", () => {
       expect(fixture.failover?.history[0]?.response_body_text).toBeUndefined();
     });
 
-    it("keeps failover history body when RECORDER_REDACT_SENSITIVE=false", () => {
-      process.env.RECORDER_REDACT_SENSITIVE = "false";
+    it("keeps failover history body when runtime redaction is disabled", () => {
       const fixture = buildFixture({
         ...baseParams,
+        redactSensitive: false,
         failoverHistory: [
           {
             upstream_id: "upstream-1",

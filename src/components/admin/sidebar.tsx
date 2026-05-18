@@ -7,6 +7,7 @@ import { useTheme } from "next-themes";
 import {
   Check,
   ChevronLeft,
+  DatabaseZap,
   Globe,
   Github,
   Key,
@@ -58,7 +59,12 @@ type NavigationItem = {
 type SystemNavigationItem = {
   href: string;
   icon: typeof LayoutDashboard;
-  labelKey: "headerCompensation" | "billing" | "backgroundSync" | "globalFailureRules";
+  labelKey:
+    | "headerCompensation"
+    | "billing"
+    | "backgroundSync"
+    | "trafficRecording"
+    | "globalFailureRules";
 };
 
 const navigation: NavigationItem[] = [
@@ -71,6 +77,7 @@ const navigation: NavigationItem[] = [
 const systemNavigation: SystemNavigationItem[] = [
   { href: "/system/billing", icon: Wallet, labelKey: "billing" },
   { href: "/system/background-sync", icon: RefreshCw, labelKey: "backgroundSync" },
+  { href: "/system/traffic-recording", icon: DatabaseZap, labelKey: "trafficRecording" },
   { href: "/system/failure-rules", icon: ShieldAlert, labelKey: "globalFailureRules" },
   { href: "/system/header-compensation", icon: ArrowLeftRight, labelKey: "headerCompensation" },
 ];

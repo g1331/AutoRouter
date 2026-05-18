@@ -1,14 +1,17 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { ScrollText } from "lucide-react";
+import { ScrollText, X } from "lucide-react";
 
 import { LogsTable } from "@/components/admin/logs-table";
 import { PaginationControls } from "@/components/admin/pagination-controls";
 import { RefreshIntervalSelect } from "@/components/admin/refresh-interval-select";
 import { Topbar } from "@/components/admin/topbar";
+import { Link, usePathname } from "@/i18n/navigation";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -124,13 +127,26 @@ export default function LogsPage() {
 
   const t = useTranslations("logs");
   const tCommon = useTranslations("common");
-  const { connectionState, fallbackRefetchIntervalMs } = useRequestLogLive({ enabled: true });
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const focusId = searchParams.get("focus")?.trim() || null;
+
+  const { connectionState, fallbackRefetchIntervalMs } = useRequestLogLive({
+    enabled: focusId === null,
+  });
   const effectiveRefetchInterval =
     refetchInterval !== false ? refetchInterval : fallbackRefetchIntervalMs;
 
-  const { data, isLoading, refetch } = useRequestLogs(page, pageSize, undefined, {
-    refetchInterval: effectiveRefetchInterval,
-  });
+  const focusFilters = useMemo(() => (focusId ? { id: focusId } : undefined), [focusId]);
+  const focusInitialExpanded = useMemo(() => (focusId ? [focusId] : []), [focusId]);
+  const { data, isLoading, refetch } = useRequestLogs(
+    focusId ? 1 : page,
+    focusId ? 1 : pageSize,
+    focusFilters,
+    {
+      refetchInterval: focusId ? false : effectiveRefetchInterval,
+    }
+  );
 
   const handleIntervalChange = useCallback((interval: number | false) => {
     setRefetchInterval(interval);
@@ -152,54 +168,83 @@ export default function LogsPage() {
         ? "animate-log-badge-connect motion-reduce:animate-none"
         : "";
 
+  const focusedItems = data?.items ?? [];
+  const focusNotFound = focusId !== null && !isLoading && focusedItems.length === 0;
+
   return (
     <>
       <Topbar title={t("pageTitle")} />
 
       <div className="mx-auto min-w-0 w-full max-w-[1560px] space-y-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
-        <Card
-          variant="outlined"
-          className={cn("border-divider bg-surface-200/70", LOGS_SECTION_ENTER_CLASS)}
-        >
-          <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2 text-amber-500">
-                <ScrollText className="h-4 w-4" aria-hidden="true" />
-                <span className="type-label-medium">{t("management")}</span>
+        {focusId ? (
+          <Card
+            variant="outlined"
+            className={cn(
+              "border-divider bg-surface-200/70",
+              LOGS_SECTION_ENTER_CLASS,
+              focusNotFound && "border-status-warning/40"
+            )}
+          >
+            <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0 space-y-1">
+                <p className="type-caption text-muted-foreground">
+                  {focusNotFound ? t("focusNotFound") : t("focusActive")}
+                </p>
+                <p className="type-body-medium truncate font-mono text-xs">{focusId}</p>
               </div>
-              <p className="type-body-medium text-muted-foreground">{t("managementDesc")}</p>
-              <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-muted-foreground">
-                <Badge
-                  variant={
-                    connectionState === "live"
-                      ? "success"
+              <Button asChild variant="outline" size="sm">
+                <Link href={pathname}>
+                  <X className="h-4 w-4" />
+                  {t("focusClear")}
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card
+            variant="outlined"
+            className={cn("border-divider bg-surface-200/70", LOGS_SECTION_ENTER_CLASS)}
+          >
+            <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 text-amber-500">
+                  <ScrollText className="h-4 w-4" aria-hidden="true" />
+                  <span className="type-label-medium">{t("management")}</span>
+                </div>
+                <p className="type-body-medium text-muted-foreground">{t("managementDesc")}</p>
+                <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-muted-foreground">
+                  <Badge
+                    variant={
+                      connectionState === "live"
+                        ? "success"
+                        : connectionState === "connecting"
+                          ? "info"
+                          : "warning"
+                    }
+                    className={cn("px-2 py-0.5 text-[10px] leading-none", liveStatusMotionClass)}
+                  >
+                    {connectionState === "live"
+                      ? t("liveStatusLive")
                       : connectionState === "connecting"
-                        ? "info"
-                        : "warning"
-                  }
-                  className={cn("px-2 py-0.5 text-[10px] leading-none", liveStatusMotionClass)}
-                >
-                  {connectionState === "live"
-                    ? t("liveStatusLive")
-                    : connectionState === "connecting"
-                      ? t("liveStatusConnecting")
-                      : t("liveStatusFallback")}
-                </Badge>
-                <span>
-                  {connectionState === "fallback"
-                    ? t("liveStatusFallbackDesc")
-                    : t("liveStatusLiveDesc")}
-                </span>
+                        ? t("liveStatusConnecting")
+                        : t("liveStatusFallback")}
+                  </Badge>
+                  <span>
+                    {connectionState === "fallback"
+                      ? t("liveStatusFallbackDesc")
+                      : t("liveStatusLiveDesc")}
+                  </span>
+                </div>
               </div>
-            </div>
 
-            <RefreshIntervalSelect
-              onIntervalChange={handleIntervalChange}
-              onManualRefresh={handleManualRefresh}
-              isRefreshing={isManualRefreshPending}
-            />
-          </CardContent>
-        </Card>
+              <RefreshIntervalSelect
+                onIntervalChange={handleIntervalChange}
+                onManualRefresh={handleManualRefresh}
+                isRefreshing={isManualRefreshPending}
+              />
+            </CardContent>
+          </Card>
+        )}
 
         {isLoading ? (
           <div className={LOGS_SECTION_ENTER_CLASS} style={{ animationDelay: "70ms" }}>
@@ -209,12 +254,16 @@ export default function LogsPage() {
           <>
             <div className={LOGS_SECTION_ENTER_CLASS} style={{ animationDelay: "70ms" }}>
               <LogsTable
-                logs={data?.items || []}
-                isLive={connectionState === "live" || effectiveRefetchInterval !== false}
+                logs={focusedItems}
+                isLive={
+                  focusId === null &&
+                  (connectionState === "live" || effectiveRefetchInterval !== false)
+                }
+                initialExpandedIds={focusInitialExpanded}
               />
             </div>
 
-            {data && data.total_pages > 1 && (
+            {!focusId && data && data.total_pages > 1 && (
               <Card
                 variant="filled"
                 className={cn("border border-divider", LOGS_SECTION_ENTER_CLASS)}

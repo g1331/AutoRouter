@@ -13,6 +13,7 @@ const log = createLogger("admin-logs");
  * Query params:
  * - page: number
  * - page_size: number
+ * - id: string (filter - exact log id, used by /logs?focus=<id>)
  * - api_key_id: string (filter)
  * - upstream_id: string (filter)
  * - status_code: number (filter)
@@ -30,6 +31,9 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
 
     const filters: ListRequestLogsFilter = {};
+
+    const id = url.searchParams.get("id");
+    if (id) filters.id = id;
 
     const apiKeyId = url.searchParams.get("api_key_id");
     if (apiKeyId) filters.apiKeyId = apiKeyId;

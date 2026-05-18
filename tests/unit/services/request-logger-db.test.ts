@@ -386,6 +386,77 @@ describe("request-logger (db flows)", () => {
     expect(result.items[1].thinkingConfig).toBeNull();
   });
 
+  it("listRequestLogs adds an eq filter on requestLogs.id when filters.id is set", async () => {
+    const { listRequestLogs } = await import("@/lib/services/request-logger");
+    const { eq } = await import("drizzle-orm");
+
+    const whereMock = vi.fn().mockResolvedValueOnce([{ value: 1 }]);
+    dbSelectMock.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({ where: whereMock }),
+    });
+    requestLogsFindManyMock.mockResolvedValueOnce([
+      {
+        id: "log-focus",
+        apiKeyId: null,
+        upstreamId: null,
+        upstream: null,
+        method: null,
+        path: null,
+        model: null,
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        cachedTokens: 0,
+        reasoningTokens: 0,
+        reasoningEffort: null,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+        statusCode: 200,
+        durationMs: 1,
+        routingDurationMs: null,
+        errorMessage: null,
+        routingType: null,
+        priorityTier: null,
+        groupName: null,
+        lbStrategy: null,
+        failoverAttempts: 0,
+        failoverHistory: null,
+        routingDecision: null,
+        thinkingConfig: null,
+        sessionId: null,
+        affinityHit: false,
+        affinityMigrated: false,
+        ttftMs: null,
+        isStream: false,
+        sessionIdCompensated: false,
+        headerDiff: null,
+        billingSnapshot: null,
+        createdAt: new Date("2026-03-01T00:00:00.000Z"),
+      },
+    ]);
+
+    const result = await listRequestLogs(1, 1, { id: "log-focus" });
+
+    expect(eq).toHaveBeenCalledWith("id", "log-focus");
+    expect(result.total).toBe(1);
+    expect(result.items[0].id).toBe("log-focus");
+  });
+
+  it("listRequestLogs returns an empty result set when filters.id does not match", async () => {
+    const { listRequestLogs } = await import("@/lib/services/request-logger");
+
+    const whereMock = vi.fn().mockResolvedValueOnce([{ value: 0 }]);
+    dbSelectMock.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({ where: whereMock }),
+    });
+    requestLogsFindManyMock.mockResolvedValueOnce([]);
+
+    const result = await listRequestLogs(1, 1, { id: "missing" });
+
+    expect(result.total).toBe(0);
+    expect(result.items).toEqual([]);
+  });
+
   it("reconcileStaleInProgressRequestLogs skips streams and persists billing snapshots", async () => {
     const { reconcileStaleInProgressRequestLogs } = await import("@/lib/services/request-logger");
 
