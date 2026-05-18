@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { DatabaseZap, FileJson, Loader2, Save, Search, Trash2 } from "lucide-react";
+import { DatabaseZap, ExternalLink, FileJson, Loader2, Save, Search, Trash2 } from "lucide-react";
+import { Link } from "@/i18n/navigation";
 import { RecordingJsonBlock } from "@/components/admin/recording-json-block";
 import { Topbar } from "@/components/admin/topbar";
 import { PaginationControls } from "@/components/admin/pagination-controls";
@@ -429,6 +430,16 @@ export default function TrafficRecordingPage() {
                             <FileJson className="h-4 w-4" />
                             {selectedId === recording.id ? t("hideDetail") : t("viewDetail")}
                           </Button>
+                          {recording.request_log_id ? (
+                            <Button asChild size="sm" variant="outline">
+                              <Link
+                                href={`/logs?focus=${encodeURIComponent(recording.request_log_id)}`}
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                                {t("openSourceLog")}
+                              </Link>
+                            </Button>
+                          ) : null}
                           {confirmingDeleteId === recording.id ? (
                             <div className="inline-flex animate-in items-center gap-1.5 duration-200 fade-in-0 zoom-in-95 motion-reduce:animate-none">
                               <Button

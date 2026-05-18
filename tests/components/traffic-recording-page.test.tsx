@@ -154,11 +154,18 @@ vi.mock("lucide-react", () => ({
   ChevronRight: () => <svg data-testid="icon-chevron-right" />,
   Copy: () => <svg data-testid="icon-copy" />,
   DatabaseZap: () => <svg data-testid="icon-database-zap" />,
+  ExternalLink: () => <svg data-testid="icon-external-link" />,
   FileJson: () => <svg data-testid="icon-file-json" />,
   Loader2: () => <svg data-testid="icon-loader" />,
   Save: () => <svg data-testid="icon-save" />,
   Search: () => <svg data-testid="icon-search" />,
   Trash2: () => <svg data-testid="icon-trash" />,
+}));
+
+vi.mock("@/i18n/navigation", () => ({
+  Link: ({ children, href }: { children: React.ReactNode; href: string }) => (
+    <a href={href}>{children}</a>
+  ),
 }));
 
 describe("TrafficRecordingPage", () => {
@@ -240,5 +247,64 @@ describe("TrafficRecordingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "trafficRecording.delete" }));
     fireEvent.click(screen.getByRole("button", { name: "trafficRecording.deleteConfirmAction" }));
     expect(deleteMutate).toHaveBeenCalledWith("recording-1");
+  });
+
+  it("renders 'open source log' link only when request_log_id is present", () => {
+    useTrafficRecordingsMock.mockReturnValue({
+      isLoading: false,
+      data: {
+        items: [
+          {
+            id: "rec-with-log",
+            request_log_id: "log-1",
+            api_key_id: null,
+            upstream_id: null,
+            method: "POST",
+            path: "v1/chat/completions",
+            model: "gpt-4.1",
+            status_code: 200,
+            outcome: "success",
+            fixture_path: "data/.../latest.json",
+            fixture_size_bytes: 1,
+            request_size_bytes: 0,
+            response_size_bytes: 0,
+            redacted: true,
+            created_at: "2026-01-02T00:00:00.000Z",
+          },
+          {
+            id: "rec-without-log",
+            request_log_id: null,
+            api_key_id: null,
+            upstream_id: null,
+            method: "POST",
+            path: "v1/chat/completions",
+            model: "gpt-4.1",
+            status_code: 200,
+            outcome: "success",
+            fixture_path: "data/.../other.json",
+            fixture_size_bytes: 1,
+            request_size_bytes: 0,
+            response_size_bytes: 0,
+            redacted: true,
+            created_at: "2026-01-02T00:00:00.000Z",
+          },
+        ],
+        total: 2,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+        stats: {
+          total: 2,
+          total_size_bytes: 2,
+          latest_created_at: "2026-01-02T00:00:00.000Z",
+        },
+      },
+    });
+
+    render(<TrafficRecordingPage />);
+
+    const links = screen.getAllByRole("link", { name: /trafficRecording.openSourceLog/i });
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute("href", "/logs?focus=log-1");
   });
 });

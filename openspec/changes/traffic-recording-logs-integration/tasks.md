@@ -33,14 +33,14 @@
 - [x] 4.5 新增 `tests/components/log-recording-section.test.tsx`，覆盖四种状态。
 - [x] 4.6 扩充 `tests/components/logs-table.test.tsx`（若不存在则新建），验证展开行能挂载录制分区组件。
 - [x] 4.7 运行 `pnpm exec tsc --noEmit --pretty false`、`pnpm lint`、`pnpm format:check`、相关测试。
-- [ ] 4.8 提交 phase 4 代码。
+- [x] 4.8 提交 phase 4 代码。
 
 ## 5. 录制行回跳到日志页
 
-- [ ] 5.1 在 `src/app/[locale]/(dashboard)/system/traffic-recording/page.tsx` 表格的「操作」列追加「打开原始日志」按钮，条件渲染 `request_log_id` 非空时显示，链接到 `/logs?focus=<id>`。
-- [ ] 5.2 补齐 `src/messages/en.json`、`src/messages/zh-CN.json` 中按钮文案翻译键。
-- [ ] 5.3 扩充 `tests/components/traffic-recording-page.test.tsx`，覆盖按钮在 `request_log_id` 非空与为空两种情况下的渲染差异。
-- [ ] 5.4 运行 `pnpm exec tsc --noEmit --pretty false`、`pnpm lint`、`pnpm test:run -- tests/components/traffic-recording-page.test.tsx`。
+- [x] 5.1 在 `src/app/[locale]/(dashboard)/system/traffic-recording/page.tsx` 表格的「操作」列追加「打开原始日志」按钮，条件渲染 `request_log_id` 非空时显示，链接到 `/logs?focus=<id>`。
+- [x] 5.2 补齐 `src/messages/en.json`、`src/messages/zh-CN.json` 中按钮文案翻译键。（`openSourceLog` 在 phase 4 已合并加入）
+- [x] 5.3 扩充 `tests/components/traffic-recording-page.test.tsx`，覆盖按钮在 `request_log_id` 非空与为空两种情况下的渲染差异。
+- [x] 5.4 运行 `pnpm exec tsc --noEmit --pretty false`、`pnpm lint`、`pnpm test:run -- tests/components/traffic-recording-page.test.tsx`。
 - [ ] 5.5 提交 phase 5 代码。
 
 ## 6. 日志页支持 `focus` query 参数
