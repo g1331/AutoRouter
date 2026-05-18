@@ -104,6 +104,9 @@ function getTaskTitle(task: BackgroundSyncTaskResponse, t: ReturnType<typeof use
   if (task.task_name === "upstream_model_catalog_sync") {
     return t("taskUpstreamModelCatalogSync");
   }
+  if (task.task_name === "traffic_recording_cleanup") {
+    return t("taskTrafficRecordingCleanup");
+  }
   return task.display_name;
 }
 
@@ -116,6 +119,9 @@ function getTaskDescription(
   }
   if (task.task_name === "upstream_model_catalog_sync") {
     return t("taskUpstreamModelCatalogSyncDesc");
+  }
+  if (task.task_name === "traffic_recording_cleanup") {
+    return t("taskTrafficRecordingCleanupDesc");
   }
   return task.task_name;
 }
