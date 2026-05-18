@@ -35,6 +35,7 @@ import {
 import { RoutingDecisionTimeline } from "@/components/admin/routing-decision-timeline";
 import { LifecycleTrack } from "@/components/admin/lifecycle-track";
 import { HeaderDiffPanel } from "@/components/logs/header-diff-panel";
+import { LogRecordingSection } from "@/components/admin/log-recording-section";
 import { matchRouteCapability } from "@/lib/services/route-capability-matcher";
 import { ROUTE_CAPABILITY_DEFINITIONS } from "@/lib/route-capabilities";
 import { getRequestThinkingBadgeLabel } from "@/lib/utils/request-thinking-config";
@@ -2848,6 +2849,9 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
             </div>
           </section>
         )}
+
+        {/* Recording Section */}
+        <LogRecordingSection logId={log.id} enabled={expandedRows.has(log.id)} />
       </div>
     );
   };

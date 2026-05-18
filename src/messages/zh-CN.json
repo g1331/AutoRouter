@@ -1345,7 +1345,16 @@
     "recordDeleteFailed": "删除录制记录失败：{message}",
     "detailTitle": "录制详情",
     "loadingDetail": "正在加载录制详情...",
-    "detailLoadFailed": "录制详情加载失败"
+    "detailLoadFailed": "录制详情加载失败",
+    "logSectionTitle": "请求录制",
+    "logSectionIdle": "展开此行后会加载对应的录制内容。",
+    "logSectionLoading": "正在加载录制内容...",
+    "logSectionAbsent": "该请求未被录制。",
+    "logSectionMissingFile": "录制索引存在，但 fixture 文件已缺失。",
+    "logSectionLoadFailed": "录制加载失败：{message}",
+    "logSectionOpenRecordings": "在录制页打开",
+    "logSectionOpenRecordingSettings": "打开录制管理",
+    "openSourceLog": "打开原始日志"
   },
   "upstreamFailureRules": {
     "title": "全局失败规则",

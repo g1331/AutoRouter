@@ -14,6 +14,13 @@ vi.mock("@/lib/date-locale", () => ({
   getDateLocale: () => undefined,
 }));
 
+// Mock the log recording section so we can assert on its mount without firing real queries.
+vi.mock("@/components/admin/log-recording-section", () => ({
+  LogRecordingSection: ({ logId, enabled }: { logId: string; enabled: boolean }) => (
+    <div data-testid="log-recording-section" data-log-id={logId} data-enabled={String(enabled)} />
+  ),
+}));
+
 /**
  * LogsTable Component Tests
  *
@@ -2449,6 +2456,21 @@ describe("LogsTable", () => {
       expect(screen.getByRole("button", { name: "Collapse diff" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "headerDiffShowValues" })).toBeInTheDocument();
       expect(screen.getByText("authorization")).toBeInTheDocument();
+    });
+  });
+
+  describe("Log Recording Section", () => {
+    it("mounts the recording section inside the expanded row with the log id and enabled flag", () => {
+      render(<LogsTable logs={[mockLog]} />);
+
+      expect(screen.queryByTestId("log-recording-section")).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+
+      const section = screen.getByTestId("log-recording-section");
+      expect(section).toBeInTheDocument();
+      expect(section.getAttribute("data-log-id")).toBe(mockLog.id);
+      expect(section.getAttribute("data-enabled")).toBe("true");
     });
   });
 });

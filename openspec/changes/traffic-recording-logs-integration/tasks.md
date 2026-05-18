@@ -22,17 +22,17 @@
 - [x] 3.3 扩充 `tests/unit/services/request-logger.test.ts`（若不存在则新建），新增按 `id` 过滤命中、未命中两个用例。
 - [x] 3.4 扩充 `tests/unit/api/admin/logs-route.test.ts`（若不存在则新建），覆盖 `id` 参数生效与未授权两个用例。
 - [x] 3.5 运行 `pnpm exec tsc --noEmit --pretty false`、`pnpm lint`、对应测试。
-- [ ] 3.6 提交 phase 3 代码。
+- [x] 3.6 提交 phase 3 代码。
 
 ## 4. 日志展开行内嵌录制分区
 
-- [ ] 4.1 在 `src/hooks/use-traffic-recording.ts` 中新增 `useTrafficRecordingByLogId(logId, enabled)`：先用 `request_log_id` filter 调用列表接口（`page_size=1`），命中后再调用详情接口；返回包含 status、recording、detail、error 的复合状态。
-- [ ] 4.2 新建 `src/components/admin/log-recording-section.tsx`，承载日志展开行内的录制分区，覆盖加载中、未录制、已录制、文件缺失四种 UI 状态；复用 `RecordingJsonBlock` 渲染 fixture。
-- [ ] 4.3 在 `src/components/admin/logs-table.tsx` 的 `renderExpandedDetails` 末尾插入 `LogRecordingSection`，传入当前日志 ID 与 `expandedRows.has(log.id)` 作为 `enabled` 标志。
-- [ ] 4.4 补齐 `src/messages/en.json`、`src/messages/zh-CN.json` 的录制分区翻译键：标题、加载中、未录制、已录制元信息标签、文件缺失、跳转按钮文案。
-- [ ] 4.5 新增 `tests/components/log-recording-section.test.tsx`，覆盖四种状态。
-- [ ] 4.6 扩充 `tests/components/logs-table.test.tsx`（若不存在则新建），验证展开行能挂载录制分区组件。
-- [ ] 4.7 运行 `pnpm exec tsc --noEmit --pretty false`、`pnpm lint`、`pnpm format:check`、相关测试。
+- [x] 4.1 在 `src/hooks/use-traffic-recording.ts` 中新增 `useTrafficRecordingByLogId(logId, enabled)`：先用 `request_log_id` filter 调用列表接口（`page_size=1`），命中后再调用详情接口；返回包含 status、recording、detail、error 的复合状态。
+- [x] 4.2 新建 `src/components/admin/log-recording-section.tsx`，承载日志展开行内的录制分区，覆盖加载中、未录制、已录制、文件缺失四种 UI 状态；复用 `RecordingJsonBlock` 渲染 fixture。
+- [x] 4.3 在 `src/components/admin/logs-table.tsx` 的 `renderExpandedDetails` 末尾插入 `LogRecordingSection`，传入当前日志 ID 与 `expandedRows.has(log.id)` 作为 `enabled` 标志。
+- [x] 4.4 补齐 `src/messages/en.json`、`src/messages/zh-CN.json` 的录制分区翻译键：标题、加载中、未录制、已录制元信息标签、文件缺失、跳转按钮文案。
+- [x] 4.5 新增 `tests/components/log-recording-section.test.tsx`，覆盖四种状态。
+- [x] 4.6 扩充 `tests/components/logs-table.test.tsx`（若不存在则新建），验证展开行能挂载录制分区组件。
+- [x] 4.7 运行 `pnpm exec tsc --noEmit --pretty false`、`pnpm lint`、`pnpm format:check`、相关测试。
 - [ ] 4.8 提交 phase 4 代码。
 
 ## 5. 录制行回跳到日志页

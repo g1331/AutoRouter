@@ -1340,7 +1340,16 @@
     "recordDeleteFailed": "Failed to delete traffic recording: {message}",
     "detailTitle": "Recording detail",
     "loadingDetail": "Loading recording detail...",
-    "detailLoadFailed": "Failed to load recording detail"
+    "detailLoadFailed": "Failed to load recording detail",
+    "logSectionTitle": "Request recording",
+    "logSectionIdle": "Expand this row to load the matching recording.",
+    "logSectionLoading": "Loading recording...",
+    "logSectionAbsent": "This request was not recorded.",
+    "logSectionMissingFile": "The recording index exists but the fixture file is missing.",
+    "logSectionLoadFailed": "Failed to load recording: {message}",
+    "logSectionOpenRecordings": "Open in recordings",
+    "logSectionOpenRecordingSettings": "Open recording settings",
+    "openSourceLog": "Open source log"
   },
   "upstreamFailureRules": {
     "title": "Global Failure Rules",
