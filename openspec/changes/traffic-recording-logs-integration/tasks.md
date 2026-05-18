@@ -64,4 +64,4 @@
   - 在聚焦模式下点击「清除聚焦」 → 回到普通列表。
 
   代理实施备注：浏览器内手动验证由用户在合并前完成。代理已通过组件测试覆盖上述四种状态（`tests/components/log-recording-section.test.tsx` 覆盖录制分区四态；`tests/components/logs-page.test.tsx` 覆盖 focus 命中/未命中/清除）。
-- [ ] 7.4 提交 phase 7 代码。
+- [x] 7.4 提交 phase 7 代码。
