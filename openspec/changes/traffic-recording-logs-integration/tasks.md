@@ -41,16 +41,16 @@
 - [x] 5.2 补齐 `src/messages/en.json`、`src/messages/zh-CN.json` 中按钮文案翻译键。（`openSourceLog` 在 phase 4 已合并加入）
 - [x] 5.3 扩充 `tests/components/traffic-recording-page.test.tsx`，覆盖按钮在 `request_log_id` 非空与为空两种情况下的渲染差异。
 - [x] 5.4 运行 `pnpm exec tsc --noEmit --pretty false`、`pnpm lint`、`pnpm test:run -- tests/components/traffic-recording-page.test.tsx`。
-- [ ] 5.5 提交 phase 5 代码。
+- [x] 5.5 提交 phase 5 代码。
 
 ## 6. 日志页支持 `focus` query 参数
 
-- [ ] 6.1 在 `src/app/[locale]/(dashboard)/logs/page.tsx` 中读取 `focus` query 参数，通过 `useRequestLogs(1, 1, { id: focus })` 加载单条日志。
-- [ ] 6.2 把 focus 命中的日志 ID 注入 `LogsTable` 的初始 `expandedRows` 集合（需要把 `expandedRows` 提升到页面层或新增 `initialExpandedIds` prop）。
-- [ ] 6.3 在页面顶部新增聚焦提示条：展示当前聚焦 ID 与「清除聚焦」按钮；命中失败时显示「找不到该日志」状态。
-- [ ] 6.4 补齐 `src/messages/en.json`、`src/messages/zh-CN.json` 的聚焦提示与「清除聚焦」翻译键。
-- [ ] 6.5 扩充 `tests/components/logs-page.test.tsx`（若不存在则新建），覆盖 focus 命中、focus 未命中、清除聚焦三种行为。
-- [ ] 6.6 运行 `pnpm exec tsc --noEmit --pretty false`、`pnpm lint`、`pnpm format:check`、相关测试。
+- [x] 6.1 在 `src/app/[locale]/(dashboard)/logs/page.tsx` 中读取 `focus` query 参数，通过 `useRequestLogs(1, 1, { id: focus })` 加载单条日志。
+- [x] 6.2 把 focus 命中的日志 ID 注入 `LogsTable` 的初始 `expandedRows` 集合（需要把 `expandedRows` 提升到页面层或新增 `initialExpandedIds` prop）。
+- [x] 6.3 在页面顶部新增聚焦提示条：展示当前聚焦 ID 与「清除聚焦」按钮；命中失败时显示「找不到该日志」状态。
+- [x] 6.4 补齐 `src/messages/en.json`、`src/messages/zh-CN.json` 的聚焦提示与「清除聚焦」翻译键。
+- [x] 6.5 扩充 `tests/components/logs-page.test.tsx`（若不存在则新建），覆盖 focus 命中、focus 未命中、清除聚焦三种行为。
+- [x] 6.6 运行 `pnpm exec tsc --noEmit --pretty false`、`pnpm lint`、`pnpm format:check`、相关测试。
 - [ ] 6.7 提交 phase 6 代码。
 
 ## 7. 集成校验与交接

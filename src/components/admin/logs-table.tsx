@@ -43,6 +43,8 @@ import { getRequestThinkingBadgeLabel } from "@/lib/utils/request-thinking-confi
 interface LogsTableProps {
   logs: RequestLog[];
   isLive?: boolean;
+  /** Log IDs to mark as expanded on initial mount (e.g. when arriving via /logs?focus=<id>). */
+  initialExpandedIds?: readonly string[];
 }
 
 type PerformancePreset = "all" | "high_ttft" | "low_tps" | "slow_duration";
@@ -712,7 +714,7 @@ function getPercentile(values: number[], percentile: number): number | null {
   return sorted[Math.max(0, Math.min(index, sorted.length - 1))];
 }
 
-export function LogsTable({ logs, isLive = false }: LogsTableProps) {
+export function LogsTable({ logs, isLive = false, initialExpandedIds }: LogsTableProps) {
   const t = useTranslations("logs");
   const locale = useLocale();
   const [desktopTableContainerElement, setDesktopTableContainerElement] =
@@ -821,7 +823,9 @@ export function LogsTable({ logs, isLive = false }: LogsTableProps) {
   const [hydratedAt, setHydratedAt] = useState<number | null>(null);
 
   // Expanded rows state for failover details
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(
+    () => new Set(initialExpandedIds ?? [])
+  );
   const [hasExpansionInteraction, setHasExpansionInteraction] = useState(false);
   const [focusedJourneySteps, setFocusedJourneySteps] = useState<Record<string, number>>({});
   const [journeyViewMode, setJourneyViewMode] = useState<"focused" | "sequential">("focused");
