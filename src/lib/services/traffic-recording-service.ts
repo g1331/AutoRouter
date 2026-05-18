@@ -46,6 +46,7 @@ export interface CreateTrafficRecordingIndexInput {
 export interface TrafficRecordingListFilters {
   apiKeyId?: string;
   upstreamId?: string;
+  requestLogId?: string;
   statusCode?: number;
   model?: string;
   startTime?: Date;
@@ -279,6 +280,8 @@ export async function listTrafficRecordings(
   const conditions = [];
   if (filters.apiKeyId) conditions.push(eq(trafficRecordings.apiKeyId, filters.apiKeyId));
   if (filters.upstreamId) conditions.push(eq(trafficRecordings.upstreamId, filters.upstreamId));
+  if (filters.requestLogId)
+    conditions.push(eq(trafficRecordings.requestLogId, filters.requestLogId));
   if (filters.statusCode !== undefined)
     conditions.push(eq(trafficRecordings.statusCode, filters.statusCode));
   if (filters.startTime) conditions.push(gte(trafficRecordings.createdAt, filters.startTime));

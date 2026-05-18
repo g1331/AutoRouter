@@ -255,6 +255,47 @@ describe("traffic-recording-service", () => {
     expect(result.stats.latestCreatedAt).toEqual(new Date("2026-01-03T00:00:00.000Z"));
   });
 
+  it("passes request_log_id filter into where clause when present", async () => {
+    const { listTrafficRecordings } = await import("@/lib/services/traffic-recording-service");
+    const { eq } = await import("drizzle-orm");
+
+    dbSelectMock
+      .mockReturnValueOnce({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([{ value: 1 }]),
+        }),
+      })
+      .mockReturnValueOnce({
+        from: vi.fn().mockResolvedValue([{ totalSizeBytes: 128, latestCreatedAt: null }]),
+      });
+    findManyMock.mockResolvedValueOnce([recordingRow()]);
+
+    const result = await listTrafficRecordings(1, 20, { requestLogId: "log-1" });
+
+    expect(eq).toHaveBeenCalledWith("recordings.request_log_id", "log-1");
+    expect(result.total).toBe(1);
+  });
+
+  it("returns empty result when request_log_id filter matches no row", async () => {
+    const { listTrafficRecordings } = await import("@/lib/services/traffic-recording-service");
+
+    dbSelectMock
+      .mockReturnValueOnce({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([{ value: 0 }]),
+        }),
+      })
+      .mockReturnValueOnce({
+        from: vi.fn().mockResolvedValue([{ totalSizeBytes: 0, latestCreatedAt: null }]),
+      });
+    findManyMock.mockResolvedValueOnce([]);
+
+    const result = await listTrafficRecordings(1, 20, { requestLogId: "missing-log" });
+
+    expect(result.total).toBe(0);
+    expect(result.items).toEqual([]);
+  });
+
   it("reads detail fixture from the configured recording root", async () => {
     const { getTrafficRecordingDetail } = await import("@/lib/services/traffic-recording-service");
 

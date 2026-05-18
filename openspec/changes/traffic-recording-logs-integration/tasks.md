@@ -4,15 +4,15 @@
 - [x] 1.2 把录制页改为引用共享组件，删除原文件内的函数定义，确保 import 顺序与 lint 通过。
 - [x] 1.3 为共享组件编写单元测试 `tests/components/recording-json-block.test.tsx`，覆盖空值、原始类型、对象、数组、展开/折叠、复制按钮等关键行为。
 - [x] 1.4 运行 `pnpm exec tsc --noEmit --pretty false`、`pnpm lint`、`pnpm test:run -- tests/components/recording-json-block.test.tsx tests/components/traffic-recording-page.test.tsx`，确认抽出后原录制页行为等价。
-- [ ] 1.5 提交 phase 1 代码，提交信息体现「抽出共享 JSON 树组件」。
+- [x] 1.5 提交 phase 1 代码，提交信息体现「抽出共享 JSON 树组件」。
 
 ## 2. 录制列表 API 支持按 `request_log_id` 过滤
 
-- [ ] 2.1 在 `src/lib/services/traffic-recording-service.ts` 的 `TrafficRecordingListFilters` 中增加 `requestLogId?: string`，在 `listTrafficRecordings` 中追加 `eq(trafficRecordings.requestLogId, ...)` 条件。
-- [ ] 2.2 在 `src/app/api/admin/traffic-recordings/route.ts` 中解析 `request_log_id` query 参数并传入服务层；空值视为未提供。
-- [ ] 2.3 扩充 `tests/unit/services/traffic-recording-service.test.ts`，新增按 `requestLogId` 过滤命中、未命中两个用例。
-- [ ] 2.4 扩充 `tests/unit/api/admin/traffic-recording-routes.test.ts`，新增 `request_log_id` 参数生效与未授权两个用例。
-- [ ] 2.5 运行 `pnpm exec tsc --noEmit --pretty false`、`pnpm lint`、`pnpm test:run -- tests/unit/services/traffic-recording-service.test.ts tests/unit/api/admin/traffic-recording-routes.test.ts`。
+- [x] 2.1 在 `src/lib/services/traffic-recording-service.ts` 的 `TrafficRecordingListFilters` 中增加 `requestLogId?: string`，在 `listTrafficRecordings` 中追加 `eq(trafficRecordings.requestLogId, ...)` 条件。
+- [x] 2.2 在 `src/app/api/admin/traffic-recordings/route.ts` 中解析 `request_log_id` query 参数并传入服务层；空值视为未提供。
+- [x] 2.3 扩充 `tests/unit/services/traffic-recording-service.test.ts`，新增按 `requestLogId` 过滤命中、未命中两个用例。
+- [x] 2.4 扩充 `tests/unit/api/admin/traffic-recording-routes.test.ts`，新增 `request_log_id` 参数生效与未授权两个用例。
+- [x] 2.5 运行 `pnpm exec tsc --noEmit --pretty false`、`pnpm lint`、`pnpm test:run -- tests/unit/services/traffic-recording-service.test.ts tests/unit/api/admin/traffic-recording-routes.test.ts`。
 - [ ] 2.6 提交 phase 2 代码。
 
 ## 3. 日志列表 API 支持按 `id` 精确查询

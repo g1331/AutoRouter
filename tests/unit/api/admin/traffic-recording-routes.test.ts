@@ -166,6 +166,47 @@ describe("traffic recording admin routes", () => {
     expect(body.stats.latest_created_at).toBe("2026-01-02T00:00:00.000Z");
   });
 
+  it("forwards request_log_id query parameter into list filters", async () => {
+    const { GET } = await import("@/app/api/admin/traffic-recordings/route");
+    listRecordingsMock.mockResolvedValueOnce({
+      items: [recording],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+      stats: {
+        total: 1,
+        totalSizeBytes: 512,
+        latestCreatedAt: recording.createdAt,
+      },
+    });
+
+    const response = await GET(
+      new NextRequest(
+        "http://localhost/api/admin/traffic-recordings?request_log_id=log-1&page_size=1",
+        { headers: { authorization: AUTH_HEADER } }
+      )
+    );
+
+    expect(response.status).toBe(200);
+    expect(listRecordingsMock).toHaveBeenCalledWith(
+      1,
+      1,
+      expect.objectContaining({ requestLogId: "log-1" })
+    );
+  });
+
+  it("rejects list requests without admin auth", async () => {
+    const { GET } = await import("@/app/api/admin/traffic-recordings/route");
+
+    const response = await GET(
+      new NextRequest("http://localhost/api/admin/traffic-recordings?request_log_id=log-1")
+    );
+
+    expect(response.status).toBe(401);
+    expect(listRecordingsMock).not.toHaveBeenCalled();
+  });
+
   it("rejects invalid list filters", async () => {
     const { GET } = await import("@/app/api/admin/traffic-recordings/route");
 

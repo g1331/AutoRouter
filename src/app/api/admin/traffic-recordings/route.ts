@@ -36,6 +36,9 @@ export async function GET(request: NextRequest): Promise<Response> {
     const upstreamId = url.searchParams.get("upstream_id");
     if (upstreamId) filters.upstreamId = upstreamId;
 
+    const requestLogId = url.searchParams.get("request_log_id");
+    if (requestLogId) filters.requestLogId = requestLogId;
+
     const statusCode = url.searchParams.get("status_code");
     if (statusCode) {
       const parsedStatusCode = Number(statusCode);
