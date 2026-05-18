@@ -13,15 +13,15 @@
 - [x] 2.3 扩充 `tests/unit/services/traffic-recording-service.test.ts`，新增按 `requestLogId` 过滤命中、未命中两个用例。
 - [x] 2.4 扩充 `tests/unit/api/admin/traffic-recording-routes.test.ts`，新增 `request_log_id` 参数生效与未授权两个用例。
 - [x] 2.5 运行 `pnpm exec tsc --noEmit --pretty false`、`pnpm lint`、`pnpm test:run -- tests/unit/services/traffic-recording-service.test.ts tests/unit/api/admin/traffic-recording-routes.test.ts`。
-- [ ] 2.6 提交 phase 2 代码。
+- [x] 2.6 提交 phase 2 代码。
 
 ## 3. 日志列表 API 支持按 `id` 精确查询
 
-- [ ] 3.1 在 `src/lib/services/request-logger.ts` 的 `ListRequestLogsFilter` 中增加 `id?: string`，在 `listRequestLogs` 中追加 `eq(requestLogs.id, ...)` 条件。
-- [ ] 3.2 在 `src/app/api/admin/logs/route.ts` 中解析 `id` query 参数并传入服务层；空值视为未提供。
-- [ ] 3.3 扩充 `tests/unit/services/request-logger.test.ts`（若不存在则新建），新增按 `id` 过滤命中、未命中两个用例。
-- [ ] 3.4 扩充 `tests/unit/api/admin/logs-route.test.ts`（若不存在则新建），覆盖 `id` 参数生效与未授权两个用例。
-- [ ] 3.5 运行 `pnpm exec tsc --noEmit --pretty false`、`pnpm lint`、对应测试。
+- [x] 3.1 在 `src/lib/services/request-logger.ts` 的 `ListRequestLogsFilter` 中增加 `id?: string`，在 `listRequestLogs` 中追加 `eq(requestLogs.id, ...)` 条件。
+- [x] 3.2 在 `src/app/api/admin/logs/route.ts` 中解析 `id` query 参数并传入服务层；空值视为未提供。
+- [x] 3.3 扩充 `tests/unit/services/request-logger.test.ts`（若不存在则新建），新增按 `id` 过滤命中、未命中两个用例。
+- [x] 3.4 扩充 `tests/unit/api/admin/logs-route.test.ts`（若不存在则新建），覆盖 `id` 参数生效与未授权两个用例。
+- [x] 3.5 运行 `pnpm exec tsc --noEmit --pretty false`、`pnpm lint`、对应测试。
 - [ ] 3.6 提交 phase 3 代码。
 
 ## 4. 日志展开行内嵌录制分区
