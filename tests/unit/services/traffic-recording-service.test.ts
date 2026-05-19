@@ -1,3 +1,4 @@
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { dbInsertMock, dbUpdateMock, dbSelectMock, dbDeleteMock, findFirstMock, findManyMock } =
@@ -305,7 +306,9 @@ describe("traffic-recording-service", () => {
     const result = await getTrafficRecordingDetail("recording-1");
 
     expect(readFileMock).toHaveBeenCalledWith(
-      expect.stringContaining("data\\traffic-recordings\\openai\\chat\\fixture.json"),
+      expect.stringContaining(
+        path.join("data", "traffic-recordings", "openai", "chat", "fixture.json")
+      ),
       "utf-8"
     );
     expect(result?.fixture).toEqual({ meta: { requestId: "req-1" } });
