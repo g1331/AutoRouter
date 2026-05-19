@@ -3,6 +3,7 @@ import { useAuth } from "@/providers/auth-provider";
 import type { PaginatedRequestLogsResponse } from "@/types/api";
 
 export interface RequestLogsFilters {
+  id?: string;
   api_key_id?: string;
   upstream_id?: string;
   status_code?: number;
@@ -32,6 +33,9 @@ export function useRequestLogs(
       params.set("page", String(page));
       params.set("page_size", String(pageSize));
 
+      if (filters?.id) {
+        params.set("id", filters.id);
+      }
       if (filters?.api_key_id) {
         params.set("api_key_id", filters.api_key_id);
       }

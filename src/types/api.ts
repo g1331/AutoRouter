@@ -781,6 +781,55 @@ export type PaginatedAPIKeysResponse = PaginatedResponse<APIKeyResponse>;
 export type PaginatedUpstreamsResponse = PaginatedResponse<UpstreamResponse>;
 export type PaginatedRequestLogsResponse = PaginatedResponse<RequestLogResponse>;
 
+export type TrafficRecordingMode = "all" | "success" | "failure";
+
+export interface TrafficRecordingSettingsResponse {
+  enabled: boolean;
+  mode: TrafficRecordingMode;
+  redact_sensitive: boolean;
+  retention_days: number;
+  updated_at: string;
+}
+
+export interface TrafficRecordingSettingsUpdate {
+  enabled?: boolean;
+  mode?: TrafficRecordingMode;
+  redact_sensitive?: boolean;
+  retention_days?: number;
+}
+
+export interface TrafficRecordingResponse {
+  id: string;
+  request_log_id: string | null;
+  api_key_id: string | null;
+  upstream_id: string | null;
+  method: string | null;
+  path: string | null;
+  model: string | null;
+  status_code: number | null;
+  outcome: "success" | "failure";
+  fixture_path: string;
+  fixture_size_bytes: number;
+  request_size_bytes: number;
+  response_size_bytes: number;
+  redacted: boolean;
+  created_at: string;
+}
+
+export interface TrafficRecordingDetailResponse extends TrafficRecordingResponse {
+  fixture: unknown;
+}
+
+export interface TrafficRecordingStatsResponse {
+  total: number;
+  total_size_bytes: number;
+  latest_created_at: string | null;
+}
+
+export interface PaginatedTrafficRecordingsResponse extends PaginatedResponse<TrafficRecordingResponse> {
+  stats: TrafficRecordingStatsResponse;
+}
+
 // ========== Billing Types ==========
 
 export interface BillingSyncResponse {

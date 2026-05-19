@@ -1,6 +1,13 @@
 import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 import type { FailoverAttempt } from "./request-logger";
+import {
+  createTrafficRecordingIndex,
+  getTrafficRecordingRoot,
+  shouldRecordTraffic,
+  type CreateTrafficRecordingIndexInput,
+  type TrafficRecordingSettingsValue,
+} from "./traffic-recording-service";
 
 export interface TrafficRecordRequest {
   method: string;
@@ -34,6 +41,7 @@ export interface TrafficRecordFixture {
     durationMs: number;
     /** Fixture format version. Absent in v1 fixtures. */
     version?: 2;
+    redacted?: boolean;
   };
   inbound: TrafficRecordRequest;
   outbound: {
@@ -96,6 +104,7 @@ export interface BuildFixtureParams {
     streamChunks?: string[];
   } | null;
   failoverHistory?: FailoverAttempt[] | null;
+  redactSensitive?: boolean;
 }
 
 /** Parsed inbound request body. */
@@ -104,8 +113,6 @@ export interface InboundBody {
   json: unknown | null;
   buffer: ArrayBuffer | null;
 }
-
-const DEFAULT_FIXTURE_DIR = "tests/fixtures";
 
 /**
  * Maximum total bytes to buffer when recording a tee'd stream.
@@ -135,45 +142,38 @@ export type RecorderOutcome = "success" | "failure";
  * Determine whether traffic recording is enabled by environment configuration.
  */
 export function isRecorderEnabled(): boolean {
-  return process.env.RECORDER_ENABLED === "true" || process.env.RECORDER_ENABLED === "1";
+  return false;
 }
 
 /**
  * Resolve the configured traffic-recording mode.
  */
 export function getRecorderMode(): RecorderMode {
-  const value = process.env.RECORDER_MODE?.trim().toLowerCase();
-  if (value === "success" || value === "failure" || value === "all") {
-    return value;
-  }
-  return "all";
+  return "failure";
 }
 
 /**
  * Decide whether a fixture should be recorded for the given request outcome.
  */
-export function shouldRecordFixture(outcome: RecorderOutcome): boolean {
-  if (!isRecorderEnabled()) {
-    return false;
-  }
-  const mode = getRecorderMode();
-  return mode === "all" || mode === outcome;
+export function shouldRecordFixture(
+  outcome: RecorderOutcome,
+  settings?: Pick<TrafficRecordingSettingsValue, "enabled" | "mode">
+): boolean {
+  return settings ? shouldRecordTraffic(settings, outcome) : false;
 }
 
 /**
  * Return the root directory used to store recorded traffic fixtures.
  */
 export function getFixtureRoot(): string {
-  return process.env.RECORDER_FIXTURES_DIR || DEFAULT_FIXTURE_DIR;
+  return getTrafficRecordingRoot();
 }
 
 /**
  * Determine whether sensitive values should be redacted from recorded fixtures.
  */
 export function isRecorderRedactionEnabled(): boolean {
-  const value = process.env.RECORDER_REDACT_SENSITIVE;
-  if (!value) return true;
-  return value !== "false" && value !== "0";
+  return true;
 }
 
 /**
@@ -209,29 +209,32 @@ function toHeaderRecord(headers: Headers | Record<string, string>): Record<strin
 }
 
 function formatHeadersForFixture(
-  headers: Headers | Record<string, string>
+  headers: Headers | Record<string, string>,
+  redactSensitive = true
 ): Record<string, string> {
-  return isRecorderRedactionEnabled() ? redactHeaders(headers) : toHeaderRecord(headers);
+  return redactSensitive ? redactHeaders(headers) : toHeaderRecord(headers);
 }
 
-function formatUrlForFixture(url: string): string {
-  return isRecorderRedactionEnabled() ? redactUrl(url) : url;
+function formatUrlForFixture(url: string, redactSensitive = true): string {
+  return redactSensitive ? redactUrl(url) : url;
 }
 
-function formatFailoverHistoryForFixture(history: FailoverAttempt[]): FailoverAttempt[] {
-  const redactionEnabled = isRecorderRedactionEnabled();
+function formatFailoverHistoryForFixture(
+  history: FailoverAttempt[],
+  redactSensitive = true
+): FailoverAttempt[] {
   return history.map((attempt) => {
     const formatted: FailoverAttempt = {
       ...attempt,
       ...(typeof attempt.upstream_base_url === "string"
-        ? { upstream_base_url: formatUrlForFixture(attempt.upstream_base_url) }
+        ? { upstream_base_url: formatUrlForFixture(attempt.upstream_base_url, redactSensitive) }
         : {}),
       ...(attempt.response_headers
-        ? { response_headers: formatHeadersForFixture(attempt.response_headers) }
+        ? { response_headers: formatHeadersForFixture(attempt.response_headers, redactSensitive) }
         : {}),
     };
 
-    if (redactionEnabled) {
+    if (redactSensitive) {
       delete formatted.response_body_text;
       delete formatted.response_body_json;
     }
@@ -386,6 +389,7 @@ export function compactSSEChunks(chunks: string[]): string[] {
 
 /** Build a TrafficRecordFixture from proxy context. */
 export function buildFixture(params: BuildFixtureParams): TrafficRecordFixture {
+  const redactSensitive = params.redactSensitive ?? true;
   // Body: prefer JSON, fall back to text
   const inboundBody: Pick<TrafficRecordRequest, "bodyText" | "bodyJson"> =
     params.inboundRequest.bodyJson != null
@@ -414,7 +418,7 @@ export function buildFixture(params: BuildFixtureParams): TrafficRecordFixture {
         : null;
   const failoverHistory =
     params.failoverHistory && params.failoverHistory.length > 0
-      ? formatFailoverHistoryForFixture(params.failoverHistory)
+      ? formatFailoverHistoryForFixture(params.failoverHistory, redactSensitive)
       : null;
 
   return {
@@ -426,11 +430,12 @@ export function buildFixture(params: BuildFixtureParams): TrafficRecordFixture {
       model: params.model,
       durationMs: Date.now() - params.startTime,
       version: 2,
+      redacted: redactSensitive,
     },
     inbound: {
       method: params.inboundRequest.method,
       path: params.inboundRequest.path,
-      headers: formatHeadersForFixture(params.inboundRequest.headers),
+      headers: formatHeadersForFixture(params.inboundRequest.headers, redactSensitive),
       ...inboundBody,
     },
     outbound: {
@@ -438,7 +443,7 @@ export function buildFixture(params: BuildFixtureParams): TrafficRecordFixture {
         id: params.upstream.id,
         name: params.upstream.name,
         providerType: params.upstream.providerType,
-        baseUrl: formatUrlForFixture(params.upstream.baseUrl),
+        baseUrl: formatUrlForFixture(params.upstream.baseUrl, redactSensitive),
       },
       ...(typeof params.outboundRequestSent === "boolean"
         ? { didSendUpstream: params.outboundRequestSent }
@@ -447,12 +452,12 @@ export function buildFixture(params: BuildFixtureParams): TrafficRecordFixture {
       request: {
         method: params.inboundRequest.method,
         path: params.inboundRequest.path,
-        headers: formatHeadersForFixture(params.outboundHeaders),
+        headers: formatHeadersForFixture(params.outboundHeaders, redactSensitive),
         bodyFromInbound: true,
       },
       response: {
         status: params.response.statusCode,
-        headers: formatHeadersForFixture(params.response.headers),
+        headers: formatHeadersForFixture(params.response.headers, redactSensitive),
         ...responseBody,
         streamChunks,
       },
@@ -462,7 +467,7 @@ export function buildFixture(params: BuildFixtureParams): TrafficRecordFixture {
           downstream: {
             response: {
               status: params.downstreamResponse.statusCode,
-              headers: formatHeadersForFixture(params.downstreamResponse.headers),
+              headers: formatHeadersForFixture(params.downstreamResponse.headers, redactSensitive),
               ...(downstreamResponseBody ?? {}),
               streamChunks: downstreamStreamChunks,
             },
@@ -483,10 +488,39 @@ export function buildFixture(params: BuildFixtureParams): TrafficRecordFixture {
 // Fixture persistence
 // ---------------------------------------------------------------------------
 
+function jsonSizeBytes(value: unknown): number {
+  if (value == null) return 0;
+  return new TextEncoder().encode(typeof value === "string" ? value : JSON.stringify(value)).length;
+}
+
+function estimateRequestSizeBytes(fixture: TrafficRecordFixture): number {
+  return jsonSizeBytes(fixture.inbound.bodyJson ?? fixture.inbound.bodyText);
+}
+
+function estimateResponseSizeBytes(fixture: TrafficRecordFixture): number {
+  const upstreamBodySize = jsonSizeBytes(
+    fixture.outbound.response.bodyJson ??
+      fixture.outbound.response.bodyText ??
+      fixture.outbound.response.streamChunks
+  );
+  const downstreamBodySize = jsonSizeBytes(
+    fixture.downstream?.response.bodyJson ??
+      fixture.downstream?.response.bodyText ??
+      fixture.downstream?.response.streamChunks
+  );
+  return upstreamBodySize + downstreamBodySize;
+}
+
 /**
  * Persist a recorded traffic fixture to disk and return its file path.
  */
-export async function recordTrafficFixture(fixture: TrafficRecordFixture): Promise<string> {
+export async function recordTrafficFixture(
+  fixture: TrafficRecordFixture,
+  index?: Omit<
+    CreateTrafficRecordingIndexInput,
+    "fixturePath" | "requestSizeBytes" | "responseSizeBytes" | "redacted" | "createdAt" | "outcome"
+  > & { outcome?: CreateTrafficRecordingIndexInput["outcome"] }
+): Promise<string> {
   const timestamp = fixture.meta.createdAt.replace(/[:.]/g, "-");
   const filePath = buildFixturePath(fixture.meta.providerType, fixture.meta.route, timestamp);
   const latestPath = path.join(path.dirname(filePath), "latest.json");
@@ -494,6 +528,23 @@ export async function recordTrafficFixture(fixture: TrafficRecordFixture): Promi
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, payload, "utf-8");
   await writeFile(latestPath, payload, "utf-8");
+
+  if (index) {
+    await createTrafficRecordingIndex({
+      ...index,
+      outcome:
+        index.outcome ??
+        (fixture.outbound.response.status >= 200 && fixture.outbound.response.status < 400
+          ? "success"
+          : "failure"),
+      fixturePath: filePath,
+      requestSizeBytes: estimateRequestSizeBytes(fixture),
+      responseSizeBytes: estimateResponseSizeBytes(fixture),
+      redacted: fixture.meta.redacted ?? true,
+      createdAt: new Date(fixture.meta.createdAt),
+    });
+  }
+
   return filePath;
 }
 
@@ -505,7 +556,7 @@ export async function readLatestFixture(
   route: string
 ): Promise<TrafficRecordFixture | null> {
   const dir = path.join(
-    DEFAULT_FIXTURE_DIR,
+    getFixtureRoot(),
     sanitizePathSegment(provider),
     sanitizePathSegment(route)
   );

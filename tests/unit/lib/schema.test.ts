@@ -6,12 +6,15 @@ import {
   upstreamProbeResults,
   apiKeyUpstreams,
   requestLogs,
+  trafficRecordingSettings,
+  trafficRecordings,
   backgroundSyncTasks,
   backgroundSyncTaskRuns,
   apiKeysRelations,
   upstreamsRelations,
   apiKeyUpstreamsRelations,
   requestLogsRelations,
+  trafficRecordingsRelations,
   type ApiKey,
   type NewApiKey,
   type Upstream,
@@ -22,6 +25,10 @@ import {
   type NewApiKeyUpstream,
   type RequestLog,
   type NewRequestLog,
+  type TrafficRecordingSettings,
+  type NewTrafficRecordingSettings,
+  type TrafficRecording,
+  type NewTrafficRecording,
   type BackgroundSyncTask,
   type NewBackgroundSyncTask,
   type BackgroundSyncTaskRun,
@@ -440,6 +447,45 @@ describe("lib/db/schema", () => {
     });
   });
 
+  describe("traffic recording tables", () => {
+    it("has runtime settings columns", () => {
+      expect(trafficRecordingSettings.id.name).toBe("id");
+      expect(trafficRecordingSettings.enabled.name).toBe("enabled");
+      expect(trafficRecordingSettings.mode.name).toBe("mode");
+      expect(trafficRecordingSettings.redactSensitive.name).toBe("redact_sensitive");
+      expect(trafficRecordingSettings.retentionDays.name).toBe("retention_days");
+      expect(trafficRecordingSettings.updatedAt.name).toBe("updated_at");
+    });
+
+    it("has searchable recording index columns", () => {
+      expect(trafficRecordings.id.name).toBe("id");
+      expect(trafficRecordings.requestLogId.name).toBe("request_log_id");
+      expect(trafficRecordings.apiKeyId.name).toBe("api_key_id");
+      expect(trafficRecordings.upstreamId.name).toBe("upstream_id");
+      expect(trafficRecordings.method.name).toBe("method");
+      expect(trafficRecordings.path.name).toBe("path");
+      expect(trafficRecordings.model.name).toBe("model");
+      expect(trafficRecordings.statusCode.name).toBe("status_code");
+      expect(trafficRecordings.outcome.name).toBe("outcome");
+      expect(trafficRecordings.fixturePath.name).toBe("fixture_path");
+      expect(trafficRecordings.redacted.name).toBe("redacted");
+      expect(trafficRecordings.createdAt.name).toBe("created_at");
+    });
+
+    it("has indexes for common traffic recording filters", () => {
+      const tableConfig = getTableConfig(trafficRecordings);
+      const indexNames = tableConfig.indexes.map((i) => i.config.name);
+      expect(indexNames).toContain("traffic_recordings_api_key_id_idx");
+      expect(indexNames).toContain("traffic_recordings_upstream_id_idx");
+      expect(indexNames).toContain("traffic_recordings_status_code_idx");
+      expect(indexNames).toContain("traffic_recordings_model_idx");
+      expect(indexNames).toContain("traffic_recordings_created_at_idx");
+      expect(tableConfig.uniqueConstraints.map((i) => i.name)).toContain(
+        "traffic_recordings_fixture_path_unique"
+      );
+    });
+  });
+
   describe("Relations", () => {
     it("exports apiKeysRelations", () => {
       expect(apiKeysRelations).toBeDefined();
@@ -455,6 +501,10 @@ describe("lib/db/schema", () => {
 
     it("exports requestLogsRelations", () => {
       expect(requestLogsRelations).toBeDefined();
+    });
+
+    it("exports trafficRecordingsRelations", () => {
+      expect(trafficRecordingsRelations).toBeDefined();
     });
   });
 
@@ -505,6 +555,17 @@ describe("lib/db/schema", () => {
     it("exports NewRequestLog type", () => {
       const _typeCheck: NewRequestLog | null = null;
       expect(_typeCheck).toBeNull();
+    });
+
+    it("exports traffic recording types", () => {
+      const _settings: TrafficRecordingSettings | null = null;
+      const _newSettings: NewTrafficRecordingSettings | null = null;
+      const _recording: TrafficRecording | null = null;
+      const _newRecording: NewTrafficRecording | null = null;
+      expect(_settings).toBeNull();
+      expect(_newSettings).toBeNull();
+      expect(_recording).toBeNull();
+      expect(_newRecording).toBeNull();
     });
 
     it("exports background sync task types", () => {

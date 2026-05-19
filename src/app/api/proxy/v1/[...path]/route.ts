@@ -104,6 +104,7 @@ import {
   buildFixture,
   recordTrafficFixture,
 } from "@/lib/services/traffic-recorder";
+import { getTrafficRecordingSettings } from "@/lib/services/traffic-recording-service";
 import {
   extractSessionId,
   affinityStore,
@@ -2453,8 +2454,9 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
   };
 
   // Recorder setup
-  const shouldRecordSuccess = shouldRecordFixture("success");
-  const shouldRecordFailure = shouldRecordFixture("failure");
+  const trafficRecordingSettings = await getTrafficRecordingSettings();
+  const shouldRecordSuccess = shouldRecordFixture("success", trafficRecordingSettings);
+  const shouldRecordFailure = shouldRecordFixture("failure", trafficRecordingSettings);
   const recorderEnabled = shouldRecordSuccess || shouldRecordFailure;
   const inboundBody = recorderEnabled ? await readRequestBody(request) : null;
 
@@ -3564,8 +3566,18 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
               },
               outboundRequestSent: true,
               outboundResponseSource: "upstream",
+              redactSensitive: trafficRecordingSettings.redactSensitive,
             });
-            return recordTrafficFixture(fixture);
+            return recordTrafficFixture(fixture, {
+              requestLogId,
+              apiKeyId: validApiKey.id,
+              upstreamId: upstreamForLogging.id,
+              method: request.method,
+              path,
+              model: resolvedModel,
+              statusCode: result.statusCode,
+              outcome: "success",
+            });
           })
           .catch((error) =>
             log.error({ err: error, requestId }, "failed to record stream fixture")
@@ -3752,11 +3764,19 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           },
           outboundRequestSent: true,
           outboundResponseSource: "upstream",
+          redactSensitive: trafficRecordingSettings.redactSensitive,
         });
 
-        void recordTrafficFixture(fixture).catch((error) =>
-          log.error({ err: error, requestId }, "failed to record fixture")
-        );
+        void recordTrafficFixture(fixture, {
+          requestLogId: persistedLogId,
+          apiKeyId: validApiKey.id,
+          upstreamId: upstreamForLogging.id,
+          method: request.method,
+          path,
+          model: resolvedModel,
+          statusCode: result.statusCode,
+          outcome: "success",
+        }).catch((error) => log.error({ err: error, requestId }, "failed to record fixture"));
       }
 
       return new Response(Buffer.from(bodyBytes), {
@@ -3982,9 +4002,19 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           bodyJson: downstreamErrorBody,
         },
         failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
+        redactSensitive: trafficRecordingSettings.redactSensitive,
       });
 
-      void recordTrafficFixture(failureFixture).catch((recordError) =>
+      void recordTrafficFixture(failureFixture, {
+        requestLogId,
+        apiKeyId: validApiKey.id,
+        upstreamId: actualUpstreamId,
+        method: request.method,
+        path,
+        model: resolvedModel,
+        statusCode: errorStatusCode,
+        outcome: "failure",
+      }).catch((recordError) =>
         log.error({ err: recordError, requestId }, "failed to record error fixture")
       );
     }

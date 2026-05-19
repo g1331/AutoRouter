@@ -228,6 +228,7 @@ export interface PaginatedRequestLogs {
 }
 
 export interface ListRequestLogsFilter {
+  id?: string;
   apiKeyId?: string;
   upstreamId?: string;
   statusCode?: number;
@@ -707,6 +708,9 @@ export async function listRequestLogs(
   // Build filter conditions
   const conditions = [];
 
+  if (filters.id) {
+    conditions.push(eq(requestLogs.id, filters.id));
+  }
   if (filters.apiKeyId) {
     conditions.push(eq(requestLogs.apiKeyId, filters.apiKeyId));
   }

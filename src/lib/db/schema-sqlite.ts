@@ -352,6 +352,55 @@ export const requestLogs = sqliteTable(
 );
 
 /**
+ * Runtime configuration for traffic recording.
+ */
+export const trafficRecordingSettings = sqliteTable("traffic_recording_settings", {
+  id: text("id").primaryKey().default("default"),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
+  mode: text("mode").notNull().default("failure"),
+  redactSensitive: integer("redact_sensitive", { mode: "boolean" }).notNull().default(true),
+  retentionDays: integer("retention_days").notNull().default(7),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+});
+
+/**
+ * Searchable index for recorded traffic fixture files.
+ */
+export const trafficRecordings = sqliteTable(
+  "traffic_recordings",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    requestLogId: text("request_log_id").references(() => requestLogs.id, {
+      onDelete: "set null",
+    }),
+    apiKeyId: text("api_key_id").references(() => apiKeys.id, { onDelete: "set null" }),
+    upstreamId: text("upstream_id").references(() => upstreams.id, { onDelete: "set null" }),
+    method: text("method"),
+    path: text("path"),
+    model: text("model"),
+    statusCode: integer("status_code"),
+    outcome: text("outcome").notNull(),
+    fixturePath: text("fixture_path").notNull().unique(),
+    fixtureSizeBytes: integer("fixture_size_bytes").notNull().default(0),
+    requestSizeBytes: integer("request_size_bytes").notNull().default(0),
+    responseSizeBytes: integer("response_size_bytes").notNull().default(0),
+    redacted: integer("redacted", { mode: "boolean" }).notNull().default(true),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("traffic_recordings_request_log_id_idx").on(table.requestLogId),
+    index("traffic_recordings_api_key_id_idx").on(table.apiKeyId),
+    index("traffic_recordings_upstream_id_idx").on(table.upstreamId),
+    index("traffic_recordings_status_code_idx").on(table.statusCode),
+    index("traffic_recordings_model_idx").on(table.model),
+    index("traffic_recordings_created_at_idx").on(table.createdAt),
+  ]
+);
+
+/**
  * Synced model price catalog from external sources.
  */
 export const billingModelPrices = sqliteTable(
@@ -658,6 +707,21 @@ export const requestLogsRelations = relations(requestLogs, ({ one }) => ({
   }),
 }));
 
+export const trafficRecordingsRelations = relations(trafficRecordings, ({ one }) => ({
+  requestLog: one(requestLogs, {
+    fields: [trafficRecordings.requestLogId],
+    references: [requestLogs.id],
+  }),
+  apiKey: one(apiKeys, {
+    fields: [trafficRecordings.apiKeyId],
+    references: [apiKeys.id],
+  }),
+  upstream: one(upstreams, {
+    fields: [trafficRecordings.upstreamId],
+    references: [upstreams.id],
+  }),
+}));
+
 export const requestBillingSnapshotsRelations = relations(requestBillingSnapshots, ({ one }) => ({
   requestLog: one(requestLogs, {
     fields: [requestBillingSnapshots.requestLogId],
@@ -686,6 +750,10 @@ export type ApiKeyUpstream = typeof apiKeyUpstreams.$inferSelect;
 export type NewApiKeyUpstream = typeof apiKeyUpstreams.$inferInsert;
 export type RequestLog = typeof requestLogs.$inferSelect;
 export type NewRequestLog = typeof requestLogs.$inferInsert;
+export type TrafficRecordingSettings = typeof trafficRecordingSettings.$inferSelect;
+export type NewTrafficRecordingSettings = typeof trafficRecordingSettings.$inferInsert;
+export type TrafficRecording = typeof trafficRecordings.$inferSelect;
+export type NewTrafficRecording = typeof trafficRecordings.$inferInsert;
 export type CircuitBreakerState = typeof circuitBreakerStates.$inferSelect;
 export type NewCircuitBreakerState = typeof circuitBreakerStates.$inferInsert;
 export type UpstreamFailureRule = typeof upstreamFailureRules.$inferSelect;

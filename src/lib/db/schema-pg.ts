@@ -336,6 +336,54 @@ export const requestLogs = pgTable(
 );
 
 /**
+ * Runtime configuration for traffic recording.
+ */
+export const trafficRecordingSettings = pgTable("traffic_recording_settings", {
+  id: varchar("id", { length: 32 }).primaryKey().default("default"),
+  enabled: boolean("enabled").notNull().default(false),
+  mode: varchar("mode", { length: 16 }).notNull().default("failure"),
+  redactSensitive: boolean("redact_sensitive").notNull().default(true),
+  retentionDays: integer("retention_days").notNull().default(7),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Searchable index for recorded traffic fixture files.
+ */
+export const trafficRecordings = pgTable(
+  "traffic_recordings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    requestLogId: uuid("request_log_id").references(() => requestLogs.id, {
+      onDelete: "set null",
+    }),
+    apiKeyId: uuid("api_key_id").references(() => apiKeys.id, { onDelete: "set null" }),
+    upstreamId: uuid("upstream_id").references(() => upstreams.id, { onDelete: "set null" }),
+    method: varchar("method", { length: 10 }),
+    path: text("path"),
+    model: varchar("model", { length: 128 }),
+    statusCode: integer("status_code"),
+    outcome: varchar("outcome", { length: 16 }).notNull(),
+    fixturePath: text("fixture_path").notNull(),
+    fixtureSizeBytes: integer("fixture_size_bytes").notNull().default(0),
+    requestSizeBytes: integer("request_size_bytes").notNull().default(0),
+    responseSizeBytes: integer("response_size_bytes").notNull().default(0),
+    redacted: boolean("redacted").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("traffic_recordings_fixture_path_unique").on(table.fixturePath),
+    index("traffic_recordings_request_log_id_idx").on(table.requestLogId),
+    index("traffic_recordings_api_key_id_idx").on(table.apiKeyId),
+    index("traffic_recordings_upstream_id_idx").on(table.upstreamId),
+    index("traffic_recordings_status_code_idx").on(table.statusCode),
+    index("traffic_recordings_model_idx").on(table.model),
+    index("traffic_recordings_created_at_idx").on(table.createdAt),
+  ]
+);
+
+/**
  * Synced model price catalog from external sources.
  */
 export const billingModelPrices = pgTable(
@@ -628,6 +676,21 @@ export const requestLogsRelations = relations(requestLogs, ({ one }) => ({
   }),
 }));
 
+export const trafficRecordingsRelations = relations(trafficRecordings, ({ one }) => ({
+  requestLog: one(requestLogs, {
+    fields: [trafficRecordings.requestLogId],
+    references: [requestLogs.id],
+  }),
+  apiKey: one(apiKeys, {
+    fields: [trafficRecordings.apiKeyId],
+    references: [apiKeys.id],
+  }),
+  upstream: one(upstreams, {
+    fields: [trafficRecordings.upstreamId],
+    references: [upstreams.id],
+  }),
+}));
+
 export const requestBillingSnapshotsRelations = relations(requestBillingSnapshots, ({ one }) => ({
   requestLog: one(requestLogs, {
     fields: [requestBillingSnapshots.requestLogId],
@@ -656,6 +719,10 @@ export type ApiKeyUpstream = typeof apiKeyUpstreams.$inferSelect;
 export type NewApiKeyUpstream = typeof apiKeyUpstreams.$inferInsert;
 export type RequestLog = typeof requestLogs.$inferSelect;
 export type NewRequestLog = typeof requestLogs.$inferInsert;
+export type TrafficRecordingSettings = typeof trafficRecordingSettings.$inferSelect;
+export type NewTrafficRecordingSettings = typeof trafficRecordingSettings.$inferInsert;
+export type TrafficRecording = typeof trafficRecordings.$inferSelect;
+export type NewTrafficRecording = typeof trafficRecordings.$inferInsert;
 export type CircuitBreakerState = typeof circuitBreakerStates.$inferSelect;
 export type NewCircuitBreakerState = typeof circuitBreakerStates.$inferInsert;
 export type UpstreamFailureRule = typeof upstreamFailureRules.$inferSelect;

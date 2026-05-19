@@ -3,6 +3,7 @@
 import {
   ArrowUpRight,
   ArrowLeftRight,
+  DatabaseZap,
   Globe,
   Github,
   LogOut,
@@ -33,6 +34,7 @@ export default function SettingsPage() {
   const tCompensation = useTranslations("compensation");
   const tBilling = useTranslations("billing");
   const tBackgroundSync = useTranslations("backgroundSync");
+  const tTrafficRecording = useTranslations("trafficRecording");
   const tRepository = useTranslations("repository");
   const tFailureRules = useTranslations("upstreamFailureRules");
 
@@ -63,6 +65,12 @@ export default function SettingsPage() {
       icon: RefreshCw,
       title: tBackgroundSync("title"),
       description: tBackgroundSync("panelDescription"),
+    },
+    {
+      href: "/system/traffic-recording",
+      icon: DatabaseZap,
+      title: tTrafficRecording("title"),
+      description: tTrafficRecording("settingsDescription"),
     },
     {
       href: "/system/failure-rules",

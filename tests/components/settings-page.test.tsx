@@ -82,6 +82,7 @@ vi.mock("@/components/ui/card", () => ({
 vi.mock("lucide-react", () => ({
   ArrowUpRight: () => <svg data-testid="icon-arrow-up-right" />,
   ArrowLeftRight: () => <svg data-testid="icon-arrow-left-right" />,
+  DatabaseZap: () => <svg data-testid="icon-database-zap" />,
   Globe: () => <svg data-testid="icon-globe" />,
   Github: () => <svg data-testid="icon-github" />,
   LogOut: () => <svg data-testid="icon-logout" />,
@@ -118,5 +119,13 @@ describe("SettingsPage", () => {
     const failureRulesLink = screen.getByRole("link", { name: /upstreamFailureRules.title/i });
     expect(failureRulesLink).toHaveAttribute("href", "/system/failure-rules");
     expect(screen.getByText("upstreamFailureRules.settingsDescription")).toBeInTheDocument();
+  });
+
+  it("renders traffic recording settings entry", () => {
+    render(<SettingsPage />);
+
+    const trafficRecordingLink = screen.getByRole("link", { name: /trafficRecording.title/i });
+    expect(trafficRecordingLink).toHaveAttribute("href", "/system/traffic-recording");
+    expect(screen.getByText("trafficRecording.settingsDescription")).toBeInTheDocument();
   });
 });

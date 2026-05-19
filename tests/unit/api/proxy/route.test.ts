@@ -376,12 +376,16 @@ vi.mock("@/lib/services/traffic-recorder", () => ({
   isRecorderEnabled: vi.fn(
     () => process.env.RECORDER_ENABLED === "true" || process.env.RECORDER_ENABLED === "1"
   ),
-  shouldRecordFixture: vi.fn((outcome: "success" | "failure") => {
-    const enabled = process.env.RECORDER_ENABLED === "true" || process.env.RECORDER_ENABLED === "1";
-    if (!enabled) return false;
-    const mode = (process.env.RECORDER_MODE ?? "all").trim().toLowerCase();
-    return mode === "all" || mode === outcome;
-  }),
+  shouldRecordFixture: vi.fn(
+    (
+      outcome: "success" | "failure",
+      settings?: { enabled: boolean; mode: "all" | "success" | "failure" }
+    ) => {
+      if (!settings?.enabled) return false;
+      const mode = settings.mode;
+      return mode === "all" || mode === outcome;
+    }
+  ),
   readRequestBody: vi.fn(async (request: Request) => {
     const text = await request.clone().text();
     if (!text) return { text: null, json: null, buffer: null };
@@ -395,6 +399,21 @@ vi.mock("@/lib/services/traffic-recorder", () => ({
   teeStreamForRecording: vi.fn((stream: ReadableStream<Uint8Array>) => [stream, stream]),
   buildFixture: vi.fn((params) => params),
   recordTrafficFixture: vi.fn(async () => "/tmp/mock-fixture.json"),
+}));
+
+vi.mock("@/lib/services/traffic-recording-service", () => ({
+  getTrafficRecordingSettings: vi.fn(async () => {
+    const enabled = process.env.RECORDER_ENABLED === "true" || process.env.RECORDER_ENABLED === "1";
+    const rawMode = (process.env.RECORDER_MODE ?? "all").trim().toLowerCase();
+    const mode = rawMode === "success" || rawMode === "failure" ? rawMode : "all";
+    return {
+      enabled,
+      mode,
+      redactSensitive: true,
+      retentionDays: 7,
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    };
+  }),
 }));
 
 vi.mock("@/lib/utils/logger", () => {
