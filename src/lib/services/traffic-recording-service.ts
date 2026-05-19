@@ -310,7 +310,8 @@ export async function listTrafficRecordings(
       totalSizeBytes: sql<number>`coalesce(sum(${trafficRecordings.fixtureSizeBytes}), 0)`,
       latestCreatedAt: sql<Date | null>`max(${trafficRecordings.createdAt})`,
     })
-    .from(trafficRecordings);
+    .from(trafficRecordings)
+    .where(whereClause);
 
   return {
     items: rows.map(mapRecording),

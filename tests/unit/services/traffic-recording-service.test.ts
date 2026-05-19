@@ -235,12 +235,14 @@ describe("traffic-recording-service", () => {
         }),
       })
       .mockReturnValueOnce({
-        from: vi.fn().mockResolvedValue([
-          {
-            totalSizeBytes: 512,
-            latestCreatedAt: "2026-01-03T00:00:00.000Z",
-          },
-        ]),
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([
+            {
+              totalSizeBytes: 512,
+              latestCreatedAt: "2026-01-03T00:00:00.000Z",
+            },
+          ]),
+        }),
       });
     findManyMock.mockResolvedValueOnce([recordingRow()]);
 
@@ -267,7 +269,9 @@ describe("traffic-recording-service", () => {
         }),
       })
       .mockReturnValueOnce({
-        from: vi.fn().mockResolvedValue([{ totalSizeBytes: 128, latestCreatedAt: null }]),
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([{ totalSizeBytes: 128, latestCreatedAt: null }]),
+        }),
       });
     findManyMock.mockResolvedValueOnce([recordingRow()]);
 
@@ -287,7 +291,9 @@ describe("traffic-recording-service", () => {
         }),
       })
       .mockReturnValueOnce({
-        from: vi.fn().mockResolvedValue([{ totalSizeBytes: 0, latestCreatedAt: null }]),
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([{ totalSizeBytes: 0, latestCreatedAt: null }]),
+        }),
       });
     findManyMock.mockResolvedValueOnce([]);
 
