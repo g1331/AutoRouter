@@ -26,10 +26,10 @@
 
 ## 4. OAuth 登录流程服务
 
-- [ ] 4.1 新增 `src/lib/services/cliproxy-oauth-login-service.ts`，实现发起登录：校验服务商、调用 `getProviderAuthUrl`、返回授权地址与会话标识
-- [ ] 4.2 实现登录状态查询：透传 CLIProxyAPI 状态，状态为成功时触发该实例账号同步
-- [ ] 4.3 为 OAuth 登录流程服务编写单元测试，覆盖发起登录、轮询进行中、登录成功触发同步、登录失败
-- [ ] 4.4 运行 `pnpm test:run` 与 `pnpm exec tsc --noEmit` 确认通过，提交本阶段代码
+- [x] 4.1 新增 `src/lib/services/cliproxy-oauth-login-service.ts`，实现发起登录：校验服务商、调用 `getProviderAuthUrl`、返回授权地址与会话标识
+- [x] 4.2 实现登录状态查询：透传 CLIProxyAPI 状态，状态为成功时触发该实例账号同步
+- [x] 4.3 为 OAuth 登录流程服务编写单元测试，覆盖发起登录、轮询进行中、登录成功触发同步、登录失败
+- [x] 4.4 运行 `pnpm test:run` 与 `pnpm exec tsc --noEmit` 确认通过，提交本阶段代码
 
 ## 5. Admin API
 
