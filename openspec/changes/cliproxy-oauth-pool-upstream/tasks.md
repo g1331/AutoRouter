@@ -1,9 +1,9 @@
 ## 1. 数据模型
 
-- [ ] 1.1 在 `src/lib/db/schema-pg.ts` 的 `upstreams` 表新增可空字段 `cliproxyInstanceId`（外键引用 cliproxyInstances、onDelete set null）、`cliproxyAuthFileName`、`cliproxyProvider`
-- [ ] 1.2 在 `src/lib/db/schema-sqlite.ts` 的 `upstreams` 表以等价字段新增三个 CLIProxyAPI 关联字段
-- [ ] 1.3 运行 `pnpm db:generate` 与 `pnpm db:generate:sqlite` 生成迁移文件，检查迁移为纯列新增
-- [ ] 1.4 运行 `pnpm exec tsc --noEmit` 确认类型检查通过，同步更新 `migrate-sqlite` 测试的迁移数量与清单断言，提交本阶段代码
+- [x] 1.1 在 `src/lib/db/schema-pg.ts` 的 `upstreams` 表新增可空字段 `cliproxyInstanceId`（外键引用 cliproxyInstances、onDelete set null）、`cliproxyAuthFileName`、`cliproxyProvider`
+- [x] 1.2 在 `src/lib/db/schema-sqlite.ts` 的 `upstreams` 表以等价字段新增三个 CLIProxyAPI 关联字段
+- [x] 1.3 运行 `pnpm db:generate` 与 `pnpm db:generate:sqlite` 生成迁移文件，检查迁移为纯列新增
+- [x] 1.4 运行 `pnpm exec tsc --noEmit` 确认类型检查通过，同步更新 `migrate-sqlite` 测试的迁移数量与清单断言，提交本阶段代码
 
 ## 2. 池上游预设服务
 

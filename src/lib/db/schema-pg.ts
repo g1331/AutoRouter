@@ -111,6 +111,12 @@ export const upstreams = pgTable(
       | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
       | null
     >(),
+    // CLIProxyAPI 关联字段，仅 CLI OAuth 上游有值，普通上游为空。
+    cliproxyInstanceId: uuid("cliproxy_instance_id").references(() => cliproxyInstances.id, {
+      onDelete: "set null",
+    }),
+    cliproxyAuthFileName: text("cliproxy_auth_file_name"),
+    cliproxyProvider: varchar("cliproxy_provider", { length: 32 }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

@@ -113,6 +113,12 @@ export const upstreams = sqliteTable(
       | { period_type: "daily" | "monthly" | "rolling"; limit: number; period_hours?: number }[]
       | null
     >(),
+    // CLIProxyAPI 关联字段，仅 CLI OAuth 上游有值，普通上游为空。
+    cliproxyInstanceId: text("cliproxy_instance_id").references(() => cliproxyInstances.id, {
+      onDelete: "set null",
+    }),
+    cliproxyAuthFileName: text("cliproxy_auth_file_name"),
+    cliproxyProvider: text("cliproxy_provider"),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },
