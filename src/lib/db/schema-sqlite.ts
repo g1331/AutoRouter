@@ -737,6 +737,33 @@ export const requestBillingSnapshotsRelations = relations(requestBillingSnapshot
   }),
 }));
 
+/**
+ * CLIProxyAPI instances providing CLI OAuth upstream capability.
+ */
+export const cliproxyInstances = sqliteTable(
+  "cliproxy_instances",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    name: text("name").notNull().unique(),
+    // Runtime mode: "managed" (sidecar) or "external" (standalone service)
+    mode: text("mode").notNull().default("managed"),
+    baseUrl: text("base_url").notNull(), // Proxy forwarding base URL
+    managementUrl: text("management_url").notNull(), // Management API base URL
+    clientApiKeyEncrypted: text("client_api_key_encrypted").notNull(), // Fernet-encrypted
+    managementKeyEncrypted: text("management_key_encrypted").notNull(), // Fernet-encrypted
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    description: text("description"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("cliproxy_instances_name_idx").on(table.name),
+    index("cliproxy_instances_enabled_idx").on(table.enabled),
+  ]
+);
+
 // Type exports
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type NewApiKey = typeof apiKeys.$inferInsert;
@@ -770,3 +797,5 @@ export type BackgroundSyncTaskRun = typeof backgroundSyncTaskRuns.$inferSelect;
 export type NewBackgroundSyncTaskRun = typeof backgroundSyncTaskRuns.$inferInsert;
 export type RequestBillingSnapshot = typeof requestBillingSnapshots.$inferSelect;
 export type NewRequestBillingSnapshot = typeof requestBillingSnapshots.$inferInsert;
+export type CliproxyInstance = typeof cliproxyInstances.$inferSelect;
+export type NewCliproxyInstance = typeof cliproxyInstances.$inferInsert;

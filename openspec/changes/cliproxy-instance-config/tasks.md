@@ -1,10 +1,10 @@
 ## 1. 数据模型
 
-- [ ] 1.1 在 `src/lib/db/schema-pg.ts` 中新增 `cliproxyInstances` 表（`cliproxy_instances`），字段包含 id、name（唯一）、mode、baseUrl、managementUrl、clientApiKeyEncrypted、managementKeyEncrypted、enabled、description、createdAt、updatedAt，并补充 name 与 enabled 索引
-- [ ] 1.2 在 `src/lib/db/schema-sqlite.ts` 中以等价字段新增 `cliproxyInstances` 表，主键与时间戳按 SQLite 方言表达，字段集合与语义与 PostgreSQL 版本一致
-- [ ] 1.3 在两套 schema 中补充 `CliproxyInstance` 与 `NewCliproxyInstance` 推导类型导出，并确认 `schema.ts` 正确再导出
-- [ ] 1.4 运行 `pnpm db:generate` 生成迁移文件，检查迁移内容为纯新增表
-- [ ] 1.5 运行 `pnpm exec tsc --noEmit` 确认类型检查通过，提交本阶段代码（数据模型与迁移）
+- [x] 1.1 在 `src/lib/db/schema-pg.ts` 中新增 `cliproxyInstances` 表（`cliproxy_instances`），字段包含 id、name（唯一）、mode、baseUrl、managementUrl、clientApiKeyEncrypted、managementKeyEncrypted、enabled、description、createdAt、updatedAt，并补充 name 与 enabled 索引
+- [x] 1.2 在 `src/lib/db/schema-sqlite.ts` 中以等价字段新增 `cliproxyInstances` 表，主键与时间戳按 SQLite 方言表达，字段集合与语义与 PostgreSQL 版本一致
+- [x] 1.3 在两套 schema 中补充 `CliproxyInstance` 与 `NewCliproxyInstance` 推导类型导出，并确认 `schema.ts` 正确再导出
+- [x] 1.4 运行 `pnpm db:generate` 生成迁移文件，检查迁移内容为纯新增表
+- [x] 1.5 运行 `pnpm exec tsc --noEmit` 确认类型检查通过，提交本阶段代码（数据模型与迁移）
 
 ## 2. 服务层
 
