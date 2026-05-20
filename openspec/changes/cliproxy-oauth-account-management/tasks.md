@@ -33,13 +33,13 @@
 
 ## 5. Admin API
 
-- [ ] 5.1 新增 `src/app/api/admin/cliproxy/instances/[id]/auth-accounts/route.ts`，实现 GET 列出实例下账号
-- [ ] 5.2 新增 `src/app/api/admin/cliproxy/instances/[id]/auth-accounts/sync/route.ts`，实现 POST 触发账号同步
-- [ ] 5.3 新增 `src/app/api/admin/cliproxy/instances/[id]/auth-accounts/[accountName]/route.ts` 与 `status/route.ts`，实现 PATCH 字段更新与 PATCH 启停
-- [ ] 5.4 新增 `src/app/api/admin/cliproxy/instances/[id]/oauth-login/route.ts` 与 `status/route.ts`，实现 POST 发起登录与 GET 轮询状态
-- [ ] 5.5 新增账号的 API 响应转换逻辑，输出非敏感字段的 snake_case 形态
-- [ ] 5.6 为全部 Admin API 路由编写测试，覆盖列表、同步、启停、字段更新、发起登录、轮询、鉴权失败、实例不存在
-- [ ] 5.7 运行 `pnpm test:run`、`pnpm exec tsc --noEmit`、`pnpm lint` 确认通过，提交本阶段代码
+- [x] 5.1 新增 `src/app/api/admin/cliproxy/instances/[id]/auth-accounts/route.ts`，实现 GET 列出实例下账号
+- [x] 5.2 新增 `src/app/api/admin/cliproxy/instances/[id]/auth-accounts/sync/route.ts`，实现 POST 触发账号同步
+- [x] 5.3 新增 `src/app/api/admin/cliproxy/instances/[id]/auth-accounts/[accountName]/route.ts` 与 `status/route.ts`，实现 PATCH 字段更新与 PATCH 启停
+- [x] 5.4 新增 `src/app/api/admin/cliproxy/instances/[id]/oauth-login/route.ts` 与 `status/route.ts`，实现 POST 发起登录与 GET 轮询状态
+- [x] 5.5 新增账号的 API 响应转换逻辑，输出非敏感字段的 snake_case 形态
+- [x] 5.6 为全部 Admin API 路由编写测试，覆盖列表、同步、启停、字段更新、发起登录、轮询、鉴权失败、实例不存在
+- [x] 5.7 运行 `pnpm test:run`、`pnpm exec tsc --noEmit`、`pnpm lint` 确认通过，提交本阶段代码
 
 ## 6. 收尾验证
 
