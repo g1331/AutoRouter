@@ -26,6 +26,10 @@ vi.mock("@/lib/db", () => ({
     name: "name",
     createdAt: "createdAt",
   },
+  cliproxyAuthAccounts: {
+    id: "id",
+    instanceId: "instanceId",
+  },
 }));
 
 vi.mock("@/lib/utils/encryption", () => ({
@@ -210,6 +214,30 @@ describe("cliproxy-instance-crud", () => {
     await expect(deleteCliproxyInstance("missing")).rejects.toBeInstanceOf(
       CliproxyInstanceNotFoundError
     );
+  });
+
+  it("deleteCliproxyInstance 存在缓存账号时拒绝删除", async () => {
+    const { deleteCliproxyInstance, CliproxyInstanceInUseError } =
+      await import("@/lib/services/cliproxy-instance-crud");
+
+    dbSelectMock.mockReturnValueOnce(makeSelectChain([sampleRow])); // getCliproxyInstanceRow
+    dbSelectMock.mockReturnValueOnce(makeSelectChain([{ id: "account-1" }])); // 引用校验
+
+    await expect(deleteCliproxyInstance("instance-1")).rejects.toBeInstanceOf(
+      CliproxyInstanceInUseError
+    );
+    expect(dbDeleteMock).not.toHaveBeenCalled();
+  });
+
+  it("deleteCliproxyInstance 无缓存账号时正常删除", async () => {
+    const { deleteCliproxyInstance } = await import("@/lib/services/cliproxy-instance-crud");
+
+    dbSelectMock.mockReturnValueOnce(makeSelectChain([sampleRow])); // getCliproxyInstanceRow
+    dbSelectMock.mockReturnValueOnce(makeSelectChain([])); // 引用校验：无账号
+    dbDeleteMock.mockReturnValueOnce({ where: vi.fn().mockResolvedValueOnce(undefined) });
+
+    await expect(deleteCliproxyInstance("instance-1")).resolves.toBeUndefined();
+    expect(dbDeleteMock).toHaveBeenCalled();
   });
 
   it("getDecryptedManagementKey 返回解密后的明文", async () => {

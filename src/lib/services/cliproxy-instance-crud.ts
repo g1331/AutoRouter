@@ -1,5 +1,5 @@
 import { eq, desc } from "drizzle-orm";
-import { db, cliproxyInstances, type CliproxyInstance } from "../db";
+import { db, cliproxyInstances, cliproxyAuthAccounts, type CliproxyInstance } from "../db";
 import { encrypt, decrypt } from "../utils/encryption";
 import { isUrlSafe } from "./upstream-ssrf-validator";
 import { createLogger } from "../utils/logger";
@@ -278,8 +278,8 @@ export async function updateCliproxyInstance(
 /**
  * 删除 CLIProxyAPI 实例。
  *
- * 后续变更会让 OAuth 账号缓存表与上游表引用本表，届时需在此处补充删除前
- * 引用校验。当前变更尚无引用方，直接允许删除。
+ * 删除前校验该实例下是否仍存在缓存的 OAuth 账号，存在则拒绝删除。
+ * 后续上游变更会在此追加对 upstreams 引用的校验。
  */
 export async function deleteCliproxyInstance(instanceId: string): Promise<void> {
   const current = await getCliproxyInstanceRow(instanceId);
@@ -287,7 +287,18 @@ export async function deleteCliproxyInstance(instanceId: string): Promise<void> 
     throw new CliproxyInstanceNotFoundError(instanceId);
   }
 
-  // 引用校验扩展点：后续变更在此检查 cliproxy_auth_accounts 与 upstreams 引用。
+  // 引用校验：存在缓存的 OAuth 账号时拒绝删除，给出可理解的错误信息。
+  const referencingAccounts = await db
+    .select({ id: cliproxyAuthAccounts.id })
+    .from(cliproxyAuthAccounts)
+    .where(eq(cliproxyAuthAccounts.instanceId, instanceId))
+    .limit(1);
+  if (referencingAccounts.length > 0) {
+    throw new CliproxyInstanceInUseError(
+      instanceId,
+      "该实例下仍存在缓存的 OAuth 账号，请先移除账号后再删除实例"
+    );
+  }
 
   await db.delete(cliproxyInstances).where(eq(cliproxyInstances.id, instanceId));
   log.info({ id: instanceId }, "deleted CLIProxyAPI instance");

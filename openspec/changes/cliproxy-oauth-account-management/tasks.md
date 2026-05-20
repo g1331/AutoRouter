@@ -17,12 +17,12 @@
 
 ## 3. 账号同步与账号管理服务
 
-- [ ] 3.1 新增 `src/lib/services/cliproxy-auth-account-service.ts`，实现账号同步：拉取 auth-files、按白名单解析非敏感字段、查询模型数量、按 `(instanceId, authFileName)` upsert、移除失效条目
-- [ ] 3.2 在同步服务中实现单账号模型查询失败容错，保证整体同步不中断
-- [ ] 3.3 实现账号列表查询、账号启停、账号字段更新，启停与字段更新先调用 CLIProxyAPI 再更新本地缓存
-- [ ] 3.4 在 `cliproxy-instance-crud.ts` 的 `deleteCliproxyInstance` 引用校验扩展点补充逻辑，存在缓存账号时抛出 `CliproxyInstanceInUseError`
-- [ ] 3.5 为账号同步与账号管理服务编写单元测试，覆盖新增同步、移除失效、模型查询失败容错、启停、字段更新、删除引用保护
-- [ ] 3.6 运行 `pnpm test:run` 与 `pnpm exec tsc --noEmit` 确认通过，提交本阶段代码
+- [x] 3.1 新增 `src/lib/services/cliproxy-auth-account-service.ts`，实现账号同步：拉取 auth-files、按白名单解析非敏感字段、查询模型数量、按 `(instanceId, authFileName)` upsert、移除失效条目
+- [x] 3.2 在同步服务中实现单账号模型查询失败容错，保证整体同步不中断
+- [x] 3.3 实现账号列表查询、账号启停、账号字段更新，启停与字段更新先调用 CLIProxyAPI 再更新本地缓存
+- [x] 3.4 在 `cliproxy-instance-crud.ts` 的 `deleteCliproxyInstance` 引用校验扩展点补充逻辑，存在缓存账号时抛出 `CliproxyInstanceInUseError`
+- [x] 3.5 为账号同步与账号管理服务编写单元测试，覆盖新增同步、移除失效、模型查询失败容错、启停、字段更新、删除引用保护
+- [x] 3.6 运行 `pnpm test:run` 与 `pnpm exec tsc --noEmit` 确认通过，提交本阶段代码
 
 ## 4. OAuth 登录流程服务
 
