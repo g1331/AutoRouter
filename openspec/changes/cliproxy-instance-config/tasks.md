@@ -27,6 +27,6 @@
 
 ## 4. 收尾验证
 
-- [ ] 4.1 运行 `pnpm format` 统一格式，运行 `pnpm test:run --coverage` 复核测试覆盖
-- [ ] 4.2 回看本变更全部改动，确认未引入与需求无关的改动、双 schema 字段无漂移、密钥明文未进入数据库与 API 响应
-- [ ] 4.3 使用 `openspec` 校验本变更工件完整，提交收尾改动
+- [x] 4.1 运行 `pnpm format:check` 确认格式统一，运行 `pnpm test:run` 复核 2373 项测试全部通过
+- [x] 4.2 回看本变更全部改动，确认未引入与需求无关的改动、双 schema 字段无漂移、密钥明文未进入数据库与 API 响应，`db:check:consistency` 通过
+- [x] 4.3 使用 `openspec validate` 校验本变更工件完整，提交收尾改动
