@@ -17,13 +17,13 @@
 
 ## 3. Admin API
 
-- [ ] 3.1 新增 `src/app/api/admin/cliproxy/instances/route.ts`，实现 GET 列表与 POST 创建，复用 `validateAdminAuth`、`errorResponse`、Zod 入参校验，响应不返回密钥明文
-- [ ] 3.2 新增 `src/app/api/admin/cliproxy/instances/[id]/route.ts`，实现 GET 详情、PATCH 更新、DELETE 删除，处理实例不存在错误
-- [ ] 3.3 新增 `src/app/api/admin/cliproxy/instances/[id]/test/route.ts`，对已保存实例执行连通性检测
-- [ ] 3.4 新增 `src/app/api/admin/cliproxy/instances/test/route.ts`，对未保存配置执行创建前预检测
-- [ ] 3.5 新增 API 响应转换逻辑，将实例记录转为 API 响应形态，密钥字段转为是否已配置的布尔标记
-- [ ] 3.6 为四个 API 路由编写测试，覆盖创建、查询、更新、删除、鉴权失败、实例不存在、密钥明文不外泄
-- [ ] 3.7 运行 `pnpm test:run`、`pnpm exec tsc --noEmit`、`pnpm lint` 确认通过，提交本阶段代码（Admin API 与测试）
+- [x] 3.1 新增 `src/app/api/admin/cliproxy/instances/route.ts`，实现 GET 列表与 POST 创建，复用 `validateAdminAuth`、`errorResponse`、Zod 入参校验，响应不返回密钥明文
+- [x] 3.2 新增 `src/app/api/admin/cliproxy/instances/[id]/route.ts`，实现 GET 详情、PATCH 更新、DELETE 删除，处理实例不存在错误
+- [x] 3.3 新增 `src/app/api/admin/cliproxy/instances/[id]/test/route.ts`，对已保存实例执行连通性检测
+- [x] 3.4 新增 `src/app/api/admin/cliproxy/instances/test/route.ts`，对未保存配置执行创建前预检测
+- [x] 3.5 新增 API 响应转换逻辑，将实例记录转为 API 响应形态，密钥字段转为是否已配置的布尔标记
+- [x] 3.6 为四个 API 路由编写测试，覆盖创建、查询、更新、删除、鉴权失败、实例不存在、密钥明文不外泄
+- [x] 3.7 运行 `pnpm test:run`、`pnpm exec tsc --noEmit`、`pnpm lint` 确认通过，提交本阶段代码（Admin API 与测试）
 
 ## 4. 收尾验证
 

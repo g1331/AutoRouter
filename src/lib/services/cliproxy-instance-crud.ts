@@ -14,6 +14,7 @@ const log = createLogger("cliproxy-instance-crud");
 export const CLIPROXY_INSTANCE_MODES = ["managed", "external"] as const;
 export type CliproxyInstanceMode = (typeof CLIPROXY_INSTANCE_MODES)[number];
 
+/** 判断给定值是否为合法的运行模式取值。 */
 export function isCliproxyInstanceMode(value: unknown): value is CliproxyInstanceMode {
   return (
     typeof value === "string" && CLIPROXY_INSTANCE_MODES.includes(value as CliproxyInstanceMode)
