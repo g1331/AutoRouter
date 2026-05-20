@@ -43,6 +43,6 @@
 
 ## 6. 收尾验证
 
-- [ ] 6.1 运行 `pnpm format:check` 确认格式统一，运行 `pnpm test:run` 复核全部测试通过
-- [ ] 6.2 回看本变更全部改动，确认双 schema 无字段漂移、token 明文未进入缓存表、`db:check:consistency` 通过
-- [ ] 6.3 使用 `openspec validate` 校验本变更工件完整，提交收尾改动
+- [x] 6.1 运行 `pnpm format:check` 确认格式统一，运行 `pnpm test:run` 复核全部测试通过
+- [x] 6.2 回看本变更全部改动，确认双 schema 无字段漂移、token 明文未进入缓存表、`db:check:consistency` 通过
+- [x] 6.3 使用 `openspec validate` 校验本变更工件完整，提交收尾改动
