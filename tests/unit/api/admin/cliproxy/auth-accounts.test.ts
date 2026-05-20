@@ -208,6 +208,27 @@ describe("Admin CLIProxyAPI auth accounts API", () => {
     );
   });
 
+  it("启停账号支持含邮箱与点号的真实账号文件名", async () => {
+    const { PATCH } =
+      await import("@/app/api/admin/cliproxy/instances/[id]/auth-accounts/[accountName]/status/route");
+    const realName = "codex-user@example.com-plus.json";
+    setCliproxyAuthAccountStatusMock.mockResolvedValueOnce({ ...sampleAccount, disabled: true });
+
+    const res = await PATCH(
+      jsonRequest(
+        `http://localhost/api/admin/cliproxy/instances/instance-1/auth-accounts/${encodeURIComponent(
+          realName
+        )}/status`,
+        "PATCH",
+        { disabled: true }
+      ),
+      ctx({ id: "instance-1", accountName: realName })
+    );
+
+    expect(res.status).toBe(200);
+    expect(setCliproxyAuthAccountStatusMock).toHaveBeenCalledWith("instance-1", realName, true);
+  });
+
   it("启停账号缺少 disabled 字段返回 400", async () => {
     const { PATCH } =
       await import("@/app/api/admin/cliproxy/instances/[id]/auth-accounts/[accountName]/status/route");

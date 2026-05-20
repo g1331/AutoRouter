@@ -253,6 +253,13 @@
       "when": 1779287816694,
       "tag": "0035_powerful_nightcrawler",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1779289077625,
+      "tag": "0036_furry_warhawk",
+      "breakpoints": true
     }
   ]
 }

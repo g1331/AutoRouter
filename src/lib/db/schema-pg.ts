@@ -743,9 +743,10 @@ export const cliproxyAuthAccounts = pgTable(
       .notNull()
       .references(() => cliproxyInstances.id, { onDelete: "cascade" }),
     authFileName: text("auth_file_name").notNull(), // CLIProxyAPI auth-file name
-    provider: varchar("provider", { length: 32 }).notNull(),
+    // provider / status are free-form text from CLIProxyAPI; not length-bounded.
+    provider: text("provider").notNull(),
     email: text("email"),
-    status: varchar("status", { length: 32 }),
+    status: text("status"),
     disabled: boolean("disabled").notNull().default(false),
     prefix: text("prefix"),
     modelCount: integer("model_count").notNull().default(0),

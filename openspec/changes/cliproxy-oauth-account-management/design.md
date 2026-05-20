@@ -178,6 +178,8 @@ src/app/api/admin/cliproxy/instances/[id]/
 
 [账号字段更新两侧不一致] → 先改 CLIProxyAPI 再改本地缓存，中间失败会产生短暂不一致。缓解措施是以 CLIProxyAPI 为准，本地缓存更新失败时下次同步自动纠正。
 
+[登录状态轮询在成功时内联执行账号同步] → `pollCliproxyOAuthStatus` 在状态为 `ok` 时同步执行账号同步，同步包含一次 auth-files 拉取与每账号一次模型查询，账号多且 CLIProxyAPI 较慢时该次轮询响应耗时会明显增加。本变更接受这一行为：登录完成后的一次同步等待属于合理的登录收尾，且仅发生在状态首次变为 `ok` 的那一次轮询。若后续实测耗时不可接受，再评估改为异步同步并引入“同步进行中”状态。`provider` 与 `status` 字段在缓存表中按自由文本存储，不设长度上限，避免 CLIProxyAPI 返回较长状态文本时写入截断。
+
 ## Migration Plan
 
 数据库迁移通过 `pnpm db:generate` 与 `pnpm db:generate:sqlite` 生成。`cliproxy_auth_accounts` 是新增表，含指向 `cliproxy_instances` 的外键，迁移为纯新增。
