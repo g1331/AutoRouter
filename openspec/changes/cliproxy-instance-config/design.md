@@ -101,7 +101,9 @@ CLIProxyAPI 实例地址需要一套独立于普通上游的校验策略。
                   通过则允许写入
 ```
 
-`managed` 模式校验 URL 格式合法、协议为 `http` 或 `https`，不做私有地址拦截，因为 sidecar 地址本就是受管内网地址。`external` 模式执行完整 SSRF 校验，因为外部地址由管理员输入，存在被诱导访问内网的可能。
+`managed` 模式校验 URL 格式合法、协议为 `http` 或 `https`，不做私有地址拦截，因为 sidecar 地址本就是受管内网地址。`external` 模式在写入前额外调用 `isUrlSafe` 执行同步地址安全校验，当地址主机为字面 IP 时拦截私有、回环、链路本地与云元数据地址，因为外部地址由管理员输入，存在被诱导访问内网的可能。
+
+需要明确校验粒度。`isUrlSafe` 是同步函数，仅在主机为字面 IP 时做 IP 安全判定，对域名不做 DNS 解析。这与既有上游写入路径一致：`createUpstream` 与 `updateUpstream` 在写入时并不做 SSRF 校验，DNS 解析级别的 SSRF 防护由 `upstream-connection-tester` 与 `upstream-probe-service` 在请求发起时刻通过 `resolveAndValidateHostname` 完成。本变更的写入路径同步校验已严于上游写入路径的现有做法。针对域名经 DNS 解析落入内网的 DNS 重绑定情形，属于请求时刻防护，留待后续涉及连通性检测请求与请求转发的变更补充。
 
 考虑过对全部模式统一放行，被否决，因为 `external` 模式的地址校验不严会引入 SSRF 隐患。也考虑过统一拦截，同样被否决，因为它使 sidecar 模式不可用。按模式分流是唯一同时满足安全与可用的方案。
 
@@ -170,3 +172,5 @@ src/app/api/admin/cliproxy/instances/
 CLIProxyAPI 管理 API 的鉴权头部具体形式（`Authorization: Bearer` 还是自定义头部）需在实现连通性检测前以 CLIProxyAPI 源码或实测确认。当前设计假定为 Bearer 形式，若不符，调整集中在 `cliproxy-connection-tester.ts`。
 
 `management_url` 是否需要进一步区分“后端可访问地址”与“浏览器可访问地址”。本变更暂不拆分，若后续 OAuth 登录变更确认浏览器侧需要独立地址，再以新变更追加字段。
+
+CLIProxyAPI 管理 API 对鉴权失败存在限流：连续 5 次失败后封禁来源 IP 30 分钟。连通性检测预检测端点为管理员鉴权端点，正常使用不会触发该限流，但管理员反复以错误管理密钥预检测，可能导致 AutoRouter 来源 IP 在 CLIProxyAPI 侧被临时封禁。本变更不在代码层做额外节流，后续若出现实际问题，再评估是否在预检测端点增加调用频率限制。

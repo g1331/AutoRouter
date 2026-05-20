@@ -161,7 +161,12 @@ export async function getCliproxyInstanceById(
   return row ? toCliproxyInstanceResponse(row) : null;
 }
 
-/** 查询指定实例的原始记录（含加密凭据），未找到返回 null。仅供内部使用。 */
+/**
+ * 查询指定实例的原始记录（含加密凭据），未找到返回 null。
+ *
+ * @internal 返回值含加密凭据字段，仅供服务内部与连通性检测、请求转发等场景使用，
+ * 严禁将原始记录直接写入任何 API 响应。对外响应一律使用 `CliproxyInstanceResponse`。
+ */
 export async function getCliproxyInstanceRow(instanceId: string): Promise<CliproxyInstance | null> {
   const [row] = await db
     .select()
