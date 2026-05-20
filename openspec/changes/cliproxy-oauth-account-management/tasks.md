@@ -8,12 +8,12 @@
 
 ## 2. 管理 API 客户端
 
-- [ ] 2.1 新增 `src/lib/services/cliproxy-management-client.ts`，定义 auth-files、模型、auth-url、auth-status 等响应的 TypeScript 类型，按 CLIProxyAPI 实际契约定义
-- [ ] 2.2 实现 `listAuthFiles`、`getAuthFileModels` 两个只读调用，统一注入 `Authorization: Bearer`、设置超时、容错解析响应缺失字段
-- [ ] 2.3 实现 `patchAuthFileStatus`、`patchAuthFileFields` 两个写入调用，请求体按 CLIProxyAPI 契约构造
-- [ ] 2.4 实现 `getProviderAuthUrl`、`getAuthStatus` 两个 OAuth 流程调用，`getProviderAuthUrl` 默认携带 `is_webui=true`
-- [ ] 2.5 为管理 API 客户端编写单元测试，覆盖鉴权头注入、超时、字段缺失容错、各端点请求与响应解析
-- [ ] 2.6 运行 `pnpm test:run` 与 `pnpm exec tsc --noEmit` 确认通过，提交本阶段代码
+- [x] 2.1 新增 `src/lib/services/cliproxy-management-client.ts`，定义 auth-files、模型、auth-url、auth-status 等响应的 TypeScript 类型，按 CLIProxyAPI 实际契约定义
+- [x] 2.2 实现 `listAuthFiles`、`getAuthFileModels` 两个只读调用，统一注入 `Authorization: Bearer`、设置超时、容错解析响应缺失字段
+- [x] 2.3 实现 `patchAuthFileStatus`、`patchAuthFileFields` 两个写入调用，请求体按 CLIProxyAPI 契约构造
+- [x] 2.4 实现 `getProviderAuthUrl`、`getAuthStatus` 两个 OAuth 流程调用，`getProviderAuthUrl` 默认携带 `is_webui=true`
+- [x] 2.5 为管理 API 客户端编写单元测试，覆盖鉴权头注入、超时、字段缺失容错、各端点请求与响应解析
+- [x] 2.6 运行 `pnpm test:run` 与 `pnpm exec tsc --noEmit` 确认通过，提交本阶段代码
 
 ## 3. 账号同步与账号管理服务
 
