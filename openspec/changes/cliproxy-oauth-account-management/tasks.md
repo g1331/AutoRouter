@@ -1,10 +1,10 @@
 ## 1. 数据模型
 
-- [ ] 1.1 在 `src/lib/db/schema-pg.ts` 中新增 `cliproxyAuthAccounts` 表（`cliproxy_auth_accounts`），含 id、instanceId（外键引用 cliproxyInstances、onDelete cascade）、authFileName、provider、email、status、disabled、prefix、modelCount、priority、note、rawMetadata、lastSyncedAt、createdAt、updatedAt，建立 `(instanceId, authFileName)` 唯一约束与 instanceId 索引
-- [ ] 1.2 在 `src/lib/db/schema-sqlite.ts` 中以等价字段新增 `cliproxyAuthAccounts` 表，字段集合与约束与 PostgreSQL 版本一致
-- [ ] 1.3 在两套 schema 与 `schema.ts` 中补充表导出与 `CliproxyAuthAccount`、`NewCliproxyAuthAccount` 类型导出，并补充 relations
-- [ ] 1.4 运行 `pnpm db:generate` 与 `pnpm db:generate:sqlite` 生成迁移文件，检查迁移为纯新增表
-- [ ] 1.5 运行 `pnpm exec tsc --noEmit` 确认类型检查通过，同步更新 `migrate-sqlite` 测试的迁移数量与清单断言，提交本阶段代码
+- [x] 1.1 在 `src/lib/db/schema-pg.ts` 中新增 `cliproxyAuthAccounts` 表（`cliproxy_auth_accounts`），含 id、instanceId（外键引用 cliproxyInstances、onDelete cascade）、authFileName、provider、email、status、disabled、prefix、modelCount、priority、note、rawMetadata、lastSyncedAt、createdAt、updatedAt，建立 `(instanceId, authFileName)` 唯一约束与 instanceId 索引
+- [x] 1.2 在 `src/lib/db/schema-sqlite.ts` 中以等价字段新增 `cliproxyAuthAccounts` 表，字段集合与约束与 PostgreSQL 版本一致
+- [x] 1.3 在两套 schema 与 `schema.ts` 中补充表导出与 `CliproxyAuthAccount`、`NewCliproxyAuthAccount` 类型导出，并补充 relations
+- [x] 1.4 运行 `pnpm db:generate` 与 `pnpm db:generate:sqlite` 生成迁移文件，检查迁移为纯新增表
+- [x] 1.5 运行 `pnpm exec tsc --noEmit` 确认类型检查通过，同步更新 `migrate-sqlite` 测试的迁移数量与清单断言，提交本阶段代码
 
 ## 2. 管理 API 客户端
 

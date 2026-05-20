@@ -731,6 +731,49 @@ export const cliproxyInstances = pgTable(
   ]
 );
 
+/**
+ * Cached non-sensitive metadata of CLIProxyAPI OAuth accounts (auth-files).
+ * OAuth token material is never stored here; it stays in CLIProxyAPI's auth-dir.
+ */
+export const cliproxyAuthAccounts = pgTable(
+  "cliproxy_auth_accounts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    instanceId: uuid("instance_id")
+      .notNull()
+      .references(() => cliproxyInstances.id, { onDelete: "cascade" }),
+    authFileName: text("auth_file_name").notNull(), // CLIProxyAPI auth-file name
+    provider: varchar("provider", { length: 32 }).notNull(),
+    email: text("email"),
+    status: varchar("status", { length: 32 }),
+    disabled: boolean("disabled").notNull().default(false),
+    prefix: text("prefix"),
+    modelCount: integer("model_count").notNull().default(0),
+    priority: integer("priority"),
+    note: text("note"),
+    // Non-sensitive field snapshot from auth-files response; never includes tokens.
+    rawMetadata: json("raw_metadata").$type<Record<string, unknown> | null>(),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("cliproxy_auth_accounts_instance_file_unique").on(table.instanceId, table.authFileName),
+    index("cliproxy_auth_accounts_instance_id_idx").on(table.instanceId),
+  ]
+);
+
+export const cliproxyInstancesRelations = relations(cliproxyInstances, ({ many }) => ({
+  authAccounts: many(cliproxyAuthAccounts),
+}));
+
+export const cliproxyAuthAccountsRelations = relations(cliproxyAuthAccounts, ({ one }) => ({
+  instance: one(cliproxyInstances, {
+    fields: [cliproxyAuthAccounts.instanceId],
+    references: [cliproxyInstances.id],
+  }),
+}));
+
 // Type exports
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type NewApiKey = typeof apiKeys.$inferInsert;
@@ -766,3 +809,5 @@ export type RequestBillingSnapshot = typeof requestBillingSnapshots.$inferSelect
 export type NewRequestBillingSnapshot = typeof requestBillingSnapshots.$inferInsert;
 export type CliproxyInstance = typeof cliproxyInstances.$inferSelect;
 export type NewCliproxyInstance = typeof cliproxyInstances.$inferInsert;
+export type CliproxyAuthAccount = typeof cliproxyAuthAccounts.$inferSelect;
+export type NewCliproxyAuthAccount = typeof cliproxyAuthAccounts.$inferInsert;
