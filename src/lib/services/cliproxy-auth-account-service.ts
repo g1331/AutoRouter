@@ -102,7 +102,7 @@ export async function listCliproxyAuthAccounts(instanceId: string): Promise<Clip
 }
 
 /** 查询某实例下指定账号的缓存记录，未找到返回 null。 */
-async function getAuthAccountRow(
+export async function getCliproxyAuthAccount(
   instanceId: string,
   authFileName: string
 ): Promise<CliproxyAuthAccount | null> {
@@ -207,7 +207,7 @@ export async function setCliproxyAuthAccountStatus(
   disabled: boolean
 ): Promise<CliproxyAuthAccount> {
   const target = await resolveManagementTarget(instanceId);
-  const account = await getAuthAccountRow(instanceId, authFileName);
+  const account = await getCliproxyAuthAccount(instanceId, authFileName);
   if (!account) {
     throw new CliproxyAuthAccountNotFoundError(instanceId, authFileName);
   }
@@ -230,7 +230,7 @@ export async function updateCliproxyAuthAccountFields(
   fields: CliproxyAuthAccountFieldsInput
 ): Promise<CliproxyAuthAccount> {
   const target = await resolveManagementTarget(instanceId);
-  const account = await getAuthAccountRow(instanceId, authFileName);
+  const account = await getCliproxyAuthAccount(instanceId, authFileName);
   if (!account) {
     throw new CliproxyAuthAccountNotFoundError(instanceId, authFileName);
   }
