@@ -1,0 +1,40 @@
+# CLIProxyAPI 配置模板
+#
+# 本文件是受管 sidecar 模式下 CLIProxyAPI 的配置模板，不包含任何明文密钥。
+# 容器启动时由 cliproxy/docker-entrypoint.sh 读取 CLIPROXY_* 环境变量，
+# 将下方 ${...} 占位符替换为实际值后生成 /CLIProxyAPI/config.yaml。
+#
+# 占位符与环境变量的对应关系见 .env.example 中的 CLIProxyAPI 段落。
+
+# 监听网络接口。留空表示绑定全部接口，使同一 Docker 网络内的 AutoRouter 可以访问。
+host: ""
+
+# 服务监听端口。AutoRouter 通过该端口转发代理请求与调用管理 API。
+port: ${CLIPROXY_PORT}
+
+# OAuth 凭据目录。该目录由 named volume 持久化，OAuth token 明文仅存在于此处。
+auth-dir: "/root/.cli-proxy-api"
+
+# 客户端 API Key 列表。所有代理请求（含本机）都必须携带其中之一。
+# 此处的密钥必须与 AutoRouter 中 cliproxy_instances 记录的客户端 API Key 一致。
+api-keys:
+  - "${CLIPROXY_CLIENT_API_KEY}"
+
+# 管理 API 配置。
+remote-management:
+  # 管理 API 密钥。明文在 CLIProxyAPI 启动时自动哈希。留空会禁用管理 API。
+  # 此处的密钥必须与 AutoRouter 中 cliproxy_instances 记录的管理密钥一致。
+  secret-key: "${CLIPROXY_MANAGEMENT_KEY}"
+  # 是否允许非本机访问管理 API。
+  # 受管 sidecar 下 AutoRouter 与 CLIProxyAPI 属于不同容器，跨容器访问需要置为 true。
+  allow-remote: ${CLIPROXY_ALLOW_REMOTE}
+
+# 全局出站代理地址，供 CLIProxyAPI 访问 Codex / Claude / Gemini 的登录与模型 API。
+# 支持 http、https、socks5 格式。留空表示不使用出站代理。
+proxy-url: "${CLIPROXY_PROXY_URL}"
+
+# 将运行日志写入文件，文件位于 named volume 持久化的 logs 目录。
+logging-to-file: true
+
+# 调试日志开关。排查问题时可改为 true。
+debug: false

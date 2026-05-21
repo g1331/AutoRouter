@@ -1,8 +1,8 @@
 ## 1. CPA 配置模板与启动脚本
 
-- [ ] 1.1 新增 `cliproxy/config.yaml.template`，包含 `auth-dir`、`port`、`api-keys`、`remote-management.secret-key`、`remote-management.allow-remote`、`proxy-url` 等键，敏感值以 `CLIPROXY_*` 环境变量占位符表示
-- [ ] 1.2 新增 `cliproxy/docker-entrypoint.sh`，读取 `CLIPROXY_*` 环境变量生成实际 `config.yaml`，优先使用 `envsubst`，缺失时回退到 `sed` 占位符替换，最后 `exec` 启动 CPA 进程
-- [ ] 1.3 校验启动脚本对必填变量缺失的处理：`CLIPROXY_CLIENT_API_KEY` 或 `CLIPROXY_MANAGEMENT_KEY` 为空时输出可理解的错误并终止启动
+- [x] 1.1 新增 `cliproxy/config.yaml.template`，包含 `auth-dir`、`port`、`api-keys`、`remote-management.secret-key`、`remote-management.allow-remote`、`proxy-url` 等键，敏感值以 `CLIPROXY_*` 环境变量占位符表示
+- [x] 1.2 新增 `cliproxy/docker-entrypoint.sh`，读取 `CLIPROXY_*` 环境变量生成实际 `config.yaml`，优先使用 `envsubst`，缺失时回退到 `sed` 占位符替换，最后 `exec` 启动 CPA 进程
+- [x] 1.3 校验启动脚本对必填变量缺失的处理：`CLIPROXY_CLIENT_API_KEY` 或 `CLIPROXY_MANAGEMENT_KEY` 为空时输出可理解的错误并终止启动
 
 ## 2. Docker Compose 叠加文件
 
