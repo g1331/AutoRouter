@@ -1,5 +1,11 @@
 import { eq, desc } from "drizzle-orm";
-import { db, cliproxyInstances, cliproxyAuthAccounts, type CliproxyInstance } from "../db";
+import {
+  db,
+  cliproxyInstances,
+  cliproxyAuthAccounts,
+  upstreams,
+  type CliproxyInstance,
+} from "../db";
 import { encrypt, decrypt } from "../utils/encryption";
 import { isUrlSafe } from "./upstream-ssrf-validator";
 import { createLogger } from "../utils/logger";
@@ -297,6 +303,19 @@ export async function deleteCliproxyInstance(instanceId: string): Promise<void> 
     throw new CliproxyInstanceInUseError(
       instanceId,
       "该实例下仍存在缓存的 OAuth 账号，请先移除账号后再删除实例"
+    );
+  }
+
+  // 引用校验：存在关联该实例的上游时拒绝删除，外键 set null 仅作兜底。
+  const referencingUpstreams = await db
+    .select({ id: upstreams.id })
+    .from(upstreams)
+    .where(eq(upstreams.cliproxyInstanceId, instanceId))
+    .limit(1);
+  if (referencingUpstreams.length > 0) {
+    throw new CliproxyInstanceInUseError(
+      instanceId,
+      "该实例下仍存在关联的池上游或单账号上游，请先删除相关上游后再删除实例"
     );
   }
 

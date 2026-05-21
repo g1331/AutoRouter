@@ -23,9 +23,9 @@
 
 ## 4. 实例删除校验扩展
 
-- [ ] 4.1 在 `cliproxy-instance-crud.ts` 的 `deleteCliproxyInstance` 中补充对 `upstreams` 表 `cliproxyInstanceId` 引用的校验，存在关联上游时抛出 `CliproxyInstanceInUseError`
-- [ ] 4.2 更新 `cliproxy-instance-crud` 测试，覆盖存在关联上游时拒绝删除、无引用时允许删除
-- [ ] 4.3 运行 `pnpm test:run` 与 `pnpm exec tsc --noEmit` 确认通过，提交本阶段代码
+- [x] 4.1 在 `cliproxy-instance-crud.ts` 的 `deleteCliproxyInstance` 中补充对 `upstreams` 表 `cliproxyInstanceId` 引用的校验，存在关联上游时抛出 `CliproxyInstanceInUseError`
+- [x] 4.2 更新 `cliproxy-instance-crud` 测试，覆盖存在关联上游时拒绝删除、无引用时允许删除
+- [x] 4.3 运行 `pnpm test:run` 与 `pnpm exec tsc --noEmit` 确认通过，提交本阶段代码
 
 ## 5. Admin API
 

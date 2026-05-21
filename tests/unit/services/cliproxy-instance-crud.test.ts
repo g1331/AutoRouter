@@ -30,6 +30,10 @@ vi.mock("@/lib/db", () => ({
     id: "id",
     instanceId: "instanceId",
   },
+  upstreams: {
+    id: "id",
+    cliproxyInstanceId: "cliproxyInstanceId",
+  },
 }));
 
 vi.mock("@/lib/utils/encryption", () => ({
@@ -221,7 +225,7 @@ describe("cliproxy-instance-crud", () => {
       await import("@/lib/services/cliproxy-instance-crud");
 
     dbSelectMock.mockReturnValueOnce(makeSelectChain([sampleRow])); // getCliproxyInstanceRow
-    dbSelectMock.mockReturnValueOnce(makeSelectChain([{ id: "account-1" }])); // 引用校验
+    dbSelectMock.mockReturnValueOnce(makeSelectChain([{ id: "account-1" }])); // 账号引用校验
 
     await expect(deleteCliproxyInstance("instance-1")).rejects.toBeInstanceOf(
       CliproxyInstanceInUseError
@@ -229,11 +233,26 @@ describe("cliproxy-instance-crud", () => {
     expect(dbDeleteMock).not.toHaveBeenCalled();
   });
 
-  it("deleteCliproxyInstance 无缓存账号时正常删除", async () => {
+  it("deleteCliproxyInstance 存在关联上游时拒绝删除", async () => {
+    const { deleteCliproxyInstance, CliproxyInstanceInUseError } =
+      await import("@/lib/services/cliproxy-instance-crud");
+
+    dbSelectMock.mockReturnValueOnce(makeSelectChain([sampleRow])); // getCliproxyInstanceRow
+    dbSelectMock.mockReturnValueOnce(makeSelectChain([])); // 账号引用校验：无账号
+    dbSelectMock.mockReturnValueOnce(makeSelectChain([{ id: "upstream-1" }])); // 上游引用校验
+
+    await expect(deleteCliproxyInstance("instance-1")).rejects.toBeInstanceOf(
+      CliproxyInstanceInUseError
+    );
+    expect(dbDeleteMock).not.toHaveBeenCalled();
+  });
+
+  it("deleteCliproxyInstance 无账号与关联上游时正常删除", async () => {
     const { deleteCliproxyInstance } = await import("@/lib/services/cliproxy-instance-crud");
 
     dbSelectMock.mockReturnValueOnce(makeSelectChain([sampleRow])); // getCliproxyInstanceRow
-    dbSelectMock.mockReturnValueOnce(makeSelectChain([])); // 引用校验：无账号
+    dbSelectMock.mockReturnValueOnce(makeSelectChain([])); // 账号引用校验：无账号
+    dbSelectMock.mockReturnValueOnce(makeSelectChain([])); // 上游引用校验：无上游
     dbDeleteMock.mockReturnValueOnce({ where: vi.fn().mockResolvedValueOnce(undefined) });
 
     await expect(deleteCliproxyInstance("instance-1")).resolves.toBeUndefined();
