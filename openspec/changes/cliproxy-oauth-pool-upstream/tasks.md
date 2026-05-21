@@ -29,10 +29,10 @@
 
 ## 5. Admin API
 
-- [ ] 5.1 新增 `src/app/api/admin/cliproxy/instances/[id]/pool-upstreams/route.ts`，实现 POST 创建服务商池上游
-- [ ] 5.2 新增 `src/app/api/admin/cliproxy/instances/[id]/auth-accounts/[accountName]/upstream/route.ts`，实现 POST 创建单账号映射上游
-- [ ] 5.3 为两个 API 路由编写测试，覆盖创建成功、鉴权失败、实例不存在、账号不存在、非法服务商
-- [ ] 5.4 运行 `pnpm test:run`、`pnpm exec tsc --noEmit`、`pnpm lint` 确认通过，提交本阶段代码
+- [x] 5.1 新增 `src/app/api/admin/cliproxy/instances/[id]/pool-upstreams/route.ts`，实现 POST 创建服务商池上游
+- [x] 5.2 新增 `src/app/api/admin/cliproxy/instances/[id]/auth-accounts/[accountName]/upstream/route.ts`，实现 POST 创建单账号映射上游
+- [x] 5.3 为两个 API 路由编写测试，覆盖创建成功、鉴权失败、实例不存在、账号不存在、非法服务商
+- [x] 5.4 运行 `pnpm test:run`、`pnpm exec tsc --noEmit`、`pnpm lint` 确认通过，提交本阶段代码
 
 ## 6. 收尾验证
 
