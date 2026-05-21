@@ -10,7 +10,16 @@ import type {
   CliproxyAuthAccount,
   CliproxyAuthAccountFieldsUpdate,
   CliproxyAuthAccountSyncResult,
+  CliproxyProvider,
+  CliproxyOAuthInitiateResult,
+  CliproxyOAuthStatusResult,
 } from "@/types/cliproxy";
+
+/** OAuth 登录状态轮询间隔（毫秒）。 */
+export const CLIPROXY_OAUTH_POLL_INTERVAL_MS = 3000;
+
+/** OAuth 登录的客户端轮询超时上限（毫秒）。 */
+export const CLIPROXY_OAUTH_POLL_TIMEOUT_MS = 5 * 60 * 1000;
 
 type CliproxyTranslator = (key: string, values?: Record<string, string | number | null>) => string;
 
@@ -236,5 +245,52 @@ export function useUpdateCliproxyAuthAccountFields() {
     onError: (error: Error) => {
       toast.error(t("accountFieldsUpdateFailed", { message: error.message }));
     },
+  });
+}
+
+/** 发起指定实例的 OAuth 登录。 */
+export function useInitiateCliproxyOAuthLogin() {
+  const { apiClient } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({
+      instanceId,
+      provider,
+    }: {
+      instanceId: string;
+      provider: CliproxyProvider;
+    }) => {
+      const response = await apiClient.post<{ data: CliproxyOAuthInitiateResult }>(
+        `/admin/cliproxy/instances/${instanceId}/oauth-login`,
+        { provider }
+      );
+      return response.data;
+    },
+  });
+}
+
+/**
+ * 轮询 OAuth 登录状态。
+ *
+ * 状态为 `wait` 时按固定间隔继续轮询，`ok` 或 `error` 时停止。
+ */
+export function useCliproxyOAuthStatus(instanceId: string, state: string | null, enabled: boolean) {
+  const { apiClient } = useAuth();
+
+  return useQuery({
+    queryKey: ["cliproxy", "oauth-status", instanceId, state],
+    queryFn: async () => {
+      const response = await apiClient.get<{ data: CliproxyOAuthStatusResult }>(
+        `/admin/cliproxy/instances/${instanceId}/oauth-login/status?state=${encodeURIComponent(
+          state ?? ""
+        )}`
+      );
+      return response.data;
+    },
+    enabled: enabled && Boolean(state),
+    refetchInterval: (query) =>
+      query.state.data?.status === "wait" ? CLIPROXY_OAUTH_POLL_INTERVAL_MS : false,
+    refetchIntervalInBackground: false,
+    gcTime: 0,
   });
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { LogIn, RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,6 +14,7 @@ import {
 import type { CliproxyAuthAccount, CliproxyInstance } from "@/types/cliproxy";
 import { CliproxyAccountsTable } from "./cliproxy-accounts-table";
 import { CliproxyAccountFieldsDialog } from "./cliproxy-account-fields-dialog";
+import { CliproxyOAuthLoginDialog } from "./cliproxy-oauth-login-dialog";
 
 interface CliproxyAccountsPanelProps {
   instance: CliproxyInstance;
@@ -29,6 +30,7 @@ export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) 
   const statusMutation = useSetCliproxyAuthAccountStatus();
 
   const [editAccount, setEditAccount] = useState<CliproxyAuthAccount | null>(null);
+  const [oauthOpen, setOauthOpen] = useState(false);
 
   const handleToggleStatus = (account: CliproxyAuthAccount) => {
     statusMutation.mutate({
@@ -46,14 +48,20 @@ export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) 
             <h2 className="type-title-medium text-foreground">{t("accountsTitle")}</h2>
             <p className="type-body-small text-muted-foreground">{instance.name}</p>
           </div>
-          <Button
-            variant="outline"
-            disabled={syncMutation.isPending}
-            onClick={() => syncMutation.mutate(instance.id)}
-          >
-            <RefreshCw className="mr-2 h-4 w-4" />
-            {syncMutation.isPending ? t("syncing") : t("syncAccounts")}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setOauthOpen(true)}>
+              <LogIn className="mr-2 h-4 w-4" />
+              {t("oauthLogin")}
+            </Button>
+            <Button
+              variant="outline"
+              disabled={syncMutation.isPending}
+              onClick={() => syncMutation.mutate(instance.id)}
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              {syncMutation.isPending ? t("syncing") : t("syncAccounts")}
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (
@@ -84,6 +92,13 @@ export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) 
           account={editAccount}
           open
           onClose={() => setEditAccount(null)}
+        />
+      )}
+      {oauthOpen && (
+        <CliproxyOAuthLoginDialog
+          instanceId={instance.id}
+          open
+          onClose={() => setOauthOpen(false)}
         />
       )}
     </Card>

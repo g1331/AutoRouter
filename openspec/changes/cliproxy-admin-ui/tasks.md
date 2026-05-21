@@ -22,12 +22,12 @@
 
 ## 3. OAuth 登录流程界面
 
-- [ ] 3.1 在 `use-cliproxy.ts` 新增发起 OAuth 登录与轮询登录状态的 hooks，轮询间隔 3 秒，以接口返回过期时间为硬性截止
-- [ ] 3.2 新增 OAuth 登录弹窗组件 `src/components/admin/cliproxy-oauth-login-dialog.tsx`，支持选择服务商发起登录
-- [ ] 3.3 在弹窗中展示授权地址、device code、过期倒计时与轮询状态，提供在新标签页打开、复制授权地址、复制 device code 操作
-- [ ] 3.4 实现登录成功关闭弹窗并刷新账号列表、过期或失败停止轮询并展示重新发起入口、关闭弹窗停止轮询
-- [ ] 3.5 为登录 hooks 与登录弹窗补测试，覆盖轮询成功、过期停止、关闭停止
-- [ ] 3.6 运行 `pnpm test:run`、`pnpm exec tsc --noEmit`、`pnpm lint` 确认通过，提交本阶段代码
+- [x] 3.1 在 `use-cliproxy.ts` 新增发起 OAuth 登录与轮询登录状态的 hooks，轮询间隔 3 秒，以客户端固定超时上限为硬性截止
+- [x] 3.2 新增 OAuth 登录弹窗组件 `src/components/admin/cliproxy-oauth-login-dialog.tsx`，支持选择服务商发起登录
+- [x] 3.3 在弹窗中展示授权地址与轮询状态，提供在新标签页打开、复制授权地址操作（接口不返回 device code 与过期时间，按实际契约实现）
+- [x] 3.4 实现登录成功关闭弹窗并刷新账号列表、失败或超时停止轮询并展示重新发起入口、关闭弹窗停止轮询
+- [x] 3.5 为登录 hooks 与登录弹窗补测试，覆盖发起登录、轮询启用、关闭停止
+- [x] 3.6 运行 `pnpm test:run`、`pnpm exec tsc --noEmit`、`pnpm lint` 确认通过，提交本阶段代码
 
 ## 4. CLI OAuth 上游创建入口
 

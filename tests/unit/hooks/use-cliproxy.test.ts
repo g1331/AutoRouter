@@ -265,3 +265,52 @@ describe("use-cliproxy 账号 hooks", () => {
     await waitFor(() => expect(mockToastSuccess).toHaveBeenCalled());
   });
 });
+
+describe("use-cliproxy OAuth 登录 hooks", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("useInitiateCliproxyOAuthLogin 发起登录并返回授权地址", async () => {
+    mockPost.mockResolvedValueOnce({
+      data: { provider: "codex", url: "https://auth.example", state: "state-1" },
+    });
+    const { useInitiateCliproxyOAuthLogin } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useInitiateCliproxyOAuthLogin(), { wrapper });
+    const res = await result.current.mutateAsync({
+      instanceId: "instance-1",
+      provider: "codex",
+    });
+
+    expect(mockPost).toHaveBeenCalledWith("/admin/cliproxy/instances/instance-1/oauth-login", {
+      provider: "codex",
+    });
+    expect(res.state).toBe("state-1");
+  });
+
+  it("useCliproxyOAuthStatus 在 state 为空时不发起请求", async () => {
+    const { useCliproxyOAuthStatus } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    renderHook(() => useCliproxyOAuthStatus("instance-1", null, true), { wrapper });
+
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it("useCliproxyOAuthStatus 启用时按 state 轮询登录状态", async () => {
+    mockGet.mockResolvedValueOnce({ data: { status: "wait" } });
+    const { useCliproxyOAuthStatus } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useCliproxyOAuthStatus("instance-1", "state-1", true), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockGet).toHaveBeenCalledWith(
+      "/admin/cliproxy/instances/instance-1/oauth-login/status?state=state-1"
+    );
+  });
+});

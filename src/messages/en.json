@@ -1509,6 +1509,25 @@
     "accountStatusUpdateSuccess": "Account status updated",
     "accountStatusUpdateFailed": "Failed to update account status: {message}",
     "accountFieldsUpdateSuccess": "Account updated",
-    "accountFieldsUpdateFailed": "Failed to update account: {message}"
+    "accountFieldsUpdateFailed": "Failed to update account: {message}",
+    "oauthLogin": "OAuth Login",
+    "oauthLoginTitle": "OAuth Login",
+    "oauthLoginDescription": "Open the authorization URL and complete login in your browser.",
+    "oauthSelectProvider": "Select a provider to log in with.",
+    "providerCodex": "Codex",
+    "providerAnthropic": "Claude",
+    "providerGemini": "Gemini",
+    "oauthStartLogin": "Start Login",
+    "oauthStarting": "Starting...",
+    "oauthAuthUrlLabel": "Authorization URL",
+    "oauthOpenAuthUrl": "Open in New Tab",
+    "oauthCopyAuthUrl": "Copy URL",
+    "oauthCopied": "Authorization URL copied",
+    "oauthPolling": "Waiting for login to complete...",
+    "oauthLoginSuccess": "OAuth login completed",
+    "oauthLoginError": "OAuth login failed",
+    "oauthLoginTimeout": "Login timed out. Start the login again.",
+    "oauthRetry": "Start Again",
+    "oauthInitiateFailed": "Failed to start OAuth login: {message}"
   }
 }

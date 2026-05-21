@@ -99,3 +99,22 @@ export interface CliproxyAuthAccountSyncResult {
   removed: number;
   total: number;
 }
+
+/** 发起 OAuth 登录的结果。 */
+export interface CliproxyOAuthInitiateResult {
+  provider: CliproxyProvider;
+  /** OAuth 授权地址。 */
+  url: string;
+  /** 登录会话标识，用于轮询登录状态。 */
+  state: string;
+}
+
+/** OAuth 登录状态。 */
+export type CliproxyOAuthStatus = "ok" | "wait" | "error";
+
+/** OAuth 登录状态查询结果。 */
+export interface CliproxyOAuthStatusResult {
+  status: CliproxyOAuthStatus;
+  error?: string;
+  syncResult?: CliproxyAuthAccountSyncResult;
+}
