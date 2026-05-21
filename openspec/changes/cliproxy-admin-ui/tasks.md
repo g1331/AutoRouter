@@ -39,7 +39,7 @@
 
 ## 5. 国际化补齐与收尾验证
 
-- [ ] 5.1 复核 `cliproxy` 与 `nav` 命名空间中英文文案完整，无遗漏键与硬编码字符串
-- [ ] 5.2 复核页面加载态、空态、错误态处理与既有页面一致
-- [ ] 5.3 运行 `pnpm format:check`、`pnpm test:run` 复核全部测试通过
-- [ ] 5.4 使用 `openspec validate cliproxy-admin-ui` 校验本变更工件完整，提交收尾改动
+- [x] 5.1 复核 `cliproxy` 与 `nav` 命名空间中英文文案完整，无遗漏键与硬编码字符串
+- [x] 5.2 复核页面加载态、空态、错误态处理与既有页面一致
+- [x] 5.3 运行 `pnpm format:check`、`pnpm test:run` 复核全部测试通过
+- [x] 5.4 使用 `openspec validate cliproxy-admin-ui` 校验本变更工件完整，提交收尾改动
