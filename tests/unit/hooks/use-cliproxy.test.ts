@@ -1,0 +1,188 @@
+import { renderHook, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import React from "react";
+import type { CliproxyInstance } from "@/types/cliproxy";
+
+const mockGet = vi.fn();
+const mockPost = vi.fn();
+const mockPatch = vi.fn();
+const mockDelete = vi.fn();
+
+vi.mock("@/providers/auth-provider", () => ({
+  useAuth: () => ({
+    apiClient: {
+      get: mockGet,
+      post: mockPost,
+      patch: mockPatch,
+      delete: mockDelete,
+    },
+  }),
+}));
+
+vi.mock("next-intl", () => ({
+  useTranslations: () => (key: string, values?: Record<string, string | number | null>) =>
+    values?.message ? `${key}: ${values.message}` : key,
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
+import { toast } from "sonner";
+const mockToastSuccess = toast.success as ReturnType<typeof vi.fn>;
+const mockToastError = toast.error as ReturnType<typeof vi.fn>;
+
+function createWrapper() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+  return {
+    queryClient,
+    wrapper: ({ children }: { children: React.ReactNode }) =>
+      React.createElement(QueryClientProvider, { client: queryClient }, children),
+  };
+}
+
+const sampleInstance: CliproxyInstance = {
+  id: "instance-1",
+  name: "local-dev",
+  mode: "external",
+  base_url: "http://localhost:8317",
+  management_url: "http://localhost:8317",
+  has_client_api_key: true,
+  has_management_key: true,
+  enabled: true,
+  description: null,
+  created_at: "2026-05-21T00:00:00Z",
+  updated_at: "2026-05-21T00:00:00Z",
+};
+
+describe("use-cliproxy 实例 hooks", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("useCliproxyInstances 拉取并解包实例列表", async () => {
+    mockGet.mockResolvedValueOnce({ data: [sampleInstance] });
+    const { useCliproxyInstances } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useCliproxyInstances(), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockGet).toHaveBeenCalledWith("/admin/cliproxy/instances");
+    expect(result.current.data).toEqual([sampleInstance]);
+  });
+
+  it("useCreateCliproxyInstance 创建成功后提示并解包数据", async () => {
+    mockPost.mockResolvedValueOnce({ data: sampleInstance });
+    const { useCreateCliproxyInstance } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useCreateCliproxyInstance(), { wrapper });
+    const created = await result.current.mutateAsync({
+      name: "local-dev",
+      mode: "external",
+      base_url: "http://localhost:8317",
+      management_url: "http://localhost:8317",
+      client_api_key: "key",
+      management_key: "secret",
+    });
+
+    expect(created).toEqual(sampleInstance);
+    expect(mockPost).toHaveBeenCalledWith(
+      "/admin/cliproxy/instances",
+      expect.objectContaining({ name: "local-dev", mode: "external" })
+    );
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalled());
+  });
+
+  it("useCreateCliproxyInstance 失败时提示错误", async () => {
+    mockPost.mockRejectedValueOnce(new Error("name conflict"));
+    const { useCreateCliproxyInstance } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useCreateCliproxyInstance(), { wrapper });
+    await expect(
+      result.current.mutateAsync({
+        name: "dup",
+        mode: "managed",
+        base_url: "u",
+        management_url: "u",
+        client_api_key: "k",
+        management_key: "m",
+      })
+    ).rejects.toThrow("name conflict");
+
+    await waitFor(() =>
+      expect(mockToastError).toHaveBeenCalledWith("instanceCreateFailed: name conflict")
+    );
+  });
+
+  it("useUpdateCliproxyInstance 以 PATCH 更新实例", async () => {
+    mockPatch.mockResolvedValueOnce({ data: sampleInstance });
+    const { useUpdateCliproxyInstance } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useUpdateCliproxyInstance(), { wrapper });
+    await result.current.mutateAsync({ id: "instance-1", data: { name: "renamed" } });
+
+    expect(mockPatch).toHaveBeenCalledWith("/admin/cliproxy/instances/instance-1", {
+      name: "renamed",
+    });
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalled());
+  });
+
+  it("useDeleteCliproxyInstance 以 DELETE 删除实例", async () => {
+    mockDelete.mockResolvedValueOnce({ data: { id: "instance-1" } });
+    const { useDeleteCliproxyInstance } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useDeleteCliproxyInstance(), { wrapper });
+    await result.current.mutateAsync("instance-1");
+
+    expect(mockDelete).toHaveBeenCalledWith("/admin/cliproxy/instances/instance-1");
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalled());
+  });
+
+  it("useTestCliproxyConnection 调用预检测接口", async () => {
+    mockPost.mockResolvedValueOnce({
+      data: { status: "success", message: "ok", statusCode: 200 },
+    });
+    const { useTestCliproxyConnection } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useTestCliproxyConnection(), { wrapper });
+    const res = await result.current.mutateAsync({
+      management_url: "http://localhost:8317",
+      management_key: "secret",
+    });
+
+    expect(mockPost).toHaveBeenCalledWith("/admin/cliproxy/instances/test", {
+      management_url: "http://localhost:8317",
+      management_key: "secret",
+    });
+    expect(res.status).toBe("success");
+  });
+
+  it("useTestCliproxyInstance 调用已保存实例检测接口", async () => {
+    mockPost.mockResolvedValueOnce({
+      data: { status: "auth_failed", message: "bad key", statusCode: 401 },
+    });
+    const { useTestCliproxyInstance } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useTestCliproxyInstance(), { wrapper });
+    const res = await result.current.mutateAsync("instance-1");
+
+    expect(mockPost).toHaveBeenCalledWith("/admin/cliproxy/instances/instance-1/test");
+    expect(res.status).toBe("auth_failed");
+  });
+});

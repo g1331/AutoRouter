@@ -21,6 +21,7 @@ import {
   Settings,
   ShieldAlert,
   Sun,
+  TerminalSquare,
   Wrench,
   ArrowLeftRight,
   Wallet,
@@ -64,7 +65,8 @@ type SystemNavigationItem = {
     | "billing"
     | "backgroundSync"
     | "trafficRecording"
-    | "globalFailureRules";
+    | "globalFailureRules"
+    | "cliproxy";
 };
 
 const navigation: NavigationItem[] = [
@@ -80,6 +82,7 @@ const systemNavigation: SystemNavigationItem[] = [
   { href: "/system/traffic-recording", icon: DatabaseZap, labelKey: "trafficRecording" },
   { href: "/system/failure-rules", icon: ShieldAlert, labelKey: "globalFailureRules" },
   { href: "/system/header-compensation", icon: ArrowLeftRight, labelKey: "headerCompensation" },
+  { href: "/system/cliproxy", icon: TerminalSquare, labelKey: "cliproxy" },
 ];
 
 const mobileNavigation: NavigationItem[] = [

@@ -1,14 +1,14 @@
 ## 1. 菜单入口、页面路由与实例管理界面
 
-- [ ] 1.1 在 `src/components/admin/sidebar.tsx` 的系统导航数组与类型新增 CLIProxyAPI 菜单项，图标取自 `lucide-react`
-- [ ] 1.2 在 `src/messages/en.json` 与 `src/messages/zh-CN.json` 的 `nav` 命名空间新增 CLIProxyAPI 菜单标签，并新建 `cliproxy` 命名空间承载本变更文案
-- [ ] 1.3 新增 `src/hooks/use-cliproxy.ts`，实现实例列表、创建、更新、删除、连通性预检测与已保存实例检测的 TanStack Query hooks，复用 `useAuth().apiClient` 与既有查询键约定
-- [ ] 1.4 新增页面 `src/app/[locale]/(dashboard)/system/cliproxy/page.tsx`，以 `Topbar` 与 `Card` 承载实例表格与操作区
-- [ ] 1.5 新增实例表格组件 `src/components/admin/cliproxy-instances-table.tsx`，展示实例名称、运行模式、地址、启用状态，并提供行操作菜单
-- [ ] 1.6 新增实例创建编辑弹窗 `src/components/admin/cliproxy-instance-form-dialog.tsx`，使用 `react-hook-form` 与 `zod`，敏感字段用 `PasswordInput`，内置连通性预检测
-- [ ] 1.7 新增实例删除确认弹窗与连通性检测弹窗组件
-- [ ] 1.8 为 `use-cliproxy.ts` 的实例 hooks 与实例表单弹窗补单元测试与组件测试
-- [ ] 1.9 运行 `pnpm test:run`、`pnpm exec tsc --noEmit`、`pnpm lint` 确认通过，提交本阶段代码
+- [x] 1.1 在 `src/components/admin/sidebar.tsx` 的系统导航数组与类型新增 CLIProxyAPI 菜单项，图标取自 `lucide-react`
+- [x] 1.2 在 `src/messages/en.json` 与 `src/messages/zh-CN.json` 的 `nav` 命名空间新增 CLIProxyAPI 菜单标签，并新建 `cliproxy` 命名空间承载本变更文案
+- [x] 1.3 新增 `src/hooks/use-cliproxy.ts`，实现实例列表、创建、更新、删除、连通性预检测与已保存实例检测的 TanStack Query hooks，复用 `useAuth().apiClient` 与既有查询键约定
+- [x] 1.4 新增页面 `src/app/[locale]/(dashboard)/system/cliproxy/page.tsx`，以 `Topbar` 与 `Card` 承载实例表格与操作区
+- [x] 1.5 新增实例表格组件 `src/components/admin/cliproxy-instances-table.tsx`，展示实例名称、运行模式、地址、启用状态，并提供行操作菜单
+- [x] 1.6 新增实例创建编辑弹窗 `src/components/admin/cliproxy-instance-form-dialog.tsx`，使用 `react-hook-form` 与 `zod`，敏感字段用 `PasswordInput`，内置连通性预检测
+- [x] 1.7 新增实例删除确认弹窗与连通性检测弹窗组件
+- [x] 1.8 为 `use-cliproxy.ts` 的实例 hooks 与实例表单弹窗补单元测试与组件测试
+- [x] 1.9 运行 `pnpm test:run`、`pnpm exec tsc --noEmit`、`pnpm lint` 确认通过，提交本阶段代码
 
 ## 2. OAuth 账号列表与账号管理界面
 
