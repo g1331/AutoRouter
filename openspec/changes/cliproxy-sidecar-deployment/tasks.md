@@ -13,8 +13,8 @@
 
 ## 3. 环境变量样例
 
-- [ ] 3.1 在 `.env.example` 补充 `CLIPROXY_CLIENT_API_KEY`、`CLIPROXY_MANAGEMENT_KEY`、`CLIPROXY_PROXY_URL`、`CLIPROXY_ALLOW_REMOTE`、`CLIPROXY_PORT`、`CLI_PROXY_IMAGE` 等变量及中文注释
-- [ ] 3.2 在注释中区分「CLIProxyAPI 服务地址」与「OAuth 出站代理」两类配置，并说明密钥需与 `cliproxy_instances` 记录一致
+- [x] 3.1 在 `.env.example` 补充 `CLIPROXY_CLIENT_API_KEY`、`CLIPROXY_MANAGEMENT_KEY`、`CLIPROXY_PROXY_URL`、`CLIPROXY_ALLOW_REMOTE`、`CLIPROXY_PORT`、`CLI_PROXY_IMAGE` 等变量及中文注释
+- [x] 3.2 在注释中区分「CLIProxyAPI 服务地址」与「OAuth 出站代理」两类配置，并说明密钥需与 `cliproxy_instances` 记录一致
 
 ## 4. 部署文档
 
