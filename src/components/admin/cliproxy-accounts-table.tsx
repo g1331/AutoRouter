@@ -1,6 +1,6 @@
 "use client";
 
-import { MoreHorizontal, Pencil, Power, PowerOff } from "lucide-react";
+import { Boxes, MoreHorizontal, Pencil, Power, PowerOff } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ interface CliproxyAccountsTableProps {
   accounts: CliproxyAuthAccount[];
   onToggleStatus: (account: CliproxyAuthAccount) => void;
   onEditFields: (account: CliproxyAuthAccount) => void;
+  onMapUpstream: (account: CliproxyAuthAccount) => void;
 }
 
 /**
@@ -33,6 +34,7 @@ export function CliproxyAccountsTable({
   accounts,
   onToggleStatus,
   onEditFields,
+  onMapUpstream,
 }: CliproxyAccountsTableProps) {
   const t = useTranslations("cliproxy");
 
@@ -92,6 +94,10 @@ export function CliproxyAccountsTable({
                   <DropdownMenuItem onClick={() => onEditFields(account)}>
                     <Pencil className="mr-2 h-4 w-4" />
                     {t("actionEditFields")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onMapUpstream(account)}>
+                    <Boxes className="mr-2 h-4 w-4" />
+                    {t("actionMapUpstream")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

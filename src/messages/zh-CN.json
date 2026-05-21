@@ -1533,6 +1533,19 @@
     "oauthLoginError": "OAuth 登录失败",
     "oauthLoginTimeout": "登录已超时，请重新发起登录。",
     "oauthRetry": "重新发起",
-    "oauthInitiateFailed": "发起 OAuth 登录失败：{message}"
+    "oauthInitiateFailed": "发起 OAuth 登录失败：{message}",
+    "actionCreatePoolUpstream": "创建池上游",
+    "actionMapUpstream": "映射为上游",
+    "poolUpstreamDialogTitle": "创建池上游",
+    "poolUpstreamDialogDescription": "为所选服务商创建一个 OAuth 池上游。",
+    "poolUpstreamProvider": "服务商",
+    "accountUpstreamDialogTitle": "将账号映射为上游",
+    "accountUpstreamDialogDescription": "创建一个绑定到该 OAuth 账号的上游。",
+    "createUpstream": "创建上游",
+    "creatingUpstream": "创建中...",
+    "poolUpstreamCreateSuccess": "池上游已创建",
+    "poolUpstreamCreateFailed": "创建池上游失败：{message}",
+    "accountUpstreamCreateSuccess": "单账号上游已创建",
+    "accountUpstreamCreateFailed": "创建单账号上游失败：{message}"
   }
 }

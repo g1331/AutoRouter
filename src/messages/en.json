@@ -1528,6 +1528,19 @@
     "oauthLoginError": "OAuth login failed",
     "oauthLoginTimeout": "Login timed out. Start the login again.",
     "oauthRetry": "Start Again",
-    "oauthInitiateFailed": "Failed to start OAuth login: {message}"
+    "oauthInitiateFailed": "Failed to start OAuth login: {message}",
+    "actionCreatePoolUpstream": "Create Pool Upstream",
+    "actionMapUpstream": "Map to Upstream",
+    "poolUpstreamDialogTitle": "Create Pool Upstream",
+    "poolUpstreamDialogDescription": "Create an OAuth pool upstream for the selected provider.",
+    "poolUpstreamProvider": "Provider",
+    "accountUpstreamDialogTitle": "Map Account to Upstream",
+    "accountUpstreamDialogDescription": "Create an upstream bound to this OAuth account.",
+    "createUpstream": "Create Upstream",
+    "creatingUpstream": "Creating...",
+    "poolUpstreamCreateSuccess": "Pool upstream created",
+    "poolUpstreamCreateFailed": "Failed to create pool upstream: {message}",
+    "accountUpstreamCreateSuccess": "Account upstream created",
+    "accountUpstreamCreateFailed": "Failed to create account upstream: {message}"
   }
 }

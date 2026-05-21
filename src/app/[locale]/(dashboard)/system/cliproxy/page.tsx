@@ -12,6 +12,7 @@ import { CliproxyInstanceFormDialog } from "@/components/admin/cliproxy-instance
 import { DeleteCliproxyInstanceDialog } from "@/components/admin/delete-cliproxy-instance-dialog";
 import { CliproxyConnectionTestDialog } from "@/components/admin/cliproxy-connection-test-dialog";
 import { CliproxyAccountsPanel } from "@/components/admin/cliproxy-accounts-panel";
+import { CliproxyPoolUpstreamDialog } from "@/components/admin/cliproxy-pool-upstream-dialog";
 import { useCliproxyInstances } from "@/hooks/use-cliproxy";
 import type { CliproxyInstance } from "@/types/cliproxy";
 
@@ -23,6 +24,7 @@ export default function CliproxyPage() {
   const [editInstance, setEditInstance] = useState<CliproxyInstance | null>(null);
   const [deleteInstance, setDeleteInstance] = useState<CliproxyInstance | null>(null);
   const [testInstance, setTestInstance] = useState<CliproxyInstance | null>(null);
+  const [poolUpstreamInstance, setPoolUpstreamInstance] = useState<CliproxyInstance | null>(null);
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
 
   const selectedInstance =
@@ -67,6 +69,7 @@ export default function CliproxyPage() {
                 onSelect={(instance) => setSelectedInstanceId(instance.id)}
                 onEdit={setEditInstance}
                 onTest={setTestInstance}
+                onCreatePoolUpstream={setPoolUpstreamInstance}
                 onDelete={setDeleteInstance}
               />
             )}
@@ -106,6 +109,13 @@ export default function CliproxyPage() {
           instance={testInstance}
           open
           onClose={() => setTestInstance(null)}
+        />
+      )}
+      {poolUpstreamInstance && (
+        <CliproxyPoolUpstreamDialog
+          instanceId={poolUpstreamInstance.id}
+          open
+          onClose={() => setPoolUpstreamInstance(null)}
         />
       )}
     </>

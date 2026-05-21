@@ -294,3 +294,65 @@ export function useCliproxyOAuthStatus(instanceId: string, state: string | null,
     gcTime: 0,
   });
 }
+
+/** 按服务商为指定实例一键创建 OAuth 池上游。 */
+export function useCreateCliproxyPoolUpstream() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  const t = useTranslations("cliproxy") as CliproxyTranslator;
+
+  return useMutation({
+    mutationFn: async ({
+      instanceId,
+      provider,
+    }: {
+      instanceId: string;
+      provider: CliproxyProvider;
+    }) => {
+      const response = await apiClient.post<{ data: { id: string } }>(
+        `/admin/cliproxy/instances/${instanceId}/pool-upstreams`,
+        { provider }
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["upstreams"] });
+      toast.success(t("poolUpstreamCreateSuccess"));
+    },
+    onError: (error: Error) => {
+      toast.error(t("poolUpstreamCreateFailed", { message: error.message }));
+    },
+  });
+}
+
+/** 将单个 OAuth 账号固定映射为一个上游。 */
+export function useCreateCliproxySingleAccountUpstream() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  const t = useTranslations("cliproxy") as CliproxyTranslator;
+
+  return useMutation({
+    mutationFn: async ({
+      instanceId,
+      accountName,
+    }: {
+      instanceId: string;
+      accountName: string;
+    }) => {
+      const response = await apiClient.post<{ data: { id: string } }>(
+        `/admin/cliproxy/instances/${instanceId}/auth-accounts/${encodeURIComponent(
+          accountName
+        )}/upstream`,
+        {}
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["upstreams"] });
+      toast.success(t("accountUpstreamCreateSuccess"));
+    },
+    onError: (error: Error) => {
+      toast.error(t("accountUpstreamCreateFailed", { message: error.message }));
+    },
+  });
+}

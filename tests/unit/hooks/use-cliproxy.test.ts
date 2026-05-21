@@ -314,3 +314,41 @@ describe("use-cliproxy OAuth 登录 hooks", () => {
     );
   });
 });
+
+describe("use-cliproxy 上游创建 hooks", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("useCreateCliproxyPoolUpstream 按服务商创建池上游", async () => {
+    mockPost.mockResolvedValueOnce({ data: { id: "upstream-1" } });
+    const { useCreateCliproxyPoolUpstream } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useCreateCliproxyPoolUpstream(), { wrapper });
+    await result.current.mutateAsync({ instanceId: "instance-1", provider: "codex" });
+
+    expect(mockPost).toHaveBeenCalledWith("/admin/cliproxy/instances/instance-1/pool-upstreams", {
+      provider: "codex",
+    });
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalled());
+  });
+
+  it("useCreateCliproxySingleAccountUpstream 创建单账号上游", async () => {
+    mockPost.mockResolvedValueOnce({ data: { id: "upstream-2" } });
+    const { useCreateCliproxySingleAccountUpstream } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useCreateCliproxySingleAccountUpstream(), { wrapper });
+    await result.current.mutateAsync({
+      instanceId: "instance-1",
+      accountName: "codex-a.json",
+    });
+
+    expect(mockPost).toHaveBeenCalledWith(
+      "/admin/cliproxy/instances/instance-1/auth-accounts/codex-a.json/upstream",
+      {}
+    );
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalled());
+  });
+});

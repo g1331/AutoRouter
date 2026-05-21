@@ -15,6 +15,7 @@ import type { CliproxyAuthAccount, CliproxyInstance } from "@/types/cliproxy";
 import { CliproxyAccountsTable } from "./cliproxy-accounts-table";
 import { CliproxyAccountFieldsDialog } from "./cliproxy-account-fields-dialog";
 import { CliproxyOAuthLoginDialog } from "./cliproxy-oauth-login-dialog";
+import { CliproxyAccountUpstreamDialog } from "./cliproxy-account-upstream-dialog";
 
 interface CliproxyAccountsPanelProps {
   instance: CliproxyInstance;
@@ -30,6 +31,7 @@ export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) 
   const statusMutation = useSetCliproxyAuthAccountStatus();
 
   const [editAccount, setEditAccount] = useState<CliproxyAuthAccount | null>(null);
+  const [mapAccount, setMapAccount] = useState<CliproxyAuthAccount | null>(null);
   const [oauthOpen, setOauthOpen] = useState(false);
 
   const handleToggleStatus = (account: CliproxyAuthAccount) => {
@@ -82,6 +84,7 @@ export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) 
             accounts={accounts}
             onToggleStatus={handleToggleStatus}
             onEditFields={setEditAccount}
+            onMapUpstream={setMapAccount}
           />
         )}
       </CardContent>
@@ -99,6 +102,14 @@ export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) 
           instanceId={instance.id}
           open
           onClose={() => setOauthOpen(false)}
+        />
+      )}
+      {mapAccount && (
+        <CliproxyAccountUpstreamDialog
+          instanceId={instance.id}
+          account={mapAccount}
+          open
+          onClose={() => setMapAccount(null)}
         />
       )}
     </Card>

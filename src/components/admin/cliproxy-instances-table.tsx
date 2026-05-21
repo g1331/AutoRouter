@@ -1,6 +1,6 @@
 "use client";
 
-import { MoreHorizontal, Pencil, PlugZap, Trash2 } from "lucide-react";
+import { Boxes, MoreHorizontal, Pencil, PlugZap, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ interface CliproxyInstancesTableProps {
   onSelect: (instance: CliproxyInstance) => void;
   onEdit: (instance: CliproxyInstance) => void;
   onTest: (instance: CliproxyInstance) => void;
+  onCreatePoolUpstream: (instance: CliproxyInstance) => void;
   onDelete: (instance: CliproxyInstance) => void;
 }
 
@@ -39,6 +40,7 @@ export function CliproxyInstancesTable({
   onSelect,
   onEdit,
   onTest,
+  onCreatePoolUpstream,
   onDelete,
 }: CliproxyInstancesTableProps) {
   const t = useTranslations("cliproxy");
@@ -94,6 +96,10 @@ export function CliproxyInstancesTable({
                   <DropdownMenuItem onClick={() => onTest(instance)}>
                     <PlugZap className="mr-2 h-4 w-4" />
                     {t("actionTest")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onCreatePoolUpstream(instance)}>
+                    <Boxes className="mr-2 h-4 w-4" />
+                    {t("actionCreatePoolUpstream")}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => onEdit(instance)}>
                     <Pencil className="mr-2 h-4 w-4" />
