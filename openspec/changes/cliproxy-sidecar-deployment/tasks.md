@@ -18,10 +18,10 @@
 
 ## 4. 部署文档
 
-- [ ] 4.1 新增 `docs/cliproxy-deployment.md`，说明外部 CPA 与受管 sidecar 两种部署方式的步骤
-- [ ] 4.2 在文档中说明 CPA 凭据与 `cliproxy_instances` 记录的一致性要求，以及创建实例记录后用管理端连通性检测验证
-- [ ] 4.3 在文档中说明 named volume 的备份与迁移方式，并提供 auth-dir 改用 bind mount 的变体说明
-- [ ] 4.4 在文档中说明不同网络环境下 CPA 出站代理的配置方式，涵盖 `http`、`https`、`socks5` 格式
+- [x] 4.1 新增 `docs/cliproxy-deployment.md`，说明外部 CPA 与受管 sidecar 两种部署方式的步骤
+- [x] 4.2 在文档中说明 CPA 凭据与 `cliproxy_instances` 记录的一致性要求，以及创建实例记录后用管理端连通性检测验证
+- [x] 4.3 在文档中说明 named volume 的备份与迁移方式，并提供 auth-dir 改用 bind mount 的变体说明
+- [x] 4.4 在文档中说明不同网络环境下 CPA 出站代理的配置方式，涵盖 `http`、`https`、`socks5` 格式
 
 ## 5. 收尾验证
 
