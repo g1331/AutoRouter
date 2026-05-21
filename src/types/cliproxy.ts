@@ -64,3 +64,38 @@ export interface CliproxyConnectionTestResult {
   message: string;
   statusCode: number | null;
 }
+
+/** CLIProxyAPI OAuth 账号的对外响应形态。 */
+export interface CliproxyAuthAccount {
+  id: string;
+  instance_id: string;
+  auth_file_name: string;
+  provider: string;
+  email: string | null;
+  status: string | null;
+  disabled: boolean;
+  prefix: string | null;
+  model_count: number;
+  priority: number | null;
+  note: string | null;
+  raw_metadata: Record<string, unknown> | null;
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** 账号字段更新请求体。 */
+export interface CliproxyAuthAccountFieldsUpdate {
+  prefix?: string;
+  proxy_url?: string;
+  priority?: number;
+  note?: string;
+}
+
+/** 账号同步结果。 */
+export interface CliproxyAuthAccountSyncResult {
+  added: number;
+  updated: number;
+  removed: number;
+  total: number;
+}

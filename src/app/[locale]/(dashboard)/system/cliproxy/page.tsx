@@ -11,6 +11,7 @@ import { CliproxyInstancesTable } from "@/components/admin/cliproxy-instances-ta
 import { CliproxyInstanceFormDialog } from "@/components/admin/cliproxy-instance-form-dialog";
 import { DeleteCliproxyInstanceDialog } from "@/components/admin/delete-cliproxy-instance-dialog";
 import { CliproxyConnectionTestDialog } from "@/components/admin/cliproxy-connection-test-dialog";
+import { CliproxyAccountsPanel } from "@/components/admin/cliproxy-accounts-panel";
 import { useCliproxyInstances } from "@/hooks/use-cliproxy";
 import type { CliproxyInstance } from "@/types/cliproxy";
 
@@ -22,6 +23,10 @@ export default function CliproxyPage() {
   const [editInstance, setEditInstance] = useState<CliproxyInstance | null>(null);
   const [deleteInstance, setDeleteInstance] = useState<CliproxyInstance | null>(null);
   const [testInstance, setTestInstance] = useState<CliproxyInstance | null>(null);
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
+
+  const selectedInstance =
+    instances?.find((instance) => instance.id === selectedInstanceId) ?? null;
 
   return (
     <>
@@ -58,6 +63,8 @@ export default function CliproxyPage() {
             ) : (
               <CliproxyInstancesTable
                 instances={instances}
+                selectedInstanceId={selectedInstanceId}
+                onSelect={(instance) => setSelectedInstanceId(instance.id)}
                 onEdit={setEditInstance}
                 onTest={setTestInstance}
                 onDelete={setDeleteInstance}
@@ -65,6 +72,18 @@ export default function CliproxyPage() {
             )}
           </CardContent>
         </Card>
+
+        {selectedInstance ? (
+          <CliproxyAccountsPanel instance={selectedInstance} />
+        ) : instances && instances.length > 0 ? (
+          <Card variant="outlined">
+            <CardContent className="p-6">
+              <p className="text-center type-body-medium text-muted-foreground">
+                {t("selectInstanceHint")}
+              </p>
+            </CardContent>
+          </Card>
+        ) : null}
       </div>
 
       {createOpen && (

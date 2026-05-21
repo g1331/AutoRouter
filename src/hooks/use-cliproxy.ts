@@ -7,6 +7,9 @@ import type {
   CliproxyInstanceCreate,
   CliproxyInstanceUpdate,
   CliproxyConnectionTestResult,
+  CliproxyAuthAccount,
+  CliproxyAuthAccountFieldsUpdate,
+  CliproxyAuthAccountSyncResult,
 } from "@/types/cliproxy";
 
 type CliproxyTranslator = (key: string, values?: Record<string, string | number | null>) => string;
@@ -121,6 +124,117 @@ export function useTestCliproxyInstance() {
         `/admin/cliproxy/instances/${id}/test`
       );
       return response.data;
+    },
+  });
+}
+
+/** 列出指定实例下缓存的 OAuth 账号。 */
+export function useCliproxyAuthAccounts(instanceId: string | null) {
+  const { apiClient } = useAuth();
+
+  return useQuery({
+    queryKey: ["cliproxy", "accounts", instanceId],
+    queryFn: async () => {
+      const response = await apiClient.get<{ data: CliproxyAuthAccount[] }>(
+        `/admin/cliproxy/instances/${instanceId}/auth-accounts`
+      );
+      return response.data;
+    },
+    enabled: Boolean(instanceId),
+  });
+}
+
+/** 从 CLIProxyAPI 同步指定实例的 OAuth 账号。 */
+export function useSyncCliproxyAuthAccounts() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  const t = useTranslations("cliproxy") as CliproxyTranslator;
+
+  return useMutation({
+    mutationFn: async (instanceId: string) => {
+      const response = await apiClient.post<{ data: CliproxyAuthAccountSyncResult }>(
+        `/admin/cliproxy/instances/${instanceId}/auth-accounts/sync`
+      );
+      return response.data;
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["cliproxy", "accounts"] });
+      toast.success(
+        t("accountSyncSuccess", {
+          added: result.added,
+          updated: result.updated,
+          removed: result.removed,
+        })
+      );
+    },
+    onError: (error: Error) => {
+      toast.error(t("accountSyncFailed", { message: error.message }));
+    },
+  });
+}
+
+/** 启停指定 OAuth 账号。 */
+export function useSetCliproxyAuthAccountStatus() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  const t = useTranslations("cliproxy") as CliproxyTranslator;
+
+  return useMutation({
+    mutationFn: async ({
+      instanceId,
+      accountName,
+      disabled,
+    }: {
+      instanceId: string;
+      accountName: string;
+      disabled: boolean;
+    }) => {
+      const response = await apiClient.patch<{ data: CliproxyAuthAccount }>(
+        `/admin/cliproxy/instances/${instanceId}/auth-accounts/${encodeURIComponent(
+          accountName
+        )}/status`,
+        { disabled }
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cliproxy", "accounts"] });
+      toast.success(t("accountStatusUpdateSuccess"));
+    },
+    onError: (error: Error) => {
+      toast.error(t("accountStatusUpdateFailed", { message: error.message }));
+    },
+  });
+}
+
+/** 更新指定 OAuth 账号的前缀、出站代理、优先级与备注。 */
+export function useUpdateCliproxyAuthAccountFields() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  const t = useTranslations("cliproxy") as CliproxyTranslator;
+
+  return useMutation({
+    mutationFn: async ({
+      instanceId,
+      accountName,
+      data,
+    }: {
+      instanceId: string;
+      accountName: string;
+      data: CliproxyAuthAccountFieldsUpdate;
+    }) => {
+      const response = await apiClient.patch<{ data: CliproxyAuthAccount }>(
+        `/admin/cliproxy/instances/${instanceId}/auth-accounts/${encodeURIComponent(accountName)}`,
+        data
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cliproxy", "accounts"] });
+      toast.success(t("accountFieldsUpdateSuccess"));
+    },
+    onError: (error: Error) => {
+      toast.error(t("accountFieldsUpdateFailed", { message: error.message }));
     },
   });
 }

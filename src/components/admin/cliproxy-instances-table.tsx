@@ -23,16 +23,20 @@ import type { CliproxyInstance } from "@/types/cliproxy";
 
 interface CliproxyInstancesTableProps {
   instances: CliproxyInstance[];
+  selectedInstanceId: string | null;
+  onSelect: (instance: CliproxyInstance) => void;
   onEdit: (instance: CliproxyInstance) => void;
   onTest: (instance: CliproxyInstance) => void;
   onDelete: (instance: CliproxyInstance) => void;
 }
 
 /**
- * CLIProxyAPI 实例列表表格。每行提供编辑、连通性检测、删除操作。
+ * CLIProxyAPI 实例列表表格。点击行选中实例以查看其账号，每行提供编辑、连通性检测、删除操作。
  */
 export function CliproxyInstancesTable({
   instances,
+  selectedInstanceId,
+  onSelect,
   onEdit,
   onTest,
   onDelete,
@@ -52,7 +56,12 @@ export function CliproxyInstancesTable({
       </TableHeader>
       <TableBody>
         {instances.map((instance) => (
-          <TableRow key={instance.id}>
+          <TableRow
+            key={instance.id}
+            onClick={() => onSelect(instance)}
+            data-state={selectedInstanceId === instance.id ? "selected" : undefined}
+            className="cursor-pointer"
+          >
             <TableCell className="font-medium">{instance.name}</TableCell>
             <TableCell>
               <Badge variant="secondary">
@@ -69,7 +78,7 @@ export function CliproxyInstancesTable({
                 {instance.enabled ? t("statusEnabled") : t("statusDisabled")}
               </Badge>
             </TableCell>
-            <TableCell className="text-right">
+            <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button

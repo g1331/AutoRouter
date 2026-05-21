@@ -186,3 +186,82 @@ describe("use-cliproxy 实例 hooks", () => {
     expect(res.status).toBe("auth_failed");
   });
 });
+
+describe("use-cliproxy 账号 hooks", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("useCliproxyAuthAccounts 在实例 id 存在时拉取账号列表", async () => {
+    mockGet.mockResolvedValueOnce({ data: [] });
+    const { useCliproxyAuthAccounts } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useCliproxyAuthAccounts("instance-1"), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockGet).toHaveBeenCalledWith("/admin/cliproxy/instances/instance-1/auth-accounts");
+  });
+
+  it("useCliproxyAuthAccounts 在实例 id 为空时不发起请求", async () => {
+    const { useCliproxyAuthAccounts } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    renderHook(() => useCliproxyAuthAccounts(null), { wrapper });
+
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it("useSyncCliproxyAuthAccounts 同步后提示并刷新", async () => {
+    mockPost.mockResolvedValueOnce({
+      data: { added: 1, updated: 2, removed: 0, total: 3 },
+    });
+    const { useSyncCliproxyAuthAccounts } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useSyncCliproxyAuthAccounts(), { wrapper });
+    await result.current.mutateAsync("instance-1");
+
+    expect(mockPost).toHaveBeenCalledWith(
+      "/admin/cliproxy/instances/instance-1/auth-accounts/sync"
+    );
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalled());
+  });
+
+  it("useSetCliproxyAuthAccountStatus 以 PATCH 启停账号", async () => {
+    mockPatch.mockResolvedValueOnce({ data: {} });
+    const { useSetCliproxyAuthAccountStatus } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useSetCliproxyAuthAccountStatus(), { wrapper });
+    await result.current.mutateAsync({
+      instanceId: "instance-1",
+      accountName: "codex-a.json",
+      disabled: true,
+    });
+
+    expect(mockPatch).toHaveBeenCalledWith(
+      "/admin/cliproxy/instances/instance-1/auth-accounts/codex-a.json/status",
+      { disabled: true }
+    );
+  });
+
+  it("useUpdateCliproxyAuthAccountFields 以 PATCH 更新账号字段", async () => {
+    mockPatch.mockResolvedValueOnce({ data: {} });
+    const { useUpdateCliproxyAuthAccountFields } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useUpdateCliproxyAuthAccountFields(), { wrapper });
+    await result.current.mutateAsync({
+      instanceId: "instance-1",
+      accountName: "codex-a.json",
+      data: { prefix: "team-a", priority: 0, note: "" },
+    });
+
+    expect(mockPatch).toHaveBeenCalledWith(
+      "/admin/cliproxy/instances/instance-1/auth-accounts/codex-a.json",
+      { prefix: "team-a", priority: 0, note: "" }
+    );
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalled());
+  });
+});
