@@ -25,6 +25,6 @@
 
 ## 5. 收尾验证
 
-- [ ] 5.1 复核主 `docker-compose.yml` 未被改动，未引入叠加文件的既有部署行为不变
-- [ ] 5.2 复核所有新增工件编码为 UTF-8 无 BOM，配置模板不含明文密钥
-- [ ] 5.3 使用 `openspec validate cliproxy-sidecar-deployment` 校验本变更工件完整，提交收尾改动
+- [x] 5.1 复核主 `docker-compose.yml` 未被改动，未引入叠加文件的既有部署行为不变
+- [x] 5.2 复核所有新增工件编码为 UTF-8 无 BOM，配置模板不含明文密钥
+- [x] 5.3 使用 `openspec validate cliproxy-sidecar-deployment` 校验本变更工件完整，提交收尾改动
