@@ -6,10 +6,10 @@
 
 ## 2. Docker Compose 叠加文件
 
-- [ ] 2.1 新增 `docker-compose.cliproxy.yml`，定义 `cliproxyapi` 服务，使用镜像 `eceasy/cli-proxy-api` 并支持经 `CLI_PROXY_IMAGE` 固定版本，接入 `autorouter-net` 网络
-- [ ] 2.2 在 `cliproxyapi` 服务中配置端口、entrypoint 脚本与配置模板的只读挂载、auth-dir 与日志的 named volume，并新增对应 volume 声明
-- [ ] 2.3 为 `cliproxyapi` 服务配置 `restart` 策略与 healthcheck，使其生命周期由 Docker Compose 管理
-- [ ] 2.4 运行 `docker compose -f docker-compose.yml -f docker-compose.cliproxy.yml config` 校验叠加文件语法与服务合并结果正确
+- [x] 2.1 新增 `docker-compose.cliproxy.yml`，定义 `cliproxyapi` 服务，使用镜像 `eceasy/cli-proxy-api` 并支持经 `CLI_PROXY_IMAGE` 固定版本，接入 `autorouter-net` 网络
+- [x] 2.2 在 `cliproxyapi` 服务中配置端口、entrypoint 脚本与配置模板的只读挂载、auth-dir 与日志的 named volume，并新增对应 volume 声明
+- [x] 2.3 为 `cliproxyapi` 服务配置 `restart` 策略与 healthcheck，使其生命周期由 Docker Compose 管理
+- [x] 2.4 校验叠加文件语法与服务合并结果正确（当前环境无 Docker，以 YAML 解析与网络/卷引用一致性核对替代 `docker compose config`）
 
 ## 3. 环境变量样例
 

@@ -1,0 +1,49 @@
+# AutoRouter — CLIProxyAPI sidecar 叠加文件
+#
+# 本文件为可选叠加文件，用于以受管 sidecar 形态运行 CLIProxyAPI。
+# 使用外部独立 CLIProxyAPI 的部署无需引入本文件。
+#
+# 启用受管 sidecar：
+#   docker compose -f docker-compose.yml -f docker-compose.cliproxy.yml up -d
+#
+# 启动前需在 .env 中设置 CLIPROXY_* 相关变量，详见 .env.example。
+# CLIProxyAPI 的客户端 API Key 与管理密钥必须与 AutoRouter 中
+# cliproxy_instances 记录的同名凭据保持一致。
+
+services:
+  cliproxyapi:
+    image: ${CLI_PROXY_IMAGE:-eceasy/cli-proxy-api:latest}
+    container_name: cliproxyapi
+    restart: unless-stopped
+    # 覆盖镜像默认入口，先渲染配置模板再启动 CLIProxyAPI 进程。
+    entrypoint: ["/bin/sh", "/cliproxy/docker-entrypoint.sh"]
+    environment:
+      - CLIPROXY_PORT=${CLIPROXY_PORT:-8317}
+      - CLIPROXY_CLIENT_API_KEY=${CLIPROXY_CLIENT_API_KEY}
+      - CLIPROXY_MANAGEMENT_KEY=${CLIPROXY_MANAGEMENT_KEY}
+      - CLIPROXY_ALLOW_REMOTE=${CLIPROXY_ALLOW_REMOTE:-true}
+      - CLIPROXY_PROXY_URL=${CLIPROXY_PROXY_URL:-}
+    volumes:
+      # 配置模板与入口脚本以只读方式挂入，渲染结果写入容器可写层。
+      - ./cliproxy/config.yaml.template:/cliproxy/config.yaml.template:ro
+      - ./cliproxy/docker-entrypoint.sh:/cliproxy/docker-entrypoint.sh:ro
+      # OAuth 凭据目录，named volume 持久化，跨容器重启保留。
+      - cliproxy-auth:/root/.cli-proxy-api
+      # 运行日志目录，named volume 持久化。
+      - cliproxy-logs:/CLIProxyAPI/logs
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:${CLIPROXY_PORT:-8317}/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - autorouter-net
+    # 默认仅在 autorouter-net 网络内可达，AutoRouter 通过服务名 cliproxyapi 访问。
+    # 如需从宿主机直接访问 CLIProxyAPI（仅调试用途），取消下方注释。
+    # ports:
+    #   - "${CLIPROXY_PORT:-8317}:8317"
+
+volumes:
+  cliproxy-auth:
+  cliproxy-logs:
