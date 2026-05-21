@@ -15,11 +15,11 @@
 
 ## 3. 转发层前缀注入
 
-- [ ] 3.1 在 `proxy-client.ts` 的 `forwardRequest` 增加可选 `modelOverride` 入参，请求体为 JSON 时改写其中的模型名，Gemini 原生请求同步改写 URL 中的模型段
-- [ ] 3.2 在代理路由 `forwardWithFailover` 选定上游后，按上游 `cliproxyAuthFileName` 取账号前缀，拼出携带前缀的模型名作为 `modelOverride` 传入；字段为空时不注入
-- [ ] 3.3 实现取账号前缀的辅助函数，模型名已含前缀分隔符时跳过注入避免重复拼接
-- [ ] 3.4 为转发层注入编写单元测试，覆盖单账号上游注入前缀、普通上游与池上游不改写、failover 切换上游重新判定、模型名已含前缀时跳过
-- [ ] 3.5 运行 `pnpm test:run` 与 `pnpm exec tsc --noEmit` 确认通过，提交本阶段代码
+- [x] 3.1 在 `proxy-client.ts` 的 `forwardRequest` 增加可选 `modelOverride` 入参，请求体为 JSON 时改写其中的模型名，Gemini 原生请求同步改写 URL 中的模型段
+- [x] 3.2 在代理路由 `forwardWithFailover` 选定上游后，按上游 `cliproxyAuthFileName` 取账号前缀，拼出携带前缀的模型名作为 `modelOverride` 传入；字段为空时不注入
+- [x] 3.3 实现取账号前缀的辅助函数，模型名已含前缀分隔符时跳过注入避免重复拼接
+- [x] 3.4 为转发层注入编写单元测试，覆盖单账号上游注入前缀、普通上游与池上游不改写、failover 切换上游重新判定、模型名已含前缀时跳过
+- [x] 3.5 运行 `pnpm test:run` 与 `pnpm exec tsc --noEmit` 确认通过，提交本阶段代码
 
 ## 4. 实例删除校验扩展
 

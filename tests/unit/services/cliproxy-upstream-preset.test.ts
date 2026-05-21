@@ -100,6 +100,57 @@ describe("cliproxy-upstream-preset", () => {
     });
   });
 
+  describe("resolveCliproxyAccountPrefix", () => {
+    it("账号存在且有前缀时返回归一化前缀", async () => {
+      const { resolveCliproxyAccountPrefix } =
+        await import("@/lib/services/cliproxy-upstream-preset");
+      getCliproxyAuthAccountMock.mockResolvedValueOnce({
+        id: "acc-1",
+        authFileName: "codex-a.json",
+        provider: "codex",
+        prefix: "  /team-a/  ",
+      });
+
+      await expect(resolveCliproxyAccountPrefix("instance-1", "codex-a.json")).resolves.toBe(
+        "team-a"
+      );
+    });
+
+    it("账号不存在时返回 null", async () => {
+      const { resolveCliproxyAccountPrefix } =
+        await import("@/lib/services/cliproxy-upstream-preset");
+      getCliproxyAuthAccountMock.mockResolvedValueOnce(null);
+
+      await expect(resolveCliproxyAccountPrefix("instance-1", "missing.json")).resolves.toBeNull();
+    });
+
+    it("账号无前缀时返回 null", async () => {
+      const { resolveCliproxyAccountPrefix } =
+        await import("@/lib/services/cliproxy-upstream-preset");
+      getCliproxyAuthAccountMock.mockResolvedValueOnce({
+        id: "acc-1",
+        authFileName: "codex-a.json",
+        provider: "codex",
+        prefix: null,
+      });
+
+      await expect(resolveCliproxyAccountPrefix("instance-1", "codex-a.json")).resolves.toBeNull();
+    });
+
+    it("前缀取值非法时返回 null 而非抛错", async () => {
+      const { resolveCliproxyAccountPrefix } =
+        await import("@/lib/services/cliproxy-upstream-preset");
+      getCliproxyAuthAccountMock.mockResolvedValueOnce({
+        id: "acc-1",
+        authFileName: "codex-a.json",
+        provider: "codex",
+        prefix: "///",
+      });
+
+      await expect(resolveCliproxyAccountPrefix("instance-1", "codex-a.json")).resolves.toBeNull();
+    });
+  });
+
   describe("createCliproxyPoolUpstream", () => {
     it("创建 Codex 池上游：拼接 /v1 路径并预设能力", async () => {
       const { createCliproxyPoolUpstream } =

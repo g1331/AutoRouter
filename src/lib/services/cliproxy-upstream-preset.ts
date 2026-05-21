@@ -83,6 +83,36 @@ export function buildCliproxyPrefixedModel(prefix: string, model: string): strin
   return model.startsWith(head) ? model : `${head}${model}`;
 }
 
+/**
+ * 转发层使用：取单账号映射上游所绑定 OAuth 账号的前缀。
+ *
+ * 账号缓存记录不存在、账号无前缀或前缀取值非法时返回 null，由调用方据此决定是否注入。
+ * 返回值经 `normalizeCliproxyPrefix` 归一化，与创建上游时写入 CLIProxyAPI 的形式一致。
+ */
+export async function resolveCliproxyAccountPrefix(
+  instanceId: string,
+  authFileName: string
+): Promise<string | null> {
+  const account = await getCliproxyAuthAccount(instanceId, authFileName);
+  if (!account?.prefix) {
+    return null;
+  }
+  try {
+    return normalizeCliproxyPrefix(account.prefix);
+  } catch (err) {
+    log.warn(
+      {
+        instanceId,
+        authFileName,
+        prefix: account.prefix,
+        err: err instanceof Error ? err.message : String(err),
+      },
+      "CLIProxyAPI account prefix is invalid, skipping model prefix injection"
+    );
+    return null;
+  }
+}
+
 /** 由账号文件名推导默认前缀：去除 `.json` 后缀并移除斜杠。 */
 function buildDefaultAccountPrefix(authFileName: string): string {
   const base = authFileName.replace(/\.json$/i, "");

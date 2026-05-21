@@ -70,6 +70,10 @@ import {
 } from "@/lib/services/route-capability-matcher";
 import { ensureRouteCapabilityMigration } from "@/lib/services/route-capability-migration";
 import {
+  resolveCliproxyAccountPrefix,
+  buildCliproxyPrefixedModel,
+} from "@/lib/services/cliproxy-upstream-preset";
+import {
   matchUpstreamModelRules,
   normalizeUpstreamModelRules,
 } from "@/lib/services/upstream-model-rules";
@@ -1288,6 +1292,7 @@ async function forwardWithFailover(
   path: string,
   requestId: string,
   candidateUpstreamIds: string[],
+  requestModel: string | null,
   affinityContext: {
     apiKeyId: string;
     sessionId: string | null;
@@ -1502,12 +1507,31 @@ async function forwardWithFailover(
       });
       attemptUpstreamBaseUrl = upstreamForProxy.baseUrl;
       didSendUpstream = true;
+
+      // CLIProxyAPI 单账号映射上游：按绑定账号的前缀拼出携带前缀的模型名注入转发，
+      // 使 CLIProxyAPI 把请求固定路由到该账号。普通上游与池上游不带账号文件名，跳过注入。
+      let cliproxyModelOverride: string | undefined;
+      if (
+        selectedUpstream.cliproxyAuthFileName &&
+        selectedUpstream.cliproxyInstanceId &&
+        requestModel
+      ) {
+        const accountPrefix = await resolveCliproxyAccountPrefix(
+          selectedUpstream.cliproxyInstanceId,
+          selectedUpstream.cliproxyAuthFileName
+        );
+        if (accountPrefix) {
+          cliproxyModelOverride = buildCliproxyPrefixedModel(accountPrefix, requestModel);
+        }
+      }
+
       const result = await forwardRequest(
         proxyRequest,
         upstreamForProxy,
         path,
         requestId,
-        compensationHeaders
+        compensationHeaders,
+        cliproxyModelOverride
       );
 
       // Check if response indicates we should failover
@@ -3018,6 +3042,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         path,
         requestId,
         candidateUpstreamIds,
+        model,
         affinityContext,
         compensationHeaders,
         persistQueueWaitingState
@@ -3072,6 +3097,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           path,
           requestId,
           candidateUpstreamIds,
+          model,
           affinityContext,
           compensationHeaders,
           persistQueueWaitingState
