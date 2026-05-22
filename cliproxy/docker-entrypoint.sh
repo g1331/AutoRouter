@@ -47,15 +47,28 @@ if command -v envsubst >/dev/null 2>&1; then
   envsubst "$PLACEHOLDERS" < "$TEMPLATE" > "$TARGET"
   echo "[cliproxy-entrypoint] 已使用 envsubst 渲染配置：$TARGET"
 else
-  # 回退到 sed 逐个替换占位符。
-  sed \
-    -e "s|\${CLIPROXY_PORT}|${CLIPROXY_PORT}|g" \
-    -e "s|\${CLIPROXY_ALLOW_REMOTE}|${CLIPROXY_ALLOW_REMOTE}|g" \
-    -e "s|\${CLIPROXY_PROXY_URL}|${CLIPROXY_PROXY_URL}|g" \
-    -e "s|\${CLIPROXY_CLIENT_API_KEY}|${CLIPROXY_CLIENT_API_KEY}|g" \
-    -e "s|\${CLIPROXY_MANAGEMENT_KEY}|${CLIPROXY_MANAGEMENT_KEY}|g" \
-    "$TEMPLATE" > "$TARGET"
-  echo "[cliproxy-entrypoint] 已使用 sed 渲染配置：$TARGET"
+  # 回退方案：envsubst 不可用时，用纯 POSIX shell 做字面量替换。
+  # 不经过 sed/awk，占位符与取值均按字面量处理，
+  # 避免取值中的 & \ | 等字符被工具解释而破坏生成的配置。
+  render_literal() {
+    # $1=待处理文本 $2=占位符 $3=替换值，三者均按字面量处理。
+    _src="$1"
+    _out=""
+    while [ "${_src#*"$2"}" != "$_src" ]; do
+      _out="${_out}${_src%%"$2"*}${3}"
+      _src="${_src#*"$2"}"
+    done
+    printf '%s' "${_out}${_src}"
+  }
+
+  CONTENT=$(cat "$TEMPLATE")
+  CONTENT=$(render_literal "$CONTENT" '${CLIPROXY_PORT}' "$CLIPROXY_PORT")
+  CONTENT=$(render_literal "$CONTENT" '${CLIPROXY_ALLOW_REMOTE}' "$CLIPROXY_ALLOW_REMOTE")
+  CONTENT=$(render_literal "$CONTENT" '${CLIPROXY_PROXY_URL}' "$CLIPROXY_PROXY_URL")
+  CONTENT=$(render_literal "$CONTENT" '${CLIPROXY_CLIENT_API_KEY}' "$CLIPROXY_CLIENT_API_KEY")
+  CONTENT=$(render_literal "$CONTENT" '${CLIPROXY_MANAGEMENT_KEY}' "$CLIPROXY_MANAGEMENT_KEY")
+  printf '%s\n' "$CONTENT" > "$TARGET"
+  echo "[cliproxy-entrypoint] 已使用 shell 字面量替换渲染配置：$TARGET"
 fi
 
 # CLIProxyAPI 镜像的工作目录为 /CLIProxyAPI，二进制名为 CLIProxyAPI。
