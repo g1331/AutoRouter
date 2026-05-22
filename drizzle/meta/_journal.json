@@ -239,6 +239,34 @@
       "when": 1779007329409,
       "tag": "0033_shocking_emma_frost",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1779285688608,
+      "tag": "0034_youthful_sally_floyd",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1779287816694,
+      "tag": "0035_powerful_nightcrawler",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1779289077625,
+      "tag": "0036_furry_warhawk",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1779289549032,
+      "tag": "0037_familiar_nico_minoru",
+      "breakpoints": true
     }
   ]
 }

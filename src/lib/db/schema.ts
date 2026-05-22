@@ -22,6 +22,8 @@ export const billingPriceSyncHistory = schema.billingPriceSyncHistory;
 export const backgroundSyncTasks = schema.backgroundSyncTasks;
 export const backgroundSyncTaskRuns = schema.backgroundSyncTaskRuns;
 export const requestBillingSnapshots = schema.requestBillingSnapshots;
+export const cliproxyInstances = schema.cliproxyInstances;
+export const cliproxyAuthAccounts = schema.cliproxyAuthAccounts;
 
 export const apiKeysRelations = schema.apiKeysRelations;
 export const upstreamsRelations = schema.upstreamsRelations;
@@ -33,6 +35,8 @@ export const apiKeyUpstreamsRelations = schema.apiKeyUpstreamsRelations;
 export const requestLogsRelations = schema.requestLogsRelations;
 export const trafficRecordingsRelations = schema.trafficRecordingsRelations;
 export const requestBillingSnapshotsRelations = schema.requestBillingSnapshotsRelations;
+export const cliproxyInstancesRelations = schema.cliproxyInstancesRelations;
+export const cliproxyAuthAccountsRelations = schema.cliproxyAuthAccountsRelations;
 
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type NewApiKey = typeof apiKeys.$inferInsert;
@@ -68,3 +72,7 @@ export type BackgroundSyncTaskRun = typeof backgroundSyncTaskRuns.$inferSelect;
 export type NewBackgroundSyncTaskRun = typeof backgroundSyncTaskRuns.$inferInsert;
 export type RequestBillingSnapshot = typeof requestBillingSnapshots.$inferSelect;
 export type NewRequestBillingSnapshot = typeof requestBillingSnapshots.$inferInsert;
+export type CliproxyInstance = typeof cliproxyInstances.$inferSelect;
+export type NewCliproxyInstance = typeof cliproxyInstances.$inferInsert;
+export type CliproxyAuthAccount = typeof cliproxyAuthAccounts.$inferSelect;
+export type NewCliproxyAuthAccount = typeof cliproxyAuthAccounts.$inferInsert;

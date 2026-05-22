@@ -883,6 +883,46 @@ function extractRequestModel(bodyJson: Record<string, unknown>, path: string): s
   return extractGeminiModelFromPath(path) ?? "N/A";
 }
 
+/** Gemini 原生 generateContent 请求的路径模型段，模型名以单段形式出现。 */
+const GEMINI_NATIVE_MODEL_SEGMENT = /(models\/)[^/:]+(:(?:generateContent|streamGenerateContent))/i;
+
+/**
+ * 将请求中的模型名改写为指定值，用于 CLIProxyAPI 单账号映射上游注入账号前缀。
+ *
+ * OpenAI 与 Anthropic 请求的模型名在 JSON 请求体的 `model` 字段，改写该字段后重新序列化；
+ * Gemini 原生请求的模型名在 URL 路径段，改写路径中的模型段。两类改写互不影响，
+ * 非 JSON 请求体与无模型段的路径均原样返回。
+ */
+function applyModelOverride(
+  body: ArrayBuffer,
+  path: string,
+  modelOverride: string
+): { body: ArrayBuffer; path: string } {
+  let nextBody = body;
+  if (body.byteLength > 0) {
+    try {
+      const json = JSON.parse(new TextDecoder().decode(body)) as Record<string, unknown>;
+      if (typeof json.model === "string" && json.model.trim()) {
+        json.model = modelOverride;
+        const encoded = new TextEncoder().encode(JSON.stringify(json));
+        nextBody = encoded.buffer.slice(
+          encoded.byteOffset,
+          encoded.byteOffset + encoded.byteLength
+        ) as ArrayBuffer;
+      }
+    } catch {
+      // 非 JSON 请求体不改写。
+    }
+  }
+
+  const nextPath = path.replace(
+    GEMINI_NATIVE_MODEL_SEGMENT,
+    (_full, head: string, tail: string) => `${head}${modelOverride}${tail}`
+  );
+
+  return { body: nextBody, path: nextPath };
+}
+
 function isStreamRequest(
   bodyJson: Record<string, unknown>,
   path: string,
@@ -946,7 +986,8 @@ export async function forwardRequest(
   upstream: UpstreamForProxy,
   path: string,
   requestId: string,
-  compensationHeaders?: CompensationHeader[]
+  compensationHeaders?: CompensationHeader[],
+  modelOverride?: string
 ): Promise<ProxyResult> {
   // Prepare headers
   const originalHeaders = new Headers(request.headers);
@@ -1042,13 +1083,23 @@ export async function forwardRequest(
 
   // Construct upstream URL
   const baseUrl = upstream.baseUrl.replace(/\/$/, "");
-  const normalizedPath = path.replace(/^\//, "");
   const requestUrl = new URL(request.url);
   const requestSearch = requestUrl.search;
-  const url = `${baseUrl}/${normalizedPath}${normalizedPath.includes("?") ? "" : requestSearch}`;
 
   // Read request body
-  const body = await request.arrayBuffer();
+  let body = await request.arrayBuffer();
+  let effectivePath = path;
+
+  // CLIProxyAPI 单账号映射上游：将模型名改写为携带账号前缀的形式，
+  // 使 CLIProxyAPI 把请求固定路由到绑定账号。普通上游与池上游不传 modelOverride，不受影响。
+  if (modelOverride) {
+    const overridden = applyModelOverride(body, path, modelOverride);
+    body = overridden.body;
+    effectivePath = overridden.path;
+  }
+
+  const normalizedPath = effectivePath.replace(/^\//, "");
+  const url = `${baseUrl}/${normalizedPath}${normalizedPath.includes("?") ? "" : requestSearch}`;
 
   // Log request info
   const reqLog = log.child({ requestId });

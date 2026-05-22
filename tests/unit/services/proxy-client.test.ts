@@ -2051,6 +2051,133 @@ describe("proxy-client", () => {
       );
     });
 
+    describe("modelOverride 注入", () => {
+      const geminiUpstream: UpstreamForProxy = {
+        ...mockUpstream,
+        providerType: "google",
+        baseUrl: "https://cliproxyapi.local/api/provider/google",
+      };
+
+      async function readForwardedBody(): Promise<Record<string, unknown> | null> {
+        const call = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+        const init = call[1] as RequestInit;
+        if (!init.body) {
+          return null;
+        }
+        const buffer = init.body as ArrayBuffer;
+        try {
+          return JSON.parse(new TextDecoder().decode(buffer)) as Record<string, unknown>;
+        } catch {
+          return null;
+        }
+      }
+
+      it("传入 modelOverride 时改写 OpenAI 请求体的 model 字段", async () => {
+        global.fetch = vi.fn().mockResolvedValue(
+          new Response(JSON.stringify({ id: "ok" }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          })
+        );
+
+        const request = new Request("http://localhost/api/proxy/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "gpt-4", messages: [] }),
+        });
+
+        await forwardRequest(
+          request,
+          mockUpstream,
+          "chat/completions",
+          "req-1",
+          undefined,
+          "team-a/gpt-4"
+        );
+
+        expect(await readForwardedBody()).toMatchObject({ model: "team-a/gpt-4", messages: [] });
+      });
+
+      it("不传 modelOverride 时请求体保持原模型名", async () => {
+        global.fetch = vi.fn().mockResolvedValue(
+          new Response(JSON.stringify({ id: "ok" }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          })
+        );
+
+        const request = new Request("http://localhost/api/proxy/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "gpt-4", messages: [] }),
+        });
+
+        await forwardRequest(request, mockUpstream, "chat/completions", "req-2");
+
+        expect(await readForwardedBody()).toMatchObject({ model: "gpt-4" });
+      });
+
+      it("传入 modelOverride 时改写 Gemini 原生请求 URL 中的模型段", async () => {
+        global.fetch = vi.fn().mockResolvedValue(
+          new Response(JSON.stringify({ candidates: [] }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          })
+        );
+
+        const request = new Request(
+          "http://localhost/api/proxy/v1/v1beta/models/gemini-2.5-flash:generateContent",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ contents: [] }),
+          }
+        );
+
+        await forwardRequest(
+          request,
+          geminiUpstream,
+          "v1beta/models/gemini-2.5-flash:generateContent",
+          "req-3",
+          undefined,
+          "team-b/gemini-2.5-flash"
+        );
+
+        expect(global.fetch).toHaveBeenCalledWith(
+          "https://cliproxyapi.local/api/provider/google/v1beta/models/team-b/gemini-2.5-flash:generateContent",
+          expect.objectContaining({ method: "POST" })
+        );
+      });
+
+      it("非 JSON 请求体在注入时原样转发", async () => {
+        global.fetch = vi.fn().mockResolvedValue(
+          new Response(JSON.stringify({ id: "ok" }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          })
+        );
+
+        const request = new Request("http://localhost/api/proxy/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "text/plain" },
+          body: "not-json",
+        });
+
+        await forwardRequest(
+          request,
+          mockUpstream,
+          "chat/completions",
+          "req-4",
+          undefined,
+          "team-a/gpt-4"
+        );
+
+        const call = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+        const init = call[1] as RequestInit;
+        expect(new TextDecoder().decode(init.body as ArrayBuffer)).toBe("not-json");
+      });
+    });
+
     describe("compensation header injection", () => {
       it("should inject compensation header when target header is absent", async () => {
         const mockResponse = new Response(JSON.stringify({ id: "ok" }), {

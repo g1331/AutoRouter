@@ -2554,7 +2554,8 @@ describe("proxy route upstream selection", () => {
       expect.objectContaining({ providerType: "anthropic" }),
       "v1/messages",
       expect.any(String),
-      expect.any(Array)
+      expect.any(Array),
+      undefined
     );
   });
 
