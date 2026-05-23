@@ -134,9 +134,12 @@ SSE 分支的处理（`proxy-client.ts:1179` 起）：
 - `abortSignal.abort` 触发（典型场景：客户端关连接）时，调用 `reader.cancel` 并释放上游侧并发槽位（`route.ts:2031-2033`）。
 - 流正常完成后释放槽位（`route.ts:2063`），并 fire-and-forget 调 `markHealthy` 与 `recordSuccess` 通知健康与熔断模块（`route.ts:2066-2067`）。
 
-**失败转移**（`route.ts:1538` 起）：转发或流读取过程中检测到 `shouldTriggerFailover(result.statusCode, config)` 为真（典型：5xx、上游超时、特定错误码）时，记录此次失败、释放连接、调 `markUnhealthy` 与 `recordFailure`，向本次请求的 `failoverHistory` 数组追加一条记录（`route.ts:1559`），把当前上游加入「已失败」集合，重新进入阶段五选下一条候选。当且仅当全部候选都失败时，才向调用方返回最终错误。
+**失败转移分两类，行为不一样**：
 
-`failoverHistory` 数组在请求结束时随日志一起写入 `requestLogs.failoverHistory` 字段，可在管理后台「请求日志」详情页查看每一次尝试的 upstream_id、错误类型、状态码与时间戳。
+- **首字节前的失败（可重试）**（`route.ts:1538` 起）：上游返回响应头时如果 `shouldTriggerFailover(result.statusCode, config)` 为真（典型：5xx、特定错误码、连接超时），记录此次失败、释放连接、调 `markUnhealthy` 与 `recordFailure`，向本次请求的 `failoverHistory` 数组追加一条记录（`route.ts:1559`），把当前上游加入「已失败」集合，`continue` 重新进入阶段五选下一条候选。当且仅当全部候选都失败时，才向调用方返回最终错误。这一阶段的重试对调用方完全无感。
+- **流开始后的中断（不可重试）**（`route.ts:1592-1651`）：一旦 `result.isStream === true`，函数直接 `return` 包装好的流给调用方（`route.ts:1651`），中途读流失败由 `wrapStreamWithConnectionTracking` 的回调（`route.ts:1618-1649`）交给 `settleStreamRuntimeFailureForCircuitBreaker` 处理——只更新日志、记录熔断失败、释放连接，**不会**回到阶段五选另一条上游接着吐 chunk。调用方此时看到的是一条提前结束的 SSE 流，需要自行处理「上游 stream 中断」这一错误。
+
+`failoverHistory` 数组在请求结束时随日志一起写入 `requestLogs.failoverHistory` 字段，可在管理后台「请求日志」详情页查看每一次尝试的 upstream_id、错误类型、状态码与时间戳。流式中断的失败记录入口不在这个数组，而是写入流式日志更新（阶段七的 `metricsPromise.then(...)` 路径）。
 
 ## 阶段七：日志、计费、响应回写
 
@@ -152,7 +155,7 @@ SSE 分支的处理（`proxy-client.ts:1179` 起）：
 - 时机：日志写入后立即 **await**——非流式在 `route.ts:3739-3748`，流式在 `metricsPromise.then(...)` 内（`route.ts:3530-3545`）。
 - 写入：`requestBillingSnapshots` 表，使用 Drizzle 的 `onConflictDoUpdate`（`billing-cost-service.ts:118`）实现幂等 upsert，对同一 `request_log_id` 多次写入安全。
 
-**响应 header 回写**：`route.ts:3192` 用 `new Headers(result.headers)` 拷贝得到响应 header，但 `result.headers` 不是上游原始 header 的 1:1 副本，已经经过 `proxy-client.ts` 两道处理——`filterHeaders`（`proxy-client.ts:216`、调用点 `:995`）去掉 hop-by-hop header；当 undici 解压响应体时 `proxy-client.ts:1157-1159` 再删 `content-encoding` 与 `content-length`。SSE 分支额外强制写入 `Content-Type: text/event-stream`、`Cache-Control: no-cache`、`Connection: keep-alive`（`route.ts:3557-3559`）。代理层**不会**追加任何 AutoRouter 专属 header（既无 `X-AutoRouter-Request-Id`，也无 `X-AutoRouter-Upstream-Id`）。请求 ID 与命中上游 ID 只通过管理后台「请求日志」回查。
+**响应 header 回写**：`route.ts:3192` 用 `new Headers(result.headers)` 拷贝得到响应 header，但 `result.headers` 不是上游原始 header 的 1:1 副本，已经经过 `proxy-client.ts` 两道处理——`proxy-client.ts:1147-1153` 的 inline 循环按 `HOP_BY_HOP_HEADERS` 集合过滤上游响应头去掉 hop-by-hop 字段（与请求侧 `filterHeaders` 是两段不同代码）；当 undici 解压响应体时 `proxy-client.ts:1157-1159` 再删 `content-encoding` 与 `content-length`。SSE 分支额外强制写入 `Content-Type: text/event-stream`、`Cache-Control: no-cache`、`Connection: keep-alive`（`route.ts:3557-3559`）。代理层**不会**追加任何 AutoRouter 专属 header（既无 `X-AutoRouter-Request-Id`，也无 `X-AutoRouter-Upstream-Id`）。请求 ID 与命中上游 ID 只通过管理后台「请求日志」回查。
 
 **统一错误格式**：路由阶段及之后的所有错误经 `src/lib/services/unified-error.ts` 包装，响应体形如 `{ error: { code, message, ... } }`，状态码与错误码的映射定义在 `unified-error.ts` 的 `STATUS_CODE_MAP`。注意阶段三的鉴权早期错误**不经过**这一层，格式更朴素（只有顶层 `error` 字段，无 `code`）。
 

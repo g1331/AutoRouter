@@ -208,8 +208,8 @@ print(response.text)
 
 正常 2xx 响应：AutoRouter 把上游响应体透传给调用方，响应 header 在 `src/app/api/proxy/v1/[...path]/route.ts:3192` 处由 `new Headers(result.headers)` 拷贝得到。这里的 `result.headers` 并不是上游响应的原始 header，已经经过 `src/lib/services/proxy-client.ts` 的两道处理：
 
-1. `filterHeaders`（`proxy-client.ts:216`、调用点 `:995`）剔除 hop-by-hop header（`connection`、`keep-alive`、`transfer-encoding` 等不应跨连接传递的字段）。
-2. 当 undici 已经自动解压响应体时，`proxy-client.ts:1157-1159` 会同时删除 `content-encoding` 与 `content-length`，避免响应体长度与声明值不一致。
+1. **去 hop-by-hop**：`proxy-client.ts:1147-1153` 的 inline 循环按 `HOP_BY_HOP_HEADERS` 集合过滤上游响应头，剔除 `connection`、`keep-alive`、`transfer-encoding` 等不应跨连接传递的字段（与 `filterHeaders` 处理请求侧 inbound header 是两段不同代码，不要混淆）。
+2. **去解压元数据**：当 undici 已经自动解压响应体时，`proxy-client.ts:1157-1159` 会同时删除 `content-encoding` 与 `content-length`，避免响应体长度与声明值不一致导致下游再解压时报 `Z_DATA_ERROR`。
 
 也就是说调用方拿到的不是 1:1 的上游 header 副本。SSE 流式分支额外强制写入 `Content-Type: text/event-stream`、`Cache-Control: no-cache`、`Connection: keep-alive` 三个标准头（`route.ts:3557-3559`）。代理层**不会**追加 `X-AutoRouter-Request-Id` / `X-AutoRouter-Upstream-Id` 之类的自定义头；本次请求的 ID 与命中上游 ID 通过管理后台的「请求日志」回查。响应体本身格式与上游完全一致，调用方不需要任何兼容层。
 
@@ -236,7 +236,7 @@ print(response.text)
 
 状态码与错误码映射关系定义在 `src/lib/services/unified-error.ts`；以上仅列最常见者，完整枚举以源文件 `UnifiedErrorCode` 与 `STATUS_CODE_MAP` 为准。
 
-failover 在调用方眼里是无感的：AutoRouter 会按 [`docs/circuit-breaker.md`](/circuit-breaker) 中的逻辑自动尝试下一条候选，仅当全部候选都失败时才返回最终错误。`/api/admin/logs` 中可以看到本次请求的 `failoverHistory` 字段，记录每次尝试的上游 ID、错误类型与时间戳。
+failover 只在「首字节前」对调用方无感：上游在返回响应头时如果命中可重试条件（5xx、连接超时等），AutoRouter 会按 [`docs/circuit-breaker.md`](/circuit-breaker) 中的逻辑自动尝试下一条候选，仅当全部候选都失败时才返回最终错误。一旦 SSE 流的第一块数据已经吐出（`result.isStream === true`、`src/app/api/proxy/v1/[...path]/route.ts:1592-1651`），后续的流中断不会再换上游，调用方会看到一条提前结束的 SSE 流，需要自行处理「上游 stream 中断」错误。两类失败都会写入 `requestLogs`，可在 `/api/admin/logs` 看到本次请求的 `failoverHistory` 字段，记录每次尝试的上游 ID、错误类型与时间戳。
 
 ## 模型字段的写法约束
 
