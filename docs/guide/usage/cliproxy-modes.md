@@ -41,21 +41,24 @@ if (mode === "external") {
 }
 ```
 
-| 模式       | URL 格式 | 协议（http / https） | SSRF 校验              | IP 字面量为私有 / loopback / 元数据端点 | 域名解析到私有 IP  |
-| ---------- | -------- | -------------------- | ---------------------- | --------------------------------------- | ------------------ |
-| `managed`  | 必须     | 必须                 | **跳过**               | **允许**                                | **允许**           |
-| `external` | 必须     | 必须                 | 走 `isUrlSafe`（SSRF） | **拦截**                                | **不解析、不拦截** |
+| 模式       | URL 格式 | 协议（http / https） | SSRF 校验              | IPv4 字面量为私有 / loopback / 元数据 | IPv6 字面量（含 loopback / ULA） | 域名解析到私有 IP  |
+| ---------- | -------- | -------------------- | ---------------------- | ------------------------------------- | -------------------------------- | ------------------ |
+| `managed`  | 必须     | 必须                 | **跳过**               | **允许**                              | **允许**                         | **允许**           |
+| `external` | 必须     | 必须                 | 走 `isUrlSafe`（SSRF） | **拦截**                              | **不拦截**（hostname 含方括号）  | **不解析、不拦截** |
 
-`isUrlSafe`（`src/lib/services/upstream-ssrf-validator.ts:69-94`）的判定逻辑分两路：
+`isUrlSafe`（`src/lib/services/upstream-ssrf-validator.ts:69-94`）的判定逻辑分三路：
 
 - 解析出的 hostname 是 `localhost`：拒绝。
-- hostname 字面是 IP（正则 `^[\d.:]+$` 命中）：交给 `isIpSafe` 校验，私有网段（10/8、172.16/12、192.168/16）、loopback（127/8、`::1`）、链路本地（169.254/16，含 AWS 元数据端点）、IPv6 ULA/链路本地/multicast 等全部拒绝。
-- hostname 是普通域名：**直接返回 `safe: true`**，**不做 DNS 解析**。
+- hostname 字面是 IPv4 字面量（正则 `^[\d.:]+$` 命中）：交给 `isIpSafe` 校验，私有网段（10/8、172.16/12、192.168/16）、loopback（127/8）、链路本地（169.254/16，含 AWS 元数据端点）等全部拒绝。
+- 其余情况（普通域名 + IPv6 字面量）：**直接返回 `safe: true`**，**不做 DNS 解析**。
 
-::: warning 重要限制：DNS 不解析
-`isUrlSafe` 对非 IP 字面量的 hostname 不查 DNS。因此 `external` 模式下登记 `http://cpa.internal` 这种域名地址，即使它最终解析到 `192.168.x.x` 或 `169.254.169.254`，也能通过校验。SSRF 防护实际上**只在 IP 字面量上生效**。
+::: warning 重要限制：仅 IPv4 字面量被拦截
+`isUrlSafe` 的拦截能力只覆盖 **IPv4 字面量**。两类危险地址会逃过校验：
 
-仓库里另有一个 `resolveAndValidateHostname`（同文件 `:99-153`）会做 DNS 解析并校验所有解析结果，但 `validateInstanceAddress` 当前没有调用它。如果对外部 CPA 的拓扑信任度不够，建议把 `base_url` / `management_url` 直接写成公网 IP 字面量（让 IP 校验起作用），或者通过反向代理网关收敛入口。
+1. **IPv6 字面量**：`new URL("http://[::1]/").hostname === "[::1]"`（含方括号），正则 `/^[\d.:]+$/` 因为方括号不匹配，hostname 被当作普通域名直接 `safe: true`。`http://[::1]`、`http://[fc00::1]`、`http://[fe80::1]` 等 IPv6 loopback / ULA / 链路本地地址在 `external` 模式下**都能通过校验**。
+2. **域名**：`http://cpa.internal` 即使最终解析到 `192.168.x.x` 或 `169.254.169.254`，也能通过校验，因为 `isUrlSafe` 不做 DNS 解析。
+
+仓库里另有一个 `resolveAndValidateHostname`（同文件 `:99-153`）会做 DNS 解析并校验所有解析结果（含 IPv6），但 `validateInstanceAddress` 当前没有调用它。如果对外部 CPA 的拓扑信任度不够，建议把 `base_url` / `management_url` 写成公网 IPv4 字面量（让 IP 校验起作用），或者通过反向代理网关收敛入口；至少不要依赖 `external` 模式的 SSRF 校验来挡住 IPv6 或域名形式的内网地址。
 :::
 
 为什么要差异化处理：
@@ -115,13 +118,25 @@ if (referencingUpstreams.length > 0) {
 
 因此正确的删除顺序是：
 
-| 步骤 | 操作                                                                                       |
-| ---- | ------------------------------------------------------------------------------------------ |
-| 1    | 该实例下所有**池上游 / 单账号上游**逐条删除（或先 `is_active = false` 让流量停掉，再删除） |
-| 2    | 该实例下所有缓存的 **OAuth 账号**逐条删除（管理后台账号列表的删除按钮）                    |
-| 3    | 删除实例本身                                                                               |
+| 步骤 | 操作                                                                                                            |
+| ---- | --------------------------------------------------------------------------------------------------------------- |
+| 1    | 该实例下所有**池上游 / 单账号上游**逐条删除（或先 `is_active = false` 让流量停掉，再删除）                      |
+| 2    | 在 **CPA 侧**删掉对应的 auth-file，再回到 AutoRouter 触发**账号同步**，让本地缓存条目随同步被清除（见下方说明） |
+| 3    | 删除实例本身                                                                                                    |
 
 任何一步漏做都会让第三步返 409，提示中明确写出还有哪一类引用未清理。**没有「强制删除」开关**——这是有意设计，避免把还在接流量的池上游意外切断。
+
+::: warning 账号列表当前没有「删除账号」按钮
+账号子路由 `src/app/api/admin/cliproxy/instances/[id]/auth-accounts/[accountName]/route.ts` 只导出了 `PATCH`（字段更新），同目录下另有 `status/route.ts`（启停）与 `upstream/route.ts`（映射上游），但 AutoRouter **没有**为账号实现 `DELETE` 路由。管理后台账号表 UI 只提供「启用/禁用」「编辑字段」「映射为上游」三个动作。
+
+因此「清掉本地缓存账号」的可行做法是借助 sync 反向清理：
+
+1. 在 CPA 自己的管理界面（或直接操作其 auth-files 目录）删掉对应 OAuth 凭据文件。
+2. 回到 AutoRouter 触发账号同步（管理后台账号列表的「同步」按钮，或调用 `POST /api/admin/cliproxy/instances/:id/auth-accounts/sync`）。
+3. 同步流程在 `cliproxy-auth-account-service.ts:189-197` 会把本地 `cliproxy_auth_accounts` 中「CPA 侧已不存在」的行 `db.delete` 掉，`sync` 结果里的 `removed` 字段记录了清理条数。
+
+如果 CPA 也不可达、根本同步不动，又必须删除 AutoRouter 侧的实例，最后的兜底是直接对 `cliproxy_auth_accounts` 表执行 `DELETE FROM cliproxy_auth_accounts WHERE instance_id = '<uuid>'`（生产环境慎用，建议先备份）。
+:::
 
 如果需要迁移到另一台 CPA：先建好新实例并把流量切过去（新建池上游 + 老池上游 `is_active = false` 让权重自然停止流入），观察一段无流量后再按上面三步删除老实例。
 
