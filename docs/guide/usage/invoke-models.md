@@ -206,7 +206,12 @@ print(response.text)
 
 ## 响应行为：透传 + 改写
 
-正常 2xx 响应：AutoRouter 把上游响应体透传给调用方，响应 header 直接复制自上游（`src/app/api/proxy/v1/[...path]/route.ts:3192`，`new Headers(result.headers)`）。SSE 流式分支会额外强制写入 `Content-Type: text/event-stream`、`Cache-Control: no-cache`、`Connection: keep-alive` 三个标准头（`route.ts:3557-3559`）。代理层**不会**追加 `X-AutoRouter-Request-Id` / `X-AutoRouter-Upstream-Id` 之类的自定义头；本次请求的 ID 与命中上游 ID 通过管理后台的「请求日志」回查。响应体格式与上游完全一致，调用方不需要任何兼容层。
+正常 2xx 响应：AutoRouter 把上游响应体透传给调用方，响应 header 在 `src/app/api/proxy/v1/[...path]/route.ts:3192` 处由 `new Headers(result.headers)` 拷贝得到。这里的 `result.headers` 并不是上游响应的原始 header，已经经过 `src/lib/services/proxy-client.ts` 的两道处理：
+
+1. `filterHeaders`（`proxy-client.ts:216`、调用点 `:995`）剔除 hop-by-hop header（`connection`、`keep-alive`、`transfer-encoding` 等不应跨连接传递的字段）。
+2. 当 undici 已经自动解压响应体时，`proxy-client.ts:1157-1159` 会同时删除 `content-encoding` 与 `content-length`，避免响应体长度与声明值不一致。
+
+也就是说调用方拿到的不是 1:1 的上游 header 副本。SSE 流式分支额外强制写入 `Content-Type: text/event-stream`、`Cache-Control: no-cache`、`Connection: keep-alive` 三个标准头（`route.ts:3557-3559`）。代理层**不会**追加 `X-AutoRouter-Request-Id` / `X-AutoRouter-Upstream-Id` 之类的自定义头；本次请求的 ID 与命中上游 ID 通过管理后台的「请求日志」回查。响应体本身格式与上游完全一致，调用方不需要任何兼容层。
 
 错误响应分两类，调用方需要分别识别：
 

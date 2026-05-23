@@ -32,7 +32,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
 ## 阶段二：CORS 与 OPTIONS
 
-代理入口**没有**显式导出 `OPTIONS` handler，也没有独立的 `cors.ts` 工具文件。CORS 配置只有一项：`src/lib/utils/config.ts` 中的 `corsOrigins` 字段，从环境变量 `CORS_ORIGINS` 读入（逗号分隔），默认值为 `["http://localhost:3000"]`。预检请求依靠 Next.js 自身的 OPTIONS 路由能力处理，不在 `handleProxy` 的可见路径内。生产部署若被浏览器侧 SDK 直连，需要把对应 origin 加入 `CORS_ORIGINS`。
+代理入口**没有**显式导出 `OPTIONS` handler，也没有独立的 `cors.ts` 工具文件。环境变量 `CORS_ORIGINS` 解析后保存在 `src/lib/utils/config.ts` 的 `corsOrigins` 字段中（默认 `["http://localhost:3000"]`），但当前**仅此一处引用**——全仓没有任何代码读取该字段后输出 `Access-Control-Allow-Origin` 或允许请求头等响应头（grep `Access-Control-Allow` 无匹配）。也就是说：`CORS_ORIGINS` 在当前实现里没有运行期效果，把某个 origin 加入该列表并不能让代理通过浏览器的 preflight。如果一定要让浏览器侧 SDK 直连代理，需要在代理前置一层反向代理（Nginx / Caddy / Traefik 等）由它来注入 CORS 头；典型部署中，代理仍被服务端调用方使用，浏览器不直接访问。
 
 ## 阶段三：客户端鉴权
 
@@ -84,7 +84,7 @@ if (fromGoogleApiKey) return { keyValue: fromGoogleApiKey, authSource: "x-goog-a
 - Gemini：`extractGeminiModelFromPath(path)`（`route.ts:2391`、`route-capability-matcher.ts:279`），从 URL 路径段 `v1beta/models/<model>:generateContent` 中取出 `<model>`。
 - 最终：`model = modelFromBody ?? modelFromPath`（`route.ts:2413`）。
 
-模型名缺失或无法解析直接返回 400 错误，由统一错误层包装（见阶段七的错误格式说明）。
+当请求体里 `bodyJson.model` 是 string 时直接采用，否则 `modelFromBody` 为 `null`（`route.ts:2408`）。当 `modelFromBody` 与 `modelFromPath` 都为 `null` 时，最终 `model` 字段也是 `null`，AutoRouter **不会**在本地拒绝该请求：`filterCandidatesByModelRules`（`route.ts:591`）在 `originalModel` 为 null 时直接返回全部候选（`route.ts:595-600`），请求仍会进入阶段五并被转发到选中的上游。若调用方因此收到 400，错误来自上游侧的响应，而非 AutoRouter 的统一错误层。
 
 ## 阶段五：候选过滤与上游选路
 
@@ -152,7 +152,7 @@ SSE 分支的处理（`proxy-client.ts:1179` 起）：
 - 时机：日志写入后立即 **await**——非流式在 `route.ts:3739-3748`，流式在 `metricsPromise.then(...)` 内（`route.ts:3530-3545`）。
 - 写入：`requestBillingSnapshots` 表，使用 Drizzle 的 `onConflictDoUpdate`（`billing-cost-service.ts:118`）实现幂等 upsert，对同一 `request_log_id` 多次写入安全。
 
-**响应 header 回写**：`route.ts:3192` 用 `new Headers(result.headers)` 把上游 header 整体复制为响应 header；SSE 分支额外强制写入 `Content-Type: text/event-stream`、`Cache-Control: no-cache`、`Connection: keep-alive`（`route.ts:3557-3559`）。代理层**不会**追加任何 AutoRouter 专属 header（既无 `X-AutoRouter-Request-Id`，也无 `X-AutoRouter-Upstream-Id`）。请求 ID 与命中上游 ID 只通过管理后台「请求日志」回查。
+**响应 header 回写**：`route.ts:3192` 用 `new Headers(result.headers)` 拷贝得到响应 header，但 `result.headers` 不是上游原始 header 的 1:1 副本，已经经过 `proxy-client.ts` 两道处理——`filterHeaders`（`proxy-client.ts:216`、调用点 `:995`）去掉 hop-by-hop header；当 undici 解压响应体时 `proxy-client.ts:1157-1159` 再删 `content-encoding` 与 `content-length`。SSE 分支额外强制写入 `Content-Type: text/event-stream`、`Cache-Control: no-cache`、`Connection: keep-alive`（`route.ts:3557-3559`）。代理层**不会**追加任何 AutoRouter 专属 header（既无 `X-AutoRouter-Request-Id`，也无 `X-AutoRouter-Upstream-Id`）。请求 ID 与命中上游 ID 只通过管理后台「请求日志」回查。
 
 **统一错误格式**：路由阶段及之后的所有错误经 `src/lib/services/unified-error.ts` 包装，响应体形如 `{ error: { code, message, ... } }`，状态码与错误码的映射定义在 `unified-error.ts` 的 `STATUS_CODE_MAP`。注意阶段三的鉴权早期错误**不经过**这一层，格式更朴素（只有顶层 `error` 字段，无 `code`）。
 
@@ -169,7 +169,7 @@ SSE 分支的处理（`proxy-client.ts:1179` 起）：
   ▼
 [1] 方法分发  ──────────►  handleProxy（route.ts:2434）
   ▼
-[2] CORS / OPTIONS（由 Next.js 处理，不进入 handleProxy）
+[2] CORS / OPTIONS（无自定义 handler；CORS_ORIGINS 当前无运行期效果）
   ▼
 [3] 鉴权
       ├ 缺 key  → 401 { error: "Missing API key" }
