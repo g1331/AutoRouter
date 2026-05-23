@@ -524,4 +524,49 @@ describe("request-logger (db flows)", () => {
       },
     });
   });
+
+  it("reconcileStaleInProgressRequestLogs clamps overflow durationMs before updating", async () => {
+    const { reconcileStaleInProgressRequestLogs } = await import("@/lib/services/request-logger");
+
+    const int4Max = 2_147_483_647;
+    const now = new Date("2026-03-07T12:00:00.000Z");
+    requestLogsFindManyMock.mockResolvedValueOnce([
+      {
+        id: "log-overflow",
+        createdAt: new Date(now.getTime() - int4Max - 1_000),
+        isStream: false,
+      },
+    ]);
+
+    const returningMock = vi.fn().mockResolvedValueOnce([
+      {
+        id: "log-overflow",
+        statusCode: 520,
+        apiKeyId: null,
+        upstreamId: null,
+        model: null,
+      },
+    ]);
+    const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
+    const setMock = vi.fn().mockImplementation((values) => {
+      if (typeof values.durationMs === "number" && values.durationMs > int4Max) {
+        throw new RangeError("integer out of range");
+      }
+      return { where: whereMock };
+    });
+    dbUpdateMock.mockReturnValue({ set: setMock });
+    calculateAndPersistRequestBillingSnapshotMock.mockResolvedValueOnce({
+      status: "unbilled",
+      unbillableReason: "usage_missing",
+      finalCost: null,
+      source: null,
+    });
+
+    await expect(reconcileStaleInProgressRequestLogs({ now })).resolves.toBe(1);
+    expect(setMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        durationMs: int4Max,
+      })
+    );
+  });
 });
