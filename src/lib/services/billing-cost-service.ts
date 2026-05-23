@@ -69,6 +69,51 @@ function resolveViolatedFkColumn(
 }
 
 /**
+ * 临时诊断：当 FK 重试探测失败时，把错误对象与 .cause 上所有 own enumerable 标量
+ * 字段平摊后打印出来。目的是定位 PG driver 实际使用的约束名字段（已尝试过
+ * constraint_name / constraint 均落空），看清真实形状后再做永久修复。
+ *
+ * 仅打 warn 级别，永远不影响主流程；包在 try/catch 里防止序列化自身抛错。
+ */
+function logBillingFkDiagnostic(
+  error: unknown,
+  requestLogId: string,
+  reason: string,
+  extra?: Record<string, unknown>
+): void {
+  try {
+    const flattenScalarOwnProps = (obj: unknown): Record<string, unknown> | null => {
+      if (!obj || typeof obj !== "object") return null;
+      const out: Record<string, unknown> = {};
+      for (const key of Object.getOwnPropertyNames(obj)) {
+        const value = (obj as Record<string, unknown>)[key];
+        if (typeof value === "string") {
+          out[key] = value.length > 300 ? `${value.slice(0, 300)}...` : value;
+        } else if (typeof value === "number" || typeof value === "boolean" || value === null) {
+          out[key] = value;
+        }
+      }
+      return out;
+    };
+    const cause = (error as { cause?: unknown })?.cause;
+    log.warn(
+      {
+        requestLogId,
+        reason,
+        errCtor: (error as { constructor?: { name?: string } })?.constructor?.name,
+        errFlat: flattenScalarOwnProps(error),
+        causeCtor: (cause as { constructor?: { name?: string } })?.constructor?.name,
+        causeFlat: flattenScalarOwnProps(cause),
+        ...extra,
+      },
+      "billing snapshot FK diagnostic"
+    );
+  } catch {
+    /* 诊断永不破坏主流程 */
+  }
+}
+
+/**
  * 写 snapshot 时若 api_key_id / upstream_id 违反 FK 约束（典型场景：caller 持有的
  * id 在请求处理与异步 snapshot 写入之间被并发删除——reconcile 也无法消除这一
  * TOCTOU 窗口），把违反的那一列置 NULL 后单次重试。
@@ -89,9 +134,21 @@ async function upsertBillingSnapshotWithFkRetry(
     return { apiKeyId: values.apiKeyId ?? null, upstreamId: values.upstreamId ?? null };
   } catch (error) {
     const violation = extractPgForeignKeyViolation(error);
-    if (!violation) throw error;
+    if (!violation) {
+      logBillingFkDiagnostic(
+        error,
+        requestLogId,
+        "extract returned null (not detected as FK 23503)"
+      );
+      throw error;
+    }
     const column = resolveViolatedFkColumn(violation.constraint_name);
-    if (!column) throw error;
+    if (!column) {
+      logBillingFkDiagnostic(error, requestLogId, "detected 23503 but constraint name unresolved", {
+        detectedConstraintName: violation.constraint_name,
+      });
+      throw error;
+    }
 
     const patchedValues: BillingSnapshotInsertValues = { ...values, [column]: null };
     const patchedSet: BillingSnapshotUpdateSet = { ...updateSet, [column]: null };
