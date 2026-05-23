@@ -89,18 +89,26 @@ openssl rand -hex 32
 
 ## 请求录制
 
-请求录制功能存在两套默认值：代码层是「保守默认」（默认禁用、默认脱敏、默认 `all` 模式），而仓库内的 `docker-compose.yml` 把这些字段重新覆盖成「部署默认」（默认启用、默认不脱敏、默认 `failure` 模式），更贴合「捕获生产侧失败请求样本」的运维场景。两套默认在排障时容易引起困惑，下表分别列出。
+请求录制的运行期开关已经全部搬到「数据库中的 Runtime Settings 单例」（表 `traffic_recording_settings`），由 `src/lib/services/traffic-recording-service.ts:167` 的 `getTrafficRecordingSettings()` 读取，首次读取时按以下默认值初始化：
 
-| 变量                        | 必填 | 代码默认                                  | docker-compose 默认 | 重启           | 说明                                                                              |
-| --------------------------- | ---- | ----------------------------------------- | ------------------- | -------------- | --------------------------------------------------------------------------------- |
-| `RECORDER_ENABLED`          | 否   | 未设置即视为禁用；显式 `true` 或 `1` 启用 | `true`              | 重启           | 是否启用请求录制                                                                  |
-| `RECORDER_MODE`             | 否   | `all`                                     | `failure`           | 重启           | 录制范围。可取 `all` / `success` / `failure`                                      |
-| `RECORDER_FIXTURES_DIR`     | 否   | `tests/fixtures`                          | `tests/fixtures`    | 重启           | 录制文件目录                                                                      |
-| `RECORDER_REDACT_SENSITIVE` | 否   | `true`                                    | `false`             | 运行时配置覆盖 | 是否脱敏敏感字段。运行期实际行为由「Runtime Settings」覆盖，env var 只是 fallback |
+| Runtime Settings 字段 | 默认值      | 说明                                    |
+| --------------------- | ----------- | --------------------------------------- |
+| `enabled`             | `false`     | 是否开启录制                            |
+| `mode`                | `"failure"` | 录制范围：`all` / `success` / `failure` |
+| `redact_sensitive`    | `true`      | 是否脱敏敏感字段                        |
+| `retention_days`      | `7`         | 录制文件保留天数                        |
 
-::: warning RECORDER_REDACT_SENSITIVE 在生产部署下默认 false
-`docker-compose.yml` 把该字段默认置为 `false`，这意味着开箱即用的录制内容会保留敏感字段。任何打算把录制文件用于回放、归档或共享给第三方的部署，都应当显式把该字段改为 `true`，或在管理后台 Runtime Settings 中开启脱敏。
+修改方式：管理后台「系统 → 请求录制」页面（`/system/traffic-recording`）。修改后立即生效，不需要重启。
+
+::: warning 三个 RECORDER\_\* 环境变量当前不再作为运行时开关
+`.env.example` 与 `docker-compose.yml` 仍包含 `RECORDER_ENABLED`、`RECORDER_MODE`、`RECORDER_REDACT_SENSITIVE` 三个键，但它们**已经不再控制运行期行为**——代码层的 `shouldRecordFixture()` 只从 Runtime Settings 拿值，不再回退到 env var。即便 `.env` 中显式设置任意值，是否开启录制、录制模式、是否脱敏都以管理后台 Runtime Settings 的当前值为准。这三个键是历史遗留，未来可能被清理；不要据其调整部署预期。
 :::
+
+唯一仍生效的录制相关 env var 是文件目录：
+
+| 变量                    | 必填 | 默认值           | 重启 | 说明                                                                                                                |
+| ----------------------- | ---- | ---------------- | ---- | ------------------------------------------------------------------------------------------------------------------- |
+| `RECORDER_FIXTURES_DIR` | 否   | `tests/fixtures` | 重启 | 录制文件落盘目录。由 `resolveRecordingRoot()` / `getTrafficRecordingRoot()` 直接读取 env var，未走 Runtime Settings |
 
 ## CLIProxyAPI Sidecar（可选）
 
@@ -160,5 +168,5 @@ CLIProxyAPI 涉及两类地址，含义不同：
 - `.env.example`：字段清单与注释来源
 - `docker-compose.yml`、`docker-compose.cliproxy.yml`：`${VAR:-default}` 形式的部署默认值
 - `src/lib/utils/config.ts`：代码层的默认值、必填校验与 fail-fast 逻辑
-- `src/lib/services/traffic-recording-service.ts`、`tests/unit/services/traffic-recorder.test.ts`：录制相关字段的代码默认值与运行时配置覆盖关系
+- `src/lib/services/traffic-recording-service.ts`、`tests/unit/services/traffic-recorder.test.ts`：录制功能已迁移到数据库 Runtime Settings 单例，仅 `RECORDER_FIXTURES_DIR` 仍通过 env var 生效
 - `.github/workflows/deploy-personal.yml`：CI 自动生成 `.env` 时的填值规则

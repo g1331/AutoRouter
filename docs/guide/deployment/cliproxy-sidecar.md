@@ -171,14 +171,22 @@ docker compose \
 docker compose -f docker-compose.yml up -d
 ```
 
-`cliproxy-auth` 与 `cliproxy-logs` 两个 named volume 在显式 `docker volume rm` 之前保留，再次启用 sidecar 时已登录账号无需重新授权。如果需要彻底清理 OAuth 凭据：
+`cliproxy-auth` 与 `cliproxy-logs` 两个 named volume 在显式 `docker volume rm` 之前保留，再次启用 sidecar 时已登录账号无需重新授权。如果需要彻底清理 OAuth 凭据，先找出实际卷名再删除——`docker-compose.cliproxy.yml` 中的 volumes 段没有声明 `name:`，Compose 会自动给卷加上「项目名」前缀，所以宿主机上看到的卷名不是 `cliproxy-auth`，而是 `<项目名>_cliproxy-auth`。项目名默认取自部署目录的小写化形式：`/opt/autorouter` 部署目录对应项目名 `autorouter`，因此实际卷名通常是 `autorouter_cliproxy-auth` 与 `autorouter_cliproxy-logs`。
+
+稳妥的做法是先列出再删：
 
 ```bash
-docker volume rm cliproxy-auth cliproxy-logs
+# 列出本机所有 cliproxy 相关的卷，确认实际名称与项目名前缀
+docker volume ls --filter name=cliproxy
+
+# 用上一条列出的实际卷名删除；以 /opt/autorouter 部署目录为例：
+docker volume rm autorouter_cliproxy-auth autorouter_cliproxy-logs
 ```
 
+如果部署目录不是 `/opt/autorouter`、或显式通过 `-p` / `COMPOSE_PROJECT_NAME` 指定了别的项目名，请把上述命令中的 `autorouter` 替换为实际项目名前缀。直接执行 `docker volume rm cliproxy-auth cliproxy-logs`（无前缀）通常会报 `Error: No such volume`，因为该名称的卷并不存在。
+
 ::: danger 清理 cliproxy-auth 会清空 OAuth 凭据
-`cliproxy-auth` 中存放 Codex / Claude / Gemini 的 OAuth token 明文。删除该卷后，所有账号都需要在 CLIProxyAPI 管理端重新登录，AutoRouter 管理端登记的实例记录仍在但池上游会因为无可用账号而失效。生产环境执行前务必确认。
+`cliproxy-auth`（实际名 `<项目名>_cliproxy-auth`）中存放 Codex / Claude / Gemini 的 OAuth token 明文。删除该卷后，所有账号都需要在 CLIProxyAPI 管理端重新登录，AutoRouter 管理端登记的实例记录仍在但池上游会因为无可用账号而失效。生产环境执行前务必确认。
 :::
 
 ## 不在本页范围内
