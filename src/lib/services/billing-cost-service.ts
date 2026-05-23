@@ -8,6 +8,73 @@ import {
 import { getProviderTypeForModel } from "@/lib/services/model-router";
 import { quotaTracker } from "@/lib/services/upstream-quota-tracker";
 import { apiKeyQuotaTracker } from "@/lib/services/api-key-quota-tracker";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("billing-cost-service");
+
+type BillingSnapshotInsertValues = typeof requestBillingSnapshots.$inferInsert;
+type BillingSnapshotUpdateSet = Partial<BillingSnapshotInsertValues>;
+
+function isPgForeignKeyViolation(
+  error: unknown
+): error is { code: string; constraint_name?: string } {
+  return (
+    typeof error === "object" && error !== null && (error as { code?: unknown }).code === "23503"
+  );
+}
+
+function resolveViolatedFkColumn(
+  constraintName: string | undefined
+): "apiKeyId" | "upstreamId" | null {
+  if (!constraintName) return null;
+  if (constraintName.includes("api_key_id")) return "apiKeyId";
+  if (constraintName.includes("upstream_id")) return "upstreamId";
+  return null;
+}
+
+/**
+ * 写 snapshot 时若 api_key_id / upstream_id 违反 FK 约束（典型场景：caller 持有的
+ * id 在请求处理与异步 snapshot 写入之间被并发删除——reconcile 也无法消除这一
+ * TOCTOU 窗口），把违反的那一列置 NULL 后单次重试。
+ *
+ * 返回实际写入数据库的两列值，供 applyQuotaDeltaAfterSnapshotUpsert 使用，
+ * 防止"INSERT 已置 NULL 但内存配额仍按原 id 累加"导致 DB/memory 状态错位。
+ */
+async function upsertBillingSnapshotWithFkRetry(
+  values: BillingSnapshotInsertValues,
+  updateSet: BillingSnapshotUpdateSet,
+  requestLogId: string
+): Promise<{ apiKeyId: string | null; upstreamId: string | null }> {
+  try {
+    await db
+      .insert(requestBillingSnapshots)
+      .values(values)
+      .onConflictDoUpdate({ target: requestBillingSnapshots.requestLogId, set: updateSet });
+    return { apiKeyId: values.apiKeyId ?? null, upstreamId: values.upstreamId ?? null };
+  } catch (error) {
+    if (!isPgForeignKeyViolation(error)) throw error;
+    const column = resolveViolatedFkColumn(error.constraint_name);
+    if (!column) throw error;
+
+    const patchedValues: BillingSnapshotInsertValues = { ...values, [column]: null };
+    const patchedSet: BillingSnapshotUpdateSet = { ...updateSet, [column]: null };
+
+    await db.insert(requestBillingSnapshots).values(patchedValues).onConflictDoUpdate({
+      target: requestBillingSnapshots.requestLogId,
+      set: patchedSet,
+    });
+
+    log.warn(
+      { requestLogId, nulledColumn: column, constraint: error.constraint_name },
+      "billing snapshot FK violation retried with NULL"
+    );
+
+    return {
+      apiKeyId: patchedValues.apiKeyId ?? null,
+      upstreamId: patchedValues.upstreamId ?? null,
+    };
+  }
+}
 
 export type UnbillableReason =
   | "model_missing"
@@ -142,9 +209,8 @@ async function upsertUnbilledSnapshot(
     },
   });
 
-  await db
-    .insert(requestBillingSnapshots)
-    .values({
+  const writtenIds = await upsertBillingSnapshotWithFkRetry(
+    {
       requestLogId: input.requestLogId,
       apiKeyId: input.apiKeyId,
       upstreamId: input.upstreamId,
@@ -174,45 +240,44 @@ async function upsertUnbilledSnapshot(
       currency: "USD",
       billedAt: now,
       createdAt: now,
-    })
-    .onConflictDoUpdate({
-      target: requestBillingSnapshots.requestLogId,
-      set: {
-        apiKeyId: input.apiKeyId,
-        upstreamId: input.upstreamId,
-        model: input.model,
-        billingStatus: "unbilled",
-        unbillableReason: reason,
-        priceSource: null,
-        baseInputPricePerMillion: null,
-        baseOutputPricePerMillion: null,
-        baseCacheReadInputPricePerMillion: null,
-        baseCacheWriteInputPricePerMillion: null,
-        matchedRuleType: null,
-        matchedRuleDisplayLabel: null,
-        appliedTierThreshold: null,
-        modelMaxInputTokens: null,
-        modelMaxOutputTokens: null,
-        inputMultiplier: null,
-        outputMultiplier: null,
-        promptTokens: usage.promptTokens,
-        completionTokens: usage.completionTokens,
-        totalTokens: usage.totalTokens,
-        cacheReadTokens: usage.cacheReadTokens,
-        cacheWriteTokens: usage.cacheWriteTokens,
-        cacheReadCost: null,
-        cacheWriteCost: null,
-        finalCost: null,
-        currency: "USD",
-        billedAt: now,
-      },
-    });
+    },
+    {
+      apiKeyId: input.apiKeyId,
+      upstreamId: input.upstreamId,
+      model: input.model,
+      billingStatus: "unbilled",
+      unbillableReason: reason,
+      priceSource: null,
+      baseInputPricePerMillion: null,
+      baseOutputPricePerMillion: null,
+      baseCacheReadInputPricePerMillion: null,
+      baseCacheWriteInputPricePerMillion: null,
+      matchedRuleType: null,
+      matchedRuleDisplayLabel: null,
+      appliedTierThreshold: null,
+      modelMaxInputTokens: null,
+      modelMaxOutputTokens: null,
+      inputMultiplier: null,
+      outputMultiplier: null,
+      promptTokens: usage.promptTokens,
+      completionTokens: usage.completionTokens,
+      totalTokens: usage.totalTokens,
+      cacheReadTokens: usage.cacheReadTokens,
+      cacheWriteTokens: usage.cacheWriteTokens,
+      cacheReadCost: null,
+      cacheWriteCost: null,
+      finalCost: null,
+      currency: "USD",
+      billedAt: now,
+    },
+    input.requestLogId
+  );
 
   applyQuotaDeltaAfterSnapshotUpsert(
     previousSnapshot ?? null,
     "unbilled",
-    input.apiKeyId,
-    input.upstreamId,
+    writtenIds.apiKeyId,
+    writtenIds.upstreamId,
     null
   );
 
@@ -347,9 +412,8 @@ export async function calculateAndPersistRequestBillingSnapshot(
     },
   });
 
-  await db
-    .insert(requestBillingSnapshots)
-    .values({
+  const writtenIds = await upsertBillingSnapshotWithFkRetry(
+    {
       requestLogId: input.requestLogId,
       apiKeyId: input.apiKeyId,
       upstreamId: input.upstreamId,
@@ -379,45 +443,44 @@ export async function calculateAndPersistRequestBillingSnapshot(
       currency: "USD",
       billedAt: now,
       createdAt: now,
-    })
-    .onConflictDoUpdate({
-      target: requestBillingSnapshots.requestLogId,
-      set: {
-        apiKeyId: input.apiKeyId,
-        upstreamId: input.upstreamId,
-        model,
-        billingStatus: "billed",
-        unbillableReason: null,
-        priceSource: resolvedPrice.source,
-        baseInputPricePerMillion: resolvedPrice.inputPricePerMillion,
-        baseOutputPricePerMillion: resolvedPrice.outputPricePerMillion,
-        baseCacheReadInputPricePerMillion: resolvedPrice.cacheReadInputPricePerMillion,
-        baseCacheWriteInputPricePerMillion: resolvedPrice.cacheWriteInputPricePerMillion,
-        matchedRuleType: resolvedPrice.matchedRuleType,
-        matchedRuleDisplayLabel: resolvedPrice.matchedRuleDisplayLabel,
-        appliedTierThreshold: resolvedPrice.appliedTierThreshold,
-        modelMaxInputTokens: resolvedPrice.modelMaxInputTokens,
-        modelMaxOutputTokens: resolvedPrice.modelMaxOutputTokens,
-        inputMultiplier,
-        outputMultiplier,
-        promptTokens: cost.billedInputTokens,
-        completionTokens: usage.completionTokens,
-        totalTokens: usage.totalTokens,
-        cacheReadTokens: usage.cacheReadTokens,
-        cacheWriteTokens: usage.cacheWriteTokens,
-        cacheReadCost: cost.cacheReadCost,
-        cacheWriteCost: cost.cacheWriteCost,
-        finalCost: cost.finalCost,
-        currency: "USD",
-        billedAt: now,
-      },
-    });
+    },
+    {
+      apiKeyId: input.apiKeyId,
+      upstreamId: input.upstreamId,
+      model,
+      billingStatus: "billed",
+      unbillableReason: null,
+      priceSource: resolvedPrice.source,
+      baseInputPricePerMillion: resolvedPrice.inputPricePerMillion,
+      baseOutputPricePerMillion: resolvedPrice.outputPricePerMillion,
+      baseCacheReadInputPricePerMillion: resolvedPrice.cacheReadInputPricePerMillion,
+      baseCacheWriteInputPricePerMillion: resolvedPrice.cacheWriteInputPricePerMillion,
+      matchedRuleType: resolvedPrice.matchedRuleType,
+      matchedRuleDisplayLabel: resolvedPrice.matchedRuleDisplayLabel,
+      appliedTierThreshold: resolvedPrice.appliedTierThreshold,
+      modelMaxInputTokens: resolvedPrice.modelMaxInputTokens,
+      modelMaxOutputTokens: resolvedPrice.modelMaxOutputTokens,
+      inputMultiplier,
+      outputMultiplier,
+      promptTokens: cost.billedInputTokens,
+      completionTokens: usage.completionTokens,
+      totalTokens: usage.totalTokens,
+      cacheReadTokens: usage.cacheReadTokens,
+      cacheWriteTokens: usage.cacheWriteTokens,
+      cacheReadCost: cost.cacheReadCost,
+      cacheWriteCost: cost.cacheWriteCost,
+      finalCost: cost.finalCost,
+      currency: "USD",
+      billedAt: now,
+    },
+    input.requestLogId
+  );
 
   applyQuotaDeltaAfterSnapshotUpsert(
     previousSnapshot ?? null,
     "billed",
-    input.apiKeyId,
-    input.upstreamId,
+    writtenIds.apiKeyId,
+    writtenIds.upstreamId,
     cost.finalCost
   );
 
