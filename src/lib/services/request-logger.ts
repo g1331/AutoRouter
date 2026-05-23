@@ -17,6 +17,7 @@ const log = createLogger("request-logger");
 const REQUEST_LOG_STALE_MINUTES = 15;
 const REQUEST_LOG_STALE_SCAN_LIMIT = 200;
 const STALE_REQUEST_LOG_STATUS_CODE = 520;
+const INT4_MAX = 2_147_483_647;
 const STALE_REQUEST_LOG_ERROR_MESSAGE =
   "Request did not settle before the stale reconciliation timeout window";
 
@@ -406,9 +407,14 @@ export async function updateRequestLog(
   if (input.cacheReadTokens !== undefined) updateValues.cacheReadTokens = input.cacheReadTokens;
 
   if (input.statusCode !== undefined) updateValues.statusCode = input.statusCode;
-  if (input.durationMs !== undefined) updateValues.durationMs = input.durationMs;
+  if (input.durationMs !== undefined)
+    updateValues.durationMs =
+      input.durationMs === null ? null : Math.min(Math.max(0, input.durationMs), INT4_MAX);
   if (input.routingDurationMs !== undefined)
-    updateValues.routingDurationMs = input.routingDurationMs;
+    updateValues.routingDurationMs =
+      input.routingDurationMs === null
+        ? null
+        : Math.min(Math.max(0, input.routingDurationMs), INT4_MAX);
   if (input.errorMessage !== undefined) updateValues.errorMessage = input.errorMessage;
 
   if (input.routingType !== undefined) updateValues.routingType = input.routingType;
@@ -480,8 +486,12 @@ export async function logRequest(input: LogRequestInput): Promise<RequestLog> {
       cacheCreation1hTokens: input.cacheCreation1hTokens ?? 0,
       cacheReadTokens: input.cacheReadTokens ?? 0,
       statusCode: input.statusCode,
-      durationMs: input.durationMs,
-      routingDurationMs: input.routingDurationMs ?? null,
+      durationMs:
+        input.durationMs === null ? null : Math.min(Math.max(0, input.durationMs), INT4_MAX),
+      routingDurationMs:
+        input.routingDurationMs === undefined || input.routingDurationMs === null
+          ? null
+          : Math.min(Math.max(0, input.routingDurationMs), INT4_MAX),
       errorMessage: input.errorMessage ?? null,
       // Routing decision fields
       routingType: input.routingType ?? null,
@@ -542,7 +552,7 @@ export async function reconcileStaleInProgressRequestLogs(options?: {
       continue;
     }
 
-    const durationMs = Math.max(0, now.getTime() - createdAt.getTime());
+    const durationMs = Math.min(Math.max(0, now.getTime() - createdAt.getTime()), INT4_MAX);
     const updated = await updateRequestLog(candidate.id, {
       statusCode: STALE_REQUEST_LOG_STATUS_CODE,
       durationMs,
