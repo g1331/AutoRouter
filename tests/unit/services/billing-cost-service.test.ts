@@ -52,6 +52,16 @@ vi.mock("@/lib/services/upstream-quota-tracker", () => ({
   },
 }));
 
+const loggerWarnMock = vi.fn();
+vi.mock("@/lib/utils/logger", () => ({
+  createLogger: () => ({
+    info: vi.fn(),
+    debug: vi.fn(),
+    warn: loggerWarnMock,
+    error: vi.fn(),
+  }),
+}));
+
 describe("billing-cost-service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -507,5 +517,171 @@ describe("billing-cost-service", () => {
         upstreamId: null,
       })
     );
+  });
+
+  it("retries with null api_key_id when INSERT hits api_keys FK violation", async () => {
+    // 真实生产 race：reconcile 读到的 api_key_id 在 reconcile→INSERT 之间被并发删除，
+    // INSERT 撞 FK；helper 应当捕获 PG 23503 + 对应约束名后单次重试，把 apiKeyId 置 NULL。
+    // reconcile 此时还能读到旧 id（cascade 尚未触发），下一刻 INSERT 才撞 FK。
+    requestLogsFindFirstMock.mockResolvedValueOnce({
+      apiKeyId: "doomed-key-id",
+      upstreamId: "still-valid-upstream",
+    });
+    const fkError = Object.assign(new Error("FK violation"), {
+      code: "23503",
+      constraint_name: "request_billing_snapshots_api_key_id_api_keys_id_fk",
+      table_name: "request_billing_snapshots",
+    });
+    onConflictDoUpdateMock.mockRejectedValueOnce(fkError).mockResolvedValueOnce(undefined);
+
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("../../../src/lib/services/billing-cost-service");
+
+    await calculateAndPersistRequestBillingSnapshot({
+      requestLogId: "log-fk-retry",
+      apiKeyId: "doomed-key-id",
+      upstreamId: "still-valid-upstream",
+      model: "gpt-4.1-smoke",
+      usage: { promptTokens: 6, completionTokens: 3, totalTokens: 9 },
+    });
+
+    expect(onConflictDoUpdateMock).toHaveBeenCalledTimes(2);
+    expect(valuesMock).toHaveBeenCalledTimes(2);
+    expect(valuesMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        apiKeyId: null,
+        upstreamId: "still-valid-upstream",
+      })
+    );
+    expect(loggerWarnMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nulledColumn: "apiKeyId",
+        constraint: "request_billing_snapshots_api_key_id_api_keys_id_fk",
+      }),
+      expect.stringContaining("FK violation retried")
+    );
+  });
+
+  it("retries with null upstream_id when INSERT hits upstreams FK violation", async () => {
+    requestLogsFindFirstMock.mockResolvedValueOnce({
+      apiKeyId: "still-valid-key",
+      upstreamId: "doomed-upstream-id",
+    });
+    const fkError = Object.assign(new Error("FK violation"), {
+      code: "23503",
+      constraint_name: "request_billing_snapshots_upstream_id_upstreams_id_fk",
+    });
+    onConflictDoUpdateMock.mockRejectedValueOnce(fkError).mockResolvedValueOnce(undefined);
+
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("../../../src/lib/services/billing-cost-service");
+
+    await calculateAndPersistRequestBillingSnapshot({
+      requestLogId: "log-upstream-retry",
+      apiKeyId: "still-valid-key",
+      upstreamId: "doomed-upstream-id",
+      model: "gpt-4.1-smoke",
+      usage: { promptTokens: 6, completionTokens: 3, totalTokens: 9 },
+    });
+
+    expect(valuesMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        apiKeyId: "still-valid-key",
+        upstreamId: null,
+      })
+    );
+  });
+
+  it("skips quota delta for FK-retried column to avoid db/memory state drift", async () => {
+    // 重试时 upstream_id 被置 NULL，配额累加必须基于实际写入值（NULL），
+    // 否则数据库快照已无 upstream 维度但内存配额仍按旧 id 累加，造成幽灵配额。
+    const { resolveBillingModelPrice } =
+      await import("../../../src/lib/services/billing-price-service");
+    vi.mocked(resolveBillingModelPrice).mockResolvedValueOnce({
+      model: "gpt-4.1",
+      source: "litellm",
+      inputPricePerMillion: 10,
+      outputPricePerMillion: 30,
+      cacheReadInputPricePerMillion: null,
+      cacheWriteInputPricePerMillion: null,
+      matchedRuleType: "flat",
+      matchedRuleDisplayLabel: null,
+      appliedTierThreshold: null,
+      modelMaxInputTokens: 200000,
+      modelMaxOutputTokens: 8192,
+    });
+    upstreamFindFirstMock.mockResolvedValueOnce({
+      billingInputMultiplier: 1,
+      billingOutputMultiplier: 1,
+    });
+    requestLogsFindFirstMock.mockResolvedValueOnce({
+      apiKeyId: "key-1",
+      upstreamId: "doomed-upstream-id",
+    });
+
+    const fkError = Object.assign(new Error("FK violation"), {
+      code: "23503",
+      constraint_name: "request_billing_snapshots_upstream_id_upstreams_id_fk",
+    });
+    onConflictDoUpdateMock.mockRejectedValueOnce(fkError).mockResolvedValueOnce(undefined);
+
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("../../../src/lib/services/billing-cost-service");
+
+    await calculateAndPersistRequestBillingSnapshot({
+      requestLogId: "log-quota-retry-null",
+      apiKeyId: "key-1",
+      upstreamId: "doomed-upstream-id",
+      model: "gpt-4.1",
+      usage: { promptTokens: 1000, completionTokens: 500, totalTokens: 1500 },
+    });
+
+    const upstreamCalls = mockAdjustSpending.mock.calls.filter(
+      ([id]) => id === "doomed-upstream-id"
+    );
+    expect(upstreamCalls).toHaveLength(0);
+  });
+
+  it("rethrows non-FK errors without retry", async () => {
+    const otherError = Object.assign(new Error("unique violation"), { code: "23505" });
+    onConflictDoUpdateMock.mockRejectedValueOnce(otherError);
+
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("../../../src/lib/services/billing-cost-service");
+
+    await expect(
+      calculateAndPersistRequestBillingSnapshot({
+        requestLogId: "log-other-err",
+        apiKeyId: "key-1",
+        upstreamId: "up-1",
+        model: null,
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      })
+    ).rejects.toBe(otherError);
+
+    expect(onConflictDoUpdateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rethrows FK violation when constraint name is not recognized", async () => {
+    const fkError = Object.assign(new Error("FK violation"), {
+      code: "23503",
+      constraint_name: "some_unrelated_constraint",
+    });
+    onConflictDoUpdateMock.mockRejectedValueOnce(fkError);
+
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("../../../src/lib/services/billing-cost-service");
+
+    await expect(
+      calculateAndPersistRequestBillingSnapshot({
+        requestLogId: "log-unknown-fk",
+        apiKeyId: "key-1",
+        upstreamId: "up-1",
+        model: null,
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      })
+    ).rejects.toBe(fkError);
+
+    expect(onConflictDoUpdateMock).toHaveBeenCalledTimes(1);
   });
 });
