@@ -15,12 +15,41 @@ const log = createLogger("billing-cost-service");
 type BillingSnapshotInsertValues = typeof requestBillingSnapshots.$inferInsert;
 type BillingSnapshotUpdateSet = Partial<BillingSnapshotInsertValues>;
 
-function isPgForeignKeyViolation(
-  error: unknown
-): error is { code: string; constraint_name?: string } {
-  return (
-    typeof error === "object" && error !== null && (error as { code?: unknown }).code === "23503"
-  );
+interface PgForeignKeyViolation {
+  code: "23503";
+  constraint_name?: string;
+}
+
+/**
+ * 提取 Postgres FK 违例信息。drizzle-orm 0.45 会把驱动抛出的 PostgresError 包成
+ * DrizzleQueryError 并将原错误塞到 `.cause` 上，因此外层对象本身没有 `code` 字段。
+ * 这里同时检查顶层与 `.cause` 一层，覆盖两种形状；非 FK 违例返回 null。
+ */
+function extractPgForeignKeyViolation(error: unknown): PgForeignKeyViolation | null {
+  if (typeof error !== "object" || error === null) return null;
+
+  const direct = error as { code?: unknown; constraint_name?: unknown };
+  if (direct.code === "23503") {
+    return {
+      code: "23503",
+      constraint_name:
+        typeof direct.constraint_name === "string" ? direct.constraint_name : undefined,
+    };
+  }
+
+  const cause = (error as { cause?: unknown }).cause;
+  if (typeof cause === "object" && cause !== null) {
+    const inner = cause as { code?: unknown; constraint_name?: unknown };
+    if (inner.code === "23503") {
+      return {
+        code: "23503",
+        constraint_name:
+          typeof inner.constraint_name === "string" ? inner.constraint_name : undefined,
+      };
+    }
+  }
+
+  return null;
 }
 
 function resolveViolatedFkColumn(
@@ -52,8 +81,9 @@ async function upsertBillingSnapshotWithFkRetry(
       .onConflictDoUpdate({ target: requestBillingSnapshots.requestLogId, set: updateSet });
     return { apiKeyId: values.apiKeyId ?? null, upstreamId: values.upstreamId ?? null };
   } catch (error) {
-    if (!isPgForeignKeyViolation(error)) throw error;
-    const column = resolveViolatedFkColumn(error.constraint_name);
+    const violation = extractPgForeignKeyViolation(error);
+    if (!violation) throw error;
+    const column = resolveViolatedFkColumn(violation.constraint_name);
     if (!column) throw error;
 
     const patchedValues: BillingSnapshotInsertValues = { ...values, [column]: null };
@@ -65,7 +95,7 @@ async function upsertBillingSnapshotWithFkRetry(
     });
 
     log.warn(
-      { requestLogId, nulledColumn: column, constraint: error.constraint_name },
+      { requestLogId, nulledColumn: column, constraint: violation.constraint_name },
       "billing snapshot FK violation retried with NULL"
     );
 
