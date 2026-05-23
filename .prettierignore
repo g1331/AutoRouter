@@ -9,3 +9,5 @@ drizzle
 .claude
 .codex
 openspec
+docs/.vitepress/dist
+docs/.vitepress/cache
