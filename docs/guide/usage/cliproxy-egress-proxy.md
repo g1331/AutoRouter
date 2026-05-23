@@ -69,7 +69,17 @@ outline: deep
 
 ### 生效时机
 
-环境变量在 `docker-compose` 配置中是**容器启动期注入**——修改 `.env` 后需要 `docker compose up -d` 或 `docker compose restart cliproxyapi` 让 CPA 重新读配置。运行中改 `.env` 不会自动生效。
+环境变量在 `docker-compose` 配置中是**容器启动期注入**——修改 `.env` 后必须**重建容器**，CPA 才会读到新值。注意：`docker compose restart cliproxyapi` **不行**，它只是重启已有容器，仍然使用容器创建时捕获的旧 env。正确做法是用叠加文件再次 `up -d`（compose 会检测到 env 变化并自动重建受影响的容器），或者显式 `--force-recreate`：
+
+```
+# 推荐：compose 自动判断需要重建哪些容器
+docker compose -f docker-compose.yml -f docker-compose.cliproxy.yml up -d
+
+# 或显式强制重建 CPA 容器
+docker compose -f docker-compose.yml -f docker-compose.cliproxy.yml up -d --force-recreate cliproxyapi
+```
+
+运行中改 `.env` 不会自动生效。
 
 ### 外部模式（`external`）下
 
@@ -131,7 +141,7 @@ CPA 侧的行为：账号粒度 `proxy_url` 非空时覆盖全局；为空（或
 
 ### 全局代理是否生效
 
-1. 改完 `.env` 并 `docker compose -f docker-compose.yml -f docker-compose.cliproxy.yml up -d` 后，检查容器 env：
+1. 改完 `.env` 并 `docker compose -f docker-compose.yml -f docker-compose.cliproxy.yml up -d`（容器会被重建，参见上一节）后，检查容器 env：
    ```
    docker compose exec cliproxyapi env | grep CLIPROXY_PROXY_URL
    ```

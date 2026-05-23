@@ -157,7 +157,7 @@ if (referencingUpstreams.length > 0) {
 
 `mode` 字段允许通过 PATCH 接口修改（`src/lib/services/cliproxy-instance-crud.ts:238`，`mode = input.mode ?? (current.mode as CliproxyInstanceMode)`）。但要注意切换方向：
 
-- `managed` → `external`：切换会立即触发地址重新校验，如果当前 `base_url` / `management_url` 是内网地址，校验失败，PATCH 被拒。先把地址改成符合 SSRF 校验的形式（或同时改 mode + 地址），再保存。
+- `managed` → `external`：切换会立即触发地址重新校验。**只有内网 IPv4 字面量**（如 `http://172.20.0.5:8317`）会被 `isUrlSafe` 拦下，PATCH 被拒；Docker 服务名（如 `http://cliproxyapi:8317`）、IPv6 字面量、任意域名都会**通过校验**——参见上文「地址校验」一节的限制说明。也就是说大多数 sidecar 拓扑下的 managed 实例切到 external 时**不会因为校验失败而被拒**，但这些值原本就不适合外部模式（服务名只在 docker 网络内可解析），切换后实例虽然能保存，CPA 调用仍会因连不上而失败。要换 mode 时仍应该把地址改成外部可达的真实地址，校验通不通过都不是判定能不能切的依据。
 - `external` → `managed`：放宽校验，地址原值不变。切换后立即生效。
 
 无论哪个方向，切换 `mode` 不影响已存在的池上游、OAuth 账号缓存、转发流量；仅影响后续创建 / 编辑实例时的地址校验。
