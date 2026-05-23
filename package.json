@@ -92,7 +92,7 @@
     "tailwindcss": "^4.1.17",
     "tsx": "^4.19.0",
     "typescript": "^5",
-    "vitepress": "^1.6.4",
+    "vitepress": "2.0.0-alpha.17",
     "vitest": "^4.0.15"
   },
   "pnpm": {
