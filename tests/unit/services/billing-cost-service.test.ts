@@ -5,6 +5,7 @@ const valuesMock = vi.fn(() => ({ onConflictDoUpdate: onConflictDoUpdateMock }))
 const insertMock = vi.fn(() => ({ values: valuesMock }));
 const upstreamFindFirstMock = vi.fn();
 const snapshotFindFirstMock = vi.fn();
+const requestLogsFindFirstMock = vi.fn();
 
 vi.mock("drizzle-orm", async (importOriginal) => {
   const actual = await importOriginal<typeof import("drizzle-orm")>();
@@ -23,11 +24,17 @@ vi.mock("@/lib/db", () => ({
       requestBillingSnapshots: {
         findFirst: snapshotFindFirstMock,
       },
+      requestLogs: {
+        findFirst: requestLogsFindFirstMock,
+      },
     },
     insert: insertMock,
   },
   requestBillingSnapshots: {
     requestLogId: "request_log_id",
+  },
+  requestLogs: {
+    id: "id",
   },
   upstreams: {
     id: "id",
@@ -50,6 +57,7 @@ describe("billing-cost-service", () => {
     vi.clearAllMocks();
     upstreamFindFirstMock.mockResolvedValue(null);
     snapshotFindFirstMock.mockResolvedValue(null);
+    requestLogsFindFirstMock.mockResolvedValue({ apiKeyId: "key-1", upstreamId: "up-1" });
     onConflictDoUpdateMock.mockResolvedValue(undefined);
   });
 
@@ -448,6 +456,55 @@ describe("billing-cost-service", () => {
         appliedTierThreshold: 128000,
         modelMaxInputTokens: 200000,
         modelMaxOutputTokens: 8192,
+      })
+    );
+  });
+
+  it("writes null FK columns when request_logs row was cascade-nulled after key/upstream deletion", async () => {
+    // 模拟生产环境观察到的 race：冒烟测试发完请求后立刻删除了 api_key 和 upstream，
+    // request_logs 行已被 cascade SET NULL；调用方仍然带着内存里的旧 id 进来，
+    // 此时 snapshot 必须按 request_logs 的最终值写入 NULL，避免 FK 违例。
+    requestLogsFindFirstMock.mockResolvedValueOnce({ apiKeyId: null, upstreamId: null });
+
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("../../../src/lib/services/billing-cost-service");
+
+    const result = await calculateAndPersistRequestBillingSnapshot({
+      requestLogId: "log-fk-race",
+      apiKeyId: "stale-key-id",
+      upstreamId: "stale-upstream-id",
+      model: "gpt-4.1-smoke",
+      usage: { promptTokens: 6, completionTokens: 3, totalTokens: 9 },
+    });
+
+    expect(result.status).toBe("unbilled");
+    expect(result.unbillableReason).toBe("price_not_found");
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKeyId: null,
+        upstreamId: null,
+      })
+    );
+  });
+
+  it("falls back to null FK columns when request_logs row is missing", async () => {
+    requestLogsFindFirstMock.mockResolvedValueOnce(undefined);
+
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("../../../src/lib/services/billing-cost-service");
+
+    await calculateAndPersistRequestBillingSnapshot({
+      requestLogId: "log-missing",
+      apiKeyId: "stale-key-id",
+      upstreamId: "stale-upstream-id",
+      model: null,
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    });
+
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKeyId: null,
+        upstreamId: null,
       })
     );
   });
