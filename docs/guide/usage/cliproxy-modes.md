@@ -19,7 +19,7 @@ outline: deep
 │ 网络，通过服务名互访           │    │ 通过公网 / 内网域名访问        │
 │ base_url:        cliproxyapi  │    │ base_url:    cpa.example.com  │
 │ management_url:  cliproxyapi  │    │ management_url: 同上           │
-│ 允许私有/内网/loopback 地址   │    │ 拒绝私有/内网/loopback/元数据 │
+│ 允许私有/内网/loopback 地址   │    │ 拒绝私有/loopback IP 字面量   │
 │ 适合自托管单实例 / 小团队     │    │ 适合多 AR 共享一个 CPA 服务    │
 └──────────────────────────────┘    └──────────────────────────────┘
 ```
