@@ -110,5 +110,7 @@ export default defineConfig([
     "coverage/**",
     "next-env.d.ts",
     ".auto-claude/**", // Ignore auto-claude worktrees
+    "docs/.vitepress/dist/**",
+    "docs/.vitepress/cache/**",
   ]),
 ]);
