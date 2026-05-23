@@ -192,7 +192,7 @@ from google import genai
 
 client = genai.Client(
     api_key="sk-auto-...",
-    http_options={"base_url": "http://<your-host>:3331/api/proxy"},
+    http_options={"base_url": "http://<your-host>:3331/api/proxy/v1"},
 )
 
 response = client.models.generate_content(
@@ -202,21 +202,34 @@ response = client.models.generate_content(
 print(response.text)
 ```
 
-`base_url` 末尾不需要 `/v1` 后缀，因为 Gemini SDK 自己会拼接 `/v1beta/...`。
+`base_url` 末尾的 `/v1` 是必需的：Gemini SDK 会在 base URL 之后再追加 `/v1beta/models/...`，因此最终拼接结果是 `/api/proxy/v1/v1beta/...`。AutoRouter 的代理处理器位于 `/api/proxy/v1/[...path]`，只有保留这段 `/v1` 才能命中代理；丢掉 `/v1` 后请求会落在 `/api/proxy/v1beta/...`，返回 404。
 
 ## 响应行为：透传 + 改写
 
 正常 2xx 响应：AutoRouter 直接把上游响应体透传给调用方，仅做必要的 header 改写（去除上游侧暴露内部地址的 header、追加 AutoRouter 自身的请求 ID 与命中上游 ID）。响应体格式与上游完全一致，调用方不需要任何兼容层。
 
-错误响应：AutoRouter 会按统一 schema 包装错误，便于调用方区分「AutoRouter 层错误」与「上游层错误」。常见错误码：
+错误响应分两类，调用方需要分别识别：
+
+**鉴权阶段**（`src/app/api/proxy/v1/[...path]/route.ts:2446-2473`）：发生在统一错误包装之前，响应体格式较朴素：
+
+```json
+{ "error": "Missing API key" }
+{ "error": "Invalid API key" }
+{ "error": "API key has expired" }
+```
+
+均为 HTTP 401。注意不带 `code` / `error_code` 字段，客户端识别失败原因需要解析 `error` 字符串本身。
+
+**路由与转发阶段**：进入统一错误包装（`src/lib/services/unified-error.ts`），响应体形如 `{ error: { code, message, ... } }`。常见错误码：
 
 | 状态            | 错误码                    | 含义                                       |
 | --------------- | ------------------------- | ------------------------------------------ |
-| 401             | `INVALID_API_KEY`         | 客户端 Key 错误、停用、撤销、过期          |
 | 400             | 多种                      | 请求体格式错、`model` 缺失、模型名无法解析 |
 | 403             | `NO_AUTHORIZED_UPSTREAMS` | 受限模式下绑定的上游均不能承接该路由能力   |
-| 404             | `NO_UPSTREAMS_CONFIGURED` | 没有任何上游声明对应路由能力               |
+| 503             | `NO_UPSTREAMS_CONFIGURED` | 没有任何活跃上游声明对应路由能力           |
 | 502 / 503 / 504 | 多种                      | 全部候选上游都已 failover 失败             |
+
+状态码与错误码映射关系定义在 `src/lib/services/unified-error.ts`；以上仅列最常见者，完整枚举以源文件 `UnifiedErrorCode` 与 `STATUS_CODE_MAP` 为准。
 
 failover 在调用方眼里是无感的：AutoRouter 会按 [`docs/circuit-breaker.md`](/circuit-breaker) 中的逻辑自动尝试下一条候选，仅当全部候选都失败时才返回最终错误。`/api/admin/logs` 中可以看到本次请求的 `failoverHistory` 字段，记录每次尝试的上游 ID、错误类型与时间戳。
 
