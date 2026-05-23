@@ -135,9 +135,9 @@ CPA 侧的行为：账号粒度 `proxy_url` 非空时覆盖全局；为空（或
    ```
    docker compose exec cliproxyapi env | grep CLIPROXY_PROXY_URL
    ```
-2. 检查渲染后的 config.yaml：
+2. 检查渲染后的 config.yaml（默认路径 `/CLIProxyAPI/config.yaml`，由 `cliproxy/docker-entrypoint.sh:12` 的 `CLIPROXY_CONFIG_TARGET` 决定；若覆盖了该变量按实际值看）：
    ```
-   docker compose exec cliproxyapi cat /app/config/config.yaml | grep proxy-url
+   docker compose exec cliproxyapi cat /CLIProxyAPI/config.yaml | grep proxy-url
    ```
 3. 触发一次实际调用（管理后台列出账号 / 客户端发请求），CPA 日志中应能看到代理握手。
 

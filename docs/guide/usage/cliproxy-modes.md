@@ -41,19 +41,29 @@ if (mode === "external") {
 }
 ```
 
-| 模式       | URL 格式 | 协议（http / https） | SSRF 校验              | 私有 IP / loopback / 云元数据端点 |
-| ---------- | -------- | -------------------- | ---------------------- | --------------------------------- |
-| `managed`  | 必须     | 必须                 | **跳过**               | **允许**                          |
-| `external` | 必须     | 必须                 | 走 `isUrlSafe`（SSRF） | **拦截**                          |
+| 模式       | URL 格式 | 协议（http / https） | SSRF 校验              | IP 字面量为私有 / loopback / 元数据端点 | 域名解析到私有 IP  |
+| ---------- | -------- | -------------------- | ---------------------- | --------------------------------------- | ------------------ |
+| `managed`  | 必须     | 必须                 | **跳过**               | **允许**                                | **允许**           |
+| `external` | 必须     | 必须                 | 走 `isUrlSafe`（SSRF） | **拦截**                                | **不解析、不拦截** |
 
-`isUrlSafe` 是 AutoRouter 通用的 SSRF 防护函数（来自 `src/lib/services/upstream-ssrf-validator.ts`，也用于上游字段校验），会拒绝指向 169.254.169.254 这类云元数据端点、私有网段、loopback 等地址。
+`isUrlSafe`（`src/lib/services/upstream-ssrf-validator.ts:69-94`）的判定逻辑分两路：
+
+- 解析出的 hostname 是 `localhost`：拒绝。
+- hostname 字面是 IP（正则 `^[\d.:]+$` 命中）：交给 `isIpSafe` 校验，私有网段（10/8、172.16/12、192.168/16）、loopback（127/8、`::1`）、链路本地（169.254/16，含 AWS 元数据端点）、IPv6 ULA/链路本地/multicast 等全部拒绝。
+- hostname 是普通域名：**直接返回 `safe: true`**，**不做 DNS 解析**。
+
+::: warning 重要限制：DNS 不解析
+`isUrlSafe` 对非 IP 字面量的 hostname 不查 DNS。因此 `external` 模式下登记 `http://cpa.internal` 这种域名地址，即使它最终解析到 `192.168.x.x` 或 `169.254.169.254`，也能通过校验。SSRF 防护实际上**只在 IP 字面量上生效**。
+
+仓库里另有一个 `resolveAndValidateHostname`（同文件 `:99-153`）会做 DNS 解析并校验所有解析结果，但 `validateInstanceAddress` 当前没有调用它。如果对外部 CPA 的拓扑信任度不够，建议把 `base_url` / `management_url` 直接写成公网 IP 字面量（让 IP 校验起作用），或者通过反向代理网关收敛入口。
+:::
 
 为什么要差异化处理：
 
 - `managed` 模式下 CPA 在同一个 Docker 网络里，地址通常是 `http://cliproxyapi:port` 形式的服务名，或 `172.18.0.x` 之类的私有 IP。如果套上 SSRF 校验，正常的 sidecar 拓扑直接被拒。
-- `external` 模式下 CPA 是远端独立服务，地址通常是公网域名。如果不做 SSRF 校验，攻击者可以登记一个指向云元数据端点的恶意「实例」，再通过 OAuth 登录/凭据测试等管理 API 请求做 SSRF 探测。
+- `external` 模式下 CPA 是远端独立服务，地址通常是公网域名。即使 SSRF 校验只在 IP 字面量上生效，对显式填写私有 IP 的恶意登记仍然有效，是一道有限但有意义的防御。
 
-简记：**managed 牺牲一道防御换内网兼容性，external 牺牲内网兼容性换防御**。一旦把模式设错，要么填地址被无故拒（managed 应填的地址在 external 下被 SSRF 拦），要么把内网管理面无意中开放给 SSRF 利用面。
+简记：**managed 完全跳过 SSRF 校验，external 启用基于 IP 字面量的 SSRF 校验**。一旦把模式设错，要么填地址被无故拒（managed 应填的内网 IP 在 external 下被 SSRF 拦），要么把内网管理面无意中开放给 SSRF 利用面。
 
 ### 拓扑与地址填法
 
@@ -68,7 +78,7 @@ if (mode === "external") {
 - 部署形态：CPA 跑在另一台主机、另一台容器、甚至公网托管。
 - 地址格式：`https://cpa.example.com` 或公网 IP + 端口。
 - `base_url` 与 `management_url` 仍然通常相同；若管理面与转发面被反代到不同子路径，两者可以分别填。
-- 实际填的地址必须能通过 SSRF 校验（公网域名或显式放行的非私有 IP）。
+- 实际填的地址必须能通过 SSRF 校验：任何非 `localhost` 的域名都能通过，IP 字面量必须是非私有 / 非 loopback / 非元数据网段。注意域名校验**不查 DNS**（见上一节警告），如需更强保护请填公网 IP 字面量。
 
 ### `enabled` 字段的实际语义
 
@@ -78,27 +88,42 @@ if (mode === "external") {
 - 池上游创建、连通性测试、OAuth 登录、账号同步等管理 API 也不在入口处检查 `enabled`。
 - 把 `enabled` 设为 `false` **不会**让依赖该实例的池上游自动停止接流量；只是管理后台显示一个 `disabled` 角标。
 
-要让一个实例下的池上游全部停摆，目前的可靠做法是把对应的**上游**（`upstreams` 表）逐条 `is_active = false`，或者直接删除该实例（删除时 `cliproxyInstanceId` 受 `onDelete: set null` 约束，相关上游的关联字段被清空但记录本身保留，仍按 `base_url` 直连——见下一节）。
+要让一个实例下的池上游全部停摆，可靠做法是把对应的**上游**（`upstreams` 表）逐条 `is_active = false`。直接尝试删除实例并不能跳过这一步——见下一节。
 
 ### 删除实例的影响
 
-`cliproxyInstanceId` 列声明（`src/lib/db/schema-pg.ts:115-117`）：
+`DELETE /api/admin/cliproxy/instances/:id` 路由调用 `deleteCliproxyInstance`（`src/lib/services/cliproxy-instance-crud.ts:290-320`），删除前依次做两轮引用校验：
 
 ```ts
-cliproxyInstanceId: uuid("cliproxy_instance_id").references(() => cliproxyInstances.id, {
-  onDelete: "set null",
-}),
+// 1) 缓存账号引用校验
+if (referencingAccounts.length > 0) {
+  throw new CliproxyInstanceInUseError(
+    instanceId,
+    "该实例下仍存在缓存的 OAuth 账号，请先移除账号后再删除实例"
+  );
+}
+// 2) 上游引用校验，外键 set null 仅作兜底
+if (referencingUpstreams.length > 0) {
+  throw new CliproxyInstanceInUseError(
+    instanceId,
+    "该实例下仍存在关联的池上游或单账号上游，请先删除相关上游后再删除实例"
+  );
+}
 ```
 
-删除一个 CPA 实例时：
+`CliproxyInstanceInUseError` 被路由层映射成 HTTP **409 Conflict**。`cliproxyInstanceId` 列虽然声明了 `onDelete: set null`（`src/lib/db/schema-pg.ts:115-117`），但应用层校验在 SQL 删除之前就会拒绝，外键策略只在数据被绕过应用层（直连 DB 删除）时才生效。
 
-| 关联对象                          | 行为                                                                                                                           |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| 池上游 / 单账号上游               | `cliproxyInstanceId` 置 NULL，`cliproxyProvider` / `cliproxyAuthFileName` 保留；上游记录**不删**，仍按 `base_url` 字面值发请求 |
-| `cliproxy_auth_accounts` 本地缓存 | 不会被自动清理，需要单独处理                                                                                                   |
-| 仍在跑的客户端请求                | 已经选定上游的请求继续发到原 `base_url`，CPA 关掉后会自然超时失败                                                              |
+因此正确的删除顺序是：
 
-换言之，**删除实例不是优雅停机的方式**。要替换模式或迁移 CPA，先把相关上游 `is_active = false` 让流量自然停掉，再删实例。
+| 步骤 | 操作                                                                                       |
+| ---- | ------------------------------------------------------------------------------------------ |
+| 1    | 该实例下所有**池上游 / 单账号上游**逐条删除（或先 `is_active = false` 让流量停掉，再删除） |
+| 2    | 该实例下所有缓存的 **OAuth 账号**逐条删除（管理后台账号列表的删除按钮）                    |
+| 3    | 删除实例本身                                                                               |
+
+任何一步漏做都会让第三步返 409，提示中明确写出还有哪一类引用未清理。**没有「强制删除」开关**——这是有意设计，避免把还在接流量的池上游意外切断。
+
+如果需要迁移到另一台 CPA：先建好新实例并把流量切过去（新建池上游 + 老池上游 `is_active = false` 让权重自然停止流入），观察一段无流量后再按上面三步删除老实例。
 
 ## 何时选哪个
 
