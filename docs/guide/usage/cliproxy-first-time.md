@@ -18,16 +18,16 @@ outline: deep
 
 实例字段对应数据库表 `cliproxy_instances`（`src/lib/db/schema-pg.ts:718`），表单字段如下：
 
-| 字段             | 必填                   | 含义                                                                                      |
-| ---------------- | ---------------------- | ----------------------------------------------------------------------------------------- |
-| `name`           | 是，唯一，最长 64 字符 | 实例名称，仅用于管理后台显示                                                              |
-| `mode`           | 是，默认 `managed`     | `managed`（sidecar，与 AutoRouter 同 Docker 网络）/ `external`（独立运行的远端 CPA 服务） |
-| `base_url`       | 是                     | 客户端代理转发的基础地址。后续创建池上游时会拼接 provider 后缀作为上游 `base_url`         |
-| `management_url` | 是                     | 管理 API 基础地址。AutoRouter 调用 `/v0/management/*` 拉取账号、发起 OAuth 等都走这里     |
-| `client_api_key` | 创建必填，编辑可留空   | 转发流量时注入到 `Authorization` 头的密钥；DB 中以 Fernet 加密存（`schema-pg.ts:727`）    |
-| `management_key` | 创建必填，编辑可留空   | 管理 API 鉴权密钥；DB 中同样 Fernet 加密                                                  |
-| `enabled`        | 否，默认 true          | 关闭后所有依赖该实例的池上游不可用                                                        |
-| `description`    | 否，最长 512 字符      | 备注                                                                                      |
+| 字段             | 必填                   | 含义                                                                                                                                                                                                          |
+| ---------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`           | 是，唯一，最长 64 字符 | 实例名称，仅用于管理后台显示                                                                                                                                                                                  |
+| `mode`           | 是，默认 `managed`     | `managed`（sidecar，与 AutoRouter 同 Docker 网络）/ `external`（独立运行的远端 CPA 服务）                                                                                                                     |
+| `base_url`       | 是                     | 客户端代理转发的基础地址。后续创建池上游时会拼接 provider 后缀作为上游 `base_url`                                                                                                                             |
+| `management_url` | 是                     | 管理 API 基础地址。AutoRouter 调用 `/v0/management/*` 拉取账号、发起 OAuth 等都走这里                                                                                                                         |
+| `client_api_key` | 创建必填，编辑可留空   | 转发流量时注入到 `Authorization` 头的密钥；DB 中以 Fernet 加密存（`schema-pg.ts:727`）                                                                                                                        |
+| `management_key` | 创建必填，编辑可留空   | 管理 API 鉴权密钥；DB 中同样 Fernet 加密                                                                                                                                                                      |
+| `enabled`        | 否，默认 true          | 仅作为管理后台的 enabled / disabled 标识，**不参与路由 / 调度**——把它设为 false 不会让依赖该实例的池上游自动停止接流量；要停流量请在上游层 `is_active = false`。详见 [外部 vs sidecar 选择](./cliproxy-modes) |
+| `description`    | 否，最长 512 字符      | 备注                                                                                                                                                                                                          |
 
 ### sidecar 拓扑下的 base_url 与 management_url 怎么填
 
