@@ -5,19 +5,108 @@ outline: deep
 
 # 管理后台导览
 
-::: warning 撰写中
-此文档目前为占位，正文尚未填充。完整撰写进度跟踪见 [issue #167](https://github.com/g1331/AutoRouter/issues/167)。
-:::
+完成部署、首次登录后进入的页面是仪表盘。侧边栏分两段：上半段是日常使用的「主导航」四项，下半段是不那么常用的「系统」六项。本页按现状把每一项的职责说清楚，便于在动手做配置时直接定位到目标页面，避免在十一个页面间来回试。
 
-## 计划覆盖的内容
+页面路由与中文名称取自 `src/components/admin/sidebar.tsx` 中的导航定义、`src/messages/zh-CN.json` 中的 `nav.*` 键，不靠记忆。
 
-各侧边项的职责：仪表盘、密钥、上游、CLIProxyAPI、熔断器、请求日志、统计、请求录制。
+## 主导航
 
-## 在正文就绪前的临时建议
+| 路由         | 显示名称 | 主要职责                                                                                          |
+| ------------ | -------- | ------------------------------------------------------------------------------------------------- |
+| `/dashboard` | 仪表盘   | 展示请求量统计卡片、用量趋势图、Top 客户端 / Top 模型排行榜；首页登陆后默认所在页面               |
+| `/keys`      | 密钥管理 | 客户端 API Key 的增删改、停用、撤销，绑定可访问的上游集合，控制密钥揭示                           |
+| `/upstreams` | 上游管理 | 上游 AI 提供方的 CRUD、模型路由规则、熔断器配置、连通性测试                                       |
+| `/logs`      | 请求日志 | 分页与多维度过滤的请求日志表格，支持按客户端 Key、上游、模型、状态码、时间筛选；后台 SSE 实时刷新 |
 
-在该文档正文上线之前，可以参考以下材料获取等价信息：
+### 仪表盘
 
-- 项目仓库根目录的 [README.md](https://github.com/g1331/AutoRouter/blob/master/README.md)
-- 现有长篇 [`docs/cliproxy-deployment.md`](/cliproxy-deployment)
-- 现有长篇 [`docs/circuit-breaker.md`](/circuit-breaker)
-- 项目 [Issue 列表](https://github.com/g1331/AutoRouter/issues) 与 [OpenSpec 提案](https://github.com/g1331/AutoRouter/tree/master/openspec)
+仪表盘是最先呈现「这套部署是否在正常工作」的页面。三类信息分块呈现：
+
+- **统计卡片**：总请求数、成功率、平均延迟、活跃客户端 Key 数量等核心指标，按可选时间窗口聚合。
+- **趋势图**：请求量、Token 用量、成功率随时间的曲线，便于发现流量异常或上游异常。
+- **排行榜**：按客户端 Key、按模型、按上游的用量排序，用于识别配额异常或某条 Key 被滥用。
+
+第一次部署后仪表盘多为空。直到至少一条上游被登记、一把客户端 Key 被创建、并通过该 Key 发出过请求之后，才会有数据填充。
+
+### 密钥管理
+
+密钥管理对应 [创建客户端 API Key](./client-keys) 一文的全部操作面。该页面同时承载两类「密钥」：
+
+- **客户端 API Key**：调用方在 `Authorization: Bearer <key>` 中携带的 token，由 AutoRouter 颁发。
+- 与上游凭据（写在上游记录里的 `api_key` 字段）不同——两者完全独立，前者是 AutoRouter 出口侧给客户端的凭证，后者是 AutoRouter 入口侧访问上游用的凭证。
+
+可执行操作：创建、编辑、停用、撤销、配置访问模式（受限 / 全量）、配置允许的模型、绑定可访问的上游集合、配置过期时间、配置消费规则。环境变量 `ALLOW_KEY_REVEAL=true` 才能从该页面揭示已经颁发的 Key 完整明文（默认关闭）。
+
+### 上游管理
+
+对应 [添加第一个上游](./first-upstream)。上游记录是 AutoRouter 路由决策的最重要数据来源，每个上游声明它支持哪些「路由能力」（如 `openai_chat_compatible`、`anthropic_messages`、`gemini_native_generate` 等）、模型规则、权重、优先级、熔断器配置等。
+
+可执行操作：创建、编辑、停用、删除、连通性测试、查看模型规则、调整权重 / 优先级 / 并发上限 / 队列策略、配置熔断阈值、上传或导入模型目录。
+
+### 请求日志
+
+请求日志是最常用的排障入口。每条日志至少记录：客户端 Key、请求的模型、命中的路由能力、最终选中的上游、是否发生 failover、Token 用量、延迟、状态码与错误信息（若有）。过滤条件支持按 Key、按上游、按状态码、按错误类型、按时间窗口。后台轮询保证页面停留时也能看到新进入的请求。
+
+日志保留窗口由 `LOG_RETENTION_DAYS`（默认 `90` 天）决定，定时清理。
+
+## 系统
+
+系统段下的六项偏运维与高级配置，初次部署不一定要碰，但出现特定需求时是相应能力的入口。
+
+| 路由                          | 显示名称     | 适用场景                                                               |
+| ----------------------------- | ------------ | ---------------------------------------------------------------------- |
+| `/system/billing`             | 计费         | 上游 Token 价目同步、计费倍率覆盖、阶梯计费规则                        |
+| `/system/background-sync`     | 后台任务     | 手工触发后台 cron 任务（如健康检查、模型目录刷新、价目同步）并查看状态 |
+| `/system/traffic-recording`   | 请求录制     | 启用 / 禁用流量录制；录制内容可在非生产环境通过 `/api/mock/*` 回放     |
+| `/system/failure-rules`       | 全局失败规则 | 定义 HTTP 状态码 / 错误模式规则，匹配的失败不计入熔断器统计            |
+| `/system/header-compensation` | 请求头补偿   | 向上游请求注入缺失或被剥离的请求头                                     |
+| `/system/cliproxy`            | CLIProxyAPI  | 登记 CLIProxyAPI 实例、查看池上游、OAuth 账号管理                      |
+
+### 计费
+
+向 AutoRouter 注入或覆盖上游模型的定价。日常使用 OpenAI / Anthropic 等主流上游时，定价来自后台同步任务；自部署上游或私有模型时可手工填写倍率与基准价。
+
+### 后台任务
+
+部分维护性操作通过后台 cron 周期触发，例如健康检查、模型目录刷新、计费价目同步。该页面允许手工触发某一项任务，并查看上次运行结果、下次运行时间。
+
+### 请求录制
+
+打开后，符合规则的请求会被写入 `RECORDER_FIXTURES_DIR`（默认 `tests/fixtures`）。录制的 fixture 可在非生产环境通过 `/api/mock/<path>` 端点回放，用于在没有真实上游配额的情况下复现某次请求。`RECORDER_REDACT_SENSITIVE` 控制是否在录制时脱敏敏感字段；环境变量层是 fallback，本页面提供的 Runtime Settings 是更高优先级的运行期开关。
+
+### 全局失败规则
+
+熔断器默认把所有非 2xx 响应与所有网络错误计入失败统计。在某些场景下这并不合理：例如客户端故意发出会被上游拒绝的请求（4xx）、或者上游对某些模型返回标准的「不支持」错误码。全局失败规则允许在管理端集中声明「这类响应不计入熔断器统计」，减少误判触发熔断。
+
+### 请求头补偿
+
+调用方在请求中缺失或被网关剥离了某些上游必需的请求头（如某些上游需要 `OpenAI-Project`、`Anthropic-Version` 等）时，可以在该页面定义补偿规则，AutoRouter 在转发前自动注入。
+
+### CLIProxyAPI
+
+CLIProxyAPI 实例的登记与管理界面。受管 sidecar 与外部 CLIProxyAPI 两种形态都在该页面登记。登记完成后可以触发 OAuth 登录、查看账号池、创建池上游。详细流程参见 [CLIProxyAPI 首次使用指南](./cliproxy-first-time) 与现有长篇 [`docs/cliproxy-deployment.md`](/cliproxy-deployment)。
+
+## 主导航之外
+
+侧边栏底部固定区域还有两项常用控制：
+
+- **语言切换**：在简体中文与英文之间切换。配置存储在 URL 的 `[locale]` 段中，刷新页面后保留。
+- **登出**：清除 `sessionStorage` 中的 admin token，回到登录页。AutoRouter 不使用 cookie，token 仅在当前浏览器 tab 的 session 中存在；关闭浏览器或换 tab 即需要重新登录。
+
+移动端导航条采用了精简版主导航：仪表盘、密钥管理、上游管理、请求日志、设置共 5 项。系统类配置在移动端不在底部导航暴露，需要通过桌面端或在移动浏览器中直接访问对应路径。
+
+## 鉴权与登录约定
+
+登录页 `/login` 要求填入部署时设置的 `ADMIN_TOKEN`（即 `.env` 中的同名字段）。提交后客户端会先用该 token 探测一次 `GET /api/admin/keys?page=1&page_size=1`，返回 200 视为登录成功，否则拒绝。token 以明文存于 `sessionStorage` 的 `admin_token` 键。
+
+服务端校验逻辑（`src/lib/utils/config.ts:124`）只做一次明文相等比较：`token === config.adminToken`。没有 JWT、没有 hash、没有 session 服务端状态。所有 `/api/admin/*` 请求都需要带 `Authorization: Bearer <ADMIN_TOKEN>`。
+
+这就意味着：把 admin token 泄露给浏览器扩展、第三方截图、不可信网络抓包都会直接造成完全的管理权失控。生产部署务必为 admin token 设置高熵值并配合 HTTPS 反向代理使用。
+
+## 不在本页范围内
+
+- 增删上游 / Key 的具体操作步骤：见 [添加第一个上游](./first-upstream)、[创建客户端 API Key](./client-keys)。
+- 通过 AutoRouter 发出第一次请求：见 [通过 AutoRouter 调用模型](./invoke-models)。
+- 模型路由规则的内部逻辑：见后续「模型路由规则」与「负载均衡与权重」。
+- 熔断器状态机与全局失败规则的协同：见现有长篇 [`docs/circuit-breaker.md`](/circuit-breaker) 与后续「熔断器配置」。
+- CLIProxyAPI 实例登记与 OAuth 登录流程：见 [CLIProxyAPI 首次使用指南](./cliproxy-first-time)。
