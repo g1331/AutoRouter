@@ -602,6 +602,46 @@ describe("billing-cost-service", () => {
     );
   });
 
+  it("retries with null upstream_id when wrapped FK violation uses constraint field", async () => {
+    requestLogsFindFirstMock.mockResolvedValueOnce({
+      apiKeyId: "still-valid-key",
+      upstreamId: "doomed-upstream-id",
+    });
+    const fkError = Object.assign(new Error("Failed query: insert into ..."), {
+      cause: {
+        code: "23503",
+        constraint: "request_billing_snapshots_upstream_id_upstreams_id_fk",
+      },
+    });
+    onConflictDoUpdateMock.mockRejectedValueOnce(fkError).mockResolvedValueOnce(undefined);
+
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("../../../src/lib/services/billing-cost-service");
+
+    await calculateAndPersistRequestBillingSnapshot({
+      requestLogId: "log-wrapped-constraint-retry",
+      apiKeyId: "still-valid-key",
+      upstreamId: "doomed-upstream-id",
+      model: "gpt-4.1-smoke",
+      usage: { promptTokens: 6, completionTokens: 3, totalTokens: 9 },
+    });
+
+    expect(onConflictDoUpdateMock).toHaveBeenCalledTimes(2);
+    expect(valuesMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        apiKeyId: "still-valid-key",
+        upstreamId: null,
+      })
+    );
+    expect(loggerWarnMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nulledColumn: "upstreamId",
+        constraint: "request_billing_snapshots_upstream_id_upstreams_id_fk",
+      }),
+      expect.stringContaining("FK violation retried")
+    );
+  });
+
   it("skips quota delta for FK-retried column to avoid db/memory state drift", async () => {
     // 重试时 upstream_id 被置 NULL，配额累加必须基于实际写入值（NULL），
     // 否则数据库快照已无 upstream 维度但内存配额仍按旧 id 累加，造成幽灵配额。
