@@ -20,31 +20,38 @@ interface PgForeignKeyViolation {
   constraint_name?: string;
 }
 
+function extractConstraintName(error: {
+  constraint_name?: unknown;
+  constraint?: unknown;
+}): string | undefined {
+  if (typeof error.constraint_name === "string") return error.constraint_name;
+  if (typeof error.constraint === "string") return error.constraint;
+  return undefined;
+}
+
 /**
  * 提取 Postgres FK 违例信息。drizzle-orm 0.45 会把驱动抛出的 PostgresError 包成
  * DrizzleQueryError 并将原错误塞到 `.cause` 上，因此外层对象本身没有 `code` 字段。
- * 这里同时检查顶层与 `.cause` 一层，覆盖两种形状；非 FK 违例返回 null。
+ * 这里同时检查顶层与 `.cause` 一层，并兼容 postgres-js 的 constraint 字段。
  */
 function extractPgForeignKeyViolation(error: unknown): PgForeignKeyViolation | null {
   if (typeof error !== "object" || error === null) return null;
 
-  const direct = error as { code?: unknown; constraint_name?: unknown };
+  const direct = error as { code?: unknown; constraint_name?: unknown; constraint?: unknown };
   if (direct.code === "23503") {
     return {
       code: "23503",
-      constraint_name:
-        typeof direct.constraint_name === "string" ? direct.constraint_name : undefined,
+      constraint_name: extractConstraintName(direct),
     };
   }
 
   const cause = (error as { cause?: unknown }).cause;
   if (typeof cause === "object" && cause !== null) {
-    const inner = cause as { code?: unknown; constraint_name?: unknown };
+    const inner = cause as { code?: unknown; constraint_name?: unknown; constraint?: unknown };
     if (inner.code === "23503") {
       return {
         code: "23503",
-        constraint_name:
-          typeof inner.constraint_name === "string" ? inner.constraint_name : undefined,
+        constraint_name: extractConstraintName(inner),
       };
     }
   }
