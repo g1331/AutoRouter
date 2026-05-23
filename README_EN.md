@@ -11,6 +11,7 @@
 [![Verify](https://github.com/g1331/AutoRouter/actions/workflows/verify.yml/badge.svg)](https://github.com/g1331/AutoRouter/actions/workflows/verify.yml)
 [![Release](https://github.com/g1331/AutoRouter/actions/workflows/release.yml/badge.svg)](https://github.com/g1331/AutoRouter/actions/workflows/release.yml)
 [![codecov](https://codecov.io/gh/g1331/AutoRouter/graph/badge.svg)](https://codecov.io/gh/g1331/AutoRouter)
+[![Docs](https://img.shields.io/badge/Docs-WIP-orange?logo=vite&logoColor=white)](https://g1331.github.io/AutoRouter/)
 
 <!-- Badges: Tech -->
 
