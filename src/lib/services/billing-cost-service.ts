@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { db, requestBillingSnapshots, upstreams } from "@/lib/db";
+import { db, requestBillingSnapshots, requestLogs, upstreams } from "@/lib/db";
 import {
   resolveBillingModelPrice,
   type BillingPriceSource,
@@ -277,11 +277,29 @@ function calculateCost(
 }
 
 /**
+ * 以 request_logs 行为准重写 api_key_id / upstream_id，避免引用已删除主表行导致 FK 违例。
+ * request_logs 两列都带 `ON DELETE SET NULL`，行内值已是 FK 安全的最终态。
+ */
+async function reconcileFkColumnsWithRequestLog(
+  input: PersistRequestBillingInput
+): Promise<PersistRequestBillingInput> {
+  const logRow = await db.query.requestLogs.findFirst({
+    where: eq(requestLogs.id, input.requestLogId),
+    columns: { apiKeyId: true, upstreamId: true },
+  });
+  if (!logRow) {
+    return { ...input, apiKeyId: null, upstreamId: null };
+  }
+  return { ...input, apiKeyId: logRow.apiKeyId, upstreamId: logRow.upstreamId };
+}
+
+/**
  * Calculate and persist an immutable request billing snapshot.
  */
 export async function calculateAndPersistRequestBillingSnapshot(
-  input: PersistRequestBillingInput
+  rawInput: PersistRequestBillingInput
 ): Promise<PersistedRequestBillingResult> {
+  const input = await reconcileFkColumnsWithRequestLog(rawInput);
   const model = input.model?.trim() ?? "";
   if (!model) {
     return upsertUnbilledSnapshot(input, "model_missing");
