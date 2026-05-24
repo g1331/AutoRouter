@@ -8,6 +8,7 @@ import {
   listFailureRules,
   parseFailureRuleMatch,
 } from "@/lib/services/upstream-failure-rules";
+import { failoverErrorTypeSchema } from "@/lib/constants/failover-error-types";
 import { createLogger } from "@/lib/utils/logger";
 import { z } from "zod";
 
@@ -15,7 +16,7 @@ const log = createLogger("admin-upstream-failure-rules");
 
 const failureRuleMatchSchema = z.object({
   status_codes: z.array(z.number().int().min(100).max(599)).nullable().optional(),
-  error_types: z.array(z.string().trim().min(1)).nullable().optional(),
+  error_types: z.array(failoverErrorTypeSchema).nullable().optional(),
   body_pattern: z.string().nullable().optional(),
   header_name: z.string().nullable().optional(),
   header_pattern: z.string().nullable().optional(),

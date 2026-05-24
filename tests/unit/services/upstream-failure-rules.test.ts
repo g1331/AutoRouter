@@ -424,4 +424,45 @@ describe("upstream-failure-rules", () => {
       })
     ).rejects.toBeInstanceOf(InvalidFailureRuleError);
   });
+
+  it("rejects rules containing unknown FailoverErrorType values", async () => {
+    await expect(
+      createFailureRule({
+        name: "Unknown error type",
+        match: { errorTypes: ["http_500", "timeout"] },
+      })
+    ).rejects.toThrow(/Unknown error types: http_500/);
+
+    await expect(
+      updateFailureRule("rule-1", {
+        match: { errorTypes: ["definitely_not_a_real_type"] },
+      })
+    ).rejects.toBeInstanceOf(InvalidFailureRuleError);
+  });
+
+  it("tolerates legacy rules with unknown errorTypes when matching evidence", async () => {
+    mockFindFirst.mockResolvedValueOnce({
+      id: "upstream-1",
+      failureRuleConfig: { useGlobalRules: true },
+    });
+    mockFindMany.mockResolvedValueOnce([
+      makeRule({
+        id: "legacy-rule",
+        match: {
+          statusCodes: null,
+          errorTypes: ["http_500", "timeout"],
+          bodyPattern: null,
+          headerName: null,
+          headerPattern: null,
+        },
+      }),
+    ]);
+
+    const result = await matchFailureRule({
+      upstreamId: "upstream-1",
+      errorType: "timeout",
+    });
+
+    expect(result?.id).toBe("legacy-rule");
+  });
 });

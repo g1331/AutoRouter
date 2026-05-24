@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { Loader2, Plus, Search, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
@@ -10,6 +10,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { FailoverErrorTypeMultiSelect } from "@/components/admin/failover-error-type-multi-select";
+import { isKnownFailoverErrorType } from "@/lib/constants/failover-error-types";
 import {
   useCreateGlobalUpstreamFailureRule,
   useCreateUpstreamFailureRule,
@@ -41,16 +43,17 @@ function parseStatusCodes(value: string): number[] | null {
 
 function buildMatch(input: {
   statusCodes: string;
-  errorTypes: string;
+  errorTypes: string[];
   bodyPattern: string;
   headerName: string;
   headerPattern: string;
 }): UpstreamFailureRuleMatch {
   const normalizedHeaderName = input.headerName.trim();
   const normalizedHeaderPattern = input.headerPattern.trim();
+  const knownErrorTypes = input.errorTypes.filter(isKnownFailoverErrorType);
   return {
     status_codes: parseStatusCodes(input.statusCodes),
-    error_types: parseCsvList(input.errorTypes) as FailoverErrorType[],
+    error_types: knownErrorTypes.length ? knownErrorTypes : null,
     body_pattern: input.bodyPattern.trim() || null,
     header_name: normalizedHeaderName && normalizedHeaderPattern ? normalizedHeaderName : null,
     header_pattern:
@@ -70,12 +73,41 @@ function hasRuleCondition(match: UpstreamFailureRuleMatch): boolean {
 interface RuleConditionDetail {
   key: string;
   label: string;
-  value: string;
+  value: ReactNode;
+}
+
+function renderErrorTypeChips(
+  errorTypes: readonly string[],
+  getErrorTypeLabel: (type: FailoverErrorType) => string,
+  unknownTooltip: string
+): ReactNode {
+  return (
+    <div className="flex flex-wrap gap-1">
+      {errorTypes.map((entry) =>
+        isKnownFailoverErrorType(entry) ? (
+          <Badge key={entry} variant="secondary" className="px-1.5 py-0.5 text-[10px]">
+            {getErrorTypeLabel(entry)}
+          </Badge>
+        ) : (
+          <Badge
+            key={`unknown-${entry}`}
+            variant="error"
+            title={unknownTooltip}
+            className="px-1.5 py-0.5 text-[10px]"
+          >
+            {entry}
+          </Badge>
+        )
+      )}
+    </div>
+  );
 }
 
 function getRuleConditionDetails(
   match: UpstreamFailureRuleMatch,
-  t: ReturnType<typeof useTranslations>
+  t: ReturnType<typeof useTranslations>,
+  getErrorTypeLabel: (type: FailoverErrorType) => string,
+  unknownTooltip: string
 ): RuleConditionDetail[] {
   const details: RuleConditionDetail[] = [];
   if (match.status_codes?.length) {
@@ -89,7 +121,7 @@ function getRuleConditionDetails(
     details.push({
       key: "error_types",
       label: t("failureRuleErrorTypes"),
-      value: match.error_types.join(", "),
+      value: renderErrorTypeChips(match.error_types, getErrorTypeLabel, unknownTooltip),
     });
   }
   if (match.body_pattern) {
@@ -235,6 +267,12 @@ export function UpstreamFailureRulesEditor({
   scope = "upstream",
 }: UpstreamFailureRulesEditorProps) {
   const t = useTranslations("upstreams");
+  const tErrorType = useTranslations("requestLogs.retryErrorType");
+  const getErrorTypeLabel = useCallback(
+    (type: FailoverErrorType) => tErrorType(type),
+    [tErrorType]
+  );
+  const unknownTooltip = t("failureRuleErrorTypeUnknownTooltip");
   const localRulesQuery = useUpstreamFailureRules(
     upstreamId,
     scope === "upstream" && Boolean(upstreamId)
@@ -248,7 +286,7 @@ export function UpstreamFailureRulesEditor({
   const [name, setName] = useState("");
   const [enabled, setEnabled] = useState(true);
   const [statusCodes, setStatusCodes] = useState("");
-  const [errorTypes, setErrorTypes] = useState("");
+  const [errorTypes, setErrorTypes] = useState<string[]>([]);
   const [bodyPattern, setBodyPattern] = useState("");
   const [headerName, setHeaderName] = useState("");
   const [headerPattern, setHeaderPattern] = useState("");
@@ -290,7 +328,7 @@ export function UpstreamFailureRulesEditor({
     setName("");
     setEnabled(true);
     setStatusCodes("");
-    setErrorTypes("");
+    setErrorTypes([]);
     setBodyPattern("");
     setHeaderName("");
     setHeaderPattern("");
@@ -343,7 +381,12 @@ export function UpstreamFailureRulesEditor({
 
             {filteredRules.length ? (
               filteredRules.map((rule) => {
-                const conditionDetails = getRuleConditionDetails(rule.match, t);
+                const conditionDetails = getRuleConditionDetails(
+                  rule.match,
+                  t,
+                  getErrorTypeLabel,
+                  unknownTooltip
+                );
                 return (
                   <div
                     key={rule.id}
@@ -385,7 +428,13 @@ export function UpstreamFailureRulesEditor({
                                 <div className="text-[10px] uppercase text-muted-foreground">
                                   {detail.label}
                                 </div>
-                                <div className="mt-0.5 break-all font-mono text-xs text-foreground">
+                                <div
+                                  className={
+                                    detail.key === "error_types"
+                                      ? "mt-0.5 text-xs text-foreground"
+                                      : "mt-0.5 break-all font-mono text-xs text-foreground"
+                                  }
+                                >
                                   {detail.value}
                                 </div>
                               </div>
@@ -477,10 +526,15 @@ export function UpstreamFailureRulesEditor({
             onChange={(event) => setStatusCodes(event.target.value)}
             placeholder={t("failureRuleStatusCodesPlaceholder")}
           />
-          <Input
+          <FailoverErrorTypeMultiSelect
             value={errorTypes}
-            onChange={(event) => setErrorTypes(event.target.value)}
+            onChange={setErrorTypes}
+            getLabel={getErrorTypeLabel}
             placeholder={t("failureRuleErrorTypesPlaceholder")}
+            selectAllLabel={t("failureRuleErrorTypesSelectAll")}
+            clearAllLabel={t("failureRuleErrorTypesClearAll")}
+            unknownTooltip={unknownTooltip}
+            removeAriaLabel={t("failureRuleErrorTypesRemoveAria")}
           />
           <Input
             value={bodyPattern}
