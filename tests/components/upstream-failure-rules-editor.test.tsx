@@ -3,6 +3,50 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { UpstreamFailureRulesEditor } from "@/components/admin/upstream-failure-rules-editor";
 import type { UpstreamFailureRule } from "@/types/api";
 
+vi.mock("@/components/admin/failover-error-type-multi-select", () => ({
+  FailoverErrorTypeMultiSelect: ({
+    value,
+    onChange,
+  }: {
+    value: string[];
+    onChange: (next: string[]) => void;
+  }) => (
+    <div data-testid="error-types-multi-select">
+      {[
+        "timeout",
+        "first_byte_timeout",
+        "upstream_no_content_stream",
+        "stream_idle_timeout",
+        "stream_error",
+        "http_5xx",
+        "http_4xx",
+        "http_429",
+        "connection_error",
+        "circuit_open",
+        "concurrency_full",
+      ].map((type) => (
+        <button
+          key={type}
+          type="button"
+          aria-label={`add-${type}`}
+          onClick={() => {
+            if (!value.includes(type)) onChange([...value, type]);
+          }}
+        >
+          add-{type}
+        </button>
+      ))}
+      <ul>
+        {value.map((entry) => (
+          <li key={entry} data-testid="error-types-selected">
+            {entry}
+          </li>
+        ))}
+      </ul>
+    </div>
+  ),
+}));
+
 const { mockToastError, mockToastSuccess } = vi.hoisted(() => ({
   mockToastError: vi.fn(),
   mockToastSuccess: vi.fn(),
@@ -259,9 +303,8 @@ describe("UpstreamFailureRulesEditor", () => {
     fireEvent.change(screen.getByPlaceholderText("failureRuleStatusCodesPlaceholder"), {
       target: { value: " 429, 200, 99, abc " },
     });
-    fireEvent.change(screen.getByPlaceholderText("failureRuleErrorTypesPlaceholder"), {
-      target: { value: "timeout, upstream_error" },
-    });
+    fireEvent.click(screen.getByLabelText("add-timeout"));
+    fireEvent.click(screen.getByLabelText("add-http_5xx"));
     fireEvent.change(screen.getByPlaceholderText("failureRuleBodyPatternPlaceholder"), {
       target: { value: "rate limit" },
     });
@@ -281,7 +324,7 @@ describe("UpstreamFailureRulesEditor", () => {
           enabled: true,
           match: {
             status_codes: [429, 200],
-            error_types: ["timeout", "upstream_error"],
+            error_types: ["timeout", "http_5xx"],
             body_pattern: "rate limit",
             header_name: "retry-after",
             header_pattern: "\\d+",
@@ -314,7 +357,7 @@ describe("UpstreamFailureRulesEditor", () => {
           enabled: true,
           match: {
             status_codes: [500, 503],
-            error_types: [],
+            error_types: null,
             body_pattern: null,
             header_name: null,
             header_pattern: null,

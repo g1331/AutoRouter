@@ -1,6 +1,10 @@
 import { asc, eq, isNull, or } from "drizzle-orm";
 import { db, upstreamFailureRules, upstreams, type UpstreamFailureRule } from "@/lib/db";
 import type { FailoverErrorType } from "@/types/api";
+import {
+  FAILOVER_ERROR_TYPES,
+  isKnownFailoverErrorType,
+} from "@/lib/constants/failover-error-types";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("upstream-failure-rules");
@@ -67,6 +71,15 @@ function assertValidRuleMatch(match: UpstreamFailureRuleMatch): void {
     throw new InvalidFailureRuleError("At least one failure rule condition is required");
   }
 
+  if (match.errorTypes?.length) {
+    const unknown = match.errorTypes.filter((value) => !isKnownFailoverErrorType(value));
+    if (unknown.length) {
+      throw new InvalidFailureRuleError(
+        `Unknown error types: ${unknown.join(", ")}. Allowed values: ${FAILOVER_ERROR_TYPES.join(", ")}`
+      );
+    }
+  }
+
   if (match.bodyPattern?.trim()) {
     try {
       new RegExp(match.bodyPattern);
@@ -129,6 +142,24 @@ function testRegex(pattern: string, value: string | null | undefined): boolean {
   }
 }
 
+const warnedUnknownErrorTypeRuleIds = new Set<string>();
+
+function warnUnknownErrorTypesOnce(rule: UpstreamFailureRule, unknown: string[]): void {
+  if (!unknown.length || warnedUnknownErrorTypeRuleIds.has(rule.id)) {
+    return;
+  }
+  warnedUnknownErrorTypeRuleIds.add(rule.id);
+  log.warn(
+    {
+      ruleId: rule.id,
+      ruleName: rule.name,
+      unknown,
+      allowed: FAILOVER_ERROR_TYPES,
+    },
+    "upstream failure rule contains unknown error types and will never match those values; edit the rule to remove or correct them"
+  );
+}
+
 function ruleMatchesEvidence(rule: UpstreamFailureRule, evidence: FailureEvidence): boolean {
   const match = rule.match as UpstreamFailureRuleMatch;
 
@@ -136,8 +167,12 @@ function ruleMatchesEvidence(rule: UpstreamFailureRule, evidence: FailureEvidenc
     return false;
   }
 
-  if (match.errorTypes?.length && !match.errorTypes.includes(evidence.errorType ?? "")) {
-    return false;
+  if (match.errorTypes?.length) {
+    const unknown = match.errorTypes.filter((value) => !isKnownFailoverErrorType(value));
+    warnUnknownErrorTypesOnce(rule, unknown);
+    if (!match.errorTypes.includes(evidence.errorType ?? "")) {
+      return false;
+    }
   }
 
   if (match.bodyPattern) {
