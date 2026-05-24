@@ -81,7 +81,12 @@ cliproxyProvider: varchar("cliproxy_provider", { length: 32 }),
 | 池上游         | 有值                 | `null`                 | 落到该实例的某个服务商池，CPA 内部按负载策略选账号 |
 | 单账号映射上游 | 有值                 | 有值                   | 固定路由到该 auth-file 对应账号                    |
 
-实例被删除时 FK `ON DELETE SET NULL` 会把这三列清空，上游本身不会被连带删除，但失去 CPA 关联后会退化成名义上的普通上游，需要管理员清理。
+实例的删除受守卫保护，并非依赖 FK 级联兜底。`deleteCliproxyInstance`（`cliproxy-instance-crud.ts:290-324`）在删除前依次检查：
+
+1. 实例下是否仍有缓存的 OAuth 账号——若有则抛 `CliproxyInstanceInUseError`，提示「请先移除账号后再删除实例」
+2. 是否仍有关联该实例的上游（含池上游与单账号映射上游）——若有则抛同类错误，提示「请先删除相关上游后再删除实例」
+
+只有当账号和上游都已清空时，实例本身才会被删除。三个 CPA 关联字段中只有 `cliproxyInstanceId` 带 FK `ON DELETE SET NULL`，但这条 FK 在正常路径下不会触发，仅作兜底，例如直接 SQL 删除绕过应用层守卫的极端情况。`cliproxyAuthFileName` 和 `cliproxyProvider` 是纯文本字段，没有外键，删除实例后不会自动清理。
 
 ## 服务模块分工
 
@@ -167,12 +172,14 @@ if (selectedUpstream.cliproxyAuthFileName && selectedUpstream.cliproxyInstanceId
 
 `validateInstanceAddress`（`cliproxy-instance-crud.ts:105-128`）按 mode 分支：
 
-| 模式       | 校验内容                                                                                         |
-| ---------- | ------------------------------------------------------------------------------------------------ |
-| `managed`  | 仅校验 URL 格式与 `http:` / `https:` 协议；允许私有与内网地址（因为 sidecar 在同一 Docker 网络） |
-| `external` | 在上述基础上额外执行 `isUrlSafe` 三重 SSRF 校验，拦截私有 IP、loopback、云元数据端点等           |
+| 模式       | 校验内容                                                                                                        |
+| ---------- | --------------------------------------------------------------------------------------------------------------- |
+| `managed`  | 仅校验 URL 格式与 `http:` / `https:` 协议；允许私有与内网地址（因为 sidecar 在同一 Docker 网络）                |
+| `external` | 在上述基础上额外执行 `isUrlSafe`：拦截 `localhost`、字符串形态的私有 IP / loopback / link-local / IPv6 私网等等 |
 
-填写 sidecar 的容器服务名 `http://cliproxyapi:8317` 之所以能通过校验，正是因为 managed 模式跳过了 SSRF 那一层。
+`isUrlSafe` 是同步函数，只校验 URL 协议与字面 hostname；当 hostname 是域名时，**不做 DNS 解析**，因此该路径**不包括** [安全模型](./security#ssrf-三重校验) 文档里的第三重 `resolveAndValidateHostname` 校验。换言之，一个解析到 `127.0.0.1` 或 AWS 元数据地址的恶意域名理论上能通过 external 模式的实例创建校验。普通上游创建与连通性测试都会跑第三重 DNS 校验（参见上游连通性测试与探针），CPA 实例 external 模式目前是个例外。
+
+填写 sidecar 的容器服务名 `http://cliproxyapi:8317` 之所以能通过校验，正是因为 managed 模式跳过了整个 `isUrlSafe` 那一层。
 
 ### 容器编排（仅 managed）
 
