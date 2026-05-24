@@ -592,6 +592,10 @@
     "journeyRequestNotSent": "未发送到上游，流程在网关内结束",
     "retryErrorType": {
       "timeout": "超时",
+      "first_byte_timeout": "首字超时",
+      "upstream_no_content_stream": "上游空内容流",
+      "stream_idle_timeout": "流空闲超时",
+      "stream_error": "流异常",
       "http_5xx": "5xx 错误",
       "http_4xx": "4xx 错误",
       "http_429": "429 限流",

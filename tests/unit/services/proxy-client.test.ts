@@ -1758,7 +1758,7 @@ describe("proxy-client", () => {
       await assertion;
     });
 
-    it("should fail first-byte validation when stream closes before content-bearing data", async () => {
+    it("should raise UpstreamNoContentStreamError when stream closes before content-bearing data", async () => {
       const sseData = 'data: {"type":"response.created"}\n\ndata: [DONE]\n\n';
       const mockResponse = new Response(sseData, {
         status: 200,
@@ -1781,8 +1781,8 @@ describe("proxy-client", () => {
           "req-123"
         )
       ).rejects.toMatchObject({
-        name: "FirstByteTimeoutError",
-        timeoutMs: 1000,
+        name: "UpstreamNoContentStreamError",
+        firstByteTimeoutMs: 1000,
       });
     });
 

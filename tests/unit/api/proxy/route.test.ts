@@ -121,6 +121,18 @@ vi.mock("@/lib/services/proxy-client", () => {
     }
   }
 
+  class UpstreamNoContentStreamError extends Error {
+    constructor(
+      public readonly elapsedMs: number,
+      public readonly firstByteTimeoutMs: number
+    ) {
+      super(
+        `Upstream closed SSE stream after ${(elapsedMs / 1000).toFixed(2)}s without producing any content-bearing chunk (first-byte timeout config: ${Math.round(firstByteTimeoutMs / 1000)}s)`
+      );
+      this.name = "UpstreamNoContentStreamError";
+    }
+  }
+
   return {
     forwardRequest: vi.fn(),
     prepareUpstreamForProxy: vi.fn((upstream, timeoutConfig) => ({
@@ -157,6 +169,7 @@ vi.mock("@/lib/services/proxy-client", () => {
     ),
     FirstByteTimeoutError,
     StreamIdleTimeoutError,
+    UpstreamNoContentStreamError,
   };
 });
 

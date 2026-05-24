@@ -17,6 +17,7 @@ import {
   applyCompensationHeaders,
   FirstByteTimeoutError,
   StreamIdleTimeoutError,
+  UpstreamNoContentStreamError,
   type ProxyResult,
   type HeaderDiff,
 } from "@/lib/services/proxy-client";
@@ -823,6 +824,7 @@ function getErrorType(
 ): FailoverAttempt["error_type"] {
   if (error instanceof CircuitBreakerOpenError) return "circuit_open";
   if (error instanceof FirstByteTimeoutError) return "first_byte_timeout";
+  if (error instanceof UpstreamNoContentStreamError) return "upstream_no_content_stream";
   if (error instanceof StreamIdleTimeoutError) return "stream_idle_timeout";
   if (statusCode === 429) return "http_429";
   if (statusCode && statusCode >= 400 && statusCode < 500) return "http_4xx";
@@ -843,7 +845,11 @@ function isFailoverableError(error: unknown): boolean {
   if (error instanceof CircuitBreakerOpenError) {
     return true;
   }
-  if (error instanceof FirstByteTimeoutError || error instanceof StreamIdleTimeoutError) {
+  if (
+    error instanceof FirstByteTimeoutError ||
+    error instanceof StreamIdleTimeoutError ||
+    error instanceof UpstreamNoContentStreamError
+  ) {
     return true;
   }
   if (error instanceof Error) {
