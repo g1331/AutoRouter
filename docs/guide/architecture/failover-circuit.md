@@ -161,7 +161,9 @@ export const DEFAULT_FAILOVER_CONFIG: FailoverConfig = {
 | `createUpstreamModelCatalogSyncTaskDefinition` | 同步上游模型列表 |
 | `createTrafficRecordingCleanupTaskDefinition`  | 清理过期录制文件 |
 
-`probeUpstream()` 是 Admin API 专用的手动探测入口，结果写入 `upstream_health` 表，不会更新熔断器状态。换句话说：要把一个 OPEN 上游放回 CLOSED，要么等真实流量打到它触发 HALF_OPEN，要么使用下文的强制操作。
+这四个函数里，**真正会写 `upstream_health` 表的只有 `checkUpstreamHealth`**：它在 `health-checker.ts:310` 调用 `updateHealthStatus`，后者执行 `db.update(upstreamHealth)` / `db.insert(upstreamHealth)`（`health-checker.ts:192, 206`）。`probeUpstream`（`health-checker.ts:546`）则只调用 `testUpstreamConnection` 做连通测试并返回 `boolean`，**不写任何表**，且 grep 全仓库 `probeUpstream(` 没有任何调用点（dead export）。
+
+任何一种情况下，主动探测都不会改变熔断器状态。要把一个 OPEN 上游放回 CLOSED，要么等真实流量打到它触发 HALF_OPEN，要么使用下文的强制操作。
 
 ## Admin 强制控制
 

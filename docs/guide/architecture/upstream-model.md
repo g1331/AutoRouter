@@ -45,16 +45,39 @@ outline: deep
 
 完整列定义见 `src/lib/db/schema-pg.ts:74-128`。按用途分组介绍最常被路由层读取的字段：
 
-### 路由能力与白名单
+### 路由能力与模型规则
 
-| 字段                 | 类型                           | 作用                                                        |
-| -------------------- | ------------------------------ | ----------------------------------------------------------- |
-| `route_capabilities` | `json (string[])`              | 该上游能处理哪些 `RouteCapability`，运行期会被规范化        |
-| `allowed_models`     | `json (string[])`              | 模型名白名单。`null` 或空数组 = 不限制                      |
-| `model_redirects`    | `json (Record<string,string>)` | 把客户端请求里的 `model` 改写为另一个值再做白名单匹配与转发 |
-| `is_active`          | `boolean`                      | `false` 时整个上游不参与任何路由（管理后台「禁用」）        |
+| 字段                 | 类型                           | 作用                                                                      |
+| -------------------- | ------------------------------ | ------------------------------------------------------------------------- |
+| `route_capabilities` | `json (string[])`              | 该上游能处理哪些 `RouteCapability`，运行期会被规范化                      |
+| `model_rules`        | `json (UpstreamModelRule[])`   | 当前统一的模型匹配规则，详见下文                                          |
+| `allowed_models`     | `json (string[])`              | **legacy 字段**，仅在 `model_rules` 为空时降级生效（每项当 `exact` 规则） |
+| `model_redirects`    | `json (Record<string,string>)` | **legacy 字段**，仅在 `model_rules` 为空时降级生效（每项当 `alias` 规则） |
+| `is_active`          | `boolean`                      | `false` 时整个上游不参与任何路由（管理后台「禁用」）                      |
 
-`model_redirects` 在 model-router 与请求转发两个阶段都会被应用：先按它解析 model 名再过白名单（避免别名旁路），转发时也会把 body 里的 `model` 字段改写成解析后的值。映射链限制 10 跳防循环（`src/lib/services/model-router.ts:355-381`）。
+`UpstreamModelRule` 的 TypeScript 定义在 `src/lib/services/upstream-model-types.ts:42-48`：
+
+```ts
+interface UpstreamModelRule {
+  type: "exact" | "regex" | "alias";
+  value: string; // exact 名称 / 正则表达式 / alias 源名
+  targetModel: string | null; // 仅 alias 类型有值
+  source: "manual" | "native" | "inferred" | "litellm";
+  displayLabel: string | null;
+}
+```
+
+三种规则类型的匹配语义在 `src/lib/services/upstream-model-rules.ts:326`：
+
+- `exact`：`rule.value === model` 严格相等
+- `alias`：`rule.value === model` 命中后通过 `resolveAliasTarget` 解析 `targetModel`，支持多层别名链（最深 10 跳，循环检测）
+- `regex`：`new RegExp(rule.value).test(model)` 全字段正则匹配
+
+::: warning model_redirects 与 model_rules 的 alias **不改写转发 body**
+两者解析出的「目标模型名」只用于**过滤候选**、**写日志** 和 **计费价格解析** 三件事，**不会**改写客户端请求 body 里的 `model` 字段。`forwardRequest` 把原始 model 原样发给上游（`src/lib/services/proxy-client.ts:896, 1095-1098`），唯一会改写 body 的路径是 CLIProxyAPI 上游：当 `selectedUpstream.cliproxyAuthFileName` 存在时，代理层构造 `cliproxyModelOverride` 传给 `forwardRequest`（`route.ts:1513-1525, 1534`），由 `applyModelOverride` 改写 body。
+
+这意味着：给一个普通 OpenAI 上游配置 `model_redirects: { "gpt-4o-mini": "gpt-4o" }`，客户端发 `gpt-4o-mini`，候选筛选与日志会按 `gpt-4o` 来，但实际打到上游的 body 里仍是 `gpt-4o-mini`。需要真正的服务端 model 改写时，应当在客户端层面解决，或者走 CLIProxyAPI 集成。
+:::
 
 ### 调度参数
 
@@ -95,54 +118,101 @@ API Key 的加解密统一通过 `src/lib/utils/encryption.ts` 提供的 `encryp
 路由层判断 provider 的依据是 `route_capabilities`，不是某个独立列。`getPrimaryProviderByCapabilities()`（`route-capabilities.ts:93`）按能力前缀映射出 `anthropic` / `openai` / `google`。
 :::
 
-## model-router 选上游：第一阶段（按模型前缀）
+## 候选池构建：第一阶段（按 RouteCapability + 模型规则）
 
-入口函数 `routeByModel(model)` 位于 `src/lib/services/model-router.ts:306`，五步流程：
+候选池的构建发生在 `handleProxy`（`src/app/api/proxy/v1/[...path]/route.ts:2434`）内部，按「能力 → API Key 授权 → 模型规则」三层过滤，最终交给 `selectFromUpstreamCandidates`。
 
-### 步骤 1：从 model 名推断 provider type
+::: tip 关于 routeByModel
+`src/lib/services/model-router.ts:306` 的 `routeByModel(model)` 实现了一套基于模型名前缀（`claude-` / `gpt-` / `gemini-`）推断 provider type 再过滤候选的算法，但**当前运行期没有任何生产路径调用它**——全仓库 `routeByModel(` 仅匹配定义本身。代理路径采用的是下文描述的 `resolveRouteCapabilityCandidatePool` + `filterCandidatesByModelRules`，按客户端**请求路径**解析出的 `RouteCapability` 与 `model_rules` 进行匹配，与模型名前缀无关。阅读源码时如果落到 `routeByModel` 上，可以视为历史代码。
+:::
 
-`getProviderTypeForModel(model)` 把 model 名 lowercase 后匹配前缀（`model-router.ts:20-24`）：
+### 步骤 1：按 RouteCapability + API Key 授权构建候选池
 
-| 模型前缀  | provider type |
-| --------- | ------------- |
-| `claude-` | `anthropic`   |
-| `gpt-`    | `openai`      |
-| `gemini-` | `google`      |
+`resolveRouteCapabilityCandidatePool`（`route.ts:661`）签名：
 
-无匹配的 model（例如 `qwen-max`）返回 `routingType: "none"`，表示「不按模型路由」，由路径匹配器（见 [请求生命周期](./request-lifecycle)）的 `RouteCapability` 直接决定候选池。
+```ts
+function resolveRouteCapabilityCandidatePool(
+  activeUpstreams: Upstream[],
+  allowedUpstreamIdSet: Set<string>,
+  requestedCapability: RouteCapability,
+  candidateCapability: RouteCapability
+): RouteCapabilityCandidatePool;
+```
 
-### 步骤 2：按 provider type 过滤 active 上游
+`activeUpstreams` 是数据库查出的全部 `is_active=true` 上游（`route.ts:2648`）；`allowedUpstreamIdSet` 在 `restricted` 模式下取 API Key 绑定的 `api_key_upstreams` 集合，`unrestricted` 模式下取全集（`route.ts:2651-2655`）。
 
-第 335 行根据上一步结果，调用 `getPrimaryProviderByCapabilities(upstream.routeCapabilities)` 推算每个 `is_active=true` 上游所属 provider，留下匹配项作为候选。
+过滤逻辑（`route.ts:667-668`）：
 
-### 步骤 3：剔除熔断 OPEN 中的上游
+```ts
+const capabilityCandidates = activeUpstreams.filter((upstream) =>
+  resolveRouteCapabilities(upstream.routeCapabilities).includes(candidateCapability)
+);
+```
 
-`filterUpstreamsByCircuitBreaker`（`model-router.ts:345`）排除状态为 `OPEN` 且尚未超过 `openDuration` 的上游，剔除原因记为 `"circuit_open"`。OPEN 超时后会被允许通过，作为 HALF_OPEN 探测请求。
+随后再用 `allowedUpstreamIdSet` 做授权过滤（`route.ts:670-672`），得到 `authorizedCapabilityCandidates`，并把这一层结果命名输出在 `RouteCapabilityCandidatePool`（`route.ts:653-659`）：
 
-### 步骤 4：白名单 + 别名解析
+- `capabilityCandidates`：能力匹配但不限授权
+- `authorizedCapabilityCandidates`：能力匹配 + API Key 授权
+- `candidateUpstreamIds`：上一层 ID 列表，是后续函数的实际输入
 
-第 355-381 行对每个剩余上游：
+主候选池在 `route.ts:2657` 构建。如果客户端命中的是 CLI 窄能力（`codex_cli_responses` / `claude_code_messages`），代理还会在 `route.ts:2665` 用 `getFallbackRouteCapability` 解析出的通用能力构建第二个 fallback 池，由 `shouldPreferGenericFallbackPool` 决定使用哪个。
 
-1. 用 `resolveModelWithRedirects(model, upstream.modelRedirects)` 解析 model 名（最多 10 跳，循环检测）；
-2. 若 `allowedModels` 非空，检查解析后的 model 是否在白名单里；
-3. 第一个通过的上游被记为 `selectedUpstream`。
+### 步骤 2：按 model_rules 过滤候选
 
-### 步骤 5：回退兜底
+`filterCandidatesByModelRules`（`route.ts:591`）以请求 body 里的 `model` 字段为输入：
 
-如果没有任何上游通过白名单，但确实存在健康上游，第 389 行会忽略 `allowedModels` 取第一个健康上游作 fallback。这一行为是为了避免「客户端用了一个生僻 model 名 → 全部上游拒收 → 直接 500」的可用性问题，但代价是白名单失效。
+```ts
+function filterCandidatesByModelRules(
+  originalModel: string | null,
+  candidates: Upstream[]
+): { allowed: Upstream[]; excluded: RoutingExcluded[] };
+```
 
-### 错误类型
+行为（`route.ts:595-622`）：
 
-| 错误类                   | 含义                                                  |
-| ------------------------ | ----------------------------------------------------- |
-| `NoUpstreamGroupError`   | provider type 有效，但没有任何上游声明对应 capability |
-| `NoHealthyUpstreamError` | 有候选上游，但全部被熔断器过滤掉                      |
+- `originalModel` 为 `null`（请求 body 没有 `model` 字段）→ 全部放行，不过滤
+- 否则对每个候选调用 `resolvePathRoutingModelForUpstream(originalModel, candidate)`：
+  - 命中（`matched: true`）→ 加入 `allowed`
+  - 未命中且上游有显式规则（`hasExplicitRules: true`）→ 加入 `excluded`，理由 `"model_not_allowed"`
+  - 未命中且上游没有任何规则（`hasExplicitRules: false`）→ **仍加入 `allowed`**（视为「不限制」）
 
-错误类定义在 `model-router.ts:72, 82`。具体 HTTP 状态码与客户端错误码映射见 [使用 / 故障排查手册](../usage/troubleshooting)。
+这步调用在 `route.ts:2749`，紧跟主候选池构建之后；fallback 池切换时第二次调用在 `route.ts:3062`。
+
+### 步骤 3：resolvePathRoutingModelForUpstream 与规则合并
+
+每个候选上游被 `filterCandidatesByModelRules` 调用时，最终落到 `resolvePathRoutingModelForUpstream`（`route.ts:557`），它内部调用 `matchUpstreamModelRules` 完成实际匹配，返回：
+
+```ts
+{
+  (matched, hasExplicitRules, resolvedModel, redirectApplied);
+}
+```
+
+`normalizeUpstreamModelRules`（`upstream-model-rules.ts:189`）是规则合并的统一入口：
+
+- `model_rules` 非空 → 逐条规范化为 `exact` / `regex` / `alias`
+- `model_rules` 为空 → 降级兼容旧字段：把 `allowed_models` 的每一项转成 `exact` 规则，把 `model_redirects` 的每一项转成 `alias` 规则
+
+匹配按规则数组顺序逐条尝试，第一条命中即生效。命中 `alias` 规则后通过 `resolveAliasTarget` 解析 `targetModel`（多层别名链，最深 10 跳）。
+
+### 步骤 4：resolvedModel 的真实用途
+
+`resolvePathRoutingModelForUpstream` 返回的 `resolvedModel` 在四处被消费（`route.ts:2847, 3080, 3142, 3897`）：
+
+1. 决定 API Key 配额检查时用哪个 model 名（计费维度对齐）
+2. 写入 `request_logs` 与 `RoutingDecisionLog.resolved_model`
+3. `request_billing_snapshots` 计算模型价格时使用
+4. failover 错误路径中以最终归因上游计算 `resolvedModel` 后写入失败日志
+
+如前文「路由能力与模型规则」section 所述，**`resolvedModel` 不参与请求 body 改写**，仅普通上游的 body 里 `model` 字段保持客户端原值。
+
+### 步骤 5：候选 ID 列表交给 load-balancer
+
+走到这里得到 `candidateUpstreamIds`（已通过 capability、API Key 授权、model_rules 三重过滤），由 `handleProxy` 在 `route.ts:3039` / `route.ts:3094`（fallback 路径）传给 `forwardWithFailover`，后者在 `route.ts:1380` 调用 `selectFromUpstreamCandidates` 进入第二阶段。
 
 ## load-balancer 选上游：第二阶段（按 tier + 加权）
 
-`routeByModel` 完成「按 model 选 provider type」之后，候选 ID 列表传给 `selectFromUpstreamCandidates`（`src/lib/services/load-balancer.ts:675`），由它执行 tier 过滤、加权抽样、session affinity。
+候选 ID 列表传给 `selectFromUpstreamCandidates`（`src/lib/services/load-balancer.ts:675`），由它执行 tier 过滤、加权抽样、session affinity。
 
 ### 候选池过滤顺序
 
@@ -213,16 +283,19 @@ effectiveWeight = upstream.weight * score
 
 ## 调用链一览
 
-| 入口                                                               | 行号      | 作用                              |
-| ------------------------------------------------------------------ | --------- | --------------------------------- |
-| `src/app/api/proxy/v1/[...path]/route.ts` `handleProxy`            | 2434      | 代理主流程容器                    |
-| ↳ `resolveRouteCapability(method, path, headers)`                  | 2498      | 路径 → RouteCapability            |
-| ↳ `resolveRouteCapabilityCandidatePool`                            | 2657      | 按主能力构建候选池                |
-| ↳ `getFallbackRouteCapability` + 副候选池                          | 2663-2672 | CLI 能力降级路径                  |
-| ↳ `forwardWithFailover(... candidateUpstreamIds ...)`              | 1289      | 故障转移主循环                    |
-| `src/lib/services/model-router.ts` `routeByModel(model)`           | 306       | 按 model 字段筛 provider 与白名单 |
-| `src/lib/services/load-balancer.ts` `selectFromUpstreamCandidates` | 675       | tier 过滤 + 加权抽样              |
-| ↳ `performTieredSelection`                                         | 983       | 内部 tier 循环                    |
-| ↳ `selectWeightedWithHealthScore`                                  | 485       | 加权抽样实现                      |
+| 入口                                                                           | 行号      | 作用                               |
+| ------------------------------------------------------------------------------ | --------- | ---------------------------------- |
+| `src/app/api/proxy/v1/[...path]/route.ts` `handleProxy`                        | 2434      | 代理主流程容器                     |
+| ↳ `resolveRouteCapability(method, path, headers)`                              | 2498      | 路径 → RouteCapability             |
+| ↳ `resolveRouteCapabilityCandidatePool`                                        | 2657      | 按主能力 + API Key 授权构建候选池  |
+| ↳ `getFallbackRouteCapability` + 副候选池                                      | 2663-2672 | CLI 能力降级路径                   |
+| ↳ `filterCandidatesByModelRules`                                               | 2749      | 按 `model_rules` 过滤候选          |
+| ↳ `forwardWithFailover(... candidateUpstreamIds ...)`                          | 3039      | 故障转移主循环                     |
+| `src/app/api/proxy/v1/[...path]/route.ts` `resolvePathRoutingModelForUpstream` | 557       | 实际匹配规则、产出 `resolvedModel` |
+| `src/lib/services/upstream-model-rules.ts` `normalizeUpstreamModelRules`       | 189       | model_rules / 旧字段统一规范化     |
+| `src/lib/services/upstream-model-rules.ts` `matchUpstreamModelRules`           | 326       | 三种规则类型的实际匹配             |
+| `src/lib/services/load-balancer.ts` `selectFromUpstreamCandidates`             | 675       | tier 过滤 + 加权抽样               |
+| ↳ `performTieredSelection`                                                     | 983       | 内部 tier 循环                     |
+| ↳ `selectWeightedWithHealthScore`                                              | 485       | 加权抽样实现                       |
 
 读源码时按这条链顺着走即可。后续上游被选中后的转发、SSE 处理、失败重试由 [请求生命周期](./request-lifecycle) 和 [失败转移与熔断](./failover-circuit) 接力描述。
