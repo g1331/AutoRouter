@@ -105,11 +105,13 @@ export const DEFAULT_FAILOVER_CONFIG: FailoverConfig = {
 
 代理层把两类错误判定为可故障转移：
 
-**异常类（`isFailoverableError`，`route.ts:842-863`）**：
+**异常类（`isFailoverableError`，`route.ts:844-869`）**：
 
 - `CircuitBreakerOpenError`
-- `FirstByteTimeoutError` / `StreamIdleTimeoutError`
+- `FirstByteTimeoutError` / `StreamIdleTimeoutError` / `UpstreamNoContentStreamError`
 - 错误消息包含 `timed out` / `timeout` / `econnrefused` / `econnreset` / `socket hang up` / `network` / `fetch failed` / `circuit breaker`
+
+`UpstreamNoContentStreamError` 表示上游 SSE 流正常关闭、但没有产生任何 content-bearing chunk（典型表现是只发送 `response.created` 等 metadata 事件就 `[DONE]`）。它与 `FirstByteTimeoutError` 的关键区别在于：首字超时计时器从未触发，上游是「主动提前结束流」，因此错误文案会同时携带实际耗时与配置阈值，避免把配置值误读成实际等待时长。
 
 **HTTP 响应类（`shouldTriggerFailover`，`failover-config.ts:57-73`）**：
 

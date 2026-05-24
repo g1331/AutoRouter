@@ -591,6 +591,7 @@ function RetryTimeline({
     switch (errorType) {
       case "timeout":
       case "first_byte_timeout":
+      case "upstream_no_content_stream":
       case "stream_idle_timeout":
         return <Clock className="w-3 h-3 text-status-warning" />;
       case "http_5xx":
@@ -665,6 +666,7 @@ function RetryTimeline({
                     attempt.error_type === "http_5xx" && "text-status-error",
                     (attempt.error_type === "timeout" ||
                       attempt.error_type === "first_byte_timeout" ||
+                      attempt.error_type === "upstream_no_content_stream" ||
                       attempt.error_type === "stream_idle_timeout") &&
                       "text-status-warning",
                     attempt.error_type === "http_429" && "text-orange-500",

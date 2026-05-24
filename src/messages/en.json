@@ -587,6 +587,10 @@
     "journeyRequestNotSent": "Did not send the request upstream; the flow ended inside the gateway",
     "retryErrorType": {
       "timeout": "timeout",
+      "first_byte_timeout": "first-byte timeout",
+      "upstream_no_content_stream": "upstream no-content stream",
+      "stream_idle_timeout": "stream idle timeout",
+      "stream_error": "stream error",
       "http_5xx": "HTTP 5xx",
       "http_4xx": "HTTP 4xx",
       "http_429": "HTTP 429",

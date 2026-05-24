@@ -87,6 +87,24 @@ export class StreamIdleTimeoutError extends Error {
   }
 }
 
+/**
+ * Error raised when an upstream SSE stream closes cleanly before producing any
+ * content-bearing chunk. This is distinct from FirstByteTimeoutError: the
+ * configured first-byte timer never fired — the upstream simply finished the
+ * stream early (often after sending only metadata events).
+ */
+export class UpstreamNoContentStreamError extends Error {
+  constructor(
+    public readonly elapsedMs: number,
+    public readonly firstByteTimeoutMs: number
+  ) {
+    super(
+      `Upstream closed SSE stream after ${(elapsedMs / 1000).toFixed(2)}s without producing any content-bearing chunk (first-byte timeout config: ${Math.round(firstByteTimeoutMs / 1000)}s)`
+    );
+    this.name = "UpstreamNoContentStreamError";
+  }
+}
+
 function maskSecretValue(value: string): string {
   const trimmed = value.trim();
   if (trimmed.length <= 6) return "***";
@@ -943,6 +961,8 @@ async function waitForFirstStreamContent(options: {
     return;
   }
 
+  const startedAt = Date.now();
+
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   const timeoutPromise = new Promise<never>((_resolve, reject) => {
     timeoutId = setTimeout(() => {
@@ -953,7 +973,7 @@ async function waitForFirstStreamContent(options: {
 
   const streamDoneBeforeContentPromise = options.onStreamDone.then(() => {
     if (!options.hasFirstContent()) {
-      throw new FirstByteTimeoutError(options.timeoutMs ?? 0);
+      throw new UpstreamNoContentStreamError(Date.now() - startedAt, options.timeoutMs ?? 0);
     }
   });
 
