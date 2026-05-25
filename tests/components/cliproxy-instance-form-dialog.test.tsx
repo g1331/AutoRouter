@@ -61,4 +61,11 @@ describe("CliproxyInstanceFormDialog", () => {
     const testButton = screen.getByText("testConnection").closest("button");
     expect(testButton).toBeDisabled();
   });
+
+  it("模式字段下方展示 localhost 陷阱提示", () => {
+    render(<CliproxyInstanceFormDialog open onOpenChange={vi.fn()} />);
+    expect(screen.getByText("fieldModeHint")).toBeInTheDocument();
+    expect(screen.getByText("fieldBaseUrlHint")).toBeInTheDocument();
+    expect(screen.getByText("fieldManagementUrlHint")).toBeInTheDocument();
+  });
 });
