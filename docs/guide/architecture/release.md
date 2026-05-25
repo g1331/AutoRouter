@@ -98,14 +98,23 @@ tags: |
   type=raw,value=latest,enable=${{ !contains(steps.validate.outputs.release_version, '-') }}
 ```
 
-对应实际生成的 tag：
+四条规则对应实际生成的 tag（以 `v0.2.0` 与 `v0.3.0-alpha.1` 为例）：
 
-| 来源规则                                  | 稳定 release（`v0.2.0`） | 预发布（`v0.3.0-alpha.1`） |
-| ----------------------------------------- | ------------------------ | -------------------------- |
-| `type=raw,value=${{ github.ref_name }}`   | `v0.2.0`                 | `v0.3.0-alpha.1`           |
-| `type=semver,pattern={{version}}`         | `0.2.0`                  | `0.3.0-alpha.1`            |
-| `type=semver,pattern={{major}}.{{minor}}` | `0.2`                    | —（不生成）                |
-| `type=raw,value=latest`                   | `latest`                 | —（不生成）                |
+```text
+稳定 release (v0.2.0):
+  type=raw,value=<ref_name>             →  v0.2.0
+  type=semver,pattern=<version>         →  0.2.0
+  type=semver,pattern=<major>.<minor>   →  0.2
+  type=raw,value=latest                 →  latest
+
+预发布 (v0.3.0-alpha.1):
+  type=raw,value=<ref_name>             →  v0.3.0-alpha.1
+  type=semver,pattern=<version>         →  0.3.0-alpha.1
+  type=semver,pattern=<major>.<minor>   →  —（不生成）
+  type=raw,value=latest                 →  —（不生成）
+```
+
+上面示意里 `<ref_name>` / `<version>` / `<major>.<minor>` 在 release.yml 的原始 yaml 中分别对应 GitHub Actions 上下文表达式与 docker/metadata-action 的占位符（实际写法见上一个 yaml 代码块）。
 
 设计目的：
 

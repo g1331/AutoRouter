@@ -46,14 +46,14 @@ outline: deep
 5. `docker/metadata-action` 生成镜像 tag 集合。
 6. `docker/build-push-action` 推送镜像，平台限定 `linux/amd64`，构建缓存通过 `type=gha` 复用。
 
-镜像 tag 的具体生成规则按 `docker/metadata-action` 的 `tags:` 段（`.github/workflows/release.yml:96-100`）：
+镜像 tag 的具体生成规则按 `docker/metadata-action` 的 `tags:` 段（`.github/workflows/release.yml:96-100`），合计 4 条：
 
-| 规则                                      | 何时生效              |
-| ----------------------------------------- | --------------------- |
-| `type=raw,value=${{ github.ref_name }}`   | 始终：原始 tag 字符串 |
-| `type=semver,pattern={{version}}`         | 始终：完整 semver     |
-| `type=semver,pattern={{major}}.{{minor}}` | 仅稳定 tag（无 `-`）  |
-| `type=raw,value=latest`                   | 仅稳定 tag（无 `-`）  |
+1. `type=raw,value=<github.ref_name>`：始终生成，使用 push 进来的原始 tag 字符串。
+2. `type=semver,pattern=<version>`：始终生成，完整 semver。
+3. `type=semver,pattern=<major>.<minor>`：仅稳定 tag（不含 `-` 后缀）。
+4. `type=raw,value=latest`：仅稳定 tag。
+
+`<github.ref_name>` 与 `<version>` / `<major>.<minor>` 在 release.yml 的 yaml 中分别对应 GitHub Actions 上下文表达式与 docker/metadata-action 的内置占位符；上述说明用尖括号包住，避免与 VitePress 的 Vue 模板语法冲突，原文里它们仍是带双花括号的标准写法（直接看仓库内 `.github/workflows/release.yml:96-100` 即可）。
 
 带 alpha/beta 后缀的 tag 只会更新与 tag 本身同名的镜像，不会污染 `latest` 与 `MAJOR.MINOR`，避免预览版本被默认拉取到生产环境。
 
