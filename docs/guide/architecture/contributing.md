@@ -158,8 +158,8 @@ pre-commit install                # 写入 .git/hooks/pre-commit
 2. **拉分支、写实现、跑测试**：本地至少跑 `pnpm test:run` 与 `pnpm exec tsc --noEmit`，必要时跑 `pnpm e2e`。
 3. **提 PR**：标题与首条 commit 风格一致（Conventional Commits）；PR body 简要写：动机、改了什么、是否引入破坏性变更、是否需要数据库迁移。模板可参考 `cliff.toml` 各分组的实际产出。
 4. **等 CI**：`verify.yml` 的 `verify-status` 必须通过；docs 改动会触发 `docs.yml`。CI 失败先看日志而不是反复重试。
-5. **响应 review**：fix 类响应直接 push 新 commit；不强行 rebase / squash，PR 合入时由 reviewer 选 squash / merge 策略。
-6. **合入**：默认由 reviewer 操作 merge。涉及多 commit 的功能 PR 推荐用 squash merge 让 master 历史保持线性，docs 类多文件 PR 也走相同方式。
+5. **响应 review**：fix 类响应直接 push 新 commit；不强行 rebase / squash，PR 合入时由 reviewer 选合并策略。
+6. **合入**：默认由 reviewer 操作 merge。仓库近期实际历史以 merge commit（`Merge pull request #N from ...`）为主，配合 `cliff.toml:45` 中显式 `skip` 这类 commit 的设定，保证 release notes 渲染时只看到主题 commit。需要 squash 把多个 fixup 合并的话由 reviewer 决定。
 
 ## OpenSpec 提案
 

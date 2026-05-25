@@ -102,28 +102,58 @@ curl -H "Authorization: Bearer ${ADMIN_TOKEN}" \
 
 ## 数据库迁移与升级顺序
 
-`deploy-personal.yml` 当前不会在远端自动跑数据库迁移，迁移由部署人手工触发。这导致升级时必须按 schema 兼容性区分顺序：
+迁移由 autorouter 容器 entrypoint（`scripts/docker-entrypoint.sh`）在每次启动期自动 apply——脚本内嵌一段不依赖 `drizzle-kit` 的 migration runner，按文件名顺序把 `drizzle/*.sql` 中尚未 apply 的项写入数据库，并把哈希记到 `__drizzle_migrations` 表。这意味着切镜像后**第一次启动**就会增量 apply 新迁移，部署人不需要、也无法在容器内手工跑 `drizzle-kit migrate`（dev 依赖不在 standalone 镜像内）。
+
+具体行为按迁移类型分两种情形处理。
 
 ### 前向兼容的迁移
 
-新版本仅新增列 / 新增可空字段 / 新增表 / 索引变化，旧版本应用代码不读新字段。这类升级可以「先切镜像、再跑迁移」或「先迁移、再切镜像」皆可，操作风险低：
+新版本仅新增列 / 新增可空字段 / 新增表 / 索引变化，旧版本应用代码不读新字段。这类升级直接 `docker compose up -d` 即可：
 
 ```bash
-# 切镜像
+# .env 切到新 AUTOROUTER_IMAGE 后
 docker compose up -d
-# 跑迁移（容器内）
-docker compose exec autorouter node node_modules/drizzle-kit/bin.cjs migrate
+# entrypoint 自动 apply 新迁移 → 应用启动
+docker compose logs autorouter | grep -E '\[AutoRouter\] (Applying|Migrations completed)'
 ```
+
+日志中会看到 `Applying migration: <id>_*.sql` 与 `Migrations completed` 两类行，确认迁移已经走到末尾即可。
 
 ### 破坏性迁移
 
-新版本删列 / 改类型 / 重命名表 / 修改约束。此时旧版本应用如果还在跑、又遇到新 schema，会立刻失败。必须按下面顺序：
+新版本删列 / 改类型 / 重命名表 / 修改约束。entrypoint 仍会按 forward 路径自动 apply 迁移，但有两个风险需要在升级前规避：
 
-1. 短暂停业务：`docker compose stop autorouter`（PG 容器保持运行）。
-2. 跑迁移：`docker compose exec db psql -U autorouter -d autorouter -f /tmp/migrate.sql`，或者临时启动一个新版本镜像在 entrypoint 加 `--migrate-only` 等价物（项目当前没有该选项，手工跑 `node drizzle-kit migrate` 是标准做法）。
-3. 切镜像：修改 `.env` 中 `AUTOROUTER_IMAGE`，`docker compose up -d autorouter`。
+- **旧版本副本崩溃**：蓝绿 / 多副本部署里，若旧版本应用还指向旧字段就开始读写，新镜像 apply 破坏性迁移后旧副本会立刻报字段缺失。生产升级前需要先把旧副本全部下线（或确认只有单副本）。
+- **不能自动回滚**：entrypoint 只 forward apply，不做 rollback。一旦新迁移在生产 PG 上 apply 成功，旧版本镜像就无法在不修复 schema 的前提下重新启动。
 
-破坏性迁移不能回滚——回滚意味着把已经 `DROP` 掉的列变回来，等价于「换库」。因此破坏性升级**必须**在升级前完成 `pg_dump` 离线备份。
+破坏性升级前必须先 `pg_dump` 出离线备份；回滚路径只能依靠把 dump 回灌到迁移前状态，再切回旧镜像。备份方式见 [数据持久化与备份](./persistence-backup)。
+
+```bash
+# 0. 升级前：在迁移 apply 之前做完整 dump
+docker exec autorouter-db \
+  pg_dump --clean --if-exists -U autorouter autorouter \
+  | gzip > /backup/before-vN.N.N.sql.gz
+
+# 1. 单副本可以直接切镜像；多副本需先下线旧副本
+sed -i "s|^AUTOROUTER_IMAGE=.*|AUTOROUTER_IMAGE=ghcr.io/g1331/autorouter:vN.N.N|" .env
+docker compose up -d autorouter
+
+# 2. 看 entrypoint 是否正常 apply 完
+docker compose logs --tail=200 autorouter
+```
+
+如果只有数据库迁移本身想单独 apply（不切应用镜像），可以临时拉一个**新版本镜像**并只让它跑 entrypoint 的迁移段、跑完即退：
+
+```bash
+docker run --rm \
+  --network autorouter-net \
+  -e DATABASE_URL="${DATABASE_URL}" \
+  --entrypoint /bin/sh \
+  ghcr.io/g1331/autorouter:vN.N.N \
+  /app/docker-entrypoint.sh true
+```
+
+`true` 命令把 entrypoint 末尾的 `exec "$@"` 替换为空操作，让脚本跑完迁移后直接退出，不启动应用。这是少数需要「迁移与应用启动解耦」时的实用手段。
 
 ## 回滚到上一个版本
 

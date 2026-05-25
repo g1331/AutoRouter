@@ -203,12 +203,27 @@ docker compose -f docker-compose.yml -f docker-compose.cliproxy.yml up -d clipro
 
 ## 流量录制目录备份
 
-`recordTrafficFixture`（`src/lib/services/traffic-recorder.ts:517`）把录制内容以 JSON 写到 `RECORDER_FIXTURES_DIR`（默认 `tests/fixtures`，仓库内默认；deploy 工作流通常落到 `/app/data/...` 之类挂入卷的位置）。数据库 `trafficRecordings` 表只存元数据与 `fixture_path` 路径。这意味着：
+`recordTrafficFixture`（`src/lib/services/traffic-recorder.ts:517`）把录制内容以 JSON 写到 `RECORDER_FIXTURES_DIR` 指向的目录。数据库 `trafficRecordings` 表只存元数据与 `fixture_path` 路径。这意味着：
 
 - 单独备份 PG 不足以恢复录制；恢复后详情页打开会找不到文件。
 - 单独备份录制目录也不够；查询索引、过滤、统计都依赖 PG。
 
-完整的录制备份必须 PG 与录制目录一起做。`RECORDER_FIXTURES_DIR` 通常会挂入名为 `autorouter-data` 的 named volume（如默认编排），或挂入 bind mount。备份方式与 `cliproxy-auth` 同套路：用一次性容器 + `tar`。
+完整的录制备份必须 PG 与录制目录一起做。
+
+::: danger 默认 RECORDER_FIXTURES_DIR 不是持久路径
+`docker-compose.yml` 中 `RECORDER_FIXTURES_DIR` 的默认值是 `tests/fixtures`（相对于容器内 `/app/`），实际写到 `/app/tests/fixtures`——这个目录在容器内部、**不在任何 named volume 上**。容器一旦重建（`docker compose up -d` 拉新镜像、`docker compose down && up -d` 等）所有录制文件即丢失。
+
+要在生产环境保留录制，必须显式把 `RECORDER_FIXTURES_DIR` 指到挂在持久卷上的子目录。最少改动是把它指到 `autorouter-data` 卷下的子目录：
+
+```env
+# .env
+RECORDER_FIXTURES_DIR=/app/data/traffic-recordings
+```
+
+`docker compose up -d` 让 autorouter 容器读到新值后，录制就会落到 `autorouter-data` 卷里，下面的备份命令才有意义。如果当前部署是默认值，需要在改 `.env` 之前接受「现存的容器内录制将随重建丢失」这一前提。
+:::
+
+把 `RECORDER_FIXTURES_DIR` 指到 `/app/data/...` 之后，录制目录就并入了 `autorouter-data` 卷，备份方式与 `cliproxy-auth` 同套路：用一次性容器 + `tar`。
 
 ```bash
 docker run --rm \

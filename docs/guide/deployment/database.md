@@ -59,7 +59,16 @@ DATABASE_URL=postgresql://autorouter:<strong-password>@db:5432/autorouter
 docker compose up -d
 ```
 
-`autorouter` 容器对 `db.condition: service_healthy` 有 `depends_on` 约束，会等 `pg_isready` 通过后才启动。容器内 AutoRouter 启动时不会自动跑迁移，需要按下文「迁移流程」执行 `pnpm db:migrate`，或在 CI 中由 `deploy-personal.yml` 之外的渠道触发。
+`autorouter` 容器对 `db.condition: service_healthy` 有 `depends_on` 约束，会等 `pg_isready` 通过后才启动。容器 entrypoint（`scripts/docker-entrypoint.sh`）在应用启动**之前**会自动跑一遍迁移——脚本内嵌一段不依赖 `drizzle-kit` 的自实现 migration runner，按文件名顺序 apply `drizzle/*.sql`，并把已 apply 的迁移哈希记到 `__drizzle_migrations` 表里。这意味着每次 `docker compose up -d`、`docker compose restart autorouter` 或新版本镜像首启都会增量 apply 新迁移，不需要部署人手工触发 `pnpm db:migrate`。
+
+::: tip 手工跑迁移的几种场景
+绝大多数运行期场景由 entrypoint 自动处理。只有在下列特殊情况下才需要手工干预：
+
+- 开发期对本地 SQLite 操作：`pnpm db:migrate:sqlite`。
+- 在容器外、对 PG 单独 apply 某条 SQL：`docker compose exec db psql -U autorouter -d autorouter -f /path/to/migration.sql`。
+- 跑 `pnpm db:migrate` / `drizzle-kit migrate` 需要 dev 依赖，**生产容器内不可用**——`Dockerfile` 的 standalone runner stage 只 copy `postgres` 这一个 node_modules 子包，`drizzle-kit` 是 devDependency 不进镜像。需要在本地或 CI runner 上跑。
+
+:::
 
 ### 本地 PostgreSQL（非 Docker）
 
@@ -167,12 +176,16 @@ drizzle-sqlite/
 
 ## 与升级 / 回滚的关系
 
-`deploy-personal.yml` 当前不会在远端自动跑迁移。这是个隐含约束——镜像内的应用代码与服务器上 PG 的 schema 应当事先对齐：
+升级到新镜像 tag 时，迁移由 autorouter 容器 entrypoint 在启动期自动 apply（见上文）。这条自动路径对**前向兼容**的迁移完全够用：
 
-- **前向兼容的迁移**：新版本的 schema 与上一版本完全兼容（仅新增列、新增可空字段），可以先把镜像升上去，再事后跑 `pnpm db:migrate`（或在容器内执行 `node node_modules/drizzle-kit/bin.cjs migrate`）。
-- **破坏性迁移**：删列、改类型、重命名等。生产升级前必须先把数据库迁好、再切镜像；回滚同理，需要先回滚 schema 再切镜像。
+- **前向兼容的迁移**：新版本仅新增列 / 新增可空字段 / 新增表 / 索引变化。`docker compose up -d` 切镜像 → entrypoint 自动 apply 新迁移 → 应用启动。中间无需手工干预。
 
-回滚到旧 tag 时，如果旧版本 schema 不兼容当前数据库（例如新增了 NOT NULL 列），应用启动会立刻失败。详细策略见 [升级与回滚](./upgrade-rollback)。
+但**破坏性迁移**（删列、改类型、重命名）需要额外注意：
+
+- 旧版本应用代码仍指向旧字段，新镜像 entrypoint 一旦 apply 破坏性迁移，旧版本副本（例如蓝绿部署中尚未切流量的旧实例）会立刻看到字段缺失而崩溃。
+- 回滚到旧 tag 时，旧版本应用启动**不会自动反向迁移**——entrypoint 只 forward apply，不 rollback；旧版本会直接尝试读不存在的字段或写已经被改类型的列。
+
+因此涉及破坏性迁移的版本切换在升级前必须先做 `pg_dump`（备份方式见 [数据持久化与备份](./persistence-backup)）。回滚路径只能依靠把 dump 回灌到迁移前状态，再切回旧镜像；没有备份就没有破坏性回滚。详细策略见 [升级与回滚](./upgrade-rollback)。
 
 ## 来源对照
 
@@ -181,5 +194,7 @@ drizzle-sqlite/
 - `src/lib/utils/config.ts`：`DB_TYPE` 自动推断与生产 fail-fast 守卫
 - `package.json` scripts 段：`db:generate` / `db:migrate` / `db:check:consistency` / `db:push` 命令定义
 - `scripts/ci/check-drizzle-consistency.mjs`、`scripts/db/migrate-sqlite.mjs`：迁移一致性与 SQLite 迁移实现
+- `scripts/docker-entrypoint.sh`：容器启动期自动 apply `drizzle/*.sql` 的内嵌 migration runner（不依赖 `drizzle-kit`）
+- `Dockerfile`：standalone runner stage 只 copy `postgres` 子包，确认 `drizzle-kit` 不在生产镜像内
 - `.github/workflows/verify.yml` 的 `migration` job：CI 层迁移校验
 - `playwright.e2e.config.ts`：E2E webServer 命令中如何对齐 SQLite schema
