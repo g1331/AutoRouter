@@ -41,6 +41,11 @@ export function CliproxyConnectionResult({ result, className }: CliproxyConnecti
       <div className="min-w-0 space-y-1">
         <Badge variant={BADGE_VARIANT[result.status]}>{t(`testStatus_${result.status}`)}</Badge>
         <p className="type-body-small break-words text-muted-foreground">{result.message}</p>
+        {result.status === "unreachable" && (
+          <p className="type-body-small break-words text-muted-foreground/80">
+            {t("testStatus_unreachable_hint")}
+          </p>
+        )}
       </div>
     </div>
   );

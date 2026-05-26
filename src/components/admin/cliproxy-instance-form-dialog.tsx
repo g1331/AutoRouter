@@ -213,6 +213,7 @@ export function CliproxyInstanceFormDialog({
                         <SelectItem value="external">{t("modeExternal")}</SelectItem>
                       </SelectContent>
                     </Select>
+                    <FormDescription>{t("fieldModeHint")}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
