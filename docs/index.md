@@ -30,19 +30,36 @@ features:
     details: 记录候选集、路由决策、故障转移历史与计费快照，便于排障与成本分析。
 ---
 
-## 文档进度
+## 从哪里开始
 
-文档体系当前处于 Phase 1 脚手架阶段：导航与 sidebar 已铺好，正文按主题分批撰写。具体进度参见 [issue #167](https://github.com/g1331/AutoRouter/issues/167)。
+按读者所处的部署阶段提供三条入口路径，每条路径按建议顺序串起最小可用文档集，访客可按需读完即跑通。
 
-第一批优先撰写 10 篇，确保陌生访客可以独立完成「部署 → 登记 CPA 实例 → OAuth 登录 → 客户端调用」全流程：
+### 路径 A · 部署上线
+
+适合「拿到项目准备搭起来」的访客，目标是把 AutoRouter 跑到能登录管理后台。
 
 1. [部署形态总览](/guide/deployment/overview)
 2. [快速开始（源码 docker compose）](/guide/deployment/quickstart)
-3. [CI 部署后追加 CLIProxyAPI sidecar](/guide/deployment/cliproxy-sidecar)
-4. [环境变量参考](/guide/deployment/env-reference)
-5. [添加第一个上游](/guide/usage/first-upstream)
-6. [创建客户端 API Key](/guide/usage/client-keys)
-7. [通过 AutoRouter 调用模型](/guide/usage/invoke-models)
-8. [CLIProxyAPI 首次使用指南](/guide/usage/cliproxy-first-time)
-9. [整体架构总览](/guide/architecture/overview)
-10. [请求生命周期](/guide/architecture/request-lifecycle)
+3. [环境变量参考](/guide/deployment/env-reference)
+4. [CI 部署后追加 CLIProxyAPI sidecar](/guide/deployment/cliproxy-sidecar)
+
+### 路径 B · 接入第一次调用
+
+适合「部署完成，准备第一次发起请求」的访客，目标是从管理后台配置到客户端拿到响应。
+
+1. [管理后台导览](/guide/usage/admin-overview)
+2. [添加第一个上游](/guide/usage/first-upstream)
+3. [创建客户端 API Key](/guide/usage/client-keys)
+4. [通过 AutoRouter 调用模型](/guide/usage/invoke-models)
+5. [CLIProxyAPI 首次使用指南](/guide/usage/cliproxy-first-time)
+
+### 路径 C · 理解架构与贡献
+
+适合「想了解内部实现或评估架构」的开发者。
+
+1. [整体架构总览](/guide/architecture/overview)
+2. [请求生命周期](/guide/architecture/request-lifecycle)
+3. [安全模型](/guide/architecture/security)
+4. [贡献指南与代码规范](/guide/architecture/contributing)
+
+完整文档清单（部署 10 / 使用 13 / 架构 11 共 34 篇）通过顶部导航与左侧 sidebar 访问。文档结构、撰写背景与版本规划参见 [issue #167](https://github.com/g1331/AutoRouter/issues/167)。
