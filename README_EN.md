@@ -33,6 +33,8 @@
 
 </div>
 
+> The full documentation site is maintained in Simplified Chinese. The English README covers the high-level overview, screenshots, and the minimal Docker quick start; for deployment, configuration, and architecture details please follow the doc-site links below or use your browser's translation feature.
+
 ---
 
 ## Table of Contents
@@ -40,9 +42,7 @@
 - [Features](#features)
 - [Screenshots](#screenshots)
 - [Quick Start](#quick-start)
-- [Configuration](#configuration)
-- [Project Structure](#project-structure)
-- [Development Guide](#development-guide)
+- [Documentation](#documentation)
 - [License](#license)
 
 ---
@@ -141,221 +141,35 @@
 
 ## Quick Start
 
-### Requirements
-
-| Dependency | Version | Notes                                               |
-| ---------- | ------- | --------------------------------------------------- |
-| Node.js    | 22+     | Recommend using [pnpm](https://pnpm.io/)            |
-| PostgreSQL | 16+     | Recommended for production (default)                |
-| SQLite     | Latest  | Optional for local development via `DB_TYPE=sqlite` |
-
-### Docker Deployment (Recommended)
+Minimum start-up flow:
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/g1331/AutoRouter.git
 cd AutoRouter
-
-# 2. Configure environment variables
 cp .env.example .env
-# Edit .env file, set ADMIN_TOKEN and ENCRYPTION_KEY
-
-# 3. Start services
+# Edit .env: at minimum set ADMIN_TOKEN and ENCRYPTION_KEY
 docker compose up -d
-
-# 4. Visit http://localhost:3331 by default
-# If you changed PORT in .env, use that port instead
+# Visit http://localhost:3331 by default
 ```
 
-### Release And Personal Deployment
+Runtime requirements: Node.js 22+ (for source builds), PostgreSQL 16 (default, recommended for production); SQLite is supported for local development.
 
-The default GitHub Actions flow now handles verification, image publishing, and GitHub Releases. Personal server deployment is a separate manual workflow that only deploys images that have already been released.
-
-**1. Publish an official release**
-
-```bash
-# 1. Ensure master has passed the Verify workflow
-
-# 2. Update the version in package.json
-
-# 3. Create and push the release tag
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-After the tag is pushed, the `Release` workflow validates the tag, publishes the GHCR image, and creates the GitHub Release.
-
-**2. Configure personal deployment secrets**
-
-Add these secrets in Settings → Secrets and variables → Actions:
-
-| Secret            | Description                                                    |
-| ----------------- | -------------------------------------------------------------- |
-| `SERVER_HOST`     | Server IP or domain                                            |
-| `SERVER_USER`     | SSH username                                                   |
-| `SSH_PRIVATE_KEY` | SSH private key content                                        |
-| `SERVER_PORT`     | SSH port, optional, default `22`                               |
-| `DEPLOY_DIR`      | Deploy directory, optional, default `/opt/autorouter`          |
-| `ADMIN_TOKEN`     | Admin console token written to the server `.env` during deploy |
-
-**3. Initialize the server**
-
-```bash
-mkdir -p /opt/autorouter && cd /opt/autorouter
-curl -O https://raw.githubusercontent.com/g1331/AutoRouter/v1.0.0/docker-compose.yml
-# Set AUTOROUTER_IMAGE in .env, for example ghcr.io/g1331/autorouter:v1.0.0
-nano .env
-docker compose up -d
-```
-
-**4. Trigger a personal deployment**
-
-```bash
-# Run the Personal Deploy workflow from GitHub Actions
-# image_ref may be a release tag, full ghcr.io image ref, or sha256 digest
-# confirm_release_id must be the matching release tag, for example v1.0.0
-```
-
-### Local Development
-
-Do not copy `.env.example` and run it unchanged. The repository supports two local runtime modes, and the database setup differs between them.
-
-#### Option 1: Local PostgreSQL
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/g1331/AutoRouter.git
-cd AutoRouter
-
-# 2. Copy environment variables
-cp .env.example .env.local
-
-# 3. Change DATABASE_URL in .env.local to a host-local address
-# For example:
-# DATABASE_URL=postgresql://autorouter:password@localhost:5432/autorouter
-
-# 4. Generate encryption key (add to .env.local)
-node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-
-# 5. Install dependencies
-pnpm install
-
-# 6. Push PostgreSQL schema
-pnpm db:push
-
-# 7. Start development server
-pnpm dev
-```
-
-After starting, visit http://localhost:3000 and login with `ADMIN_TOKEN`.
-
-#### Option 2: Local SQLite
-
-The runtime supports SQLite for local sandboxing:
-
-```bash
-# 1. Copy environment variables
-cp .env.example .env.local
-
-# 2. Set these values in .env.local
-# DB_TYPE=sqlite
-# SQLITE_DB_PATH=./data/dev.sqlite
-
-# 3. Generate encryption key
-node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-
-# 4. Install dependencies
-pnpm install
-
-# 5. Start development server
-pnpm dev
-```
-
-Note: the packaged Drizzle CLI scripts currently target PostgreSQL by default. SQLite is supported at runtime, but this README no longer claims that `pnpm db:push` is a general SQLite initialization flow.
+For deployment topologies, release workflow, personal deployment secrets, source-based local development, and SQLite switching, see the [Deployment Guide](https://g1331.github.io/AutoRouter/guide/deployment/overview) on the docs site (Simplified Chinese; browser translation works for the prose sections, while code blocks remain in English).
 
 ---
 
-## Configuration
+## Documentation
 
-### Environment Variables (`.env` or `.env.local`)
+| Topic                              | Link                                                                                                                                                                                 |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Deployment topologies & quickstart | [`guide/deployment`](https://g1331.github.io/AutoRouter/guide/deployment/overview)                                                                                                   |
+| Environment variable reference     | [`guide/deployment/env-reference`](https://g1331.github.io/AutoRouter/guide/deployment/env-reference)                                                                                |
+| GitHub Actions deployment          | [`guide/deployment/github-actions`](https://g1331.github.io/AutoRouter/guide/deployment/github-actions)                                                                              |
+| Admin console usage                | [`guide/usage`](https://g1331.github.io/AutoRouter/guide/usage/admin-overview)                                                                                                       |
+| Architecture & request lifecycle   | [`guide/architecture`](https://g1331.github.io/AutoRouter/guide/architecture/overview)                                                                                               |
+| Testing strategy & contributing    | [`guide/architecture/testing`](https://g1331.github.io/AutoRouter/guide/architecture/testing) · [`contributing`](https://g1331.github.io/AutoRouter/guide/architecture/contributing) |
 
-| Variable                    |  Required   | Description                                                                                                                     |
-| --------------------------- | :---------: | ------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`              | Conditional | Required in PostgreSQL mode; when `DB_TYPE` is unset, providing this value makes the app choose PostgreSQL automatically        |
-| `DB_TYPE`                   |             | Database backend: `postgres` or `sqlite`; when unset, the app auto-detects based on whether `DATABASE_URL` exists               |
-| `SQLITE_DB_PATH`            |             | SQLite file path (used when `DB_TYPE=sqlite`)                                                                                   |
-| `ENCRYPTION_KEY`            |    Yes\*    | Fernet key (either this or `ENCRYPTION_KEY_FILE`)                                                                               |
-| `ENCRYPTION_KEY_FILE`       |    Yes\*    | Load Fernet key from file (either this or `ENCRYPTION_KEY`)                                                                     |
-| `ADMIN_TOKEN`               |     Yes     | Admin console login token                                                                                                       |
-| `ALLOW_KEY_REVEAL`          |             | Allow revealing full API keys, default `false`                                                                                  |
-| `LOG_RETENTION_DAYS`        |             | Request log retention days, default `90`                                                                                        |
-| `LOG_LEVEL`                 |             | Log level: `fatal`/`error`/`warn`/`info`/`debug`/`trace`                                                                        |
-| `DEBUG_LOG_HEADERS`         |             | Debug header logging switch, default `false`                                                                                    |
-| `HEALTH_CHECK_INTERVAL`     |             | Upstream health check interval in seconds, default `30`                                                                         |
-| `HEALTH_CHECK_TIMEOUT`      |             | Upstream health check timeout in seconds, default `10`                                                                          |
-| `CORS_ORIGINS`              |             | CORS allowlist, comma-separated                                                                                                 |
-| `PORT`                      |             | Service port, default `3000`                                                                                                    |
-| `RECORDER_ENABLED`          |             | Enable traffic recording. Code defaults to off, while the repository compose file enables it by default                         |
-| `RECORDER_MODE`             |             | Recorder mode: `all` / `success` / `failure`                                                                                    |
-| `RECORDER_FIXTURES_DIR`     |             | Fixture output directory, default `tests/fixtures`                                                                              |
-| `RECORDER_REDACT_SENSITIVE` |             | Redact sensitive fields in fixtures. Code default is `true`, but the repository's production deployment template writes `false` |
-
----
-
-## Project Structure
-
-| Path                           | Purpose                                                                                                                           |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `src/app/api/proxy`            | Proxy entrypoint handling path-capability matching, candidate construction, failover, and request logging                         |
-| `src/app/api/admin`            | Admin APIs for keys, upstreams, stats, logs, billing, compensation, health, and circuit breakers                                  |
-| `src/app/[locale]/(dashboard)` | Admin console pages including dashboard, keys, logs, upstreams, settings, `system/billing`, and `system/header-compensation`      |
-| `src/lib/services`             | Core services such as load balancing, circuit breaker, health checking, billing, logging, traffic recording, and session affinity |
-| `src/lib/db`                   | Database access and schema definitions with PostgreSQL / SQLite runtime support                                                   |
-| `src/components`               | Admin console components and shared UI primitives                                                                                 |
-| `tests`                        | Unit, component, E2E, accessibility, and visual regression tests                                                                  |
-| `drizzle` / `drizzle-sqlite`   | PostgreSQL / SQLite migration outputs                                                                                             |
-| `docs` / `openspec`            | Supporting documentation and change specifications                                                                                |
-
----
-
-## Development Guide
-
-<details>
-<summary><b>Code Checking</b></summary>
-
-```bash
-pnpm lint                  # ESLint
-pnpm format                # Prettier
-pnpm exec tsc --noEmit     # Type check
-```
-
-</details>
-
-<details>
-<summary><b>Running Tests</b></summary>
-
-```bash
-pnpm test                  # Watch mode
-pnpm test:run              # Single run
-pnpm test:run --coverage   # Coverage report
-pnpm e2e                   # Playwright E2E
-pnpm e2e:headed            # Run E2E with visible browser
-```
-
-</details>
-
-<details>
-<summary><b>Database Operations</b></summary>
-
-```bash
-pnpm db:generate           # Generate migration files
-pnpm db:migrate            # Apply migrations
-pnpm db:push               # Push schema to database
-pnpm db:seed               # Seed lightweight sample data
-pnpm db:studio             # Open Drizzle Studio
-```
-
-</details>
+Documentation scope, background, and version planning are tracked in [issue #167](https://github.com/g1331/AutoRouter/issues/167).
 
 ---
 
