@@ -62,4 +62,4 @@ features:
 3. [安全模型](/guide/architecture/security)
 4. [贡献指南与代码规范](/guide/architecture/contributing)
 
-完整文档清单（部署 10 / 使用 13 / 架构 11 共 34 篇）通过顶部导航与左侧 sidebar 访问。文档结构、撰写背景与版本规划参见 [issue #167](https://github.com/g1331/AutoRouter/issues/167)。
+完整文档清单按部署、使用、架构三大类组织，另含 CLIProxyAPI 部署与熔断器两篇深度参考长篇，均通过顶部导航与左侧 sidebar 访问。
