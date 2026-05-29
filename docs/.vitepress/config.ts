@@ -43,9 +43,9 @@ const architectureSidebar = [
   { text: "版本与发布", link: "/guide/architecture/release" },
 ];
 
-const legacySidebar = [
-  { text: "CLIProxyAPI 部署（旧版长篇）", link: "/cliproxy-deployment" },
-  { text: "熔断器架构（旧版长篇）", link: "/circuit-breaker" },
+const referenceSidebar = [
+  { text: "CLIProxyAPI 部署详解", link: "/cliproxy-deployment" },
+  { text: "熔断器与失败转移详解", link: "/circuit-breaker" },
 ];
 
 export default defineConfig({
@@ -76,7 +76,7 @@ export default defineConfig({
             { text: "部署指南", collapsed: false, items: deploymentSidebar },
             { text: "使用指南", collapsed: true, items: usageSidebar },
             { text: "架构介绍", collapsed: true, items: architectureSidebar },
-            { text: "现有长篇", collapsed: true, items: legacySidebar },
+            { text: "深度参考", collapsed: true, items: referenceSidebar },
           ],
         },
         outline: { label: "目录", level: [2, 3] },

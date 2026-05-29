@@ -16,7 +16,7 @@ hero:
 
 ## Language status
 
-The Simplified Chinese documentation is the source of truth and is feature-complete (34 documents covering deployment, usage, and architecture). The English locale exists as a navigation slot but has no translated content yet.
+The Simplified Chinese documentation is the source of truth and is feature-complete, covering deployment, usage, and architecture, plus in-depth reference long-form pages. The English locale exists as a navigation slot but has no translated content yet.
 
 If you read English only and need to understand a specific topic, the recommended workflow is:
 
