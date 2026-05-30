@@ -278,7 +278,34 @@ async function mockLogsApi(page: Page) {
   });
 }
 
+// The live pulse bar in the dashboard layout opens a stats/live connection on
+// every page. Stub it so this mocked flow stays isolated from the real server.
+function mockLivePulse(page: Page): Promise<void> {
+  const snapshot = {
+    requestsPerMinute: 0,
+    errorRatePct: 0,
+    avgLatencyMs: 0,
+    tokensPerMinute: 0,
+    sampleCount: 0,
+    windowSeconds: 60,
+    generatedAt: new Date().toISOString(),
+    gateway: { healthyUpstreams: 0, totalUpstreams: 0, openCircuitBreakers: 0 },
+  };
+
+  return page.route("**/api/admin/stats/live**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(snapshot),
+    });
+  });
+}
+
 test.describe("Billing tier-aware verification", () => {
+  test.beforeEach(async ({ page }) => {
+    await mockLivePulse(page);
+  });
+
   test("admin can inspect synced tier pricing, create a manual tier rule, and verify matched-rule logs", async ({
     page,
   }) => {
