@@ -1,9 +1,9 @@
 ## 1. 服务端滚动窗口聚合器
 
-- [ ] 1.1 新增 `src/lib/services/live-pulse-aggregator.ts`，实现按秒分桶的 60 秒环形窗口：导出 `recordPulseSample({ statusCode, durationMs, totalTokens, occurredAt? })` 与 `getPulseWindowSnapshot()`；快照换算 req/min、错误率（非 2xx 占比）、平均延迟（仅成功请求）、TPM。
-- [ ] 1.2 实现过期桶清理逻辑：读取与写入时均剔除超过 60 秒的样本，保证窗口外样本不计入。
-- [ ] 1.3 新增 `tests/live-pulse-aggregator.test.ts`，覆盖：窗口内聚合正确、过期样本移出窗口、错误率只统计非 2xx、平均延迟只算成功请求、无样本时返回零值快照。
-- [ ] 1.4 运行 `pnpm test:run` 相关用例与 `pnpm exec tsc --noEmit` 通过；提交本阶段。
+- [x] 1.1 新增 `src/lib/services/live-pulse-aggregator.ts`，实现按秒分桶的 60 秒环形窗口：导出 `recordPulseSample({ statusCode, durationMs, totalTokens, occurredAt? })` 与 `getPulseWindowSnapshot()`；快照换算 req/min、错误率（非 2xx 占比）、平均延迟（仅成功请求）、TPM。
+- [x] 1.2 实现过期桶清理逻辑：读取与写入时均剔除超过 60 秒的样本，保证窗口外样本不计入。
+- [x] 1.3 新增 `tests/unit/services/live-pulse-aggregator.test.ts`，覆盖：窗口内聚合正确、过期样本移出窗口、错误率只统计非 2xx、平均延迟只算成功请求、无样本时返回零值快照。
+- [x] 1.4 运行 `pnpm test:run` 相关用例与 `pnpm exec tsc --noEmit` 通过；提交本阶段。
   - 验收：聚合器单测全绿，类型检查通过；指标口径与 `specs/live-pulse-bar/spec.md` 中「滚动窗口」需求一致。
 
 ## 2. 取样接入与快照拼装（含网关健康信号）
