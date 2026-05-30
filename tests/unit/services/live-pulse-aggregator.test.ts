@@ -68,6 +68,16 @@ describe("live-pulse-aggregator", () => {
     expect(snapshot.avgLatencyMs).toBe(150);
   });
 
+  it("retains a sample recorded exactly 60 seconds before the read time", () => {
+    // Leading edge of the window: a sample exactly 60s old must still be counted.
+    recordPulseSample({ statusCode: 200, durationMs: 50, totalTokens: 5, occurredAt: BASE });
+
+    const snapshot = getPulseWindowSnapshot(BASE + 60_000);
+
+    expect(snapshot.requestsPerMinute).toBe(1);
+    expect(snapshot.tokensPerMinute).toBe(5);
+  });
+
   it("computes error rate from non-2xx requests only", () => {
     recordPulseSample({ statusCode: 200, durationMs: 100, totalTokens: 10, occurredAt: BASE });
     recordPulseSample({

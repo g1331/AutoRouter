@@ -35,6 +35,9 @@ const EMPTY_GATEWAY_HEALTH: LivePulseGatewayHealth = {
 // of seconds. A short shared cache keeps those reads bounded regardless of how
 // many connections are open.
 const GATEWAY_CACHE_TTL_MS = 2000;
+// Cache the failed lookup briefly too, so a database outage with many open
+// connections does not bypass the cache and amplify into a query per connection.
+const GATEWAY_CACHE_ERROR_TTL_MS = 1000;
 let gatewayCache: { value: LivePulseGatewayHealth; expiresAt: number } | null = null;
 
 async function loadGatewayHealth(nowMs: number): Promise<LivePulseGatewayHealth> {
@@ -42,10 +45,15 @@ async function loadGatewayHealth(nowMs: number): Promise<LivePulseGatewayHealth>
     return gatewayCache.value;
   }
 
-  const statuses = await getAllHealthStatusWithCircuitBreaker(true, true);
-  const value = summarizeGatewayHealth(statuses);
-  gatewayCache = { value, expiresAt: nowMs + GATEWAY_CACHE_TTL_MS };
-  return value;
+  try {
+    const statuses = await getAllHealthStatusWithCircuitBreaker(true, true);
+    const value = summarizeGatewayHealth(statuses);
+    gatewayCache = { value, expiresAt: nowMs + GATEWAY_CACHE_TTL_MS };
+    return value;
+  } catch {
+    gatewayCache = { value: EMPTY_GATEWAY_HEALTH, expiresAt: nowMs + GATEWAY_CACHE_ERROR_TTL_MS };
+    return EMPTY_GATEWAY_HEALTH;
+  }
 }
 
 /**
@@ -86,13 +94,9 @@ export function summarizeGatewayHealth(statuses: HealthStatus[]): LivePulseGatew
  */
 export async function getLivePulseSnapshot(nowMs: number = Date.now()): Promise<LivePulseSnapshot> {
   const window = getPulseWindowSnapshot(nowMs);
-
-  let gateway = EMPTY_GATEWAY_HEALTH;
-  try {
-    gateway = await loadGatewayHealth(nowMs);
-  } catch {
-    // Keep window metrics usable even when upstream health cannot be read.
-  }
+  // loadGatewayHealth never throws: on failure it returns (and briefly caches)
+  // zeroed gateway health so window metrics stay usable.
+  const gateway = await loadGatewayHealth(nowMs);
 
   return {
     ...window,

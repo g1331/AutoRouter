@@ -109,5 +109,18 @@ describe("live-pulse-service", () => {
         openCircuitBreakers: 0,
       });
     });
+
+    it("briefly caches a failed gateway lookup, then re-queries after the error TTL", async () => {
+      getAllHealthStatusWithCircuitBreakerMock.mockRejectedValue(new Error("db down"));
+
+      await getLivePulseSnapshot(BASE);
+      // Within the 1s error TTL: the cached zero result is reused, no new query.
+      await getLivePulseSnapshot(BASE + 500);
+      expect(getAllHealthStatusWithCircuitBreakerMock).toHaveBeenCalledTimes(1);
+
+      // Past the error TTL: the lookup is retried.
+      await getLivePulseSnapshot(BASE + 1_500);
+      expect(getAllHealthStatusWithCircuitBreakerMock).toHaveBeenCalledTimes(2);
+    });
   });
 });

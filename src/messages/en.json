@@ -166,6 +166,7 @@
     "statusConnecting": "Connecting",
     "statusFallback": "Auto refresh",
     "statusLiveTooltip": "Receiving gateway status in real time",
+    "statusConnectingTooltip": "Establishing live connection to the gateway",
     "statusFallbackTooltip": "Live connection unavailable, switched to periodic refresh",
     "requestsPerMinute": "req/min",
     "errorRate": "errors",

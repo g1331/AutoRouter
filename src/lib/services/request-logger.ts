@@ -300,18 +300,29 @@ function notifyRequestLogChange(
  * Feed a finalized request log into the live pulse rolling window.
  * Only terminal entries (with a known status code) are sampled; in-progress
  * entries created by logRequestStart carry a null status and are skipped.
+ *
+ * The sample timestamp is the request's createdAt (when it actually happened),
+ * not the current time. This keeps stale-reconciliation finalizations — which
+ * close out requests that started long ago — outside the rolling window instead
+ * of injecting them into the current minute as fake recent traffic.
  */
 function recordPulseSampleFromLog(
-  logEntry: Pick<RequestLog, "statusCode" | "durationMs" | "totalTokens"> | null | undefined
+  logEntry:
+    | Pick<RequestLog, "statusCode" | "durationMs" | "totalTokens" | "createdAt">
+    | null
+    | undefined
 ): void {
   if (!logEntry || logEntry.statusCode == null) {
     return;
   }
 
+  const createdAt = parseRequestLogCreatedAt(logEntry.createdAt);
+
   recordPulseSample({
     statusCode: logEntry.statusCode,
     durationMs: logEntry.durationMs ?? null,
     totalTokens: logEntry.totalTokens ?? null,
+    occurredAt: createdAt ? createdAt.getTime() : undefined,
   });
 }
 

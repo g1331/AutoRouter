@@ -172,7 +172,11 @@ export function useLivePulse(options?: UseLivePulseOptions): UseLivePulseResult 
         if (!response.ok || cancelled) {
           return;
         }
-        setSnapshot((await response.json()) as LivePulseSnapshot);
+        const data = (await response.json()) as LivePulseSnapshot;
+        if (cancelled) {
+          return;
+        }
+        setSnapshot(data);
       } catch {
         // Leave the previous snapshot in place until the next poll.
       }

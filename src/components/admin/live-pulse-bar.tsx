@@ -1,7 +1,7 @@
 "use client";
 
 import { useFormatter, useTranslations } from "next-intl";
-import { Server, Zap } from "lucide-react";
+import { AlertTriangle, Server, Zap } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { LivePulseConnectionState, LivePulseSnapshot } from "@/hooks/use-live-pulse";
@@ -31,7 +31,7 @@ function StatusDot({ connectionState }: { connectionState: LivePulseConnectionSt
     connectionState === "live"
       ? "bg-status-success animate-log-badge-live motion-reduce:animate-none"
       : connectionState === "connecting"
-        ? "bg-status-info animate-log-badge-connect motion-reduce:animate-none"
+        ? "bg-muted-foreground animate-log-badge-connect motion-reduce:animate-none"
         : "bg-status-warning";
 
   return <span className={cn("inline-block h-2 w-2 rounded-full", dotClass)} aria-hidden="true" />;
@@ -39,8 +39,14 @@ function StatusDot({ connectionState }: { connectionState: LivePulseConnectionSt
 
 function Metric({ value, label, emphasis }: { value: string; label: string; emphasis?: boolean }) {
   return (
-    <span className="inline-flex items-baseline gap-1 whitespace-nowrap">
-      <span className={cn("tabular-nums", emphasis ? "text-status-error" : "text-foreground")}>
+    <span className="inline-flex items-center gap-1 whitespace-nowrap">
+      {emphasis && <AlertTriangle className="h-3 w-3 text-status-error" aria-hidden="true" />}
+      <span
+        className={cn(
+          "tabular-nums",
+          emphasis ? "font-semibold text-status-error" : "text-foreground"
+        )}
+      >
         {value}
       </span>
       <span className="text-muted-foreground">{label}</span>
@@ -71,7 +77,11 @@ export function LivePulseBar({
         : t("statusFallback");
 
   const statusTooltip =
-    connectionState === "fallback" ? t("statusFallbackTooltip") : t("statusLiveTooltip");
+    connectionState === "fallback"
+      ? t("statusFallbackTooltip")
+      : connectionState === "connecting"
+        ? t("statusConnectingTooltip")
+        : t("statusLiveTooltip");
 
   const errorEmphasis = data.errorRatePct > ERROR_RATE_WARN_THRESHOLD_PCT;
   const breakersEmphasis = data.gateway.openCircuitBreakers > 0;
@@ -100,14 +110,21 @@ export function LivePulseBar({
       <span className="text-divider" aria-hidden="true">
         ·
       </span>
-      <Metric value={`${data.errorRatePct}%`} label={t("errorRate")} emphasis={errorEmphasis} />
+      <Metric
+        value={`${format.number(data.errorRatePct, { maximumFractionDigits: 1 })}%`}
+        label={t("errorRate")}
+        emphasis={errorEmphasis}
+      />
 
       {variant === "full" && (
         <>
           <span className="text-divider" aria-hidden="true">
             ·
           </span>
-          <Metric value={`${data.avgLatencyMs} ms`} label={t("avgLatency")} />
+          <Metric
+            value={`${format.number(data.avgLatencyMs, { maximumFractionDigits: 0 })} ms`}
+            label={t("avgLatency")}
+          />
 
           <span className="text-divider" aria-hidden="true">
             ·
