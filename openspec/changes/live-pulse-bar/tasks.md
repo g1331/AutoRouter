@@ -24,11 +24,11 @@
 
 ## 4. 前端实时脉搏客户端与桌面状态条
 
-- [ ] 4.1 新增 `src/hooks/use-live-pulse.ts`，结构对齐 `use-request-log-live.ts`：连接 `/api/admin/stats/live`，解析 `live-pulse` 事件，维护快照与 `connecting/live/fallback` 三态；断线降级为定时拉取一次性快照。
-- [ ] 4.2 新增 `src/components/admin/live-pulse-bar.tsx`，纯展示组件：呈现在线指示灯（按三态着色）、req/min、错误率、平均延迟、TPM、健康上游数/总数、熔断打开数；错误率超阈值与熔断打开数 >0 时按既有错误/警示样式强调。
-- [ ] 4.3 扩展 `src/components/admin/topbar.tsx`，在右栏承载状态条（桌面端）；所有管理页因复用 `Topbar` 自动获得。
-- [ ] 4.4 在 `src/messages/en.json` 与 `src/messages/zh.json` 新增实时脉搏相关文案键（指标标签、在线/降级提示等）。
-- [ ] 4.5 运行 `pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm format:check` 通过；提交本阶段。
+- [x] 4.1 新增 `src/hooks/use-live-pulse.ts`，结构对齐 `use-request-log-live.ts`：连接 `/api/admin/stats/live`，解析 `live-pulse` 事件，维护快照与 `connecting/live/fallback` 三态；断线降级为定时拉取一次性快照。新增 `src/providers/live-pulse-provider.tsx`，在布局层只建立一条共享连接，供顶栏与移动端窄条共用，避免逐页重连。
+- [x] 4.2 新增 `src/components/admin/live-pulse-bar.tsx`，纯展示组件：呈现在线指示灯（按三态着色）、req/min、错误率、平均延迟、TPM、健康上游数/总数、熔断打开数；错误率超阈值与熔断打开数 >0 时按既有错误/警示样式强调；数字格式跟随 next-intl 当前语言。含组件单元测试。
+- [x] 4.3 扩展 `src/components/admin/topbar.tsx`，在右栏承载状态条（桌面端完整版，窄屏退化为紧凑版）；所有管理页因复用 `Topbar` 自动获得。
+- [x] 4.4 在 `src/messages/en.json` 与 `src/messages/zh-CN.json` 新增 `livePulse` 命名空间文案键（指标标签、在线/降级提示等）。
+- [x] 4.5 运行 `eslint`、`pnpm exec tsc --noEmit`、`prettier --check` 通过；提交本阶段。
   - 验收：桌面端各管理页顶栏常驻状态条，指标随推送更新，降级时指示灯转琥珀色并持续刷新；无流量时显示零值。
 
 ## 5. 移动端紧凑形态
