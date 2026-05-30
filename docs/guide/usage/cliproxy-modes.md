@@ -85,7 +85,7 @@ if (mode === "external") {
 
 ### `enabled` 字段的实际语义
 
-`enabled` 字段在 schema、UI、管理后台 badge 都存在（`src/lib/db/schema-pg.ts:731`、`src/components/admin/cliproxy-instances-table.tsx:79-80`），但**当前版本任何路由 / 调度代码都没有读它**：
+`enabled` 字段在 schema、UI、管理后台 badge 都存在（`src/lib/db/schema-pg.ts:729`、`src/components/admin/cliproxy-instances-table.tsx:79-80`），但**当前版本任何路由 / 调度代码都没有读它**：
 
 - 上游选路（`load-balancer.ts`）只看 `upstreams.is_active`，不看 `cliproxy_instances.enabled`。
 - 池上游创建、连通性测试、OAuth 登录、账号同步等管理 API 也不在入口处检查 `enabled`。
@@ -95,7 +95,7 @@ if (mode === "external") {
 
 ### 删除实例的影响
 
-`DELETE /api/admin/cliproxy/instances/:id` 路由调用 `deleteCliproxyInstance`（`src/lib/services/cliproxy-instance-crud.ts:290-320`），删除前依次做两轮引用校验：
+`DELETE /api/admin/cliproxy/instances/:id` 路由调用 `deleteCliproxyInstance`（`src/lib/services/cliproxy-instance-crud.ts:290-324`），删除前依次做两轮引用校验：
 
 ```ts
 // 1) 缓存账号引用校验

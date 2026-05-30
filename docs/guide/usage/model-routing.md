@@ -32,12 +32,14 @@ AutoRouter 选择上游的决策依据并非「模型名前缀映射」这类预
 | ----------------------------------------------------- | ----------------------------- |
 | `POST .../messages`                                   | `messages`（先记下）          |
 | `POST .../responses`                                  | `responses`（先记下）         |
-| `GET\|POST .../chat/completions` 或 `GET v1/models`   | `openai_chat_compatible`      |
+| `GET v1/models`                                       | `openai_chat_compatible`      |
+| `POST .../chat/completions`                           | `openai_chat_compatible`      |
 | `POST .../completions` / `embeddings` / `moderations` | `openai_extended`             |
 | `POST .../images/*`                                   | `openai_extended`             |
 | `POST v1beta/models/<m>:generateContent`              | `gemini_native_generate`      |
 | `POST v1beta/models/<m>:streamGenerateContent`        | `gemini_native_generate`      |
 | `POST v1internal:generateContent`                     | `gemini_code_assist_internal` |
+| `POST v1internal:streamGenerateContent`               | `gemini_code_assist_internal` |
 | 其他 / 含路径遍历                                     | `null` → 直接拒绝             |
 
 ### 步骤 2：客户端 profile 升级
@@ -75,17 +77,17 @@ AutoRouter 选择上游的决策依据并非「模型名前缀映射」这类预
 
 ### 三种 rule type 的语义
 
-| `type`  | 语义                                                    | 是否改写模型名 |
-| ------- | ------------------------------------------------------- | -------------- |
-| `exact` | 客户端模型名严格等于 `value` 时匹配                     | 否             |
-| `regex` | 客户端模型名匹配 `value` 中的正则时匹配                 | 否             |
-| `alias` | 同上述任一形式匹配后，转发时把模型名换为 `target_model` | 是             |
+| `type`  | 语义                                                                     | 是否改写模型名 |
+| ------- | ------------------------------------------------------------------------ | -------------- |
+| `exact` | 客户端模型名严格等于 `value` 时匹配                                      | 否             |
+| `regex` | 客户端模型名匹配 `value` 中的正则时匹配                                  | 否             |
+| `alias` | 客户端模型名与 `value` 精确相等时匹配，转发时把模型名换为 `target_model` | 是             |
 
 `alias` 链可以传递：A → B → C，最多追踪 10 跳后停止以防环（`upstream-model-rules.ts:131`）。
 
 ### 规则匹配出口：resolvePathRoutingModelForUpstream
 
-`resolvePathRoutingModelForUpstream(originalModel, upstream)`（`src/app/api/proxy/v1/[...path]/route.ts:557`）是路由层使用的统一出口。内部调用 `matchUpstreamModelRules`（`upstream-model-rules.ts:326`），返回四个字段：
+`resolvePathRoutingModelForUpstream(originalModel, upstream)`（`src/app/api/proxy/v1/[...path]/route.ts:558`）是路由层使用的统一出口。内部调用 `matchUpstreamModelRules`（`upstream-model-rules.ts:326`），返回四个字段：
 
 | 字段               | 含义                                                         |
 | ------------------ | ------------------------------------------------------------ |
@@ -96,18 +98,18 @@ AutoRouter 选择上游的决策依据并非「模型名前缀映射」这类预
 
 ### 「未显式拒绝即默认放行」语义
 
-整体过滤逻辑在 `filterCandidatesByModelRules`（`route.ts:591-624`）：
+整体过滤逻辑在 `filterCandidatesByModelRules`（`route.ts:592-625`）：
 
 ```ts
-// 摘自 route.ts:591-624
+// 摘自 route.ts:592-625
 if (!originalModel) return { allowed: candidates, excluded: [] }; // 模型缺失 → 全部放行
 for (const candidate of candidates) {
-  const r = resolvePathRoutingModelForUpstream(originalModel, candidate);
-  if (r.matched) {
+  const modelResolution = resolvePathRoutingModelForUpstream(originalModel, candidate);
+  if (modelResolution.matched) {
     allowed.push(candidate);
     continue;
   }
-  if (r.hasExplicitRules) {
+  if (modelResolution.hasExplicitRules) {
     excluded.push({ id: candidate.id, name: candidate.name, reason: "model_not_allowed" });
     continue;
   }
@@ -149,9 +151,9 @@ for (const candidate of candidates) {
 
 客户端 Key 的 `allowed_models` 字段（`schema-pg.ts:55`）是另一层白名单，在候选筛选**之前**生效：
 
-`isModelAllowedByApiKey(requestedModel, allowedModels)`（`src/lib/api-key-models.ts:16`）：`allowedModels` 为空或 null 直接放行；否则做精确字符串 `includes` 检查，命中失败的请求直接返回错误码 `API_KEY_MODEL_NOT_ALLOWED`（`route.ts:2507`）。
+`isModelAllowedByApiKey(requestedModel, allowedModels)`（`src/lib/api-key-models.ts:16`）：`allowedModels` 为空或 null 直接放行；否则做精确字符串 `includes` 检查，命中失败的请求直接返回错误码 `API_KEY_MODEL_NOT_ALLOWED`（`route.ts:2513`）。
 
-`getApiKeyVisibleModelList`（`route.ts:626`）仅在 `GET /v1/models` 这种返回模型列表的请求里触发：对 Key 的 `allowedModels` 做过滤，保留其中**能被至少一个候选上游接受**的模型名（用 `resolvePathRoutingModelForUpstream(model, candidate).matched` 判断），返回交集。
+`getApiKeyVisibleModelList`（`route.ts:627`）仅在 `GET /v1/models` 这种返回模型列表的请求里触发：对 Key 的 `allowedModels` 做过滤，保留其中**能被至少一个候选上游接受**的模型名（用 `resolvePathRoutingModelForUpstream(model, candidate).matched` 判断），返回交集。
 
 叠加规则三条：
 

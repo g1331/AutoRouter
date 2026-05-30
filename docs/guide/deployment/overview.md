@@ -41,11 +41,11 @@ image: ${AUTOROUTER_IMAGE:-ghcr.io/g1331/autorouter:latest}
 
 适合个人长期服务器的「按 release 升级 / 按 tag 回滚」节奏。部署的触发方式不是 push，而是手工在 GitHub Actions 页面对 `deploy-personal.yml` 触发 `workflow_dispatch`，输入三个参数：
 
-| 输入                 | 含义                       | 形式                                                                                                     |
-| -------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `image_ref`          | 要部署的镜像引用           | `v0.1.0`（自动补全 `ghcr.io/g1331/autorouter:` 前缀），或 `ghcr.io/...` 完整引用，或 `sha256:...` digest |
-| `environment_name`   | GitHub Environment 名称    | 默认 `personal-production`，作业会绑定到该 environment 的 secrets 与审批策略                             |
-| `confirm_release_id` | 用于二次确认的 release tag | 例如 `v0.1.0`；作业会校验该 tag 存在并在 `origin/master` 路径上                                          |
+| 输入                 | 含义                       | 形式                                                                                                                                                                           |
+| -------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `image_ref`          | 要部署的镜像引用           | `v0.1.0`（自动补全 `ghcr.io/g1331/autorouter:` 前缀），或 `ghcr.io/...` 完整引用，或 `sha256:...` digest                                                                       |
+| `environment_name`   | GitHub Environment 名称    | 默认 `personal-production`，作业会绑定到该 environment 的 secrets 与审批策略                                                                                                   |
+| `confirm_release_id` | 用于二次确认的 release tag | 例如 `v0.1.0`；作业会校验该 tag 在本地可解析（`git rev-parse refs/tags/<tag>`）并且 GitHub 上存在对应 release（`gh release view`），不校验 tag 是否位于 `origin/master` 路径上 |
 
 工作流通过 `appleboy/ssh-action` 登录目标服务器、`mkdir -p ${DEPLOY_DIR}`（默认 `/opt/autorouter`，可由 secret `DEPLOY_DIR` 覆盖）、`curl` 拉对应 tag 的 `docker-compose.yml`、首次部署时自动生成 `.env`（`POSTGRES_PASSWORD` / `ENCRYPTION_KEY` 由 `openssl rand` 随机填充，`ADMIN_TOKEN` 来自 GitHub secret），最后执行 `docker pull` 与 `docker compose up -d --remove-orphans`。完成后还会通过 `/api/health` 与一次完整代理 smoke test 校验部署可用性。
 

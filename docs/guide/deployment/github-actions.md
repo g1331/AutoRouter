@@ -11,13 +11,13 @@ outline: deep
 
 ## 工作流总览
 
-| 工作流文件                              | 触发方式                                                                           | 职责                                                                          |
-| --------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `.github/workflows/release.yml`         | 向 `master` 推送形如 `v*` 的 tag                                                   | 校验 tag 形式、生产构建、推送镜像到 `ghcr.io/g1331/autorouter`、生成 release  |
-| `.github/workflows/deploy-personal.yml` | 在 GitHub Actions 页面手工触发 `workflow_dispatch`                                 | 拉取目标 release tag 对应的 `docker-compose.yml`，通过 SSH 在远端启动并 smoke |
-| `.github/workflows/verify.yml`          | 向 `master` 推送相关源码 / 配置 / 工作流变更，或对 `master` 开 PR 时               | ESLint、Prettier、`tsc`、Vitest、迁移一致性、代理稳定性、Playwright E2E       |
-| `.github/workflows/docs.yml`            | `docs/**` / `README*` / `docs.yml` 自身 / `package.json` / `pnpm-lock.yaml` 变更时 | 构建 VitePress 站点，master 推送时部署到 GitHub Pages                         |
-| `.github/workflows/dependabot-fix.yml`  | Dependabot 在 `package.json` 上开 PR 时                                            | 重新生成 `pnpm-lock.yaml` 并回推到 PR 分支                                    |
+| 工作流文件                              | 触发方式                                                                                                                          | 职责                                                                          |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `.github/workflows/release.yml`         | 向 `master` 推送形如 `v*` 的 tag                                                                                                  | 校验 tag 形式、生产构建、推送镜像到 `ghcr.io/g1331/autorouter`、生成 release  |
+| `.github/workflows/deploy-personal.yml` | 在 GitHub Actions 页面手工触发 `workflow_dispatch`                                                                                | 拉取目标 release tag 对应的 `docker-compose.yml`，通过 SSH 在远端启动并 smoke |
+| `.github/workflows/verify.yml`          | 向 `master` 推送相关源码 / 配置 / 工作流变更，或对 `master` 开 PR 时                                                              | ESLint、Prettier、`tsc`、Vitest、迁移一致性、代理稳定性、Playwright E2E       |
+| `.github/workflows/docs.yml`            | `docs/**` 等路径在 master 上的 push 或对 master 的 PR 时；亦可手工触发（workflow_dispatch）。Pages 部署仅在 push 到 master 时执行 | 构建 VitePress 站点，master 推送时部署到 GitHub Pages                         |
+| `.github/workflows/dependabot-fix.yml`  | Dependabot 在 `package.json` 上开 PR 时                                                                                           | 重新生成 `pnpm-lock.yaml` 并回推到 PR 分支                                    |
 
 `release.yml` 与 `deploy-personal.yml` 是一对：前者把镜像发布出去，后者把镜像部署上线。`verify.yml` 与 `docs.yml` 在主干上做质量保障。`dependabot-fix.yml` 解决 Dependabot 不能正确处理 pnpm workspace 时 lockfile 不同步的问题。
 
@@ -87,11 +87,11 @@ permissions:
 
 只能通过 GitHub Actions 页面手工触发 `workflow_dispatch`。三个输入字段（`.github/workflows/deploy-personal.yml:4-18`）：
 
-| 输入                 | 含义                       | 形式                                                                                                            |
-| -------------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `image_ref`          | 要部署的镜像引用           | `v0.1.0`（自动补全 `ghcr.io/g1331/autorouter:` 前缀）；或完整 `ghcr.io/...` 引用；或 `sha256:...` digest        |
-| `environment_name`   | GitHub Environment 名称    | 默认 `personal-production`；作业会绑定到该 environment 的 secrets 与审批策略                                    |
-| `confirm_release_id` | 用于二次确认的 release tag | 例如 `v0.1.0`。流水线会校验该 tag 存在、tag 指向的 commit 在 `origin/master` 路径上、对应 GitHub Release 也存在 |
+| 输入                 | 含义                       | 形式                                                                                                     |
+| -------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `image_ref`          | 要部署的镜像引用           | `v0.1.0`（自动补全 `ghcr.io/g1331/autorouter:` 前缀）；或完整 `ghcr.io/...` 引用；或 `sha256:...` digest |
+| `environment_name`   | GitHub Environment 名称    | 默认 `personal-production`；作业会绑定到该 environment 的 secrets 与审批策略                             |
+| `confirm_release_id` | 用于二次确认的 release tag | 例如 `v0.1.0`。流水线会校验该 tag 存在、对应 GitHub Release 也存在                                       |
 
 `confirm_release_id` 是一道防呆——必须填写当前要部署的 release tag，且与 `image_ref` 配套。误输入会让流水线在 `validate` 阶段直接拒绝，避免把错版本推上服务器。
 

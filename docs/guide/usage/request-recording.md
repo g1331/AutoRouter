@@ -26,7 +26,7 @@ outline: deep
 shouldRecordTraffic(outcome) === enabled && (mode === "all" || mode === outcome);
 ```
 
-每次代理请求单独调一次 `getTrafficRecordingSettings()`（`route.ts:2481`，每请求新查 DB，无 in-memory 缓存），所以**改设置立即生效，不需要重启**。
+每次代理请求单独调一次 `getTrafficRecordingSettings()`（`route.ts:2487`，每请求新查 DB，无 in-memory 缓存），所以**改设置立即生效，不需要重启**。
 
 入口：管理后台 **系统 → 流量录制**（`/system/traffic-recording`，页面文件 `src/app/[locale]/(dashboard)/system/traffic-recording/page.tsx`）。
 
@@ -48,7 +48,7 @@ shouldRecordTraffic(outcome) === enabled && (mode === "all" || mode === outcome)
 {RECORDER_FIXTURES_DIR}/{provider}/{route}/{timestamp}.json
 ```
 
-- `provider` 与 `route` 经 `sanitizePathSegment()` 处理：非字母数字字符 → `_`
+- `provider` 与 `route` 经 `sanitizePathSegment()` 处理：非字母数字及非 `.` `_` `-` 字符 → `_`（保留字母、数字、`.`、`_`、`-`，其余替换为 `_`）
 - `timestamp` 来自 `fixture.meta.createdAt`，`:` 与 `.` → `-`
 - 同目录额外写 `latest.json`，每次覆盖，永远指向最新一次录制
 
@@ -94,13 +94,13 @@ shouldRecordTraffic(outcome) === enabled && (mode === "all" || mode === outcome)
 
 | 行        | 行为                                                                                                |
 | --------- | --------------------------------------------------------------------------------------------------- |
-| 2481      | `await getTrafficRecordingSettings()` —— 每请求一次 DB 查询                                         |
-| 2482-2485 | 计算 `shouldRecordSuccess` / `shouldRecordFailure` / `recorderEnabled`                              |
-| 2485      | `recorderEnabled === true` 时才 `await readRequestBody(request)` 把请求体读进内存                   |
-| 3202      | `teeStreamForRecording(originalStream)` —— `ReadableStream.tee()` 分叉流，一路给 client，一路给录制 |
-| 3597      | 流式成功路径：`return recordTrafficFixture(...)`，落盘在后台 `.then()` 里，client 响应已先行返回    |
-| 3796      | 非流式成功路径：`void recordTrafficFixture(...).catch(...)` 显式 fire-and-forget                    |
-| 4034      | 失败路径：`void recordTrafficFixture(...).catch(...)` 同上                                          |
+| 2487      | `await getTrafficRecordingSettings()` —— 每请求一次 DB 查询                                         |
+| 2488-2490 | 计算 `shouldRecordSuccess` / `shouldRecordFailure` / `recorderEnabled`                              |
+| 2491      | `recorderEnabled === true` 时才 `await readRequestBody(request)` 把请求体读进内存                   |
+| 3208      | `teeStreamForRecording(originalStream)` —— `ReadableStream.tee()` 分叉流，一路给 client，一路给录制 |
+| 3603      | 流式成功路径：`return recordTrafficFixture(...)`，落盘在后台 `.then()` 里，client 响应已先行返回    |
+| 3802      | 非流式成功路径：`void recordTrafficFixture(...).catch(...)` 显式 fire-and-forget                    |
+| 4040      | 失败路径：`void recordTrafficFixture(...).catch(...)` 同上                                          |
 
 **所有落盘均为 fire-and-forget**，client 端不阻塞等磁盘写入。读取请求体只在 `recorderEnabled === true` 时才发生，关闭录制时**不会**多产生 body 读取开销。
 
@@ -163,13 +163,13 @@ POST /api/admin/traffic-recordings/cleanup
 
 查询参数：
 
-| 参数                       | 行为                                   |
-| -------------------------- | -------------------------------------- |
-| `provider=<name>`          | 切换 provider，默认 `"default"`        |
-| `mock_stream=1`            | 按 SSE chunks 回放                     |
-| `mock_error=429`           | 直接以指定状态码失败响应               |
-| `mock_delay_ms=<n>`        | 在响应前注入延迟                       |
-| `mock_interrupt_after=<n>` | 流式模式专用，回放 `n` 个 chunk 后中断 |
+| 参数                       | 行为                                                           |
+| -------------------------- | -------------------------------------------------------------- |
+| `provider=<name>`          | 切换 provider，默认 `"default"`                                |
+| `mock_stream=1`            | 按 SSE chunks 回放                                             |
+| `mock_error=429`           | 仅支持 `429`；传入后固定返回 429 Rate Limited 错误，其他值无效 |
+| `mock_delay_ms=<n>`        | 在响应前注入延迟                                               |
+| `mock_interrupt_after=<n>` | 流式模式专用，回放 `n` 个 chunk 后中断                         |
 
 主要用于：
 

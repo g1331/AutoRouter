@@ -26,7 +26,7 @@ AutoRouter 把「上游会失败」当作常态。一次客户端请求可能触
 | HALF_OPEN | `recordFailure`                     | OPEN         | 任何一次失败即回滚                    | `circuit-breaker.ts:264-276`          |
 
 ::: tip OPEN → HALF_OPEN 是惰性的
-没有任何定时器主动把状态翻成 HALF_OPEN。OPEN 状态的过期检查只在「下一次有真实请求到来、需要选这个上游」时由 `acquireCircuitBreakerPermit` 触发（`circuit-breaker.ts:106-124`）。这意味着：若一个 OPEN 上游迟迟没有流量打到它，它会一直保持 OPEN，直到某次请求把它选回候选池，才有机会被翻成 HALF_OPEN 做探测。
+没有任何定时器主动把状态翻成 HALF_OPEN。OPEN 状态的过期检查只在「下一次有真实请求到来、需要选这个上游」时由 `acquireCircuitBreakerPermit` 触发（`circuit-breaker.ts:168-179`）。这意味着：若一个 OPEN 上游迟迟没有流量打到它，它会一直保持 OPEN，直到某次请求把它选回候选池，才有机会被翻成 HALF_OPEN 做探测。
 :::
 
 ### 默认阈值
@@ -64,10 +64,10 @@ AutoRouter 把「上游会失败」当作常态。一次客户端请求可能触
 
 ## 单次请求内的故障转移循环
 
-入口函数 `forwardWithFailover`，源码 `src/app/api/proxy/v1/[...path]/route.ts:1289-1753`。签名：
+入口函数 `forwardWithFailover`，源码 `src/app/api/proxy/v1/[...path]/route.ts:1295-1760`。签名：
 
 ```ts
-// route.ts:1289-1313（节选）
+// route.ts:1295-1320（节选）
 async function forwardWithFailover(
   request,
   routeCapability,
@@ -117,7 +117,7 @@ export const DEFAULT_FAILOVER_CONFIG: FailoverConfig = {
 
 - 状态码非 2xx 且不在 `excludeStatusCodes` 中
 
-默认 `excludeStatusCodes` 为空数组，意味着**所有 4xx（包括 401 / 403 / 404 / 429）都会触发故障转移**。`getErrorType()` 会区分 `http_429` 和通用 `http_4xx`（`route.ts:828-829`），但并不影响是否触发转移。如果不希望客户端的 401 把所有上游试一遍，需要在 `FailoverConfig.excludeStatusCodes` 里配置 `[401, 403]` 等。
+默认 `excludeStatusCodes` 为空数组，意味着**所有 4xx（包括 401 / 403 / 404 / 429）都会触发故障转移**。`getErrorType()` 会区分 `http_429` 和通用 `http_4xx`（`route.ts:829-830`），但并不影响是否触发转移。如果不希望客户端的 401 把所有上游试一遍，需要在 `FailoverConfig.excludeStatusCodes` 里配置 `[401, 403]` 等。
 
 ### 失败是否记入熔断器：FailureRule
 
@@ -130,13 +130,13 @@ export const DEFAULT_FAILOVER_CONFIG: FailoverConfig = {
 | `bodyPattern`                  | 响应体正则                                 |
 | `headerName` + `headerPattern` | 响应头名 + 值正则                          |
 
-源码 `src/lib/services/upstream-failure-rules.ts:8-14`。当 `matchFailureRule()` 命中一条规则时，本次失败仍然会触发故障转移，但 `circuitBreakerRecorded = false`（`route.ts:1549-1556, 1707-1710`），不写入 `circuit_breaker_states.failure_count`。
+源码 `src/lib/services/upstream-failure-rules.ts:12-18`。当 `matchFailureRule()` 命中一条规则时，本次失败仍然会触发故障转移，但 `circuitBreakerRecorded = false`（`route.ts:1555-1556, 1714-1715`），不写入 `circuit_breaker_states.failure_count`。
 
-典型用法：上游对应 OAuth 受控的 CLIProxyAPI auth-file，正常会偶发 401 触发后台 refresh，不希望把上游打到熔断；可以加一条 `statusCodes: [401], bodyPattern: "token expired"` 的规则。上游层 `upstreams.failure_rule_config.useGlobalRules`（默认 `true`）控制是否同时参与全局规则匹配（`upstream-failure-rules.ts:318-326`）。
+典型用法：上游对应 OAuth 受控的 CLIProxyAPI auth-file，正常会偶发 401 触发后台 refresh，不希望把上游打到熔断；可以加一条 `statusCodes: [401], bodyPattern: "token expired"` 的规则。上游层 `upstreams.failure_rule_config.useGlobalRules`（默认 `true`）控制是否同时参与全局规则匹配（`upstream-failure-rules.ts:353`）。
 
 ### 并发已满与队列等待
 
-当 `selectFromUpstreamCandidates` 抛出 `AllCandidatesConcurrencyFullError` 并携带 `waitableCandidate` 时，主循环不会立即返回失败，而是调用 `resumeQueuedUpstreamSelection`（`route.ts:1403-1463`），内部通过 `upstreamQueueAdmission` 等待该上游的并发槽位释放。等待时长由 `upstream.queue_policy` 控制，超时会抛 `UpstreamQueueWaitTimeoutError`，此时不再尝试其他上游，直接返回 503 / 504。
+当 `selectFromUpstreamCandidates` 抛出 `AllCandidatesConcurrencyFullError` 并携带 `waitableCandidate` 时，主循环不会立即返回失败，而是调用 `resumeQueuedUpstreamSelection`（`route.ts:1409-1452`），内部通过 `upstreamQueueAdmission` 等待该上游的并发槽位释放。等待时长由 `upstream.queue_policy` 控制，超时会抛 `UpstreamQueueWaitTimeoutError`，此时不再尝试其他上游，直接返回 503 / 504。
 
 ### 故障转移决策日志
 
