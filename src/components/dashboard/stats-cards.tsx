@@ -15,7 +15,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-import { formatDuration, formatNumber } from "./chart-theme";
+import { formatCost, formatDuration, formatNumber } from "./chart-theme";
 import { DashboardLoadingBlock, DashboardLoadingSurface } from "./dashboard-loading";
 
 interface StatsCardsProps {
@@ -50,12 +50,6 @@ function getTtftPerformanceClass(ttftMs: number): string {
 function formatCacheRate(rate: number): string {
   const normalizedRate = Number.isFinite(rate) ? Math.min(Math.max(rate, 0), 100) : 0;
   return `${normalizedRate.toFixed(2)}%`;
-}
-
-function formatCost(usd: number): string {
-  if (usd === 0) return "$0.00";
-  if (usd < 0.01) return `$${usd.toFixed(6)}`;
-  return `$${usd.toFixed(4)}`;
 }
 
 interface DeltaBadgeProps {

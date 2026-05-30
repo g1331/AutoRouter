@@ -197,6 +197,36 @@ describe("LeaderboardSection", () => {
       expect(screen.getByText("10.0K")).toBeInTheDocument();
     });
 
+    it("renders costs with two decimals", () => {
+      render(<LeaderboardSection data={mockData} isLoading={false} />);
+
+      expect(screen.getByText("$12.50")).toBeInTheDocument();
+      expect(screen.getByText("$8.00")).toBeInTheDocument();
+      expect(screen.getByText("$0.50")).toBeInTheDocument();
+    });
+
+    it("renders sub-cent cost with four decimals", () => {
+      const data: StatsLeaderboardResponse = {
+        api_keys: [
+          {
+            id: "key-tiny",
+            name: "Tiny Key",
+            key_prefix: "sk-tiny",
+            request_count: 1,
+            total_tokens: 10,
+            total_cost_usd: 0.006599,
+            model_distribution: [],
+          },
+        ],
+        upstreams: [],
+        models: [],
+      };
+
+      render(<LeaderboardSection data={data} isLoading={false} />);
+
+      expect(screen.getByText("$0.0066")).toBeInTheDocument();
+    });
+
     it("renders distribution pie charts with fixed dimensions", () => {
       render(<LeaderboardSection data={mockData} isLoading={false} />);
 

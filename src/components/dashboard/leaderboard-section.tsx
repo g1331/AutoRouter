@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { StatsLeaderboardResponse, DistributionItem } from "@/types/api";
 
-import { formatNumber, UPSTREAM_COLORS_DARK } from "./chart-theme";
+import { formatCost, formatNumber, UPSTREAM_COLORS_DARK } from "./chart-theme";
 import { DashboardLoadingBlock, DashboardLoadingSurface } from "./dashboard-loading";
 
 interface LeaderboardSectionProps {
@@ -38,12 +38,6 @@ function getTtftClass(ttftMs: number): string {
   if (ttftMs >= 1000) return "text-status-error";
   if (ttftMs >= 500) return "text-status-warning";
   return "text-status-success";
-}
-
-function formatCost(usd: number): string {
-  if (usd === 0) return "$0.00";
-  if (usd < 0.01) return `$${usd.toFixed(6)}`;
-  return `$${usd.toFixed(4)}`;
 }
 
 const RANK_ROW_BASE =

@@ -114,3 +114,12 @@ export function formatDuration(ms: number): string {
   }
   return `${Math.round(ms)}ms`;
 }
+
+export function formatCost(usd: number): string {
+  if (usd === 0) return "$0.00";
+  if (usd >= 1_000_000) return `$${(usd / 1_000_000).toFixed(2)}M`;
+  if (usd >= 1_000) return `$${(usd / 1_000).toFixed(2)}K`;
+  if (usd >= 0.01) return `$${usd.toFixed(2)}`;
+  // 小于一分时保留四位小数，既能让真实存在的消费显示出来，又不会过长
+  return `$${usd.toFixed(4)}`;
+}

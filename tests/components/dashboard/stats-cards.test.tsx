@@ -200,6 +200,38 @@ describe("StatsCards", () => {
     });
   });
 
+  describe("Cost formatting", () => {
+    it("renders zero cost as $0.00", () => {
+      render(<StatsCards {...defaultProps} totalCostToday={0} />);
+
+      expect(screen.getByText("$0.00")).toBeInTheDocument();
+    });
+
+    it("renders sub-cent cost with four decimals", () => {
+      render(<StatsCards {...defaultProps} totalCostToday={0.006599} />);
+
+      expect(screen.getByText("$0.0066")).toBeInTheDocument();
+    });
+
+    it("renders regular cost with two decimals", () => {
+      render(<StatsCards {...defaultProps} totalCostToday={12.5} />);
+
+      expect(screen.getByText("$12.50")).toBeInTheDocument();
+    });
+
+    it("abbreviates thousand-dollar cost with K suffix", () => {
+      render(<StatsCards {...defaultProps} totalCostToday={1234.5} />);
+
+      expect(screen.getByText("$1.23K")).toBeInTheDocument();
+    });
+
+    it("abbreviates million-dollar cost with M suffix", () => {
+      render(<StatsCards {...defaultProps} totalCostToday={2_500_000} />);
+
+      expect(screen.getByText("$2.50M")).toBeInTheDocument();
+    });
+  });
+
   describe("Icons", () => {
     it("renders activity icon for requests", () => {
       render(
