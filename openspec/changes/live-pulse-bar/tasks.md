@@ -16,10 +16,10 @@
 
 ## 3. 实时脉搏 SSE 端点
 
-- [ ] 3.1 新增 `src/app/api/admin/stats/live/route.ts`，鉴权复用 `validateAdminAuth`（`ADMIN_TOKEN` Bearer），与 `/api/admin/logs/live` 一致；`runtime = "nodejs"`、`dynamic = "force-dynamic"`。
-- [ ] 3.2 连接建立即推送一帧 `live-pulse` 快照，随后约每 2 秒推送一帧；保留约 15 秒心跳注释行；正确清理定时器与中止监听，避免断开后写入。
-- [ ] 3.3 提供降级拉取路径：支持以普通 GET 返回一次性快照（供前端 fallback 使用），或在同端点区分一次性快照请求；缺失/无效凭据返回 401 且不泄露任何指标。
-- [ ] 3.4 运行 `pnpm lint` 与 `pnpm exec tsc --noEmit` 通过；提交本阶段。
+- [x] 3.1 新增 `src/app/api/admin/stats/live/route.ts`，鉴权复用 `validateAdminAuth`（`ADMIN_TOKEN` Bearer），与 `/api/admin/logs/live` 一致；`runtime = "nodejs"`、`dynamic = "force-dynamic"`。
+- [x] 3.2 连接建立即推送一帧 `live-pulse` 快照，随后约每 2 秒推送一帧；保留约 15 秒心跳注释行；正确清理定时器与中止监听，避免断开后写入。
+- [x] 3.3 提供降级拉取路径：`?mode=snapshot` 以普通 GET 返回一次性快照（供前端 fallback 使用）；缺失/无效凭据返回 401 且不泄露任何指标。
+- [x] 3.4 运行 `pnpm lint` 与 `pnpm exec tsc --noEmit` 通过；提交本阶段。
   - 验收：未授权请求返回 401 且无指标数据；端点能稳定推送 `live-pulse` 帧并按断开清理资源。
 
 ## 4. 前端实时脉搏客户端与桌面状态条

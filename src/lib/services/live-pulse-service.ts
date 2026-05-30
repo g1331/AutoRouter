@@ -30,6 +30,31 @@ const EMPTY_GATEWAY_HEALTH: LivePulseGatewayHealth = {
   openCircuitBreakers: 0,
 };
 
+// Reading gateway health hits the database once per upstream. The pulse bar is
+// pinned on every page, so many open dashboards would each poll it every couple
+// of seconds. A short shared cache keeps those reads bounded regardless of how
+// many connections are open.
+const GATEWAY_CACHE_TTL_MS = 2000;
+let gatewayCache: { value: LivePulseGatewayHealth; expiresAt: number } | null = null;
+
+async function loadGatewayHealth(nowMs: number): Promise<LivePulseGatewayHealth> {
+  if (gatewayCache && gatewayCache.expiresAt > nowMs) {
+    return gatewayCache.value;
+  }
+
+  const statuses = await getAllHealthStatusWithCircuitBreaker(true, true);
+  const value = summarizeGatewayHealth(statuses);
+  gatewayCache = { value, expiresAt: nowMs + GATEWAY_CACHE_TTL_MS };
+  return value;
+}
+
+/**
+ * Clear the cached gateway health. Intended for tests.
+ */
+export function resetLivePulseCache(): void {
+  gatewayCache = null;
+}
+
 /**
  * Reduce a list of upstream health statuses into gateway health counters.
  * Open and half-open circuit breakers are never counted as closed.
@@ -64,8 +89,7 @@ export async function getLivePulseSnapshot(nowMs: number = Date.now()): Promise<
 
   let gateway = EMPTY_GATEWAY_HEALTH;
   try {
-    const statuses = await getAllHealthStatusWithCircuitBreaker(true, true);
-    gateway = summarizeGatewayHealth(statuses);
+    gateway = await loadGatewayHealth(nowMs);
   } catch {
     // Keep window metrics usable even when upstream health cannot be read.
   }

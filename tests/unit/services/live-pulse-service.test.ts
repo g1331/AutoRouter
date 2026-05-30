@@ -11,7 +11,11 @@ vi.mock("@/lib/services/health-checker", () => ({
   getAllHealthStatusWithCircuitBreaker: getAllHealthStatusWithCircuitBreakerMock,
 }));
 
-import { getLivePulseSnapshot, summarizeGatewayHealth } from "@/lib/services/live-pulse-service";
+import {
+  getLivePulseSnapshot,
+  resetLivePulseCache,
+  summarizeGatewayHealth,
+} from "@/lib/services/live-pulse-service";
 import { recordPulseSample, resetPulseWindow } from "@/lib/services/live-pulse-aggregator";
 
 function makeStatus(isHealthy: boolean, state?: CircuitBreakerStateEnum): HealthStatus {
@@ -34,6 +38,7 @@ describe("live-pulse-service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetPulseWindow();
+    resetLivePulseCache();
   });
 
   describe("summarizeGatewayHealth", () => {
