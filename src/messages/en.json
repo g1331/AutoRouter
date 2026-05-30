@@ -160,6 +160,21 @@
       "resetToDefault": "Reset to default time range"
     }
   },
+  "livePulse": {
+    "label": "Live pulse",
+    "statusLive": "Live",
+    "statusConnecting": "Connecting",
+    "statusFallback": "Auto refresh",
+    "statusLiveTooltip": "Receiving gateway status in real time",
+    "statusConnectingTooltip": "Establishing live connection to the gateway",
+    "statusFallbackTooltip": "Live connection unavailable, switched to periodic refresh",
+    "requestsPerMinute": "req/min",
+    "errorRate": "errors",
+    "avgLatency": "avg",
+    "tokensPerMinute": "TPM",
+    "upstreamsHealthy": "upstreams",
+    "circuitBreakersOpen": "open breakers"
+  },
   "keys": {
     "title": "API Keys",
     "pageTitle": "API KEYS",

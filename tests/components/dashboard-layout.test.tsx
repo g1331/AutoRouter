@@ -6,6 +6,10 @@ import DashboardLayout from "@/app/[locale]/(dashboard)/layout";
 
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
+  useFormatter: () => ({
+    number: (value: number, options?: Intl.NumberFormatOptions) =>
+      new Intl.NumberFormat("en-US", options).format(value),
+  }),
 }));
 
 const mockBack = vi.fn();

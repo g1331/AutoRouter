@@ -9,6 +9,7 @@ import type {
 } from "@/types/api";
 import { extractNormalizedUsage, type HeaderDiff } from "./proxy-client";
 import { publishRequestLogLiveUpdate } from "./request-log-live-updates";
+import { recordPulseSample } from "./live-pulse-aggregator";
 import { calculateAndPersistRequestBillingSnapshot } from "./billing-cost-service";
 import { createLogger } from "@/lib/utils/logger";
 import { isRequestThinkingConfig } from "@/lib/utils/request-thinking-config";
@@ -295,6 +296,36 @@ function notifyRequestLogChange(
   });
 }
 
+/**
+ * Feed a finalized request log into the live pulse rolling window.
+ * Only terminal entries (with a known status code) are sampled; in-progress
+ * entries created by logRequestStart carry a null status and are skipped.
+ *
+ * The sample timestamp is the request's createdAt (when it actually happened),
+ * not the current time. This keeps stale-reconciliation finalizations — which
+ * close out requests that started long ago — outside the rolling window instead
+ * of injecting them into the current minute as fake recent traffic.
+ */
+function recordPulseSampleFromLog(
+  logEntry:
+    | Pick<RequestLog, "statusCode" | "durationMs" | "totalTokens" | "createdAt">
+    | null
+    | undefined
+): void {
+  if (!logEntry || logEntry.statusCode == null) {
+    return;
+  }
+
+  const createdAt = parseRequestLogCreatedAt(logEntry.createdAt);
+
+  recordPulseSample({
+    statusCode: logEntry.statusCode,
+    durationMs: logEntry.durationMs ?? null,
+    totalTokens: logEntry.totalTokens ?? null,
+    occurredAt: createdAt ? createdAt.getTime() : undefined,
+  });
+}
+
 function normalizeBillingStatus(value: string | null | undefined): "billed" | "unbilled" | null {
   if (value === "billed" || value === "unbilled") {
     return value;
@@ -458,6 +489,12 @@ export async function updateRequestLog(
 
   notifyRequestLogChange(updated ?? null);
 
+  // Sample only when this update carries the terminal status code, so a single
+  // request is counted once at finalization rather than on every mid-stream update.
+  if (input.statusCode !== undefined) {
+    recordPulseSampleFromLog(updated);
+  }
+
   return updated ?? null;
 }
 
@@ -514,6 +551,7 @@ export async function logRequest(input: LogRequestInput): Promise<RequestLog> {
   // Request logged to database - details available via admin API
 
   notifyRequestLogChange(logEntry);
+  recordPulseSampleFromLog(logEntry);
 
   return logEntry;
 }
