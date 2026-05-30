@@ -104,23 +104,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           )}
         >
           <header className="sticky top-0 z-20 border-b border-divider bg-surface-200/88 backdrop-blur md:hidden">
-            <div className="flex h-12 items-center justify-between gap-2 px-3">
-              {!isMobileRootRoute ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="gap-1 text-muted-foreground hover:text-foreground"
-                  onClick={handleMobileBack}
-                  aria-label={tCommon("back")}
-                >
-                  <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                  {tCommon("back")}
-                </Button>
-              ) : (
-                <span aria-hidden="true" />
-              )}
+            <div className="grid h-12 grid-cols-[1fr_auto_1fr] items-center gap-2 px-3">
+              <div className="flex min-w-0 items-center">
+                {!isMobileRootRoute && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1 text-muted-foreground hover:text-foreground"
+                    onClick={handleMobileBack}
+                    aria-label={tCommon("back")}
+                  >
+                    <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                    {tCommon("back")}
+                  </Button>
+                )}
+              </div>
               <MobilePulseStrip />
+              <span aria-hidden="true" />
             </div>
           </header>
           {children}
