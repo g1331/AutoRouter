@@ -8,10 +8,10 @@
 
 ## 2. 取样接入与快照拼装（含网关健康信号）
 
-- [ ] 2.1 在 `src/lib/services/request-logger.ts` 的请求收口路径（终态写入处）调用 `recordPulseSample(...)`，仅在请求收口为终态、`durationMs/totalTokens` 已确定时取样；不在请求创建（进行中）处取样。
-- [ ] 2.2 新增快照拼装函数（置于 `live-pulse-aggregator.ts` 或新增 `live-pulse-service.ts`），合并滚动窗口快照与 `getAllHealthStatusWithCircuitBreaker()` 得到的健康上游数/总数、熔断打开数，产出完整 `LivePulseSnapshot`；定义其 TypeScript 类型。
-- [ ] 2.3 新增快照拼装单元测试：健康/熔断计数与传入的健康检查结果一致（打开/半开不计为关闭）；窗口指标与健康信号正确合并。
-- [ ] 2.4 运行相关测试与类型检查通过；提交本阶段。
+- [x] 2.1 在 `src/lib/services/request-logger.ts` 的请求收口路径（终态写入处）调用 `recordPulseSample(...)`，仅在请求收口为终态、`durationMs/totalTokens` 已确定时取样；不在请求创建（进行中）处取样。
+- [x] 2.2 新增快照拼装函数（新增 `live-pulse-service.ts`），合并滚动窗口快照与 `getAllHealthStatusWithCircuitBreaker()` 得到的健康上游数/总数、熔断打开数，产出完整 `LivePulseSnapshot`；定义其 TypeScript 类型。
+- [x] 2.3 新增快照拼装单元测试：健康/熔断计数与传入的健康检查结果一致（打开/半开不计为关闭）；窗口指标与健康信号正确合并。
+- [x] 2.4 运行相关测试与类型检查通过；提交本阶段。
   - 验收：取样仅发生在终态收口；快照拼装单测全绿；健康/熔断口径与 `routing-failover-observability` 既有真实状态一致。
 
 ## 3. 实时脉搏 SSE 端点
