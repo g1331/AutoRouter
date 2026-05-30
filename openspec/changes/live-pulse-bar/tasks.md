@@ -41,5 +41,5 @@
 
 - [x] 6.1 运行完整 `pnpm test:run`（151 文件 2507 passed / 1 skipped）与 `pnpm build`（成功，新端点 `/api/admin/stats/live` 已编译），确认无回归。
 - [x] 6.2 运行 `npx openspec validate live-pulse-bar --strict` 通过；逐项核对 `tasks.md` 勾选完成。
-- [ ] 6.3 创建隔离功能分支并推送，开启 PR（遵循仓库 OpenSpec PR 工作流）；不自行合并。
+- [x] 6.3 隔离功能分支 `feat/live-pulse-bar` 已推送，开启 PR #195（遵循仓库 OpenSpec PR 工作流）；合并交由用户决定，不自行合并。
   - 验收：CI 通过，PR 已开启待评审；变更可按需归档。
