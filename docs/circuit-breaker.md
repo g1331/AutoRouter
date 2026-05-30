@@ -27,22 +27,20 @@ AutoRouter implements a circuit breaker pattern combined with automatic failover
 ### State Transitions
 
 1. **CLOSED → OPEN**: When failure count exceeds `failureThreshold` (default: 5)
-2. **OPEN → HALF_OPEN**: After `openDuration` timeout (default: 30s)
+2. **OPEN → HALF_OPEN**: After `openDuration` timeout (default: 300s)
 3. **HALF_OPEN → CLOSED**: When success count reaches `successThreshold` (default: 2)
 4. **HALF_OPEN → OPEN**: On any failure during probing
 
 ## Configuration
 
-Circuit breaker can be configured per upstream via the `config` field:
+Circuit breaker can be configured per upstream via the `circuit_breaker_config` top-level field in the upstream create/update request:
 
 ```json
 {
-  "circuit_breaker": {
-    "failure_threshold": 5,
-    "success_threshold": 2,
-    "open_duration": 30000,
-    "probe_interval": 10000
-  }
+  "failure_threshold": 5,
+  "success_threshold": 2,
+  "open_duration": 300000,
+  "probe_interval": 30000
 }
 ```
 
@@ -50,8 +48,8 @@ Circuit breaker can be configured per upstream via the `config` field:
 | ------------------- | ------- | --------------------------------------------------------------- |
 | `failure_threshold` | 5       | Number of consecutive failures to open circuit                  |
 | `success_threshold` | 2       | Number of consecutive successes to close circuit from half-open |
-| `open_duration`     | 30000   | Milliseconds to wait before attempting recovery (half-open)     |
-| `probe_interval`    | 10000   | Milliseconds between probe attempts in half-open state          |
+| `open_duration`     | 300000  | Milliseconds to wait before attempting recovery (half-open)     |
+| `probe_interval`    | 30000   | Milliseconds between probe attempts in half-open state          |
 
 ## Failover Behavior
 
@@ -161,7 +159,7 @@ Failover attempts are logged in the request logs:
 | `last_failure_at` | TIMESTAMP | Last failure timestamp               |
 | `opened_at`       | TIMESTAMP | When circuit opened                  |
 | `last_probe_at`   | TIMESTAMP | Last probe attempt                   |
-| `config`          | JSONB     | Circuit breaker configuration        |
+| `config`          | JSON      | Circuit breaker configuration        |
 
 ## Troubleshooting
 

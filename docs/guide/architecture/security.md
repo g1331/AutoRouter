@@ -119,12 +119,12 @@ if (!config.allowKeyReveal) {
 }
 ```
 
-通过后调用 `revealApiKey`，内部在 `src/lib/utils/auth.ts:83-108` 先 `decrypt(encryptedKey)`，再用 `verifyApiKey(decryptedKey, keyHash)` 做 bcrypt 二次校验，防止数据库被篡改。
+通过后调用 `revealApiKey`，内部在 `src/lib/services/key-manager.ts:427-449` 接收 `keyId`，查库取出记录后先 `decrypt(keyValueEncrypted)`，再用 `verifyApiKey(decryptedKey, keyHash)` 做 bcrypt 二次校验，防止数据库被篡改。
 
 `ALLOW_KEY_REVEAL` 默认 `false`（`config.ts:31`），即使管理员通过鉴权也无法揭示，需要显式开启。
 
 ::: tip 历史 Legacy Key
-存量数据中可能有只存了 `key_hash`、没有 `key_value_encrypted` 的 Legacy Key（早期版本）。`revealApiKey` 在 `auth.ts:84-86` 直接抛 `LegacyApiKeyError`，揭示路由返回 400「Legacy keys (bcrypt-only) cannot be revealed」。
+存量数据中可能有只存了 `key_hash`、没有 `key_value_encrypted` 的 Legacy Key（早期版本）。`revealApiKey` 在 `src/lib/services/key-manager.ts:436-441` 抛 `LegacyApiKeyError`（当 `keyValueEncrypted` 为空时），揭示路由返回 400「Legacy keys (bcrypt-only) cannot be revealed」。
 :::
 
 ## 上游 API Key Fernet 加密
@@ -173,9 +173,9 @@ base64 解码后必须恰好 32 字节，前 16 字节作 HMAC signing key，后
 | ---------------- | ------------------------------------------------------------------------------ |
 | 创建时加密       | `src/lib/services/upstream-crud.ts:480`（`encrypt(apiKey)`）                   |
 | 更新时加密       | `upstream-crud.ts:575`（仅在请求带 `apiKey` 时改写）                           |
-| 转发时解密       | `src/lib/services/proxy-client.ts:1293`（`decrypt(upstream.apiKeyEncrypted)`） |
+| 转发时解密       | `src/lib/services/proxy-client.ts:1313`（`decrypt(upstream.apiKeyEncrypted)`） |
 | 健康检查解密     | `src/lib/services/health-checker.ts:283,559`                                   |
-| 管理面板掩码展示 | `upstream-crud.ts:759`（取明文后做星号掩码再返回）                             |
+| 管理面板掩码展示 | `upstream-crud.ts:760`（取明文后做星号掩码再返回）                             |
 
 ### `ENCRYPTION_KEY` 丢失的影响
 

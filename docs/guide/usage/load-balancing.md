@@ -22,7 +22,7 @@ outline: deep
 | `affinity_migration` | `json`    | `null`      | Session Affinity Migration | 见下文    |
 | `is_active`          | `boolean` | `true`      | Active                     | 开关      |
 
-`priority` 字段不是凭名字猜的——它真实存在于 schema 并有专属索引（`src/lib/db/schema-pg.ts:126`）。UI 提示直接说明（`src/messages/en.json:725`）：「Lower number = higher priority. Tier 0 is tried first, then tier 1, etc.」；权重的语义是（`src/messages/en.json:728`）：「Higher weight = more requests routed to this upstream within the same tier」。
+`priority` 字段不是凭名字猜的——它真实存在于 schema 并有专属索引（`src/lib/db/schema-pg.ts:126`）。UI 提示直接说明（`src/messages/en.json:744`）：「Lower number = higher priority. Tier 0 is tried first, then tier 1, etc.」；权重的语义是（`src/messages/en.json:747`）：「Higher weight = more requests routed to this upstream within the same tier」。
 
 简记：**priority 决定优先级层、weight 决定同层内的比例**。
 
@@ -108,10 +108,10 @@ effectiveWeight = upstream.weight * score
 
 ### 与负载均衡的顺序
 
-`selectFromUpstreamPool`（`load-balancer.ts:795`）的顺序：
+`selectFromUpstreamPool`（`load-balancer.ts:764`）的顺序：
 
 1. 先看亲和缓存——命中且可用就返回。
-2. 命中但目标更高 priority 上游可用时，按 `shouldMigrate`（`:413`）判断是否迁移（具体由上游的 `affinity_migration` 字段控制，例如同一 tier 不迁移、跨 tier 迁移、内容长度阈值之类）。
+2. 命中但目标更高 priority 上游可用时，按 `shouldMigrate`（`session-affinity.ts:413`，由 `load-balancer.ts:973` 调用）判断是否迁移（具体由上游的 `affinity_migration` 字段控制，例如同一 tier 不迁移、跨 tier 迁移、内容长度阈值之类）。
 3. 亲和未命中或不可用——降级到 `performTieredSelection`。
 
 ## 熔断与并发对选路的影响

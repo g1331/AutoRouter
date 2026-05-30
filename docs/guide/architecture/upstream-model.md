@@ -74,7 +74,7 @@ interface UpstreamModelRule {
 - `regex`：`new RegExp(rule.value).test(model)` 全字段正则匹配
 
 ::: warning model_redirects 与 model_rules 的 alias **不改写转发 body**
-两者解析出的「目标模型名」只用于**过滤候选**、**写日志** 和 **计费价格解析** 三件事，**不会**改写客户端请求 body 里的 `model` 字段。`forwardRequest` 把原始 model 原样发给上游（`src/lib/services/proxy-client.ts:896, 1095-1098`），唯一会改写 body 的路径是 CLIProxyAPI 上游：当 `selectedUpstream.cliproxyAuthFileName` 存在时，代理层构造 `cliproxyModelOverride` 传给 `forwardRequest`（`route.ts:1513-1525, 1534`），由 `applyModelOverride` 改写 body。
+两者解析出的「目标模型名」只用于**过滤候选**、**写日志** 和 **计费价格解析** 三件事，**不会**改写客户端请求 body 里的 `model` 字段。`forwardRequest` 把原始 model 原样发给上游（`src/lib/services/proxy-client.ts:1004, 1116`），唯一会改写 body 的路径是 CLIProxyAPI 上游：当 `selectedUpstream.cliproxyAuthFileName` 存在时，代理层构造 `cliproxyModelOverride` 传给 `forwardRequest`（`route.ts:1519-1530, 1540`），由 `applyModelOverride` 改写 body。
 
 这意味着：给一个普通 OpenAI 上游配置 `model_redirects: { "gpt-4o-mini": "gpt-4o" }`，客户端发 `gpt-4o-mini`，候选筛选与日志会按 `gpt-4o` 来，但实际打到上游的 body 里仍是 `gpt-4o-mini`。需要真正的服务端 model 改写时，应当在客户端层面解决，或者走 CLIProxyAPI 集成。
 :::
@@ -115,12 +115,12 @@ API Key 的加解密统一通过 `src/lib/utils/encryption.ts` 提供的 `encryp
 `billing_input_multiplier` / `billing_output_multiplier`（默认 1.0）会乘到该上游所有请求的 token 单价上，用于「同一模型在不同上游有不同折扣」的场景。`spending_rules` 是限额规则数组，结构与 `api_keys.spending_rules` 一致，详见 [使用 / 请求日志与统计](../usage/logs-stats)。
 
 ::: tip 表里没有 `provider` 列
-路由层判断 provider 的依据是 `route_capabilities`，不是某个独立列。`getPrimaryProviderByCapabilities()`（`route-capabilities.ts:93`）按能力前缀映射出 `anthropic` / `openai` / `google`。
+路由层判断 provider 的依据是 `route_capabilities`，不是某个独立列。`getPrimaryProviderByCapabilities()`（`route-capabilities.ts:223`）按能力前缀映射出 `anthropic` / `openai` / `google`。
 :::
 
 ## 候选池构建：第一阶段（按 RouteCapability + 模型规则）
 
-候选池的构建发生在 `handleProxy`（`src/app/api/proxy/v1/[...path]/route.ts:2434`）内部，按「能力 → API Key 授权 → 模型规则」三层过滤，最终交给 `selectFromUpstreamCandidates`。
+候选池的构建发生在 `handleProxy`（`src/app/api/proxy/v1/[...path]/route.ts:2440`）内部，按「能力 → API Key 授权 → 模型规则」三层过滤，最终交给 `selectFromUpstreamCandidates`。
 
 ::: tip 关于 routeByModel
 `src/lib/services/model-router.ts:306` 的 `routeByModel(model)` 实现了一套基于模型名前缀（`claude-` / `gpt-` / `gemini-`）推断 provider type 再过滤候选的算法，但**当前运行期没有任何生产路径调用它**——全仓库 `routeByModel(` 仅匹配定义本身。代理路径采用的是下文描述的 `resolveRouteCapabilityCandidatePool` + `filterCandidatesByModelRules`，按客户端**请求路径**解析出的 `RouteCapability` 与 `model_rules` 进行匹配，与模型名前缀无关。阅读源码时如果落到 `routeByModel` 上，可以视为历史代码。
@@ -128,7 +128,7 @@ API Key 的加解密统一通过 `src/lib/utils/encryption.ts` 提供的 `encryp
 
 ### 步骤 1：按 RouteCapability + API Key 授权构建候选池
 
-`resolveRouteCapabilityCandidatePool`（`route.ts:661`）签名：
+`resolveRouteCapabilityCandidatePool`（`route.ts:662`）签名：
 
 ```ts
 function resolveRouteCapabilityCandidatePool(
@@ -139,9 +139,9 @@ function resolveRouteCapabilityCandidatePool(
 ): RouteCapabilityCandidatePool;
 ```
 
-`activeUpstreams` 是数据库查出的全部 `is_active=true` 上游（`route.ts:2648`）；`allowedUpstreamIdSet` 在 `restricted` 模式下取 API Key 绑定的 `api_key_upstreams` 集合，`unrestricted` 模式下取全集（`route.ts:2651-2655`）。
+`activeUpstreams` 是数据库查出的全部 `is_active=true` 上游（`route.ts:2654`）；`allowedUpstreamIdSet` 在 `restricted` 模式下取 API Key 绑定的 `api_key_upstreams` 集合，`unrestricted` 模式下取全集（`route.ts:2657-2661`）。
 
-过滤逻辑（`route.ts:667-668`）：
+过滤逻辑（`route.ts:668-670`）：
 
 ```ts
 const capabilityCandidates = activeUpstreams.filter((upstream) =>
@@ -149,17 +149,17 @@ const capabilityCandidates = activeUpstreams.filter((upstream) =>
 );
 ```
 
-随后再用 `allowedUpstreamIdSet` 做授权过滤（`route.ts:670-672`），得到 `authorizedCapabilityCandidates`，并把这一层结果命名输出在 `RouteCapabilityCandidatePool`（`route.ts:653-659`）：
+随后再用 `allowedUpstreamIdSet` 做授权过滤（`route.ts:671-673`），得到 `authorizedCapabilityCandidates`，并把这一层结果命名输出在 `RouteCapabilityCandidatePool`（`route.ts:654-660`）：
 
 - `capabilityCandidates`：能力匹配但不限授权
 - `authorizedCapabilityCandidates`：能力匹配 + API Key 授权
 - `candidateUpstreamIds`：上一层 ID 列表，是后续函数的实际输入
 
-主候选池在 `route.ts:2657` 构建。如果客户端命中的是 CLI 窄能力（`codex_cli_responses` / `claude_code_messages`），代理还会在 `route.ts:2665` 用 `getFallbackRouteCapability` 解析出的通用能力构建第二个 fallback 池，由 `shouldPreferGenericFallbackPool` 决定使用哪个。
+主候选池在 `route.ts:2663` 构建。如果客户端命中的是 CLI 窄能力（`codex_cli_responses` / `claude_code_messages`），代理还会在 `route.ts:2669` 用 `getFallbackRouteCapability` 解析出的通用能力构建第二个 fallback 池，由 `shouldPreferGenericFallbackPool` 决定使用哪个。
 
 ### 步骤 2：按 model_rules 过滤候选
 
-`filterCandidatesByModelRules`（`route.ts:591`）以请求 body 里的 `model` 字段为输入：
+`filterCandidatesByModelRules`（`route.ts:592`）以请求 body 里的 `model` 字段为输入：
 
 ```ts
 function filterCandidatesByModelRules(
@@ -176,11 +176,11 @@ function filterCandidatesByModelRules(
   - 未命中且上游有显式规则（`hasExplicitRules: true`）→ 加入 `excluded`，理由 `"model_not_allowed"`
   - 未命中且上游没有任何规则（`hasExplicitRules: false`）→ **仍加入 `allowed`**（视为「不限制」）
 
-这步调用在 `route.ts:2749`，紧跟主候选池构建之后；fallback 池切换时第二次调用在 `route.ts:3062`。
+这步调用在 `route.ts:2755`，紧跟主候选池构建之后；fallback 池切换时第二次调用在 `route.ts:3068`。
 
 ### 步骤 3：resolvePathRoutingModelForUpstream 与规则合并
 
-每个候选上游被 `filterCandidatesByModelRules` 调用时，最终落到 `resolvePathRoutingModelForUpstream`（`route.ts:557`），它内部调用 `matchUpstreamModelRules` 完成实际匹配，返回：
+每个候选上游被 `filterCandidatesByModelRules` 调用时，最终落到 `resolvePathRoutingModelForUpstream`（`route.ts:558`），它内部调用 `matchUpstreamModelRules` 完成实际匹配，返回：
 
 ```ts
 {
@@ -197,7 +197,7 @@ function filterCandidatesByModelRules(
 
 ### 步骤 4：resolvedModel 的真实用途
 
-`resolvePathRoutingModelForUpstream` 返回的 `resolvedModel` 在四处被消费（`route.ts:2847, 3080, 3142, 3897`）：
+`resolvePathRoutingModelForUpstream` 返回的 `resolvedModel` 在四处被消费（`route.ts:2853, 3085, 3148, 3903`）：
 
 1. 决定 API Key 配额检查时用哪个 model 名（计费维度对齐）
 2. 写入 `request_logs` 与 `RoutingDecisionLog.resolved_model`
@@ -208,7 +208,7 @@ function filterCandidatesByModelRules(
 
 ### 步骤 5：候选 ID 列表交给 load-balancer
 
-走到这里得到 `candidateUpstreamIds`（已通过 capability、API Key 授权、model_rules 三重过滤），由 `handleProxy` 在 `route.ts:3039` / `route.ts:3094`（fallback 路径）传给 `forwardWithFailover`，后者在 `route.ts:1380` 调用 `selectFromUpstreamCandidates` 进入第二阶段。
+走到这里得到 `candidateUpstreamIds`（已通过 capability、API Key 授权、model_rules 三重过滤），由 `handleProxy` 在 `route.ts:3045` / `route.ts:3100`（fallback 路径）传给 `forwardWithFailover`，后者在 `route.ts:1386` 调用 `selectFromUpstreamCandidates` 进入第二阶段。
 
 ## load-balancer 选上游：第二阶段（按 tier + 加权）
 
@@ -243,13 +243,13 @@ score = 1.0 - min(latencyMs / 500, 0.5)   // 至少 0.1
 effectiveWeight = upstream.weight * score
 ```
 
-最近一次记录的 `latency_ms`（来自 `upstream_health` 表）越大、分越低。但要注意：当前 `markHealthy` 调用点写入的 latency 固定为 `100`（`src/lib/services/health-checker.ts` + `route.ts:1595, 2066`），不是实测值。因此 `score` 在当前实现里基本恒为 1.0，加权采样近似等价于按 `upstream.weight` 加权随机。
+最近一次记录的 `latency_ms`（来自 `upstream_health` 表）越大、分越低。但要注意：当前 `markHealthy` 调用点写入的 latency 固定为 `100`（`src/lib/services/health-checker.ts` + `route.ts:1601, 2072`），不是实测值。因此 `score` 在当前实现里基本恒为 1.0，加权采样近似等价于按 `upstream.weight` 加权随机。
 
 加权抽样完成后输出的 `selectedUpstream` 即为本次实际转发目标。
 
 ### Session affinity 与迁移
 
-`selectFromUpstreamPool`（`load-balancer.ts:795-939`）会先按 `(apiKeyId, routeCapability, sessionId)` 查 session 缓存：
+`selectFromUpstreamPool`（`load-balancer.ts:764-950`）会先按 `(apiKeyId, routeCapability, sessionId)` 查 session 缓存：
 
 - 命中且目标可用 → 直接返回该上游，标记 `affinityHit: true`
 - 命中但当前优先级更高的上游可用 → 按 `upstream.affinityMigration.metric`（`tokens` 或 `length`）累计、与 `threshold` 比较，达到阈值才允许迁移，标记 `affinityMigrated: true`
@@ -262,7 +262,7 @@ effectiveWeight = upstream.weight * score
 | `NoHealthyUpstreamsError`           | 所有 tier 全部过滤后仍为空                            |
 | `AllCandidatesConcurrencyFullError` | 候选池存在但全部 `concurrency_full`，可能携带等待句柄 |
 
-错误类定义在 `load-balancer.ts:29, 39, 49`。`AllCandidatesConcurrencyFullError` 携带的 `waitableCandidate` 会被代理入口拿去做队列等待（`route.ts:1403-1463`），等待超时则抛 `UpstreamQueueWaitTimeoutError` 转 504，详见 [失败转移与熔断](./failover-circuit)。
+错误类定义在 `load-balancer.ts:29, 39, 49`。`AllCandidatesConcurrencyFullError` 携带的 `waitableCandidate` 会被代理入口拿去做队列等待（`route.ts:1409-1469`），等待超时则抛 `UpstreamQueueWaitTimeoutError` 转 504，详见 [失败转移与熔断](./failover-circuit)。
 
 ## 健康状态与路由的关系
 
@@ -270,8 +270,8 @@ effectiveWeight = upstream.weight * score
 
 | 写入函数                             | 触发点                                                                                            |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `markHealthy(upstreamId, latencyMs)` | 请求成功（`route.ts:1595` 非流式；`route.ts:2066` 流式完成）                                      |
-| `markUnhealthy(upstreamId, reason)`  | HTTP 非 2xx（`route.ts:1553`）、网络/超时错误（`route.ts:1716`）、流式中途错误（`route.ts:2097`） |
+| `markHealthy(upstreamId, latencyMs)` | 请求成功（`route.ts:1601` 非流式；`route.ts:2072` 流式完成）                                      |
+| `markUnhealthy(upstreamId, reason)`  | HTTP 非 2xx（`route.ts:1559`）、网络/超时错误（`route.ts:1722`）、流式中途错误（`route.ts:2103`） |
 
 ::: warning is_healthy 不直接参与路由
 `load-balancer.ts:1033` 的 `filterByExclusions` 注释明确写着：
@@ -285,13 +285,13 @@ effectiveWeight = upstream.weight * score
 
 | 入口                                                                           | 行号      | 作用                               |
 | ------------------------------------------------------------------------------ | --------- | ---------------------------------- |
-| `src/app/api/proxy/v1/[...path]/route.ts` `handleProxy`                        | 2434      | 代理主流程容器                     |
-| ↳ `resolveRouteCapability(method, path, headers)`                              | 2498      | 路径 → RouteCapability             |
-| ↳ `resolveRouteCapabilityCandidatePool`                                        | 2657      | 按主能力 + API Key 授权构建候选池  |
-| ↳ `getFallbackRouteCapability` + 副候选池                                      | 2663-2672 | CLI 能力降级路径                   |
-| ↳ `filterCandidatesByModelRules`                                               | 2749      | 按 `model_rules` 过滤候选          |
-| ↳ `forwardWithFailover(... candidateUpstreamIds ...)`                          | 3039      | 故障转移主循环                     |
-| `src/app/api/proxy/v1/[...path]/route.ts` `resolvePathRoutingModelForUpstream` | 557       | 实际匹配规则、产出 `resolvedModel` |
+| `src/app/api/proxy/v1/[...path]/route.ts` `handleProxy`                        | 2440      | 代理主流程容器                     |
+| ↳ `resolveRouteCapability(method, path, headers)`                              | 2504      | 路径 → RouteCapability             |
+| ↳ `resolveRouteCapabilityCandidatePool`                                        | 2663      | 按主能力 + API Key 授权构建候选池  |
+| ↳ `getFallbackRouteCapability` + 副候选池                                      | 2669-2678 | CLI 能力降级路径                   |
+| ↳ `filterCandidatesByModelRules`                                               | 2755      | 按 `model_rules` 过滤候选          |
+| ↳ `forwardWithFailover(... candidateUpstreamIds ...)`                          | 3045      | 故障转移主循环                     |
+| `src/app/api/proxy/v1/[...path]/route.ts` `resolvePathRoutingModelForUpstream` | 558       | 实际匹配规则、产出 `resolvedModel` |
 | `src/lib/services/upstream-model-rules.ts` `normalizeUpstreamModelRules`       | 189       | model_rules / 旧字段统一规范化     |
 | `src/lib/services/upstream-model-rules.ts` `matchUpstreamModelRules`           | 326       | 三种规则类型的实际匹配             |
 | `src/lib/services/load-balancer.ts` `selectFromUpstreamCandidates`             | 675       | tier 过滤 + 加权抽样               |

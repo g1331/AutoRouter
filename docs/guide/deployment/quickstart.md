@@ -149,7 +149,9 @@ http://<server-host>:3331/
 
 下面只列出最常见的几类启动期错误。完整排障路径参见后续「常见部署问题排查」与 [故障排查手册](../usage/troubleshooting)。
 
-`autorouter` 容器反复重启、日志含 `ENCRYPTION_KEY is required` 或 `ADMIN_TOKEN is required`：第三步的两个密钥未在 `.env` 中正确设置，或 `.env` 文件不在 `docker-compose.yml` 同目录下。
+`autorouter` 容器反复重启、日志含 `ENCRYPTION_KEY is required`：`ENCRYPTION_KEY` 未在 `.env` 中正确设置，或 `.env` 文件不在 `docker-compose.yml` 同目录下。
+
+未设置 `ADMIN_TOKEN` 时容器仍会正常启动，但登录页输入任何 token 均会返回认证失败；请检查 `.env` 中 `ADMIN_TOKEN` 是否已正确填写。
 
 `db` 容器 healthcheck 长时间不通过、日志含 `FATAL: password authentication failed`：`.env` 中 `POSTGRES_PASSWORD` 与 `DATABASE_URL` 内的密码不一致。`docker-compose.yml` 把两者分开读取，二者必须严格相同。
 

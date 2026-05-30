@@ -72,7 +72,7 @@ outline: deep
 
 ### 请求录制
 
-打开后，符合规则的请求会被写入 `RECORDER_FIXTURES_DIR`（默认 `tests/fixtures`）。录制的 fixture 可在非生产环境通过 `/api/mock/<path>` 端点回放，用于在没有真实上游配额的情况下复现某次请求。`RECORDER_REDACT_SENSITIVE` 控制是否在录制时脱敏敏感字段；环境变量层是 fallback，本页面提供的 Runtime Settings 是更高优先级的运行期开关。
+打开后，符合规则的请求会被写入 `RECORDER_FIXTURES_DIR`（默认 `data/traffic-recordings`）。录制的 fixture 可在非生产环境通过 `/api/mock/<path>` 端点回放，用于在没有真实上游配额的情况下复现某次请求。`RECORDER_REDACT_SENSITIVE` 控制是否在录制时脱敏敏感字段；环境变量层是 fallback，本页面提供的 Runtime Settings 是更高优先级的运行期开关。
 
 ### 全局失败规则
 

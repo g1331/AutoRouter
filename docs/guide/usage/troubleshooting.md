@@ -105,11 +105,11 @@ outline: deep
 
 ### duration_ms 显示约 24.8 天
 
-`Math.min(Math.max(0, durationMs), INT4_MAX)` 的 clamp 上限是 2,147,483,647 ms ≈ 24.8 天（`request-logger.ts:21,411-417`）。读到这个值通常意味着原始 duration 异常大或溢出过 INT4，clamp 之后才能写库，**不是真的跑了 24.8 天**。配合 status_code 一起看，多半是 520（见下）或上游长时间 stuck。
+`Math.min(Math.max(0, durationMs), INT4_MAX)` 的 clamp 上限是 2,147,483,647 ms ≈ 24.8 天（`request-logger.ts:21,441-443`）。读到这个值通常意味着原始 duration 异常大或溢出过 INT4，clamp 之后才能写库，**不是真的跑了 24.8 天**。配合 status_code 一起看，多半是 520（见下）或上游长时间 stuck。
 
 ### `status_code = 520`：stale 兜底
 
-`reconcileStaleInProgressRequestLogs`（`request-logger.ts:524-569`）把 15 分钟内仍是 `status_code IS NULL` 的非流式行标记为 520，`errorMessage = "Request did not settle before the stale reconciliation timeout window"`。
+`reconcileStaleInProgressRequestLogs`（`request-logger.ts:562-607`）把 15 分钟内仍是 `status_code IS NULL` 的非流式行标记为 520，`errorMessage = "Request did not settle before the stale reconciliation timeout window"`。
 
 读到 520 **不是上游真的返了 520**，而是 reconcile 兜底。排查：
 
@@ -134,7 +134,7 @@ outline: deep
 
 | 症状                                       | 根因 / 排查                                                                                                                                                           |
 | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/logs` 列表偶发卡顿，第一页 1-2 秒才出    | `listRequestLogs` 调用前会先跑一次 `reconcileStaleInProgressRequestLogs`（`request-logger.ts:706-710`），若上次 stale 行较多会拖慢首响应。失败仅 warn，不影响列表本身 |
+| `/logs` 列表偶发卡顿，第一页 1-2 秒才出    | `listRequestLogs` 调用前会先跑一次 `reconcileStaleInProgressRequestLogs`（`request-logger.ts:744-749`），若上次 stale 行较多会拖慢首响应。失败仅 warn，不影响列表本身 |
 | Live 模式连不上 / 一直 `fallback`          | `/api/admin/logs/live` SSE 是进程内 pub/sub，**多副本部署**下不跨实例。检查 LB 是否启用了粘性会话；本机直连测试 SSE 端点                                              |
 | 列表里出现一批 520 + duration_ms ≈ 24.8 天 | 见上一节「status_code = 520」                                                                                                                                         |
 | 列表过滤参数说不支持 model                 | `/api/admin/logs` 的 query 参数确实没有 `model`（`route.ts`）。按模型查只能走 leaderboard 或客户端                                                                    |

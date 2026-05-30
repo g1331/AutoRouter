@@ -52,13 +52,13 @@ outline: deep
 | `description`    | null | 备注信息，便于后续维护时回忆 Key 的用途                                   |
 | `spending_rules` | null | 该 Key 的消费限额规则。支持 `daily` / `monthly` / `rolling` 三种周期      |
 
-过期判定（`src/app/api/proxy/v1/[...path]/route.ts:2463`）发生在每次代理请求鉴权时：`expiresAt && expiresAt < new Date()` 即返回 401。无需周期任务介入。
+过期判定（`src/app/api/proxy/v1/[...path]/route.ts:2469`）发生在每次代理请求鉴权时：`expiresAt && expiresAt < new Date()` 即返回 401。无需周期任务介入。
 
 `spending_rules` 与上游的 `spending_rules` 含义类似，但作用对象是「该 Key 的累计消费」而非「该上游的累计消费」。
 
 ## 保存：什么时候能看到完整密钥
 
-点击「保存」后，浏览器向 `POST /api/admin/keys` 发请求。服务端流程（`src/lib/services/key-manager.ts:254`）：
+点击「保存」后，浏览器向 `POST /api/admin/keys` 发请求。服务端流程（`src/lib/services/key-manager.ts:262`）：
 
 1. 生成密钥：`sk-auto-<43 字符 base64url>`，例如 `sk-auto-h3z9...`。前 12 个字符（含 `sk-auto-` 前缀）作为「key prefix」存储，便于日志展示。
 2. 完整密钥用 bcrypt（12 轮）哈希后存入 `keyHash` 列，用于后续鉴权比对。
@@ -119,7 +119,7 @@ POST /api/admin/keys/<id>/reveal
 | 撤销 / 删除 | `DELETE /api/admin/keys/[id]` | UI 上的「撤销」按钮调用 DELETE 接口，由 `deleteApiKey` 从数据库移除该 Key 记录。不可恢复，但请求日志中的 Key 字段会以历史快照形式保留以便追溯 |
 
 ::: warning 撤销 = 删除记录
-当前实现里「撤销」与「删除」是同一个操作，调用 `DELETE /api/admin/keys/[id]` 把数据库记录真实抹掉（`src/app/api/admin/keys/[id]/route.ts:45`、`src/lib/services/key-manager.ts` 的 `deleteApiKey`）。如果你的合规或审计流程需要保留 Key 记录以便日后查阅，请使用「停用」（`is_active=false`）而不是「撤销」。
+当前实现里「撤销」与「删除」是同一个操作，调用 `DELETE /api/admin/keys/[id]` 把数据库记录真实抹掉（`src/app/api/admin/keys/[id]/route.ts:47`、`src/lib/services/key-manager.ts` 的 `deleteApiKey`）。如果你的合规或审计流程需要保留 Key 记录以便日后查阅，请使用「停用」（`is_active=false`）而不是「撤销」。
 :::
 
 ## 使用密钥发请求
@@ -136,7 +136,7 @@ curl -X POST http://<your-host>:3331/api/proxy/v1/chat/completions \
   }'
 ```
 
-AutoRouter 也支持额外两种 header 名称（`src/app/api/proxy/v1/[...path]/route.ts:2249`）：
+AutoRouter 也支持额外两种 header 名称（`src/app/api/proxy/v1/[...path]/route.ts:2255`）：
 
 ```
 Authorization: Bearer <key>

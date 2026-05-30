@@ -44,7 +44,7 @@ docker compose -f docker-compose.yml -f docker-compose.cliproxy.yml logs --tail=
 
 #### `ENCRYPTION_KEY is required` 或长度校验失败
 
-`src/lib/utils/config.ts:23` 强制 `encryptionKey` 长度 44（base64 编码的 32 字节）。诊断：
+`src/lib/utils/config.ts:23` 在 `ENCRYPTION_KEY` **已设置但长度不等于 44 字符**时于启动期触发 Zod 校验错误，导致容器退出。若 `ENCRYPTION_KEY` **完全缺失**，config.ts 的校验不会触发，容器可以正常启动，但第一次执行加密或解密操作时（例如创建上游、验证 API Key 等）才会抛出 `ENCRYPTION_KEY is required`（来源：`src/lib/utils/encryption.ts:51-55`）。诊断：
 
 ```bash
 grep "^ENCRYPTION_KEY=" .env
@@ -60,9 +60,9 @@ grep "^ENCRYPTION_KEY=" .env
 首次部署时 `ENCRYPTION_KEY` 是一次性事件——它锁定数据库中所有已加密字段的解密能力。如果当前数据库已经有上游配置，换一个新密钥意味着所有上游 API Key 都无法再解密。补救路径只剩下「逐条手工重填」。这种情况下优先从备份恢复原 `.env`，详见 [数据持久化与备份](./persistence-backup)。
 :::
 
-#### `ADMIN_TOKEN is required`
+#### 管理端所有请求返回 401
 
-`src/lib/utils/config.ts:25` 强制 `adminToken` 至少 1 个字符。修复方式同上，缺失就补。
+`src/lib/utils/config.ts:25` 将 `adminToken` 定义为 `.optional()`，缺少 `ADMIN_TOKEN` **不会导致容器退出**，容器可以正常启动。但 `validateAdminToken` 在 `adminToken` 为 `undefined` 时直接返回 `false`，因此所有 `/api/admin/*` 请求均返回 401。修复方式：在 `.env` 中补充 `ADMIN_TOKEN=<任意非空字符串>` 后重启。
 
 #### `DATABASE_URL is required in production`
 
@@ -202,9 +202,9 @@ docker compose -f docker-compose.yml -f docker-compose.cliproxy.yml exec cliprox
 
 `ENCRYPTION_KEY` 用 Fernet 算法加密下面这些字段，落地到 PG：
 
-- `upstreams.api_key`：上游 provider 的 API Key
-- `apiKeys.key_value`：客户端 API Key 的明文备份
-- `cliproxyInstances.client_api_key`、`cliproxyInstances.management_key`：CLIProxyAPI 凭据
+- `upstreams.api_key_encrypted`：上游 provider 的 API Key
+- `apiKeys.key_value_encrypted`：客户端 API Key 的明文备份
+- `cliproxyInstances.client_api_key_encrypted`、`cliproxyInstances.management_key_encrypted`：CLIProxyAPI 凭据
 - 其他敏感字段（按 schema 演进可能新增）
 
 ### 现象

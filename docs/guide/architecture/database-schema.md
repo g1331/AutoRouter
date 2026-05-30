@@ -31,7 +31,7 @@ const schema = (config.dbType === "sqlite" ? sqliteSchema : pgSchema) as typeof 
 整个项目所有业务代码都从 `@/lib/db` 这个 barrel 导入表对象与类型，不直接 import `schema-pg` 或 `schema-sqlite`，保证一份业务代码同时能跑在两套数据库上。
 
 ::: warning SQLite 不是平替
-注释（`src/lib/db/index.ts:14`）明确说明：SQLite 在结构上对常规 CRUD 兼容，但 `PERCENTILE_CONT` 等 PG 专用 SQL 在 SQLite 上不可用。统计聚合（`/api/admin/stats/*`）在 SQLite 上会有部分查询直接报错。线上务必用 PostgreSQL。
+注释（`src/lib/db/index.ts:71`）明确说明：SQLite 在结构上对常规 CRUD 兼容，但 `PERCENTILE_CONT` 等 PG 专用 SQL 在 SQLite 上不可用。统计聚合（`/api/admin/stats/*`）在 SQLite 上会有部分查询直接报错。线上务必用 PostgreSQL。
 :::
 
 ## 表清单
@@ -193,8 +193,8 @@ PostgreSQL 与 SQLite 各自有独立的迁移目录：
 
 | 目录              | 用途            | 文件数                          |
 | ----------------- | --------------- | ------------------------------- |
-| `drizzle/`        | PostgreSQL 迁移 | 当前 40 个 SQL（最高编号 0037） |
-| `drizzle-sqlite/` | SQLite 迁移     | 当前 16 个 SQL                  |
+| `drizzle/`        | PostgreSQL 迁移 | 当前 39 个 SQL（最高编号 0037） |
+| `drizzle-sqlite/` | SQLite 迁移     | 当前 15 个 SQL                  |
 
 两套迁移**并不严格一一对应**，因为某些 PG 特定能力（json 类型、`gen_random_uuid()`、`timestamptz`）在 SQLite 上需要不同的表达方式甚至跳过。每次给 `schema-pg.ts` 加字段后，标准流程：
 

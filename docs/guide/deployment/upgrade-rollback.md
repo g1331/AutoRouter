@@ -117,7 +117,7 @@ docker compose up -d
 docker compose logs autorouter | grep -E '\[AutoRouter\] (Applying|Migrations completed)'
 ```
 
-日志中会看到 `Applying migration: <id>_*.sql` 与 `Migrations completed` 两类行，确认迁移已经走到末尾即可。
+日志中会看到 `[AutoRouter] Applying migration: <filename>` 与 `[AutoRouter] Migrations completed` 两类行，确认迁移已经走到末尾即可。
 
 ### 破坏性迁移
 
@@ -199,15 +199,16 @@ docker compose up -d
 
 正常的升级 / 回滚操作只动 `AUTOROUTER_IMAGE` 一行。其余字段保持原样：
 
-| 字段                               | 升级 / 回滚时是否需要变更                                             |
-| ---------------------------------- | --------------------------------------------------------------------- |
-| `AUTOROUTER_IMAGE`                 | 是。切到目标 tag 或 digest                                            |
-| `POSTGRES_*` / `DATABASE_URL`      | 否。改这些会让新容器连不上现有数据库                                  |
-| `ENCRYPTION_KEY`                   | 否。改这些会让原本加密的字段全部不可解                                |
-| `ADMIN_TOKEN`                      | 否。除非主动轮换；CI 部署模式下会被 secret 覆盖                       |
-| `PORT`                             | 否。除非有端口冲突需要换                                              |
-| `CLIPROXY_*`                       | 否。除非随版本调整凭据                                                |
-| `RECORDER_*`（已废弃为运行时配置） | 否。这些已经不再影响运行期行为，运行期开关在管理后台 Runtime Settings |
+| 字段                                                               | 升级 / 回滚时是否需要变更                                                            |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `AUTOROUTER_IMAGE`                                                 | 是。切到目标 tag 或 digest                                                           |
+| `POSTGRES_*` / `DATABASE_URL`                                      | 否。改这些会让新容器连不上现有数据库                                                 |
+| `ENCRYPTION_KEY`                                                   | 否。改这些会让原本加密的字段全部不可解                                               |
+| `ADMIN_TOKEN`                                                      | 否。除非主动轮换；CI 部署模式下会被 secret 覆盖                                      |
+| `PORT`                                                             | 否。除非有端口冲突需要换                                                             |
+| `CLIPROXY_*`                                                       | 否。除非随版本调整凭据                                                               |
+| `RECORDER_ENABLED` / `RECORDER_MODE` / `RECORDER_REDACT_SENSITIVE` | 否。这三个变量已迁移为运行时配置，由管理后台 Runtime Settings 控制，不再读取环境变量 |
+| `RECORDER_FIXTURES_DIR`                                            | 否。仍有效，控制录制文件存储目录；升级 / 回滚时通常无需改动                          |
 
 任何「需要顺手改一下密码 / 密钥」的需求与升级 / 回滚解耦：先单独完成密钥轮换并验证可用，再做版本切换。混在一起做出问题时难以定位是版本还是密钥的问题。
 

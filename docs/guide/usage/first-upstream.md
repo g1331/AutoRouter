@@ -78,12 +78,12 @@ outline: deep
 
 ## 保存：发生了什么
 
-点击「保存」后，浏览器向 `POST /api/admin/upstreams` 发请求。服务端流程（`src/lib/services/upstream-crud.ts`）：
+点击「保存」后，浏览器向 `POST /api/admin/upstreams` 发请求。服务端流程（`src/app/api/admin/upstreams/route.ts` 校验层 + `src/lib/services/upstream-crud.ts` 持久化层）：
 
-1. Zod 校验通过的字段写入 `upstreams` 表。
-2. `api_key` 字段用 `ENCRYPTION_KEY` 做 Fernet 加密后写入 `apiKeyEncrypted` 列；明文不进数据库。
-3. 校验 `route_capabilities` 同 provider，规则不通过会返回 400。
-4. 写入成功后立即出现在上游列表中，状态为活跃。
+1. Zod 校验（含 `route_capabilities` 同 provider 校验），不通过直接返回 400，不会触碰数据库。
+2. 名称唯一性检查，已存在同名上游时返回错误。
+3. `api_key` 字段用 `ENCRYPTION_KEY` 做 Fernet 加密后写入 `apiKeyEncrypted` 列；明文不进数据库。
+4. 字段写入 `upstreams` 表，写入成功后立即出现在上游列表中，状态为活跃。
 
 数据库约束之外，没有副作用——保存动作本身不会去触达上游，因此即使 base URL 写错或 API Key 失效，也能保存成功，问题要靠下一步连通性测试发现。
 

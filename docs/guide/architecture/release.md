@@ -153,7 +153,7 @@ release notes 不写手稿，由 `git-cliff` + `cliff.toml` 自动渲染。
 - `v0.3.0-alpha.2`：基线是 `v0.3.0-alpha.1`。
 - `v0.3.0-beta.1`：基线是「v0.3.0 基线下同渠道（beta）」的上一颗 beta；没有则退化到最近稳定。
 
-预发布 tag 渲染 changelog 时会带上 `--ignore-tags '.*-(alpha|beta)\\.[0-9]+$'`，避免预发布 tag 被当成稳定版本写入对比关系。
+稳定 tag 渲染 changelog 时会带上 `--ignore-tags '.*-(alpha|beta)\\.[0-9]+$'`，避免预发布 tag 被 git-cliff 当作稳定对比基线。
 
 ### commit 分组
 

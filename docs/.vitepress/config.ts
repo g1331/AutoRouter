@@ -111,7 +111,7 @@ export default defineConfig({
     socialLinks: [{ icon: "github", link: "https://github.com/g1331/AutoRouter" }],
     search: { provider: "local" },
     footer: {
-      message: "Released under the MIT License.",
+      message: "Released under the AGPL-3.0 License.",
       copyright: "Copyright © 2025-present AutoRouter Contributors",
     },
   },

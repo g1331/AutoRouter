@@ -26,7 +26,7 @@ outline: deep
 └───────────────────────────────────────────────────────────────┘
 ```
 
-`src/lib/services/proxy-client.ts:12-21` 的 `UpstreamForProxy` 接口字段里只有 `id` / `name` / `providerType` / `baseUrl` / `apiKey` / `timeout`，没有任何代理字段；同文件 `:139` 的 fetch 调用是 Node.js 原生 `fetch`，没有传 `dispatcher` 也没有读 `process.env.HTTP_PROXY`。这意味着即使在宿主机设了 `HTTPS_PROXY`，AutoRouter 的转发也不会走代理（Node `fetch` 默认行为）。
+`src/lib/services/proxy-client.ts:12-21` 的 `UpstreamForProxy` 接口字段里只有 `id` / `name` / `providerType` / `baseUrl` / `apiKey` / `timeout`，没有任何代理字段；同文件 `:1149` 的 fetch 调用是 Node.js 原生 `fetch`，没有传 `dispatcher` 也没有读 `process.env.HTTP_PROXY`。这意味着即使在宿主机设了 `HTTPS_PROXY`，AutoRouter 的转发也不会走代理（Node `fetch` 默认行为）。
 
 也就是说：
 
