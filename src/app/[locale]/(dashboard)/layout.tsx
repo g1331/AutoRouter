@@ -103,10 +103,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             isSidebarCollapsed ? "md:ml-20" : "md:ml-64"
           )}
         >
-          <MobilePulseStrip />
-          {!isMobileRootRoute && (
-            <header className="sticky top-0 z-20 border-b border-divider bg-surface-200/88 backdrop-blur md:hidden">
-              <div className="flex h-12 items-center gap-2 px-3">
+          <header className="sticky top-0 z-20 border-b border-divider bg-surface-200/88 backdrop-blur md:hidden">
+            <div className="flex h-12 items-center justify-between gap-2 px-3">
+              {!isMobileRootRoute ? (
                 <Button
                   type="button"
                   variant="ghost"
@@ -118,9 +117,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                   {tCommon("back")}
                 </Button>
-              </div>
-            </header>
-          )}
+              ) : (
+                <span aria-hidden="true" />
+              )}
+              <MobilePulseStrip />
+            </div>
+          </header>
           {children}
         </main>
       </div>
