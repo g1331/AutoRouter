@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const getCliproxyInstanceRowMock = vi.fn();
 const getProviderAuthUrlMock = vi.fn();
 const getAuthStatusMock = vi.fn();
+const submitOAuthCallbackMock = vi.fn();
 const syncCliproxyAuthAccountsMock = vi.fn();
 
 vi.mock("@/lib/services/cliproxy-instance-crud", async (importOriginal) => {
@@ -20,6 +21,7 @@ vi.mock("@/lib/services/cliproxy-management-client", async (importOriginal) => {
     ...actual,
     getProviderAuthUrl: (...args: unknown[]) => getProviderAuthUrlMock(...args),
     getAuthStatus: (...args: unknown[]) => getAuthStatusMock(...args),
+    submitOAuthCallback: (...args: unknown[]) => submitOAuthCallbackMock(...args),
   };
 });
 
@@ -125,5 +127,45 @@ describe("cliproxy-oauth-login-service", () => {
     expect(result.status).toBe("error");
     expect(result.error).toBe("user denied");
     expect(syncCliproxyAuthAccountsMock).not.toHaveBeenCalled();
+  });
+
+  // ── submitCliproxyOAuthCallback ─────────────────────────────────────────
+
+  it("submitCliproxyOAuthCallback 提交后触发账号同步", async () => {
+    const { submitCliproxyOAuthCallback } =
+      await import("@/lib/services/cliproxy-oauth-login-service");
+
+    getCliproxyInstanceRowMock.mockResolvedValueOnce(instanceRow);
+    submitOAuthCallbackMock.mockResolvedValueOnce(undefined);
+    syncCliproxyAuthAccountsMock.mockResolvedValueOnce({
+      added: 1,
+      updated: 0,
+      removed: 0,
+      total: 1,
+    });
+
+    const result = await submitCliproxyOAuthCallback(
+      "instance-1",
+      "codex",
+      "https://callback.example/auth?code=xyz"
+    );
+
+    expect(result.status).toBe("ok");
+    expect(result.syncResult).toMatchObject({ added: 1 });
+    expect(submitOAuthCallbackMock).toHaveBeenCalledWith(
+      { managementUrl: "http://cliproxyapi:8317", managementKey: "mgmt-key" },
+      "codex",
+      "https://callback.example/auth?code=xyz"
+    );
+  });
+
+  it("submitCliproxyOAuthCallback 服务商非法时抛错且不调用 CLIProxyAPI", async () => {
+    const { submitCliproxyOAuthCallback, InvalidCliproxyOAuthProviderError } =
+      await import("@/lib/services/cliproxy-oauth-login-service");
+
+    await expect(
+      submitCliproxyOAuthCallback("instance-1", "unknown", "https://callback.example/auth")
+    ).rejects.toBeInstanceOf(InvalidCliproxyOAuthProviderError);
+    expect(submitOAuthCallbackMock).not.toHaveBeenCalled();
   });
 });

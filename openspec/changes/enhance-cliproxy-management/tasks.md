@@ -7,8 +7,8 @@
 
 ## 2. 后端服务层扩展
 
-- [ ] 2.1 在 `cliproxy-auth-account-service.ts` 中新增 `deleteCliproxyAuthAccount` 方法（先调用 CLIProxyAPI 删除，成功后移除本地缓存）；编写单元测试覆盖成功删除、CLIProxyAPI 失败、本地无缓存三种场景
-- [ ] 2.2 在 `cliproxy-oauth-login-service.ts` 中更新 `InvalidCliproxyOAuthProviderError` 的取值范围以支持 6 个 Provider；验证现有 `initiateCliproxyOAuthLogin` 和 `pollCliproxyOAuthStatus` 对新 Provider 的兼容性
+- [x] 2.1 在 `cliproxy-auth-account-service.ts` 中新增 `deleteCliproxyAuthAccount`、`uploadCliproxyAuthFile`、`downloadCliproxyAuthFile`、`listCliproxyAccountModels` 服务方法；新增 `cliproxy-instance-logs-service.ts` 与 `cliproxy-linked-upstreams-service.ts` 两个独立服务；编写单元测试覆盖删除成功/失败/无缓存、上传后同步、下载、模型查询、日志获取、关联上游分类等场景
+- [x] 2.2 在 `cliproxy-oauth-login-service.ts` 中新增 `submitCliproxyOAuthCallback`；OAuth Provider 通过 `isCliproxyOAuthProvider` 已自动覆盖新增的 xAI/Antigravity/Kimi，无需单独改动 Error 类型
 
 ## 3. Admin API 路由
 

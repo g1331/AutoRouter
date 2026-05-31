@@ -6,6 +6,7 @@ import {
 import {
   getProviderAuthUrl,
   getAuthStatus,
+  submitOAuthCallback,
   isCliproxyOAuthProvider,
   type CliproxyOAuthProvider,
   type CliproxyManagementTarget,
@@ -94,4 +95,29 @@ export async function pollCliproxyOAuthStatus(
   }
 
   return { status, error };
+}
+
+/**
+ * 手动提交 OAuth 回调地址，绕过自动回调链路完成授权。
+ *
+ * 适用于 CLIProxyAPI 的 callback forwarder 无法回到本地（例如远程部署、容器
+ * 网络隔离）的场景：管理员从浏览器地址栏复制回调 URL 后通过本接口提交。
+ * 上游处理成功后触发该实例的账号同步，使新登录账号立即进入缓存表。
+ */
+export async function submitCliproxyOAuthCallback(
+  instanceId: string,
+  provider: string,
+  redirectUrl: string
+): Promise<CliproxyOAuthLoginStatusResult> {
+  if (!isCliproxyOAuthProvider(provider)) {
+    throw new InvalidCliproxyOAuthProviderError(provider);
+  }
+  const target = await resolveTarget(instanceId);
+  await submitOAuthCallback(target, provider, redirectUrl);
+  const syncResult = await syncCliproxyAuthAccounts(instanceId);
+  log.info(
+    { instanceId, provider, syncResult },
+    "submitted CLIProxyAPI OAuth callback URL and synced accounts"
+  );
+  return { status: "ok", syncResult };
 }
