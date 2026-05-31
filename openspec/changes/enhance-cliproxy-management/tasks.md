@@ -12,12 +12,12 @@
 
 ## 3. Admin API 路由
 
-- [ ] 3.1 新增 `instances/[id]/auth-files/route.ts`（POST: 上传认证文件，上传后触发同步并返回同步结果）；编写路由测试
-- [ ] 3.2 新增 `instances/[id]/auth-files/[name]/route.ts`（GET: 下载认证文件，DELETE: 删除认证文件）；编写路由测试
-- [ ] 3.3 新增 `instances/[id]/oauth-callback/route.ts`（POST: 提交回调 URL，成功后触发同步）；编写路由测试
-- [ ] 3.4 新增 `instances/[id]/logs/route.ts`（GET: 查询实例日志，支持 `since` 查询参数）；编写路由测试
-- [ ] 3.5 新增 `instances/[id]/linked-upstreams/route.ts`（GET: 查询关联上游列表）；编写路由测试
-- [ ] 3.6 新增 `instances/[id]/auth-accounts/[accountName]/models/route.ts`（GET: 查询账号模型列表）；编写路由测试
+- [x] 3.1 新增 `instances/[id]/auth-files/route.ts`（POST: 上传认证文件，上传后触发同步并返回同步结果）；编写路由测试
+- [x] 3.2 新增 `instances/[id]/auth-files/[name]/route.ts`（GET: 下载认证文件，DELETE: 删除认证文件）；编写路由测试
+- [x] 3.3 新增 `instances/[id]/oauth-callback/route.ts`（POST: 提交回调 URL，成功后触发同步）；编写路由测试
+- [x] 3.4 新增 `instances/[id]/logs/route.ts`（GET: 查询实例日志，支持 `since` 查询参数）；编写路由测试
+- [x] 3.5 新增 `instances/[id]/linked-upstreams/route.ts`（GET: 查询关联上游列表）；编写路由测试
+- [x] 3.6 新增 `instances/[id]/auth-accounts/[accountName]/models/route.ts`（GET: 查询账号模型列表）；编写路由测试
 
 ## 4. 前端 hooks 与类型
 
