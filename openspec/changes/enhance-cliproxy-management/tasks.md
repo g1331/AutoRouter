@@ -21,12 +21,12 @@
 
 ## 4. 前端 hooks 与类型
 
-- [ ] 4.1 在 `use-cliproxy.ts` 中新增 `useUploadCliproxyAuthFile`、`useDownloadCliproxyAuthFile`、`useDeleteCliproxyAuthFile` 三个 mutation hooks
-- [ ] 4.2 在 `use-cliproxy.ts` 中新增 `useCliproxyAccountModels` query hook（按账号名查询模型列表）
-- [ ] 4.3 在 `use-cliproxy.ts` 中新增 `useSubmitCliproxyOAuthCallback` mutation hook
-- [ ] 4.4 在 `use-cliproxy.ts` 中新增 `useCliproxyInstanceLogs` query hook（支持 `since` 参数）和 `useCliproxyLinkedUpstreams` query hook
-- [ ] 4.5 在 `use-cliproxy.ts` 中新增 `useToggleCliproxyInstanceEnabled` mutation hook（调用实例更新 API 仅修改 enabled 字段）
-- [ ] 4.6 在 `src/types/cliproxy.ts` 中新增 `CliproxyAuthFileModel`、`CliproxyLogEntry`、`CliproxyLinkedUpstream` 等类型定义
+- [x] 4.1 在 `use-cliproxy.ts` 中新增 `useUploadCliproxyAuthFile`、`useDownloadCliproxyAuthFile`、`useDeleteCliproxyAuthFile` 三个 mutation hooks
+- [x] 4.2 在 `use-cliproxy.ts` 中新增 `useCliproxyAccountModels` query hook（按账号名查询模型列表）
+- [x] 4.3 在 `use-cliproxy.ts` 中新增 `useSubmitCliproxyOAuthCallback` mutation hook
+- [x] 4.4 在 `use-cliproxy.ts` 中新增 `useCliproxyInstanceLogs` query hook（支持 `since` 参数）和 `useCliproxyLinkedUpstreams` query hook
+- [x] 4.5 在 `use-cliproxy.ts` 中新增 `useToggleCliproxyInstanceEnabled` mutation hook（调用实例更新 API 仅修改 enabled 字段）
+- [x] 4.6 在 `src/types/cliproxy.ts` 中新增 `CliproxyAuthFileModel`、`CliproxyLogEntry`、`CliproxyLinkedUpstream` 等类型定义
 
 ## 5. 前端组件：实例表格增强与关联上游
 
@@ -59,7 +59,7 @@
 
 ## 10. 国际化
 
-- [ ] 10.1 在 `en.json` 和 `zh-CN.json` 的 `cliproxy` 命名空间中补充所有新增功能的国际化文案，覆盖新 Provider 名称、认证文件操作、日志面板、关联上游面板、账号详情、账号模型、OAuth 回调等全部新增 UI 文案
+- [x] 10.1 在 `en.json` 和 `zh-CN.json` 的 `cliproxy` 命名空间中补充所有新增功能的国际化文案，覆盖新 Provider 名称、认证文件操作、日志面板、关联上游面板、账号详情、账号模型、OAuth 回调等全部新增 UI 文案
 
 ## 11. 集成验证
 
