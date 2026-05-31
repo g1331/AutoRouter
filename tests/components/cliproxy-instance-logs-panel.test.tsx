@@ -53,7 +53,7 @@ describe("CliproxyInstanceLogsPanel", () => {
     expect(screen.getByText("logsTitle")).toBeInTheDocument();
   });
 
-  it("加载失败展示错误", () => {
+  it("加载失败展示错误标题", () => {
     useCliproxyInstanceLogsMock.mockReturnValue({
       data: undefined,
       isError: true,
@@ -62,6 +62,25 @@ describe("CliproxyInstanceLogsPanel", () => {
     });
     render(<CliproxyInstanceLogsPanel instance={instance} />);
     expect(screen.getByText("logsLoadFailed")).toBeInTheDocument();
+  });
+
+  it("加载失败时把后端透传的具体原因（如 logging to file disabled）也展示出来", () => {
+    useCliproxyInstanceLogsMock.mockReturnValue({
+      data: undefined,
+      isError: true,
+      error: new Error(
+        "CLIProxyAPI 管理 API 调用失败：CLIProxyAPI 管理 API 返回异常状态码 400：logging to file disabled"
+      ),
+      refetch: vi.fn(),
+      isFetching: false,
+    });
+    render(<CliproxyInstanceLogsPanel instance={instance} />);
+    expect(screen.getByText("logsLoadFailed")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "CLIProxyAPI 管理 API 调用失败：CLIProxyAPI 管理 API 返回异常状态码 400：logging to file disabled"
+      )
+    ).toBeInTheDocument();
   });
 
   it("空日志展示提示", () => {

@@ -38,10 +38,13 @@ export function CliproxyInstanceLogsPanel({ instance }: CliproxyInstanceLogsPane
     data: result,
     isLoading,
     isError,
+    error,
     refetch,
     isFetching,
   } = useCliproxyInstanceLogs(instance.id, { limit: CLIPROXY_LOGS_DEFAULT_LIMIT });
   const [keyword, setKeyword] = useState("");
+
+  const errorMessage = error instanceof Error ? error.message : null;
 
   const filtered = useMemo(() => {
     const lines = result?.lines ?? [];
@@ -79,9 +82,12 @@ export function CliproxyInstanceLogsPanel({ instance }: CliproxyInstanceLogsPane
             <Skeleton className="h-6 w-full" />
           </div>
         ) : isError ? (
-          <p className="py-8 text-center type-body-medium text-destructive">
-            {t("logsLoadFailed")}
-          </p>
+          <div className="space-y-2 py-8 text-center">
+            <p className="type-body-medium text-destructive">{t("logsLoadFailed")}</p>
+            {errorMessage ? (
+              <p className="break-words type-body-small text-muted-foreground">{errorMessage}</p>
+            ) : null}
+          </div>
         ) : !result || result.lines.length === 0 ? (
           <p className="py-8 text-center type-body-medium text-muted-foreground">
             {t("logsEmpty")}
