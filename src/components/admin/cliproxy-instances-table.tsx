@@ -83,7 +83,7 @@ export function CliproxyInstancesTable({
               <div className="flex items-center gap-2">
                 <Switch
                   checked={instance.enabled}
-                  disabled={toggleEnabled.isPending}
+                  disabled={toggleEnabled.isPending && toggleEnabled.variables?.id === instance.id}
                   onCheckedChange={(checked) =>
                     toggleEnabled.mutate({ id: instance.id, enabled: checked })
                   }

@@ -332,3 +332,22 @@ export function getDecryptedClientApiKey(row: CliproxyInstance): string {
 export function getDecryptedManagementKey(row: CliproxyInstance): string {
   return decrypt(row.managementKeyEncrypted);
 }
+
+/**
+ * 读取实例并构造管理 API 调用所需的 target 对象。
+ *
+ * 复用于所有需要调用 CLIProxyAPI 管理端的服务（OAuth 登录、日志查看等），
+ * 避免每个调用方重复实例查找与管理密钥解密的样板。
+ */
+export async function resolveCliproxyManagementTarget(
+  instanceId: string
+): Promise<{ managementUrl: string; managementKey: string }> {
+  const instance = await getCliproxyInstanceRow(instanceId);
+  if (!instance) {
+    throw new CliproxyInstanceNotFoundError(instanceId);
+  }
+  return {
+    managementUrl: instance.managementUrl,
+    managementKey: getDecryptedManagementKey(instance),
+  };
+}

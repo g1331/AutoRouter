@@ -11,9 +11,26 @@ const log = createLogger("admin-cliproxy-oauth-callback");
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+/** 允许的回调 URL 协议；其它 scheme 一律拒绝以避免被透传出去触发非预期行为。 */
+const ALLOWED_REDIRECT_PROTOCOLS = new Set(["http:", "https:"]);
+
 const callbackSchema = z.object({
   provider: z.enum(CLIPROXY_OAUTH_PROVIDERS),
-  redirect_url: z.string().trim().min(1).max(4096),
+  redirect_url: z
+    .string()
+    .trim()
+    .min(1)
+    .max(4096)
+    .refine(
+      (value) => {
+        try {
+          return ALLOWED_REDIRECT_PROTOCOLS.has(new URL(value).protocol);
+        } catch {
+          return false;
+        }
+      },
+      { message: "redirect_url must be an http(s) URL" }
+    ),
 });
 
 /**

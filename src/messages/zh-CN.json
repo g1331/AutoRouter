@@ -1636,6 +1636,8 @@
     "oauthManualCallbackPlaceholder": "https://callback.example/auth?code=…&state=…",
     "oauthManualCallbackSubmit": "提交回调",
     "oauthManualCallbackEmpty": "请填写回调 URL",
-    "oauthCallbackSubmitFailed": "提交回调 URL 失败：{message}"
+    "oauthCallbackSubmitSuccess": "回调 URL 已提交，账号已同步",
+    "oauthCallbackSubmitFailed": "提交回调 URL 失败：{message}",
+    "linkedUpstreamProviderUnknown": "未识别"
   }
 }

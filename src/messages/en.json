@@ -1631,6 +1631,8 @@
     "oauthManualCallbackPlaceholder": "https://callback.example/auth?code=…&state=…",
     "oauthManualCallbackSubmit": "Submit Callback",
     "oauthManualCallbackEmpty": "Callback URL is required",
-    "oauthCallbackSubmitFailed": "Failed to submit callback URL: {message}"
+    "oauthCallbackSubmitSuccess": "Callback URL submitted, accounts synced",
+    "oauthCallbackSubmitFailed": "Failed to submit callback URL: {message}",
+    "linkedUpstreamProviderUnknown": "Unknown"
   }
 }

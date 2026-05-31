@@ -332,9 +332,6 @@ export function useCreateCliproxyPoolUpstream() {
 /** 实例日志面板的默认拉取行数上限（前端裁剪）。 */
 export const CLIPROXY_LOGS_DEFAULT_LIMIT = 200;
 
-/** 实例日志查询的查询键。 */
-const LOGS_QUERY_KEY = "logs";
-
 /** 列出实例下关联的上游（池上游与单账号上游）。 */
 export function useCliproxyLinkedUpstreams(instanceId: string | null) {
   const { apiClient } = useAuth();
@@ -374,7 +371,7 @@ export function useCliproxyInstanceLogs(instanceId: string | null, since?: strin
   const { apiClient } = useAuth();
 
   return useQuery({
-    queryKey: ["cliproxy", LOGS_QUERY_KEY, instanceId, since ?? null],
+    queryKey: ["cliproxy", "logs", instanceId, since ?? null],
     queryFn: async () => {
       const sinceParam = since ? `?since=${encodeURIComponent(since)}` : "";
       const response = await apiClient.get<{ data: CliproxyLogEntry[] }>(
@@ -512,7 +509,9 @@ export function useDownloadCliproxyAuthFile() {
       document.body.appendChild(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(url);
+      // 立即 revoke 在 Firefox 上可能导致 Blob 尚未被读取就已失效，
+      // 延后到下一个事件循环再回收，让浏览器有机会开始下载。
+      setTimeout(() => URL.revokeObjectURL(url), 100);
     },
     onError: (error: Error) => {
       toast.error(t("authFileDownloadFailed", { message: error.message }));
@@ -544,7 +543,7 @@ export function useSubmitCliproxyOAuthCallback() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cliproxy", "accounts"] });
-      toast.success(t("oauthLoginSuccess"));
+      toast.success(t("oauthCallbackSubmitSuccess"));
     },
     onError: (error: Error) => {
       toast.error(t("oauthCallbackSubmitFailed", { message: error.message }));

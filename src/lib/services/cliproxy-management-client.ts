@@ -1,4 +1,7 @@
 import { createLogger } from "../utils/logger";
+import type { CliproxyAuthFileModel, CliproxyLogEntry } from "@/types/cliproxy";
+
+export type { CliproxyAuthFileModel, CliproxyLogEntry };
 
 const log = createLogger("cliproxy-management-client");
 
@@ -58,14 +61,6 @@ export interface CliproxyAuthFileEntry {
   [key: string]: unknown;
 }
 
-/** auth-file 模型条目。 */
-export interface CliproxyAuthFileModel {
-  id: string;
-  display_name?: string;
-  type?: string;
-  owned_by?: string;
-}
-
 /** 发起 OAuth 登录返回的授权信息。 */
 export interface CliproxyAuthUrlResult {
   url: string;
@@ -86,14 +81,6 @@ export interface CliproxyAuthFileFieldsPatch {
   headers?: Record<string, string>;
   priority?: number;
   note?: string;
-}
-
-/** 管理日志条目。 */
-export interface CliproxyLogEntry {
-  timestamp: string;
-  level: string;
-  message: string;
-  [key: string]: unknown;
 }
 
 /** 连接参数：管理 API 基础地址与管理密钥明文。 */

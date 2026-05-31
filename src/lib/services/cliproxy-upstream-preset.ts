@@ -9,6 +9,7 @@ import {
 } from "./cliproxy-instance-crud";
 import { isCliproxyOAuthProvider } from "./cliproxy-management-client";
 import { InvalidCliproxyOAuthProviderError } from "./cliproxy-oauth-login-service";
+import { CLIPROXY_UPSTREAM_PROVIDERS, type CliproxyUpstreamProvider } from "@/types/cliproxy";
 import {
   getCliproxyAuthAccount,
   updateCliproxyAuthAccountFields,
@@ -32,23 +33,13 @@ interface CliproxyUpstreamPreset {
 }
 
 /**
- * 支持一键创建池上游的服务商集合。
- *
- * OAuth 登录支持的服务商（`CLIPROXY_OAUTH_PROVIDERS`）是这个集合的超集，
- * 例如 xAI、Antigravity、Kimi 也可走 OAuth 登录，但 CLIProxyAPI 暂未提供
- * 对应的代理路径后缀与路由能力，需要等上游约定稳定后再扩展。
- */
-export const CLIPROXY_UPSTREAM_PRESET_PROVIDERS = ["codex", "anthropic", "gemini"] as const;
-export type CliproxyUpstreamPresetProvider = (typeof CLIPROXY_UPSTREAM_PRESET_PROVIDERS)[number];
-
-/**
  * 三类 CLI 服务商的池上游预设表。路径后缀与路由能力为 CLIProxyAPI 的对外约定，
  * 集中维护于此，CLIProxyAPI 调整对外约定时改动收敛于这一处。
+ *
+ * Provider 列表与类型复用 `@/types/cliproxy` 中的 `CLIPROXY_UPSTREAM_PROVIDERS`，
+ * 使前端 Zod schema、后端 route schema 与本预设表共享同一来源。
  */
-export const CLIPROXY_UPSTREAM_PRESETS: Record<
-  CliproxyUpstreamPresetProvider,
-  CliproxyUpstreamPreset
-> = {
+export const CLIPROXY_UPSTREAM_PRESETS: Record<CliproxyUpstreamProvider, CliproxyUpstreamPreset> = {
   codex: {
     pathSuffix: "/v1",
     routeCapabilities: ["codex_cli_responses", "openai_responses"],
@@ -69,10 +60,9 @@ export const CLIPROXY_UPSTREAM_PRESETS: Record<
 /** 判断给定值是否为支持一键创建池上游的服务商。 */
 export function isCliproxyUpstreamPresetProvider(
   value: unknown
-): value is CliproxyUpstreamPresetProvider {
+): value is CliproxyUpstreamProvider {
   return (
-    typeof value === "string" &&
-    CLIPROXY_UPSTREAM_PRESET_PROVIDERS.includes(value as CliproxyUpstreamPresetProvider)
+    typeof value === "string" && (CLIPROXY_UPSTREAM_PROVIDERS as readonly string[]).includes(value)
   );
 }
 

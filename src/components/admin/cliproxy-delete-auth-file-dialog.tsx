@@ -11,7 +11,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useDeleteCliproxyAuthFile } from "@/hooks/use-cliproxy";
-import { cn } from "@/lib/utils";
 import type { CliproxyAuthAccount } from "@/types/cliproxy";
 
 interface CliproxyDeleteAuthFileDialogProps {
@@ -73,9 +72,9 @@ export function CliproxyDeleteAuthFileDialog({
           </Button>
           <Button
             type="button"
+            variant="destructive"
             onClick={handleConfirm}
             disabled={deleteMutation.isPending || !account}
-            className={cn("bg-destructive text-destructive-foreground hover:bg-destructive/90")}
           >
             {deleteMutation.isPending ? t("deleting") : tCommon("delete")}
           </Button>

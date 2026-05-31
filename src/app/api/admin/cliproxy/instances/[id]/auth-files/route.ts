@@ -10,6 +10,15 @@ const log = createLogger("admin-cliproxy-auth-files");
 type RouteContext = { params: Promise<{ id: string }> };
 
 /**
+ * 认证文件请求体的字节上限。
+ *
+ * CLIProxyAPI 的 auth-file 是单个 OAuth 账号的 JSON 凭据，
+ * 实际负载远小于 512 KiB；超出该阈值的请求直接拒绝，避免被
+ * 异常大的请求体绑架管理端进程内存。
+ */
+const MAX_AUTH_FILE_BYTES = 512 * 1024;
+
+/**
  * POST /api/admin/cliproxy/instances/:id/auth-files - 上传认证文件至 CLIProxyAPI。
  *
  * 请求体为认证文件的完整 JSON 对象，由调用方构造。
@@ -18,6 +27,11 @@ type RouteContext = { params: Promise<{ id: string }> };
 export async function POST(request: NextRequest, context: RouteContext): Promise<Response> {
   if (!validateAdminAuth(request.headers.get("authorization"))) {
     return errorResponse("Unauthorized", 401);
+  }
+
+  const declaredLength = Number(request.headers.get("content-length") ?? "");
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_AUTH_FILE_BYTES) {
+    return errorResponse("Auth file is too large", 413);
   }
 
   const { id } = await context.params;

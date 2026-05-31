@@ -1,15 +1,16 @@
 import { eq, desc } from "drizzle-orm";
 import { db, upstreams, type Upstream } from "../db";
 import { getCliproxyInstanceById, CliproxyInstanceNotFoundError } from "./cliproxy-instance-crud";
+import type { CliproxyLinkedUpstreamKind } from "@/types/cliproxy";
 
-/** 关联上游类型。 */
-export type CliproxyLinkedUpstreamKind = "pool" | "single";
+export type { CliproxyLinkedUpstreamKind };
 
 /** 实例下的关联上游展示形态。 */
 export interface CliproxyLinkedUpstreamResponse {
   id: string;
   name: string;
-  provider: string;
+  /** 关联上游对应的服务商；旧数据可能为 null，前端按 "未识别" 兜底展示。 */
+  provider: string | null;
   kind: CliproxyLinkedUpstreamKind;
   authFileName: string | null;
   isActive: boolean;
@@ -43,7 +44,7 @@ export async function listCliproxyLinkedUpstreams(
   return rows.map((row) => ({
     id: row.id,
     name: row.name,
-    provider: row.cliproxyProvider ?? "unknown",
+    provider: row.cliproxyProvider ?? null,
     kind: classifyKind(row),
     authFileName: row.cliproxyAuthFileName ?? null,
     isActive: row.isActive,

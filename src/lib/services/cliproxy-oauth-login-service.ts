@@ -1,15 +1,10 @@
-import {
-  getCliproxyInstanceRow,
-  getDecryptedManagementKey,
-  CliproxyInstanceNotFoundError,
-} from "./cliproxy-instance-crud";
+import { resolveCliproxyManagementTarget } from "./cliproxy-instance-crud";
 import {
   getProviderAuthUrl,
   getAuthStatus,
   submitOAuthCallback,
   isCliproxyOAuthProvider,
   type CliproxyOAuthProvider,
-  type CliproxyManagementTarget,
 } from "./cliproxy-management-client";
 import {
   syncCliproxyAuthAccounts,
@@ -42,18 +37,31 @@ export interface CliproxyOAuthLoginStatusResult {
   error?: string;
   /** 登录成功并完成账号同步时返回的同步结果。 */
   syncResult?: CliproxyAuthAccountSyncResult;
+  /** 登录成功但账号同步失败时的告警消息，登录本身仍视为成功。 */
+  syncError?: string;
 }
 
-/** 解析实例并构造管理 API 调用目标。 */
-async function resolveTarget(instanceId: string): Promise<CliproxyManagementTarget> {
-  const instance = await getCliproxyInstanceRow(instanceId);
-  if (!instance) {
-    throw new CliproxyInstanceNotFoundError(instanceId);
+/**
+ * 登录授权成功后触发账号同步。
+ *
+ * 上游授权一旦完成不可撤销，AutoRouter 侧的账号缓存同步是次要步骤；
+ * 同步失败仅记录告警并将错误信息回传调用方，登录结果仍视为成功。
+ */
+async function syncAccountsAfterLogin(
+  instanceId: string,
+  context: { provider?: CliproxyOAuthProvider }
+): Promise<{ syncResult?: CliproxyAuthAccountSyncResult; syncError?: string }> {
+  try {
+    const syncResult = await syncCliproxyAuthAccounts(instanceId);
+    return { syncResult };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    log.warn(
+      { instanceId, provider: context.provider, err: message },
+      "CLIProxyAPI OAuth login succeeded but account sync failed"
+    );
+    return { syncError: message };
   }
-  return {
-    managementUrl: instance.managementUrl,
-    managementKey: getDecryptedManagementKey(instance),
-  };
 }
 
 /**
@@ -69,7 +77,7 @@ export async function initiateCliproxyOAuthLogin(
   if (!isCliproxyOAuthProvider(provider)) {
     throw new InvalidCliproxyOAuthProviderError(provider);
   }
-  const target = await resolveTarget(instanceId);
+  const target = await resolveCliproxyManagementTarget(instanceId);
   const { url, state } = await getProviderAuthUrl(target, provider);
   log.info({ instanceId, provider }, "initiated CLIProxyAPI OAuth login");
   return { provider, url, state };
@@ -85,13 +93,15 @@ export async function pollCliproxyOAuthStatus(
   instanceId: string,
   state: string
 ): Promise<CliproxyOAuthLoginStatusResult> {
-  const target = await resolveTarget(instanceId);
+  const target = await resolveCliproxyManagementTarget(instanceId);
   const { status, error } = await getAuthStatus(target, state);
 
   if (status === "ok") {
-    const syncResult = await syncCliproxyAuthAccounts(instanceId);
-    log.info({ instanceId, syncResult }, "CLIProxyAPI OAuth login completed, accounts synced");
-    return { status, syncResult };
+    const { syncResult, syncError } = await syncAccountsAfterLogin(instanceId, {});
+    if (syncResult) {
+      log.info({ instanceId, syncResult }, "CLIProxyAPI OAuth login completed, accounts synced");
+    }
+    return { status, syncResult, syncError };
   }
 
   return { status, error };
@@ -112,12 +122,14 @@ export async function submitCliproxyOAuthCallback(
   if (!isCliproxyOAuthProvider(provider)) {
     throw new InvalidCliproxyOAuthProviderError(provider);
   }
-  const target = await resolveTarget(instanceId);
+  const target = await resolveCliproxyManagementTarget(instanceId);
   await submitOAuthCallback(target, provider, redirectUrl);
-  const syncResult = await syncCliproxyAuthAccounts(instanceId);
-  log.info(
-    { instanceId, provider, syncResult },
-    "submitted CLIProxyAPI OAuth callback URL and synced accounts"
-  );
-  return { status: "ok", syncResult };
+  const { syncResult, syncError } = await syncAccountsAfterLogin(instanceId, { provider });
+  if (syncResult) {
+    log.info(
+      { instanceId, provider, syncResult },
+      "submitted CLIProxyAPI OAuth callback URL and synced accounts"
+    );
+  }
+  return { status: "ok", syncResult, syncError };
 }

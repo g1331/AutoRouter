@@ -64,7 +64,11 @@ export function CliproxyLinkedUpstreamsPanel({ instance }: CliproxyLinkedUpstrea
                 <TableRow key={row.id}>
                   <TableCell className="font-medium">{row.name}</TableCell>
                   <TableCell>
-                    <Badge variant="info">{row.provider}</Badge>
+                    {row.provider ? (
+                      <Badge variant="info">{row.provider}</Badge>
+                    ) : (
+                      <Badge variant="secondary">{t("linkedUpstreamProviderUnknown")}</Badge>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Badge variant={row.kind === "pool" ? "secondary" : "info"}>

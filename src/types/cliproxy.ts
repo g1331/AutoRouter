@@ -28,15 +28,12 @@ export const CLIPROXY_PROVIDERS: readonly CliproxyProvider[] = [
  *
  * 当前只覆盖 OAuth Provider 的子集，因为 xAI / Antigravity / Kimi 的代理路径与
  * 路由能力约定尚未稳定。OAuth 登录仍可在全部 6 个 Provider 上发起。
+ *
+ * 使用 `as const` tuple 形式而非 `readonly string[]`，以便 zod schema 与
+ * `cliproxy-upstream-preset.ts` 中的 Record key 类型直接复用同一来源。
  */
-export type CliproxyUpstreamProvider = "codex" | "anthropic" | "gemini";
-
-/** 全部支持上游预设的服务商。 */
-export const CLIPROXY_UPSTREAM_PROVIDERS: readonly CliproxyUpstreamProvider[] = [
-  "codex",
-  "anthropic",
-  "gemini",
-];
+export const CLIPROXY_UPSTREAM_PROVIDERS = ["codex", "anthropic", "gemini"] as const;
+export type CliproxyUpstreamProvider = (typeof CLIPROXY_UPSTREAM_PROVIDERS)[number];
 
 /** CLIProxyAPI 实例的对外响应形态，凭据明文以布尔标记代替。 */
 export interface CliproxyInstance {
@@ -164,7 +161,13 @@ export type CliproxyLinkedUpstreamKind = "pool" | "single";
 export interface CliproxyLinkedUpstream {
   id: string;
   name: string;
-  provider: string;
+  /**
+   * 关联上游对应的服务商。
+   *
+   * 历史数据中 `upstreams.cliproxy_provider` 可能为 NULL；该字段同样允许为 null，
+   * 由前端在展示时落到 "未识别" 文案。
+   */
+  provider: string | null;
   kind: CliproxyLinkedUpstreamKind;
   auth_file_name: string | null;
   is_active: boolean;
