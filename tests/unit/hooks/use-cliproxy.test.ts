@@ -496,18 +496,37 @@ describe("use-cliproxy 关联上游与日志 hooks", () => {
     expect(mockGet).not.toHaveBeenCalled();
   });
 
-  it("useCliproxyInstanceLogs 按可选 since 透传查询参数", async () => {
-    mockGet.mockResolvedValueOnce({ data: [] });
+  it("useCliproxyInstanceLogs 透传 limit / after 到查询字符串并返回 lines 结构", async () => {
+    mockGet.mockResolvedValueOnce({
+      data: { lines: ["INFO ok"], line_count: 1, latest_timestamp: 1748685600 },
+    });
     const { useCliproxyInstanceLogs } = await import("@/hooks/use-cliproxy");
     const { wrapper } = createWrapper();
 
     const { result } = renderHook(
-      () => useCliproxyInstanceLogs("instance-1", "2026-05-30T00:00:00Z"),
+      () => useCliproxyInstanceLogs("instance-1", { limit: 200, after: 1748685000 }),
       { wrapper }
     );
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(mockGet).toHaveBeenCalledWith(
-      "/admin/cliproxy/instances/instance-1/logs?since=2026-05-30T00%3A00%3A00Z"
+      "/admin/cliproxy/instances/instance-1/logs?limit=200&after=1748685000"
     );
+    expect(result.current.data).toEqual({
+      lines: ["INFO ok"],
+      line_count: 1,
+      latest_timestamp: 1748685600,
+    });
+  });
+
+  it("useCliproxyInstanceLogs 未传查询参数时不附加 query string", async () => {
+    mockGet.mockResolvedValueOnce({
+      data: { lines: [], line_count: 0, latest_timestamp: 0 },
+    });
+    const { useCliproxyInstanceLogs } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useCliproxyInstanceLogs("instance-1"), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockGet).toHaveBeenCalledWith("/admin/cliproxy/instances/instance-1/logs");
   });
 });

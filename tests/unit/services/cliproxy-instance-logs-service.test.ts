@@ -20,36 +20,43 @@ const target = {
   managementKey: "mgmt-key",
 };
 
+const sampleResult = {
+  lines: ["2026-05-31 10:00:00 INFO server started"],
+  line_count: 1,
+  latest_timestamp: 1748685600,
+};
+
 describe("cliproxy-instance-logs-service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("listCliproxyInstanceLogs 透传 since 参数到管理客户端", async () => {
+  it("listCliproxyInstanceLogs 透传 limit / after 查询参数到管理客户端", async () => {
     const { listCliproxyInstanceLogs } =
       await import("@/lib/services/cliproxy-instance-logs-service");
 
     resolveTargetMock.mockResolvedValueOnce(target);
-    getLogsMock.mockResolvedValueOnce([
-      { timestamp: "2025-05-31T10:00:00Z", level: "info", message: "ok" },
-    ]);
+    getLogsMock.mockResolvedValueOnce(sampleResult);
 
-    const result = await listCliproxyInstanceLogs("instance-1", "2025-05-31T09:00:00Z");
+    const result = await listCliproxyInstanceLogs("instance-1", {
+      limit: 200,
+      after: 1748685000,
+    });
 
-    expect(result).toHaveLength(1);
-    expect(getLogsMock).toHaveBeenCalledWith(target, "2025-05-31T09:00:00Z");
+    expect(result).toEqual(sampleResult);
+    expect(getLogsMock).toHaveBeenCalledWith(target, { limit: 200, after: 1748685000 });
   });
 
-  it("listCliproxyInstanceLogs 不传 since 时也不向客户端传递", async () => {
+  it("listCliproxyInstanceLogs 不传参数时默认传空对象", async () => {
     const { listCliproxyInstanceLogs } =
       await import("@/lib/services/cliproxy-instance-logs-service");
 
     resolveTargetMock.mockResolvedValueOnce(target);
-    getLogsMock.mockResolvedValueOnce([]);
+    getLogsMock.mockResolvedValueOnce({ lines: [], line_count: 0, latest_timestamp: 0 });
 
     await listCliproxyInstanceLogs("instance-1");
 
-    expect(getLogsMock).toHaveBeenCalledWith(target, undefined);
+    expect(getLogsMock).toHaveBeenCalledWith(target, {});
   });
 
   it("listCliproxyInstanceLogs 实例不存在时抛出 CliproxyInstanceNotFoundError", async () => {

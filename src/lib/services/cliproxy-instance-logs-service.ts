@@ -1,11 +1,15 @@
-import { getLogs, type CliproxyLogEntry } from "./cliproxy-management-client";
+import {
+  getLogs,
+  type CliproxyLogsQuery,
+  type CliproxyLogsResult,
+} from "./cliproxy-management-client";
 import { resolveCliproxyManagementTarget } from "./cliproxy-instance-crud";
 
 /** 从 CLIProxyAPI 拉取实例日志。 */
 export async function listCliproxyInstanceLogs(
   instanceId: string,
-  since?: string
-): Promise<CliproxyLogEntry[]> {
+  query: CliproxyLogsQuery = {}
+): Promise<CliproxyLogsResult> {
   const target = await resolveCliproxyManagementTarget(instanceId);
-  return getLogs(target, since);
+  return getLogs(target, query);
 }

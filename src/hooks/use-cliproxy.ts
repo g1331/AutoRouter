@@ -14,7 +14,7 @@ import type {
   CliproxyUpstreamProvider,
   CliproxyOAuthInitiateResult,
   CliproxyOAuthStatusResult,
-  CliproxyLogEntry,
+  CliproxyLogsResult,
   CliproxyAuthFileModel,
   CliproxyLinkedUpstream,
 } from "@/types/cliproxy";
@@ -366,16 +366,33 @@ export function useCliproxyAccountModels(instanceId: string, authFileName: strin
   });
 }
 
-/** 拉取实例的 CLIProxyAPI 运行日志，支持可选 since 时间戳过滤。 */
-export function useCliproxyInstanceLogs(instanceId: string | null, since?: string) {
+/**
+ * 拉取实例的 CLIProxyAPI 运行日志。
+ *
+ * 接受可选的 `limit`（单次行数上限）与 `after`（Unix 秒，增量起点），
+ * 返回 `{ lines, line_count, latest_timestamp }`；下次轮询可把 `latest_timestamp`
+ * 作为 `after` 传入以实现增量拉取。
+ */
+export function useCliproxyInstanceLogs(
+  instanceId: string | null,
+  options: { limit?: number; after?: number } = {}
+) {
   const { apiClient } = useAuth();
+  const { limit, after } = options;
 
   return useQuery({
-    queryKey: ["cliproxy", "logs", instanceId, since ?? null],
+    queryKey: ["cliproxy", "logs", instanceId, limit ?? null, after ?? null],
     queryFn: async () => {
-      const sinceParam = since ? `?since=${encodeURIComponent(since)}` : "";
-      const response = await apiClient.get<{ data: CliproxyLogEntry[] }>(
-        `/admin/cliproxy/instances/${instanceId}/logs${sinceParam}`
+      const search = new URLSearchParams();
+      if (typeof limit === "number" && Number.isFinite(limit)) {
+        search.set("limit", String(limit));
+      }
+      if (typeof after === "number" && Number.isFinite(after)) {
+        search.set("after", String(after));
+      }
+      const qs = search.toString();
+      const response = await apiClient.get<{ data: CliproxyLogsResult }>(
+        `/admin/cliproxy/instances/${instanceId}/logs${qs ? `?${qs}` : ""}`
       );
       return response.data;
     },
