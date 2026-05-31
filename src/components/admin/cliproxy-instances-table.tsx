@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -18,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useToggleCliproxyInstanceEnabled } from "@/hooks/use-cliproxy";
 import { cn } from "@/lib/utils";
 import type { CliproxyInstance } from "@/types/cliproxy";
 
@@ -32,7 +34,8 @@ interface CliproxyInstancesTableProps {
 }
 
 /**
- * CLIProxyAPI 实例列表表格。点击行选中实例以查看其账号，每行提供编辑、连通性检测、删除操作。
+ * CLIProxyAPI 实例列表表格。点击行选中实例以查看其账号，每行提供启停切换、
+ * 连通性检测、编辑、删除等操作。
  */
 export function CliproxyInstancesTable({
   instances,
@@ -44,6 +47,7 @@ export function CliproxyInstancesTable({
   onDelete,
 }: CliproxyInstancesTableProps) {
   const t = useTranslations("cliproxy");
+  const toggleEnabled = useToggleCliproxyInstanceEnabled();
 
   return (
     <Table>
@@ -75,10 +79,20 @@ export function CliproxyInstancesTable({
                 {instance.base_url}
               </code>
             </TableCell>
-            <TableCell>
-              <Badge variant={instance.enabled ? "success" : "secondary"}>
-                {instance.enabled ? t("statusEnabled") : t("statusDisabled")}
-              </Badge>
+            <TableCell onClick={(event) => event.stopPropagation()}>
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={instance.enabled}
+                  disabled={toggleEnabled.isPending && toggleEnabled.variables?.id === instance.id}
+                  onCheckedChange={(checked) =>
+                    toggleEnabled.mutate({ id: instance.id, enabled: checked })
+                  }
+                  aria-label={instance.enabled ? t("statusEnabled") : t("statusDisabled")}
+                />
+                <span className="type-body-small text-muted-foreground">
+                  {instance.enabled ? t("statusEnabled") : t("statusDisabled")}
+                </span>
+              </div>
             </TableCell>
             <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
               <DropdownMenu>

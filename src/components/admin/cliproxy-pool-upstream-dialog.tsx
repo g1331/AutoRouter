@@ -19,8 +19,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCreateCliproxyPoolUpstream } from "@/hooks/use-cliproxy";
-import { CLIPROXY_PROVIDERS } from "@/types/cliproxy";
-import type { CliproxyProvider } from "@/types/cliproxy";
+import { CLIPROXY_UPSTREAM_PROVIDERS } from "@/types/cliproxy";
+import type { CliproxyUpstreamProvider } from "@/types/cliproxy";
 
 interface CliproxyPoolUpstreamDialogProps {
   instanceId: string;
@@ -28,7 +28,7 @@ interface CliproxyPoolUpstreamDialogProps {
   onClose: () => void;
 }
 
-const PROVIDER_LABEL_KEY: Record<CliproxyProvider, string> = {
+const PROVIDER_LABEL_KEY: Record<CliproxyUpstreamProvider, string> = {
   codex: "providerCodex",
   anthropic: "providerAnthropic",
   gemini: "providerGemini",
@@ -45,7 +45,7 @@ export function CliproxyPoolUpstreamDialog({
   const t = useTranslations("cliproxy");
   const tCommon = useTranslations("common");
   const createMutation = useCreateCliproxyPoolUpstream();
-  const [provider, setProvider] = useState<CliproxyProvider>("codex");
+  const [provider, setProvider] = useState<CliproxyUpstreamProvider>("codex");
 
   const handleConfirm = async () => {
     try {
@@ -68,13 +68,13 @@ export function CliproxyPoolUpstreamDialog({
           <p className="type-body-small text-muted-foreground">{t("poolUpstreamProvider")}</p>
           <Select
             value={provider}
-            onValueChange={(value) => setProvider(value as CliproxyProvider)}
+            onValueChange={(value) => setProvider(value as CliproxyUpstreamProvider)}
           >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {CLIPROXY_PROVIDERS.map((item) => (
+              {CLIPROXY_UPSTREAM_PROVIDERS.map((item) => (
                 <SelectItem key={item} value={item}>
                   {t(PROVIDER_LABEL_KEY[item])}
                 </SelectItem>

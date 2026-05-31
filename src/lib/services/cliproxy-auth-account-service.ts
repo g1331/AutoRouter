@@ -10,7 +10,11 @@ import {
   getAuthFileModels,
   patchAuthFileStatus,
   patchAuthFileFields,
+  deleteAuthFile,
+  uploadAuthFile,
+  downloadAuthFile,
   type CliproxyAuthFileEntry,
+  type CliproxyAuthFileModel,
   type CliproxyManagementTarget,
 } from "./cliproxy-management-client";
 import { createLogger } from "../utils/logger";
@@ -258,4 +262,66 @@ export async function updateCliproxyAuthAccountFields(
     .returning();
   log.info({ instanceId, authFileName }, "updated CLIProxyAPI auth account fields");
   return row;
+}
+
+/**
+ * 删除某个 OAuth 账号：先调用 CLIProxyAPI 删除上游 auth-file，
+ * 成功后再移除本地缓存。CLIProxyAPI 调用失败时本地缓存保持不变。
+ *
+ * 本地缓存可能因之前的同步落后于上游而不存在对应行；此种情况下视为已删除，
+ * 不再返回 NotFound 以便管理员在 CLIProxyAPI 侧直接清理后仍能完成本地收尾。
+ */
+export async function deleteCliproxyAuthAccount(
+  instanceId: string,
+  authFileName: string
+): Promise<void> {
+  const target = await resolveManagementTarget(instanceId);
+
+  await deleteAuthFile(target, authFileName);
+
+  const account = await getCliproxyAuthAccount(instanceId, authFileName);
+  if (account) {
+    await db.delete(cliproxyAuthAccounts).where(eq(cliproxyAuthAccounts.id, account.id));
+  }
+  log.info({ instanceId, authFileName }, "deleted CLIProxyAPI auth account");
+}
+
+/**
+ * 上传认证文件至 CLIProxyAPI，并立即触发该实例的账号同步。
+ *
+ * 上传成功但同步失败时仍向上抛出错误，便于管理端按错误信息排查；CLIProxyAPI
+ * 侧的认证文件已经写入，下次手动同步即可恢复一致。
+ */
+export async function uploadCliproxyAuthFile(
+  instanceId: string,
+  content: Record<string, unknown>
+): Promise<CliproxyAuthAccountSyncResult> {
+  const target = await resolveManagementTarget(instanceId);
+  await uploadAuthFile(target, content);
+  log.info({ instanceId }, "uploaded CLIProxyAPI auth file");
+  return syncCliproxyAuthAccounts(instanceId);
+}
+
+/**
+ * 下载某个认证文件的原始 JSON 内容，供管理员另存为本地备份。
+ */
+export async function downloadCliproxyAuthFile(
+  instanceId: string,
+  authFileName: string
+): Promise<Record<string, unknown>> {
+  const target = await resolveManagementTarget(instanceId);
+  return downloadAuthFile(target, authFileName);
+}
+
+/**
+ * 查询某个账号在 CLIProxyAPI 侧的可用模型列表。
+ *
+ * 与同步路径不同，本方法不写入本地缓存，仅作为只读窗口供前端展示。
+ */
+export async function listCliproxyAccountModels(
+  instanceId: string,
+  authFileName: string
+): Promise<CliproxyAuthFileModel[]> {
+  const target = await resolveManagementTarget(instanceId);
+  return getAuthFileModels(target, authFileName);
 }

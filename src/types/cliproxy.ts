@@ -11,10 +11,29 @@ export type CliproxyInstanceMode = "managed" | "external";
 export const CLIPROXY_INSTANCE_MODES: readonly CliproxyInstanceMode[] = ["managed", "external"];
 
 /** CLI OAuth 服务商。 */
-export type CliproxyProvider = "codex" | "anthropic" | "gemini";
+export type CliproxyProvider = "codex" | "anthropic" | "gemini" | "xai" | "antigravity" | "kimi";
 
 /** 全部 CLI OAuth 服务商，供选项使用。 */
-export const CLIPROXY_PROVIDERS: readonly CliproxyProvider[] = ["codex", "anthropic", "gemini"];
+export const CLIPROXY_PROVIDERS: readonly CliproxyProvider[] = [
+  "codex",
+  "anthropic",
+  "gemini",
+  "xai",
+  "antigravity",
+  "kimi",
+];
+
+/**
+ * 支持一键创建池上游或单账号上游的服务商集合。
+ *
+ * 当前只覆盖 OAuth Provider 的子集，因为 xAI / Antigravity / Kimi 的代理路径与
+ * 路由能力约定尚未稳定。OAuth 登录仍可在全部 6 个 Provider 上发起。
+ *
+ * 使用 `as const` tuple 形式而非 `readonly string[]`，以便 zod schema 与
+ * `cliproxy-upstream-preset.ts` 中的 Record key 类型直接复用同一来源。
+ */
+export const CLIPROXY_UPSTREAM_PROVIDERS = ["codex", "anthropic", "gemini"] as const;
+export type CliproxyUpstreamProvider = (typeof CLIPROXY_UPSTREAM_PROVIDERS)[number];
 
 /** CLIProxyAPI 实例的对外响应形态，凭据明文以布尔标记代替。 */
 export interface CliproxyInstance {
@@ -117,4 +136,40 @@ export interface CliproxyOAuthStatusResult {
   status: CliproxyOAuthStatus;
   error?: string;
   syncResult?: CliproxyAuthAccountSyncResult;
+}
+
+/** CLIProxyAPI 管理日志条目。 */
+export interface CliproxyLogEntry {
+  timestamp: string;
+  level: string;
+  message: string;
+  [key: string]: unknown;
+}
+
+/** CLIProxyAPI auth-file 模型条目。 */
+export interface CliproxyAuthFileModel {
+  id: string;
+  display_name?: string;
+  type?: string;
+  owned_by?: string;
+}
+
+/** 关联上游类型。 */
+export type CliproxyLinkedUpstreamKind = "pool" | "single";
+
+/** 实例下关联的上游记录。 */
+export interface CliproxyLinkedUpstream {
+  id: string;
+  name: string;
+  /**
+   * 关联上游对应的服务商。
+   *
+   * 历史数据中 `upstreams.cliproxy_provider` 可能为 NULL；该字段同样允许为 null，
+   * 由前端在展示时落到 "未识别" 文案。
+   */
+  provider: string | null;
+  kind: CliproxyLinkedUpstreamKind;
+  auth_file_name: string | null;
+  is_active: boolean;
+  created_at: string;
 }

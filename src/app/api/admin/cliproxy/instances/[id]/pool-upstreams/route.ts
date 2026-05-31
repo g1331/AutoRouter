@@ -6,13 +6,14 @@ import { createCliproxyPoolUpstream } from "@/lib/services/cliproxy-upstream-pre
 import { transformUpstreamToApi } from "@/lib/utils/api-transformers";
 import { handleCliproxyRouteError } from "@/lib/utils/cliproxy-route-errors";
 import { createLogger } from "@/lib/utils/logger";
+import { CLIPROXY_UPSTREAM_PROVIDERS } from "@/types/cliproxy";
 
 const log = createLogger("admin-cliproxy-pool-upstreams");
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 const createPoolUpstreamSchema = z.object({
-  provider: z.enum(["codex", "anthropic", "gemini"]),
+  provider: z.enum(CLIPROXY_UPSTREAM_PROVIDERS),
   name: z.string().trim().min(1).max(255).optional(),
   weight: z.number().int().min(0).optional(),
   priority: z.number().int().min(0).optional(),

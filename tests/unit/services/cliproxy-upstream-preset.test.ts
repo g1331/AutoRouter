@@ -209,6 +209,21 @@ describe("cliproxy-upstream-preset", () => {
       expect(createUpstreamMock).not.toHaveBeenCalled();
     });
 
+    it.each(["xai", "antigravity", "kimi"])(
+      "%s 仅支持 OAuth 登录但无池上游 preset 时被拒绝",
+      async (provider) => {
+        const { createCliproxyPoolUpstream } =
+          await import("@/lib/services/cliproxy-upstream-preset");
+        const { InvalidCliproxyOAuthProviderError } =
+          await import("@/lib/services/cliproxy-oauth-login-service");
+
+        await expect(createCliproxyPoolUpstream("instance-1", provider)).rejects.toBeInstanceOf(
+          InvalidCliproxyOAuthProviderError
+        );
+        expect(createUpstreamMock).not.toHaveBeenCalled();
+      }
+    );
+
     it("实例不存在时抛出 CliproxyInstanceNotFoundError", async () => {
       const { createCliproxyPoolUpstream } =
         await import("@/lib/services/cliproxy-upstream-preset");

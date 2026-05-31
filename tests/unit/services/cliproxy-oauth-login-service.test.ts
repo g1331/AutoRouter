@@ -1,16 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const getCliproxyInstanceRowMock = vi.fn();
+const resolveTargetMock = vi.fn();
 const getProviderAuthUrlMock = vi.fn();
 const getAuthStatusMock = vi.fn();
+const submitOAuthCallbackMock = vi.fn();
 const syncCliproxyAuthAccountsMock = vi.fn();
 
 vi.mock("@/lib/services/cliproxy-instance-crud", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/services/cliproxy-instance-crud")>();
   return {
     ...actual,
-    getCliproxyInstanceRow: (...args: unknown[]) => getCliproxyInstanceRowMock(...args),
-    getDecryptedManagementKey: () => "mgmt-key",
+    resolveCliproxyManagementTarget: (...args: unknown[]) => resolveTargetMock(...args),
   };
 });
 
@@ -20,6 +20,7 @@ vi.mock("@/lib/services/cliproxy-management-client", async (importOriginal) => {
     ...actual,
     getProviderAuthUrl: (...args: unknown[]) => getProviderAuthUrlMock(...args),
     getAuthStatus: (...args: unknown[]) => getAuthStatusMock(...args),
+    submitOAuthCallback: (...args: unknown[]) => submitOAuthCallbackMock(...args),
   };
 });
 
@@ -31,10 +32,9 @@ vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
 
-const instanceRow = {
-  id: "instance-1",
+const target = {
   managementUrl: "http://cliproxyapi:8317",
-  managementKeyEncrypted: "enc(mgmt-key)",
+  managementKey: "mgmt-key",
 };
 
 describe("cliproxy-oauth-login-service", () => {
@@ -46,7 +46,7 @@ describe("cliproxy-oauth-login-service", () => {
     const { initiateCliproxyOAuthLogin } =
       await import("@/lib/services/cliproxy-oauth-login-service");
 
-    getCliproxyInstanceRowMock.mockResolvedValueOnce(instanceRow);
+    resolveTargetMock.mockResolvedValueOnce(target);
     getProviderAuthUrlMock.mockResolvedValueOnce({
       url: "https://auth.example/x",
       state: "state-1",
@@ -76,7 +76,7 @@ describe("cliproxy-oauth-login-service", () => {
       await import("@/lib/services/cliproxy-oauth-login-service");
     const { CliproxyInstanceNotFoundError } = await import("@/lib/services/cliproxy-instance-crud");
 
-    getCliproxyInstanceRowMock.mockResolvedValueOnce(null);
+    resolveTargetMock.mockRejectedValueOnce(new CliproxyInstanceNotFoundError("missing"));
 
     await expect(initiateCliproxyOAuthLogin("missing", "codex")).rejects.toBeInstanceOf(
       CliproxyInstanceNotFoundError
@@ -86,7 +86,7 @@ describe("cliproxy-oauth-login-service", () => {
   it("pollCliproxyOAuthStatus 进行中时返回 wait 且不触发同步", async () => {
     const { pollCliproxyOAuthStatus } = await import("@/lib/services/cliproxy-oauth-login-service");
 
-    getCliproxyInstanceRowMock.mockResolvedValueOnce(instanceRow);
+    resolveTargetMock.mockResolvedValueOnce(target);
     getAuthStatusMock.mockResolvedValueOnce({ status: "wait" });
 
     const result = await pollCliproxyOAuthStatus("instance-1", "state-1");
@@ -98,7 +98,7 @@ describe("cliproxy-oauth-login-service", () => {
   it("pollCliproxyOAuthStatus 成功时触发账号同步并返回同步结果", async () => {
     const { pollCliproxyOAuthStatus } = await import("@/lib/services/cliproxy-oauth-login-service");
 
-    getCliproxyInstanceRowMock.mockResolvedValueOnce(instanceRow);
+    resolveTargetMock.mockResolvedValueOnce(target);
     getAuthStatusMock.mockResolvedValueOnce({ status: "ok" });
     syncCliproxyAuthAccountsMock.mockResolvedValueOnce({
       added: 1,
@@ -117,7 +117,7 @@ describe("cliproxy-oauth-login-service", () => {
   it("pollCliproxyOAuthStatus 失败时返回错误信息", async () => {
     const { pollCliproxyOAuthStatus } = await import("@/lib/services/cliproxy-oauth-login-service");
 
-    getCliproxyInstanceRowMock.mockResolvedValueOnce(instanceRow);
+    resolveTargetMock.mockResolvedValueOnce(target);
     getAuthStatusMock.mockResolvedValueOnce({ status: "error", error: "user denied" });
 
     const result = await pollCliproxyOAuthStatus("instance-1", "state-1");
@@ -125,5 +125,78 @@ describe("cliproxy-oauth-login-service", () => {
     expect(result.status).toBe("error");
     expect(result.error).toBe("user denied");
     expect(syncCliproxyAuthAccountsMock).not.toHaveBeenCalled();
+  });
+
+  // ── submitCliproxyOAuthCallback ─────────────────────────────────────────
+
+  it("submitCliproxyOAuthCallback 提交后触发账号同步", async () => {
+    const { submitCliproxyOAuthCallback } =
+      await import("@/lib/services/cliproxy-oauth-login-service");
+
+    resolveTargetMock.mockResolvedValueOnce(target);
+    submitOAuthCallbackMock.mockResolvedValueOnce(undefined);
+    syncCliproxyAuthAccountsMock.mockResolvedValueOnce({
+      added: 1,
+      updated: 0,
+      removed: 0,
+      total: 1,
+    });
+
+    const result = await submitCliproxyOAuthCallback(
+      "instance-1",
+      "codex",
+      "https://callback.example/auth?code=xyz"
+    );
+
+    expect(result.status).toBe("ok");
+    expect(result.syncResult).toMatchObject({ added: 1 });
+    expect(submitOAuthCallbackMock).toHaveBeenCalledWith(
+      { managementUrl: "http://cliproxyapi:8317", managementKey: "mgmt-key" },
+      "codex",
+      "https://callback.example/auth?code=xyz"
+    );
+  });
+
+  it("submitCliproxyOAuthCallback 服务商非法时抛错且不调用 CLIProxyAPI", async () => {
+    const { submitCliproxyOAuthCallback, InvalidCliproxyOAuthProviderError } =
+      await import("@/lib/services/cliproxy-oauth-login-service");
+
+    await expect(
+      submitCliproxyOAuthCallback("instance-1", "unknown", "https://callback.example/auth")
+    ).rejects.toBeInstanceOf(InvalidCliproxyOAuthProviderError);
+    expect(submitOAuthCallbackMock).not.toHaveBeenCalled();
+  });
+
+  it("submitCliproxyOAuthCallback 授权成功但账号同步失败时仍返回 ok 并附带 syncError", async () => {
+    const { submitCliproxyOAuthCallback } =
+      await import("@/lib/services/cliproxy-oauth-login-service");
+
+    resolveTargetMock.mockResolvedValueOnce(target);
+    submitOAuthCallbackMock.mockResolvedValueOnce(undefined);
+    syncCliproxyAuthAccountsMock.mockRejectedValueOnce(new Error("db unavailable"));
+
+    const result = await submitCliproxyOAuthCallback(
+      "instance-1",
+      "codex",
+      "https://callback.example/auth?code=xyz"
+    );
+
+    expect(result.status).toBe("ok");
+    expect(result.syncResult).toBeUndefined();
+    expect(result.syncError).toBe("db unavailable");
+  });
+
+  it("pollCliproxyOAuthStatus 授权成功但账号同步失败时仍返回 ok 并附带 syncError", async () => {
+    const { pollCliproxyOAuthStatus } = await import("@/lib/services/cliproxy-oauth-login-service");
+
+    resolveTargetMock.mockResolvedValueOnce(target);
+    getAuthStatusMock.mockResolvedValueOnce({ status: "ok" });
+    syncCliproxyAuthAccountsMock.mockRejectedValueOnce(new Error("db unavailable"));
+
+    const result = await pollCliproxyOAuthStatus("instance-1", "state-1");
+
+    expect(result.status).toBe("ok");
+    expect(result.syncResult).toBeUndefined();
+    expect(result.syncError).toBe("db unavailable");
   });
 });
