@@ -331,48 +331,64 @@ describe("cliproxy-management-client", () => {
 
   // ── getLogs ─────────────────────────────────────────────────────────────
 
-  it("getLogs 返回日志数组（上游直接返回数组）", async () => {
-    const entries = [
-      { timestamp: "2025-05-31T10:00:00Z", level: "info", message: "started" },
-      { timestamp: "2025-05-31T10:00:01Z", level: "warn", message: "slow" },
-    ];
-    const fetchMock = stubFetchOnce(new Response(JSON.stringify(entries), { status: 200 }));
+  it("getLogs 按 CLIProxyAPI wire 格式解析 lines / line-count / latest-timestamp", async () => {
+    const wire = {
+      lines: ["2026-05-31 10:00:00 INFO server started", "2026-05-31 10:00:01 WARN slow upstream"],
+      "line-count": 2,
+      "latest-timestamp": 1748685601,
+    };
+    const fetchMock = stubFetchOnce(new Response(JSON.stringify(wire), { status: 200 }));
 
     const result = await getLogs(TARGET);
 
-    expect(result).toHaveLength(2);
-    expect(result[0].message).toBe("started");
+    expect(result.lines).toEqual(wire.lines);
+    expect(result.line_count).toBe(2);
+    expect(result.latest_timestamp).toBe(1748685601);
     expect(fetchMock.mock.calls[0][0]).toBe("http://cliproxyapi:8317/v0/management/logs");
   });
 
-  it("getLogs 支持 since 参数并 URL 编码", async () => {
-    const fetchMock = stubFetchOnce(new Response(JSON.stringify([]), { status: 200 }));
+  it("getLogs 把 limit / after 参数拼到 query string 上", async () => {
+    const fetchMock = stubFetchOnce(
+      new Response(JSON.stringify({ lines: [], "line-count": 0, "latest-timestamp": 0 }), {
+        status: 200,
+      })
+    );
 
-    await getLogs(TARGET, "2025-05-31T10:00:00Z");
+    await getLogs(TARGET, { limit: 200, after: 1748685000 });
 
-    expect(fetchMock.mock.calls[0][0]).toContain("since=2025-05-31T10%3A00%3A00Z");
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain("limit=200");
+    expect(url).toContain("after=1748685000");
   });
 
-  it("getLogs 不传 since 时不附加查询参数", async () => {
-    const fetchMock = stubFetchOnce(new Response(JSON.stringify([]), { status: 200 }));
+  it("getLogs 不传参数时不附加 query string", async () => {
+    const fetchMock = stubFetchOnce(
+      new Response(JSON.stringify({ lines: [], "line-count": 0, "latest-timestamp": 0 }), {
+        status: 200,
+      })
+    );
 
     await getLogs(TARGET);
 
-    expect(fetchMock.mock.calls[0][0]).not.toContain("since");
+    expect(fetchMock.mock.calls[0][0]).toBe("http://cliproxyapi:8317/v0/management/logs");
   });
 
-  it("getLogs 兼容上游返回 {logs:[]} 包装格式", async () => {
-    const entries = [{ timestamp: "2025-05-31T10:00:00Z", level: "info", message: "ok" }];
-    stubFetchOnce(new Response(JSON.stringify({ logs: entries }), { status: 200 }));
-
-    const result = await getLogs(TARGET);
-
-    expect(result).toHaveLength(1);
-    expect(result[0].level).toBe("info");
-  });
-
-  it("getLogs 上游返回空对象时返回空数组", async () => {
+  it("getLogs 上游返回空对象时落到 0 / 空数组兜底", async () => {
     stubFetchOnce(new Response(JSON.stringify({}), { status: 200 }));
-    expect(await getLogs(TARGET)).toEqual([]);
+    expect(await getLogs(TARGET)).toEqual({
+      lines: [],
+      line_count: 0,
+      latest_timestamp: 0,
+    });
+  });
+
+  it("getLogs 上游返回 400 时把错误正文透传到 message", async () => {
+    stubFetchOnce(new Response("logging to file is disabled", { status: 400 }));
+
+    await expect(getLogs(TARGET)).rejects.toMatchObject({
+      kind: "service_error",
+      statusCode: 400,
+      message: expect.stringContaining("logging to file is disabled"),
+    });
   });
 });

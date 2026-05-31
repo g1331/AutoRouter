@@ -138,12 +138,26 @@ export interface CliproxyOAuthStatusResult {
   syncResult?: CliproxyAuthAccountSyncResult;
 }
 
-/** CLIProxyAPI 管理日志条目。 */
-export interface CliproxyLogEntry {
-  timestamp: string;
-  level: string;
-  message: string;
-  [key: string]: unknown;
+/**
+ * CLIProxyAPI 管理日志查询结果。
+ *
+ * CLIProxyAPI `/v0/management/logs` 端点返回的形态为
+ * `{ lines: string[], "line-count": number, "latest-timestamp": number }`，
+ * `lines` 是已格式化的日志行字符串，由 CLIProxyAPI 的 logger 直接生成。
+ * `latestTimestamp` 为最后一行的 Unix 秒时间戳，调用方可用于下一次的 `after` 增量参数。
+ */
+export interface CliproxyLogsResult {
+  lines: string[];
+  line_count: number;
+  latest_timestamp: number;
+}
+
+/** CLIProxyAPI 管理日志查询参数。 */
+export interface CliproxyLogsQuery {
+  /** 单次返回的日志行数上限，未传则由 CLIProxyAPI 决定。 */
+  limit?: number;
+  /** 仅返回时间戳大于该值的日志行（Unix 秒），用于增量轮询。 */
+  after?: number;
 }
 
 /** CLIProxyAPI auth-file 模型条目。 */

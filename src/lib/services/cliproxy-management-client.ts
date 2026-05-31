@@ -1,7 +1,11 @@
 import { createLogger } from "../utils/logger";
-import type { CliproxyAuthFileModel, CliproxyLogEntry } from "@/types/cliproxy";
+import type {
+  CliproxyAuthFileModel,
+  CliproxyLogsQuery,
+  CliproxyLogsResult,
+} from "@/types/cliproxy";
 
-export type { CliproxyAuthFileModel, CliproxyLogEntry };
+export type { CliproxyAuthFileModel, CliproxyLogsQuery, CliproxyLogsResult };
 
 const log = createLogger("cliproxy-management-client");
 
@@ -99,18 +103,45 @@ function buildManagementUrl(managementUrl: string, path: string): string {
   return `${base}${path}`;
 }
 
-/** 按响应状态码归类错误。 */
-function classifyHttpError(statusCode: number): CliproxyManagementApiError {
+/**
+ * 提取上游错误响应中可读的描述，方便在 message 中透传给用户。
+ *
+ * 兼容 CLIProxyAPI 常见的两种错误形态：纯文本（如 "logging to file is disabled"）
+ * 以及 `{ error?: string; message?: string }` 包装。截断到 200 字符避免噪音。
+ */
+function extractUpstreamErrorDetail(body: string | null): string | null {
+  if (!body) return null;
+  const trimmed = body.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    if (parsed && typeof parsed === "object") {
+      const obj = parsed as { error?: unknown; message?: unknown };
+      const candidate = typeof obj.error === "string" ? obj.error : obj.message;
+      if (typeof candidate === "string" && candidate.trim()) {
+        return candidate.trim().slice(0, 200);
+      }
+    }
+  } catch {
+    // 不是 JSON，按纯文本处理
+  }
+  return trimmed.slice(0, 200);
+}
+
+/** 按响应状态码归类错误。`body` 为上游响应正文，存在时拼接到 message 末尾。 */
+function classifyHttpError(statusCode: number, body: string | null): CliproxyManagementApiError {
+  const detail = extractUpstreamErrorDetail(body);
+  const suffix = detail ? `：${detail}` : "";
   if (statusCode === 401 || statusCode === 403) {
     return new CliproxyManagementApiError(
       "auth_failed",
-      "CLIProxyAPI 管理 API 鉴权失败，管理密钥无效",
+      `CLIProxyAPI 管理 API 鉴权失败，管理密钥无效${suffix}`,
       statusCode
     );
   }
   return new CliproxyManagementApiError(
     "service_error",
-    `CLIProxyAPI 管理 API 返回异常状态码 ${statusCode}`,
+    `CLIProxyAPI 管理 API 返回异常状态码 ${statusCode}${suffix}`,
     statusCode
   );
 }
@@ -156,7 +187,15 @@ async function requestManagementApi<T>(
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      throw classifyHttpError(response.status);
+      // 读取上游 body 以便把 "logging to file is disabled" 等具体原因透传给用户，
+      // 失败时降级为不带 detail 的状态码描述。
+      let errorBody: string | null = null;
+      try {
+        errorBody = await response.text();
+      } catch {
+        errorBody = null;
+      }
+      throw classifyHttpError(response.status, errorBody);
     }
 
     const text = await response.text();
@@ -348,26 +387,50 @@ export async function submitOAuthCallback(
 }
 
 /**
+ * CLIProxyAPI 原始 `/v0/management/logs` 响应。
+ *
+ * CLIProxyAPI 返回的字段使用 kebab-case，本类型如实声明上游 wire 形态，
+ * 由 {@link getLogs} 转换为 snake_case 后再向上层透出。
+ */
+interface CliproxyLogsWire {
+  lines?: string[];
+  "line-count"?: number;
+  "latest-timestamp"?: number;
+}
+
+/**
  * 查询 CLIProxyAPI 管理日志。
  *
- * `since` 为可选的 ISO 8601 时间戳字符串，传入时仅返回该时刻之后的条目。
- * 兼容上游返回直接数组与 `{ logs: [...] }` 包装两种格式。
+ * 端点 `/v0/management/logs` 接受 `limit` 与 `after` 两个可选参数：
+ * `limit` 限制单次返回的行数，`after` 为 Unix 秒，仅返回时间戳大于该值的行。
+ * 要求 CLIProxyAPI 已启用 `LoggingToFile`，否则上游会返回 400。
+ *
+ * 上游返回的字段使用 kebab-case（`line-count` / `latest-timestamp`），
+ * 这里转换为 snake_case 以贴合 AutoRouter 其它管理 API 的命名约定。
  */
 export async function getLogs(
   target: CliproxyManagementTarget,
-  since?: string
-): Promise<CliproxyLogEntry[]> {
-  const query = since ? `?since=${encodeURIComponent(since)}` : "";
-  const result = await requestManagementApi<CliproxyLogEntry[] | { logs?: CliproxyLogEntry[] }>(
+  query: CliproxyLogsQuery = {}
+): Promise<CliproxyLogsResult> {
+  const params = new URLSearchParams();
+  if (typeof query.limit === "number" && Number.isFinite(query.limit)) {
+    params.set("limit", String(Math.max(0, Math.floor(query.limit))));
+  }
+  if (typeof query.after === "number" && Number.isFinite(query.after)) {
+    params.set("after", String(Math.max(0, Math.floor(query.after))));
+  }
+  const search = params.toString();
+  const result = await requestManagementApi<CliproxyLogsWire>(
     target,
-    `/logs${query}`,
+    `/logs${search ? `?${search}` : ""}`,
     { method: "GET" }
   );
-  if (Array.isArray(result)) {
-    return result;
-  }
-  const wrapped = result as { logs?: CliproxyLogEntry[] };
-  return Array.isArray(wrapped.logs) ? wrapped.logs : [];
+  return {
+    lines: Array.isArray(result.lines) ? result.lines : [],
+    line_count: typeof result["line-count"] === "number" ? result["line-count"] : 0,
+    latest_timestamp:
+      typeof result["latest-timestamp"] === "number" ? result["latest-timestamp"] : 0,
+  };
 }
 
 /** 判断给定值是否为受支持的 OAuth 服务商。 */

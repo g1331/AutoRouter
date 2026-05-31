@@ -39,11 +39,13 @@ describe("Admin CLIProxyAPI logs API", () => {
     expect(res.status).toBe(401);
   });
 
-  it("返回日志数组", async () => {
+  it("返回 lines / line_count / latest_timestamp 三元组", async () => {
     const { GET } = await import("@/app/api/admin/cliproxy/instances/[id]/logs/route");
-    listCliproxyInstanceLogsMock.mockResolvedValueOnce([
-      { timestamp: "2025-05-31T10:00:00Z", level: "info", message: "ok" },
-    ]);
+    listCliproxyInstanceLogsMock.mockResolvedValueOnce({
+      lines: ["2026-05-31 10:00:00 INFO server started"],
+      line_count: 1,
+      latest_timestamp: 1748685600,
+    });
 
     const res = await GET(
       new NextRequest("http://localhost/api/admin/cliproxy/instances/instance-1/logs", {
@@ -55,24 +57,49 @@ describe("Admin CLIProxyAPI logs API", () => {
     const body = await res.json();
 
     expect(res.status).toBe(200);
-    expect(body.data).toHaveLength(1);
-    expect(body.data[0].message).toBe("ok");
-    expect(listCliproxyInstanceLogsMock).toHaveBeenCalledWith("instance-1", undefined);
+    expect(body.data.lines).toEqual(["2026-05-31 10:00:00 INFO server started"]);
+    expect(body.data.line_count).toBe(1);
+    expect(body.data.latest_timestamp).toBe(1748685600);
+    expect(listCliproxyInstanceLogsMock).toHaveBeenCalledWith("instance-1", {
+      limit: undefined,
+      after: undefined,
+    });
   });
 
-  it("透传 since 查询参数", async () => {
+  it("透传 limit 与 after 查询参数到服务层", async () => {
     const { GET } = await import("@/app/api/admin/cliproxy/instances/[id]/logs/route");
-    listCliproxyInstanceLogsMock.mockResolvedValueOnce([]);
+    listCliproxyInstanceLogsMock.mockResolvedValueOnce({
+      lines: [],
+      line_count: 0,
+      latest_timestamp: 0,
+    });
 
     await GET(
       new NextRequest(
-        "http://localhost/api/admin/cliproxy/instances/instance-1/logs?since=2025-05-31T09:00:00Z",
+        "http://localhost/api/admin/cliproxy/instances/instance-1/logs?limit=200&after=1748685000",
         { method: "GET", headers: { authorization: AUTH } }
       ),
       ctx({ id: "instance-1" })
     );
 
-    expect(listCliproxyInstanceLogsMock).toHaveBeenCalledWith("instance-1", "2025-05-31T09:00:00Z");
+    expect(listCliproxyInstanceLogsMock).toHaveBeenCalledWith("instance-1", {
+      limit: 200,
+      after: 1748685000,
+    });
+  });
+
+  it("limit 不是数字时返回 400", async () => {
+    const { GET } = await import("@/app/api/admin/cliproxy/instances/[id]/logs/route");
+
+    const res = await GET(
+      new NextRequest("http://localhost/api/admin/cliproxy/instances/instance-1/logs?limit=abc", {
+        method: "GET",
+        headers: { authorization: AUTH },
+      }),
+      ctx({ id: "instance-1" })
+    );
+    expect(res.status).toBe(400);
+    expect(listCliproxyInstanceLogsMock).not.toHaveBeenCalled();
   });
 
   it("实例不存在返回 404", async () => {

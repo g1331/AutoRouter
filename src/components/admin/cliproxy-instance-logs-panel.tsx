@@ -15,51 +15,40 @@ interface CliproxyInstanceLogsPanelProps {
   instance: CliproxyInstance;
 }
 
-/** 日志级别对应的色调，未识别级别使用 muted。 */
-function levelClassName(level: string): string {
-  switch (level.toLowerCase()) {
-    case "error":
-      return "text-destructive";
-    case "warn":
-    case "warning":
-      return "text-amber-500";
-    case "info":
-      return "text-emerald-500";
-    case "debug":
-      return "text-muted-foreground";
-    default:
-      return "text-foreground";
-  }
+/** 启发式识别行内日志级别用于上色；未识别时落到 muted 色。 */
+function classifyLineLevel(line: string): string {
+  const normalized = line.toUpperCase();
+  if (/\b(ERROR|ERR|FATAL|PANIC)\b/.test(normalized)) return "text-destructive";
+  if (/\b(WARN|WARNING)\b/.test(normalized)) return "text-amber-500";
+  if (/\b(INFO|NOTICE)\b/.test(normalized)) return "text-emerald-500";
+  if (/\b(DEBUG|TRACE)\b/.test(normalized)) return "text-muted-foreground";
+  return "text-foreground";
 }
 
 /**
  * 实例日志查看面板。
  *
- * 首次显示时拉取一次日志，提供刷新按钮与前端关键词过滤。
- * 单次拉取行数受 `CLIPROXY_LOGS_DEFAULT_LIMIT` 上限，超出部分由后端控制。
+ * 首次显示时拉取一次 CLIProxyAPI 上 `LoggingToFile` 输出的最近 N 行原始日志，
+ * 提供刷新按钮与前端关键词过滤。上游若未启用 `LoggingToFile` 会返回 400，
+ * 经管理 API 客户端透传后展示具体错误原因。
  */
 export function CliproxyInstanceLogsPanel({ instance }: CliproxyInstanceLogsPanelProps) {
   const t = useTranslations("cliproxy");
   const {
-    data: logs,
+    data: result,
     isLoading,
     isError,
     refetch,
     isFetching,
-  } = useCliproxyInstanceLogs(instance.id);
+  } = useCliproxyInstanceLogs(instance.id, { limit: CLIPROXY_LOGS_DEFAULT_LIMIT });
   const [keyword, setKeyword] = useState("");
 
   const filtered = useMemo(() => {
-    if (!logs) return [];
-    const limited = logs.slice(0, CLIPROXY_LOGS_DEFAULT_LIMIT);
-    if (!keyword.trim()) return limited;
+    const lines = result?.lines ?? [];
+    if (!keyword.trim()) return lines;
     const needle = keyword.trim().toLowerCase();
-    return limited.filter(
-      (entry) =>
-        (entry.message ?? "").toLowerCase().includes(needle) ||
-        (entry.level ?? "").toLowerCase().includes(needle)
-    );
-  }, [logs, keyword]);
+    return lines.filter((line) => line.toLowerCase().includes(needle));
+  }, [result, keyword]);
 
   return (
     <Card variant="outlined">
@@ -93,7 +82,7 @@ export function CliproxyInstanceLogsPanel({ instance }: CliproxyInstanceLogsPane
           <p className="py-8 text-center type-body-medium text-destructive">
             {t("logsLoadFailed")}
           </p>
-        ) : !logs || logs.length === 0 ? (
+        ) : !result || result.lines.length === 0 ? (
           <p className="py-8 text-center type-body-medium text-muted-foreground">
             {t("logsEmpty")}
           </p>
@@ -104,13 +93,12 @@ export function CliproxyInstanceLogsPanel({ instance }: CliproxyInstanceLogsPane
         ) : (
           <div className="max-h-[28rem] overflow-y-auto rounded-cf-sm border border-border bg-surface-200 p-3 font-mono">
             <ul className="space-y-1 type-body-small">
-              {filtered.map((entry, index) => (
-                <li key={`${entry.timestamp}-${index}`} className="flex gap-3">
-                  <span className="shrink-0 text-muted-foreground">{entry.timestamp}</span>
-                  <span className={cn("shrink-0 font-semibold", levelClassName(entry.level))}>
-                    [{entry.level.toUpperCase()}]
-                  </span>
-                  <span className="min-w-0 break-words">{entry.message}</span>
+              {filtered.map((line, index) => (
+                <li
+                  key={`${index}-${line.slice(0, 32)}`}
+                  className={cn("break-words", classifyLineLevel(line))}
+                >
+                  {line}
                 </li>
               ))}
             </ul>

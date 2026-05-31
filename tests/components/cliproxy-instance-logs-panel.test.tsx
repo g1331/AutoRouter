@@ -29,6 +29,14 @@ const instance: CliproxyInstance = {
   updated_at: "2025-05-30T12:00:00.000Z",
 };
 
+function logsResult(lines: string[]) {
+  return {
+    lines,
+    line_count: lines.length,
+    latest_timestamp: lines.length ? 1748685600 : 0,
+  };
+}
+
 describe("CliproxyInstanceLogsPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -58,7 +66,7 @@ describe("CliproxyInstanceLogsPanel", () => {
 
   it("空日志展示提示", () => {
     useCliproxyInstanceLogsMock.mockReturnValue({
-      data: [],
+      data: logsResult([]),
       isLoading: false,
       refetch: vi.fn(),
       isFetching: false,
@@ -67,29 +75,38 @@ describe("CliproxyInstanceLogsPanel", () => {
     expect(screen.getByText("logsEmpty")).toBeInTheDocument();
   });
 
-  it("渲染日志条目", () => {
+  it("渲染原始日志行字符串", () => {
     useCliproxyInstanceLogsMock.mockReturnValue({
-      data: [
-        { timestamp: "2025-05-31T10:00:00Z", level: "info", message: "started" },
-        { timestamp: "2025-05-31T10:00:01Z", level: "warn", message: "slow request" },
-      ],
+      data: logsResult([
+        "2026-05-31 10:00:00 INFO server started",
+        "2026-05-31 10:00:01 WARN slow upstream request",
+      ]),
       isLoading: false,
       refetch: vi.fn(),
       isFetching: false,
     });
     render(<CliproxyInstanceLogsPanel instance={instance} />);
-    expect(screen.getByText("started")).toBeInTheDocument();
-    expect(screen.getByText("slow request")).toBeInTheDocument();
-    expect(screen.getByText("[INFO]")).toBeInTheDocument();
-    expect(screen.getByText("[WARN]")).toBeInTheDocument();
+    expect(screen.getByText("2026-05-31 10:00:00 INFO server started")).toBeInTheDocument();
+    expect(screen.getByText("2026-05-31 10:00:01 WARN slow upstream request")).toBeInTheDocument();
   });
 
-  it("关键词过滤后只保留匹配条目", () => {
+  it("hook 使用默认 limit 调用，便于上游裁剪行数", () => {
     useCliproxyInstanceLogsMock.mockReturnValue({
-      data: [
-        { timestamp: "2025-05-31T10:00:00Z", level: "info", message: "started" },
-        { timestamp: "2025-05-31T10:00:01Z", level: "warn", message: "slow request" },
-      ],
+      data: logsResult([]),
+      isLoading: false,
+      refetch: vi.fn(),
+      isFetching: false,
+    });
+    render(<CliproxyInstanceLogsPanel instance={instance} />);
+    expect(useCliproxyInstanceLogsMock).toHaveBeenCalledWith("instance-1", { limit: 200 });
+  });
+
+  it("关键词过滤后只保留匹配的日志行", () => {
+    useCliproxyInstanceLogsMock.mockReturnValue({
+      data: logsResult([
+        "2026-05-31 10:00:00 INFO server started",
+        "2026-05-31 10:00:01 WARN slow upstream request",
+      ]),
       isLoading: false,
       refetch: vi.fn(),
       isFetching: false,
@@ -100,7 +117,23 @@ describe("CliproxyInstanceLogsPanel", () => {
       target: { value: "slow" },
     });
 
-    expect(screen.queryByText("started")).not.toBeInTheDocument();
-    expect(screen.getByText("slow request")).toBeInTheDocument();
+    expect(screen.queryByText("2026-05-31 10:00:00 INFO server started")).not.toBeInTheDocument();
+    expect(screen.getByText("2026-05-31 10:00:01 WARN slow upstream request")).toBeInTheDocument();
+  });
+
+  it("有日志但全部被过滤掉时展示 logsNoMatches", () => {
+    useCliproxyInstanceLogsMock.mockReturnValue({
+      data: logsResult(["2026-05-31 10:00:00 INFO server started"]),
+      isLoading: false,
+      refetch: vi.fn(),
+      isFetching: false,
+    });
+    render(<CliproxyInstanceLogsPanel instance={instance} />);
+
+    fireEvent.change(screen.getByPlaceholderText("logsSearchPlaceholder"), {
+      target: { value: "no-such-token" },
+    });
+
+    expect(screen.getByText("logsNoMatches")).toBeInTheDocument();
   });
 });
