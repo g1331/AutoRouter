@@ -11,10 +11,32 @@ export type CliproxyInstanceMode = "managed" | "external";
 export const CLIPROXY_INSTANCE_MODES: readonly CliproxyInstanceMode[] = ["managed", "external"];
 
 /** CLI OAuth 服务商。 */
-export type CliproxyProvider = "codex" | "anthropic" | "gemini";
+export type CliproxyProvider = "codex" | "anthropic" | "gemini" | "xai" | "antigravity" | "kimi";
 
 /** 全部 CLI OAuth 服务商，供选项使用。 */
-export const CLIPROXY_PROVIDERS: readonly CliproxyProvider[] = ["codex", "anthropic", "gemini"];
+export const CLIPROXY_PROVIDERS: readonly CliproxyProvider[] = [
+  "codex",
+  "anthropic",
+  "gemini",
+  "xai",
+  "antigravity",
+  "kimi",
+];
+
+/**
+ * 支持一键创建池上游或单账号上游的服务商集合。
+ *
+ * 当前只覆盖 OAuth Provider 的子集，因为 xAI / Antigravity / Kimi 的代理路径与
+ * 路由能力约定尚未稳定。OAuth 登录仍可在全部 6 个 Provider 上发起。
+ */
+export type CliproxyUpstreamProvider = "codex" | "anthropic" | "gemini";
+
+/** 全部支持上游预设的服务商。 */
+export const CLIPROXY_UPSTREAM_PROVIDERS: readonly CliproxyUpstreamProvider[] = [
+  "codex",
+  "anthropic",
+  "gemini",
+];
 
 /** CLIProxyAPI 实例的对外响应形态，凭据明文以布尔标记代替。 */
 export interface CliproxyInstance {
@@ -117,4 +139,34 @@ export interface CliproxyOAuthStatusResult {
   status: CliproxyOAuthStatus;
   error?: string;
   syncResult?: CliproxyAuthAccountSyncResult;
+}
+
+/** CLIProxyAPI 管理日志条目。 */
+export interface CliproxyLogEntry {
+  timestamp: string;
+  level: string;
+  message: string;
+  [key: string]: unknown;
+}
+
+/** CLIProxyAPI auth-file 模型条目。 */
+export interface CliproxyAuthFileModel {
+  id: string;
+  display_name?: string;
+  type?: string;
+  owned_by?: string;
+}
+
+/** 关联上游类型。 */
+export type CliproxyLinkedUpstreamKind = "pool" | "single";
+
+/** 实例下关联的上游记录。 */
+export interface CliproxyLinkedUpstream {
+  id: string;
+  name: string;
+  provider: string;
+  kind: CliproxyLinkedUpstreamKind;
+  auth_file_name: string | null;
+  is_active: boolean;
+  created_at: string;
 }

@@ -39,6 +39,9 @@ const PROVIDER_LABEL_KEY: Record<CliproxyProvider, string> = {
   codex: "providerCodex",
   anthropic: "providerAnthropic",
   gemini: "providerGemini",
+  xai: "providerXai",
+  antigravity: "providerAntigravity",
+  kimi: "providerKimi",
 };
 
 /**

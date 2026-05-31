@@ -7,7 +7,7 @@ import {
   getDecryptedClientApiKey,
   CliproxyInstanceNotFoundError,
 } from "./cliproxy-instance-crud";
-import { isCliproxyOAuthProvider, type CliproxyOAuthProvider } from "./cliproxy-management-client";
+import { isCliproxyOAuthProvider } from "./cliproxy-management-client";
 import { InvalidCliproxyOAuthProviderError } from "./cliproxy-oauth-login-service";
 import {
   getCliproxyAuthAccount,
@@ -32,10 +32,23 @@ interface CliproxyUpstreamPreset {
 }
 
 /**
+ * 支持一键创建池上游的服务商集合。
+ *
+ * OAuth 登录支持的服务商（`CLIPROXY_OAUTH_PROVIDERS`）是这个集合的超集，
+ * 例如 xAI、Antigravity、Kimi 也可走 OAuth 登录，但 CLIProxyAPI 暂未提供
+ * 对应的代理路径后缀与路由能力，需要等上游约定稳定后再扩展。
+ */
+export const CLIPROXY_UPSTREAM_PRESET_PROVIDERS = ["codex", "anthropic", "gemini"] as const;
+export type CliproxyUpstreamPresetProvider = (typeof CLIPROXY_UPSTREAM_PRESET_PROVIDERS)[number];
+
+/**
  * 三类 CLI 服务商的池上游预设表。路径后缀与路由能力为 CLIProxyAPI 的对外约定，
  * 集中维护于此，CLIProxyAPI 调整对外约定时改动收敛于这一处。
  */
-export const CLIPROXY_UPSTREAM_PRESETS: Record<CliproxyOAuthProvider, CliproxyUpstreamPreset> = {
+export const CLIPROXY_UPSTREAM_PRESETS: Record<
+  CliproxyUpstreamPresetProvider,
+  CliproxyUpstreamPreset
+> = {
   codex: {
     pathSuffix: "/v1",
     routeCapabilities: ["codex_cli_responses", "openai_responses"],
@@ -52,6 +65,16 @@ export const CLIPROXY_UPSTREAM_PRESETS: Record<CliproxyOAuthProvider, CliproxyUp
     label: "Gemini",
   },
 };
+
+/** 判断给定值是否为支持一键创建池上游的服务商。 */
+export function isCliproxyUpstreamPresetProvider(
+  value: unknown
+): value is CliproxyUpstreamPresetProvider {
+  return (
+    typeof value === "string" &&
+    CLIPROXY_UPSTREAM_PRESET_PROVIDERS.includes(value as CliproxyUpstreamPresetProvider)
+  );
+}
 
 /** 账号前缀取值非法错误。 */
 export class InvalidCliproxyPrefixError extends Error {
@@ -165,7 +188,9 @@ export async function createCliproxyPoolUpstream(
   provider: string,
   options: CliproxyUpstreamCreateOptions = {}
 ): Promise<UpstreamResponse> {
-  if (!isCliproxyOAuthProvider(provider)) {
+  // OAuth 支持的 Provider 是池上游 Provider 的超集；这里仅允许已配置 preset 的服务商，
+  // 避免在没有上游路径与路由能力约定的情况下创建无法转发的上游。
+  if (!isCliproxyUpstreamPresetProvider(provider)) {
     throw new InvalidCliproxyOAuthProviderError(provider);
   }
   const instance = await getCliproxyInstanceRow(instanceId);
@@ -214,7 +239,8 @@ export async function createCliproxySingleAccountUpstream(
   }
 
   const provider = account.provider;
-  if (!isCliproxyOAuthProvider(provider)) {
+  // 单账号上游同样要求 Provider 已配置 preset，否则没有路径与路由能力可用。
+  if (!isCliproxyOAuthProvider(provider) || !isCliproxyUpstreamPresetProvider(provider)) {
     throw new InvalidCliproxyOAuthProviderError(provider);
   }
 

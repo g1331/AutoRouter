@@ -1,9 +1,9 @@
 ## 1. 管理 API 客户端扩展
 
-- [ ] 1.1 在 `cliproxy-management-client.ts` 中扩展 `CLIPROXY_OAUTH_PROVIDERS` 和 `AUTH_URL_ENDPOINT`，新增 xAI、Antigravity、Kimi 三个 Provider；同步更新前端 `src/types/cliproxy.ts` 中的 `CliproxyProvider` 类型和 `CLIPROXY_PROVIDERS` 常量；编写对应的单元测试验证 `isCliproxyOAuthProvider` 对新 Provider 的识别
-- [ ] 1.2 在 `cliproxy-management-client.ts` 中新增 `deleteAuthFile`、`uploadAuthFile`、`downloadAuthFile` 三个方法；编写单元测试覆盖成功、鉴权失败、超时三种情况
-- [ ] 1.3 在 `cliproxy-management-client.ts` 中新增 `submitOAuthCallback` 方法；编写单元测试
-- [ ] 1.4 在 `cliproxy-management-client.ts` 中新增 `getLogs` 方法（支持可选 `since` 参数）；编写单元测试
+- [x] 1.1 在 `cliproxy-management-client.ts` 中扩展 `CLIPROXY_OAUTH_PROVIDERS` 和 `AUTH_URL_ENDPOINT`，新增 xAI、Antigravity、Kimi 三个 Provider；同步更新前端 `src/types/cliproxy.ts` 中的 `CliproxyProvider` 类型和 `CLIPROXY_PROVIDERS` 常量；编写对应的单元测试验证 `isCliproxyOAuthProvider` 对新 Provider 的识别
+- [x] 1.2 在 `cliproxy-management-client.ts` 中新增 `deleteAuthFile`、`uploadAuthFile`、`downloadAuthFile` 三个方法；编写单元测试覆盖成功、鉴权失败、超时三种情况
+- [x] 1.3 在 `cliproxy-management-client.ts` 中新增 `submitOAuthCallback` 方法；编写单元测试
+- [x] 1.4 在 `cliproxy-management-client.ts` 中新增 `getLogs` 方法（支持可选 `since` 参数）；编写单元测试
 
 ## 2. 后端服务层扩展
 

@@ -6,7 +6,14 @@ const log = createLogger("cliproxy-management-client");
 const DEFAULT_TIMEOUT_SECONDS = 15;
 
 /** CLIProxyAPI 支持发起 OAuth 登录的服务商。 */
-export const CLIPROXY_OAUTH_PROVIDERS = ["codex", "anthropic", "gemini"] as const;
+export const CLIPROXY_OAUTH_PROVIDERS = [
+  "codex",
+  "anthropic",
+  "gemini",
+  "xai",
+  "antigravity",
+  "kimi",
+] as const;
 export type CliproxyOAuthProvider = (typeof CLIPROXY_OAUTH_PROVIDERS)[number];
 
 /** 各服务商对应的授权地址端点片段。 */
@@ -14,6 +21,9 @@ const AUTH_URL_ENDPOINT: Record<CliproxyOAuthProvider, string> = {
   codex: "codex-auth-url",
   anthropic: "anthropic-auth-url",
   gemini: "gemini-cli-auth-url",
+  xai: "xai-auth-url",
+  antigravity: "antigravity-auth-url",
+  kimi: "kimi-auth-url",
 };
 
 /** 管理 API 调用错误分类。 */
@@ -78,6 +88,14 @@ export interface CliproxyAuthFileFieldsPatch {
   note?: string;
 }
 
+/** 管理日志条目。 */
+export interface CliproxyLogEntry {
+  timestamp: string;
+  level: string;
+  message: string;
+  [key: string]: unknown;
+}
+
 /** 连接参数：管理 API 基础地址与管理密钥明文。 */
 export interface CliproxyManagementTarget {
   managementUrl: string;
@@ -110,11 +128,17 @@ function classifyHttpError(statusCode: number): CliproxyManagementApiError {
   );
 }
 
-/** 执行一次管理 API 请求并返回解析后的 JSON。 */
+/**
+ * 执行一次管理 API 请求并返回解析后的结果。
+ *
+ * `returnRawText` 为 true 时跳过 JSON.parse，直接将响应文本作为泛型 T 返回
+ * （调用方需确保 T = string），用于上游返回纯文本而非 JSON 包装对象的端点
+ * （例如 auth-files/download）。
+ */
 async function requestManagementApi<T>(
   target: CliproxyManagementTarget,
   path: string,
-  init: { method: string; body?: unknown },
+  init: { method: string; body?: unknown; returnRawText?: boolean },
   timeoutSeconds = DEFAULT_TIMEOUT_SECONDS
 ): Promise<T> {
   let requestUrl: string;
@@ -148,8 +172,13 @@ async function requestManagementApi<T>(
       throw classifyHttpError(response.status);
     }
 
-    // 部分写入端点可能返回空响应体。
     const text = await response.text();
+
+    if (init.returnRawText) {
+      return text as unknown as T;
+    }
+
+    // 部分写入端点可能返回空响应体。
     return (text ? JSON.parse(text) : {}) as T;
   } catch (error) {
     clearTimeout(timeoutId);
@@ -221,6 +250,62 @@ export async function patchAuthFileFields(
 }
 
 /**
+ * 删除指定的 auth-file。
+ * 对应上游 `DELETE /v0/management/auth-files`，请求体携带 `{ name }`。
+ */
+export async function deleteAuthFile(
+  target: CliproxyManagementTarget,
+  authFileName: string
+): Promise<void> {
+  await requestManagementApi(target, "/auth-files", {
+    method: "DELETE",
+    body: { name: authFileName },
+  });
+}
+
+/**
+ * 上传（创建）一个 auth-file。
+ *
+ * 请求体为认证文件的完整 JSON 对象，由调用方构造；
+ * 上游端点为 `POST /v0/management/auth-files`。
+ */
+export async function uploadAuthFile(
+  target: CliproxyManagementTarget,
+  content: Record<string, unknown>
+): Promise<void> {
+  await requestManagementApi(target, "/auth-files", {
+    method: "POST",
+    body: content,
+  });
+}
+
+/**
+ * 下载指定 auth-file 的原始 JSON 内容。
+ *
+ * 上游返回纯 JSON 字符串（非 `{ files: [...] }` 包装），通过 `returnRawText`
+ * 选项跳过响应体的二次 JSON.parse，再由本方法显式解析以返回结构化对象。
+ */
+export async function downloadAuthFile(
+  target: CliproxyManagementTarget,
+  authFileName: string
+): Promise<Record<string, unknown>> {
+  const raw = await requestManagementApi<string>(
+    target,
+    `/auth-files/download?name=${encodeURIComponent(authFileName)}`,
+    { method: "GET", returnRawText: true }
+  );
+  try {
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    throw new CliproxyManagementApiError(
+      "service_error",
+      "CLIProxyAPI 返回的 auth-file 内容不是合法 JSON",
+      null
+    );
+  }
+}
+
+/**
  * 获取指定服务商的 OAuth 授权地址。默认携带 `is_webui=true`，
  * 由 CLIProxyAPI 的 callbackForwarder 处理容器与远程部署下的回调。
  */
@@ -256,6 +341,46 @@ export async function getAuthStatus(
   );
   const status = result.status === "wait" || result.status === "error" ? result.status : "ok";
   return { status, error: result.error };
+}
+
+/**
+ * 手动提交 OAuth 回调地址，通知 CLIProxyAPI 完成授权流程。
+ *
+ * 对应上游 `POST /v0/management/oauth-callback`，
+ * 请求体为 `{ provider, redirect_url }`，用于自动回调不可达时由管理员手动粘贴回调 URL。
+ */
+export async function submitOAuthCallback(
+  target: CliproxyManagementTarget,
+  provider: CliproxyOAuthProvider,
+  redirectUrl: string
+): Promise<void> {
+  await requestManagementApi(target, "/oauth-callback", {
+    method: "POST",
+    body: { provider, redirect_url: redirectUrl },
+  });
+}
+
+/**
+ * 查询 CLIProxyAPI 管理日志。
+ *
+ * `since` 为可选的 ISO 8601 时间戳字符串，传入时仅返回该时刻之后的条目。
+ * 兼容上游返回直接数组与 `{ logs: [...] }` 包装两种格式。
+ */
+export async function getLogs(
+  target: CliproxyManagementTarget,
+  since?: string
+): Promise<CliproxyLogEntry[]> {
+  const query = since ? `?since=${encodeURIComponent(since)}` : "";
+  const result = await requestManagementApi<CliproxyLogEntry[] | { logs?: CliproxyLogEntry[] }>(
+    target,
+    `/logs${query}`,
+    { method: "GET" }
+  );
+  if (Array.isArray(result)) {
+    return result;
+  }
+  const wrapped = result as { logs?: CliproxyLogEntry[] };
+  return Array.isArray(wrapped.logs) ? wrapped.logs : [];
 }
 
 /** 判断给定值是否为受支持的 OAuth 服务商。 */

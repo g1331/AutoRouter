@@ -11,7 +11,14 @@ import {
   patchAuthFileFields,
   getProviderAuthUrl,
   getAuthStatus,
+  deleteAuthFile,
+  uploadAuthFile,
+  downloadAuthFile,
+  submitOAuthCallback,
+  getLogs,
   CliproxyManagementApiError,
+  CLIPROXY_OAUTH_PROVIDERS,
+  isCliproxyOAuthProvider,
 } from "@/lib/services/cliproxy-management-client";
 
 const TARGET = { managementUrl: "http://cliproxyapi:8317", managementKey: "mgmt-key" };
@@ -163,5 +170,209 @@ describe("cliproxy-management-client", () => {
     abortError.name = "AbortError";
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(abortError));
     await expect(listAuthFiles(TARGET)).rejects.toMatchObject({ kind: "unreachable" });
+  });
+
+  // ── 新增 Provider 覆盖 ──────────────────────────────────────────────────
+
+  it("CLIPROXY_OAUTH_PROVIDERS 包含新增的三个服务商", () => {
+    expect(CLIPROXY_OAUTH_PROVIDERS).toContain("xai");
+    expect(CLIPROXY_OAUTH_PROVIDERS).toContain("antigravity");
+    expect(CLIPROXY_OAUTH_PROVIDERS).toContain("kimi");
+    expect(CLIPROXY_OAUTH_PROVIDERS).toHaveLength(6);
+  });
+
+  it("isCliproxyOAuthProvider 对新 Provider 返回 true", () => {
+    expect(isCliproxyOAuthProvider("xai")).toBe(true);
+    expect(isCliproxyOAuthProvider("antigravity")).toBe(true);
+    expect(isCliproxyOAuthProvider("kimi")).toBe(true);
+    expect(isCliproxyOAuthProvider("unknown")).toBe(false);
+  });
+
+  it("getProviderAuthUrl xAI 映射到 xai-auth-url 端点", async () => {
+    const fetchMock = stubFetchOnce(
+      new Response(JSON.stringify({ url: "https://x.ai/oauth", state: "xai-state" }), {
+        status: 200,
+      })
+    );
+
+    const result = await getProviderAuthUrl(TARGET, "xai");
+
+    expect(result).toEqual({ url: "https://x.ai/oauth", state: "xai-state" });
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "http://cliproxyapi:8317/v0/management/xai-auth-url?is_webui=true"
+    );
+  });
+
+  it("getProviderAuthUrl antigravity 映射到 antigravity-auth-url 端点", async () => {
+    const fetchMock = stubFetchOnce(
+      new Response(JSON.stringify({ url: "https://ag.example/oauth", state: "ag-state" }), {
+        status: 200,
+      })
+    );
+
+    await getProviderAuthUrl(TARGET, "antigravity");
+
+    expect(fetchMock.mock.calls[0][0]).toContain("antigravity-auth-url");
+  });
+
+  it("getProviderAuthUrl kimi 映射到 kimi-auth-url 端点", async () => {
+    const fetchMock = stubFetchOnce(
+      new Response(JSON.stringify({ url: "https://kimi.moonshot.cn/oauth", state: "kimi-state" }), {
+        status: 200,
+      })
+    );
+
+    await getProviderAuthUrl(TARGET, "kimi");
+
+    expect(fetchMock.mock.calls[0][0]).toContain("kimi-auth-url");
+  });
+
+  // ── deleteAuthFile ──────────────────────────────────────────────────────
+
+  it("deleteAuthFile 发送 DELETE 请求并携带正确请求体", async () => {
+    const fetchMock = stubFetchOnce(new Response("", { status: 200 }));
+
+    await deleteAuthFile(TARGET, "codex-a.json");
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(init.method).toBe("DELETE");
+    expect(JSON.parse(init.body as string)).toEqual({ name: "codex-a.json" });
+    expect(fetchMock.mock.calls[0][0]).toBe("http://cliproxyapi:8317/v0/management/auth-files");
+  });
+
+  it("deleteAuthFile 请求体保留原始文件名（含空格）", async () => {
+    const fetchMock = stubFetchOnce(new Response("", { status: 200 }));
+
+    await deleteAuthFile(TARGET, "codex a.json");
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(init.body as string)).toEqual({ name: "codex a.json" });
+  });
+
+  it("deleteAuthFile 上游返回 401 时抛出鉴权错误", async () => {
+    stubFetchOnce(new Response("unauthorized", { status: 401 }));
+    await expect(deleteAuthFile(TARGET, "codex-a.json")).rejects.toMatchObject({
+      kind: "auth_failed",
+    });
+  });
+
+  // ── uploadAuthFile ──────────────────────────────────────────────────────
+
+  it("uploadAuthFile 发送 POST 请求并携带文件内容", async () => {
+    const fetchMock = stubFetchOnce(new Response("", { status: 200 }));
+    const content = { token: "abc123", provider: "codex" };
+
+    await uploadAuthFile(TARGET, content);
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual(content);
+    expect(fetchMock.mock.calls[0][0]).toBe("http://cliproxyapi:8317/v0/management/auth-files");
+  });
+
+  it("uploadAuthFile 上游返回 4xx 时向上抛出服务异常", async () => {
+    stubFetchOnce(new Response("conflict", { status: 409 }));
+    await expect(uploadAuthFile(TARGET, { token: "x" })).rejects.toMatchObject({
+      kind: "service_error",
+    });
+  });
+
+  // ── downloadAuthFile ────────────────────────────────────────────────────
+
+  it("downloadAuthFile 发送 GET 请求并对文件名 URL 编码", async () => {
+    const fileContent = { token: "abc123", provider: "codex" };
+    const fetchMock = stubFetchOnce(new Response(JSON.stringify(fileContent), { status: 200 }));
+
+    const result = await downloadAuthFile(TARGET, "codex a.json");
+
+    expect(result).toEqual(fileContent);
+    expect(fetchMock.mock.calls[0][0]).toContain("name=codex%20a.json");
+    expect(fetchMock.mock.calls[0][0]).toContain("/auth-files/download");
+  });
+
+  it("downloadAuthFile 上游返回非 JSON 内容时抛出服务异常", async () => {
+    stubFetchOnce(new Response("not-json-at-all", { status: 200 }));
+    await expect(downloadAuthFile(TARGET, "codex-a.json")).rejects.toMatchObject({
+      kind: "service_error",
+    });
+  });
+
+  it("downloadAuthFile 上游返回 404 时抛出服务异常", async () => {
+    stubFetchOnce(new Response("not found", { status: 404 }));
+    await expect(downloadAuthFile(TARGET, "missing.json")).rejects.toMatchObject({
+      kind: "service_error",
+    });
+  });
+
+  // ── submitOAuthCallback ─────────────────────────────────────────────────
+
+  it("submitOAuthCallback 发送 POST 并携带正确请求体", async () => {
+    const fetchMock = stubFetchOnce(new Response("", { status: 200 }));
+
+    await submitOAuthCallback(TARGET, "codex", "https://callback.example/auth?code=xyz");
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({
+      provider: "codex",
+      redirect_url: "https://callback.example/auth?code=xyz",
+    });
+    expect(fetchMock.mock.calls[0][0]).toBe("http://cliproxyapi:8317/v0/management/oauth-callback");
+  });
+
+  it("submitOAuthCallback 支持新增服务商 xai", async () => {
+    const fetchMock = stubFetchOnce(new Response("", { status: 200 }));
+
+    await submitOAuthCallback(TARGET, "xai", "https://callback.example/xai?code=abc");
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(init.body as string).provider).toBe("xai");
+  });
+
+  // ── getLogs ─────────────────────────────────────────────────────────────
+
+  it("getLogs 返回日志数组（上游直接返回数组）", async () => {
+    const entries = [
+      { timestamp: "2025-05-31T10:00:00Z", level: "info", message: "started" },
+      { timestamp: "2025-05-31T10:00:01Z", level: "warn", message: "slow" },
+    ];
+    const fetchMock = stubFetchOnce(new Response(JSON.stringify(entries), { status: 200 }));
+
+    const result = await getLogs(TARGET);
+
+    expect(result).toHaveLength(2);
+    expect(result[0].message).toBe("started");
+    expect(fetchMock.mock.calls[0][0]).toBe("http://cliproxyapi:8317/v0/management/logs");
+  });
+
+  it("getLogs 支持 since 参数并 URL 编码", async () => {
+    const fetchMock = stubFetchOnce(new Response(JSON.stringify([]), { status: 200 }));
+
+    await getLogs(TARGET, "2025-05-31T10:00:00Z");
+
+    expect(fetchMock.mock.calls[0][0]).toContain("since=2025-05-31T10%3A00%3A00Z");
+  });
+
+  it("getLogs 不传 since 时不附加查询参数", async () => {
+    const fetchMock = stubFetchOnce(new Response(JSON.stringify([]), { status: 200 }));
+
+    await getLogs(TARGET);
+
+    expect(fetchMock.mock.calls[0][0]).not.toContain("since");
+  });
+
+  it("getLogs 兼容上游返回 {logs:[]} 包装格式", async () => {
+    const entries = [{ timestamp: "2025-05-31T10:00:00Z", level: "info", message: "ok" }];
+    stubFetchOnce(new Response(JSON.stringify({ logs: entries }), { status: 200 }));
+
+    const result = await getLogs(TARGET);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].level).toBe("info");
+  });
+
+  it("getLogs 上游返回空对象时返回空数组", async () => {
+    stubFetchOnce(new Response(JSON.stringify({}), { status: 200 }));
+    expect(await getLogs(TARGET)).toEqual([]);
   });
 });

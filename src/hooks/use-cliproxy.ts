@@ -11,6 +11,7 @@ import type {
   CliproxyAuthAccountFieldsUpdate,
   CliproxyAuthAccountSyncResult,
   CliproxyProvider,
+  CliproxyUpstreamProvider,
   CliproxyOAuthInitiateResult,
   CliproxyOAuthStatusResult,
 } from "@/types/cliproxy";
@@ -307,7 +308,7 @@ export function useCreateCliproxyPoolUpstream() {
       provider,
     }: {
       instanceId: string;
-      provider: CliproxyProvider;
+      provider: CliproxyUpstreamProvider;
     }) => {
       const response = await apiClient.post<{ data: { id: string } }>(
         `/admin/cliproxy/instances/${instanceId}/pool-upstreams`,
