@@ -1,14 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const getCliproxyInstanceRowMock = vi.fn();
+const resolveTargetMock = vi.fn();
 const getLogsMock = vi.fn();
 
 vi.mock("@/lib/services/cliproxy-instance-crud", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/services/cliproxy-instance-crud")>();
   return {
     ...actual,
-    getCliproxyInstanceRow: (...args: unknown[]) => getCliproxyInstanceRowMock(...args),
-    getDecryptedManagementKey: () => "mgmt-key",
+    resolveCliproxyManagementTarget: (...args: unknown[]) => resolveTargetMock(...args),
   };
 });
 
@@ -16,10 +15,9 @@ vi.mock("@/lib/services/cliproxy-management-client", () => ({
   getLogs: (...args: unknown[]) => getLogsMock(...args),
 }));
 
-const instanceRow = {
-  id: "instance-1",
+const target = {
   managementUrl: "http://cliproxyapi:8317",
-  managementKeyEncrypted: "enc(mgmt-key)",
+  managementKey: "mgmt-key",
 };
 
 describe("cliproxy-instance-logs-service", () => {
@@ -31,7 +29,7 @@ describe("cliproxy-instance-logs-service", () => {
     const { listCliproxyInstanceLogs } =
       await import("@/lib/services/cliproxy-instance-logs-service");
 
-    getCliproxyInstanceRowMock.mockResolvedValueOnce(instanceRow);
+    resolveTargetMock.mockResolvedValueOnce(target);
     getLogsMock.mockResolvedValueOnce([
       { timestamp: "2025-05-31T10:00:00Z", level: "info", message: "ok" },
     ]);
@@ -39,25 +37,19 @@ describe("cliproxy-instance-logs-service", () => {
     const result = await listCliproxyInstanceLogs("instance-1", "2025-05-31T09:00:00Z");
 
     expect(result).toHaveLength(1);
-    expect(getLogsMock).toHaveBeenCalledWith(
-      { managementUrl: "http://cliproxyapi:8317", managementKey: "mgmt-key" },
-      "2025-05-31T09:00:00Z"
-    );
+    expect(getLogsMock).toHaveBeenCalledWith(target, "2025-05-31T09:00:00Z");
   });
 
   it("listCliproxyInstanceLogs 不传 since 时也不向客户端传递", async () => {
     const { listCliproxyInstanceLogs } =
       await import("@/lib/services/cliproxy-instance-logs-service");
 
-    getCliproxyInstanceRowMock.mockResolvedValueOnce(instanceRow);
+    resolveTargetMock.mockResolvedValueOnce(target);
     getLogsMock.mockResolvedValueOnce([]);
 
     await listCliproxyInstanceLogs("instance-1");
 
-    expect(getLogsMock).toHaveBeenCalledWith(
-      { managementUrl: "http://cliproxyapi:8317", managementKey: "mgmt-key" },
-      undefined
-    );
+    expect(getLogsMock).toHaveBeenCalledWith(target, undefined);
   });
 
   it("listCliproxyInstanceLogs 实例不存在时抛出 CliproxyInstanceNotFoundError", async () => {
@@ -65,7 +57,7 @@ describe("cliproxy-instance-logs-service", () => {
       await import("@/lib/services/cliproxy-instance-logs-service");
     const { CliproxyInstanceNotFoundError } = await import("@/lib/services/cliproxy-instance-crud");
 
-    getCliproxyInstanceRowMock.mockResolvedValueOnce(null);
+    resolveTargetMock.mockRejectedValueOnce(new CliproxyInstanceNotFoundError("missing"));
 
     await expect(listCliproxyInstanceLogs("missing")).rejects.toBeInstanceOf(
       CliproxyInstanceNotFoundError

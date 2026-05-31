@@ -352,3 +352,162 @@ describe("use-cliproxy 上游创建 hooks", () => {
     await waitFor(() => expect(mockToastSuccess).toHaveBeenCalled());
   });
 });
+
+describe("use-cliproxy 实例启停 hook", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("useToggleCliproxyInstanceEnabled 以 PATCH 仅更新 enabled 字段", async () => {
+    mockPatch.mockResolvedValueOnce({ data: sampleInstance });
+    const { useToggleCliproxyInstanceEnabled } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useToggleCliproxyInstanceEnabled(), { wrapper });
+    await result.current.mutateAsync({ id: "instance-1", enabled: false });
+
+    expect(mockPatch).toHaveBeenCalledWith("/admin/cliproxy/instances/instance-1", {
+      enabled: false,
+    });
+  });
+
+  it("useToggleCliproxyInstanceEnabled 失败时弹错并保留为非成功状态", async () => {
+    mockPatch.mockRejectedValueOnce(new Error("conflict"));
+    const { useToggleCliproxyInstanceEnabled } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useToggleCliproxyInstanceEnabled(), { wrapper });
+    await expect(result.current.mutateAsync({ id: "instance-1", enabled: true })).rejects.toThrow(
+      "conflict"
+    );
+    await waitFor(() =>
+      expect(mockToastError).toHaveBeenCalledWith("instanceUpdateFailed: conflict")
+    );
+  });
+});
+
+describe("use-cliproxy 认证文件 hooks", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("useUploadCliproxyAuthFile 以 POST 上传 JSON 内容", async () => {
+    mockPost.mockResolvedValueOnce({
+      data: { added: 1, updated: 0, removed: 0, total: 1 },
+    });
+    const { useUploadCliproxyAuthFile } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useUploadCliproxyAuthFile(), { wrapper });
+    await result.current.mutateAsync({
+      instanceId: "instance-1",
+      content: { type: "codex", refresh_token: "xxx" },
+    });
+
+    expect(mockPost).toHaveBeenCalledWith("/admin/cliproxy/instances/instance-1/auth-files", {
+      type: "codex",
+      refresh_token: "xxx",
+    });
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalled());
+  });
+
+  it("useDeleteCliproxyAuthFile 以 DELETE 调用并编码文件名", async () => {
+    mockDelete.mockResolvedValueOnce({ data: { name: "codex a.json" } });
+    const { useDeleteCliproxyAuthFile } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useDeleteCliproxyAuthFile(), { wrapper });
+    await result.current.mutateAsync({
+      instanceId: "instance-1",
+      authFileName: "codex a.json",
+    });
+
+    expect(mockDelete).toHaveBeenCalledWith(
+      "/admin/cliproxy/instances/instance-1/auth-files/codex%20a.json"
+    );
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalled());
+  });
+
+  it("useSubmitCliproxyOAuthCallback 以 POST 提交回调 URL 并展示专用提示", async () => {
+    mockPost.mockResolvedValueOnce({ data: { status: "ok" } });
+    const { useSubmitCliproxyOAuthCallback } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useSubmitCliproxyOAuthCallback(), { wrapper });
+    await result.current.mutateAsync({
+      instanceId: "instance-1",
+      provider: "codex",
+      redirectUrl: "https://callback.example/auth?code=abc",
+    });
+
+    expect(mockPost).toHaveBeenCalledWith("/admin/cliproxy/instances/instance-1/oauth-callback", {
+      provider: "codex",
+      redirect_url: "https://callback.example/auth?code=abc",
+    });
+    await waitFor(() =>
+      expect(mockToastSuccess).toHaveBeenCalledWith("oauthCallbackSubmitSuccess")
+    );
+  });
+});
+
+describe("use-cliproxy 关联上游与日志 hooks", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("useCliproxyLinkedUpstreams 在实例 id 存在时按 GET 拉取", async () => {
+    mockGet.mockResolvedValueOnce({ data: [] });
+    const { useCliproxyLinkedUpstreams } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useCliproxyLinkedUpstreams("instance-1"), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockGet).toHaveBeenCalledWith("/admin/cliproxy/instances/instance-1/linked-upstreams");
+  });
+
+  it("useCliproxyLinkedUpstreams 在实例 id 为空时不发起请求", async () => {
+    const { useCliproxyLinkedUpstreams } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    renderHook(() => useCliproxyLinkedUpstreams(null), { wrapper });
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it("useCliproxyAccountModels 在 authFileName 存在时按 GET 拉取且编码文件名", async () => {
+    mockGet.mockResolvedValueOnce({ data: [] });
+    const { useCliproxyAccountModels } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useCliproxyAccountModels("instance-1", "codex a.json"), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockGet).toHaveBeenCalledWith(
+      "/admin/cliproxy/instances/instance-1/auth-accounts/codex%20a.json/models"
+    );
+  });
+
+  it("useCliproxyAccountModels 在 authFileName 为空时不发起请求", async () => {
+    const { useCliproxyAccountModels } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    renderHook(() => useCliproxyAccountModels("instance-1", null), { wrapper });
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it("useCliproxyInstanceLogs 按可选 since 透传查询参数", async () => {
+    mockGet.mockResolvedValueOnce({ data: [] });
+    const { useCliproxyInstanceLogs } = await import("@/hooks/use-cliproxy");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(
+      () => useCliproxyInstanceLogs("instance-1", "2026-05-30T00:00:00Z"),
+      { wrapper }
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockGet).toHaveBeenCalledWith(
+      "/admin/cliproxy/instances/instance-1/logs?since=2026-05-30T00%3A00%3A00Z"
+    );
+  });
+});
