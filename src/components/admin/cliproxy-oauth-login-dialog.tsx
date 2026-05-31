@@ -21,10 +21,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import {
   CLIPROXY_OAUTH_POLL_TIMEOUT_MS,
   useCliproxyOAuthStatus,
   useInitiateCliproxyOAuthLogin,
+  useSubmitCliproxyOAuthCallback,
 } from "@/hooks/use-cliproxy";
 import { CLIPROXY_PROVIDERS } from "@/types/cliproxy";
 import type { CliproxyProvider } from "@/types/cliproxy";
@@ -62,8 +64,10 @@ export function CliproxyOAuthLoginDialog({
   const [provider, setProvider] = useState<CliproxyProvider>("codex");
   const [session, setSession] = useState<{ url: string; state: string } | null>(null);
   const [timedOut, setTimedOut] = useState(false);
+  const [callbackUrl, setCallbackUrl] = useState("");
 
   const initiateMutation = useInitiateCliproxyOAuthLogin();
+  const callbackMutation = useSubmitCliproxyOAuthCallback();
   const statusQuery = useCliproxyOAuthStatus(
     instanceId,
     session?.state ?? null,
@@ -104,6 +108,24 @@ export function CliproxyOAuthLoginDialog({
   const handleRetry = () => {
     setSession(null);
     setTimedOut(false);
+    setCallbackUrl("");
+  };
+
+  const handleSubmitCallback = async () => {
+    if (!callbackUrl.trim()) {
+      toast.error(t("oauthManualCallbackEmpty"));
+      return;
+    }
+    try {
+      await callbackMutation.mutateAsync({
+        instanceId,
+        provider,
+        redirectUrl: callbackUrl.trim(),
+      });
+      onClose();
+    } catch {
+      // 错误已由 mutation 的 onError 提示
+    }
   };
 
   const handleCopy = async () => {
@@ -170,13 +192,39 @@ export function CliproxyOAuthLoginDialog({
               </div>
 
               {failed ? (
-                <div className="flex items-start gap-2 rounded-cf-sm border border-amber-500/40 bg-amber-500/5 p-3">
-                  <XCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" aria-hidden />
-                  <p className="type-body-small text-muted-foreground">
-                    {timedOut
-                      ? t("oauthLoginTimeout")
-                      : (statusQuery.data?.error ?? t("oauthLoginError"))}
-                  </p>
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2 rounded-cf-sm border border-amber-500/40 bg-amber-500/5 p-3">
+                    <XCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" aria-hidden />
+                    <p className="type-body-small text-muted-foreground">
+                      {timedOut
+                        ? t("oauthLoginTimeout")
+                        : (statusQuery.data?.error ?? t("oauthLoginError"))}
+                    </p>
+                  </div>
+                  <div className="space-y-2 rounded-cf-sm border border-border p-3">
+                    <div>
+                      <p className="type-label-large text-foreground">{t("oauthManualCallback")}</p>
+                      <p className="type-body-small text-muted-foreground">
+                        {t("oauthManualCallbackDescription")}
+                      </p>
+                    </div>
+                    <Input
+                      value={callbackUrl}
+                      onChange={(event) => setCallbackUrl(event.target.value)}
+                      placeholder={t("oauthManualCallbackPlaceholder")}
+                      className="font-mono"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={callbackMutation.isPending}
+                      onClick={handleSubmitCallback}
+                    >
+                      {callbackMutation.isPending
+                        ? tCommon("loading")
+                        : t("oauthManualCallbackSubmit")}
+                    </Button>
+                  </div>
                 </div>
               ) : status === "ok" ? (
                 <div className="flex items-center gap-2 text-emerald-500">

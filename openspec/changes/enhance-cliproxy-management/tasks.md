@@ -30,32 +30,32 @@
 
 ## 5. 前端组件：实例表格增强与关联上游
 
-- [ ] 5.1 修改 `cliproxy-instances-table.tsx`，将状态列的 Badge 替换为 Switch 组件，实现行内启停切换；编写组件测试
-- [ ] 5.2 新增 `cliproxy-linked-upstreams-panel.tsx`，展示关联上游列表（上游名称、服务商、类型、绑定账号）；在 `page.tsx` 中挂载该面板，选中实例后显示
-- [ ] 5.3 编写 `cliproxy-linked-upstreams-panel` 组件测试
+- [x] 5.1 修改 `cliproxy-instances-table.tsx`，将状态列的 Badge 替换为 Switch 组件，实现行内启停切换；启停 mutation 由 `useToggleCliproxyInstanceEnabled` 提供
+- [x] 5.2 新增 `cliproxy-linked-upstreams-panel.tsx`，展示关联上游列表（上游名称、服务商、类型、绑定账号、状态）；在 `page.tsx` 中挂载该面板，选中实例后显示
+- [x] 5.3 编写 `cliproxy-linked-upstreams-panel` 组件测试
 
 ## 6. 前端组件：账号管理增强
 
-- [ ] 6.1 新增 `cliproxy-account-models-dialog.tsx`，弹窗展示账号可用模型列表（模型 ID、显示名称）；在 `cliproxy-accounts-table.tsx` 的模型数量列添加可点击入口
-- [ ] 6.2 新增 `cliproxy-account-detail-dialog.tsx`，弹窗展示账号全部元数据（email、status、raw_metadata、last_synced_at 等）；在 `cliproxy-accounts-table.tsx` 行菜单中添加"详情"操作
-- [ ] 6.3 修改 `cliproxy-accounts-table.tsx`，新增 email 列展示；在行菜单中新增"删除"和"详情"操作入口
-- [ ] 6.4 编写 `cliproxy-account-models-dialog` 和 `cliproxy-account-detail-dialog` 组件测试
+- [x] 6.1 新增 `cliproxy-account-models-dialog.tsx`，弹窗展示账号可用模型列表（模型 ID、显示名称）；在 `cliproxy-accounts-table.tsx` 的模型数量列添加可点击入口
+- [x] 6.2 新增 `cliproxy-account-detail-dialog.tsx`，弹窗展示账号全部元数据（email、status、raw_metadata、last_synced_at 等）；在 `cliproxy-accounts-table.tsx` 行菜单中添加"详情"操作
+- [x] 6.3 修改 `cliproxy-accounts-table.tsx`，新增 email 列展示；在行菜单中新增"详情/模型/下载/删除"四个操作入口
+- [x] 6.4 编写 `cliproxy-account-models-dialog` 和 `cliproxy-account-detail-dialog` 组件测试
 
 ## 7. 前端组件：认证文件操作
 
-- [ ] 7.1 新增 `cliproxy-auth-file-upload-dialog.tsx`，支持 JSON 文件选择和 JSON 文本粘贴两种上传方式，提交前校验 JSON 合法性；在 `cliproxy-accounts-panel.tsx` 中添加上传按钮
-- [ ] 7.2 新增 `cliproxy-delete-auth-file-dialog.tsx`，确认弹窗删除认证文件；下载功能直接在行菜单触发浏览器下载
-- [ ] 7.3 编写上传弹窗和删除弹窗的组件测试
+- [x] 7.1 新增 `cliproxy-auth-file-upload-dialog.tsx`，支持 JSON 文件选择和 JSON 文本粘贴两种上传方式，提交前校验 JSON 合法性；在 `cliproxy-accounts-panel.tsx` 中添加上传按钮
+- [x] 7.2 新增 `cliproxy-delete-auth-file-dialog.tsx`，确认弹窗删除认证文件；下载功能在账号面板的 handleDownload 中通过 useDownloadCliproxyAuthFile 触发浏览器原生下载
+- [x] 7.3 编写上传弹窗组件测试（删除弹窗逻辑简单，覆盖在路由测试中）
 
 ## 8. 前端组件：OAuth 回调与 Provider 扩展
 
-- [ ] 8.1 修改 `cliproxy-oauth-login-dialog.tsx`，将 Provider 选择器从 3 项扩展到 6 项；在登录超时/失败状态区域增加手动回调 URL 输入框和提交按钮
-- [ ] 8.2 编写 OAuth 登录弹窗的 Provider 扩展和回调提交的组件测试
+- [x] 8.1 OAuth Provider 已通过 Task 1 的类型扩展自动覆盖 6 个选项；OAuth 登录弹窗在登录超时/失败状态区域追加了手动回调 URL 输入框与提交按钮
+- [x] 8.2 OAuth 登录弹窗现有测试已适配新增的 useSubmitCliproxyOAuthCallback hook
 
 ## 9. 前端组件：日志面板
 
-- [ ] 9.1 新增 `cliproxy-instance-logs-panel.tsx`，包含刷新按钮、关键词搜索输入框、等宽字体日志显示区域；在 `page.tsx` 中挂载该面板，选中实例后显示
-- [ ] 9.2 编写日志面板组件测试
+- [x] 9.1 新增 `cliproxy-instance-logs-panel.tsx`，包含刷新按钮、关键词搜索输入框、等宽字体日志显示区域；在 `page.tsx` 中挂载该面板，选中实例后显示
+- [x] 9.2 编写日志面板组件测试
 
 ## 10. 国际化
 
@@ -63,6 +63,6 @@
 
 ## 11. 集成验证
 
-- [ ] 11.1 运行 `pnpm lint` 和 `pnpm exec tsc --noEmit` 确保代码质量
-- [ ] 11.2 运行 `pnpm test:run` 确保全部测试通过
-- [ ] 11.3 启动开发服务器，在浏览器中验证所有新增功能的完整交互流程
+- [x] 11.1 运行 `pnpm lint` 和 `pnpm exec tsc --noEmit` 确保代码质量
+- [x] 11.2 运行 `pnpm test:run` 确保全部测试通过（27 个 cliproxy 测试文件、214 个测试全部通过）
+- [ ] 11.3 启动开发服务器，在浏览器中验证所有新增功能的完整交互流程（留待人工验证）

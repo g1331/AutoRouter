@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 
 const initiateMutateAsync = vi.fn();
+const submitCallbackMutateAsync = vi.fn();
 
 vi.mock("@/hooks/use-cliproxy", () => ({
   CLIPROXY_OAUTH_POLL_TIMEOUT_MS: 300000,
@@ -10,6 +11,10 @@ vi.mock("@/hooks/use-cliproxy", () => ({
     isPending: false,
   }),
   useCliproxyOAuthStatus: () => ({ data: undefined }),
+  useSubmitCliproxyOAuthCallback: () => ({
+    mutateAsync: submitCallbackMutateAsync,
+    isPending: false,
+  }),
 }));
 
 vi.mock("@tanstack/react-query", () => ({

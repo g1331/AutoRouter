@@ -13,6 +13,8 @@ import { DeleteCliproxyInstanceDialog } from "@/components/admin/delete-cliproxy
 import { CliproxyConnectionTestDialog } from "@/components/admin/cliproxy-connection-test-dialog";
 import { CliproxyAccountsPanel } from "@/components/admin/cliproxy-accounts-panel";
 import { CliproxyPoolUpstreamDialog } from "@/components/admin/cliproxy-pool-upstream-dialog";
+import { CliproxyLinkedUpstreamsPanel } from "@/components/admin/cliproxy-linked-upstreams-panel";
+import { CliproxyInstanceLogsPanel } from "@/components/admin/cliproxy-instance-logs-panel";
 import { useCliproxyInstances } from "@/hooks/use-cliproxy";
 import type { CliproxyInstance } from "@/types/cliproxy";
 
@@ -77,7 +79,11 @@ export default function CliproxyPage() {
         </Card>
 
         {selectedInstance ? (
-          <CliproxyAccountsPanel instance={selectedInstance} />
+          <>
+            <CliproxyAccountsPanel instance={selectedInstance} />
+            <CliproxyLinkedUpstreamsPanel instance={selectedInstance} />
+            <CliproxyInstanceLogsPanel instance={selectedInstance} />
+          </>
         ) : instances && instances.length > 0 ? (
           <Card variant="outlined">
             <CardContent className="p-6">

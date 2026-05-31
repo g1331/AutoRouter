@@ -1,44 +1,62 @@
 "use client";
 
 import { useState } from "react";
-import { LogIn, RefreshCw } from "lucide-react";
+import { LogIn, RefreshCw, Upload } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   useCliproxyAuthAccounts,
+  useDownloadCliproxyAuthFile,
   useSetCliproxyAuthAccountStatus,
   useSyncCliproxyAuthAccounts,
 } from "@/hooks/use-cliproxy";
 import type { CliproxyAuthAccount, CliproxyInstance } from "@/types/cliproxy";
 import { CliproxyAccountsTable } from "./cliproxy-accounts-table";
 import { CliproxyAccountFieldsDialog } from "./cliproxy-account-fields-dialog";
+import { CliproxyAccountModelsDialog } from "./cliproxy-account-models-dialog";
+import { CliproxyAccountDetailDialog } from "./cliproxy-account-detail-dialog";
 import { CliproxyOAuthLoginDialog } from "./cliproxy-oauth-login-dialog";
 import { CliproxyAccountUpstreamDialog } from "./cliproxy-account-upstream-dialog";
+import { CliproxyAuthFileUploadDialog } from "./cliproxy-auth-file-upload-dialog";
+import { CliproxyDeleteAuthFileDialog } from "./cliproxy-delete-auth-file-dialog";
 
 interface CliproxyAccountsPanelProps {
   instance: CliproxyInstance;
 }
 
 /**
- * 选中实例后展示其 OAuth 账号列表的内联面板，提供同步、启停与字段编辑。
+ * 选中实例后展示其 OAuth 账号列表的内联面板，提供 OAuth 登录、上传文件、同步、
+ * 账号启停、字段编辑、详情查看、模型列表查看、下载、删除、上游映射等完整操作。
  */
 export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) {
   const t = useTranslations("cliproxy");
   const { data: accounts, isLoading, isError } = useCliproxyAuthAccounts(instance.id);
   const syncMutation = useSyncCliproxyAuthAccounts();
   const statusMutation = useSetCliproxyAuthAccountStatus();
+  const downloadMutation = useDownloadCliproxyAuthFile();
 
   const [editAccount, setEditAccount] = useState<CliproxyAuthAccount | null>(null);
+  const [detailAccount, setDetailAccount] = useState<CliproxyAuthAccount | null>(null);
+  const [modelsAccount, setModelsAccount] = useState<CliproxyAuthAccount | null>(null);
+  const [deleteAccount, setDeleteAccount] = useState<CliproxyAuthAccount | null>(null);
   const [mapAccount, setMapAccount] = useState<CliproxyAuthAccount | null>(null);
   const [oauthOpen, setOauthOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   const handleToggleStatus = (account: CliproxyAuthAccount) => {
     statusMutation.mutate({
       instanceId: instance.id,
       accountName: account.auth_file_name,
       disabled: !account.disabled,
+    });
+  };
+
+  const handleDownload = (account: CliproxyAuthAccount) => {
+    downloadMutation.mutate({
+      instanceId: instance.id,
+      authFileName: account.auth_file_name,
     });
   };
 
@@ -54,6 +72,10 @@ export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) 
             <Button variant="outline" onClick={() => setOauthOpen(true)}>
               <LogIn className="mr-2 h-4 w-4" />
               {t("oauthLogin")}
+            </Button>
+            <Button variant="outline" onClick={() => setUploadOpen(true)}>
+              <Upload className="mr-2 h-4 w-4" />
+              {t("uploadAuthFile")}
             </Button>
             <Button
               variant="outline"
@@ -85,6 +107,10 @@ export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) 
             onToggleStatus={handleToggleStatus}
             onEditFields={setEditAccount}
             onMapUpstream={setMapAccount}
+            onViewDetail={setDetailAccount}
+            onViewModels={setModelsAccount}
+            onDownload={handleDownload}
+            onDelete={setDeleteAccount}
           />
         )}
       </CardContent>
@@ -97,11 +123,33 @@ export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) 
           onClose={() => setEditAccount(null)}
         />
       )}
+      {detailAccount && (
+        <CliproxyAccountDetailDialog
+          account={detailAccount}
+          open
+          onClose={() => setDetailAccount(null)}
+        />
+      )}
+      {modelsAccount && (
+        <CliproxyAccountModelsDialog
+          instanceId={instance.id}
+          authFileName={modelsAccount.auth_file_name}
+          open
+          onClose={() => setModelsAccount(null)}
+        />
+      )}
       {oauthOpen && (
         <CliproxyOAuthLoginDialog
           instanceId={instance.id}
           open
           onClose={() => setOauthOpen(false)}
+        />
+      )}
+      {uploadOpen && (
+        <CliproxyAuthFileUploadDialog
+          instanceId={instance.id}
+          open
+          onClose={() => setUploadOpen(false)}
         />
       )}
       {mapAccount && (
@@ -112,6 +160,11 @@ export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) 
           onClose={() => setMapAccount(null)}
         />
       )}
+      <CliproxyDeleteAuthFileDialog
+        instanceId={instance.id}
+        account={deleteAccount}
+        onClose={() => setDeleteAccount(null)}
+      />
     </Card>
   );
 }
