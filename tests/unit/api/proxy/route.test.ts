@@ -6318,6 +6318,80 @@ describe("proxy route upstream selection", () => {
     expect(forwardRequest).not.toHaveBeenCalled();
   });
 
+  it("should return model list for keys bound only to non-chat-compatible upstreams", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+    const { logRequest } = await import("@/lib/services/request-logger");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      {
+        id: "key-1",
+        keyHash: "hash-1",
+        keyPrefix: "sk-test",
+        name: "Codex-only Model List Key",
+        expiresAt: null,
+        isActive: true,
+        allowedModels: ["gpt-5.5", "gpt-5.4-high"],
+      },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-codex-only" },
+    ]);
+    // The only authorized upstream exposes Codex/Responses capabilities, NOT
+    // openai_chat_compatible. Listing models must still succeed locally instead
+    // of returning NO_AUTHORIZED_UPSTREAMS.
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-codex-only",
+        name: "codex-only",
+        providerType: "openai",
+        routeCapabilities: ["openai_responses", "codex_cli_responses"],
+        baseUrl: "https://codex.example.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        modelRules: null,
+        allowedModels: null,
+        modelRedirects: null,
+      },
+    ]);
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/models", {
+      method: "GET",
+      headers: {
+        authorization: "Bearer sk-test",
+      },
+    });
+
+    const response = await GET(request, {
+      params: Promise.resolve({ path: ["models"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.data.map((item: { id: string }) => item.id)).toEqual(["gpt-5.5", "gpt-5.4-high"]);
+    expect(selectFromProviderType).not.toHaveBeenCalled();
+    expect(forwardRequest).not.toHaveBeenCalled();
+    expect(logRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKeyId: "key-1",
+        upstreamId: null,
+        method: "GET",
+        path: "models",
+        model: "(model-list)",
+        statusCode: 200,
+        routingDecision: expect.objectContaining({
+          matched_route_capability: "openai_chat_compatible",
+          did_send_upstream: false,
+          actual_upstream_id: null,
+        }),
+      })
+    );
+  });
+
   it("should reject when API key not authorized for selected upstream", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");

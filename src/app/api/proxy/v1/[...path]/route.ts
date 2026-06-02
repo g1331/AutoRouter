@@ -2660,6 +2660,47 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       : activeUpstreams.map((upstream) => upstream.id);
   const allowedUpstreamIdSet = new Set(allowedUpstreamIds);
 
+  // Serve the OpenAI-compatible model list locally for keys that declare allowed
+  // models. Model listing is a discovery endpoint and must not be gated on a
+  // specific route capability (openai_chat_compatible): a key whose authorized
+  // upstreams only expose openai_responses / codex_cli_responses can still
+  // enumerate its allowed models, mirroring what those upstreams actually serve.
+  const apiKeyAllowedModels = normalizeApiKeyAllowedModels(validApiKey.allowedModels);
+  if (isOpenAIModelListRequest(request.method, path) && apiKeyAllowedModels) {
+    const authorizedActiveUpstreams = activeUpstreams.filter((upstream) =>
+      allowedUpstreamIdSet.has(upstream.id)
+    );
+    if (authorizedActiveUpstreams.length > 0) {
+      const visibleModels = getApiKeyVisibleModelList(
+        apiKeyAllowedModels,
+        authorizedActiveUpstreams
+      );
+
+      try {
+        await logLocalApiKeyModelListRequest({
+          apiKeyId: validApiKey.id,
+          apiKeyName: apiKeySnapshot.apiKeyName,
+          apiKeyPrefix: apiKeySnapshot.apiKeyPrefix,
+          request,
+          path,
+          requestId,
+          startTime,
+          matchedRouteCapability,
+          routeMatchSource: matchedRouteMatchSource,
+        });
+      } catch (error) {
+        log.error({ err: error, requestId }, "failed to log local API key model list request");
+      }
+
+      return new Response(Buffer.from(createApiKeyModelListResponseBody(visibleModels)), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      });
+    }
+  }
+
   const primaryCandidatePool = resolveRouteCapabilityCandidatePool(
     activeUpstreams,
     allowedUpstreamIdSet,
@@ -2819,34 +2860,6 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     }
 
     return rejectedResponse;
-  }
-
-  const apiKeyAllowedModels = normalizeApiKeyAllowedModels(validApiKey.allowedModels);
-  if (isOpenAIModelListRequest(request.method, path) && apiKeyAllowedModels) {
-    const visibleModels = getApiKeyVisibleModelList(apiKeyAllowedModels, finalCapabilityCandidates);
-
-    try {
-      await logLocalApiKeyModelListRequest({
-        apiKeyId: validApiKey.id,
-        apiKeyName: apiKeySnapshot.apiKeyName,
-        apiKeyPrefix: apiKeySnapshot.apiKeyPrefix,
-        request,
-        path,
-        requestId,
-        startTime,
-        matchedRouteCapability,
-        routeMatchSource: matchedRouteMatchSource,
-      });
-    } catch (error) {
-      log.error({ err: error, requestId }, "failed to log local API key model list request");
-    }
-
-    return new Response(Buffer.from(createApiKeyModelListResponseBody(visibleModels)), {
-      status: 200,
-      headers: {
-        "content-type": "application/json",
-      },
-    });
   }
 
   let selectedCandidate = finalCapabilityCandidates[0];
