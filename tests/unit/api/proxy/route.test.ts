@@ -6392,6 +6392,161 @@ describe("proxy route upstream selection", () => {
     );
   });
 
+  it("should still 403 model list when key has allowed models but no authorized active upstream", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType } = await import("@/lib/services/load-balancer");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      {
+        id: "key-1",
+        keyHash: "hash-1",
+        keyPrefix: "sk-test",
+        name: "Orphaned Model List Key",
+        expiresAt: null,
+        isActive: true,
+        allowedModels: ["gpt-5.5"],
+      },
+    ]);
+    // The key is bound to an upstream that is absent from the active set
+    // (inactive or deleted), so it ends up with zero authorized active upstreams
+    // and the local model-list short-circuit must not fire.
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-bound-inactive" },
+    ]);
+    // An openai_chat_compatible upstream is active but NOT authorized for this key,
+    // so the request still falls through to NO_AUTHORIZED_UPSTREAMS.
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-openai-active",
+        name: "openai-active",
+        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        modelRules: null,
+        allowedModels: null,
+        modelRedirects: null,
+      },
+    ]);
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/models", {
+      method: "GET",
+      headers: {
+        authorization: "Bearer sk-test",
+      },
+    });
+
+    const response = await GET(request, {
+      params: Promise.resolve({ path: ["models"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(data).toEqual({
+      error: expect.objectContaining({
+        code: "NO_AUTHORIZED_UPSTREAMS",
+        reason: "NO_AUTHORIZED_UPSTREAMS",
+        did_send_upstream: false,
+      }),
+    });
+    expect(selectFromProviderType).not.toHaveBeenCalled();
+    expect(forwardRequest).not.toHaveBeenCalled();
+  });
+
+  it("should list models across providers for a key authorized on multiple upstreams", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      {
+        id: "key-1",
+        keyHash: "hash-1",
+        keyPrefix: "sk-test",
+        name: "Multi-provider Model List Key",
+        expiresAt: null,
+        isActive: true,
+        allowedModels: ["gpt-5.5", "claude-3.7", "unserved-model"],
+      },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-openai" },
+      { upstreamId: "up-anthropic" },
+    ]);
+    // The discovery list now reflects ALL authorized active upstreams regardless
+    // of route capability: claude-3.7 is only served by the Anthropic upstream,
+    // yet it appears on the OpenAI-style /v1/models response, while a model no
+    // upstream serves is filtered out.
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
+      {
+        id: "up-openai",
+        name: "openai-main",
+        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        modelRules: [
+          {
+            type: "exact",
+            value: "gpt-5.5",
+            targetModel: null,
+            source: "manual",
+            displayLabel: null,
+          },
+        ],
+        allowedModels: null,
+        modelRedirects: null,
+      },
+      {
+        id: "up-anthropic",
+        name: "anthropic-main",
+        providerType: "anthropic",
+        routeCapabilities: ["anthropic_messages"],
+        baseUrl: "https://api.anthropic.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        modelRules: [
+          {
+            type: "exact",
+            value: "claude-3.7",
+            targetModel: null,
+            source: "manual",
+            displayLabel: null,
+          },
+        ],
+        allowedModels: null,
+        modelRedirects: null,
+      },
+    ]);
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/models", {
+      method: "GET",
+      headers: {
+        authorization: "Bearer sk-test",
+      },
+    });
+
+    const response = await GET(request, {
+      params: Promise.resolve({ path: ["models"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.data.map((item: { id: string }) => item.id)).toEqual(["gpt-5.5", "claude-3.7"]);
+    expect(forwardRequest).not.toHaveBeenCalled();
+  });
+
   it("should reject when API key not authorized for selected upstream", async () => {
     const { db } = await import("@/lib/db");
     const { forwardRequest } = await import("@/lib/services/proxy-client");
