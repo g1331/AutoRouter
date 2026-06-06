@@ -72,6 +72,20 @@ export function isPasswordStrong(password: string): boolean {
 }
 
 /**
+ * Normalize a username for storage and uniqueness comparison.
+ *
+ * Usernames are case-insensitive login identifiers: surrounding whitespace is
+ * trimmed and the value is lowercased so `ZhangSan` and `zhangsan` resolve to
+ * the same account, avoiding duplicate accounts and login ambiguity.
+ *
+ * @param username - The raw username
+ * @returns The normalized (trimmed, lowercased) username
+ */
+export function normalizeUsername(username: string): string {
+  return username.trim().toLowerCase();
+}
+
+/**
  * Extract API key from Authorization header.
  *
  * Supports both "Bearer <key>" and raw key formats.

@@ -7,6 +7,7 @@ import {
   hashPassword,
   verifyPassword,
   isPasswordStrong,
+  normalizeUsername,
   MIN_PASSWORD_LENGTH,
 } from "@/lib/utils/auth";
 
@@ -219,6 +220,16 @@ describe("auth utilities", () => {
 
     it("rejects an empty password", () => {
       expect(isPasswordStrong("")).toBe(false);
+    });
+  });
+
+  describe("normalizeUsername", () => {
+    it("trims surrounding whitespace and lowercases", () => {
+      expect(normalizeUsername("  ZhangSan  ")).toBe("zhangsan");
+    });
+
+    it("treats case variants as the same identifier", () => {
+      expect(normalizeUsername("ALICE")).toBe(normalizeUsername("alice"));
     });
   });
 });

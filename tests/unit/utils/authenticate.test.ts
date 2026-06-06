@@ -23,6 +23,14 @@ vi.mock("@/lib/db", () => ({
   db: {
     select: (...args: unknown[]) => mockSelect(...args),
   },
+  users: {
+    id: "id",
+    role: "role",
+    username: "username",
+    displayName: "display_name",
+    passwordHash: "password_hash",
+    isActive: "is_active",
+  },
 }));
 
 vi.mock("@/lib/utils/config", () => ({
