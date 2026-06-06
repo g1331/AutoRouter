@@ -84,7 +84,17 @@
     "invalidToken": "无效的 Admin Token",
     "tokenInfo": "Admin Token 由系统管理员在服务端配置时生成。",
     "logoutSuccess": "已登出",
-    "sessionExpired": "会话已过期，请重新登录"
+    "sessionExpired": "会话已过期，请重新登录",
+    "accountTab": "账号登录",
+    "tokenTab": "管理员令牌",
+    "accountAuthRequired": "使用管理员为您创建的账号登录",
+    "username": "用户名",
+    "usernamePlaceholder": "输入您的用户名",
+    "password": "密码",
+    "passwordPlaceholder": "输入您的密码",
+    "invalidCredentials": "用户名或密码错误",
+    "tooManyAttempts": "登录尝试次数过多，请稍后再试。",
+    "accountInfo": "账号由系统管理员创建。如需重置密码请联系管理员。"
   },
   "dashboard": {
     "title": "系统监控",

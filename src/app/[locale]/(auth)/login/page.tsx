@@ -4,10 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
-import { ArrowRight, Cpu, KeyRound, Shield, Terminal } from "lucide-react";
+import { ArrowRight, Cpu, KeyRound, Shield, Terminal, User } from "lucide-react";
 
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { createApiClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -105,11 +106,16 @@ function SystemStatus() {
   );
 }
 
+type LoginMode = "account" | "token";
+
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { setToken, token } = useAuth();
+  const [mode, setMode] = useState<LoginMode>("account");
   const [isLoading, setIsLoading] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [inputValue, setInputValue] = useState("");
   const [error, setError] = useState("");
   const [bootComplete, setBootComplete] = useState(false);
@@ -130,9 +136,54 @@ export default function LoginPage() {
     }
   }, [token, router, searchParams]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const switchMode = (next: LoginMode) => {
+    setMode(next);
+    setError("");
+  };
 
+  const completeLogin = (newToken: string) => {
+    setToken(newToken);
+    toast.success(t("loginSuccess"));
+    const redirect = searchParams.get("redirect") || "/dashboard";
+    router.push(redirect);
+  };
+
+  // 账号模式：调用 /api/auth/login 端点，凭用户名与密码换取 JWT。
+  const handleAccountLogin = async () => {
+    if (!username.trim() || !password) {
+      setError(t("invalidCredentials"));
+      return;
+    }
+
+    setError("");
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: username.trim(), password }),
+      });
+
+      if (response.ok) {
+        const data = (await response.json()) as { token: string };
+        completeLogin(data.token);
+        return;
+      }
+
+      const message = response.status === 429 ? t("tooManyAttempts") : t("invalidCredentials");
+      setError(message);
+      toast.error(message);
+    } catch {
+      setError(t("loginFailed"));
+      toast.error(t("loginFailed"));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 令牌模式：沿用对受保护接口的探针校验，通过即认定 ADMIN_TOKEN 有效。
+  const handleTokenLogin = async () => {
     if (!inputValue.trim()) {
       setError(t("tokenPlaceholder"));
       return;
@@ -144,10 +195,7 @@ export default function LoginPage() {
     try {
       const tempClient = createApiClient({ getToken: () => inputValue });
       await tempClient.get("/admin/keys?page=1&page_size=1");
-      setToken(inputValue);
-      toast.success(t("loginSuccess"));
-      const redirect = searchParams.get("redirect") || "/dashboard";
-      router.push(redirect);
+      completeLogin(inputValue);
     } catch {
       if (typeof window !== "undefined") {
         sessionStorage.removeItem("admin_token");
@@ -156,6 +204,15 @@ export default function LoginPage() {
       toast.error(t("invalidToken"));
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (mode === "account") {
+      void handleAccountLogin();
+    } else {
+      void handleTokenLogin();
     }
   };
 
@@ -211,45 +268,129 @@ export default function LoginPage() {
             >
               <SystemStatus />
 
+              <div role="tablist" aria-label={t("login")} className="grid grid-cols-2 gap-2">
+                {[
+                  { value: "account" as const, label: t("accountTab") },
+                  { value: "token" as const, label: t("tokenTab") },
+                ].map((tab) => {
+                  const selected = mode === tab.value;
+                  return (
+                    <button
+                      key={tab.value}
+                      type="button"
+                      role="tab"
+                      aria-selected={selected}
+                      onClick={() => switchMode(tab.value)}
+                      disabled={!showForm}
+                      className={cn(
+                        "rounded-[8px] border px-3 py-2 text-center font-mono type-label-small transition-colors",
+                        selected
+                          ? "border-amber-500/55 bg-surface-300/80 text-foreground"
+                          : "border-divider bg-surface-300/40 text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+
               <div className="rounded-[10px] border border-divider bg-surface-300/55 px-3.5 py-3">
                 <div className="mb-1.5 flex items-center gap-2 text-muted-foreground">
                   <Terminal className="h-4 w-4 text-amber-500" aria-hidden="true" />
                   <span className="type-label-small">{t("systemMessage")}</span>
                 </div>
                 <p className="type-body-small pl-6 text-foreground">
-                  {">"} {t("authRequired")}
+                  {">"} {mode === "account" ? t("accountAuthRequired") : t("authRequired")}
                 </p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <label htmlFor="admin-token" className="type-label-small text-muted-foreground">
-                    {t("adminToken")}
-                  </label>
-                  <div className="relative">
-                    <KeyRound
-                      className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    <PasswordInput
-                      id="admin-token"
-                      allowPasswordManager
-                      autoComplete="current-password"
-                      placeholder={t("tokenPlaceholder")}
-                      value={inputValue}
-                      onChange={(e) => setInputValue(e.target.value)}
-                      disabled={isLoading || !showForm}
-                      className="pl-10"
-                      aria-invalid={!!error}
-                      aria-describedby={error ? "token-error" : undefined}
-                    />
+                {mode === "account" ? (
+                  <>
+                    <div className="space-y-2">
+                      <label
+                        htmlFor="login-username"
+                        className="type-label-small text-muted-foreground"
+                      >
+                        {t("username")}
+                      </label>
+                      <div className="relative">
+                        <User
+                          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                        <Input
+                          id="login-username"
+                          autoComplete="username"
+                          placeholder={t("usernamePlaceholder")}
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                          disabled={isLoading || !showForm}
+                          className="pl-10"
+                          aria-invalid={!!error}
+                          aria-describedby={error ? "login-error" : undefined}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label
+                        htmlFor="login-password"
+                        className="type-label-small text-muted-foreground"
+                      >
+                        {t("password")}
+                      </label>
+                      <div className="relative">
+                        <KeyRound
+                          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                        <PasswordInput
+                          id="login-password"
+                          allowPasswordManager
+                          autoComplete="current-password"
+                          placeholder={t("passwordPlaceholder")}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          disabled={isLoading || !showForm}
+                          className="pl-10"
+                          aria-invalid={!!error}
+                          aria-describedby={error ? "login-error" : undefined}
+                        />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    <label htmlFor="admin-token" className="type-label-small text-muted-foreground">
+                      {t("adminToken")}
+                    </label>
+                    <div className="relative">
+                      <KeyRound
+                        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      <PasswordInput
+                        id="admin-token"
+                        allowPasswordManager
+                        autoComplete="current-password"
+                        placeholder={t("tokenPlaceholder")}
+                        value={inputValue}
+                        onChange={(e) => setInputValue(e.target.value)}
+                        disabled={isLoading || !showForm}
+                        className="pl-10"
+                        aria-invalid={!!error}
+                        aria-describedby={error ? "login-error" : undefined}
+                      />
+                    </div>
                   </div>
-                  {error && (
-                    <p id="token-error" className="type-body-small text-status-error" role="alert">
-                      {error}
-                    </p>
-                  )}
-                </div>
+                )}
+
+                {error && (
+                  <p id="login-error" className="type-body-small text-status-error" role="alert">
+                    {error}
+                  </p>
+                )}
 
                 <Button
                   type="submit"
@@ -276,7 +417,7 @@ export default function LoginPage() {
               </form>
 
               <p className="type-caption border-t border-dashed border-divider pt-3 text-muted-foreground">
-                {t("tokenInfo")}
+                {mode === "account" ? t("accountInfo") : t("tokenInfo")}
               </p>
             </div>
           </div>

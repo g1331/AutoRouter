@@ -57,11 +57,11 @@
 
 ## 7. 前端认证状态与登录页
 
-- [ ] 7.1 升级 `auth-provider.tsx`：principal 由 token 快照派生并缓存（保持 useSyncExternalStore 快照稳定），解码仅取 role 且对畸形 token 容错退化为未认证，复用现有 `handleUnauthorized`/`isHydrated`；username/displayName 经 `/api/auth/me` 或登录响应获取
-- [ ] 7.2 调整 `api.ts` 客户端使 Authorization 头适配 JWT 与 ADMIN_TOKEN 两种 token；实现登出清除凭据
-- [ ] 7.3 改造 `(auth)/login/page.tsx` 为双模式（账号登录默认、管理员令牌登录标签），账号模式调用登录端点，令牌模式沿用探针逻辑
-- [ ] 7.4 为登录页两种模式、AuthProvider 状态转换、畸形 token 容错、登出编写组件测试
-- [ ] 7.5 通过质量门禁后提交：`feat(auth): 前端登录双模式与认证状态升级`
+- [x] 7.1 升级 `auth-provider.tsx`：principal 由 token 快照派生并缓存（保持 useSyncExternalStore 快照稳定），解码仅取 role 且对畸形 token 容错退化为未认证，复用现有 `handleUnauthorized`/`isHydrated`；username/displayName 经 `/api/auth/me` 或登录响应获取
+- [x] 7.2 调整 `api.ts` 客户端使 Authorization 头适配 JWT 与 ADMIN_TOKEN 两种 token；实现登出清除凭据
+- [x] 7.3 改造 `(auth)/login/page.tsx` 为双模式（账号登录默认、管理员令牌登录标签），账号模式调用登录端点，令牌模式沿用探针逻辑
+- [x] 7.4 为登录页两种模式、AuthProvider 状态转换、畸形 token 容错、登出编写组件测试
+- [x] 7.5 通过质量门禁后提交：`feat(auth): 前端登录双模式与认证状态升级`
 
 ## 8. 用户管理页面与导航入口
 
