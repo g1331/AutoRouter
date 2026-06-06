@@ -23,11 +23,11 @@
 
 ## 3. 统一角色感知鉴权
 
-- [ ] 3.1 定义 `AuthPrincipal` 判别联合类型（admin_token / user / null）
-- [ ] 3.2 实现 `authenticate(request)`：ADMIN_TOKEN 用 `timingSafeEqual` 常量时间比较且不查库；JWT 验签后查库校验 `is_active` 并以查库最新 `role` 为准
-- [ ] 3.3 实现 `requireAdmin(request)` 与 `requireUser(request)` 门禁封装，分别处理 401 与 403，`requireUser` 返回携带 userId 的主体
-- [ ] 3.4 为三类身份、未认证、停用用户、过期/畸形 token、admin 降级后旧 token 被拒、admin_token 不触发查库编写单元测试
-- [ ] 3.5 通过质量门禁后提交：`feat(auth): 新增统一角色感知鉴权工具`
+- [x] 3.1 定义 `AuthPrincipal` 判别联合类型（admin_token / user / null）
+- [x] 3.2 实现 `authenticate(request)`：ADMIN_TOKEN 用 `timingSafeEqual` 常量时间比较且不查库；JWT 验签后查库校验 `is_active` 并以查库最新 `role` 为准
+- [x] 3.3 实现 `requireAdmin(request)` 与 `requireUser(request)` 门禁封装，分别处理 401 与 403，`requireUser` 返回携带 userId 的主体
+- [x] 3.4 为三类身份、未认证、停用用户、过期/畸形 token、admin 降级后旧 token 被拒、admin_token 不触发查库编写单元测试
+- [x] 3.5 通过质量门禁后提交：`feat(auth): 新增统一角色感知鉴权工具`
 
 ## 4. 登录与会话端点
 
