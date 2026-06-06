@@ -22,6 +22,7 @@ import {
   ShieldAlert,
   Sun,
   TerminalSquare,
+  Users,
   Wrench,
   ArrowLeftRight,
   Wallet,
@@ -66,7 +67,8 @@ type SystemNavigationItem = {
     | "backgroundSync"
     | "trafficRecording"
     | "globalFailureRules"
-    | "cliproxy";
+    | "cliproxy"
+    | "users";
 };
 
 const navigation: NavigationItem[] = [
@@ -77,6 +79,7 @@ const navigation: NavigationItem[] = [
 ];
 
 const systemNavigation: SystemNavigationItem[] = [
+  { href: "/system/users", icon: Users, labelKey: "users" },
   { href: "/system/billing", icon: Wallet, labelKey: "billing" },
   { href: "/system/background-sync", icon: RefreshCw, labelKey: "backgroundSync" },
   { href: "/system/traffic-recording", icon: DatabaseZap, labelKey: "trafficRecording" },
@@ -254,7 +257,12 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname();
   const tNav = useTranslations("nav");
   const tCommon = useTranslations("common");
-  const { logout } = useAuth();
+  const { logout, principal } = useAuth();
+  const isAdmin = principal?.role === "admin";
+  // 用户管理仅对管理员可见；其余系统导航按角色分流留待门户阶段统一处理
+  const visibleSystemNavigation = systemNavigation.filter(
+    (item) => item.labelKey !== "users" || isAdmin
+  );
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const confirmLogout = () => {
     setShowLogoutDialog(false);
@@ -351,7 +359,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
                 </span>
               </div>
             )}
-            {systemNavigation.map((item) => {
+            {visibleSystemNavigation.map((item) => {
               const Icon = item.icon;
               const active = isPathActive(pathname, item.href);
 
