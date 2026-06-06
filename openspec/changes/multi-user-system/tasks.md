@@ -2,15 +2,15 @@
 
 ## 1. 数据模型与迁移
 
-- [ ] 1.1 在 `schema-pg.ts` 新增 `users` 表（id、username 唯一且小写归一、password_hash、display_name、role 默认 member、is_active 默认 true、created_at、updated_at）
-- [ ] 1.2 在 `schema-sqlite.ts` 同步定义 `users` 表，时间戳沿用 `timestamp_ms` + `.defaultNow()`、主键沿用 `text().$defaultFn(() => randomUUID())`，保持与全表风格一致
-- [ ] 1.3 在两套 schema 新增 `user_upstreams` 关联表（user_id、upstream_id），沿用现有 `api_key_upstreams` 关联表写法
-- [ ] 1.4 给两套 schema 的 `api_keys.user_id` 添加引用 `users(id)` 的外键（ON DELETE SET NULL）与索引 `idx_api_keys_user_id`
-- [ ] 1.5 给 `request_logs` 与 `request_billing_snapshots` 各新增冗余 `user_id` 列与索引
-- [ ] 1.6 导出新表与新列的类型定义，并在 `schema.ts` 方言派发中正确 re-export
-- [ ] 1.7 运行 `pnpm db:generate` 与 `pnpm db:generate:sqlite` 生成两套迁移文件
-- [ ] 1.8 运行 `pnpm db:check:consistency` 确认 schema 与迁移一致，并补充验证新表、外键、冗余列存在的测试（不依赖 SQLite 外键运行时强制）
-- [ ] 1.9 通过质量门禁（lint、format、tsc）后提交：`feat(users): 新增 users/user_upstreams 表与归属外键、事实表冗余列`
+- [x] 1.1 在 `schema-pg.ts` 新增 `users` 表（id、username 唯一且小写归一、password_hash、display_name、role 默认 member、is_active 默认 true、created_at、updated_at）
+- [x] 1.2 在 `schema-sqlite.ts` 同步定义 `users` 表，时间戳沿用 `timestamp_ms` + `.defaultNow()`、主键沿用 `text().$defaultFn(() => randomUUID())`，保持与全表风格一致
+- [x] 1.3 在两套 schema 新增 `user_upstreams` 关联表（user_id、upstream_id），沿用现有 `api_key_upstreams` 关联表写法
+- [x] 1.4 给两套 schema 的 `api_keys.user_id` 添加引用 `users(id)` 的外键（ON DELETE SET NULL）与索引 `idx_api_keys_user_id`
+- [x] 1.5 给 `request_logs` 与 `request_billing_snapshots` 各新增冗余 `user_id` 列与索引
+- [x] 1.6 导出新表与新列的类型定义，并在 `schema.ts` 方言派发中正确 re-export
+- [x] 1.7 运行 `pnpm db:generate` 与 `pnpm db:generate:sqlite` 生成两套迁移文件
+- [x] 1.8 运行 `pnpm db:check:consistency` 确认 schema 与迁移一致，并补充验证新表、外键、冗余列存在的测试（不依赖 SQLite 外键运行时强制）
+- [x] 1.9 通过质量门禁（lint、format、tsc）后提交：`feat(users): 新增 users/user_upstreams 表与归属外键、事实表冗余列`
 
 ## 2. 密码、JWT 与配置基础
 

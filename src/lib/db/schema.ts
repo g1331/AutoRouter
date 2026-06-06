@@ -4,6 +4,8 @@ import * as sqliteSchema from "./schema-sqlite";
 
 const schema = (config.dbType === "sqlite" ? sqliteSchema : pgSchema) as typeof pgSchema;
 
+export const users = schema.users;
+export const userUpstreams = schema.userUpstreams;
 export const apiKeys = schema.apiKeys;
 export const upstreams = schema.upstreams;
 export const upstreamHealth = schema.upstreamHealth;
@@ -25,6 +27,8 @@ export const requestBillingSnapshots = schema.requestBillingSnapshots;
 export const cliproxyInstances = schema.cliproxyInstances;
 export const cliproxyAuthAccounts = schema.cliproxyAuthAccounts;
 
+export const usersRelations = schema.usersRelations;
+export const userUpstreamsRelations = schema.userUpstreamsRelations;
 export const apiKeysRelations = schema.apiKeysRelations;
 export const upstreamsRelations = schema.upstreamsRelations;
 export const upstreamHealthRelations = schema.upstreamHealthRelations;
@@ -38,6 +42,10 @@ export const requestBillingSnapshotsRelations = schema.requestBillingSnapshotsRe
 export const cliproxyInstancesRelations = schema.cliproxyInstancesRelations;
 export const cliproxyAuthAccountsRelations = schema.cliproxyAuthAccountsRelations;
 
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+export type UserUpstream = typeof userUpstreams.$inferSelect;
+export type NewUserUpstream = typeof userUpstreams.$inferInsert;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type NewApiKey = typeof apiKeys.$inferInsert;
 export type Upstream = typeof upstreams.$inferSelect;
