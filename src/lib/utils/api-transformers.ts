@@ -60,6 +60,7 @@ import type {
   TrafficRecordingSettingsValue,
   TrafficRecordingStats,
 } from "@/lib/services/traffic-recording-service";
+import type { UserListItem, PaginatedUsers } from "@/lib/services/user-service";
 
 // ========== Helper Utilities ==========
 
@@ -1605,5 +1606,54 @@ export function transformStatsLeaderboardToApi(
     api_keys: stats.apiKeys.map(transformLeaderboardApiKeyToApi),
     upstreams: stats.upstreams.map(transformLeaderboardUpstreamToApi),
     models: stats.models.map(transformLeaderboardModelToApi),
+  };
+}
+
+// ========== User Transformers ==========
+
+/**
+ * API response format for a user (snake_case). The password hash is never
+ * included in any API response.
+ */
+export interface UserApiResponse {
+  id: string;
+  username: string;
+  display_name: string;
+  role: "admin" | "member";
+  is_active: boolean;
+  api_key_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Transform a user list item to API response format. The password hash is
+ * structurally absent from {@link UserListItem}, so it cannot leak here.
+ */
+export function transformUserToApi(user: UserListItem): UserApiResponse {
+  return {
+    id: user.id,
+    username: user.username,
+    display_name: user.displayName,
+    role: user.role,
+    is_active: user.isActive,
+    api_key_count: user.apiKeyCount,
+    created_at: user.createdAt.toISOString(),
+    updated_at: user.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * Transform paginated user results to API response format.
+ */
+export function transformPaginatedUsers(
+  result: PaginatedUsers
+): PaginatedApiResponse<UserApiResponse> {
+  return {
+    items: result.items.map(transformUserToApi),
+    total: result.total,
+    page: result.page,
+    page_size: result.pageSize,
+    total_pages: result.totalPages,
   };
 }

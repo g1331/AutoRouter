@@ -1,0 +1,533 @@
+import { and, count, desc, eq, inArray, ne } from "drizzle-orm";
+import { db, users, apiKeys, userUpstreams, upstreams, type User } from "../db";
+import { hashPassword, isPasswordStrong, normalizeUsername } from "../utils/auth";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("user-service");
+
+export type UserRole = "admin" | "member";
+
+/**
+ * Raised when a user lookup cannot find a persisted record.
+ */
+export class UserNotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UserNotFoundError";
+  }
+}
+
+/**
+ * Raised when a username collides with an existing (case-insensitive) account.
+ */
+export class UsernameConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UsernameConflictError";
+  }
+}
+
+/**
+ * Raised when a password fails the minimum strength requirement.
+ */
+export class WeakPasswordError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "WeakPasswordError";
+  }
+}
+
+/**
+ * Raised when an operation would deactivate, delete, or demote the last active
+ * admin, which would lock every admin out of the management surface.
+ */
+export class LastActiveAdminError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "LastActiveAdminError";
+  }
+}
+
+/**
+ * Raised when an API key ownership assignment references a missing key.
+ */
+export class ApiKeyOwnershipError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ApiKeyOwnershipError";
+  }
+}
+
+/**
+ * Raised when an available-upstream assignment references missing upstreams.
+ */
+export class UpstreamAssignmentError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UpstreamAssignmentError";
+  }
+}
+
+function normalizeRole(role: string | null | undefined): UserRole {
+  return role === "admin" ? "admin" : "member";
+}
+
+/**
+ * Detect a unique-constraint violation across PostgreSQL and SQLite. PostgreSQL
+ * raises "duplicate key value violates unique constraint"; SQLite raises
+ * "UNIQUE constraint failed". A pre-check narrows the common case, but a
+ * concurrent insert can still race past it, so callers also catch this.
+ */
+export function isUniqueViolation(err: unknown): boolean {
+  const message = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return message.includes("unique") || message.includes("duplicate");
+}
+
+export interface UserCreateInput {
+  username: string;
+  password: string;
+  displayName: string;
+  role?: UserRole;
+}
+
+export interface UserUpdateInput {
+  displayName?: string;
+  role?: UserRole;
+  isActive?: boolean;
+}
+
+export interface UserListItem {
+  id: string;
+  username: string;
+  displayName: string;
+  role: UserRole;
+  isActive: boolean;
+  apiKeyCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface PaginatedUsers {
+  items: UserListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+function toListItem(row: User, apiKeyCount: number): UserListItem {
+  return {
+    id: row.id,
+    username: row.username,
+    displayName: row.displayName,
+    role: normalizeRole(row.role),
+    isActive: row.isActive,
+    apiKeyCount,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+/**
+ * Create a new user. The username is normalized (trimmed, lowercased) and must
+ * be unique case-insensitively; the password is bcrypt-hashed and never stored
+ * in plaintext.
+ *
+ * @param input - The new user's username, password, display name, and role
+ * @returns The created user as a list item (with zero owned keys)
+ */
+export async function createUser(input: UserCreateInput): Promise<UserListItem> {
+  const username = normalizeUsername(input.username);
+  if (!isPasswordStrong(input.password)) {
+    throw new WeakPasswordError("Password does not meet the minimum length requirement");
+  }
+  const displayName = input.displayName.trim();
+  const role = normalizeRole(input.role);
+  const now = new Date();
+
+  // Friendly pre-check; the unique index is the authoritative guard against a
+  // concurrent insert that races past this lookup.
+  const existing = await db.query.users.findFirst({ where: eq(users.username, username) });
+  if (existing) {
+    throw new UsernameConflictError(`Username already exists: ${username}`);
+  }
+
+  const passwordHash = await hashPassword(input.password);
+
+  let created: User;
+  try {
+    const [row] = await db
+      .insert(users)
+      .values({
+        username,
+        passwordHash,
+        displayName,
+        role,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+    created = row;
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      throw new UsernameConflictError(`Username already exists: ${username}`);
+    }
+    throw err;
+  }
+
+  log.info({ userId: created.id, username, role }, "created user");
+  return toListItem(created, 0);
+}
+
+/**
+ * List users with pagination, aggregating each user's owned API key count via a
+ * left join so users without keys report zero rather than being dropped.
+ *
+ * @param page - 1-based page number
+ * @param pageSize - Page size, clamped to [1, 100]
+ * @returns A page of users with owned key counts
+ */
+export async function listUsers(page: number = 1, pageSize: number = 20): Promise<PaginatedUsers> {
+  page = Math.max(1, page);
+  pageSize = Math.min(100, Math.max(1, pageSize));
+
+  const [{ value: total }] = await db.select({ value: count() }).from(users);
+
+  const offset = (page - 1) * pageSize;
+  const rows = await db
+    .select({
+      id: users.id,
+      username: users.username,
+      passwordHash: users.passwordHash,
+      displayName: users.displayName,
+      role: users.role,
+      isActive: users.isActive,
+      createdAt: users.createdAt,
+      updatedAt: users.updatedAt,
+      apiKeyCount: count(apiKeys.id),
+    })
+    .from(users)
+    .leftJoin(apiKeys, eq(apiKeys.userId, users.id))
+    .groupBy(users.id)
+    .orderBy(desc(users.createdAt))
+    .limit(pageSize)
+    .offset(offset);
+
+  const items = rows.map((row) =>
+    toListItem(
+      {
+        id: row.id,
+        username: row.username,
+        passwordHash: row.passwordHash,
+        displayName: row.displayName,
+        role: row.role,
+        isActive: row.isActive,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      },
+      Number(row.apiKeyCount)
+    )
+  );
+
+  const totalPages = total > 0 ? Math.ceil(total / pageSize) : 1;
+
+  return { items, total, page, pageSize, totalPages };
+}
+
+/**
+ * Fetch a single user by id with its owned API key count.
+ *
+ * @param id - The user id
+ * @returns The user list item, or null when no such user exists
+ */
+export async function getUserById(id: string): Promise<UserListItem | null> {
+  const user = await db.query.users.findFirst({ where: eq(users.id, id) });
+  if (!user) {
+    return null;
+  }
+  const [{ value: apiKeyCount }] = await db
+    .select({ value: count() })
+    .from(apiKeys)
+    .where(eq(apiKeys.userId, id));
+  return toListItem(user, apiKeyCount);
+}
+
+/**
+ * Update a user's profile fields (display name, role, active state). Role
+ * demotion and deactivation are guarded inside a transaction so the system can
+ * never lose its last active admin (see {@link LastActiveAdminError}).
+ *
+ * @param id - The user id
+ * @param input - The fields to change; omitted fields are left untouched
+ * @returns The updated user list item
+ */
+export async function updateUser(id: string, input: UserUpdateInput): Promise<UserListItem> {
+  const now = new Date();
+
+  const updated = await db.transaction(async (tx) => {
+    const target = await tx.query.users.findFirst({ where: eq(users.id, id) });
+    if (!target) {
+      throw new UserNotFoundError(`User not found: ${id}`);
+    }
+
+    const nextRole =
+      input.role !== undefined ? normalizeRole(input.role) : normalizeRole(target.role);
+    const nextActive = input.isActive !== undefined ? input.isActive : target.isActive;
+    const wasActiveAdmin = target.role === "admin" && target.isActive;
+    const losesAdminCapability = !(nextRole === "admin" && nextActive);
+
+    if (wasActiveAdmin && losesAdminCapability) {
+      const [{ value: others }] = await tx
+        .select({ value: count() })
+        .from(users)
+        .where(and(eq(users.role, "admin"), eq(users.isActive, true), ne(users.id, id)));
+      if (others === 0) {
+        throw new LastActiveAdminError("Cannot demote or deactivate the last active admin user");
+      }
+    }
+
+    const updateData: Partial<{
+      displayName: string;
+      role: UserRole;
+      isActive: boolean;
+      updatedAt: Date;
+    }> = { updatedAt: now };
+    if (input.displayName !== undefined) {
+      updateData.displayName = input.displayName.trim();
+    }
+    if (input.role !== undefined) {
+      updateData.role = nextRole;
+    }
+    if (input.isActive !== undefined) {
+      updateData.isActive = input.isActive;
+    }
+
+    const [row] = await tx.update(users).set(updateData).where(eq(users.id, id)).returning();
+    if (!row) {
+      throw new UserNotFoundError(`User not found: ${id}`);
+    }
+    return row;
+  });
+
+  const [{ value: apiKeyCount }] = await db
+    .select({ value: count() })
+    .from(apiKeys)
+    .where(eq(apiKeys.userId, id));
+
+  log.info({ userId: id, role: updated.role, isActive: updated.isActive }, "updated user");
+  return toListItem(updated, apiKeyCount);
+}
+
+/**
+ * Change a user's username. The new value is normalized and must remain unique
+ * case-insensitively (excluding the user's own current record).
+ *
+ * @param id - The user id
+ * @param rawUsername - The new username, before normalization
+ * @returns The updated user list item
+ */
+export async function changeUsername(id: string, rawUsername: string): Promise<UserListItem> {
+  const username = normalizeUsername(rawUsername);
+  const now = new Date();
+
+  const conflict = await db.query.users.findFirst({ where: eq(users.username, username) });
+  if (conflict && conflict.id !== id) {
+    throw new UsernameConflictError(`Username already exists: ${username}`);
+  }
+
+  let updated: User;
+  try {
+    const [row] = await db
+      .update(users)
+      .set({ username, updatedAt: now })
+      .where(eq(users.id, id))
+      .returning();
+    if (!row) {
+      throw new UserNotFoundError(`User not found: ${id}`);
+    }
+    updated = row;
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      throw new UsernameConflictError(`Username already exists: ${username}`);
+    }
+    throw err;
+  }
+
+  const [{ value: apiKeyCount }] = await db
+    .select({ value: count() })
+    .from(apiKeys)
+    .where(eq(apiKeys.userId, id));
+
+  log.info({ userId: id, username }, "changed username");
+  return toListItem(updated, apiKeyCount);
+}
+
+/**
+ * Reset a user's password to a new bcrypt hash after enforcing minimum strength.
+ *
+ * @param id - The user id
+ * @param newPassword - The new plaintext password
+ */
+export async function resetPassword(id: string, newPassword: string): Promise<void> {
+  if (!isPasswordStrong(newPassword)) {
+    throw new WeakPasswordError("Password does not meet the minimum length requirement");
+  }
+  const passwordHash = await hashPassword(newPassword);
+  const now = new Date();
+
+  const [row] = await db
+    .update(users)
+    .set({ passwordHash, updatedAt: now })
+    .where(eq(users.id, id))
+    .returning();
+  if (!row) {
+    throw new UserNotFoundError(`User not found: ${id}`);
+  }
+
+  log.info({ userId: id }, "reset user password");
+}
+
+/**
+ * Delete a user. Owned API keys are detached (user_id set to NULL) in the same
+ * transaction as the delete so SQLite — which does not enforce foreign keys at
+ * runtime — cannot leave dangling ownership, and a concurrent self-service key
+ * creation cannot slip a hanging reference past the cleanup. The last active
+ * admin is protected from deletion.
+ *
+ * @param id - The user id
+ */
+export async function deleteUser(id: string): Promise<void> {
+  const now = new Date();
+
+  await db.transaction(async (tx) => {
+    const target = await tx.query.users.findFirst({ where: eq(users.id, id) });
+    if (!target) {
+      throw new UserNotFoundError(`User not found: ${id}`);
+    }
+
+    if (target.role === "admin" && target.isActive) {
+      const [{ value: others }] = await tx
+        .select({ value: count() })
+        .from(users)
+        .where(and(eq(users.role, "admin"), eq(users.isActive, true), ne(users.id, id)));
+      if (others === 0) {
+        throw new LastActiveAdminError("Cannot delete the last active admin user");
+      }
+    }
+
+    await tx.update(apiKeys).set({ userId: null, updatedAt: now }).where(eq(apiKeys.userId, id));
+    await tx.delete(users).where(eq(users.id, id));
+  });
+
+  log.info({ userId: id }, "deleted user");
+}
+
+/**
+ * Assign ownership of an existing API key to a user, after verifying the target
+ * user exists.
+ *
+ * @param keyId - The API key id
+ * @param userId - The user to own the key
+ */
+export async function assignApiKeyOwnership(keyId: string, userId: string): Promise<void> {
+  const now = new Date();
+
+  await db.transaction(async (tx) => {
+    const user = await tx.query.users.findFirst({ where: eq(users.id, userId) });
+    if (!user) {
+      throw new UserNotFoundError(`User not found: ${userId}`);
+    }
+
+    const [row] = await tx
+      .update(apiKeys)
+      .set({ userId, updatedAt: now })
+      .where(eq(apiKeys.id, keyId))
+      .returning();
+    if (!row) {
+      throw new ApiKeyOwnershipError(`API key not found: ${keyId}`);
+    }
+  });
+
+  log.info({ keyId, userId }, "assigned API key ownership");
+}
+
+/**
+ * Revoke ownership of an API key, detaching it (user_id set to NULL).
+ *
+ * @param keyId - The API key id
+ */
+export async function revokeApiKeyOwnership(keyId: string): Promise<void> {
+  const now = new Date();
+  const [row] = await db
+    .update(apiKeys)
+    .set({ userId: null, updatedAt: now })
+    .where(eq(apiKeys.id, keyId))
+    .returning();
+  if (!row) {
+    throw new ApiKeyOwnershipError(`API key not found: ${keyId}`);
+  }
+
+  log.info({ keyId }, "revoked API key ownership");
+}
+
+/**
+ * Fetch the set of upstreams an admin has made available to a user for
+ * self-service key authorization.
+ *
+ * @param userId - The user id
+ * @returns The list of upstream ids open to the user
+ */
+export async function getUserUpstreams(userId: string): Promise<string[]> {
+  const links = await db.query.userUpstreams.findMany({
+    where: eq(userUpstreams.userId, userId),
+  });
+  return links.map((link) => link.upstreamId);
+}
+
+/**
+ * Replace the set of upstreams available to a user. Validates the user exists
+ * and every upstream id is real, then swaps the association set atomically.
+ *
+ * @param userId - The user id
+ * @param upstreamIds - The complete new set of available upstream ids
+ * @returns The persisted set of upstream ids
+ */
+export async function setUserUpstreams(userId: string, upstreamIds: string[]): Promise<string[]> {
+  const normalizedIds = Array.from(new Set(upstreamIds));
+  const now = new Date();
+
+  const persisted = await db.transaction(async (tx) => {
+    const user = await tx.query.users.findFirst({ where: eq(users.id, userId) });
+    if (!user) {
+      throw new UserNotFoundError(`User not found: ${userId}`);
+    }
+
+    if (normalizedIds.length > 0) {
+      const valid = await tx.query.upstreams.findMany({
+        where: inArray(upstreams.id, normalizedIds),
+      });
+      if (valid.length !== normalizedIds.length) {
+        const validIds = new Set(valid.map((u) => u.id));
+        const invalidIds = normalizedIds.filter((upstreamId) => !validIds.has(upstreamId));
+        throw new UpstreamAssignmentError(`Invalid upstream IDs: ${invalidIds.join(", ")}`);
+      }
+    }
+
+    await tx.delete(userUpstreams).where(eq(userUpstreams.userId, userId));
+    if (normalizedIds.length > 0) {
+      await tx.insert(userUpstreams).values(
+        normalizedIds.map((upstreamId) => ({
+          userId,
+          upstreamId,
+          createdAt: now,
+        }))
+      );
+    }
+
+    return normalizedIds;
+  });
+
+  log.info({ userId, upstreams: persisted.length }, "set user available upstreams");
+  return persisted;
+}
