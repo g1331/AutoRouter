@@ -3,8 +3,7 @@ import {
   listTrafficRecordings,
   type TrafficRecordingListFilters,
 } from "@/lib/services/traffic-recording-service";
-import { errorResponse, getPaginationParams } from "@/lib/utils/api-auth";
-import { validateAdminAuth } from "@/lib/utils/auth";
+import { errorResponse, getPaginationParams, requireAdmin } from "@/lib/utils/api-auth";
 import { createLogger } from "@/lib/utils/logger";
 import { transformPaginatedTrafficRecordingsToApi } from "@/lib/utils/api-transformers";
 
@@ -20,9 +19,9 @@ function parseDateFilter(value: string, fieldName: string): Date | Response {
 
 /** Return paginated traffic recording indexes using supported filters. */
 export async function GET(request: NextRequest): Promise<Response> {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {

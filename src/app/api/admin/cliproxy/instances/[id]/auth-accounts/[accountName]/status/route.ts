@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import { setCliproxyAuthAccountStatus } from "@/lib/services/cliproxy-auth-account-service";
 import { toCliproxyAuthAccountApiResponse } from "@/lib/utils/cliproxy-api-transformers";
 import { handleCliproxyRouteError } from "@/lib/utils/cliproxy-route-errors";
@@ -19,8 +18,9 @@ const statusSchema = z.object({
  * PATCH /api/admin/cliproxy/instances/:id/auth-accounts/:accountName/status - 启停账号。
  */
 export async function PATCH(request: NextRequest, context: RouteContext): Promise<Response> {
-  if (!validateAdminAuth(request.headers.get("authorization"))) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   const { id, accountName } = await context.params;

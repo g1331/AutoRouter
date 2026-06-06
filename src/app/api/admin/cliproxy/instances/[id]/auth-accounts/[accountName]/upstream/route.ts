@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import { createCliproxySingleAccountUpstream } from "@/lib/services/cliproxy-upstream-preset";
 import { transformUpstreamToApi } from "@/lib/utils/api-transformers";
 import { handleCliproxyRouteError } from "@/lib/utils/cliproxy-route-errors";
@@ -23,8 +22,9 @@ const createAccountUpstreamSchema = z.object({
  * 将单个 OAuth 账号固定映射为一个上游。
  */
 export async function POST(request: NextRequest, context: RouteContext): Promise<Response> {
-  if (!validateAdminAuth(request.headers.get("authorization"))) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   const { id, accountName } = await context.params;

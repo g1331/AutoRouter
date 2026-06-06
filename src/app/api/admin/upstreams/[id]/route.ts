@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import {
   getUpstreamById,
   updateUpstream,
@@ -158,9 +157,9 @@ const updateUpstreamSchema = z
  * GET /api/admin/upstreams/[id] - Get upstream details
  */
 export async function GET(request: NextRequest, context: RouteContext) {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {
@@ -182,9 +181,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
  * PUT /api/admin/upstreams/[id] - Update upstream
  */
 export async function PUT(request: NextRequest, context: RouteContext) {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {
@@ -337,9 +336,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
  * DELETE /api/admin/upstreams/[id] - Delete upstream
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {

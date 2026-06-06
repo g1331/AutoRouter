@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import {
   listCliproxyInstances,
   createCliproxyInstance,
@@ -29,8 +28,9 @@ const createInstanceSchema = z.object({
  * GET /api/admin/cliproxy/instances - 列出全部 CLIProxyAPI 实例。
  */
 export async function GET(request: NextRequest): Promise<Response> {
-  if (!validateAdminAuth(request.headers.get("authorization"))) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {
@@ -46,8 +46,9 @@ export async function GET(request: NextRequest): Promise<Response> {
  * POST /api/admin/cliproxy/instances - 创建 CLIProxyAPI 实例。
  */
 export async function POST(request: NextRequest): Promise<Response> {
-  if (!validateAdminAuth(request.headers.get("authorization"))) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   let rawBody: unknown;

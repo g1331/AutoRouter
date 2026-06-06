@@ -5,9 +5,23 @@ const uploadCliproxyAuthFileMock = vi.fn();
 const downloadCliproxyAuthFileMock = vi.fn();
 const deleteCliproxyAuthAccountMock = vi.fn();
 
-vi.mock("@/lib/utils/auth", () => ({
-  validateAdminAuth: vi.fn((authHeader) => authHeader === "Bearer valid-token"),
-}));
+// Mock admin authorization: the route now calls requireAdmin (the role-aware
+// guard). importActual keeps errorResponse and getPaginationParams real so
+// response shapes are unchanged; only the gate decision is driven by the
+// request token.
+vi.mock("@/lib/utils/api-auth", async (importActual) => {
+  const actual = await importActual<typeof import("@/lib/utils/api-auth")>();
+  return {
+    ...actual,
+    requireAdmin: vi.fn(async (request: Request) => {
+      const authHeader = request.headers.get("authorization");
+      if (authHeader === "Bearer valid-token") {
+        return { kind: "admin_token" };
+      }
+      return actual.errorResponse("Unauthorized", 401);
+    }),
+  };
+});
 
 vi.mock("@/lib/services/cliproxy-auth-account-service", async (importOriginal) => {
   const actual =

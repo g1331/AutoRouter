@@ -3,28 +3,11 @@ import { timingSafeEqual } from "crypto";
 import { eq } from "drizzle-orm";
 import { db, users } from "@/lib/db";
 import { config } from "./config";
-import { extractApiKey, validateAdminAuth } from "./auth";
+import { extractApiKey } from "./auth";
 import { verifyUserToken } from "./jwt";
 import { createLogger } from "./logger";
 
 const log = createLogger("api-auth");
-
-export type ApiHandler<T = unknown> = (request: NextRequest, context: T) => Promise<NextResponse>;
-
-/**
- * Wrap an API handler with admin authentication.
- */
-export function withAdminAuth<T = unknown>(handler: ApiHandler<T>): ApiHandler<T> {
-  return async (request: NextRequest, context: T) => {
-    const authHeader = request.headers.get("authorization");
-
-    if (!validateAdminAuth(authHeader)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    return handler(request, context);
-  };
-}
 
 /**
  * Create a JSON error response.

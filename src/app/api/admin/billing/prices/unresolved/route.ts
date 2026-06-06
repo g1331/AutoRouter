@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import { createLogger } from "@/lib/utils/logger";
 import { listBillingUnresolvedModels } from "@/lib/services/billing-price-service";
 import { transformBillingUnresolvedModelToApi } from "@/lib/utils/api-transformers";
@@ -11,9 +10,9 @@ const log = createLogger("admin-billing-unresolved-models");
  * GET /api/admin/billing/prices/unresolved - List unresolved models.
  */
 export async function GET(request: NextRequest): Promise<Response> {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {

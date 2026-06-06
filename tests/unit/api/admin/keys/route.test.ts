@@ -1,9 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-vi.mock("@/lib/utils/auth", () => ({
-  validateAdminAuth: vi.fn((authHeader: string | null) => authHeader === "Bearer test-admin-token"),
-}));
+// Mock admin authorization: the route now calls requireAdmin (the role-aware
+// guard) instead of validateAdminAuth. importActual keeps errorResponse and
+// getPaginationParams real so response shapes are unchanged; only the gate
+// decision is driven by the request token.
+vi.mock("@/lib/utils/api-auth", async (importActual) => {
+  const actual = await importActual<typeof import("@/lib/utils/api-auth")>();
+  return {
+    ...actual,
+    requireAdmin: vi.fn(async (request: Request) => {
+      const authHeader = request.headers.get("authorization");
+      if (authHeader === "Bearer test-admin-token") {
+        return { kind: "admin_token" };
+      }
+      return actual.errorResponse("Unauthorized", 401);
+    }),
+  };
+});
 
 const mockCreateApiKey = vi.fn();
 const mockUpdateApiKey = vi.fn();

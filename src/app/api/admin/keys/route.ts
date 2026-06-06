@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { getPaginationParams, errorResponse } from "@/lib/utils/api-auth";
+import { getPaginationParams, errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import { listApiKeys, createApiKey, type ApiKeyCreateInput } from "@/lib/services/key-manager";
 import {
   transformPaginatedApiKeys,
@@ -39,9 +38,9 @@ const createApiKeySchema = z
  * GET /api/admin/keys - List all API keys
  */
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {
@@ -59,9 +58,9 @@ export async function GET(request: NextRequest) {
  * POST /api/admin/keys - Create a new API key
  */
 export async function POST(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {

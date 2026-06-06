@@ -40,11 +40,11 @@
 
 ## 5. 现有 admin route 鉴权迁移
 
-- [ ] 5.1 将全部 `/api/admin/*` route 的内联 `validateAdminAuth(authHeader)` 替换为 `requireAdmin(request)`
-- [ ] 5.2 以简单字面 pattern grep `validateAdminAuth` 确认 `src/app/api/admin/` 下无残留，核对带 `params` 与多方法 route 均已迁移，并决定是否清退无调用方的 `withAdminAuth` 死代码
-- [ ] 5.3 补充覆盖典型 admin route 在三类身份下行为的回归测试，确认 ADMIN_TOKEN 行为不变、member 被拒
-- [ ] 5.4 运行现有 admin route 测试套件确认无回归
-- [ ] 5.5 通过质量门禁后提交：`refactor(admin): 迁移 admin route 到统一角色鉴权`
+- [x] 5.1 将全部 `/api/admin/*` route 的内联 `validateAdminAuth(authHeader)` 替换为 `requireAdmin(request)`
+- [x] 5.2 以简单字面 pattern grep `validateAdminAuth` 确认 `src/app/api/admin/` 下无残留，核对带 `params` 与多方法 route 均已迁移，并决定是否清退无调用方的 `withAdminAuth` 死代码
+- [x] 5.3 补充覆盖典型 admin route 在三类身份下行为的回归测试，确认 ADMIN_TOKEN 行为不变、member 被拒
+- [x] 5.4 运行现有 admin route 测试套件确认无回归
+- [x] 5.5 通过质量门禁后提交：`refactor(admin): 迁移 admin route 到统一角色鉴权`
 
 ## 6. 管理员用户管理 API
 

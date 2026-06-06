@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import {
   getCliproxyInstanceById,
   updateCliproxyInstance,
@@ -38,8 +37,9 @@ const updateInstanceSchema = z
  * GET /api/admin/cliproxy/instances/:id - 查询指定实例详情。
  */
 export async function GET(request: NextRequest, context: RouteContext): Promise<Response> {
-  if (!validateAdminAuth(request.headers.get("authorization"))) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   const { id } = await context.params;
@@ -59,8 +59,9 @@ export async function GET(request: NextRequest, context: RouteContext): Promise<
  * PATCH /api/admin/cliproxy/instances/:id - 更新指定实例。
  */
 export async function PATCH(request: NextRequest, context: RouteContext): Promise<Response> {
-  if (!validateAdminAuth(request.headers.get("authorization"))) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   const { id } = await context.params;
@@ -108,8 +109,9 @@ export async function PATCH(request: NextRequest, context: RouteContext): Promis
  * DELETE /api/admin/cliproxy/instances/:id - 删除指定实例。
  */
 export async function DELETE(request: NextRequest, context: RouteContext): Promise<Response> {
-  if (!validateAdminAuth(request.headers.get("authorization"))) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   const { id } = await context.params;

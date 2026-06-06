@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import { createLogger } from "@/lib/utils/logger";
 import {
   deleteBillingManualPriceOverride,
@@ -37,9 +36,9 @@ const updateOverrideSchema = z
  * PUT /api/admin/billing/overrides/[id] - Update manual override.
  */
 export async function PUT(request: NextRequest, context: RouteContext): Promise<Response> {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {
@@ -74,9 +73,9 @@ export async function PUT(request: NextRequest, context: RouteContext): Promise<
  * DELETE /api/admin/billing/overrides/[id] - Delete manual override.
  */
 export async function DELETE(request: NextRequest, context: RouteContext): Promise<Response> {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {

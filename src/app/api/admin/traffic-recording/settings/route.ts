@@ -4,8 +4,7 @@ import {
   getTrafficRecordingSettings,
   updateTrafficRecordingSettings,
 } from "@/lib/services/traffic-recording-service";
-import { errorResponse } from "@/lib/utils/api-auth";
-import { validateAdminAuth } from "@/lib/utils/auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import { createLogger } from "@/lib/utils/logger";
 import { transformTrafficRecordingSettingsToApi } from "@/lib/utils/api-transformers";
 
@@ -20,9 +19,9 @@ const updateSettingsSchema = z.object({
 
 /** Return the current traffic recording runtime settings. */
 export async function GET(request: NextRequest): Promise<Response> {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {
@@ -36,9 +35,9 @@ export async function GET(request: NextRequest): Promise<Response> {
 
 /** Update traffic recording runtime settings from admin input. */
 export async function PATCH(request: NextRequest): Promise<Response> {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {
