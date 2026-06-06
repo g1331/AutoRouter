@@ -24,6 +24,9 @@ const configSchema = z
     encryptionKeyFile: z.string().optional(),
     adminToken: z.string().min(1).optional(),
 
+    // JWT — optional; when unset the signing key is derived from ENCRYPTION_KEY via HKDF
+    jwtSecret: z.string().optional(),
+
     // Logging
     logLevel: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).optional(),
 
@@ -76,6 +79,7 @@ function loadConfig(): Config {
     encryptionKey: process.env.ENCRYPTION_KEY,
     encryptionKeyFile: process.env.ENCRYPTION_KEY_FILE,
     adminToken: process.env.ADMIN_TOKEN,
+    jwtSecret: process.env.JWT_SECRET,
     logLevel: process.env.LOG_LEVEL,
     allowKeyReveal: process.env.ALLOW_KEY_REVEAL,
     debugLogHeaders: process.env.DEBUG_LOG_HEADERS,

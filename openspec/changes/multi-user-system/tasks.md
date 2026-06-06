@@ -14,12 +14,12 @@
 
 ## 2. 密码、JWT 与配置基础
 
-- [ ] 2.1 在 `package.json` 引入 `jose` 依赖
-- [ ] 2.2 在 `config.ts` 的 Zod schema 新增可选 `JWT_SECRET`；实现未配置时从 `ENCRYPTION_KEY` 经 Web Crypto（`crypto.subtle` + HKDF，info 标签 `autorouter-jwt-v1`）派生签名密钥；两者皆缺失时 fail-fast 抛配置错误
-- [ ] 2.3 在 `auth.ts` 复用 bcrypt 增加密码哈希与校验函数（`hashPassword` / `verifyPassword`）及密码最小强度校验（不少于 8 字符），与 API Key 哈希共用 `BCRYPT_ROUNDS`
-- [ ] 2.4 新增 JWT 工具模块：签发（payload 仅含 userId、role、exp，不含用户名，过期初始 24 小时）与验证（`jose.jwtVerify` 固定算法，拒绝 alg=none）
-- [ ] 2.5 为密码哈希、强度校验、JWT 签发与验证、Web Crypto 密钥派生确定性、双密钥缺失 fail-fast、固定算法拒绝畸形 token 编写单元测试
-- [ ] 2.6 通过质量门禁后提交：`feat(auth): 新增密码哈希、JWT 工具与密钥派生`
+- [x] 2.1 在 `package.json` 引入 `jose` 依赖
+- [x] 2.2 在 `config.ts` 的 Zod schema 新增可选 `JWT_SECRET`；实现未配置时从 `ENCRYPTION_KEY` 经 Web Crypto（`crypto.subtle` + HKDF，info 标签 `autorouter-jwt-v1`）派生签名密钥；两者皆缺失时 fail-fast 抛配置错误（密钥来源复用 `encryption.ts` 的 `getEncryptionKeyBase64`，兼顾 `ENCRYPTION_KEY_FILE`）
+- [x] 2.3 在 `auth.ts` 复用 bcrypt 增加密码哈希与校验函数（`hashPassword` / `verifyPassword`）及密码最小强度校验（不少于 8 字符），与 API Key 哈希共用 `BCRYPT_ROUNDS`
+- [x] 2.4 新增 JWT 工具模块：签发（payload 仅含 userId、role、exp，不含用户名，过期初始 24 小时）与验证（`jose.jwtVerify` 固定算法，拒绝 alg=none 与算法降级，`requiredClaims` 强制 exp）
+- [x] 2.5 为密码哈希、强度校验、JWT 签发与验证、Web Crypto 密钥派生确定性、双密钥缺失 fail-fast、固定算法拒绝畸形 token、算法降级、过期与缺失声明、URL-safe 密钥归一化、`ENCRYPTION_KEY_FILE` 回退编写单元测试
+- [x] 2.6 通过质量门禁后提交：`feat(auth): 新增密码哈希、JWT 工具与密钥派生`
 
 ## 3. 统一角色感知鉴权
 
