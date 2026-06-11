@@ -91,10 +91,11 @@ function extractPgForeignKeyViolation(error: unknown): PgForeignKeyViolation | n
 
 function resolveViolatedFkColumn(
   constraintName: string | undefined
-): "apiKeyId" | "upstreamId" | null {
+): "apiKeyId" | "upstreamId" | "userId" | null {
   if (!constraintName) return null;
   if (constraintName.includes("api_key_id")) return "apiKeyId";
   if (constraintName.includes("upstream_id")) return "upstreamId";
+  if (constraintName.includes("user_id")) return "userId";
   return null;
 }
 
@@ -161,6 +162,9 @@ export interface PersistRequestBillingInput {
   requestLogId: string;
   apiKeyId: string | null;
   upstreamId: string | null;
+  // Redundant owner snapshot; resolved from the request_logs row before the
+  // upsert so the snapshot always matches the log's attribution (decision 7).
+  userId?: string | null;
   model: string | null;
   usage: BillingUsageInput;
   billedAt?: Date;
@@ -281,6 +285,7 @@ async function upsertUnbilledSnapshot(
       requestLogId: input.requestLogId,
       apiKeyId: input.apiKeyId,
       upstreamId: input.upstreamId,
+      userId: input.userId ?? null,
       model: input.model,
       billingStatus: "unbilled",
       unbillableReason: reason,
@@ -311,6 +316,7 @@ async function upsertUnbilledSnapshot(
     {
       apiKeyId: input.apiKeyId,
       upstreamId: input.upstreamId,
+      userId: input.userId ?? null,
       model: input.model,
       billingStatus: "unbilled",
       unbillableReason: reason,
@@ -409,20 +415,26 @@ function calculateCost(
 }
 
 /**
- * 以 request_logs 行为准重写 api_key_id / upstream_id，避免引用已删除主表行导致 FK 违例。
- * request_logs 两列都带 `ON DELETE SET NULL`，行内值已是 FK 安全的最终态。
+ * 以 request_logs 行为准重写 api_key_id / upstream_id / user_id，避免引用已删除
+ * 主表行导致 FK 违例。request_logs 三列都带 `ON DELETE SET NULL`，行内值已是
+ * FK 安全的最终态；user_id 同时保证快照归属与日志行一致。
  */
 async function reconcileFkColumnsWithRequestLog(
   input: PersistRequestBillingInput
 ): Promise<PersistRequestBillingInput> {
   const logRow = await db.query.requestLogs.findFirst({
     where: eq(requestLogs.id, input.requestLogId),
-    columns: { apiKeyId: true, upstreamId: true },
+    columns: { apiKeyId: true, upstreamId: true, userId: true },
   });
   if (!logRow) {
-    return { ...input, apiKeyId: null, upstreamId: null };
+    return { ...input, apiKeyId: null, upstreamId: null, userId: null };
   }
-  return { ...input, apiKeyId: logRow.apiKeyId, upstreamId: logRow.upstreamId };
+  return {
+    ...input,
+    apiKeyId: logRow.apiKeyId,
+    upstreamId: logRow.upstreamId,
+    userId: logRow.userId,
+  };
 }
 
 /**
@@ -484,6 +496,7 @@ export async function calculateAndPersistRequestBillingSnapshot(
       requestLogId: input.requestLogId,
       apiKeyId: input.apiKeyId,
       upstreamId: input.upstreamId,
+      userId: input.userId ?? null,
       model,
       billingStatus: "billed",
       unbillableReason: null,
@@ -514,6 +527,7 @@ export async function calculateAndPersistRequestBillingSnapshot(
     {
       apiKeyId: input.apiKeyId,
       upstreamId: input.upstreamId,
+      userId: input.userId ?? null,
       model,
       billingStatus: "billed",
       unbillableReason: null,

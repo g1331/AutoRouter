@@ -93,6 +93,9 @@ vi.mock("@/lib/db", () => ({
       circuitBreakerStates: {
         findMany: vi.fn(),
       },
+      users: {
+        findFirst: vi.fn(),
+      },
     },
   },
   apiKeys: {},
@@ -100,6 +103,7 @@ vi.mock("@/lib/db", () => ({
   upstreams: {},
   upstreamHealth: {},
   circuitBreakerStates: {},
+  users: {},
 }));
 
 vi.mock("@/lib/services/route-capability-migration", () => ({
@@ -734,6 +738,81 @@ describe("proxy route upstream selection", () => {
 
       expect(response.status).toBe(401);
       expect(data).toEqual({ error: "API key has expired" });
+    });
+
+    it("should reject a key owned by an inactive user", async () => {
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        { id: "key-owned", keyHash: "hash-1", expiresAt: null, isActive: true, userId: "user-1" },
+      ]);
+      vi.mocked(db.query.users.findFirst).mockResolvedValueOnce({ isActive: false } as never);
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-owned",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ model: "gpt-5.2", input: "hello" }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["chat", "completions"] }),
+      });
+      const data = await response.json();
+
+      expect(response.status).toBe(401);
+      expect(data).toEqual({ error: "API key is disabled" });
+    });
+
+    it("should let a key owned by an active user pass the owner check", async () => {
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        { id: "key-owned", keyHash: "hash-1", expiresAt: null, isActive: true, userId: "user-1" },
+      ]);
+      vi.mocked(db.query.users.findFirst).mockResolvedValueOnce({ isActive: true } as never);
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/custom/not-matched", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-owned",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ model: "gpt-5.2", input: "hello" }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["custom", "not-matched"] }),
+      });
+
+      expect(response.status).not.toBe(401);
+      expect(db.query.users.findFirst).toHaveBeenCalledTimes(1);
+    });
+
+    it("should not consult the users table for an ownerless key", async () => {
+      const { db } = await import("@/lib/db");
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+        { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true, userId: null },
+      ]);
+
+      const request = new NextRequest("http://localhost/api/proxy/v1/custom/not-matched", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sk-ownerless",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ model: "gpt-5.2", input: "hello" }),
+      });
+
+      const response = await POST(request, {
+        params: Promise.resolve({ path: ["custom", "not-matched"] }),
+      });
+
+      expect(response.status).not.toBe(401);
+      expect(db.query.users.findFirst).not.toHaveBeenCalled();
     });
   });
 

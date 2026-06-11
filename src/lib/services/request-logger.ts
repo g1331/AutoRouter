@@ -26,6 +26,9 @@ export interface LogRequestInput {
   apiKeyId: string | null;
   apiKeyName?: string | null;
   apiKeyPrefix?: string | null;
+  // Redundant owner snapshot taken from the API key at request time; survives
+  // key deletion so personal usage keeps attributing to the user (decision 7).
+  userId?: string | null;
   upstreamId: string | null;
   method: string | null;
   path: string | null;
@@ -71,6 +74,7 @@ export interface StartRequestLogInput {
   apiKeyId: string | null;
   apiKeyName?: string | null;
   apiKeyPrefix?: string | null;
+  userId?: string | null;
   upstreamId: string | null;
   method: string | null;
   path: string | null;
@@ -93,6 +97,7 @@ export interface UpdateRequestLogInput {
   apiKeyId?: string | null;
   apiKeyName?: string | null;
   apiKeyPrefix?: string | null;
+  userId?: string | null;
   upstreamId?: string | null;
   method?: string | null;
   path?: string | null;
@@ -232,6 +237,9 @@ export interface PaginatedRequestLogs {
 export interface ListRequestLogsFilter {
   id?: string;
   apiKeyId?: string;
+  // Owner filter over the redundant user_id snapshot; user-side endpoints
+  // inject the authenticated userId here for server-enforced data isolation.
+  userId?: string;
   upstreamId?: string;
   statusCode?: number;
   startTime?: Date;
@@ -368,6 +376,7 @@ export async function logRequestStart(input: StartRequestLogInput): Promise<Requ
       apiKeyId: input.apiKeyId,
       apiKeyName: input.apiKeyName ?? null,
       apiKeyPrefix: input.apiKeyPrefix ?? null,
+      userId: input.userId ?? null,
       upstreamId: input.upstreamId,
       method: input.method,
       path: input.path,
@@ -418,6 +427,7 @@ export async function updateRequestLog(
   if (input.apiKeyId !== undefined) updateValues.apiKeyId = input.apiKeyId;
   if (input.apiKeyName !== undefined) updateValues.apiKeyName = input.apiKeyName;
   if (input.apiKeyPrefix !== undefined) updateValues.apiKeyPrefix = input.apiKeyPrefix;
+  if (input.userId !== undefined) updateValues.userId = input.userId;
   if (input.upstreamId !== undefined) updateValues.upstreamId = input.upstreamId;
   if (input.method !== undefined) updateValues.method = input.method;
   if (input.path !== undefined) updateValues.path = input.path;
@@ -508,6 +518,7 @@ export async function logRequest(input: LogRequestInput): Promise<RequestLog> {
       apiKeyId: input.apiKeyId,
       apiKeyName: input.apiKeyName ?? null,
       apiKeyPrefix: input.apiKeyPrefix ?? null,
+      userId: input.userId ?? null,
       upstreamId: input.upstreamId,
       method: input.method,
       path: input.path,
@@ -761,6 +772,9 @@ export async function listRequestLogs(
   }
   if (filters.apiKeyId) {
     conditions.push(eq(requestLogs.apiKeyId, filters.apiKeyId));
+  }
+  if (filters.userId) {
+    conditions.push(eq(requestLogs.userId, filters.userId));
   }
   if (filters.upstreamId) {
     conditions.push(eq(requestLogs.upstreamId, filters.upstreamId));

@@ -61,6 +61,11 @@ import type {
   TrafficRecordingStats,
 } from "@/lib/services/traffic-recording-service";
 import type { UserListItem, PaginatedUsers } from "@/lib/services/user-service";
+import type {
+  UserOverview,
+  UserUsagePoint,
+  UserUsageStats,
+} from "@/lib/services/user-data-service";
 
 // ========== Helper Utilities ==========
 
@@ -1663,5 +1668,65 @@ export function transformPaginatedUsers(result: PaginatedUsers): PaginatedUsersA
     page_size: result.pageSize,
     total_pages: result.totalPages,
     active_admin_total: result.activeAdminTotal,
+  };
+}
+
+// ========== User Portal API Response Types ==========
+
+export interface UserOverviewApiResponse {
+  today_requests: number;
+  month_requests: number;
+  month_cost_usd: number;
+  total_requests: number;
+  total_cost_usd: number;
+  active_key_count: number;
+  total_key_count: number;
+}
+
+export interface UserUsagePointApiResponse {
+  timestamp: string;
+  request_count: number;
+  total_tokens: number;
+  total_cost_usd: number;
+}
+
+export interface UserUsageApiResponse {
+  range: "7d" | "30d";
+  granularity: "day";
+  points: UserUsagePointApiResponse[];
+}
+
+/**
+ * Transform the personal overview aggregates to API response format.
+ */
+export function transformUserOverviewToApi(overview: UserOverview): UserOverviewApiResponse {
+  return {
+    today_requests: overview.todayRequests,
+    month_requests: overview.monthRequests,
+    month_cost_usd: overview.monthCostUsd,
+    total_requests: overview.totalRequests,
+    total_cost_usd: overview.totalCostUsd,
+    active_key_count: overview.activeKeyCount,
+    total_key_count: overview.totalKeyCount,
+  };
+}
+
+function transformUserUsagePointToApi(point: UserUsagePoint): UserUsagePointApiResponse {
+  return {
+    timestamp: point.timestamp.toISOString(),
+    request_count: point.requestCount,
+    total_tokens: point.totalTokens,
+    total_cost_usd: point.totalCostUsd,
+  };
+}
+
+/**
+ * Transform the personal day-bucketed usage trend to API response format.
+ */
+export function transformUserUsageToApi(usage: UserUsageStats): UserUsageApiResponse {
+  return {
+    range: usage.range,
+    granularity: usage.granularity,
+    points: usage.points.map(transformUserUsagePointToApi),
   };
 }

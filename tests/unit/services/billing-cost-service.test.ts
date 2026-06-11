@@ -106,6 +106,38 @@ describe("billing-cost-service", () => {
     );
   });
 
+  it("attributes the snapshot to the request log's redundant user_id", async () => {
+    const { calculateAndPersistRequestBillingSnapshot } =
+      await import("../../../src/lib/services/billing-cost-service");
+
+    // The owner snapshot is resolved from the request_logs row, not the caller,
+    // so the billing snapshot always matches the log's attribution.
+    requestLogsFindFirstMock.mockResolvedValue({
+      apiKeyId: "key-1",
+      upstreamId: "up-1",
+      userId: "user-1",
+    });
+
+    await calculateAndPersistRequestBillingSnapshot({
+      requestLogId: "log-owned",
+      apiKeyId: "key-1",
+      upstreamId: "up-1",
+      model: null,
+      usage: {
+        promptTokens: 10,
+        completionTokens: 20,
+        totalTokens: 30,
+      },
+    });
+
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestLogId: "log-owned",
+        userId: "user-1",
+      })
+    );
+  });
+
   it("marks request as unbilled when usage is missing", async () => {
     const { calculateAndPersistRequestBillingSnapshot } =
       await import("../../../src/lib/services/billing-cost-service");
