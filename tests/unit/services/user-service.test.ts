@@ -106,12 +106,14 @@ import {
   getUserUpstreams,
   setUserUpstreams,
   isUniqueViolation,
+  isForeignKeyViolation,
   UserNotFoundError,
   UsernameConflictError,
   WeakPasswordError,
   LastActiveAdminError,
   ApiKeyOwnershipError,
   UpstreamAssignmentError,
+  InvalidUsernameError,
 } from "@/lib/services/user-service";
 
 const NONEXISTENT_ID = "00000000-0000-0000-0000-000000000000";
@@ -202,6 +204,12 @@ describe("user-service", () => {
         createUser({ username: "alice", password: "password123", displayName: "Other" })
       ).rejects.toBeInstanceOf(UsernameConflictError);
     });
+
+    it("rejects a whitespace-only username that normalizes to empty", async () => {
+      await expect(
+        createUser({ username: "   ", password: "password123", displayName: "Blank" })
+      ).rejects.toBeInstanceOf(InvalidUsernameError);
+    });
   });
 
   describe("listUsers", () => {
@@ -228,6 +236,35 @@ describe("user-service", () => {
       expect(counts.a).toBe(2);
       expect(counts.b).toBe(1);
       expect(counts.c).toBe(0);
+    });
+
+    it("reports the table-wide active admin total independent of the page", async () => {
+      await createUser({
+        username: "admin1",
+        password: "password123",
+        displayName: "A1",
+        role: "admin",
+      });
+      await createUser({
+        username: "admin2",
+        password: "password123",
+        displayName: "A2",
+        role: "admin",
+      });
+      const inactive = await createUser({
+        username: "admin3",
+        password: "password123",
+        displayName: "A3",
+        role: "admin",
+      });
+      await updateUser(inactive.id, { isActive: false });
+      await createUser({ username: "member1", password: "password123", displayName: "M1" });
+
+      // Page size 1 returns a single item, but the active admin total reflects
+      // every active admin in the table (admin1 + admin2; admin3 is inactive).
+      const page = await listUsers(1, 1);
+      expect(page.items).toHaveLength(1);
+      expect(page.activeAdminTotal).toBe(2);
     });
   });
 
@@ -345,6 +382,20 @@ describe("user-service", () => {
 
     it("throws for a missing user", async () => {
       await expect(changeUsername(NONEXISTENT_ID, "x")).rejects.toBeInstanceOf(UserNotFoundError);
+    });
+
+    it("reports a missing user even when the requested name is already taken", async () => {
+      await createUser({ username: "taken", password: "password123", displayName: "T" });
+      // The target id does not exist; the missing-user check must win over the
+      // name-conflict pre-check so callers get a 404 rather than a misleading 409.
+      await expect(changeUsername(NONEXISTENT_ID, "taken")).rejects.toBeInstanceOf(
+        UserNotFoundError
+      );
+    });
+
+    it("rejects a whitespace-only username that normalizes to empty", async () => {
+      const u = await createUser({ username: "u", password: "password123", displayName: "U" });
+      await expect(changeUsername(u.id, "   ")).rejects.toBeInstanceOf(InvalidUsernameError);
     });
   });
 
@@ -518,6 +569,20 @@ describe("user-service", () => {
 
     it("returns false for unrelated errors", () => {
       expect(isUniqueViolation(new Error("connection reset"))).toBe(false);
+    });
+  });
+
+  describe("isForeignKeyViolation", () => {
+    it("recognizes the PostgreSQL foreign key violation message", () => {
+      expect(isForeignKeyViolation(new Error("insert violates foreign key constraint"))).toBe(true);
+    });
+
+    it("recognizes the SQLite foreign key violation message", () => {
+      expect(isForeignKeyViolation(new Error("FOREIGN KEY constraint failed"))).toBe(true);
+    });
+
+    it("returns false for unrelated errors", () => {
+      expect(isForeignKeyViolation(new Error("connection reset"))).toBe(false);
     });
   });
 });

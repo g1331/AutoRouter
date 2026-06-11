@@ -18,7 +18,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 const updateUserSchema = z
   .object({
-    display_name: z.string().min(1).max(255).optional(),
+    display_name: z.string().trim().min(1).max(255).optional(),
     role: z.enum(["admin", "member"]).optional(),
     is_active: z.boolean().optional(),
   })

@@ -84,6 +84,7 @@
     "password": "Password",
     "passwordPlaceholder": "Set an initial password",
     "passwordRequired": "Password is required",
+    "passwordMinLength": "Password must be at least 8 characters",
     "newPassword": "New Password",
     "role": "Role",
     "roleAdmin": "Admin",

@@ -181,14 +181,19 @@ export function recordLoginFailure(username: string, ip: string): void {
 }
 
 /**
- * Clear the failure counters for a username and IP after a successful login.
+ * Clear the username failure counter after a successful login.
+ *
+ * Only the per-username dimension is reset. The per-IP dimension is shared
+ * across every account behind that IP, so a single successful login must not
+ * wipe it — otherwise an attacker holding any one valid account could
+ * periodically authenticate to reset the IP-wide lockout in the middle of a
+ * credential-stuffing run, defeating the IP dimension entirely. The IP counter
+ * instead recovers on its own as in-window failures age out.
  *
  * @param username - The normalized username that succeeded
- * @param ip - The source IP of the request
  */
-export function recordLoginSuccess(username: string, ip: string): void {
+export function recordLoginSuccess(username: string): void {
   failures.delete(`user:${username}`);
-  failures.delete(`ip:${ip}`);
 }
 
 /**

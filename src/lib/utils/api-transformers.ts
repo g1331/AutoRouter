@@ -1644,16 +1644,24 @@ export function transformUserToApi(user: UserListItem): UserApiResponse {
 }
 
 /**
+ * Paginated user list response. Extends the shared pagination envelope with the
+ * table-wide count of active admins so the admin console can guard the last
+ * active admin even when admins span multiple pages.
+ */
+export interface PaginatedUsersApiResponse extends PaginatedApiResponse<UserApiResponse> {
+  active_admin_total: number;
+}
+
+/**
  * Transform paginated user results to API response format.
  */
-export function transformPaginatedUsers(
-  result: PaginatedUsers
-): PaginatedApiResponse<UserApiResponse> {
+export function transformPaginatedUsers(result: PaginatedUsers): PaginatedUsersApiResponse {
   return {
     items: result.items.map(transformUserToApi),
     total: result.total,
     page: result.page,
     page_size: result.pageSize,
     total_pages: result.totalPages,
+    active_admin_total: result.activeAdminTotal,
   };
 }

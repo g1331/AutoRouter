@@ -91,7 +91,7 @@ describe("POST /api/auth/login", () => {
       user: { id: "u1", username: "alice", displayName: "Alice", role: "admin" },
     });
     expect(mockSignUserToken).toHaveBeenCalledWith({ userId: "u1", role: "admin" });
-    expect(mockRecordSuccess).toHaveBeenCalledWith("alice", expect.any(String));
+    expect(mockRecordSuccess).toHaveBeenCalledWith("alice");
     expect(mockRecordFailure).not.toHaveBeenCalled();
   });
 
@@ -143,7 +143,7 @@ describe("POST /api/auth/login", () => {
 
     await POST(loginRequest({ username: "  Alice  ", password: "secret123" }));
     expect(mockCheck).toHaveBeenCalledWith("alice", expect.any(String));
-    expect(mockRecordSuccess).toHaveBeenCalledWith("alice", expect.any(String));
+    expect(mockRecordSuccess).toHaveBeenCalledWith("alice");
   });
 
   it("returns 400 when a field is missing", async () => {

@@ -32,6 +32,7 @@ vi.mock("@/lib/utils/logger", () => ({
 vi.mock("@/lib/services/user-service", () => {
   class UserNotFoundError extends Error {}
   class UsernameConflictError extends Error {}
+  class InvalidUsernameError extends Error {}
   class WeakPasswordError extends Error {}
   class LastActiveAdminError extends Error {}
   class UpstreamAssignmentError extends Error {}
@@ -50,6 +51,7 @@ vi.mock("@/lib/services/user-service", () => {
     revokeApiKeyOwnership: vi.fn(),
     UserNotFoundError,
     UsernameConflictError,
+    InvalidUsernameError,
     WeakPasswordError,
     LastActiveAdminError,
     UpstreamAssignmentError,
@@ -138,6 +140,7 @@ describe("GET /api/admin/users", () => {
       page: 1,
       pageSize: 20,
       totalPages: 1,
+      activeAdminTotal: 2,
     } as never);
 
     const res = await listUsersRoute(makeRequest(ADMIN));
@@ -147,6 +150,8 @@ describe("GET /api/admin/users", () => {
     expect(body.items[0].username).toBe("alice");
     expect(body.items[0]).not.toHaveProperty("password_hash");
     expect(body.items[0]).not.toHaveProperty("passwordHash");
+    // The table-wide active-admin total is surfaced for the last-admin guardrail.
+    expect(body.active_admin_total).toBe(2);
   });
 });
 
@@ -192,6 +197,24 @@ describe("POST /api/admin/users", () => {
     );
     const res = await createUserRoute(
       makeRequest(ADMIN, { username: "alice", password: "x", display_name: "Alice" })
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a whitespace-only username at the schema layer with 400", async () => {
+    const res = await createUserRoute(
+      makeRequest(ADMIN, { username: "   ", password: "password123", display_name: "Alice" })
+    );
+    expect(res.status).toBe(400);
+    expect(userService.createUser).not.toHaveBeenCalled();
+  });
+
+  it("maps an invalid username from the service to 400", async () => {
+    vi.mocked(userService.createUser).mockRejectedValue(
+      new userService.InvalidUsernameError("Username must not be empty")
+    );
+    const res = await createUserRoute(
+      makeRequest(ADMIN, { username: "alice", password: "password123", display_name: "Alice" })
     );
     expect(res.status).toBe(400);
   });

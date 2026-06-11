@@ -4,6 +4,7 @@ import {
   changeUsername,
   UserNotFoundError,
   UsernameConflictError,
+  InvalidUsernameError,
 } from "@/lib/services/user-service";
 import { transformUserToApi } from "@/lib/utils/api-transformers";
 import { z } from "zod";
@@ -15,7 +16,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 const changeUsernameSchema = z
   .object({
-    username: z.string().min(1).max(255),
+    username: z.string().trim().min(1).max(255),
   })
   .strict();
 
@@ -51,6 +52,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
     if (error instanceof UsernameConflictError) {
       return errorResponse(error.message, 409);
+    }
+    if (error instanceof InvalidUsernameError) {
+      return errorResponse(error.message, 400);
     }
     if (error instanceof UserNotFoundError) {
       return errorResponse("User not found", 404);

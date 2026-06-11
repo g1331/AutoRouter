@@ -67,12 +67,24 @@ describe("login-rate-limiter", () => {
     expect(checkLoginRateLimit("alice", "1.1.1.1").allowed).toBe(true);
   });
 
-  it("clears counters on a successful login", () => {
+  it("clears the username counter on a successful login", () => {
     for (let i = 0; i < 5; i += 1) {
       recordLoginFailure("alice", "1.1.1.1");
     }
-    recordLoginSuccess("alice", "1.1.1.1");
+    recordLoginSuccess("alice");
     expect(checkLoginRateLimit("alice", "1.1.1.1").allowed).toBe(true);
+  });
+
+  it("does not reset the shared IP counter on a successful login", () => {
+    // Drive the shared IP dimension to its threshold across many usernames.
+    for (let i = 0; i < 30; i += 1) {
+      recordLoginFailure(`user${i}`, "2.2.2.2");
+    }
+    expect(checkLoginRateLimit("fresh", "2.2.2.2").allowed).toBe(false);
+    // A successful login on one account must not wipe the IP-wide lockout,
+    // otherwise an attacker holding one valid account could reset it at will.
+    recordLoginSuccess("user0");
+    expect(checkLoginRateLimit("fresh", "2.2.2.2").allowed).toBe(false);
   });
 
   it("bounds the number of tracked keys under a flood of unique pairs", () => {

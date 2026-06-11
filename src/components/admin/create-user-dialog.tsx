@@ -48,7 +48,7 @@ export function CreateUserDialog() {
   const schema = z.object({
     username: z.string().min(1, t("usernameRequired")).max(255),
     display_name: z.string().min(1, t("displayNameRequired")).max(255),
-    password: z.string().min(1, t("passwordRequired")),
+    password: z.string().min(8, t("passwordMinLength")),
     role: z.enum(["admin", "member"]),
   });
   type FormValues = z.infer<typeof schema>;

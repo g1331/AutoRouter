@@ -68,6 +68,18 @@ export class UpstreamAssignmentError extends Error {
   }
 }
 
+/**
+ * Raised when a username is empty after normalization. A username consisting
+ * only of whitespace passes a raw `min(1)` length check but normalizes to an
+ * empty string, which would violate the "username MUST be non-empty" invariant.
+ */
+export class InvalidUsernameError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidUsernameError";
+  }
+}
+
 function normalizeRole(role: string | null | undefined): UserRole {
   return role === "admin" ? "admin" : "member";
 }
@@ -81,6 +93,17 @@ function normalizeRole(role: string | null | undefined): UserRole {
 export function isUniqueViolation(err: unknown): boolean {
   const message = (err instanceof Error ? err.message : String(err)).toLowerCase();
   return message.includes("unique") || message.includes("duplicate");
+}
+
+/**
+ * Detect a foreign-key-constraint violation across PostgreSQL and SQLite.
+ * PostgreSQL raises "violates foreign key constraint"; SQLite raises "FOREIGN
+ * KEY constraint failed". An upstream validated moments earlier can still be
+ * deleted concurrently before the dependent insert lands, so callers catch this.
+ */
+export function isForeignKeyViolation(err: unknown): boolean {
+  const message = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return message.includes("foreign key");
 }
 
 export interface UserCreateInput {
@@ -113,6 +136,13 @@ export interface PaginatedUsers {
   page: number;
   pageSize: number;
   totalPages: number;
+  /**
+   * Count of active admins across the entire users table, not just the current
+   * page. The admin console uses this to decide whether a row is the last active
+   * admin even when admins span multiple pages; the service still enforces the
+   * invariant authoritatively, so this is a display-only aid.
+   */
+  activeAdminTotal: number;
 }
 
 function toListItem(row: User, apiKeyCount: number): UserListItem {
@@ -138,6 +168,9 @@ function toListItem(row: User, apiKeyCount: number): UserListItem {
  */
 export async function createUser(input: UserCreateInput): Promise<UserListItem> {
   const username = normalizeUsername(input.username);
+  if (!username) {
+    throw new InvalidUsernameError("Username must not be empty");
+  }
   if (!isPasswordStrong(input.password)) {
     throw new WeakPasswordError("Password does not meet the minimum length requirement");
   }
@@ -194,6 +227,11 @@ export async function listUsers(page: number = 1, pageSize: number = 20): Promis
 
   const [{ value: total }] = await db.select({ value: count() }).from(users);
 
+  const [{ value: activeAdminTotal }] = await db
+    .select({ value: count() })
+    .from(users)
+    .where(and(eq(users.role, "admin"), eq(users.isActive, true)));
+
   const offset = (page - 1) * pageSize;
   const rows = await db
     .select({
@@ -232,7 +270,7 @@ export async function listUsers(page: number = 1, pageSize: number = 20): Promis
 
   const totalPages = total > 0 ? Math.ceil(total / pageSize) : 1;
 
-  return { items, total, page, pageSize, totalPages };
+  return { items, total, page, pageSize, totalPages, activeAdminTotal };
 }
 
 /**
@@ -329,7 +367,18 @@ export async function updateUser(id: string, input: UserUpdateInput): Promise<Us
  */
 export async function changeUsername(id: string, rawUsername: string): Promise<UserListItem> {
   const username = normalizeUsername(rawUsername);
+  if (!username) {
+    throw new InvalidUsernameError("Username must not be empty");
+  }
   const now = new Date();
+
+  // Resolve the target user first so a missing user surfaces as a 404 even when
+  // the requested name happens to be taken by someone else (otherwise the
+  // conflict pre-check below would mask the real cause with a 409).
+  const target = await db.query.users.findFirst({ where: eq(users.id, id) });
+  if (!target) {
+    throw new UserNotFoundError(`User not found: ${id}`);
+  }
 
   const conflict = await db.query.users.findFirst({ where: eq(users.username, username) });
   if (conflict && conflict.id !== id) {
@@ -516,13 +565,23 @@ export async function setUserUpstreams(userId: string, upstreamIds: string[]): P
 
     await tx.delete(userUpstreams).where(eq(userUpstreams.userId, userId));
     if (normalizedIds.length > 0) {
-      await tx.insert(userUpstreams).values(
-        normalizedIds.map((upstreamId) => ({
-          userId,
-          upstreamId,
-          createdAt: now,
-        }))
-      );
+      try {
+        await tx.insert(userUpstreams).values(
+          normalizedIds.map((upstreamId) => ({
+            userId,
+            upstreamId,
+            createdAt: now,
+          }))
+        );
+      } catch (err) {
+        // An upstream validated above can be deleted concurrently before this
+        // insert lands; classify the resulting foreign-key violation as a 400
+        // assignment error rather than letting it surface as a generic 500.
+        if (isForeignKeyViolation(err)) {
+          throw new UpstreamAssignmentError("One or more upstreams no longer exist");
+        }
+        throw err;
+      }
     }
 
     return normalizedIds;

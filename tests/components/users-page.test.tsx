@@ -94,6 +94,7 @@ describe("UsersPage", () => {
         page: 1,
         page_size: 10,
         total_pages: 1,
+        active_admin_total: 1,
       },
       isLoading: false,
     };

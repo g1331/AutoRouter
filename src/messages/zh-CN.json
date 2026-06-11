@@ -84,6 +84,7 @@
     "password": "密码",
     "passwordPlaceholder": "设置初始密码",
     "passwordRequired": "密码不能为空",
+    "passwordMinLength": "密码至少需要 8 个字符",
     "newPassword": "新密码",
     "role": "角色",
     "roleAdmin": "管理员",

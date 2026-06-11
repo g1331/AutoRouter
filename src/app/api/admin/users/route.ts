@@ -5,6 +5,7 @@ import {
   createUser,
   UsernameConflictError,
   WeakPasswordError,
+  InvalidUsernameError,
   type UserCreateInput,
 } from "@/lib/services/user-service";
 import { transformPaginatedUsers, transformUserToApi } from "@/lib/utils/api-transformers";
@@ -15,9 +16,9 @@ const log = createLogger("admin-users");
 
 const createUserSchema = z
   .object({
-    username: z.string().min(1).max(255),
+    username: z.string().trim().min(1).max(255),
     password: z.string().min(1),
-    display_name: z.string().min(1).max(255),
+    display_name: z.string().trim().min(1).max(255),
     role: z.enum(["admin", "member"]).optional(),
   })
   .strict();
@@ -79,6 +80,9 @@ export async function POST(request: NextRequest) {
     }
     if (error instanceof UsernameConflictError) {
       return errorResponse(error.message, 409);
+    }
+    if (error instanceof InvalidUsernameError) {
+      return errorResponse(error.message, 400);
     }
     if (error instanceof WeakPasswordError) {
       return errorResponse(error.message, 400);

@@ -24,8 +24,11 @@ const configSchema = z
     encryptionKeyFile: z.string().optional(),
     adminToken: z.string().min(1).optional(),
 
-    // JWT — optional; when unset the signing key is derived from ENCRYPTION_KEY via HKDF
-    jwtSecret: z.string().optional(),
+    // JWT — optional; when unset the signing key is derived from ENCRYPTION_KEY
+    // via HKDF. When set explicitly it is used verbatim as the HS256 HMAC key,
+    // so a minimum length is enforced to reject trivially brute-forceable
+    // secrets (mirrors the fail-fast length guard on ENCRYPTION_KEY).
+    jwtSecret: z.string().min(32).optional(),
 
     // Logging
     logLevel: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).optional(),

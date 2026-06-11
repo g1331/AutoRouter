@@ -100,6 +100,8 @@ export interface PaginatedUsersResponse {
   page: number;
   page_size: number;
   total_pages: number;
+  /** Table-wide count of active admins, used to guard the last active admin across pages. */
+  active_admin_total: number;
 }
 
 export interface UserCreate {

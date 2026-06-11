@@ -118,7 +118,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return errorResponse("Invalid username or password", 401);
   }
 
-  recordLoginSuccess(username, ip);
+  recordLoginSuccess(username);
 
   const role = user.role === "admin" ? "admin" : "member";
   const token = await signUserToken({ userId: user.id, role });

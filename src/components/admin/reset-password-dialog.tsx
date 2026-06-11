@@ -42,7 +42,7 @@ export function ResetPasswordDialog({ user, open, onOpenChange }: ResetPasswordD
   const tCommon = useTranslations("common");
 
   const schema = z.object({
-    password: z.string().min(1, t("passwordRequired")),
+    password: z.string().min(8, t("passwordMinLength")),
   });
   type FormValues = z.infer<typeof schema>;
 

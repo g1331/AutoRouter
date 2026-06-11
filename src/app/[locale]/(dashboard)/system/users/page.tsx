@@ -31,8 +31,8 @@ export default function UsersPage() {
   const { data, isLoading } = useUsers(page, pageSize);
 
   const users = data?.items ?? [];
-  // 当前页可见的启用管理员数量，用于前端禁用最后一个启用管理员的危险操作
-  const activeAdminCount = users.filter((user) => user.role === "admin" && user.is_active).length;
+  // 全表启用管理员总数（由后端返回），用于跨分页判断最后一个启用管理员的危险操作禁用
+  const activeAdminCount = data?.active_admin_total ?? 0;
   const isLastActiveAdmin = (user: User) =>
     user.role === "admin" && user.is_active && activeAdminCount <= 1;
 
