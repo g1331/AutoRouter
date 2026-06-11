@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import {
   executeUpstreamProbe,
   listUpstreamProbeResults,
@@ -26,9 +25,9 @@ const executeProbeSchema = z.object({
  * List diagnostic probe results for one upstream.
  */
 export async function GET(request: NextRequest, context: RouteContext) {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {
@@ -44,9 +43,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
  * Execute and persist one diagnostic upstream probe.
  */
 export async function POST(request: NextRequest, context: RouteContext) {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {

@@ -30,6 +30,62 @@ export async function verifyApiKey(key: string, hash: string): Promise<boolean> 
 }
 
 /**
+ * Minimum length enforced for user passwords.
+ */
+export const MIN_PASSWORD_LENGTH = 8;
+
+/**
+ * Hash a user password using bcrypt.
+ *
+ * Shares the same bcrypt cost factor as API key hashing.
+ *
+ * @param password - The plaintext password to hash
+ * @returns The bcrypt hash
+ */
+export async function hashPassword(password: string): Promise<string> {
+  return bcryptjs.hash(password, BCRYPT_ROUNDS);
+}
+
+/**
+ * Verify a user password against a bcrypt hash.
+ *
+ * @param password - The plaintext password to verify
+ * @param hash - The bcrypt hash to compare against
+ * @returns True if the password matches the hash
+ */
+export async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  try {
+    return await bcryptjs.compare(password, hash);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check whether a password meets the minimum strength requirement.
+ *
+ * @param password - The plaintext password to check
+ * @returns True if the password satisfies the minimum length
+ */
+export function isPasswordStrong(password: string): boolean {
+  return typeof password === "string" && password.length >= MIN_PASSWORD_LENGTH;
+}
+
+/**
+ * Normalize a username for storage and uniqueness comparison.
+ *
+ * Usernames are case-insensitive login identifiers: surrounding whitespace is
+ * trimmed and the value is lowercased so `ZhangSan` and `zhangsan` resolve to
+ * the same account, avoiding duplicate accounts and login ambiguity.
+ *
+ * @param username - The raw username
+ * @returns The normalized (trimmed, lowercased) username
+ */
+export function normalizeUsername(username: string): string {
+  return username.trim().toLowerCase();
+}
+
+/**
  * Extract API key from Authorization header.
  *
  * Supports both "Bearer <key>" and raw key formats.

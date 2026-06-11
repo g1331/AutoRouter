@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import { testCliproxyConnection } from "@/lib/services/cliproxy-connection-tester";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -16,8 +15,9 @@ const preTestSchema = z.object({
  * POST /api/admin/cliproxy/instances/test - 对未保存配置执行创建前连通性预检测。
  */
 export async function POST(request: NextRequest): Promise<Response> {
-  if (!validateAdminAuth(request.headers.get("authorization"))) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   let rawBody: unknown;

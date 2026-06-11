@@ -1,5 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { hashApiKey, verifyApiKey, extractApiKey, getKeyPrefix } from "@/lib/utils/auth";
+import {
+  hashApiKey,
+  verifyApiKey,
+  extractApiKey,
+  getKeyPrefix,
+  hashPassword,
+  verifyPassword,
+  isPasswordStrong,
+  normalizeUsername,
+  MIN_PASSWORD_LENGTH,
+} from "@/lib/utils/auth";
 
 describe("auth utilities", () => {
   describe("hashApiKey", () => {
@@ -172,6 +182,54 @@ describe("auth utilities", () => {
       await expect(freshRevealApiKey("encrypted-value", "somehash")).rejects.toThrow(
         "Key reveal is disabled"
       );
+    });
+  });
+
+  describe("hashPassword / verifyPassword", () => {
+    it("hashes a password to a bcrypt hash distinct from plaintext", async () => {
+      const password = "correct horse battery";
+      const hash = await hashPassword(password);
+      expect(hash).not.toBe(password);
+      expect(hash.startsWith("$2")).toBe(true);
+    });
+
+    it("verifies a correct password", async () => {
+      const password = "correct horse battery";
+      const hash = await hashPassword(password);
+      expect(await verifyPassword(password, hash)).toBe(true);
+    });
+
+    it("rejects an incorrect password", async () => {
+      const hash = await hashPassword("correct horse battery");
+      expect(await verifyPassword("wrong password", hash)).toBe(false);
+    });
+
+    it("handles a malformed hash gracefully", async () => {
+      expect(await verifyPassword("any password", "not-a-bcrypt-hash")).toBe(false);
+    });
+  });
+
+  describe("isPasswordStrong", () => {
+    it("accepts a password at the minimum length", () => {
+      expect(isPasswordStrong("a".repeat(MIN_PASSWORD_LENGTH))).toBe(true);
+    });
+
+    it("rejects a password below the minimum length", () => {
+      expect(isPasswordStrong("a".repeat(MIN_PASSWORD_LENGTH - 1))).toBe(false);
+    });
+
+    it("rejects an empty password", () => {
+      expect(isPasswordStrong("")).toBe(false);
+    });
+  });
+
+  describe("normalizeUsername", () => {
+    it("trims surrounding whitespace and lowercases", () => {
+      expect(normalizeUsername("  ZhangSan  ")).toBe("zhangsan");
+    });
+
+    it("treats case variants as the same identifier", () => {
+      expect(normalizeUsername("ALICE")).toBe(normalizeUsername("alice"));
     });
   });
 });

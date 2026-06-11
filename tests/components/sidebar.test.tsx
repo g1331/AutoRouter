@@ -56,16 +56,20 @@ vi.mock("lucide-react", () => ({
   Wallet: () => <svg data-testid="icon-wallet" />,
   RefreshCw: () => <svg data-testid="icon-refresh-cw" />,
   Github: () => <svg data-testid="icon-github" />,
+  Users: () => <svg data-testid="icon-users" />,
 }));
 
 // Mock useAuth hook
 const mockLogout = vi.fn();
+// 可变角色：用于验证用户管理入口按角色显隐
+const authState = vi.hoisted(() => ({ role: "admin" as "admin" | "member" }));
 vi.mock("@/providers/auth-provider", () => ({
   useAuth: () => ({
     logout: mockLogout,
     token: "test-token",
     setToken: vi.fn(),
     apiClient: {},
+    principal: { kind: "user", role: authState.role, username: "u", displayName: "U" },
   }),
 }));
 
@@ -121,6 +125,7 @@ describe("Sidebar", () => {
     mockPathname = "/dashboard";
     onToggleCollapse.mockReset();
     mockLogout.mockReset();
+    authState.role = "admin";
   });
 
   describe("Rendering", () => {
@@ -348,6 +353,22 @@ describe("Sidebar", () => {
 
       // Sidebar should be in the document
       expect(screen.getByRole("navigation", { name: "Main navigation" })).toBeInTheDocument();
+    });
+  });
+
+  describe("Role-based navigation", () => {
+    it("shows user management entry for admin principal", () => {
+      authState.role = "admin";
+      renderSidebar();
+
+      expect(screen.getAllByText("users").length).toBeGreaterThan(0);
+    });
+
+    it("hides user management entry for member principal", () => {
+      authState.role = "member";
+      renderSidebar();
+
+      expect(screen.queryByText("users")).not.toBeInTheDocument();
     });
   });
 });

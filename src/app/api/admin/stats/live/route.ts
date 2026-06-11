@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { errorResponse } from "@/lib/utils/api-auth";
-import { validateAdminAuth } from "@/lib/utils/auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import { getLivePulseSnapshot } from "@/lib/services/live-pulse-service";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -23,9 +22,9 @@ function formatSseEvent(eventName: string, data: unknown): string {
  * JSON, used by the frontend fallback polling when SSE is unavailable.
  */
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   if (request.nextUrl.searchParams.get("mode") === "snapshot") {

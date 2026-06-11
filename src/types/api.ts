@@ -79,6 +79,48 @@ export interface APIKeyRevealResponse {
   name: string;
 }
 
+// ========== User Management Types ==========
+
+export type UserRole = "admin" | "member";
+
+export interface User {
+  id: string; // UUID
+  username: string;
+  display_name: string;
+  role: UserRole;
+  is_active: boolean;
+  api_key_count: number;
+  created_at: string; // ISO 8601 date string
+  updated_at: string; // ISO 8601 date string
+}
+
+export interface PaginatedUsersResponse {
+  items: User[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  /** Table-wide count of active admins, used to guard the last active admin across pages. */
+  active_admin_total: number;
+}
+
+export interface UserCreate {
+  username: string;
+  password: string;
+  display_name: string;
+  role?: UserRole;
+}
+
+export interface UserUpdate {
+  display_name?: string;
+  role?: UserRole;
+  is_active?: boolean;
+}
+
+export interface UserUpstreamsResponse {
+  upstream_ids: string[]; // UUID[]
+}
+
 // ========== Load Balancing Types ==========
 
 /**

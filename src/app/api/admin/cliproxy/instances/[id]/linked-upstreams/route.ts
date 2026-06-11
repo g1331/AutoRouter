@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import { listCliproxyLinkedUpstreams } from "@/lib/services/cliproxy-linked-upstreams-service";
 import { handleCliproxyRouteError } from "@/lib/utils/cliproxy-route-errors";
 import { createLogger } from "@/lib/utils/logger";
@@ -16,8 +15,9 @@ type RouteContext = { params: Promise<{ id: string }> };
  * 单账号上游通过 `cliproxyAuthFileName` 非空识别，其余视为池上游。
  */
 export async function GET(request: NextRequest, context: RouteContext): Promise<Response> {
-  if (!validateAdminAuth(request.headers.get("authorization"))) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   const { id } = await context.params;

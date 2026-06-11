@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import { forceOpen } from "@/lib/services/circuit-breaker";
 import { db, upstreams } from "@/lib/db";
 import { eq } from "drizzle-orm";
@@ -16,9 +15,9 @@ interface RouteContext {
  * Handle POST /api/admin/circuit-breakers/[id]/force-open and force the upstream circuit breaker to OPEN.
  */
 export async function POST(request: NextRequest, context: RouteContext): Promise<Response> {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {

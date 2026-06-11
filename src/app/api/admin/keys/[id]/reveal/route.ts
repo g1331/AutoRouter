@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import { revealApiKey, ApiKeyNotFoundError, LegacyApiKeyError } from "@/lib/services/key-manager";
 import { transformApiKeyRevealToApi } from "@/lib/utils/api-transformers";
 import { config } from "@/lib/utils/config";
@@ -25,9 +24,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
 }
 
 async function handleReveal(request: NextRequest, context: RouteContext) {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   // Check if key reveal is enabled
