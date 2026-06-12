@@ -37,6 +37,8 @@ export interface ApiKeyCreateInput {
   name: string;
   upstreamIds: string[];
   accessMode?: ApiKeyAccessMode;
+  // Owner of the key; the self-service portal forces this to the caller.
+  userId?: string | null;
   description?: string | null;
   expiresAt?: Date | null;
   spendingRules?: SpendingRule[] | null;
@@ -302,6 +304,7 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
       keyValueEncrypted,
       keyPrefix,
       name,
+      userId: input.userId ?? null,
       description: description ?? null,
       accessMode: normalizedAccessMode,
       allowedModels,
@@ -376,23 +379,32 @@ export async function deleteApiKey(keyId: string): Promise<void> {
   log.info({ keyPrefix: existing.keyPrefix, name: existing.name }, "deleted API key");
 }
 
+export interface ListApiKeysFilter {
+  // Owner filter; the self-service portal injects the authenticated userId.
+  userId?: string;
+}
+
 /**
- * List all API keys with pagination.
+ * List API keys with pagination and an optional owner filter.
  */
 export async function listApiKeys(
   page: number = 1,
-  pageSize: number = 20
+  pageSize: number = 20,
+  filter: ListApiKeysFilter = {}
 ): Promise<PaginatedApiKeys> {
   // Validate pagination params
   page = Math.max(1, page);
   pageSize = Math.min(100, Math.max(1, pageSize));
 
+  const whereClause = filter.userId ? eq(apiKeys.userId, filter.userId) : undefined;
+
   // Count total keys
-  const [{ value: total }] = await db.select({ value: count() }).from(apiKeys);
+  const [{ value: total }] = await db.select({ value: count() }).from(apiKeys).where(whereClause);
 
   // Query paginated results (ordered by created_at desc)
   const offset = (page - 1) * pageSize;
   const keys = await db.query.apiKeys.findMany({
+    where: whereClause,
     orderBy: [desc(apiKeys.createdAt)],
     limit: pageSize,
     offset,

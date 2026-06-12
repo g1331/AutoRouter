@@ -22,6 +22,7 @@ vi.mock("@/lib/utils/auth", async (importActual) => {
   return {
     ...actual,
     hashPassword: vi.fn(async (password: string) => `hashed:${password}`),
+    verifyPassword: vi.fn(async (password: string, hash: string) => hash === `hashed:${password}`),
   };
 });
 
@@ -100,6 +101,7 @@ import {
   updateUser,
   changeUsername,
   resetPassword,
+  changeOwnPassword,
   deleteUser,
   assignApiKeyOwnership,
   revokeApiKeyOwnership,
@@ -114,6 +116,7 @@ import {
   ApiKeyOwnershipError,
   UpstreamAssignmentError,
   InvalidUsernameError,
+  InvalidCredentialsError,
 } from "@/lib/services/user-service";
 
 const NONEXISTENT_ID = "00000000-0000-0000-0000-000000000000";
@@ -416,6 +419,37 @@ describe("user-service", () => {
       await expect(resetPassword(NONEXISTENT_ID, "newpassword123")).rejects.toBeInstanceOf(
         UserNotFoundError
       );
+    });
+  });
+
+  describe("changeOwnPassword", () => {
+    it("updates the hash after verifying the current password", async () => {
+      const u = await createUser({ username: "u", password: "password123", displayName: "U" });
+      await changeOwnPassword(u.id, "password123", "newpassword123");
+      const [persisted] = await db.select().from(users).where(eq(users.id, u.id));
+      expect(persisted.passwordHash).toBe("hashed:newpassword123");
+    });
+
+    it("rejects a wrong current password and keeps the stored hash", async () => {
+      const u = await createUser({ username: "u", password: "password123", displayName: "U" });
+      await expect(
+        changeOwnPassword(u.id, "wrongpassword", "newpassword123")
+      ).rejects.toBeInstanceOf(InvalidCredentialsError);
+      const [persisted] = await db.select().from(users).where(eq(users.id, u.id));
+      expect(persisted.passwordHash).toBe("hashed:password123");
+    });
+
+    it("rejects a weak new password", async () => {
+      const u = await createUser({ username: "u", password: "password123", displayName: "U" });
+      await expect(changeOwnPassword(u.id, "password123", "short")).rejects.toBeInstanceOf(
+        WeakPasswordError
+      );
+    });
+
+    it("throws for a missing user", async () => {
+      await expect(
+        changeOwnPassword(NONEXISTENT_ID, "password123", "newpassword123")
+      ).rejects.toBeInstanceOf(UserNotFoundError);
     });
   });
 
