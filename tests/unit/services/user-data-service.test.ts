@@ -72,11 +72,20 @@ vi.mock("@/lib/db", async () => {
   return { db, ...schema };
 });
 
-import { db, users, apiKeys, requestLogs, requestBillingSnapshots } from "@/lib/db";
+import {
+  db,
+  users,
+  apiKeys,
+  requestLogs,
+  requestBillingSnapshots,
+  upstreams,
+  userUpstreams,
+} from "@/lib/db";
 import {
   getUserOverview,
   listUserRequestLogs,
   getUserUsageStats,
+  listUserUpstreamOptions,
 } from "@/lib/services/user-data-service";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -171,10 +180,27 @@ async function seedBillingSnapshot(overrides: {
   });
 }
 
+async function seedUpstream(name: string): Promise<{ id: string }> {
+  const now = new Date();
+  const [row] = await db
+    .insert(upstreams)
+    .values({
+      name,
+      baseUrl: "https://example.test",
+      apiKeyEncrypted: "encrypted:test",
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning();
+  return row;
+}
+
 beforeEach(async () => {
   await db.delete(requestBillingSnapshots);
   await db.delete(requestLogs);
   await db.delete(apiKeys);
+  await db.delete(userUpstreams);
+  await db.delete(upstreams);
   await db.delete(users);
 });
 
@@ -355,5 +381,35 @@ describe("getUserUsageStats", () => {
     const usage = await getUserUsageStats(alice.id);
 
     expect(usage.points).toEqual([]);
+  });
+});
+
+describe("listUserUpstreamOptions", () => {
+  it("returns only the caller's granted upstreams as id + name, sorted by name", async () => {
+    const alice = await seedUser("alice");
+    const bob = await seedUser("bob");
+    const upBeta = await seedUpstream("beta");
+    const upAlpha = await seedUpstream("alpha");
+    const upOther = await seedUpstream("other");
+
+    await db.insert(userUpstreams).values([
+      { userId: alice.id, upstreamId: upBeta.id, createdAt: new Date() },
+      { userId: alice.id, upstreamId: upAlpha.id, createdAt: new Date() },
+      { userId: bob.id, upstreamId: upOther.id, createdAt: new Date() },
+    ]);
+
+    const options = await listUserUpstreamOptions(alice.id);
+
+    expect(options).toEqual([
+      { id: upAlpha.id, name: "alpha" },
+      { id: upBeta.id, name: "beta" },
+    ]);
+  });
+
+  it("returns an empty list for a user without grants", async () => {
+    const alice = await seedUser("alice");
+    await seedUpstream("alpha");
+
+    expect(await listUserUpstreamOptions(alice.id)).toEqual([]);
   });
 });

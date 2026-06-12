@@ -1,5 +1,5 @@
-import { and, count, eq, gte, sql } from "drizzle-orm";
-import { db, apiKeys, requestLogs, requestBillingSnapshots } from "../db";
+import { and, asc, count, eq, gte, sql } from "drizzle-orm";
+import { db, apiKeys, requestLogs, requestBillingSnapshots, upstreams, userUpstreams } from "../db";
 import {
   listRequestLogs,
   reconcileStaleInProgressRequestLogs,
@@ -24,6 +24,11 @@ export interface UserOverview {
   totalCostUsd: number;
   activeKeyCount: number;
   totalKeyCount: number;
+}
+
+export interface UserUpstreamOption {
+  id: string;
+  name: string;
 }
 
 export interface UserUsagePoint {
@@ -104,6 +109,20 @@ export async function getUserOverview(userId: string): Promise<UserOverview> {
     activeKeyCount: keyRows[0]?.active ?? 0,
     totalKeyCount: keyRows[0]?.total ?? 0,
   };
+}
+
+/**
+ * Upstreams the caller may authorize on self-service keys: the user's
+ * user_upstreams grant set, exposed as id + display name only so no upstream
+ * configuration (base URL, key material) leaks to members.
+ */
+export async function listUserUpstreamOptions(userId: string): Promise<UserUpstreamOption[]> {
+  return db
+    .select({ id: upstreams.id, name: upstreams.name })
+    .from(userUpstreams)
+    .innerJoin(upstreams, eq(userUpstreams.upstreamId, upstreams.id))
+    .where(eq(userUpstreams.userId, userId))
+    .orderBy(asc(upstreams.name));
 }
 
 /**

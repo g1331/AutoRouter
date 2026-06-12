@@ -34,12 +34,14 @@ vi.mock("@/lib/services/user-data-service", () => ({
   getUserOverview: vi.fn(),
   listUserRequestLogs: vi.fn(),
   getUserUsageStats: vi.fn(),
+  listUserUpstreamOptions: vi.fn(),
 }));
 
 import * as userDataService from "@/lib/services/user-data-service";
 import { GET as overviewRoute } from "@/app/api/user/overview/route";
 import { GET as logsRoute } from "@/app/api/user/logs/route";
 import { GET as usageRoute } from "@/app/api/user/usage/route";
+import { GET as upstreamsRoute } from "@/app/api/user/upstreams/route";
 
 const SELF_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_ID = "22222222-2222-4222-8222-222222222222";
@@ -94,6 +96,7 @@ describe("user routes — guard", () => {
     ["overview", () => overviewRoute(makeRequest("http://localhost/api/user/overview", null))],
     ["logs", () => logsRoute(makeRequest("http://localhost/api/user/logs", null))],
     ["usage", () => usageRoute(makeRequest("http://localhost/api/user/usage", null))],
+    ["upstreams", () => upstreamsRoute(makeRequest("http://localhost/api/user/upstreams", null))],
   ])("rejects an unauthenticated request to %s with 401", async (_name, invoke) => {
     const res = await invoke();
     expect(res.status).toBe(401);
@@ -106,12 +109,33 @@ describe("user routes — guard", () => {
     ],
     ["logs", () => logsRoute(makeRequest("http://localhost/api/user/logs", ADMIN_TOKEN))],
     ["usage", () => usageRoute(makeRequest("http://localhost/api/user/usage", ADMIN_TOKEN))],
+    [
+      "upstreams",
+      () => upstreamsRoute(makeRequest("http://localhost/api/user/upstreams", ADMIN_TOKEN)),
+    ],
   ])("rejects the ADMIN_TOKEN identity on %s with 403", async (_name, invoke) => {
     const res = await invoke();
     expect(res.status).toBe(403);
     expect(userDataService.getUserOverview).not.toHaveBeenCalled();
     expect(userDataService.listUserRequestLogs).not.toHaveBeenCalled();
     expect(userDataService.getUserUsageStats).not.toHaveBeenCalled();
+    expect(userDataService.listUserUpstreamOptions).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /api/user/upstreams", () => {
+  it("returns the caller's granted upstream options", async () => {
+    vi.mocked(userDataService.listUserUpstreamOptions).mockResolvedValue([
+      { id: "33333333-3333-4333-8333-333333333333", name: "alpha" },
+    ]);
+
+    const res = await upstreamsRoute(makeRequest("http://localhost/api/user/upstreams", MEMBER));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({
+      items: [{ id: "33333333-3333-4333-8333-333333333333", name: "alpha" }],
+    });
+    expect(userDataService.listUserUpstreamOptions).toHaveBeenCalledWith(SELF_ID);
   });
 });
 
