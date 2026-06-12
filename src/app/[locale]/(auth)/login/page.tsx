@@ -111,7 +111,7 @@ type LoginMode = "account" | "token";
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { setToken, token } = useAuth();
+  const { setToken, token, principal } = useAuth();
   const [mode, setMode] = useState<LoginMode>("account");
   const [isLoading, setIsLoading] = useState(false);
   const [username, setUsername] = useState("");
@@ -130,21 +130,25 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
-    if (token) {
-      const redirect = searchParams.get("redirect") || "/dashboard";
+    if (token && principal) {
+      const fallback = principal.role === "member" ? "/portal" : "/dashboard";
+      const redirect = searchParams.get("redirect") || fallback;
       router.push(redirect);
     }
-  }, [token, router, searchParams]);
+  }, [token, principal, router, searchParams]);
 
   const switchMode = (next: LoginMode) => {
     setMode(next);
     setError("");
   };
 
-  const completeLogin = (newToken: string) => {
+  // 登录后按角色分流落地页（决策九）：member 进入自助门户，
+  // admin 与管理员令牌进入管理后台；显式 redirect 参数仍然优先。
+  const completeLogin = (newToken: string, role: "admin" | "member") => {
     setToken(newToken);
     toast.success(t("loginSuccess"));
-    const redirect = searchParams.get("redirect") || "/dashboard";
+    const fallback = role === "member" ? "/portal" : "/dashboard";
+    const redirect = searchParams.get("redirect") || fallback;
     router.push(redirect);
   };
 
@@ -166,8 +170,11 @@ export default function LoginPage() {
       });
 
       if (response.ok) {
-        const data = (await response.json()) as { token: string };
-        completeLogin(data.token);
+        const data = (await response.json()) as {
+          token: string;
+          user: { role: "admin" | "member" };
+        };
+        completeLogin(data.token, data.user.role);
         return;
       }
 
@@ -195,7 +202,7 @@ export default function LoginPage() {
     try {
       const tempClient = createApiClient({ getToken: () => inputValue });
       await tempClient.get("/admin/keys?page=1&page_size=1");
-      completeLogin(inputValue);
+      completeLogin(inputValue, "admin");
     } catch {
       if (typeof window !== "undefined") {
         sessionStorage.removeItem("admin_token");
