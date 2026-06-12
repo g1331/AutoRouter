@@ -110,8 +110,8 @@
 
 ## 13. 集成校验与收尾
 
-- [ ] 13.1 运行 `pnpm test:run` 全量单元与组件测试，修复回归
-- [ ] 13.2 运行 `pnpm exec tsc --noEmit`、`pnpm lint`、`pnpm format:check` 确认全部通过
-- [ ] 13.3 更新 `.env.example` 补充 `JWT_SECRET` 说明，更新 `AGENTS.md` 中认证与用户体系相关描述
-- [ ] 13.4 补充登录、用户管理、自助门户、数据越权、停用连带失效的 E2E 场景，运行 `pnpm e2e` 确认通过
-- [ ] 13.5 通过质量门禁后提交：`test(multi-user): 补全集成校验与文档更新`
+- [x] 13.1 运行 `pnpm test:run` 全量单元与组件测试，修复回归
+- [x] 13.2 运行 `pnpm exec tsc --noEmit`、`pnpm lint`、`pnpm format:check` 确认全部通过
+- [x] 13.3 更新 `.env.example` 补充 `JWT_SECRET` 说明，更新 `AGENTS.md` 中认证与用户体系相关描述
+- [x] 13.4 补充登录、用户管理、自助门户、数据越权、停用连带失效的 E2E 场景，运行 `pnpm e2e` 确认通过
+- [x] 13.5 通过质量门禁后提交：`test(multi-user): 补全集成校验与文档更新`
