@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
 import {
@@ -42,12 +43,12 @@ interface UsersTableProps {
   activeAdminCount: number;
   /** 调用者是否为 ADMIN_TOKEN 超级令牌；为真时豁免“最后一个启用管理员”的禁用。 */
   bypassLastAdminGuard?: boolean;
-  onEdit: (user: User) => void;
-  onChangeUsername: (user: User) => void;
-  onResetPassword: (user: User) => void;
-  onConfigureUpstreams: (user: User) => void;
-  onAssignKeys: (user: User) => void;
-  onDelete: (user: User) => void;
+  onEdit: (user: User, source: HTMLElement | null) => void;
+  onChangeUsername: (user: User, source: HTMLElement | null) => void;
+  onResetPassword: (user: User, source: HTMLElement | null) => void;
+  onConfigureUpstreams: (user: User, source: HTMLElement | null) => void;
+  onAssignKeys: (user: User, source: HTMLElement | null) => void;
+  onDelete: (user: User, source: HTMLElement | null) => void;
 }
 
 /**
@@ -70,6 +71,11 @@ export function UsersTable({
   const t = useTranslations("users");
   const locale = useLocale();
   const dateLocale = getDateLocale(locale);
+
+  // 操作入口都在 DropdownMenu 内（菜单内容经 Portal 挂到 body，无法用 closest 取到行），
+  // 因此按 user.id 收集每一行元素，作为容器变形动画的源元素。
+  const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
+  const rowSource = (id: string) => rowRefs.current.get(id) ?? null;
 
   const isLastActiveAdmin = (user: User) =>
     !bypassLastAdminGuard && user.role === "admin" && user.is_active && activeAdminCount <= 1;
@@ -116,7 +122,17 @@ export function UsersTable({
           {users.map((user) => {
             const lastAdmin = isLastActiveAdmin(user);
             return (
-              <TableRow key={user.id}>
+              <TableRow
+                key={user.id}
+                data-morph-source
+                ref={(el) => {
+                  if (el) {
+                    rowRefs.current.set(user.id, el);
+                  } else {
+                    rowRefs.current.delete(user.id);
+                  }
+                }}
+              >
                 <TableCell className="font-medium">{user.username}</TableCell>
                 <TableCell>{user.display_name}</TableCell>
                 <TableCell>
@@ -168,29 +184,31 @@ export function UsersTable({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-52">
-                      <DropdownMenuItem onClick={() => onEdit(user)}>
+                      <DropdownMenuItem onClick={() => onEdit(user, rowSource(user.id))}>
                         <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
                         {t("edit")}
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => onChangeUsername(user)}>
+                      <DropdownMenuItem onClick={() => onChangeUsername(user, rowSource(user.id))}>
                         <UserCog className="mr-2 h-4 w-4" aria-hidden="true" />
                         {t("changeUsername")}
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => onResetPassword(user)}>
+                      <DropdownMenuItem onClick={() => onResetPassword(user, rowSource(user.id))}>
                         <KeyRound className="mr-2 h-4 w-4" aria-hidden="true" />
                         {t("resetPassword")}
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => onConfigureUpstreams(user)}>
+                      <DropdownMenuItem
+                        onClick={() => onConfigureUpstreams(user, rowSource(user.id))}
+                      >
                         <Server className="mr-2 h-4 w-4" aria-hidden="true" />
                         {t("configureUpstreams")}
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => onAssignKeys(user)}>
+                      <DropdownMenuItem onClick={() => onAssignKeys(user, rowSource(user.id))}>
                         <Link2 className="mr-2 h-4 w-4" aria-hidden="true" />
                         {t("assignKeys")}
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
-                        onClick={() => onDelete(user)}
+                        onClick={() => onDelete(user, rowSource(user.id))}
                         disabled={lastAdmin}
                         className="text-status-error focus:text-status-error"
                       >

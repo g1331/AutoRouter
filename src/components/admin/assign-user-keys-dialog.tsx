@@ -21,12 +21,22 @@ interface AssignUserKeysDialogProps {
   user: User;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** 启用容器变形动画（View Transition）。 */
+  morph?: boolean;
+  /** 容器变形使用的 view-transition-name，须与 CSS 具名过渡对应。 */
+  morphName?: string;
 }
 
 /**
  * 分配密钥对话框：把已有 API 密钥的归属人设置为该用户。分配生效后用户列表的密钥数随之更新。
  */
-export function AssignUserKeysDialog({ user, open, onOpenChange }: AssignUserKeysDialogProps) {
+export function AssignUserKeysDialog({
+  user,
+  open,
+  onOpenChange,
+  morph = false,
+  morphName = "morph-user-row",
+}: AssignUserKeysDialogProps) {
   const { data, isLoading } = useAPIKeys(1, 100);
   const assignMutation = useAssignApiKeyOwner();
   const t = useTranslations("users");
@@ -52,7 +62,7 @@ export function AssignUserKeysDialog({ user, open, onOpenChange }: AssignUserKey
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg" morph={morph} morphName={morphName}>
         <DialogHeader>
           <DialogTitle>{t("assignKeysTitle")}</DialogTitle>
           <DialogDescription>{t("assignKeysDesc")}</DialogDescription>

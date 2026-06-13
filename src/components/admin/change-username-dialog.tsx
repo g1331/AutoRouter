@@ -31,12 +31,22 @@ interface ChangeUsernameDialogProps {
   user: User;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** 启用容器变形动画（View Transition）。 */
+  morph?: boolean;
+  /** 容器变形使用的 view-transition-name，须与 CSS 具名过渡对应。 */
+  morphName?: string;
 }
 
 /**
  * 修改用户名对话框：为用户设置新的登录用户名，唯一性冲突由服务端返回 409 提示。
  */
-export function ChangeUsernameDialog({ user, open, onOpenChange }: ChangeUsernameDialogProps) {
+export function ChangeUsernameDialog({
+  user,
+  open,
+  onOpenChange,
+  morph = false,
+  morphName = "morph-user-row",
+}: ChangeUsernameDialogProps) {
   const mutation = useChangeUsername();
   const t = useTranslations("users");
   const tCommon = useTranslations("common");
@@ -66,7 +76,7 @@ export function ChangeUsernameDialog({ user, open, onOpenChange }: ChangeUsernam
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md" morph={morph} morphName={morphName}>
         <DialogHeader>
           <DialogTitle>{t("changeUsernameTitle")}</DialogTitle>
           <DialogDescription>{t("changeUsernameDesc")}</DialogDescription>

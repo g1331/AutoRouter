@@ -41,6 +41,10 @@ interface EditUserDialogProps {
   onOpenChange: (open: boolean) => void;
   /** 该用户是当前可见数据中唯一启用的管理员时，锁定角色与启用状态以避免误操作。 */
   isLastActiveAdmin?: boolean;
+  /** 启用容器变形动画（View Transition）。 */
+  morph?: boolean;
+  /** 容器变形使用的 view-transition-name，须与 CSS 具名过渡对应。 */
+  morphName?: string;
 }
 
 /**
@@ -51,6 +55,8 @@ export function EditUserDialog({
   open,
   onOpenChange,
   isLastActiveAdmin = false,
+  morph = false,
+  morphName = "morph-user-row",
 }: EditUserDialogProps) {
   const updateMutation = useUpdateUser();
   const t = useTranslations("users");
@@ -92,7 +98,7 @@ export function EditUserDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md" morph={morph} morphName={morphName}>
         <DialogHeader>
           <DialogTitle>{t("editUserTitle")}</DialogTitle>
           <DialogDescription>{t("editUserDesc")}</DialogDescription>

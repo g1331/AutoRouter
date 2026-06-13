@@ -139,9 +139,13 @@ describe("UsersTable", () => {
     render(<UsersTable users={[user]} activeAdminCount={0} {...handlers} />);
 
     fireEvent.click(screen.getByRole("button", { name: "edit" }));
-    expect(handlers.onEdit).toHaveBeenCalledWith(user);
+    expect(handlers.onEdit).toHaveBeenCalledWith(user, expect.any(HTMLElement));
 
     fireEvent.click(screen.getByRole("button", { name: "deleteUser" }));
-    expect(handlers.onDelete).toHaveBeenCalledWith(user);
+    expect(handlers.onDelete).toHaveBeenCalledWith(user, expect.any(HTMLElement));
+
+    // 容器变形动画需要源元素：下拉操作以所在行（带 data-morph-source）为变形源。
+    const source = handlers.onEdit.mock.calls[0][1] as HTMLElement;
+    expect(source.hasAttribute("data-morph-source")).toBe(true);
   });
 });

@@ -23,12 +23,22 @@ interface UserUpstreamsDialogProps {
   user: User;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** 启用容器变形动画（View Transition）。 */
+  morph?: boolean;
+  /** 容器变形使用的 view-transition-name，须与 CSS 具名过渡对应。 */
+  morphName?: string;
 }
 
 /**
  * 配置可用上游对话框：选择该用户的密钥允许路由到的上游集合，整体替换保存。
  */
-export function UserUpstreamsDialog({ user, open, onOpenChange }: UserUpstreamsDialogProps) {
+export function UserUpstreamsDialog({
+  user,
+  open,
+  onOpenChange,
+  morph = false,
+  morphName = "morph-user-row",
+}: UserUpstreamsDialogProps) {
   const { data: currentUpstreams, isLoading: currentLoading } = useUserUpstreams(user.id, open);
   const { data: allUpstreams, isLoading: allLoading } = useAllUpstreams();
   const setMutation = useSetUserUpstreams();
@@ -79,7 +89,7 @@ export function UserUpstreamsDialog({ user, open, onOpenChange }: UserUpstreamsD
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg" morph={morph} morphName={morphName}>
         <DialogHeader>
           <DialogTitle>{t("configureUpstreamsTitle")}</DialogTitle>
           <DialogDescription>{t("configureUpstreamsDesc")}</DialogDescription>
