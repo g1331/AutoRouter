@@ -47,6 +47,10 @@ interface PortalKeyDialogProps {
   apiKey?: APIKey | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** 启用容器变形动画（View Transition）。 */
+  morph?: boolean;
+  /** 容器变形使用的 view-transition-name，须与 CSS 具名过渡对应。 */
+  morphName?: string;
 }
 
 function toSpendingRuleDrafts(rules: APIKeySpendingRule[] | null | undefined): SpendingRuleDraft[] {
@@ -63,13 +67,24 @@ function toSpendingRuleDrafts(rules: APIKeySpendingRule[] | null | undefined): S
  * admin-granted set, and spending rules can only be tightened (the server
  * rejects any relaxation).
  */
-export function PortalKeyDialog({ mode, apiKey, open, onOpenChange }: PortalKeyDialogProps) {
+export function PortalKeyDialog({
+  mode,
+  apiKey,
+  open,
+  onOpenChange,
+  morph = false,
+  morphName = "morph-portal-key-form",
+}: PortalKeyDialogProps) {
   const [createdKey, setCreatedKey] = useState<APIKeyCreateResponse | null>(null);
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-xl flex-col overflow-hidden p-0">
+        <DialogContent
+          className="flex max-h-[calc(100vh-2rem)] max-w-xl flex-col overflow-hidden p-0"
+          morph={morph}
+          morphName={morphName}
+        >
           {/* Remounting the body per open/key resets the form without effects. */}
           {open && (
             <PortalKeyDialogBody

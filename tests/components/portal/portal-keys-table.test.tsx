@@ -70,10 +70,14 @@ describe("PortalKeysTable", () => {
     render(<PortalKeysTable keys={[key]} onEdit={onEdit} onRevoke={onRevoke} />);
 
     fireEvent.click(screen.getByRole("button", { name: "keys.editKey" }));
-    expect(onEdit).toHaveBeenCalledWith(key);
+    expect(onEdit).toHaveBeenCalledWith(key, expect.any(HTMLElement));
 
     fireEvent.click(screen.getByRole("button", { name: "keys.revokeKey" }));
-    expect(onRevoke).toHaveBeenCalledWith(key);
+    expect(onRevoke).toHaveBeenCalledWith(key, expect.any(HTMLElement));
+
+    // 容器变形动画需要源元素：表格行须带 data-morph-source 供按钮 closest 取到。
+    const editSource = onEdit.mock.calls[0][1] as HTMLElement;
+    expect(editSource.hasAttribute("data-morph-source")).toBe(true);
   });
 
   it("toggles the active state through the portal mutation", () => {

@@ -22,8 +22,8 @@ import type { APIKey } from "@/types/api";
 
 interface PortalKeysTableProps {
   keys: APIKey[];
-  onEdit: (key: APIKey) => void;
-  onRevoke: (key: APIKey) => void;
+  onEdit: (key: APIKey, source: HTMLElement | null) => void;
+  onRevoke: (key: APIKey, source: HTMLElement | null) => void;
 }
 
 function maskKeyPrefix(keyPrefix: string): string {
@@ -76,7 +76,7 @@ export function PortalKeysTable({ keys, onEdit, onRevoke }: PortalKeysTableProps
       </TableHeader>
       <TableBody>
         {keys.map((key) => (
-          <TableRow key={key.id}>
+          <TableRow key={key.id} data-morph-source>
             <TableCell>
               <div className="min-w-0">
                 <p className="truncate type-body-medium text-foreground">{key.name}</p>
@@ -146,7 +146,9 @@ export function PortalKeysTable({ keys, onEdit, onRevoke }: PortalKeysTableProps
                   type="button"
                   variant="ghost"
                   size="icon"
-                  onClick={() => onEdit(key)}
+                  onClick={(event) =>
+                    onEdit(key, event.currentTarget.closest<HTMLElement>("[data-morph-source]"))
+                  }
                   aria-label={t("editKey")}
                   title={t("editKey")}
                 >
@@ -157,7 +159,9 @@ export function PortalKeysTable({ keys, onEdit, onRevoke }: PortalKeysTableProps
                   variant="ghost"
                   size="icon"
                   className="text-destructive hover:text-destructive"
-                  onClick={() => onRevoke(key)}
+                  onClick={(event) =>
+                    onRevoke(key, event.currentTarget.closest<HTMLElement>("[data-morph-source]"))
+                  }
                   aria-label={t("revokeKey")}
                   title={t("revokeKey")}
                 >
