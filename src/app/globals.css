@@ -431,6 +431,31 @@
   }
 }
 
+/* 落地页：CTA 涟漪水波纹 + Hero 文案依次淡入上移 */
+@keyframes vr-ripple {
+  from {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+@keyframes vr-hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 html.theme-switching::before {
   content: "";
   position: fixed;
@@ -757,6 +782,16 @@ html.theme-switching::before {
 
   .animate-log-badge-connect {
     animation: vr-log-badge-connect 1.8s var(--cf-easing-standard) infinite;
+  }
+
+  /* 落地页动效。reduced-motion 时由全局 * 规则压成 0.01ms，
+     ripple(forwards) 与 hero-rise(both) 会停在终帧，文案与按钮保持可见。 */
+  .animate-ripple {
+    animation: vr-ripple 620ms var(--cf-easing-sharp) forwards;
+  }
+
+  .animate-hero-rise {
+    animation: vr-hero-rise var(--cf-duration-slow) var(--cf-easing-standard) both;
   }
 }
 

@@ -1,4 +1,48 @@
 {
+  "hero": {
+    "nav": {
+      "login": "Sign in",
+      "docs": "Docs"
+    },
+    "badge": "Self-hosted AI API gateway",
+    "headline": "Orchestrate all your AI API traffic",
+    "subheadline": "API key distribution, multi-upstream routing, load balancing with circuit breaking, and per-request billing — manage every bit of AI traffic from one self-hosted console.",
+    "ctaPrimary": "Get started",
+    "ctaSecondary": "View docs",
+    "features": {
+      "title": "Core capabilities",
+      "subtitle": "Built for multi-upstream, highly available AI traffic distribution",
+      "routing": {
+        "title": "Capability-based routing",
+        "desc": "Detects capability from the request path and model, then routes traffic to the matching upstream."
+      },
+      "balancing": {
+        "title": "Balancing & circuit breaking",
+        "desc": "Distributes by priority and weight, trips unhealthy upstreams, and fails over to the next candidate."
+      },
+      "quota": {
+        "title": "Quota & concurrency control",
+        "desc": "Applies quota, concurrency, and queue-admission limits per key to keep upstreams stable."
+      },
+      "billing": {
+        "title": "Per-request billing",
+        "desc": "Computes a billing snapshot for every request from synced prices, overrides, and multipliers."
+      },
+      "keys": {
+        "title": "API key distribution",
+        "desc": "Issues and manages client keys, scoped to authorized upstreams and expiry."
+      },
+      "failover": {
+        "title": "Failover & session affinity",
+        "desc": "Switches candidates seamlessly on failure and can pin a conversation to a chosen upstream."
+      }
+    },
+    "cta": {
+      "title": "Ready to connect?",
+      "desc": "Sign in to the console and finish key issuance and upstream setup in minutes.",
+      "button": "Open console"
+    }
+  },
   "common": {
     "appName": "AutoRouter",
     "adminConsole": "Admin Console",
