@@ -56,6 +56,7 @@ import {
   useUpdateBillingTierRule,
 } from "@/hooks/use-billing";
 import { useBackgroundSyncTasks } from "@/hooks/use-background-sync";
+import { useContainerMorph } from "@/hooks/use-container-morph";
 import type {
   BillingModelPrice,
   BillingManualOverride,
@@ -489,6 +490,11 @@ export default function BillingPage() {
   const [selectedResetModels, setSelectedResetModels] = useState<string[]>([]);
   const [resetDialogTargets, setResetDialogTargets] = useState<string[] | null>(null);
   const [recentlySavedModel, setRecentlySavedModel] = useState<string | null>(null);
+
+  // 容器变形动画：单行重置以该行的重置按钮为源、展开收回；批量重置无单一源，
+  // 弹窗单独淡入（hook 对 source 为空安全降级）。
+  const { startMorph, canMorph } = useContainerMorph();
+  const morphSourceRef = useRef<HTMLElement | null>(null);
   const modelPrices = useBillingModelPrices(modelPricePage, modelPricePageSize, modelPriceQuery);
   const tierRules = useBillingTierRules();
   const syncPrices = useSyncBillingPrices();
@@ -975,15 +981,25 @@ export default function BillingPage() {
     });
   };
 
-  const openResetDialog = (models: string[]) => {
+  const openResetDialog = (models: string[], source?: HTMLElement | null) => {
     const normalized = [...new Set(models.map((m) => m.trim()).filter(Boolean))];
     if (normalized.length === 0) {
       return;
     }
-    setResetDialogTargets(normalized);
+    morphSourceRef.current = source ?? null;
+    startMorph(() => setResetDialogTargets(normalized), {
+      source: source ?? null,
+      name: "morph-billing-override-reset",
+      mode: "enter",
+    });
   };
 
-  const closeResetDialog = () => setResetDialogTargets(null);
+  const closeResetDialog = () =>
+    startMorph(() => setResetDialogTargets(null), {
+      source: morphSourceRef.current,
+      name: "morph-billing-override-reset",
+      mode: "exit",
+    });
 
   const handleConfirmReset = async () => {
     if (!resetDialogTargets || resetOverrides.isPending) {
@@ -1392,7 +1408,9 @@ export default function BillingPage() {
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 shrink-0"
-                                onClick={() => openResetDialog([override.model])}
+                                onClick={(event) =>
+                                  openResetDialog([override.model], event.currentTarget)
+                                }
                                 disabled={resetOverrides.isPending}
                                 title={
                                   override.has_official_price === false
@@ -1938,7 +1956,9 @@ export default function BillingPage() {
                                     variant="ghost"
                                     size="icon"
                                     className="h-8 w-8 shrink-0"
-                                    onClick={() => openResetDialog([item.model])}
+                                    onClick={(event) =>
+                                      openResetDialog([item.model], event.currentTarget)
+                                    }
                                     disabled={resetOverrides.isPending}
                                     title={t("priceCatalogResetToOfficial")}
                                   >
@@ -2474,7 +2494,9 @@ export default function BillingPage() {
                                           variant="ghost"
                                           size="icon"
                                           className="h-8 w-8"
-                                          onClick={() => openResetDialog([override.model])}
+                                          onClick={(event) =>
+                                            openResetDialog([override.model], event.currentTarget)
+                                          }
                                           disabled={resetOverrides.isPending}
                                           title={
                                             override.has_official_price === false
@@ -3309,7 +3331,9 @@ export default function BillingPage() {
                                             variant="ghost"
                                             size="icon"
                                             className="h-8 w-8"
-                                            onClick={() => openResetDialog([item.model])}
+                                            onClick={(event) =>
+                                              openResetDialog([item.model], event.currentTarget)
+                                            }
                                             disabled={resetOverrides.isPending}
                                             title={t("priceCatalogResetToOfficial")}
                                           >
@@ -3670,7 +3694,7 @@ export default function BillingPage() {
       </div>
 
       <AlertDialog open={!!resetDialogTargets} onOpenChange={(v) => !v && closeResetDialog()}>
-        <AlertDialogContent>
+        <AlertDialogContent morph={canMorph} morphName="morph-billing-override-reset">
           <AlertDialogHeader>
             <AlertDialogTitle>{t("priceCatalogResetDialogTitle")}</AlertDialogTitle>
             <AlertDialogDescription>

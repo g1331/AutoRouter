@@ -817,7 +817,8 @@ html.theme-switching::before {
 ::view-transition-group(morph-compensation-delete),
 ::view-transition-group(morph-user-row),
 ::view-transition-group(morph-cliproxy-instance),
-::view-transition-group(morph-cliproxy-account) {
+::view-transition-group(morph-cliproxy-account),
+::view-transition-group(morph-billing-override-reset) {
   animation-duration: var(--vr-motion-normal);
   animation-timing-function: var(--vr-easing-standard);
 }
@@ -845,7 +846,9 @@ html.theme-switching::before {
 ::view-transition-old(morph-cliproxy-instance),
 ::view-transition-new(morph-cliproxy-instance),
 ::view-transition-old(morph-cliproxy-account),
-::view-transition-new(morph-cliproxy-account) {
+::view-transition-new(morph-cliproxy-account),
+::view-transition-old(morph-billing-override-reset),
+::view-transition-new(morph-billing-override-reset) {
   animation-duration: var(--vr-motion-normal);
   animation-timing-function: var(--vr-easing-standard);
   /* 源元素（小卡片 / 图标按钮）与弹窗长宽比差异大，用 cover 避免内容被拉伸变形 */
