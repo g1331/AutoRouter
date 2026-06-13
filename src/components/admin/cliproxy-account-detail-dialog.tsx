@@ -17,6 +17,9 @@ interface CliproxyAccountDetailDialogProps {
   account: CliproxyAuthAccount;
   open: boolean;
   onClose: () => void;
+  /** 启用容器变形动画时，由调用方传入与源元素一致的 view-transition-name。 */
+  morph?: boolean;
+  morphName?: string;
 }
 
 /** 将可空字符串渲染为占位符。 */
@@ -43,6 +46,8 @@ export function CliproxyAccountDetailDialog({
   account,
   open,
   onClose,
+  morph,
+  morphName = "morph-cliproxy-account",
 }: CliproxyAccountDetailDialogProps) {
   const t = useTranslations("cliproxy");
   const tCommon = useTranslations("common");
@@ -55,7 +60,7 @@ export function CliproxyAccountDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl" morph={morph} morphName={morphName}>
         <DialogHeader>
           <DialogTitle>{t("accountDetailDialogTitle")}</DialogTitle>
           <DialogDescription>
