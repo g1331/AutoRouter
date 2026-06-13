@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
 // Route-layer tests for the self-service password change endpoint. The
@@ -41,6 +41,7 @@ vi.mock("@/lib/services/user-service", () => {
 
 import * as userService from "@/lib/services/user-service";
 import { InvalidCredentialsError, WeakPasswordError } from "@/lib/services/user-service";
+import { resetPasswordChangeRateLimiter } from "@/lib/services/password-change-rate-limiter";
 import { PUT as passwordRoute } from "@/app/api/user/password/route";
 
 const SELF_ID = "11111111-1111-4111-8111-111111111111";
@@ -61,6 +62,11 @@ function makeRequest(authHeader: string | null, body?: unknown): NextRequest {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetPasswordChangeRateLimiter();
+});
+
+afterEach(() => {
+  resetPasswordChangeRateLimiter();
 });
 
 describe("PUT /api/user/password", () => {
@@ -116,5 +122,28 @@ describe("PUT /api/user/password", () => {
       makeRequest(MEMBER, { current_password: "password123", new_password: "short" })
     );
     expect(res.status).toBe(400);
+  });
+
+  it("rate-limits repeated wrong current_password attempts with 429", async () => {
+    vi.mocked(userService.changeOwnPassword).mockRejectedValue(
+      new InvalidCredentialsError("Current password is incorrect")
+    );
+
+    // Five wrong-current-password attempts are each rejected with 400…
+    for (let i = 0; i < 5; i += 1) {
+      const res = await passwordRoute(
+        makeRequest(MEMBER, { current_password: "wrong", new_password: "newpassword123" })
+      );
+      expect(res.status).toBe(400);
+    }
+
+    // …the sixth is blocked by the rate limiter before reaching the service.
+    vi.mocked(userService.changeOwnPassword).mockClear();
+    const blocked = await passwordRoute(
+      makeRequest(MEMBER, { current_password: "wrong", new_password: "newpassword123" })
+    );
+    expect(blocked.status).toBe(429);
+    expect(blocked.headers.get("Retry-After")).toBeTruthy();
+    expect(userService.changeOwnPassword).not.toHaveBeenCalled();
   });
 });
