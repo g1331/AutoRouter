@@ -5,10 +5,13 @@
       "docs": "文档"
     },
     "badge": "自托管 AI API 网关",
-    "headline": "统一调度你的 AI API 流量",
+    "headline": "统一调度你的 <hi>AI API 流量</hi>",
     "subheadline": "API Key 分发、多上游路由、负载均衡与熔断、按请求计费——在一个自托管控制台里管好所有 AI 流量。",
     "ctaPrimary": "开始使用",
     "ctaSecondary": "查看文档",
+    "terminal": {
+      "caption": "只需把 base URL 指向网关，路由、负载均衡与计费由 AutoRouter 接管。"
+    },
     "features": {
       "title": "核心能力",
       "subtitle": "为多上游、高可用的 AI 流量分发而构建",

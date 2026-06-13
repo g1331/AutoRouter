@@ -5,10 +5,13 @@
       "docs": "Docs"
     },
     "badge": "Self-hosted AI API gateway",
-    "headline": "Orchestrate all your AI API traffic",
+    "headline": "Orchestrate all your <hi>AI API traffic</hi>",
     "subheadline": "API key distribution, multi-upstream routing, load balancing with circuit breaking, and per-request billing — manage every bit of AI traffic from one self-hosted console.",
     "ctaPrimary": "Get started",
     "ctaSecondary": "View docs",
+    "terminal": {
+      "caption": "Point your base URL at the gateway — AutoRouter handles routing, balancing, and billing."
+    },
     "features": {
       "title": "Core capabilities",
       "subtitle": "Built for multi-upstream, highly available AI traffic distribution",
