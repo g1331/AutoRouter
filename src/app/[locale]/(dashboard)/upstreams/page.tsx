@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useTranslations } from "next-intl";
 import {
   Filter,
@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useAllUpstreams, useUpstreams, useTestUpstream } from "@/hooks/use-upstreams";
+import { useContainerMorph } from "@/hooks/use-container-morph";
 import type { RouteCapability, Upstream } from "@/types/api";
 import { ROUTE_CAPABILITY_DEFINITIONS } from "@/lib/route-capabilities";
 import { ROUTE_CAPABILITY_ICON_META } from "@/components/admin/route-capability-badges";
@@ -102,6 +103,10 @@ export default function UpstreamsPage() {
   const [capabilityFilter, setCapabilityFilter] = useState<RouteCapability | "all">("all");
   const [includeInactive, setIncludeInactive] = useState(true);
   const [workbenchDensity, setWorkbenchDensity] = useState<WorkbenchDensity>("compact");
+
+  // 容器变形动画：记录触发弹窗的源元素，关闭时收回同一元素。
+  const { startMorph, canMorph } = useContainerMorph();
+  const morphSourceRef = useRef<HTMLElement | null>(null);
 
   const pageSize = 10;
   const t = useTranslations("upstreams");
@@ -203,7 +208,15 @@ export default function UpstreamsPage() {
               </div>
 
               <Button
-                onClick={() => setCreateDialogOpen(true)}
+                onClick={(event) => {
+                  const source = event.currentTarget;
+                  morphSourceRef.current = source;
+                  startMorph(() => setCreateDialogOpen(true), {
+                    source,
+                    name: "morph-upstream-form",
+                    mode: "enter",
+                  });
+                }}
                 variant="primary"
                 className="w-full gap-2 sm:w-auto"
               >
@@ -373,8 +386,22 @@ export default function UpstreamsPage() {
           <div className="space-y-4 animate-in fade-in-0 slide-in-from-top-1 duration-300">
             <UpstreamsTable
               upstreams={filteredUpstreams}
-              onEdit={setEditUpstream}
-              onDelete={setDeleteUpstream}
+              onEdit={(upstream, source) => {
+                morphSourceRef.current = source;
+                startMorph(() => setEditUpstream(upstream), {
+                  source,
+                  name: "morph-upstream-form",
+                  mode: "enter",
+                });
+              }}
+              onDelete={(upstream, source) => {
+                morphSourceRef.current = source;
+                startMorph(() => setDeleteUpstream(upstream), {
+                  source,
+                  name: "morph-upstream-delete",
+                  mode: "enter",
+                });
+              }}
               onTest={setTestUpstream}
               density={workbenchDensity}
               hasActiveFilters={hasActiveFilters}
@@ -398,18 +425,50 @@ export default function UpstreamsPage() {
         )}
       </div>
 
-      <UpstreamFormDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
+      <UpstreamFormDialog
+        open={createDialogOpen}
+        onOpenChange={(open) => {
+          if (open) {
+            setCreateDialogOpen(true);
+          } else {
+            startMorph(() => setCreateDialogOpen(false), {
+              source: morphSourceRef.current,
+              name: "morph-upstream-form",
+              mode: "exit",
+            });
+          }
+        }}
+        morph={canMorph}
+        morphName="morph-upstream-form"
+      />
 
       <UpstreamFormDialog
         upstream={editUpstream}
         open={!!editUpstream}
-        onOpenChange={(open) => !open && setEditUpstream(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            startMorph(() => setEditUpstream(null), {
+              source: morphSourceRef.current,
+              name: "morph-upstream-form",
+              mode: "exit",
+            });
+          }
+        }}
+        morph={canMorph}
+        morphName="morph-upstream-form"
       />
 
       <DeleteUpstreamDialog
         upstream={deleteUpstream}
         open={!!deleteUpstream}
-        onClose={() => setDeleteUpstream(null)}
+        onClose={() => {
+          startMorph(() => setDeleteUpstream(null), {
+            source: morphSourceRef.current,
+            name: "morph-upstream-delete",
+            mode: "exit",
+          });
+        }}
+        morph={canMorph}
       />
 
       <TestUpstreamDialog

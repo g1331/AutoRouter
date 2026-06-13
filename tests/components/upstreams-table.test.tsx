@@ -374,7 +374,10 @@ describe("UpstreamsTable", () => {
 
     expect(screen.queryByLabelText("test: OpenAI Main")).not.toBeInTheDocument();
     expect(onTest).not.toHaveBeenCalled();
-    expect(onEdit).toHaveBeenCalledWith(baseUpstream);
+    expect(onEdit).toHaveBeenCalledWith(baseUpstream, expect.any(HTMLElement));
+    // 容器变形动画的源元素应锚定到卡片（带 data-morph-source）
+    const [, editSource] = onEdit.mock.calls[0];
+    expect(editSource).toHaveAttribute("data-morph-source");
   });
 
   it("supports delete action directly", async () => {
@@ -390,8 +393,11 @@ describe("UpstreamsTable", () => {
     fireEvent.click(screen.getByLabelText("delete: OpenAI Main"));
 
     await waitFor(() => {
-      expect(onDelete).toHaveBeenCalledWith(baseUpstream);
+      expect(onDelete).toHaveBeenCalledWith(baseUpstream, expect.any(HTMLElement));
     });
+    // 删除确认弹窗同样从卡片变形展开
+    const [, deleteSource] = onDelete.mock.calls[0];
+    expect(deleteSource).toHaveAttribute("data-morph-source");
   });
 
   it("shows circuit recover action when circuit is open", async () => {

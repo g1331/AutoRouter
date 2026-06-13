@@ -18,12 +18,19 @@ interface DeleteUpstreamDialogProps {
   upstream: Upstream | null;
   open: boolean;
   onClose: () => void;
+  /** 启用容器变形动画（View Transition）。 */
+  morph?: boolean;
 }
 
 /**
  * M3 Delete Upstream Confirmation Dialog
  */
-export function DeleteUpstreamDialog({ upstream, open, onClose }: DeleteUpstreamDialogProps) {
+export function DeleteUpstreamDialog({
+  upstream,
+  open,
+  onClose,
+  morph = false,
+}: DeleteUpstreamDialogProps) {
   const deleteMutation = useDeleteUpstream();
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
@@ -49,7 +56,7 @@ export function DeleteUpstreamDialog({ upstream, open, onClose }: DeleteUpstream
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md" morph={morph} morphName="morph-upstream-delete">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-[var(--shape-corner-medium)] bg-[rgb(var(--md-sys-color-error-container))] flex items-center justify-center">

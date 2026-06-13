@@ -123,6 +123,10 @@ interface UpstreamFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   trigger?: React.ReactNode;
+  /** 启用容器变形动画（View Transition）。 */
+  morph?: boolean;
+  /** 容器变形使用的 view-transition-name，需与触发它的源元素一致。 */
+  morphName?: string;
 }
 
 // Circuit breaker config schema
@@ -1072,6 +1076,8 @@ export function UpstreamFormDialog({
   open,
   onOpenChange,
   trigger,
+  morph = false,
+  morphName = "morph-upstream-form",
 }: UpstreamFormDialogProps) {
   const isEdit = !!upstream;
   const activeSchema = isEdit ? editUpstreamFormSchema : createUpstreamFormSchema;
@@ -2019,6 +2025,8 @@ export function UpstreamFormDialog({
   const dialogContent = (
     <DialogContent
       className="h-[92vh] max-w-6xl overflow-hidden p-0"
+      morph={morph}
+      morphName={morphName}
       onOpenAutoFocus={(event) => {
         event.preventDefault();
         (event.currentTarget as HTMLElement).focus();
