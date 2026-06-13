@@ -31,6 +31,42 @@ export function getPaginationParams(request: NextRequest): { page: number; pageS
 }
 
 /**
+ * Parse an optional integer filter query param into one of three states:
+ * `undefined` when absent or empty (no filter applied), `null` when present but
+ * not a valid integer (the caller should reject with 400), or the parsed
+ * integer. NaN-guarding the value here keeps a non-numeric param from reaching
+ * an integer SQL column, where the bind would otherwise surface as a 500.
+ *
+ * @param raw - The raw query param value (e.g. from searchParams.get())
+ * @returns undefined when absent/empty, null when invalid, otherwise the integer
+ */
+export function parseIntFilterParam(raw: string | null): number | null | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
+/**
+ * Parse an optional ISO datetime filter query param into one of three states:
+ * `undefined` when absent or empty, `null` when present but unparseable (the
+ * caller should reject with 400), or the Date. Guarding against an Invalid Date
+ * here keeps it from reaching the query layer, where serializing it would throw
+ * and surface as a 500.
+ *
+ * @param raw - The raw query param value
+ * @returns undefined when absent/empty, null when invalid, otherwise the Date
+ */
+export function parseDateFilterParam(raw: string | null): Date | null | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/**
  * Authenticated principal resolved from a request.
  *
  * - `admin_token`: the bootstrap ADMIN_TOKEN super-admin (no user record).

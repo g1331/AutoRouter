@@ -199,6 +199,22 @@ describe("GET /api/user/logs", () => {
       endTime: new Date("2026-06-10T00:00:00.000Z"),
     });
   });
+
+  it("rejects a non-numeric status_code with 400 instead of failing downstream", async () => {
+    const res = await logsRoute(
+      makeRequest("http://localhost/api/user/logs?status_code=abc", MEMBER)
+    );
+    expect(res.status).toBe(400);
+    expect(userDataService.listUserRequestLogs).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid start_time with 400", async () => {
+    const res = await logsRoute(
+      makeRequest("http://localhost/api/user/logs?start_time=not-a-date", MEMBER)
+    );
+    expect(res.status).toBe(400);
+    expect(userDataService.listUserRequestLogs).not.toHaveBeenCalled();
+  });
 });
 
 describe("GET /api/user/usage", () => {

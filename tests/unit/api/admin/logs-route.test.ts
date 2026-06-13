@@ -100,4 +100,17 @@ describe("admin logs route", () => {
     expect(response.status).toBe(401);
     expect(listRequestLogsMock).not.toHaveBeenCalled();
   });
+
+  it("rejects a non-numeric status_code with 400", async () => {
+    const { GET } = await import("@/app/api/admin/logs/route");
+
+    const response = await GET(
+      new NextRequest("http://localhost/api/admin/logs?status_code=abc", {
+        headers: { authorization: AUTH_HEADER },
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(listRequestLogsMock).not.toHaveBeenCalled();
+  });
 });
