@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ArrowLeftRight, GripVertical, Pencil, Plus, Trash2, X, Check } from "lucide-react";
 import { toast } from "sonner";
@@ -44,6 +44,7 @@ import {
   useUpdateCompensationRule,
   useDeleteCompensationRule,
 } from "@/hooks/use-compensation-rules";
+import { useContainerMorph } from "@/hooks/use-container-morph";
 import { ROUTE_CAPABILITY_DEFINITIONS } from "@/lib/route-capabilities";
 import type { RouteCapability } from "@/lib/route-capabilities";
 import type { CompensationRule, CompensationRuleCreate, CompensationRuleUpdate } from "@/types/api";
@@ -191,9 +192,11 @@ interface RuleFormDialogProps {
   open: boolean;
   onClose: () => void;
   initial?: CompensationRule;
+  /** 启用容器变形动画（View Transition）。 */
+  morph?: boolean;
 }
 
-function RuleFormDialog({ open, onClose, initial }: RuleFormDialogProps) {
+function RuleFormDialog({ open, onClose, initial, morph = false }: RuleFormDialogProps) {
   const t = useTranslations("compensation");
   const createMutation = useCreateCompensationRule();
   const updateMutation = useUpdateCompensationRule();
@@ -248,7 +251,7 @@ function RuleFormDialog({ open, onClose, initial }: RuleFormDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg" morph={morph} morphName="morph-compensation-form">
         <DialogHeader>
           <DialogTitle className="text-sm tracking-wider">
             {isEditing ? t("ruleName") : t("addRule")}
@@ -320,8 +323,8 @@ function RuleFormDialog({ open, onClose, initial }: RuleFormDialogProps) {
 
 interface RuleCardProps {
   rule: CompensationRule;
-  onEdit: (rule: CompensationRule) => void;
-  onDelete: (rule: CompensationRule) => void;
+  onEdit: (rule: CompensationRule, source: HTMLElement | null) => void;
+  onDelete: (rule: CompensationRule, source: HTMLElement | null) => void;
 }
 
 function RuleCard({ rule, onEdit, onDelete }: RuleCardProps) {
@@ -335,7 +338,10 @@ function RuleCard({ rule, onEdit, onDelete }: RuleCardProps) {
   };
 
   return (
-    <div className="rounded-cf-sm border border-divider bg-surface-300/55 shadow-[var(--vr-shadow-xs)]">
+    <div
+      data-morph-source
+      className="rounded-cf-sm border border-divider bg-surface-300/55 shadow-[var(--vr-shadow-xs)]"
+    >
       <div className="flex items-center gap-3 border-b border-divider/80 bg-surface-200/70 px-3 py-2">
         <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-amber-500" />
         <span className="flex-1 truncate text-xs font-medium text-foreground">{rule.name}</span>
@@ -427,7 +433,9 @@ function RuleCard({ rule, onEdit, onDelete }: RuleCardProps) {
               variant="ghost"
               size="icon"
               className="h-6 w-6 text-muted-foreground hover:text-foreground"
-              onClick={() => onEdit(rule)}
+              onClick={(event) =>
+                onEdit(rule, event.currentTarget.closest<HTMLElement>("[data-morph-source]"))
+              }
               title="Edit"
             >
               <Pencil className="h-3 w-3" />
@@ -438,7 +446,9 @@ function RuleCard({ rule, onEdit, onDelete }: RuleCardProps) {
               variant="ghost"
               size="icon"
               className="h-6 w-6 text-muted-foreground hover:text-status-error"
-              onClick={() => onDelete(rule)}
+              onClick={(event) =>
+                onDelete(rule, event.currentTarget.closest<HTMLElement>("[data-morph-source]"))
+              }
               title={t("deleteRule")}
             >
               <Trash2 className="h-3 w-3" />
@@ -544,18 +554,59 @@ export default function HeaderCompensationPage() {
   const [editTarget, setEditTarget] = useState<CompensationRule | undefined>();
   const [deleteTarget, setDeleteTarget] = useState<CompensationRule | undefined>();
 
+  // 容器变形动画：记录触发弹窗的源卡片（创建按钮 / 规则卡片），关闭时收回同一元素。
+  const { startMorph, canMorph } = useContainerMorph();
+  const morphSourceRef = useRef<HTMLElement | null>(null);
+
   const rules = data ?? [];
   const builtinRules = rules.filter((rule) => rule.is_builtin);
   const customRules = rules.filter((rule) => !rule.is_builtin);
 
-  const openCreate = () => {
-    setEditTarget(undefined);
-    setFormOpen(true);
+  const openCreate = (source: HTMLElement | null) => {
+    morphSourceRef.current = source;
+    startMorph(
+      () => {
+        setEditTarget(undefined);
+        setFormOpen(true);
+      },
+      { source, name: "morph-compensation-form", mode: "enter" }
+    );
   };
 
-  const openEdit = (rule: CompensationRule) => {
-    setEditTarget(rule);
-    setFormOpen(true);
+  const openEdit = (rule: CompensationRule, source: HTMLElement | null) => {
+    morphSourceRef.current = source;
+    startMorph(
+      () => {
+        setEditTarget(rule);
+        setFormOpen(true);
+      },
+      { source, name: "morph-compensation-form", mode: "enter" }
+    );
+  };
+
+  const openDelete = (rule: CompensationRule, source: HTMLElement | null) => {
+    morphSourceRef.current = source;
+    startMorph(() => setDeleteTarget(rule), {
+      source,
+      name: "morph-compensation-delete",
+      mode: "enter",
+    });
+  };
+
+  const closeForm = () => {
+    startMorph(() => setFormOpen(false), {
+      source: morphSourceRef.current,
+      name: "morph-compensation-form",
+      mode: "exit",
+    });
+  };
+
+  const closeDelete = () => {
+    startMorph(() => setDeleteTarget(undefined), {
+      source: morphSourceRef.current,
+      name: "morph-compensation-delete",
+      mode: "exit",
+    });
   };
 
   const confirmDelete = async () => {
@@ -576,7 +627,11 @@ export default function HeaderCompensationPage() {
             </h2>
             <p className="mt-0.5 text-xs text-muted-foreground">{t("managementDesc")}</p>
           </div>
-          <Button size="sm" onClick={openCreate} className="gap-1.5">
+          <Button
+            size="sm"
+            onClick={(event) => openCreate(event.currentTarget)}
+            className="gap-1.5"
+          >
             <Plus className="h-3.5 w-3.5" />
             {t("addRule")}
           </Button>
@@ -615,12 +670,7 @@ export default function HeaderCompensationPage() {
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {builtinRules.map((rule) => (
-                    <RuleCard
-                      key={rule.id}
-                      rule={rule}
-                      onEdit={openEdit}
-                      onDelete={setDeleteTarget}
-                    />
+                    <RuleCard key={rule.id} rule={rule} onEdit={openEdit} onDelete={openDelete} />
                   ))}
                 </div>
               )}
@@ -642,12 +692,7 @@ export default function HeaderCompensationPage() {
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {customRules.map((rule) => (
-                    <RuleCard
-                      key={rule.id}
-                      rule={rule}
-                      onEdit={openEdit}
-                      onDelete={setDeleteTarget}
-                    />
+                    <RuleCard key={rule.id} rule={rule} onEdit={openEdit} onDelete={openDelete} />
                   ))}
                 </div>
               )}
@@ -659,11 +704,11 @@ export default function HeaderCompensationPage() {
       </main>
 
       {formOpen && (
-        <RuleFormDialog open={formOpen} onClose={() => setFormOpen(false)} initial={editTarget} />
+        <RuleFormDialog open={formOpen} onClose={closeForm} initial={editTarget} morph={canMorph} />
       )}
 
-      <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(undefined)}>
-        <AlertDialogContent>
+      <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && closeDelete()}>
+        <AlertDialogContent morph={canMorph} morphName="morph-compensation-delete">
           <AlertDialogHeader>
             <AlertDialogTitle>{t("deleteRuleTitle")}</AlertDialogTitle>
             <AlertDialogDescription>{t("deleteRuleDesc")}</AlertDialogDescription>
