@@ -117,6 +117,20 @@ describe("CliproxyAccountsTable", () => {
     expect(handlers.onDelete).toHaveBeenCalledTimes(1);
   });
 
+  it("查看详情 / 编辑字段 / 删除回调附带行元素作为容器变形源", () => {
+    const handlers = setup();
+
+    fireEvent.click(screen.getByText("actionViewDetail"));
+    fireEvent.click(screen.getByText("actionEditFields"));
+    fireEvent.click(screen.getByText("actionDelete"));
+
+    for (const handler of [handlers.onViewDetail, handlers.onEditFields, handlers.onDelete]) {
+      expect(handler).toHaveBeenCalledWith(expect.anything(), expect.any(HTMLElement));
+      const source = handler.mock.calls[0][1] as HTMLElement;
+      expect(source.hasAttribute("data-morph-source")).toBe(true);
+    }
+  });
+
   it("禁用状态下菜单展示 actionEnable", () => {
     setup({ disabled: true });
     expect(screen.getByText("actionEnable")).toBeInTheDocument();

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { Boxes, MoreHorizontal, Pencil, PlugZap, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
@@ -27,10 +28,10 @@ interface CliproxyInstancesTableProps {
   instances: CliproxyInstance[];
   selectedInstanceId: string | null;
   onSelect: (instance: CliproxyInstance) => void;
-  onEdit: (instance: CliproxyInstance) => void;
+  onEdit: (instance: CliproxyInstance, source: HTMLElement | null) => void;
   onTest: (instance: CliproxyInstance) => void;
   onCreatePoolUpstream: (instance: CliproxyInstance) => void;
-  onDelete: (instance: CliproxyInstance) => void;
+  onDelete: (instance: CliproxyInstance, source: HTMLElement | null) => void;
 }
 
 /**
@@ -49,6 +50,11 @@ export function CliproxyInstancesTable({
   const t = useTranslations("cliproxy");
   const toggleEnabled = useToggleCliproxyInstanceEnabled();
 
+  // 操作入口在 DropdownMenu（内容经 Portal 挂到 body，closest 取不到行），
+  // 按实例 id 收集行元素，作为编辑/删除弹窗的容器变形源。
+  const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
+  const rowSource = (id: string) => rowRefs.current.get(id) ?? null;
+
   return (
     <Table>
       <TableHeader>
@@ -64,6 +70,14 @@ export function CliproxyInstancesTable({
         {instances.map((instance) => (
           <TableRow
             key={instance.id}
+            data-morph-source
+            ref={(el) => {
+              if (el) {
+                rowRefs.current.set(instance.id, el);
+              } else {
+                rowRefs.current.delete(instance.id);
+              }
+            }}
             onClick={() => onSelect(instance)}
             data-state={selectedInstanceId === instance.id ? "selected" : undefined}
             className="cursor-pointer"
@@ -115,12 +129,12 @@ export function CliproxyInstancesTable({
                     <Boxes className="mr-2 h-4 w-4" />
                     {t("actionCreatePoolUpstream")}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onEdit(instance)}>
+                  <DropdownMenuItem onClick={() => onEdit(instance, rowSource(instance.id))}>
                     <Pencil className="mr-2 h-4 w-4" />
                     {t("actionEdit")}
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onClick={() => onDelete(instance)}
+                    onClick={() => onDelete(instance, rowSource(instance.id))}
                     className={cn("text-destructive focus:text-destructive")}
                   >
                     <Trash2 className="mr-2 h-4 w-4" />

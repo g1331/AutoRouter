@@ -23,8 +23,8 @@ import { RouteCapabilityBadges } from "@/components/admin/route-capability-badge
 
 interface UpstreamsTableProps {
   upstreams: Upstream[];
-  onEdit: (upstream: Upstream) => void;
-  onDelete: (upstream: Upstream) => void;
+  onEdit: (upstream: Upstream, source: HTMLElement | null) => void;
+  onDelete: (upstream: Upstream, source: HTMLElement | null) => void;
   onTest: (upstream: Upstream) => void;
   density?: "comfortable" | "compact";
   hasActiveFilters?: boolean;
@@ -586,6 +586,7 @@ export function UpstreamsTable({
                     return (
                       <article
                         key={upstream.id}
+                        data-morph-source
                         className={cn(
                           "w-full min-w-0 max-w-full overflow-hidden rounded-cf-md border bg-card shadow-[var(--vr-shadow-sm)]",
                           "transition-[transform,box-shadow,border-color,opacity,filter] duration-300 ease-cf-standard",
@@ -689,7 +690,12 @@ export function UpstreamsTable({
                                 "border-divider bg-surface-200",
                                 isCompactDensity ? "h-7 w-7" : "h-8 w-8"
                               )}
-                              onClick={() => onEdit(upstream)}
+                              onClick={(event) =>
+                                onEdit(
+                                  upstream,
+                                  event.currentTarget.closest<HTMLElement>("[data-morph-source]")
+                                )
+                              }
                               aria-label={`${tCommon("edit")}: ${upstream.name}`}
                             >
                               <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
@@ -724,7 +730,12 @@ export function UpstreamsTable({
                                 "border-status-error/45 bg-status-error-muted text-status-error",
                                 isCompactDensity ? "h-7 w-7" : "h-8 w-8"
                               )}
-                              onClick={() => onDelete(upstream)}
+                              onClick={(event) =>
+                                onDelete(
+                                  upstream,
+                                  event.currentTarget.closest<HTMLElement>("[data-morph-source]")
+                                )
+                              }
                               aria-label={`${tCommon("delete")}: ${upstream.name}`}
                             >
                               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />

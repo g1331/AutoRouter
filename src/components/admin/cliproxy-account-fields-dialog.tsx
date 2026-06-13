@@ -32,6 +32,9 @@ interface CliproxyAccountFieldsDialogProps {
   account: CliproxyAuthAccount;
   open: boolean;
   onClose: () => void;
+  /** 启用容器变形动画时，由调用方传入与源元素一致的 view-transition-name。 */
+  morph?: boolean;
+  morphName?: string;
 }
 
 interface FieldsForm {
@@ -51,6 +54,8 @@ export function CliproxyAccountFieldsDialog({
   account,
   open,
   onClose,
+  morph,
+  morphName = "morph-cliproxy-account",
 }: CliproxyAccountFieldsDialogProps) {
   const t = useTranslations("cliproxy");
   const tCommon = useTranslations("common");
@@ -101,7 +106,7 @@ export function CliproxyAccountFieldsDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg" morph={morph} morphName={morphName}>
         <DialogHeader>
           <DialogTitle>{t("editAccountFieldsTitle")}</DialogTitle>
           <DialogDescription>

@@ -18,6 +18,9 @@ interface DeleteCliproxyInstanceDialogProps {
   instance: CliproxyInstance | null;
   open: boolean;
   onClose: () => void;
+  /** 启用容器变形动画时，由调用方传入与源元素一致的 view-transition-name。 */
+  morph?: boolean;
+  morphName?: string;
 }
 
 /**
@@ -27,6 +30,8 @@ export function DeleteCliproxyInstanceDialog({
   instance,
   open,
   onClose,
+  morph,
+  morphName = "morph-cliproxy-instance",
 }: DeleteCliproxyInstanceDialogProps) {
   const t = useTranslations("cliproxy");
   const tCommon = useTranslations("common");
@@ -50,7 +55,7 @@ export function DeleteCliproxyInstanceDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md" morph={morph} morphName={morphName}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-amber-500" aria-hidden />

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import {
   Boxes,
   Download,
@@ -34,12 +35,12 @@ import type { CliproxyAuthAccount } from "@/types/cliproxy";
 interface CliproxyAccountsTableProps {
   accounts: CliproxyAuthAccount[];
   onToggleStatus: (account: CliproxyAuthAccount) => void;
-  onEditFields: (account: CliproxyAuthAccount) => void;
+  onEditFields: (account: CliproxyAuthAccount, source: HTMLElement | null) => void;
   onMapUpstream: (account: CliproxyAuthAccount) => void;
-  onViewDetail: (account: CliproxyAuthAccount) => void;
+  onViewDetail: (account: CliproxyAuthAccount, source: HTMLElement | null) => void;
   onViewModels: (account: CliproxyAuthAccount) => void;
   onDownload: (account: CliproxyAuthAccount) => void;
-  onDelete: (account: CliproxyAuthAccount) => void;
+  onDelete: (account: CliproxyAuthAccount, source: HTMLElement | null) => void;
 }
 
 /**
@@ -60,6 +61,11 @@ export function CliproxyAccountsTable({
 }: CliproxyAccountsTableProps) {
   const t = useTranslations("cliproxy");
 
+  // 操作入口在 DropdownMenu（内容经 Portal 挂到 body，closest 取不到行），
+  // 按账号 id 收集行元素，作为查看详情/编辑字段/删除弹窗的容器变形源。
+  const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
+  const rowSource = (id: string) => rowRefs.current.get(id) ?? null;
+
   return (
     <Table>
       <TableHeader>
@@ -75,7 +81,17 @@ export function CliproxyAccountsTable({
       </TableHeader>
       <TableBody>
         {accounts.map((account) => (
-          <TableRow key={account.id}>
+          <TableRow
+            key={account.id}
+            data-morph-source
+            ref={(el) => {
+              if (el) {
+                rowRefs.current.set(account.id, el);
+              } else {
+                rowRefs.current.delete(account.id);
+              }
+            }}
+          >
             <TableCell className="font-medium">{account.auth_file_name}</TableCell>
             <TableCell>
               <Badge variant="info">{account.provider}</Badge>
@@ -122,7 +138,7 @@ export function CliproxyAccountsTable({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => onViewDetail(account)}>
+                  <DropdownMenuItem onClick={() => onViewDetail(account, rowSource(account.id))}>
                     <Info className="mr-2 h-4 w-4" />
                     {t("actionViewDetail")}
                   </DropdownMenuItem>
@@ -138,7 +154,7 @@ export function CliproxyAccountsTable({
                     )}
                     {account.disabled ? t("actionEnable") : t("actionDisable")}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onEditFields(account)}>
+                  <DropdownMenuItem onClick={() => onEditFields(account, rowSource(account.id))}>
                     <Pencil className="mr-2 h-4 w-4" />
                     {t("actionEditFields")}
                   </DropdownMenuItem>
@@ -151,7 +167,7 @@ export function CliproxyAccountsTable({
                     {t("actionDownload")}
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onClick={() => onDelete(account)}
+                    onClick={() => onDelete(account, rowSource(account.id))}
                     className={cn("text-destructive focus:text-destructive")}
                   >
                     <Trash2 className="mr-2 h-4 w-4" />

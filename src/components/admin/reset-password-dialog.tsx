@@ -31,12 +31,22 @@ interface ResetPasswordDialogProps {
   user: User;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** 启用容器变形动画（View Transition）。 */
+  morph?: boolean;
+  /** 容器变形使用的 view-transition-name，须与 CSS 具名过渡对应。 */
+  morphName?: string;
 }
 
 /**
  * 重置密码对话框：管理员为用户设置新密码，用户在下次登录时使用。
  */
-export function ResetPasswordDialog({ user, open, onOpenChange }: ResetPasswordDialogProps) {
+export function ResetPasswordDialog({
+  user,
+  open,
+  onOpenChange,
+  morph = false,
+  morphName = "morph-user-row",
+}: ResetPasswordDialogProps) {
   const mutation = useResetUserPassword();
   const t = useTranslations("users");
   const tCommon = useTranslations("common");
@@ -67,7 +77,7 @@ export function ResetPasswordDialog({ user, open, onOpenChange }: ResetPasswordD
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md" morph={morph} morphName={morphName}>
         <DialogHeader>
           <DialogTitle>{t("resetPasswordTitle")}</DialogTitle>
           <DialogDescription>{t("resetPasswordDesc")}</DialogDescription>

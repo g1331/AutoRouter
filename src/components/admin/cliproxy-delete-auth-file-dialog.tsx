@@ -17,6 +17,9 @@ interface CliproxyDeleteAuthFileDialogProps {
   instanceId: string;
   account: CliproxyAuthAccount | null;
   onClose: () => void;
+  /** 启用容器变形动画时，由调用方传入与源元素一致的 view-transition-name。 */
+  morph?: boolean;
+  morphName?: string;
 }
 
 /**
@@ -27,6 +30,8 @@ export function CliproxyDeleteAuthFileDialog({
   instanceId,
   account,
   onClose,
+  morph,
+  morphName = "morph-cliproxy-account",
 }: CliproxyDeleteAuthFileDialogProps) {
   const t = useTranslations("cliproxy");
   const tCommon = useTranslations("common");
@@ -47,7 +52,7 @@ export function CliproxyDeleteAuthFileDialog({
 
   return (
     <Dialog open={Boolean(account)} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md" morph={morph} morphName={morphName}>
         <DialogHeader>
           <DialogTitle>{t("deleteAuthFileTitle")}</DialogTitle>
           <DialogDescription>{t("deleteAuthFileDescription")}</DialogDescription>

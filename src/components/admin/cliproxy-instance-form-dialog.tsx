@@ -54,6 +54,9 @@ interface CliproxyInstanceFormDialogProps {
   instance?: CliproxyInstance | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** 启用容器变形动画时，由调用方传入与源元素一致的 view-transition-name。 */
+  morph?: boolean;
+  morphName?: string;
 }
 
 interface FormValues {
@@ -89,6 +92,8 @@ export function CliproxyInstanceFormDialog({
   instance,
   open,
   onOpenChange,
+  morph,
+  morphName = "morph-cliproxy-instance",
 }: CliproxyInstanceFormDialogProps) {
   const t = useTranslations("cliproxy");
   const tCommon = useTranslations("common");
@@ -173,7 +178,11 @@ export function CliproxyInstanceFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-xl flex-col overflow-hidden p-0">
+      <DialogContent
+        className="flex max-h-[calc(100vh-2rem)] max-w-xl flex-col overflow-hidden p-0"
+        morph={morph}
+        morphName={morphName}
+      >
         <DialogHeader className="shrink-0 px-6 pb-0 pr-12 pt-6">
           <DialogTitle>{isEdit ? t("editInstanceTitle") : t("createInstanceTitle")}</DialogTitle>
           <DialogDescription>{t("pageDescription")}</DialogDescription>

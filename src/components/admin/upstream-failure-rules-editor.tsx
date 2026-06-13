@@ -267,9 +267,9 @@ export function UpstreamFailureRulesEditor({
   scope = "upstream",
 }: UpstreamFailureRulesEditorProps) {
   const t = useTranslations("upstreams");
-  const tErrorType = useTranslations("requestLogs.retryErrorType");
+  const tErrorType = useTranslations("logs");
   const getErrorTypeLabel = useCallback(
-    (type: FailoverErrorType) => tErrorType(type),
+    (type: FailoverErrorType) => tErrorType(`retryErrorType.${type}`),
     [tErrorType]
   );
   const unknownTooltip = t("failureRuleErrorTypeUnknownTooltip");

@@ -19,12 +19,19 @@ interface PortalRevokeKeyDialogProps {
   apiKey: APIKey | null;
   open: boolean;
   onClose: () => void;
+  /** 启用容器变形动画（View Transition）。 */
+  morph?: boolean;
 }
 
 /**
  * Confirmation dialog for deleting one of the caller's own API keys.
  */
-export function PortalRevokeKeyDialog({ apiKey, open, onClose }: PortalRevokeKeyDialogProps) {
+export function PortalRevokeKeyDialog({
+  apiKey,
+  open,
+  onClose,
+  morph = false,
+}: PortalRevokeKeyDialogProps) {
   const t = useTranslations("keys");
   const tCommon = useTranslations("common");
   const deleteMutation = useDeletePortalKey();
@@ -42,7 +49,7 @@ export function PortalRevokeKeyDialog({ apiKey, open, onClose }: PortalRevokeKey
 
   return (
     <AlertDialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
-      <AlertDialogContent>
+      <AlertDialogContent morph={morph} morphName="morph-portal-key-revoke">
         <AlertDialogHeader>
           <AlertDialogTitle>{t("revokeKeyTitle")}</AlertDialogTitle>
           <AlertDialogDescription>{t("revokeKeyDesc")}</AlertDialogDescription>

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { LogIn, RefreshCw, Upload } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useContainerMorph } from "@/hooks/use-container-morph";
 import {
   useCliproxyAuthAccounts,
   useDownloadCliproxyAuthFile,
@@ -44,6 +45,11 @@ export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) 
   const [mapAccount, setMapAccount] = useState<CliproxyAuthAccount | null>(null);
   const [oauthOpen, setOauthOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+
+  // 容器变形动画：查看详情 / 编辑字段 / 删除从账号行展开、关闭收回。
+  // 三者互斥（同一时刻只开一个），共用单个 view-transition-name。
+  const { startMorph, canMorph } = useContainerMorph();
+  const morphSourceRef = useRef<HTMLElement | null>(null);
 
   const handleToggleStatus = (account: CliproxyAuthAccount) => {
     statusMutation.mutate({
@@ -105,12 +111,33 @@ export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) 
           <CliproxyAccountsTable
             accounts={accounts}
             onToggleStatus={handleToggleStatus}
-            onEditFields={setEditAccount}
+            onEditFields={(account, source) => {
+              morphSourceRef.current = source;
+              startMorph(() => setEditAccount(account), {
+                source,
+                name: "morph-cliproxy-account",
+                mode: "enter",
+              });
+            }}
             onMapUpstream={setMapAccount}
-            onViewDetail={setDetailAccount}
+            onViewDetail={(account, source) => {
+              morphSourceRef.current = source;
+              startMorph(() => setDetailAccount(account), {
+                source,
+                name: "morph-cliproxy-account",
+                mode: "enter",
+              });
+            }}
             onViewModels={setModelsAccount}
             onDownload={handleDownload}
-            onDelete={setDeleteAccount}
+            onDelete={(account, source) => {
+              morphSourceRef.current = source;
+              startMorph(() => setDeleteAccount(account), {
+                source,
+                name: "morph-cliproxy-account",
+                mode: "enter",
+              });
+            }}
           />
         )}
       </CardContent>
@@ -120,14 +147,30 @@ export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) 
           instanceId={instance.id}
           account={editAccount}
           open
-          onClose={() => setEditAccount(null)}
+          onClose={() =>
+            startMorph(() => setEditAccount(null), {
+              source: morphSourceRef.current,
+              name: "morph-cliproxy-account",
+              mode: "exit",
+            })
+          }
+          morph={canMorph}
+          morphName="morph-cliproxy-account"
         />
       )}
       {detailAccount && (
         <CliproxyAccountDetailDialog
           account={detailAccount}
           open
-          onClose={() => setDetailAccount(null)}
+          onClose={() =>
+            startMorph(() => setDetailAccount(null), {
+              source: morphSourceRef.current,
+              name: "morph-cliproxy-account",
+              mode: "exit",
+            })
+          }
+          morph={canMorph}
+          morphName="morph-cliproxy-account"
         />
       )}
       {modelsAccount && (
@@ -163,7 +206,15 @@ export function CliproxyAccountsPanel({ instance }: CliproxyAccountsPanelProps) 
       <CliproxyDeleteAuthFileDialog
         instanceId={instance.id}
         account={deleteAccount}
-        onClose={() => setDeleteAccount(null)}
+        onClose={() =>
+          startMorph(() => setDeleteAccount(null), {
+            source: morphSourceRef.current,
+            name: "morph-cliproxy-account",
+            mode: "exit",
+          })
+        }
+        morph={canMorph}
+        morphName="morph-cliproxy-account"
       />
     </Card>
   );

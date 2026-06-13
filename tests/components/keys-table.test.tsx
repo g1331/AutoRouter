@@ -349,7 +349,10 @@ describe("KeysTable", () => {
       const deleteButton = screen.getByLabelText("revokeKey: Test API Key");
       fireEvent.click(deleteButton);
 
-      expect(mockOnRevoke).toHaveBeenCalledWith(mockKey);
+      expect(mockOnRevoke).toHaveBeenCalledWith(mockKey, expect.any(HTMLElement));
+      // 容器变形动画需要源元素：表格行须带 data-morph-source 供按钮 closest 取到。
+      const source = mockOnRevoke.mock.calls[0][1] as HTMLElement;
+      expect(source.hasAttribute("data-morph-source")).toBe(true);
     });
   });
 
@@ -405,7 +408,10 @@ describe("KeysTable", () => {
       const editButton = screen.getByLabelText("editKey: Test API Key");
       fireEvent.click(editButton);
 
-      expect(mockOnEdit).toHaveBeenCalledWith(mockKey);
+      expect(mockOnEdit).toHaveBeenCalledWith(mockKey, expect.any(HTMLElement));
+      // 容器变形动画需要源元素：表格行须带 data-morph-source 供按钮 closest 取到。
+      const source = mockOnEdit.mock.calls[0][1] as HTMLElement;
+      expect(source.hasAttribute("data-morph-source")).toBe(true);
     });
   });
 

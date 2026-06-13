@@ -33,8 +33,11 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => {
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    morph?: boolean;
+    morphName?: string;
+  }
+>(({ className, children, morph = false, morphName = "morph-dialog", style, ...props }, ref) => {
   warnIfForbiddenVisualStyle("DialogContent", className);
   return (
     <DialogPortal>
@@ -45,13 +48,17 @@ const DialogContent = React.forwardRef<
           "fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2",
           "gap-5 rounded-cf-md border border-border bg-card p-6 text-foreground shadow-[var(--vr-shadow-lg)]",
           "duration-cf-normal ease-cf-standard",
-          "data-[state=open]:animate-in data-[state=closed]:animate-out",
-          "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-          "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
-          "data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%]",
-          "data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
+          // 走容器变形（View Transition）时关闭默认 zoom/slide 进出场，运动交给 VT 接管
+          !morph && [
+            "data-[state=open]:animate-in data-[state=closed]:animate-out",
+            "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+            "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+            "data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%]",
+            "data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
+          ],
           className
         )}
+        style={morph ? { viewTransitionName: morphName, ...style } : style}
         {...props}
       >
         {children}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Key, Plus } from "lucide-react";
 
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePortalKeys } from "@/hooks/use-portal-keys";
+import { useContainerMorph } from "@/hooks/use-container-morph";
 import type { APIKey } from "@/types/api";
 
 export default function PortalKeysPage() {
@@ -24,6 +25,10 @@ export default function PortalKeysPage() {
   const [editingKey, setEditingKey] = useState<APIKey | null>(null);
   const [revokeKey, setRevokeKey] = useState<APIKey | null>(null);
   const pageSize = 10;
+
+  // 容器变形动画：记录触发弹窗的源元素（创建按钮 / 表格行），关闭时收回同一元素。
+  const { startMorph, canMorph } = useContainerMorph();
+  const morphSourceRef = useRef<HTMLElement | null>(null);
 
   const { data, isLoading } = usePortalKeys(page, pageSize);
 
@@ -39,7 +44,18 @@ export default function PortalKeysPage() {
               {t("keys.managementDesc")}
             </span>
           </div>
-          <Button type="button" onClick={() => setCreateOpen(true)}>
+          <Button
+            type="button"
+            onClick={(event) => {
+              const source = event.currentTarget;
+              morphSourceRef.current = source;
+              startMorph(() => setCreateOpen(true), {
+                source,
+                name: "morph-portal-key-create",
+                mode: "enter",
+              });
+            }}
+          >
             <Plus className="mr-2 h-4 w-4" />
             {tKeys("createKey")}
           </Button>
@@ -61,8 +77,22 @@ export default function PortalKeysPage() {
           <>
             <PortalKeysTable
               keys={data?.items ?? []}
-              onEdit={setEditingKey}
-              onRevoke={setRevokeKey}
+              onEdit={(key, source) => {
+                morphSourceRef.current = source;
+                startMorph(() => setEditingKey(key), {
+                  source,
+                  name: "morph-portal-key-edit",
+                  mode: "enter",
+                });
+              }}
+              onRevoke={(key, source) => {
+                morphSourceRef.current = source;
+                startMorph(() => setRevokeKey(key), {
+                  source,
+                  name: "morph-portal-key-revoke",
+                  mode: "enter",
+                });
+              }}
             />
 
             {data && data.total_pages > 1 && (
@@ -80,19 +110,52 @@ export default function PortalKeysPage() {
         )}
       </div>
 
-      <PortalKeyDialog mode="create" open={createOpen} onOpenChange={setCreateOpen} />
+      <PortalKeyDialog
+        mode="create"
+        open={createOpen}
+        onOpenChange={(open) => {
+          if (open) {
+            setCreateOpen(true);
+          } else {
+            startMorph(() => setCreateOpen(false), {
+              source: morphSourceRef.current,
+              name: "morph-portal-key-create",
+              mode: "exit",
+            });
+          }
+        }}
+        morph={canMorph}
+        morphName="morph-portal-key-create"
+      />
 
       <PortalKeyDialog
         mode="edit"
         apiKey={editingKey}
         open={!!editingKey}
-        onOpenChange={(open) => !open && setEditingKey(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            startMorph(() => setEditingKey(null), {
+              source: morphSourceRef.current,
+              name: "morph-portal-key-edit",
+              mode: "exit",
+            });
+          }
+        }}
+        morph={canMorph}
+        morphName="morph-portal-key-edit"
       />
 
       <PortalRevokeKeyDialog
         apiKey={revokeKey}
         open={!!revokeKey}
-        onClose={() => setRevokeKey(null)}
+        onClose={() => {
+          startMorph(() => setRevokeKey(null), {
+            source: morphSourceRef.current,
+            name: "morph-portal-key-revoke",
+            mode: "exit",
+          });
+        }}
+        morph={canMorph}
       />
     </>
   );
