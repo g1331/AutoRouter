@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+
+import { ThemeProvider } from "@/providers/theme-provider";
+
 import "./globals.css";
 
 const manrope = localFont({
@@ -59,7 +62,9 @@ export default async function RootLayout({ children, params }: RootLayoutProps) 
       className={`${manrope.variable} ${jetbrainsMono.variable}`}
     >
       <head />
-      <body className={manrope.className}>{children}</body>
+      <body className={manrope.className}>
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   );
 }

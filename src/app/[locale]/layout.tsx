@@ -8,7 +8,6 @@ import { Locale } from "@/i18n/config";
 import { routing } from "@/i18n/routing";
 import { AuthProvider } from "@/providers/auth-provider";
 import { QueryProvider } from "@/providers/query-provider";
-import { ThemeProvider } from "@/providers/theme-provider";
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
@@ -30,17 +29,15 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
   const messages = await getMessages();
 
   return (
-    <ThemeProvider>
-      <NextIntlClientProvider messages={messages}>
-        <QueryProvider>
-          <TooltipProvider>
-            <AuthProvider>
-              <div className="min-h-dvh bg-background text-foreground">{children}</div>
-              <Toaster />
-            </AuthProvider>
-          </TooltipProvider>
-        </QueryProvider>
-      </NextIntlClientProvider>
-    </ThemeProvider>
+    <NextIntlClientProvider messages={messages}>
+      <QueryProvider>
+        <TooltipProvider>
+          <AuthProvider>
+            <div className="min-h-dvh bg-background text-foreground">{children}</div>
+            <Toaster />
+          </AuthProvider>
+        </TooltipProvider>
+      </QueryProvider>
+    </NextIntlClientProvider>
   );
 }
