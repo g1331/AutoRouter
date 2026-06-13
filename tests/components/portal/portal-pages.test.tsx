@@ -40,8 +40,18 @@ vi.mock("@/components/portal/portal-usage-chart", () => ({
 }));
 
 vi.mock("@/components/admin/logs-table", () => ({
-  LogsTable: ({ logs }: { logs: Array<{ id: string }> }) => (
-    <div data-testid="logs-table" data-log-count={logs.length} />
+  LogsTable: ({
+    logs,
+    hideRecordingSection,
+  }: {
+    logs: Array<{ id: string }>;
+    hideRecordingSection?: boolean;
+  }) => (
+    <div
+      data-testid="logs-table"
+      data-log-count={logs.length}
+      data-hide-recording={String(Boolean(hideRecordingSection))}
+    />
   ),
 }));
 
@@ -125,6 +135,8 @@ describe("PortalRequestsPage", () => {
     render(<PortalRequestsPage />);
 
     expect(screen.getByTestId("logs-table")).toHaveAttribute("data-log-count", "2");
+    // The portal must hide the admin-only recording section in the shared table.
+    expect(screen.getByTestId("logs-table")).toHaveAttribute("data-hide-recording", "true");
     // Single page → no pagination card.
     expect(screen.queryByTestId("pagination")).not.toBeInTheDocument();
   });

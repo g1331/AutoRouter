@@ -395,6 +395,24 @@ describe("LogsTable", () => {
     });
   });
 
+  describe("Recording Section Visibility", () => {
+    it("mounts the recording section in the expanded row by default", () => {
+      render(<LogsTable logs={[mockLog]} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+
+      expect(screen.getByTestId("log-recording-section")).toBeInTheDocument();
+    });
+
+    it("omits the recording section when hideRecordingSection is set", () => {
+      render(<LogsTable logs={[mockLog]} hideRecordingSection />);
+
+      fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+
+      expect(screen.queryByTestId("log-recording-section")).not.toBeInTheDocument();
+    });
+  });
+
   describe("Mobile Layout Billing Display", () => {
     it("keeps interface type text and request mode visible in mobile cards", () => {
       const originalMatchMedia = window.matchMedia;

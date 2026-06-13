@@ -56,7 +56,7 @@ export default function PortalRequestsPage() {
           </Card>
         ) : (
           <>
-            <LogsTable logs={data?.items ?? []} />
+            <LogsTable logs={data?.items ?? []} hideRecordingSection />
 
             {data && data.total_pages > 1 && (
               <Card variant="filled" className="border border-divider">
