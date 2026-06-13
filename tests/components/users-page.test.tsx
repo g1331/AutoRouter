@@ -20,6 +20,16 @@ vi.mock("@/hooks/use-users", () => ({
   useUsers: () => usersState.current,
 }));
 
+// useAuth：默认账号登录的管理员（不豁免），用例可切换为 ADMIN_TOKEN
+const authState = vi.hoisted(() => ({
+  current: { principal: { kind: "user", role: "admin" } } as {
+    principal: { kind: string; role?: string } | null;
+  },
+}));
+vi.mock("@/providers/auth-provider", () => ({
+  useAuth: () => authState.current,
+}));
+
 // 顶栏：仅回显标题
 vi.mock("@/components/admin/topbar", () => ({
   Topbar: ({ title }: { title: string }) => <div data-testid="topbar">{title}</div>,
@@ -27,10 +37,16 @@ vi.mock("@/components/admin/topbar", () => ({
 
 // 用户表格：捕获页面传入的 props，断言 activeAdminCount 计算
 const tableProps = vi.hoisted(() => ({
-  current: undefined as { users: User[]; activeAdminCount: number } | undefined,
+  current: undefined as
+    | { users: User[]; activeAdminCount: number; bypassLastAdminGuard?: boolean }
+    | undefined,
 }));
 vi.mock("@/components/admin/users-table", () => ({
-  UsersTable: (props: { users: User[]; activeAdminCount: number }) => {
+  UsersTable: (props: {
+    users: User[];
+    activeAdminCount: number;
+    bypassLastAdminGuard?: boolean;
+  }) => {
     tableProps.current = props;
     return <div data-testid="users-table" />;
   },
@@ -70,6 +86,7 @@ function makeUser(overrides: Partial<User>): User {
 beforeEach(() => {
   vi.clearAllMocks();
   usersState.current = { data: undefined, isLoading: true };
+  authState.current = { principal: { kind: "user", role: "admin" } };
   tableProps.current = undefined;
 });
 
@@ -106,5 +123,25 @@ describe("UsersPage", () => {
     expect(tableProps.current?.users).toHaveLength(3);
     // 仅统计启用状态的管理员，停用管理员不计入
     expect(tableProps.current?.activeAdminCount).toBe(1);
+    // 账号登录的管理员不豁免最后一个启用管理员守卫
+    expect(tableProps.current?.bypassLastAdminGuard).toBe(false);
+  });
+
+  it("ADMIN_TOKEN 登录时向表格传入豁免标志", () => {
+    authState.current = { principal: { kind: "admin_token" } };
+    usersState.current = {
+      data: {
+        items: [makeUser({ id: "a1", username: "root", role: "admin", is_active: true })],
+        total: 1,
+        page: 1,
+        page_size: 10,
+        total_pages: 1,
+        active_admin_total: 1,
+      },
+      isLoading: false,
+    };
+    render(<UsersPage />);
+
+    expect(tableProps.current?.bypassLastAdminGuard).toBe(true);
   });
 });

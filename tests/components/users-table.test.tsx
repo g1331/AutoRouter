@@ -126,6 +126,14 @@ describe("UsersTable", () => {
     expect(screen.getByRole("button", { name: "deleteUser" })).not.toBeDisabled();
   });
 
+  it("ADMIN_TOKEN 豁免时即便是最后一个启用管理员也不禁用危险操作", () => {
+    const admin = makeUser({ id: "a1", username: "root", role: "admin", is_active: true });
+    render(<UsersTable users={[admin]} activeAdminCount={1} bypassLastAdminGuard {...handlers} />);
+
+    expect(screen.getByRole("switch")).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "deleteUser" })).not.toBeDisabled();
+  });
+
   it("点击编辑与删除触发对应回调", () => {
     const user = makeUser({});
     render(<UsersTable users={[user]} activeAdminCount={0} {...handlers} />);

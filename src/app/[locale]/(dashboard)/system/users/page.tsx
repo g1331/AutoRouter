@@ -16,6 +16,7 @@ import { UsersTable } from "@/components/admin/users-table";
 import { UserUpstreamsDialog } from "@/components/admin/user-upstreams-dialog";
 import { Card } from "@/components/ui/card";
 import { useUsers } from "@/hooks/use-users";
+import { useAuth } from "@/providers/auth-provider";
 import type { User } from "@/types/api";
 
 type UserDialog = "edit" | "username" | "password" | "upstreams" | "keys" | "delete" | null;
@@ -29,12 +30,17 @@ export default function UsersPage() {
   const t = useTranslations("users");
   const tCommon = useTranslations("common");
   const { data, isLoading } = useUsers(page, pageSize);
+  const { principal } = useAuth();
+
+  // ADMIN_TOKEN 超级令牌独立于用户表、始终能管理系统，因此豁免“保留最后一个启用
+  // 管理员”的前端禁用；账号登录的管理员仍受限，后端按相同口径用 409 兜底。
+  const bypassLastAdminGuard = principal?.kind === "admin_token";
 
   const users = data?.items ?? [];
   // 全表启用管理员总数（由后端返回），用于跨分页判断最后一个启用管理员的危险操作禁用
   const activeAdminCount = data?.active_admin_total ?? 0;
   const isLastActiveAdmin = (user: User) =>
-    user.role === "admin" && user.is_active && activeAdminCount <= 1;
+    !bypassLastAdminGuard && user.role === "admin" && user.is_active && activeAdminCount <= 1;
 
   const openDialog = (type: Exclude<UserDialog, null>) => (user: User) => {
     setActiveUser(user);
@@ -64,6 +70,7 @@ export default function UsersPage() {
             <UsersTable
               users={users}
               activeAdminCount={activeAdminCount}
+              bypassLastAdminGuard={bypassLastAdminGuard}
               onEdit={openDialog("edit")}
               onChangeUsername={openDialog("username")}
               onResetPassword={openDialog("password")}
