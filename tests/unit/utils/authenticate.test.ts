@@ -47,7 +47,7 @@ vi.mock("@/lib/utils/logger", () => ({
   }),
 }));
 
-import { authenticate, requireAdmin, requireUser } from "@/lib/utils/api-auth";
+import { authenticate, requireAdmin, requireUser, requireMember } from "@/lib/utils/api-auth";
 import { config } from "@/lib/utils/config";
 
 function makeRequest(authHeader: string | null): NextRequest {
@@ -219,6 +219,46 @@ describe("requireUser", () => {
     mockVerifyUserToken.mockResolvedValue({ userId: "u1", role: "member" });
     mockLimit.mockRejectedValue(new Error("db down"));
     const result = await requireUser(makeRequest("Bearer jwt"));
+    expect(result).toBeInstanceOf(NextResponse);
+    expect((result as NextResponse).status).toBe(500);
+  });
+});
+
+describe("requireMember", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("passes a member user and carries the userId", async () => {
+    mockVerifyUserToken.mockResolvedValue({ userId: "u1", role: "member" });
+    mockLimit.mockResolvedValue([{ id: "u1", role: "member", username: "m", isActive: true }]);
+    const result = await requireMember(makeRequest("Bearer jwt"));
+    expect(result).toMatchObject({ kind: "user", userId: "u1", role: "member" });
+  });
+
+  it("passes an admin-role user, which still owns a personal data scope", async () => {
+    mockVerifyUserToken.mockResolvedValue({ userId: "u9", role: "admin" });
+    mockLimit.mockResolvedValue([{ id: "u9", role: "admin", username: "adm", isActive: true }]);
+    const result = await requireMember(makeRequest("Bearer jwt"));
+    expect(result).toMatchObject({ kind: "user", userId: "u9", role: "admin" });
+  });
+
+  it("rejects the ADMIN_TOKEN super-admin with 403 (no personal data scope)", async () => {
+    const result = await requireMember(makeRequest("Bearer test-admin-token"));
+    expect(result).toBeInstanceOf(NextResponse);
+    expect((result as NextResponse).status).toBe(403);
+  });
+
+  it("rejects an unauthenticated request with 401", async () => {
+    const result = await requireMember(makeRequest(null));
+    expect(result).toBeInstanceOf(NextResponse);
+    expect((result as NextResponse).status).toBe(401);
+  });
+
+  it("returns 500 when the user lookup throws", async () => {
+    mockVerifyUserToken.mockResolvedValue({ userId: "u1", role: "member" });
+    mockLimit.mockRejectedValue(new Error("db down"));
+    const result = await requireMember(makeRequest("Bearer jwt"));
     expect(result).toBeInstanceOf(NextResponse);
     expect((result as NextResponse).status).toBe(500);
   });

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { errorResponse, requireUser } from "@/lib/utils/api-auth";
+import { errorResponse, requireMember } from "@/lib/utils/api-auth";
 import {
   changeOwnPassword,
   InvalidCredentialsError,
@@ -22,12 +22,9 @@ const changePasswordSchema = z.object({
  * the admin reset. The target user is always the authenticated principal.
  */
 export async function PUT(request: NextRequest) {
-  const auth = await requireUser(request);
+  const auth = await requireMember(request);
   if (auth instanceof NextResponse) {
     return auth;
-  }
-  if (auth.kind !== "user") {
-    return errorResponse("Admin token has no personal data scope", 403);
   }
 
   try {

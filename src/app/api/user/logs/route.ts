@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getPaginationParams, errorResponse, requireUser } from "@/lib/utils/api-auth";
+import { getPaginationParams, errorResponse, requireMember } from "@/lib/utils/api-auth";
 import { listUserRequestLogs } from "@/lib/services/user-data-service";
 import type { ListRequestLogsFilter } from "@/lib/services/request-logger";
 import { transformPaginatedRequestLogs } from "@/lib/utils/api-transformers";
@@ -22,12 +22,9 @@ const log = createLogger("user-logs");
  * comes from the authenticated principal (decision 7).
  */
 export async function GET(request: NextRequest) {
-  const auth = await requireUser(request);
+  const auth = await requireMember(request);
   if (auth instanceof NextResponse) {
     return auth;
-  }
-  if (auth.kind !== "user") {
-    return errorResponse("Admin token has no personal data scope", 403);
   }
 
   try {

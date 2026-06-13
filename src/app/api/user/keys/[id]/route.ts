@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { errorResponse, requireUser } from "@/lib/utils/api-auth";
+import { errorResponse, requireMember } from "@/lib/utils/api-auth";
 import {
   updateOwnApiKey,
   deleteOwnApiKey,
@@ -31,12 +31,9 @@ const updateOwnKeySchema = z.object({
  * PUT /api/user/keys/[id] - Update one of the caller's own API keys
  */
 export async function PUT(request: NextRequest, context: RouteContext) {
-  const auth = await requireUser(request);
+  const auth = await requireMember(request);
   if (auth instanceof NextResponse) {
     return auth;
-  }
-  if (auth.kind !== "user") {
-    return errorResponse("Admin token has no personal data scope", 403);
   }
 
   try {
@@ -86,12 +83,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
  * DELETE /api/user/keys/[id] - Delete one of the caller's own API keys
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
-  const auth = await requireUser(request);
+  const auth = await requireMember(request);
   if (auth instanceof NextResponse) {
     return auth;
-  }
-  if (auth.kind !== "user") {
-    return errorResponse("Admin token has no personal data scope", 403);
   }
 
   try {

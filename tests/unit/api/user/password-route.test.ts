@@ -4,7 +4,7 @@ import { NextRequest } from "next/server";
 // Route-layer tests for the self-service password change endpoint. The
 // current-password verification and strength rule run against a real database
 // in tests/unit/services/user-service.test.ts; here the service is mocked so
-// these tests focus on the route concerns: the requireUser guard, the forced
+// these tests focus on the route concerns: the requireMember guard, the forced
 // target (always the authenticated principal), and the error-to-status mapping
 // (InvalidCredentialsError → 400, WeakPasswordError → 400).
 
@@ -12,13 +12,13 @@ vi.mock("@/lib/utils/api-auth", async (importActual) => {
   const actual = await importActual<typeof import("@/lib/utils/api-auth")>();
   return {
     ...actual,
-    requireUser: vi.fn(async (request: Request) => {
+    requireMember: vi.fn(async (request: Request) => {
       const authHeader = request.headers.get("authorization");
       if (authHeader === "Bearer member-token") {
         return { kind: "user", userId: SELF_ID, role: "member", username: "alice" };
       }
       if (authHeader === "Bearer valid-admin-token") {
-        return { kind: "admin_token" };
+        return actual.errorResponse("Admin token has no personal data scope", 403);
       }
       return actual.errorResponse("Unauthorized", 401);
     }),

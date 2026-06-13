@@ -160,6 +160,10 @@ export async function requireAdmin(
  * super-admin passes without a userId, so user-side endpoints must handle that
  * `admin_token` kind explicitly rather than assume a userId is present.
  *
+ * Personal-data endpoints should prefer {@link requireMember}, which folds the
+ * `admin_token` rejection into the gate and narrows the return type to a `user`
+ * principal so the userId is guaranteed without a per-route re-check.
+ *
  * @param request - The incoming request
  * @returns The authenticated principal, or a NextResponse error to return directly
  */
@@ -173,6 +177,36 @@ export async function requireUser(
   const { principal } = resolved;
   if (!principal) {
     return errorResponse("Unauthorized", 401);
+  }
+  return principal;
+}
+
+/**
+ * Require an authenticated end-user that owns a personal data scope. A `user`
+ * principal (member or admin-role user, both carrying a userId) passes; the
+ * ADMIN_TOKEN super-admin has no personal data scope and is rejected with 403;
+ * an unauthenticated request gets 401.
+ *
+ * The return type is narrowed to the `user` principal, so callers get a
+ * guaranteed `userId` without repeating the `auth.kind !== "user"` check at every
+ * `/api/user/*` route.
+ *
+ * @param request - The incoming request
+ * @returns The user principal (carrying userId), or a NextResponse error to return directly
+ */
+export async function requireMember(
+  request: NextRequest
+): Promise<Extract<AuthPrincipal, { kind: "user" }> | NextResponse> {
+  const resolved = await authenticateOrError(request);
+  if (resolved instanceof NextResponse) {
+    return resolved;
+  }
+  const { principal } = resolved;
+  if (!principal) {
+    return errorResponse("Unauthorized", 401);
+  }
+  if (principal.kind !== "user") {
+    return errorResponse("Admin token has no personal data scope", 403);
   }
   return principal;
 }

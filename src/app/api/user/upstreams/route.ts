@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { errorResponse, requireUser } from "@/lib/utils/api-auth";
+import { errorResponse, requireMember } from "@/lib/utils/api-auth";
 import { listUserUpstreamOptions } from "@/lib/services/user-data-service";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -11,12 +11,9 @@ const log = createLogger("user-upstreams");
  * are exposed; upstream configuration stays admin-only.
  */
 export async function GET(request: NextRequest) {
-  const auth = await requireUser(request);
+  const auth = await requireMember(request);
   if (auth instanceof NextResponse) {
     return auth;
-  }
-  if (auth.kind !== "user") {
-    return errorResponse("Admin token has no personal data scope", 403);
   }
 
   try {

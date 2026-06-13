@@ -4,7 +4,7 @@ import { NextRequest } from "next/server";
 // Route-layer tests for the self-service API key endpoints. The ownership,
 // upstream-subset, and tighten-only rules run against a real database in
 // tests/unit/services/user-key-service.test.ts; here the service is mocked so
-// these tests focus on the route concerns: the requireUser guard (401
+// these tests focus on the route concerns: the requireMember guard (401
 // unauthenticated, 403 for the ADMIN_TOKEN super-admin), the forced owner
 // scope from the principal, the schema stripping any attempted user_id /
 // access_mode fields, the snake_case body mapping, and the error-to-status
@@ -15,13 +15,13 @@ vi.mock("@/lib/utils/api-auth", async (importActual) => {
   const actual = await importActual<typeof import("@/lib/utils/api-auth")>();
   return {
     ...actual,
-    requireUser: vi.fn(async (request: Request) => {
+    requireMember: vi.fn(async (request: Request) => {
       const authHeader = request.headers.get("authorization");
       if (authHeader === "Bearer member-token") {
         return { kind: "user", userId: SELF_ID, role: "member", username: "alice" };
       }
       if (authHeader === "Bearer valid-admin-token") {
-        return { kind: "admin_token" };
+        return actual.errorResponse("Admin token has no personal data scope", 403);
       }
       return actual.errorResponse("Unauthorized", 401);
     }),

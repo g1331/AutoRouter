@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getPaginationParams, errorResponse, requireUser } from "@/lib/utils/api-auth";
+import { getPaginationParams, errorResponse, requireMember } from "@/lib/utils/api-auth";
 import {
   listOwnApiKeys,
   createOwnApiKey,
@@ -29,12 +29,9 @@ const createOwnKeySchema = z.object({
  * GET /api/user/keys - List the caller's own API keys
  */
 export async function GET(request: NextRequest) {
-  const auth = await requireUser(request);
+  const auth = await requireMember(request);
   if (auth instanceof NextResponse) {
     return auth;
-  }
-  if (auth.kind !== "user") {
-    return errorResponse("Admin token has no personal data scope", 403);
   }
 
   try {
@@ -52,12 +49,9 @@ export async function GET(request: NextRequest) {
  * POST /api/user/keys - Create an API key owned by the caller
  */
 export async function POST(request: NextRequest) {
-  const auth = await requireUser(request);
+  const auth = await requireMember(request);
   if (auth instanceof NextResponse) {
     return auth;
-  }
-  if (auth.kind !== "user") {
-    return errorResponse("Admin token has no personal data scope", 403);
   }
 
   try {
