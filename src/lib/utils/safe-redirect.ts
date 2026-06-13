@@ -7,7 +7,7 @@
  * supplies `?redirect=https://evil.com` and the app would navigate off-site.
  *
  * Tab/CR/LF are stripped first because browsers remove them from URLs before
- * resolving, so "/\t/evil" would otherwise collapse to "//evil".
+ * resolving, so `"/\t/evil"` would otherwise collapse to "//evil".
  *
  * @param raw - The untrusted redirect value (e.g. from a query param)
  * @param fallback - The safe in-app path to fall back to
