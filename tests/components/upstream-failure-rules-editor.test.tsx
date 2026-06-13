@@ -170,7 +170,9 @@ describe("UpstreamFailureRulesEditor", () => {
     expect(screen.getByText("failureRuleStatusCodes")).toBeInTheDocument();
     expect(screen.getByText("502, 503")).toBeInTheDocument();
     expect(screen.getByText("failureRuleErrorTypes")).toBeInTheDocument();
-    expect(screen.getByText("timeout")).toBeInTheDocument();
+    // getErrorTypeLabel 走 logs.retryErrorType.<type>；mock 直接回显 key 路径，
+    // 生产环境下经真实 next-intl 解析为本地化文案（如「超时」/「timeout」）。
+    expect(screen.getByText("retryErrorType.timeout")).toBeInTheDocument();
     expect(screen.getByText("failureRuleBodyPattern")).toBeInTheDocument();
     expect(screen.getByText("/overloaded/")).toBeInTheDocument();
     expect(screen.getByText("failureRuleHeaderPattern")).toBeInTheDocument();
