@@ -17,6 +17,14 @@ vi.mock("@/lib/utils/api-auth", async (importActual) => {
       if (authHeader === "Bearer valid-admin-token") {
         return { kind: "admin_token" };
       }
+      if (authHeader === "Bearer account-admin-token") {
+        return {
+          kind: "user",
+          userId: "99999999-9999-4999-8999-999999999999",
+          role: "admin",
+          username: "account-admin",
+        };
+      }
       if (authHeader === "Bearer member-token") {
         return actual.errorResponse("Forbidden", 403);
       }
@@ -233,6 +241,26 @@ describe("GET/PUT/DELETE /api/admin/users/[id]", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.display_name).toBe("New");
+    // ADMIN_TOKEN 超级令牌调用方豁免“最后一个启用管理员”守卫
+    expect(userService.updateUser).toHaveBeenCalledWith(
+      USER_ID,
+      { displayName: "New" },
+      { bypassLastActiveAdminGuard: true }
+    );
+  });
+
+  it("does not bypass the last-active-admin guard for an account admin on update", async () => {
+    vi.mocked(userService.updateUser).mockResolvedValue(makeUser({ role: "member" }) as never);
+    await updateUserRoute(
+      makeRequest("Bearer account-admin-token", { role: "member" }),
+      ctx(USER_ID)
+    );
+    // 账号登录的管理员仍受守卫约束
+    expect(userService.updateUser).toHaveBeenCalledWith(
+      USER_ID,
+      { role: "member" },
+      { bypassLastActiveAdminGuard: false }
+    );
   });
 
   it("maps the last-active-admin lock to 409 on update", async () => {
@@ -253,6 +281,19 @@ describe("GET/PUT/DELETE /api/admin/users/[id]", () => {
     vi.mocked(userService.deleteUser).mockResolvedValue(undefined);
     const res = await deleteUserRoute(makeRequest(ADMIN), ctx(USER_ID));
     expect(res.status).toBe(204);
+    // ADMIN_TOKEN 超级令牌调用方豁免“最后一个启用管理员”守卫
+    expect(userService.deleteUser).toHaveBeenCalledWith(USER_ID, {
+      bypassLastActiveAdminGuard: true,
+    });
+  });
+
+  it("does not bypass the last-active-admin guard for an account admin on delete", async () => {
+    vi.mocked(userService.deleteUser).mockResolvedValue(undefined);
+    await deleteUserRoute(makeRequest("Bearer account-admin-token"), ctx(USER_ID));
+    // 账号登录的管理员仍受守卫约束
+    expect(userService.deleteUser).toHaveBeenCalledWith(USER_ID, {
+      bypassLastActiveAdminGuard: false,
+    });
   });
 
   it("maps the last-active-admin lock to 409 on delete", async () => {

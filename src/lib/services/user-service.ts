@@ -305,15 +305,33 @@ export async function getUserById(id: string): Promise<UserListItem | null> {
 }
 
 /**
+ * Options for the admin mutations that are normally bounded by the "keep at
+ * least one active admin" guard. When the caller is the ADMIN_TOKEN super-admin
+ * — a credential that lives outside the users table and can always administer
+ * the system — the guard serves no purpose, so the route passes
+ * `bypassLastActiveAdminGuard: true` to allow deleting or demoting the final
+ * active admin user. Account-based admins never set it and stay guarded.
+ */
+export interface LastAdminGuardOptions {
+  bypassLastActiveAdminGuard?: boolean;
+}
+
+/**
  * Update a user's profile fields (display name, role, active state). Role
  * demotion and deactivation are guarded inside a transaction so the system can
- * never lose its last active admin (see {@link LastActiveAdminError}).
+ * never lose its last active admin (see {@link LastActiveAdminError}), unless
+ * the caller is the ADMIN_TOKEN super-admin (see {@link LastAdminGuardOptions}).
  *
  * @param id - The user id
  * @param input - The fields to change; omitted fields are left untouched
+ * @param options - Guard-bypass flags for the ADMIN_TOKEN super-admin
  * @returns The updated user list item
  */
-export async function updateUser(id: string, input: UserUpdateInput): Promise<UserListItem> {
+export async function updateUser(
+  id: string,
+  input: UserUpdateInput,
+  options: LastAdminGuardOptions = {}
+): Promise<UserListItem> {
   const now = new Date();
 
   const updated = await db.transaction(async (tx) => {
@@ -328,7 +346,7 @@ export async function updateUser(id: string, input: UserUpdateInput): Promise<Us
     const wasActiveAdmin = target.role === "admin" && target.isActive;
     const losesAdminCapability = !(nextRole === "admin" && nextActive);
 
-    if (wasActiveAdmin && losesAdminCapability) {
+    if (!options.bypassLastActiveAdminGuard && wasActiveAdmin && losesAdminCapability) {
       const [{ value: others }] = await tx
         .select({ value: count() })
         .from(users)
@@ -489,11 +507,13 @@ export async function changeOwnPassword(
  * transaction as the delete so SQLite — which does not enforce foreign keys at
  * runtime — cannot leave dangling ownership, and a concurrent self-service key
  * creation cannot slip a hanging reference past the cleanup. The last active
- * admin is protected from deletion.
+ * admin is protected from deletion unless the caller is the ADMIN_TOKEN
+ * super-admin (see {@link LastAdminGuardOptions}).
  *
  * @param id - The user id
+ * @param options - Guard-bypass flags for the ADMIN_TOKEN super-admin
  */
-export async function deleteUser(id: string): Promise<void> {
+export async function deleteUser(id: string, options: LastAdminGuardOptions = {}): Promise<void> {
   const now = new Date();
 
   await db.transaction(async (tx) => {
@@ -502,7 +522,7 @@ export async function deleteUser(id: string): Promise<void> {
       throw new UserNotFoundError(`User not found: ${id}`);
     }
 
-    if (target.role === "admin" && target.isActive) {
+    if (!options.bypassLastActiveAdminGuard && target.role === "admin" && target.isActive) {
       const [{ value: others }] = await tx
         .select({ value: count() })
         .from(users)

@@ -40,6 +40,8 @@ interface UsersTableProps {
   users: User[];
   /** 当前可见数据中启用的管理员数量，用于在前端禁用最后一个启用管理员的危险操作。 */
   activeAdminCount: number;
+  /** 调用者是否为 ADMIN_TOKEN 超级令牌；为真时豁免“最后一个启用管理员”的禁用。 */
+  bypassLastAdminGuard?: boolean;
   onEdit: (user: User) => void;
   onChangeUsername: (user: User) => void;
   onResetPassword: (user: User) => void;
@@ -50,11 +52,13 @@ interface UsersTableProps {
 
 /**
  * 用户列表表格：展示账号信息，行内开关切换启用状态，下拉菜单聚合编辑与危险操作。
- * 最后一个启用的管理员在前端禁用停用与删除入口，服务端对跨页情形再做 409 兜底。
+ * 最后一个启用的管理员在前端禁用停用与删除入口，服务端对跨页情形再做 409 兜底；
+ * 当 bypassLastAdminGuard 为真（ADMIN_TOKEN 超级令牌登录）时该禁用被豁免。
  */
 export function UsersTable({
   users,
   activeAdminCount,
+  bypassLastAdminGuard = false,
   onEdit,
   onChangeUsername,
   onResetPassword,
@@ -68,7 +72,7 @@ export function UsersTable({
   const dateLocale = getDateLocale(locale);
 
   const isLastActiveAdmin = (user: User) =>
-    user.role === "admin" && user.is_active && activeAdminCount <= 1;
+    !bypassLastAdminGuard && user.role === "admin" && user.is_active && activeAdminCount <= 1;
 
   const handleToggle = async (user: User, nextActive: boolean) => {
     if (nextActive === user.is_active) {

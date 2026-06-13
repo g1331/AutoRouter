@@ -82,7 +82,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       input.isActive = validated.is_active;
     }
 
-    const result = await updateUser(id, input);
+    const result = await updateUser(id, input, {
+      bypassLastActiveAdminGuard: auth.kind === "admin_token",
+    });
 
     return NextResponse.json(transformUserToApi(result));
   } catch (error) {
@@ -114,7 +116,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
   try {
     const { id } = await context.params;
-    await deleteUser(id);
+    await deleteUser(id, { bypassLastActiveAdminGuard: auth.kind === "admin_token" });
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     if (error instanceof UserNotFoundError) {

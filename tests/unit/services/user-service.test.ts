@@ -340,6 +340,36 @@ describe("user-service", () => {
       );
     });
 
+    it("demotes the last active admin when the guard is bypassed", async () => {
+      const admin = await createUser({
+        username: "admin",
+        password: "password123",
+        displayName: "Admin",
+        role: "admin",
+      });
+      const updated = await updateUser(
+        admin.id,
+        { role: "member" },
+        { bypassLastActiveAdminGuard: true }
+      );
+      expect(updated.role).toBe("member");
+    });
+
+    it("deactivates the last active admin when the guard is bypassed", async () => {
+      const admin = await createUser({
+        username: "admin",
+        password: "password123",
+        displayName: "Admin",
+        role: "admin",
+      });
+      const updated = await updateUser(
+        admin.id,
+        { isActive: false },
+        { bypassLastActiveAdminGuard: true }
+      );
+      expect(updated.isActive).toBe(false);
+    });
+
     it("deactivates a non-last admin", async () => {
       await createUser({
         username: "admin1",
@@ -476,6 +506,17 @@ describe("user-service", () => {
         role: "admin",
       });
       await expect(deleteUser(admin.id)).rejects.toBeInstanceOf(LastActiveAdminError);
+    });
+
+    it("deletes the last active admin when the guard is bypassed", async () => {
+      const admin = await createUser({
+        username: "admin",
+        password: "password123",
+        displayName: "Admin",
+        role: "admin",
+      });
+      await deleteUser(admin.id, { bypassLastActiveAdminGuard: true });
+      expect(await getUserById(admin.id)).toBeNull();
     });
 
     it("deletes a non-last admin", async () => {
