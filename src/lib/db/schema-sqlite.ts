@@ -69,6 +69,9 @@ export const apiKeys = sqliteTable(
       | null
     >(),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    // Mirror of schema-pg: records that the inactive state was imposed by an
+    // admin. A member cannot re-enable a key while this is set.
+    disabledByAdmin: integer("disabled_by_admin", { mode: "boolean" }).notNull().default(false),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),

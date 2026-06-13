@@ -8,16 +8,24 @@ vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
 }));
 
-// 登录页使用 next/navigation 的 useSearchParams，默认无 redirect 参数。
-vi.mock("next/navigation", () => ({
-  useSearchParams: () => ({ get: () => null }),
-}));
-
 // 路由跳转来自 @/i18n/navigation 的本地化 useRouter。
-const { pushMock, setTokenMock, tokenGetMock } = vi.hoisted(() => ({
+const { pushMock, setTokenMock, tokenGetMock, searchParamsState, authState } = vi.hoisted(() => ({
   pushMock: vi.fn(),
   setTokenMock: vi.fn(),
   tokenGetMock: vi.fn(),
+  // 登录页使用 next/navigation 的 useSearchParams，默认无 redirect 参数。
+  searchParamsState: { redirect: null as string | null },
+  // token + principal 可变，用于验证已登录态与按角色分流。
+  authState: {
+    token: null as string | null,
+    principal: null as { kind: string; role: "admin" | "member" } | null,
+  },
+}));
+
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => ({
+    get: (key: string) => (key === "redirect" ? searchParamsState.redirect : null),
+  }),
 }));
 
 vi.mock("@/i18n/navigation", () => ({
@@ -25,7 +33,11 @@ vi.mock("@/i18n/navigation", () => ({
 }));
 
 vi.mock("@/providers/auth-provider", () => ({
-  useAuth: () => ({ setToken: setTokenMock, token: null }),
+  useAuth: () => ({
+    setToken: setTokenMock,
+    token: authState.token,
+    principal: authState.principal,
+  }),
 }));
 
 // 令牌模式探针经 createApiClient().get 发起，这里桩掉以便断言与控制结果。
@@ -80,6 +92,9 @@ async function waitForForm() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  searchParamsState.redirect = null;
+  authState.token = null;
+  authState.principal = null;
   // prefers-reduced-motion: reduce 让 BootSequence 立即完成开机序列。
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
     matches: true,
@@ -123,7 +138,7 @@ describe("LoginPage 双模式登录", () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ token: "issued-jwt", user: { id: "u1" } }),
+      json: async () => ({ token: "issued-jwt", user: { id: "u1", role: "admin" } }),
     });
 
     render(<LoginPage />);
@@ -205,6 +220,104 @@ describe("LoginPage 双模式登录", () => {
     await waitFor(() => expect(setTokenMock).toHaveBeenCalledWith("admin-secret"));
     expect(tokenGetMock).toHaveBeenCalledWith("/admin/keys?page=1&page_size=1");
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("member 账号登录成功后跳转到自助门户", async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ token: "member-jwt", user: { id: "u2", role: "member" } }),
+    });
+
+    render(<LoginPage />);
+    await waitForForm();
+
+    fireEvent.change(screen.getByLabelText("username"), { target: { value: "bob" } });
+    fireEvent.change(screen.getByLabelText("password"), { target: { value: "Sup3rSecret!" } });
+    fireEvent.click(screen.getByRole("button", { name: "loginButton" }));
+
+    await waitFor(() => expect(setTokenMock).toHaveBeenCalledWith("member-jwt"));
+    expect(pushMock).toHaveBeenCalledWith("/portal");
+  });
+
+  it("显式 redirect 参数优先于角色默认落地页", async () => {
+    searchParamsState.redirect = "/portal/keys";
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ token: "member-jwt", user: { id: "u2", role: "member" } }),
+    });
+
+    render(<LoginPage />);
+    await waitForForm();
+
+    fireEvent.change(screen.getByLabelText("username"), { target: { value: "bob" } });
+    fireEvent.change(screen.getByLabelText("password"), { target: { value: "Sup3rSecret!" } });
+    fireEvent.click(screen.getByRole("button", { name: "loginButton" }));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/portal/keys"));
+  });
+
+  it("将外站 redirect 参数中和到角色默认落地页（防开放重定向）", async () => {
+    searchParamsState.redirect = "https://evil.com";
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ token: "member-jwt", user: { id: "u2", role: "member" } }),
+    });
+
+    render(<LoginPage />);
+    await waitForForm();
+
+    fireEvent.change(screen.getByLabelText("username"), { target: { value: "bob" } });
+    fireEvent.change(screen.getByLabelText("password"), { target: { value: "Sup3rSecret!" } });
+    fireEvent.click(screen.getByRole("button", { name: "loginButton" }));
+
+    await waitFor(() => expect(setTokenMock).toHaveBeenCalledWith("member-jwt"));
+    expect(pushMock).toHaveBeenCalledWith("/portal");
+    expect(pushMock).not.toHaveBeenCalledWith("https://evil.com");
+  });
+
+  it("已登录态下外站 redirect 参数被中和为角色默认落地页", async () => {
+    searchParamsState.redirect = "https://evil.com";
+    authState.token = "member-jwt";
+    authState.principal = { kind: "user", role: "member" };
+
+    render(<LoginPage />);
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/portal"));
+    expect(pushMock).not.toHaveBeenCalledWith("https://evil.com");
+  });
+
+  it("已登录的 member 访问登录页时按角色送回门户", async () => {
+    authState.token = "member-jwt";
+    authState.principal = { kind: "user", role: "member" };
+
+    render(<LoginPage />);
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/portal"));
+  });
+
+  it("已登录的 admin 访问登录页时送回管理后台", async () => {
+    authState.token = "admin-jwt";
+    authState.principal = { kind: "user", role: "admin" };
+
+    render(<LoginPage />);
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/dashboard"));
+  });
+
+  it("令牌模式探针成功后按 admin 落地管理后台", async () => {
+    tokenGetMock.mockResolvedValue({ data: [] });
+
+    render(<LoginPage />);
+    await waitForForm();
+
+    fireEvent.click(screen.getByRole("tab", { name: "tokenTab" }));
+    fireEvent.change(screen.getByLabelText("adminToken"), { target: { value: "admin-secret" } });
+    fireEvent.click(screen.getByRole("button", { name: "loginButton" }));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/dashboard"));
   });
 
   it("令牌模式探针失败时显示令牌无效", async () => {

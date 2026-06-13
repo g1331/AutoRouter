@@ -31,6 +31,42 @@ export function getPaginationParams(request: NextRequest): { page: number; pageS
 }
 
 /**
+ * Parse an optional integer filter query param into one of three states:
+ * `undefined` when absent or empty (no filter applied), `null` when present but
+ * not a valid integer (the caller should reject with 400), or the parsed
+ * integer. NaN-guarding the value here keeps a non-numeric param from reaching
+ * an integer SQL column, where the bind would otherwise surface as a 500.
+ *
+ * @param raw - The raw query param value (e.g. from searchParams.get())
+ * @returns undefined when absent/empty, null when invalid, otherwise the integer
+ */
+export function parseIntFilterParam(raw: string | null): number | null | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
+/**
+ * Parse an optional ISO datetime filter query param into one of three states:
+ * `undefined` when absent or empty, `null` when present but unparseable (the
+ * caller should reject with 400), or the Date. Guarding against an Invalid Date
+ * here keeps it from reaching the query layer, where serializing it would throw
+ * and surface as a 500.
+ *
+ * @param raw - The raw query param value
+ * @returns undefined when absent/empty, null when invalid, otherwise the Date
+ */
+export function parseDateFilterParam(raw: string | null): Date | null | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/**
  * Authenticated principal resolved from a request.
  *
  * - `admin_token`: the bootstrap ADMIN_TOKEN super-admin (no user record).
@@ -160,6 +196,10 @@ export async function requireAdmin(
  * super-admin passes without a userId, so user-side endpoints must handle that
  * `admin_token` kind explicitly rather than assume a userId is present.
  *
+ * Personal-data endpoints should prefer {@link requireMember}, which folds the
+ * `admin_token` rejection into the gate and narrows the return type to a `user`
+ * principal so the userId is guaranteed without a per-route re-check.
+ *
  * @param request - The incoming request
  * @returns The authenticated principal, or a NextResponse error to return directly
  */
@@ -173,6 +213,36 @@ export async function requireUser(
   const { principal } = resolved;
   if (!principal) {
     return errorResponse("Unauthorized", 401);
+  }
+  return principal;
+}
+
+/**
+ * Require an authenticated end-user that owns a personal data scope. A `user`
+ * principal (member or admin-role user, both carrying a userId) passes; the
+ * ADMIN_TOKEN super-admin has no personal data scope and is rejected with 403;
+ * an unauthenticated request gets 401.
+ *
+ * The return type is narrowed to the `user` principal, so callers get a
+ * guaranteed `userId` without repeating the `auth.kind !== "user"` check at every
+ * `/api/user/*` route.
+ *
+ * @param request - The incoming request
+ * @returns The user principal (carrying userId), or a NextResponse error to return directly
+ */
+export async function requireMember(
+  request: NextRequest
+): Promise<Extract<AuthPrincipal, { kind: "user" }> | NextResponse> {
+  const resolved = await authenticateOrError(request);
+  if (resolved instanceof NextResponse) {
+    return resolved;
+  }
+  const { principal } = resolved;
+  if (!principal) {
+    return errorResponse("Unauthorized", 401);
+  }
+  if (principal.kind !== "user") {
+    return errorResponse("Admin token has no personal data scope", 403);
   }
   return principal;
 }

@@ -11,6 +11,7 @@ import {
   Globe,
   Github,
   Key,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   Monitor,
@@ -96,7 +97,26 @@ const mobileNavigation: NavigationItem[] = [
   { href: "/settings", icon: Settings, labelKey: "settings" },
 ];
 
-function isPathActive(pathname: string, href: string): boolean {
+type PortalNavigationItem = {
+  href: string;
+  icon: typeof LayoutDashboard;
+  labelKey: "overview" | "myRequests" | "myKeys" | "changePassword";
+  // The portal root would prefix-match every portal page, so it matches exactly.
+  exact?: boolean;
+};
+
+// member 的门户导航集合（决策九）：桌面与移动端共用，移动端栅格按项数适配。
+const portalNavigation: PortalNavigationItem[] = [
+  { href: "/portal", icon: LayoutDashboard, labelKey: "overview", exact: true },
+  { href: "/portal/requests", icon: ScrollText, labelKey: "myRequests" },
+  { href: "/portal/keys", icon: Key, labelKey: "myKeys" },
+  { href: "/portal/password", icon: KeyRound, labelKey: "changePassword" },
+];
+
+function isPathActive(pathname: string, href: string, exact = false): boolean {
+  if (exact) {
+    return pathname === href;
+  }
   return pathname === href || (href !== "/" && pathname.startsWith(`${href}/`));
 }
 
@@ -256,13 +276,22 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname();
   const tNav = useTranslations("nav");
+  const tPortalNav = useTranslations("portal.nav");
   const tCommon = useTranslations("common");
   const { logout, principal } = useAuth();
   const isAdmin = principal?.role === "admin";
-  // 用户管理仅对管理员可见；其余系统导航按角色分流留待门户阶段统一处理
+  // member 看到门户导航集合，管理员身份沿用管理后台集合（决策九）。
+  const isMember = principal?.role === "member";
+  // 用户管理仅对管理员可见
   const visibleSystemNavigation = systemNavigation.filter(
     (item) => item.labelKey !== "users" || isAdmin
   );
+  const desktopItems = isMember
+    ? portalNavigation.map((item) => ({ ...item, label: tPortalNav(item.labelKey) }))
+    : navigation.map((item) => ({ ...item, exact: false, label: tNav(item.labelKey) }));
+  const mobileItems = isMember
+    ? portalNavigation.map((item) => ({ ...item, label: tPortalNav(item.labelKey) }))
+    : mobileNavigation.map((item) => ({ ...item, exact: false, label: tNav(item.labelKey) }));
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const confirmLogout = () => {
     setShowLogoutDialog(false);
@@ -322,9 +351,9 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         </Button>
 
         <nav className="flex-1 space-y-1.5 px-2 py-4" aria-label="Primary">
-          {navigation.map((item) => {
+          {desktopItems.map((item) => {
             const Icon = item.icon;
-            const active = isPathActive(pathname, item.href);
+            const active = isPathActive(pathname, item.href, item.exact);
 
             return (
               <Link
@@ -338,54 +367,56 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
                     : "border-transparent text-muted-foreground hover:border-border hover:bg-surface-300 hover:text-foreground"
                 )}
                 aria-current={active ? "page" : undefined}
-                title={tNav(item.labelKey)}
+                title={item.label}
               >
                 <Icon
                   className={cn("h-4 w-4 flex-shrink-0", active && "text-amber-500")}
                   aria-hidden="true"
                 />
-                {!collapsed && <span className="truncate">{tNav(item.labelKey)}</span>}
+                {!collapsed && <span className="truncate">{item.label}</span>}
               </Link>
             );
           })}
 
-          {/* System group */}
-          <div className={cn("pt-2", !collapsed && "border-t border-divider/60 mt-2")}>
-            {!collapsed && (
-              <div className="flex items-center gap-1.5 px-3 pb-1.5 pt-1">
-                <Wrench className="h-3 w-3 text-muted-foreground/60" aria-hidden="true" />
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
-                  {tNav("system")}
-                </span>
-              </div>
-            )}
-            {visibleSystemNavigation.map((item) => {
-              const Icon = item.icon;
-              const active = isPathActive(pathname, item.href);
+          {/* System group — admin-only surface, hidden for portal members */}
+          {!isMember && (
+            <div className={cn("pt-2", !collapsed && "border-t border-divider/60 mt-2")}>
+              {!collapsed && (
+                <div className="flex items-center gap-1.5 px-3 pb-1.5 pt-1">
+                  <Wrench className="h-3 w-3 text-muted-foreground/60" aria-hidden="true" />
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                    {tNav("system")}
+                  </span>
+                </div>
+              )}
+              {visibleSystemNavigation.map((item) => {
+                const Icon = item.icon;
+                const active = isPathActive(pathname, item.href);
 
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "group relative flex items-center rounded-cf-sm border text-sm transition-all duration-cf-normal ease-cf-standard",
-                    collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
-                    active
-                      ? "border-amber-500/45 bg-surface-300 text-foreground shadow-cf-glow-subtle"
-                      : "border-transparent text-muted-foreground hover:border-border hover:bg-surface-300 hover:text-foreground"
-                  )}
-                  aria-current={active ? "page" : undefined}
-                  title={tNav(item.labelKey)}
-                >
-                  <Icon
-                    className={cn("h-4 w-4 flex-shrink-0", active && "text-amber-500")}
-                    aria-hidden="true"
-                  />
-                  {!collapsed && <span className="truncate">{tNav(item.labelKey)}</span>}
-                </Link>
-              );
-            })}
-          </div>
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "group relative flex items-center rounded-cf-sm border text-sm transition-all duration-cf-normal ease-cf-standard",
+                      collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
+                      active
+                        ? "border-amber-500/45 bg-surface-300 text-foreground shadow-cf-glow-subtle"
+                        : "border-transparent text-muted-foreground hover:border-border hover:bg-surface-300 hover:text-foreground"
+                    )}
+                    aria-current={active ? "page" : undefined}
+                    title={tNav(item.labelKey)}
+                  >
+                    <Icon
+                      className={cn("h-4 w-4 flex-shrink-0", active && "text-amber-500")}
+                      aria-hidden="true"
+                    />
+                    {!collapsed && <span className="truncate">{tNav(item.labelKey)}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </nav>
 
         <div
@@ -415,10 +446,15 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         className="fixed inset-x-0 bottom-0 z-40 border-t border-divider bg-surface-200/96 backdrop-blur md:hidden"
         aria-label="Bottom navigation"
       >
-        <div className="mx-auto grid max-w-lg grid-cols-5 gap-1 px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
-          {mobileNavigation.map((item) => {
+        <div
+          className={cn(
+            "mx-auto grid max-w-lg gap-1 px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]",
+            isMember ? "grid-cols-4" : "grid-cols-5"
+          )}
+        >
+          {mobileItems.map((item) => {
             const Icon = item.icon;
-            const active = isPathActive(pathname, item.href);
+            const active = isPathActive(pathname, item.href, item.exact);
 
             return (
               <Link
@@ -434,7 +470,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
                 )}
               >
                 <Icon className={cn("h-[18px] w-[18px]", active && "text-amber-500")} />
-                <span className="truncate">{tNav(item.labelKey)}</span>
+                <span className="truncate">{item.label}</span>
               </Link>
             );
           })}

@@ -1724,5 +1724,67 @@
     "oauthCallbackSubmitSuccess": "Callback URL submitted, accounts synced",
     "oauthCallbackSubmitFailed": "Failed to submit callback URL: {message}",
     "linkedUpstreamProviderUnknown": "Unknown"
+  },
+  "portal": {
+    "nav": {
+      "overview": "Overview",
+      "myRequests": "My Requests",
+      "myKeys": "My Keys",
+      "changePassword": "Change Password"
+    },
+    "overview": {
+      "pageTitle": "Overview",
+      "todayRequests": "Today's Requests",
+      "todayRequestsHint": "Requests made by your keys today",
+      "monthRequests": "This Month's Requests",
+      "totalRequestsHint": "All-time total: {total}",
+      "monthCost": "This Month's Cost",
+      "totalCostHint": "All-time total: {total}",
+      "activeKeys": "Active Keys",
+      "totalKeysHint": "Total keys: {total}",
+      "usageTrend": "Usage Trend",
+      "usageRange": "Time range",
+      "chartMetric": "Metric",
+      "chartMetricRequests": "Requests",
+      "chartMetricTokens": "Tokens",
+      "chartMetricCost": "Cost",
+      "range_7d": "7 days",
+      "range_30d": "30 days"
+    },
+    "requests": {
+      "pageTitle": "My Requests",
+      "managementDesc": "Request records produced by your own API keys"
+    },
+    "keys": {
+      "pageTitle": "My Keys",
+      "managementDesc": "Create and manage API keys owned by you",
+      "createTitle": "Create API Key",
+      "editTitle": "Edit API Key",
+      "dialogDesc": "Keys created here are owned by you and limited to the upstreams your administrator has granted.",
+      "upstreamsDesc": "Choose from the upstreams granted to you by the administrator.",
+      "noGrantedUpstreams": "No upstreams have been granted to you yet. Contact your administrator.",
+      "spendingRulesTightenHint": "Spending rules can only be tightened: existing rules cannot be removed and limits cannot be raised.",
+      "noKeysDesc": "Create your first API key to call the proxy API. Keys are limited to the upstreams granted to you.",
+      "quotaUnlimited": "No limit",
+      "quotaRuleCount": "{count} rules",
+      "disabledByAdmin": "Disabled by admin",
+      "disabledByAdminHint": "An administrator disabled this key. Contact your administrator to restore it."
+    },
+    "password": {
+      "pageTitle": "Change Password",
+      "cardTitle": "Change Password",
+      "cardDesc": "Enter your current password and choose a new one of at least 8 characters.",
+      "currentLabel": "Current Password",
+      "newLabel": "New Password",
+      "confirmLabel": "Confirm New Password",
+      "currentRequired": "Current password is required",
+      "newTooShort": "New password must be at least 8 characters",
+      "confirmRequired": "Please confirm the new password",
+      "confirmMismatch": "The two passwords do not match",
+      "changing": "Changing...",
+      "submit": "Change Password",
+      "changeSuccess": "Password changed",
+      "changeFailed": "Failed to change password"
+    }
   }
 }

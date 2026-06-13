@@ -121,6 +121,10 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
     if (validated.is_active !== undefined) {
       input.isActive = validated.is_active;
+      // The admin is the lock authority: disabling a key imposes the admin lock
+      // (members cannot self-re-enable), enabling it clears the lock and returns
+      // pause/resume control to the owner.
+      input.disabledByAdmin = !validated.is_active;
     }
     if (validated.access_mode !== undefined) {
       input.accessMode = validated.access_mode;

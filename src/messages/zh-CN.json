@@ -1729,5 +1729,67 @@
     "oauthCallbackSubmitSuccess": "回调 URL 已提交，账号已同步",
     "oauthCallbackSubmitFailed": "提交回调 URL 失败：{message}",
     "linkedUpstreamProviderUnknown": "未识别"
+  },
+  "portal": {
+    "nav": {
+      "overview": "个人概览",
+      "myRequests": "我的请求",
+      "myKeys": "我的密钥",
+      "changePassword": "修改密码"
+    },
+    "overview": {
+      "pageTitle": "个人概览",
+      "todayRequests": "今日请求",
+      "todayRequestsHint": "今天由你的密钥发起的请求数",
+      "monthRequests": "本月请求",
+      "totalRequestsHint": "累计请求：{total}",
+      "monthCost": "本月费用",
+      "totalCostHint": "累计费用：{total}",
+      "activeKeys": "活跃密钥",
+      "totalKeysHint": "密钥总数：{total}",
+      "usageTrend": "用量趋势",
+      "usageRange": "时间范围",
+      "chartMetric": "指标",
+      "chartMetricRequests": "请求数",
+      "chartMetricTokens": "Token",
+      "chartMetricCost": "费用",
+      "range_7d": "近 7 天",
+      "range_30d": "近 30 天"
+    },
+    "requests": {
+      "pageTitle": "我的请求",
+      "managementDesc": "由你名下密钥产生的请求记录"
+    },
+    "keys": {
+      "pageTitle": "我的密钥",
+      "managementDesc": "创建并管理归属于你的 API 密钥",
+      "createTitle": "创建 API 密钥",
+      "editTitle": "编辑 API 密钥",
+      "dialogDesc": "在这里创建的密钥归属于你本人，可用上游限定在管理员为你开放的范围内。",
+      "upstreamsDesc": "从管理员为你开放的上游中选择。",
+      "noGrantedUpstreams": "管理员尚未为你开放任何上游，请联系管理员。",
+      "spendingRulesTightenHint": "消费限额只能收紧：不能删除已有规则，也不能调高限额。",
+      "noKeysDesc": "创建你的第一个 API 密钥来调用代理 API。密钥的可用范围限定在管理员为你开放的上游内。",
+      "quotaUnlimited": "未设限额",
+      "quotaRuleCount": "{count} 条规则",
+      "disabledByAdmin": "已被管理员停用",
+      "disabledByAdminHint": "此密钥已被管理员停用，如需恢复请联系管理员。"
+    },
+    "password": {
+      "pageTitle": "修改密码",
+      "cardTitle": "修改密码",
+      "cardDesc": "输入当前密码，并设置一个至少 8 位的新密码。",
+      "currentLabel": "当前密码",
+      "newLabel": "新密码",
+      "confirmLabel": "确认新密码",
+      "currentRequired": "请输入当前密码",
+      "newTooShort": "新密码长度至少为 8 个字符",
+      "confirmRequired": "请再次输入新密码",
+      "confirmMismatch": "两次输入的密码不一致",
+      "changing": "正在修改...",
+      "submit": "修改密码",
+      "changeSuccess": "密码修改成功",
+      "changeFailed": "密码修改失败"
+    }
   }
 }

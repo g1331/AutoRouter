@@ -1,6 +1,6 @@
 import { and, count, desc, eq, inArray, ne } from "drizzle-orm";
 import { db, users, apiKeys, userUpstreams, upstreams, type User } from "../db";
-import { hashPassword, isPasswordStrong, normalizeUsername } from "../utils/auth";
+import { hashPassword, isPasswordStrong, normalizeUsername, verifyPassword } from "../utils/auth";
 import { createLogger } from "../utils/logger";
 
 const log = createLogger("user-service");
@@ -77,6 +77,19 @@ export class InvalidUsernameError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "InvalidUsernameError";
+  }
+}
+
+/**
+ * Raised when the self-service password change is given a wrong current
+ * password. Distinct from WeakPasswordError so the route can keep the two
+ * rejection reasons apart without leaking which credential check failed
+ * beyond what the caller already knows.
+ */
+export class InvalidCredentialsError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidCredentialsError";
   }
 }
 
@@ -435,6 +448,40 @@ export async function resetPassword(id: string, newPassword: string): Promise<vo
   }
 
   log.info({ userId: id }, "reset user password");
+}
+
+/**
+ * Self-service password change: verifies the current password before applying
+ * the same strength check and hashing as the admin reset. The userId always
+ * comes from the authenticated principal, never from request parameters.
+ *
+ * @param id - The authenticated user's id
+ * @param currentPassword - The current plaintext password to verify
+ * @param newPassword - The new plaintext password
+ */
+export async function changeOwnPassword(
+  id: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<void> {
+  const user = await db.query.users.findFirst({ where: eq(users.id, id) });
+  if (!user) {
+    throw new UserNotFoundError(`User not found: ${id}`);
+  }
+
+  const matches = await verifyPassword(currentPassword, user.passwordHash);
+  if (!matches) {
+    throw new InvalidCredentialsError("Current password is incorrect");
+  }
+
+  if (!isPasswordStrong(newPassword)) {
+    throw new WeakPasswordError("Password does not meet the minimum length requirement");
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+  await db.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, id));
+
+  log.info({ userId: id }, "user changed own password");
 }
 
 /**

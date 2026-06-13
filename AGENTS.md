@@ -69,7 +69,11 @@ pnpm docs:preview
 src/
 ├── app/
 │   ├── api/                 # Next.js API Routes (backend)
-│   │   ├── admin/           # Admin API (Bearer ADMIN_TOKEN), one folder per domain:
+│   │   ├── auth/            # Login (username/password → JWT) + /me session info
+│   │   ├── user/            # Member self-service API (requireUser, owner-scoped):
+│   │   │                    #   overview, usage, logs, keys, upstreams, password
+│   │   ├── admin/           # Admin API (ADMIN_TOKEN or admin-role JWT), one folder per domain:
+│   │   │   ├── users/       #   User management (CRUD, role, status, upstream grants)
 │   │   │   ├── keys/        #   API key management (+ /reveal)
 │   │   │   ├── upstreams/   #   Upstream CRUD, health, probes, quota, catalog
 │   │   │   ├── upstream-failure-rules/ # Per-upstream failure rules
@@ -87,8 +91,9 @@ src/
 │   │   ├── mock/[...path]/  # Replays recorded fixtures (non-production)
 │   │   └── health/          # Health check
 │   ├── [locale]/            # Internationalized routes (next-intl: en, zh-CN)
-│   │   ├── (auth)/          # Login page (route group)
-│   │   └── (dashboard)/     # dashboard, keys, upstreams, logs, settings, system
+│   │   ├── (auth)/          # Login page (route group, dual mode: account / admin token)
+│   │   ├── (dashboard)/     # Admin dashboard: dashboard, keys, upstreams, logs, settings, system
+│   │   └── (portal)/        # Member self-service portal: overview, requests, keys, password
 │   └── layout.tsx           # Root layout with providers
 ├── components/              # admin/, dashboard/, logs/, ui/ (shadcn/ui based)
 ├── hooks/                   # TanStack Query hooks (use-upstreams, use-billing, use-live-pulse, …)
@@ -118,7 +123,10 @@ docs/                        # VitePress documentation site
 1. **Dual-dialect database**: Drizzle ORM with PostgreSQL (default, production) and SQLite (local dev sandbox). `config.dbType` selects the dialect; when unset it auto-detects `postgres` if `DATABASE_URL` exists, otherwise `sqlite`. `schema.ts` dispatches to `schema-pg.ts` or `schema-sqlite.ts` at import time, but **all business code is written against the PostgreSQL types** — the SQLite drizzle instance is treated as structurally compatible at runtime. Raw SQL via `db.execute()` may use PG-specific syntax (e.g. `PERCENTILE_CONT`) that does not run on SQLite. Production fails fast rather than silently falling back to SQLite.
 
 2. **Security model**:
-   - Admin authentication: Bearer token (`ADMIN_TOKEN`) on all `/api/admin/*` routes.
+   - User accounts & roles: a `users` table with `admin` / `member` roles. `/api/auth/login` verifies username/password (bcrypt) and issues an HS256 JWT (signing key from `JWT_SECRET`, or derived from `ENCRYPTION_KEY` via HKDF when unset).
+   - Admin authentication: all `/api/admin/*` routes accept the Bearer `ADMIN_TOKEN` or an admin-role user JWT (`requireAdmin`); members get 403.
+   - Member self-service: `/api/user/*` routes require a user JWT (`requireUser`) and force the owner scope from the authenticated principal — the `ADMIN_TOKEN` identity has no personal data scope and gets 403. Self-managed API keys are forced to the caller's ownership, `restricted` access mode, and the user's granted upstream subset; spending rules can only be tightened.
+   - Frontend routing splits by role: members land on `/portal` (self-service), admins on `/dashboard`; client-side guards redirect cross-role access with server-side 403 as the backstop.
    - Client API keys: hashed with bcrypt, verified on proxy requests, scoped to authorized upstreams and expiry.
    - Upstream keys: encrypted at rest with Fernet (`ENCRYPTION_KEY`, 44-char base64).
    - SSRF protection (`upstream-ssrf-validator.ts`): blocks private/loopback/metadata addresses and validates DNS resolution when registering upstreams.
@@ -150,6 +158,7 @@ DB_TYPE=postgres                   # "postgres" | "sqlite"; auto-detected from D
 SQLITE_DB_PATH=./data/dev.sqlite   # only used when DB_TYPE=sqlite
 
 # Optional
+JWT_SECRET=<32+ chars>             # HS256 key for user login JWTs; derived from ENCRYPTION_KEY via HKDF when unset
 ALLOW_KEY_REVEAL=false             # Allow revealing API keys via Admin API
 LOG_RETENTION_DAYS=90              # Request log retention
 LOG_LEVEL=info                     # fatal|error|warn|info|debug|trace

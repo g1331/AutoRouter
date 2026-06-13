@@ -47,7 +47,14 @@ vi.mock("@/lib/utils/logger", () => ({
   }),
 }));
 
-import { authenticate, requireAdmin, requireUser } from "@/lib/utils/api-auth";
+import {
+  authenticate,
+  requireAdmin,
+  requireUser,
+  requireMember,
+  parseIntFilterParam,
+  parseDateFilterParam,
+} from "@/lib/utils/api-auth";
 import { config } from "@/lib/utils/config";
 
 function makeRequest(authHeader: string | null): NextRequest {
@@ -221,5 +228,80 @@ describe("requireUser", () => {
     const result = await requireUser(makeRequest("Bearer jwt"));
     expect(result).toBeInstanceOf(NextResponse);
     expect((result as NextResponse).status).toBe(500);
+  });
+});
+
+describe("requireMember", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("passes a member user and carries the userId", async () => {
+    mockVerifyUserToken.mockResolvedValue({ userId: "u1", role: "member" });
+    mockLimit.mockResolvedValue([{ id: "u1", role: "member", username: "m", isActive: true }]);
+    const result = await requireMember(makeRequest("Bearer jwt"));
+    expect(result).toMatchObject({ kind: "user", userId: "u1", role: "member" });
+  });
+
+  it("passes an admin-role user, which still owns a personal data scope", async () => {
+    mockVerifyUserToken.mockResolvedValue({ userId: "u9", role: "admin" });
+    mockLimit.mockResolvedValue([{ id: "u9", role: "admin", username: "adm", isActive: true }]);
+    const result = await requireMember(makeRequest("Bearer jwt"));
+    expect(result).toMatchObject({ kind: "user", userId: "u9", role: "admin" });
+  });
+
+  it("rejects the ADMIN_TOKEN super-admin with 403 (no personal data scope)", async () => {
+    const result = await requireMember(makeRequest("Bearer test-admin-token"));
+    expect(result).toBeInstanceOf(NextResponse);
+    expect((result as NextResponse).status).toBe(403);
+  });
+
+  it("rejects an unauthenticated request with 401", async () => {
+    const result = await requireMember(makeRequest(null));
+    expect(result).toBeInstanceOf(NextResponse);
+    expect((result as NextResponse).status).toBe(401);
+  });
+
+  it("returns 500 when the user lookup throws", async () => {
+    mockVerifyUserToken.mockResolvedValue({ userId: "u1", role: "member" });
+    mockLimit.mockRejectedValue(new Error("db down"));
+    const result = await requireMember(makeRequest("Bearer jwt"));
+    expect(result).toBeInstanceOf(NextResponse);
+    expect((result as NextResponse).status).toBe(500);
+  });
+});
+
+describe("parseIntFilterParam", () => {
+  it("returns undefined for an absent or empty param", () => {
+    expect(parseIntFilterParam(null)).toBeUndefined();
+    expect(parseIntFilterParam("")).toBeUndefined();
+  });
+
+  it("returns the parsed integer for a valid value", () => {
+    expect(parseIntFilterParam("429")).toBe(429);
+    expect(parseIntFilterParam(" 200 ")).toBe(200);
+  });
+
+  it("returns null for a non-integer value (NaN-guard before the SQL bind)", () => {
+    expect(parseIntFilterParam("abc")).toBeNull();
+    expect(parseIntFilterParam("4.5")).toBeNull();
+    expect(parseIntFilterParam("NaN")).toBeNull();
+  });
+});
+
+describe("parseDateFilterParam", () => {
+  it("returns undefined for an absent or empty param", () => {
+    expect(parseDateFilterParam(null)).toBeUndefined();
+    expect(parseDateFilterParam("")).toBeUndefined();
+  });
+
+  it("returns a Date for a valid ISO datetime", () => {
+    const result = parseDateFilterParam("2026-06-01T00:00:00.000Z");
+    expect(result).toBeInstanceOf(Date);
+    expect((result as Date).toISOString()).toBe("2026-06-01T00:00:00.000Z");
+  });
+
+  it("returns null for an unparseable value (Invalid Date guard)", () => {
+    expect(parseDateFilterParam("not-a-date")).toBeNull();
   });
 });

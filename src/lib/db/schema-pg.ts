@@ -76,6 +76,11 @@ export const apiKeys = pgTable(
       | null
     >(),
     isActive: boolean("is_active").notNull().default(true),
+    // Records that the inactive state was imposed by an admin. A member cannot
+    // re-enable a key while this is set; an admin clears it by re-enabling the
+    // key. Member-initiated disables leave this false so the member keeps
+    // self-service control over their own pause/resume.
+    disabledByAdmin: boolean("disabled_by_admin").notNull().default(false),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

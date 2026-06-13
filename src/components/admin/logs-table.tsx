@@ -45,6 +45,14 @@ interface LogsTableProps {
   isLive?: boolean;
   /** Log IDs to mark as expanded on initial mount (e.g. when arriving via /logs?focus=<id>). */
   initialExpandedIds?: readonly string[];
+  /**
+   * Hide the per-row traffic-recording section, which fetches from the
+   * admin-only /admin/traffic-recordings endpoint and links to management pages.
+   * The member portal reuses this table for personal logs and must not surface
+   * that panel (it would fire 403 probes and expose admin links), so it passes
+   * this true.
+   */
+  hideRecordingSection?: boolean;
 }
 
 type PerformancePreset = "all" | "high_ttft" | "low_tps" | "slow_duration";
@@ -714,7 +722,12 @@ function getPercentile(values: number[], percentile: number): number | null {
   return sorted[Math.max(0, Math.min(index, sorted.length - 1))];
 }
 
-export function LogsTable({ logs, isLive = false, initialExpandedIds }: LogsTableProps) {
+export function LogsTable({
+  logs,
+  isLive = false,
+  initialExpandedIds,
+  hideRecordingSection = false,
+}: LogsTableProps) {
   const t = useTranslations("logs");
   const locale = useLocale();
   const [desktopTableContainerElement, setDesktopTableContainerElement] =
@@ -2854,8 +2867,10 @@ export function LogsTable({ logs, isLive = false, initialExpandedIds }: LogsTabl
           </section>
         )}
 
-        {/* Recording Section */}
-        <LogRecordingSection logId={log.id} enabled={expandedRows.has(log.id)} />
+        {/* Recording Section (admin-only data source; hidden in the member portal) */}
+        {!hideRecordingSection && (
+          <LogRecordingSection logId={log.id} enabled={expandedRows.has(log.id)} />
+        )}
       </div>
     );
   };

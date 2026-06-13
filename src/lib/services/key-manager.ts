@@ -37,6 +37,8 @@ export interface ApiKeyCreateInput {
   name: string;
   upstreamIds: string[];
   accessMode?: ApiKeyAccessMode;
+  // Owner of the key; the self-service portal forces this to the caller.
+  userId?: string | null;
   description?: string | null;
   expiresAt?: Date | null;
   spendingRules?: SpendingRule[] | null;
@@ -67,6 +69,7 @@ export interface ApiKeyCreateResult {
   spendingRuleStatuses: ApiKeySpendingRuleStatus[];
   isQuotaExceeded: boolean;
   isActive: boolean;
+  disabledByAdmin: boolean;
   expiresAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -84,6 +87,7 @@ export interface ApiKeyListItem {
   spendingRuleStatuses: ApiKeySpendingRuleStatus[];
   isQuotaExceeded: boolean;
   isActive: boolean;
+  disabledByAdmin: boolean;
   expiresAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -108,6 +112,10 @@ export interface ApiKeyUpdateInput {
   name?: string;
   description?: string | null;
   isActive?: boolean;
+  // Set the admin-lock flag alongside isActive. Only the admin surface passes
+  // this; the self-service surface never does, so a member toggling activation
+  // cannot touch the lock.
+  disabledByAdmin?: boolean;
   accessMode?: ApiKeyAccessMode;
   expiresAt?: Date | null;
   upstreamIds?: string[];
@@ -220,6 +228,7 @@ async function buildApiKeyListItem(
     | "allowedModels"
     | "spendingRules"
     | "isActive"
+    | "disabledByAdmin"
     | "expiresAt"
     | "createdAt"
     | "updatedAt"
@@ -242,6 +251,7 @@ async function buildApiKeyListItem(
     spendingRuleStatuses: quotaState.spendingRuleStatuses,
     isQuotaExceeded: quotaState.isQuotaExceeded,
     isActive: key.isActive,
+    disabledByAdmin: key.disabledByAdmin,
     expiresAt: key.expiresAt,
     createdAt: key.createdAt,
     updatedAt: key.updatedAt,
@@ -302,11 +312,13 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
       keyValueEncrypted,
       keyPrefix,
       name,
+      userId: input.userId ?? null,
       description: description ?? null,
       accessMode: normalizedAccessMode,
       allowedModels,
       spendingRules,
       isActive: true,
+      disabledByAdmin: false,
       expiresAt: expiresAt ?? null,
       createdAt: now,
       updatedAt: now,
@@ -352,6 +364,7 @@ export async function createApiKey(input: ApiKeyCreateInput): Promise<ApiKeyCrea
     spendingRuleStatuses: quotaState.spendingRuleStatuses,
     isQuotaExceeded: quotaState.isQuotaExceeded,
     isActive: newKey.isActive,
+    disabledByAdmin: newKey.disabledByAdmin,
     expiresAt: newKey.expiresAt,
     createdAt: newKey.createdAt,
     updatedAt: newKey.updatedAt,
@@ -376,23 +389,32 @@ export async function deleteApiKey(keyId: string): Promise<void> {
   log.info({ keyPrefix: existing.keyPrefix, name: existing.name }, "deleted API key");
 }
 
+export interface ListApiKeysFilter {
+  // Owner filter; the self-service portal injects the authenticated userId.
+  userId?: string;
+}
+
 /**
- * List all API keys with pagination.
+ * List API keys with pagination and an optional owner filter.
  */
 export async function listApiKeys(
   page: number = 1,
-  pageSize: number = 20
+  pageSize: number = 20,
+  filter: ListApiKeysFilter = {}
 ): Promise<PaginatedApiKeys> {
   // Validate pagination params
   page = Math.max(1, page);
   pageSize = Math.min(100, Math.max(1, pageSize));
 
+  const whereClause = filter.userId ? eq(apiKeys.userId, filter.userId) : undefined;
+
   // Count total keys
-  const [{ value: total }] = await db.select({ value: count() }).from(apiKeys);
+  const [{ value: total }] = await db.select({ value: count() }).from(apiKeys).where(whereClause);
 
   // Query paginated results (ordered by created_at desc)
   const offset = (page - 1) * pageSize;
   const keys = await db.query.apiKeys.findMany({
+    where: whereClause,
     orderBy: [desc(apiKeys.createdAt)],
     limit: pageSize,
     offset,
@@ -516,7 +538,8 @@ export async function updateApiKey(
   keyId: string,
   input: ApiKeyUpdateInput
 ): Promise<ApiKeyListItem> {
-  const { name, description, isActive, accessMode, expiresAt, upstreamIds } = input;
+  const { name, description, isActive, disabledByAdmin, accessMode, expiresAt, upstreamIds } =
+    input;
   const now = new Date();
   const parsedSpendingRules =
     input.spendingRules !== undefined ? parseSpendingRules(input.spendingRules) : undefined;
@@ -579,6 +602,7 @@ export async function updateApiKey(
       name: string;
       description: string | null;
       isActive: boolean;
+      disabledByAdmin: boolean;
       accessMode: ApiKeyAccessMode;
       allowedModels: string[] | null;
       expiresAt: Date | null;
@@ -596,6 +620,9 @@ export async function updateApiKey(
     }
     if (isActive !== undefined) {
       updateData.isActive = isActive;
+    }
+    if (disabledByAdmin !== undefined) {
+      updateData.disabledByAdmin = disabledByAdmin;
     }
     if (shouldUpdateAccess) {
       updateData.accessMode = nextAccessMode;
@@ -680,6 +707,7 @@ export async function updateApiKey(
       allowedModels: normalizeApiKeyAllowedModels(updatedKey.allowedModels),
       spendingRules: parseSpendingRules(updatedKey.spendingRules),
       isActive: updatedKey.isActive,
+      disabledByAdmin: updatedKey.disabledByAdmin,
       expiresAt: updatedKey.expiresAt,
       createdAt: updatedKey.createdAt,
       updatedAt: updatedKey.updatedAt,
@@ -702,6 +730,7 @@ export async function updateApiKey(
       allowedModels: updatedResult.allowedModels,
       spendingRules: updatedResult.spendingRules,
       isActive: updatedResult.isActive,
+      disabledByAdmin: updatedResult.disabledByAdmin,
       expiresAt: updatedResult.expiresAt,
       createdAt: updatedResult.createdAt,
       updatedAt: updatedResult.updatedAt,

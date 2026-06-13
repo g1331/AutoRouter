@@ -62,6 +62,7 @@ function buildServiceApiKey(overrides?: Record<string, unknown>) {
     ],
     isQuotaExceeded: false,
     isActive: true,
+    disabledByAdmin: false,
     expiresAt: null,
     createdAt: new Date("2024-01-01T00:00:00.000Z"),
     updatedAt: new Date("2024-01-01T00:00:00.000Z"),
@@ -210,6 +211,54 @@ describe("admin keys routes spending rules", () => {
         ],
         is_quota_exceeded: true,
       })
+    );
+  });
+
+  it("PUT /api/admin/keys/[id] disabling a key imposes the admin lock", async () => {
+    const { PUT } = await import("@/app/api/admin/keys/[id]/route");
+    mockUpdateApiKey.mockResolvedValueOnce(
+      buildServiceApiKey({ isActive: false, disabledByAdmin: true })
+    );
+
+    const request = new NextRequest(`http://localhost:3000/api/admin/keys/${KEY_ID}`, {
+      method: "PUT",
+      headers: {
+        authorization: "Bearer test-admin-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ is_active: false }),
+    });
+
+    const response = await PUT(request, { params: Promise.resolve({ id: KEY_ID }) });
+
+    expect(response.status).toBe(200);
+    expect(mockUpdateApiKey).toHaveBeenCalledWith(
+      KEY_ID,
+      expect.objectContaining({ isActive: false, disabledByAdmin: true })
+    );
+  });
+
+  it("PUT /api/admin/keys/[id] enabling a key clears the admin lock", async () => {
+    const { PUT } = await import("@/app/api/admin/keys/[id]/route");
+    mockUpdateApiKey.mockResolvedValueOnce(
+      buildServiceApiKey({ isActive: true, disabledByAdmin: false })
+    );
+
+    const request = new NextRequest(`http://localhost:3000/api/admin/keys/${KEY_ID}`, {
+      method: "PUT",
+      headers: {
+        authorization: "Bearer test-admin-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ is_active: true }),
+    });
+
+    const response = await PUT(request, { params: Promise.resolve({ id: KEY_ID }) });
+
+    expect(response.status).toBe(200);
+    expect(mockUpdateApiKey).toHaveBeenCalledWith(
+      KEY_ID,
+      expect.objectContaining({ isActive: true, disabledByAdmin: false })
     );
   });
 });
