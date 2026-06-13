@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Key } from "lucide-react";
 
@@ -12,6 +12,7 @@ import { RevokeKeyDialog } from "@/components/admin/revoke-key-dialog";
 import { Topbar } from "@/components/admin/topbar";
 import { Card } from "@/components/ui/card";
 import { useAPIKeys } from "@/hooks/use-api-keys";
+import { useContainerMorph } from "@/hooks/use-container-morph";
 import type { APIKey } from "@/types/api";
 
 interface KeysLoadingSkeletonProps {
@@ -61,6 +62,10 @@ export default function KeysPage() {
   const [editingKey, setEditingKey] = useState<APIKey | null>(null);
   const pageSize = 10;
 
+  // 容器变形动画：记录触发弹窗的源元素（表格行 / 卡片），关闭时收回同一元素。
+  const { startMorph, canMorph } = useContainerMorph();
+  const morphSourceRef = useRef<HTMLElement | null>(null);
+
   const t = useTranslations("keys");
   const tCommon = useTranslations("common");
   const { data, isLoading } = useAPIKeys(page, pageSize);
@@ -82,7 +87,25 @@ export default function KeysPage() {
           <KeysLoadingSkeleton loadingLabel={tCommon("loading")} />
         ) : (
           <>
-            <KeysTable keys={data?.items || []} onRevoke={setRevokeKey} onEdit={setEditingKey} />
+            <KeysTable
+              keys={data?.items || []}
+              onRevoke={(key, source) => {
+                morphSourceRef.current = source;
+                startMorph(() => setRevokeKey(key), {
+                  source,
+                  name: "morph-key-revoke",
+                  mode: "enter",
+                });
+              }}
+              onEdit={(key, source) => {
+                morphSourceRef.current = source;
+                startMorph(() => setEditingKey(key), {
+                  source,
+                  name: "morph-key-form",
+                  mode: "enter",
+                });
+              }}
+            />
 
             {data && data.total_pages > 1 && (
               <Card variant="filled" className="border border-divider">
@@ -99,13 +122,34 @@ export default function KeysPage() {
         )}
       </div>
 
-      <RevokeKeyDialog apiKey={revokeKey} open={!!revokeKey} onClose={() => setRevokeKey(null)} />
+      <RevokeKeyDialog
+        apiKey={revokeKey}
+        open={!!revokeKey}
+        onClose={() => {
+          startMorph(() => setRevokeKey(null), {
+            source: morphSourceRef.current,
+            name: "morph-key-revoke",
+            mode: "exit",
+          });
+        }}
+        morph={canMorph}
+      />
 
       {editingKey && (
         <EditKeyDialog
           apiKey={editingKey}
           open={!!editingKey}
-          onOpenChange={(open) => !open && setEditingKey(null)}
+          onOpenChange={(open) => {
+            if (!open) {
+              startMorph(() => setEditingKey(null), {
+                source: morphSourceRef.current,
+                name: "morph-key-form",
+                mode: "exit",
+              });
+            }
+          }}
+          morph={canMorph}
+          morphName="morph-key-form"
         />
       )}
     </>

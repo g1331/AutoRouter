@@ -65,12 +65,22 @@ interface EditKeyDialogProps {
   apiKey: APIKeyResponse;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** 启用容器变形动画（View Transition）。 */
+  morph?: boolean;
+  /** 容器变形使用的 view-transition-name，须与 CSS 具名过渡对应。 */
+  morphName?: string;
 }
 
 /**
  * Edit API Key Dialog
  */
-export function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps) {
+export function EditKeyDialog({
+  apiKey,
+  open,
+  onOpenChange,
+  morph = false,
+  morphName = "morph-key-form",
+}: EditKeyDialogProps) {
   const updateMutation = useUpdateAPIKey();
   const [upstreamSearchQuery, setUpstreamSearchQuery] = useState("");
   const [spendingRuleDrafts, setSpendingRuleDrafts] = useState<Record<string, string>>({});
@@ -276,6 +286,8 @@ export function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className="flex max-h-[calc(100vh-2rem)] max-w-2xl flex-col overflow-hidden p-0"
+        morph={morph}
+        morphName={morphName}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           (event.currentTarget as HTMLElement).focus();

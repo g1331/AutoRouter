@@ -25,8 +25,8 @@ import { cn } from "@/lib/utils";
 
 interface KeysTableProps {
   keys: APIKey[];
-  onRevoke: (key: APIKey) => void;
-  onEdit: (key: APIKey) => void;
+  onRevoke: (key: APIKey, source: HTMLElement | null) => void;
+  onEdit: (key: APIKey, source: HTMLElement | null) => void;
 }
 
 function formatAccessModeLabel(key: APIKey, t: ReturnType<typeof useTranslations>): string {
@@ -366,6 +366,7 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
           {filteredKeys.map((key) => (
             <div
               key={key.id}
+              data-morph-source
               className="space-y-3 rounded-cf-md border border-divider bg-surface-200/70 p-3"
             >
               <div className="flex items-start justify-between gap-2">
@@ -494,7 +495,9 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
                     size="icon"
                     type="button"
                     className="h-8 w-8"
-                    onClick={() => onEdit(key)}
+                    onClick={(event) =>
+                      onEdit(key, event.currentTarget.closest<HTMLElement>("[data-morph-source]"))
+                    }
                     aria-label={`${t("editKey")}: ${key.name} (mobile)`}
                   >
                     <Pencil className="h-4 w-4" aria-hidden="true" />
@@ -504,7 +507,9 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
                     size="icon"
                     type="button"
                     className="h-8 w-8 text-status-error hover:bg-status-error-muted"
-                    onClick={() => onRevoke(key)}
+                    onClick={(event) =>
+                      onRevoke(key, event.currentTarget.closest<HTMLElement>("[data-morph-source]"))
+                    }
                     aria-label={`${t("revokeKey")}: ${key.name} (mobile)`}
                   >
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -538,7 +543,10 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
                 const isExpanded = expandedKeys.has(key.id);
                 return (
                   <Fragment key={key.id}>
-                    <TableRow className={cn(hasQuota && isExpanded && "[&>td]:border-b-0")}>
+                    <TableRow
+                      data-morph-source
+                      className={cn(hasQuota && isExpanded && "[&>td]:border-b-0")}
+                    >
                       <TableCell
                         className={cn("max-w-[200px] font-medium", hasQuota && "cursor-pointer")}
                         onClick={() => hasQuota && toggleExpand(key.id)}
@@ -675,7 +683,12 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
                             size="icon"
                             type="button"
                             className="h-8 w-8"
-                            onClick={() => onEdit(key)}
+                            onClick={(event) =>
+                              onEdit(
+                                key,
+                                event.currentTarget.closest<HTMLElement>("[data-morph-source]")
+                              )
+                            }
                             aria-label={`${t("editKey")}: ${key.name}`}
                           >
                             <Pencil className="h-4 w-4" aria-hidden="true" />
@@ -685,7 +698,12 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
                             size="icon"
                             type="button"
                             className="h-8 w-8 text-status-error hover:bg-status-error-muted"
-                            onClick={() => onRevoke(key)}
+                            onClick={(event) =>
+                              onRevoke(
+                                key,
+                                event.currentTarget.closest<HTMLElement>("[data-morph-source]")
+                              )
+                            }
                             aria-label={`${t("revokeKey")}: ${key.name}`}
                           >
                             <Trash2 className="h-4 w-4" aria-hidden="true" />

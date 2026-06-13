@@ -18,12 +18,14 @@ interface RevokeKeyDialogProps {
   apiKey: APIKey | null;
   open: boolean;
   onClose: () => void;
+  /** 启用容器变形动画（View Transition）。 */
+  morph?: boolean;
 }
 
 /**
  * M3 Revoke API Key Confirmation Dialog
  */
-export function RevokeKeyDialog({ apiKey, open, onClose }: RevokeKeyDialogProps) {
+export function RevokeKeyDialog({ apiKey, open, onClose, morph = false }: RevokeKeyDialogProps) {
   const revokeMutation = useRevokeAPIKey();
   const t = useTranslations("keys");
   const tCommon = useTranslations("common");
@@ -49,7 +51,7 @@ export function RevokeKeyDialog({ apiKey, open, onClose }: RevokeKeyDialogProps)
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md" morph={morph} morphName="morph-key-revoke">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-[var(--shape-corner-medium)] bg-[rgb(var(--md-sys-color-error-container))] flex items-center justify-center">
