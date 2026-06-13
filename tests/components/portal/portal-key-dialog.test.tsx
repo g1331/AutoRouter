@@ -149,4 +149,72 @@ describe("PortalKeyDialog", () => {
     });
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
+
+  it("drops upstreams no longer granted before submitting the edit", async () => {
+    updateMutateAsyncMock.mockResolvedValue(makeKey());
+    const onOpenChange = vi.fn();
+
+    // "up-stale" is bound to the key but absent from the granted options (the
+    // admin revoked the grant), so it must not survive the save.
+    render(
+      <PortalKeyDialog
+        mode="edit"
+        apiKey={makeKey({ upstream_ids: ["up-1", "up-stale"] })}
+        open
+        onOpenChange={onOpenChange}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    await waitFor(() => {
+      expect(updateMutateAsyncMock).toHaveBeenCalledWith({
+        id: "key-1",
+        data: {
+          name: "my key",
+          description: "personal key",
+          upstream_ids: ["up-1"],
+          spending_rules: [{ period_type: "daily", limit: 5 }],
+        },
+      });
+    });
+  });
+
+  it("requires reselecting an upstream when every bound upstream was revoked", async () => {
+    const onOpenChange = vi.fn();
+
+    render(
+      <PortalKeyDialog
+        mode="edit"
+        apiKey={makeKey({ upstream_ids: ["up-stale"] })}
+        open
+        onOpenChange={onOpenChange}
+      />
+    );
+
+    // All bound upstreams are stale, so the form value is reconciled to empty and
+    // the save is blocked by the required-field validation rather than a 400.
+    fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("keys.selectUpstreamsRequired")).toBeInTheDocument();
+    });
+    expect(updateMutateAsyncMock).not.toHaveBeenCalled();
+
+    // Picking a still-granted upstream (the first option, up-1) unblocks the save.
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+    fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    await waitFor(() => {
+      expect(updateMutateAsyncMock).toHaveBeenCalledWith({
+        id: "key-1",
+        data: {
+          name: "my key",
+          description: "personal key",
+          upstream_ids: ["up-1"],
+          spending_rules: [{ period_type: "daily", limit: 5 }],
+        },
+      });
+    });
+  });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -133,6 +133,27 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
           }
         : { name: "", description: "", upstream_ids: [] },
   });
+
+  // The granted upstream options load after this body mounts. A key may still
+  // reference an upstream the member can no longer manage (an admin revoked the
+  // grant or deleted the upstream). That id never shows up in the checkbox list,
+  // yet it stays in the form value, so the member cannot uncheck it and every
+  // save is rejected server-side by assertUpstreamsAllowed — the key becomes
+  // uneditable. Once the options arrive, drop any id outside the granted set so
+  // the form only carries upstreams the member can actually toggle and submit;
+  // if all of them were stale, upstream_ids becomes empty and the required-field
+  // validation correctly asks the member to pick from the visible options.
+  useEffect(() => {
+    if (mode !== "edit" || !upstreamOptions) {
+      return;
+    }
+    const allowedIds = new Set(upstreamOptions.items.map((item) => item.id));
+    const current = form.getValues("upstream_ids");
+    const reconciled = current.filter((id) => allowedIds.has(id));
+    if (reconciled.length !== current.length) {
+      form.setValue("upstream_ids", reconciled);
+    }
+  }, [upstreamOptions, mode, form]);
 
   const parseSpendingRules = (): APIKeySpendingRule[] | null | undefined => {
     const parsed: APIKeySpendingRule[] = [];
