@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { createApiClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { sanitizeRedirect } from "@/lib/utils/safe-redirect";
 import { useRouter } from "@/i18n/navigation";
 import { useAuth } from "@/providers/auth-provider";
 
@@ -132,7 +133,7 @@ export default function LoginPage() {
   useEffect(() => {
     if (token && principal) {
       const fallback = principal.role === "member" ? "/portal" : "/dashboard";
-      const redirect = searchParams.get("redirect") || fallback;
+      const redirect = sanitizeRedirect(searchParams.get("redirect"), fallback);
       router.push(redirect);
     }
   }, [token, principal, router, searchParams]);
@@ -148,7 +149,7 @@ export default function LoginPage() {
     setToken(newToken);
     toast.success(t("loginSuccess"));
     const fallback = role === "member" ? "/portal" : "/dashboard";
-    const redirect = searchParams.get("redirect") || fallback;
+    const redirect = sanitizeRedirect(searchParams.get("redirect"), fallback);
     router.push(redirect);
   };
 

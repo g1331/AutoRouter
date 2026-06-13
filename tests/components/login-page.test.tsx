@@ -258,6 +258,37 @@ describe("LoginPage 双模式登录", () => {
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/portal/keys"));
   });
 
+  it("将外站 redirect 参数中和到角色默认落地页（防开放重定向）", async () => {
+    searchParamsState.redirect = "https://evil.com";
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ token: "member-jwt", user: { id: "u2", role: "member" } }),
+    });
+
+    render(<LoginPage />);
+    await waitForForm();
+
+    fireEvent.change(screen.getByLabelText("username"), { target: { value: "bob" } });
+    fireEvent.change(screen.getByLabelText("password"), { target: { value: "Sup3rSecret!" } });
+    fireEvent.click(screen.getByRole("button", { name: "loginButton" }));
+
+    await waitFor(() => expect(setTokenMock).toHaveBeenCalledWith("member-jwt"));
+    expect(pushMock).toHaveBeenCalledWith("/portal");
+    expect(pushMock).not.toHaveBeenCalledWith("https://evil.com");
+  });
+
+  it("已登录态下外站 redirect 参数被中和为角色默认落地页", async () => {
+    searchParamsState.redirect = "https://evil.com";
+    authState.token = "member-jwt";
+    authState.principal = { kind: "user", role: "member" };
+
+    render(<LoginPage />);
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/portal"));
+    expect(pushMock).not.toHaveBeenCalledWith("https://evil.com");
+  });
+
   it("已登录的 member 访问登录页时按角色送回门户", async () => {
     authState.token = "member-jwt";
     authState.principal = { kind: "user", role: "member" };
