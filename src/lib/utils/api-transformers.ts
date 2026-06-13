@@ -311,6 +311,7 @@ export interface ApiKeyApiResponse {
   }[];
   is_quota_exceeded: boolean;
   is_active: boolean;
+  disabled_by_admin: boolean;
   expires_at: string | null;
   created_at: string;
   updated_at: string;
@@ -363,6 +364,7 @@ export function transformApiKeyToApi(apiKey: ApiKeyListItem): ApiKeyApiResponse 
     })),
     is_quota_exceeded: apiKey.isQuotaExceeded,
     is_active: apiKey.isActive,
+    disabled_by_admin: apiKey.disabledByAdmin,
     expires_at: toISOStringOrNull(apiKey.expiresAt),
     created_at: apiKey.createdAt.toISOString(),
     updated_at: apiKey.updatedAt.toISOString(),
@@ -396,6 +398,7 @@ export function transformApiKeyCreateToApi(result: ApiKeyCreateResult): ApiKeyCr
     })),
     is_quota_exceeded: result.isQuotaExceeded,
     is_active: result.isActive,
+    disabled_by_admin: result.disabledByAdmin,
     expires_at: toISOStringOrNull(result.expiresAt),
     created_at: result.createdAt.toISOString(),
     updated_at: result.updatedAt.toISOString(),

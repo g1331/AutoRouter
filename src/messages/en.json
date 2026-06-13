@@ -1766,7 +1766,9 @@
       "spendingRulesTightenHint": "Spending rules can only be tightened: existing rules cannot be removed and limits cannot be raised.",
       "noKeysDesc": "Create your first API key to call the proxy API. Keys are limited to the upstreams granted to you.",
       "quotaUnlimited": "No limit",
-      "quotaRuleCount": "{count} rules"
+      "quotaRuleCount": "{count} rules",
+      "disabledByAdmin": "Disabled by admin",
+      "disabledByAdminHint": "An administrator disabled this key. Contact your administrator to restore it."
     },
     "password": {
       "pageTitle": "Change Password",

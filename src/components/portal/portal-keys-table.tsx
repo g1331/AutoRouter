@@ -111,17 +111,26 @@ export function PortalKeysTable({ keys, onEdit, onRevoke }: PortalKeysTableProps
               )}
             </TableCell>
             <TableCell>
-              <div className="flex items-center gap-2">
+              <div
+                className="flex items-center gap-2"
+                title={key.disabled_by_admin ? tPortal("keys.disabledByAdminHint") : undefined}
+              >
                 <Switch
                   checked={key.is_active}
-                  disabled={toggleActiveMutation.isPending}
+                  // An admin lock cannot be lifted from the portal, so the
+                  // toggle is read-only until an admin re-enables the key.
+                  disabled={toggleActiveMutation.isPending || key.disabled_by_admin}
                   onCheckedChange={(checked) =>
                     toggleActiveMutation.mutate({ id: key.id, nextActive: checked })
                   }
                   aria-label={key.is_active ? t("quickDisable") : t("quickEnable")}
                 />
                 <span className="hidden type-body-small text-muted-foreground sm:inline">
-                  {key.is_active ? t("enabled") : t("disabled")}
+                  {key.disabled_by_admin
+                    ? tPortal("keys.disabledByAdmin")
+                    : key.is_active
+                      ? t("enabled")
+                      : t("disabled")}
                 </span>
               </div>
             </TableCell>

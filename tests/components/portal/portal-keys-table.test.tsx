@@ -34,6 +34,7 @@ function makeKey(overrides: Partial<APIKey> = {}): APIKey {
     spending_rule_statuses: [],
     is_quota_exceeded: false,
     is_active: true,
+    disabled_by_admin: false,
     expires_at: null,
     created_at: "2026-06-01T00:00:00.000Z",
     updated_at: "2026-06-01T00:00:00.000Z",
@@ -81,6 +82,23 @@ describe("PortalKeysTable", () => {
     fireEvent.click(screen.getByRole("switch"));
 
     expect(toggleMutateMock).toHaveBeenCalledWith({ id: "key-1", nextActive: false });
+  });
+
+  it("locks the toggle and labels an admin-disabled key", () => {
+    render(
+      <PortalKeysTable
+        keys={[makeKey({ is_active: false, disabled_by_admin: true })]}
+        onEdit={vi.fn()}
+        onRevoke={vi.fn()}
+      />
+    );
+
+    // The member cannot flip an admin-disabled key back on from the portal.
+    expect(screen.getByRole("switch")).toBeDisabled();
+    expect(screen.getByText("portal.keys.disabledByAdmin")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("switch"));
+    expect(toggleMutateMock).not.toHaveBeenCalled();
   });
 
   it("marks an exceeded quota", () => {

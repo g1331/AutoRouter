@@ -6,6 +6,7 @@ import {
   KeyOwnershipError,
   UpstreamNotAllowedError,
   SpendingRuleRelaxationError,
+  AdminLockedKeyError,
 } from "@/lib/services/user-key-service";
 import { transformApiKeyToApi } from "@/lib/utils/api-transformers";
 import { z } from "zod";
@@ -69,6 +70,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       return errorResponse("API key not found", 404);
     }
     if (error instanceof UpstreamNotAllowedError) {
+      return errorResponse(error.message, 403);
+    }
+    if (error instanceof AdminLockedKeyError) {
       return errorResponse(error.message, 403);
     }
     if (error instanceof SpendingRuleRelaxationError) {

@@ -63,6 +63,18 @@ export class SpendingRuleRelaxationError extends Error {
   }
 }
 
+/**
+ * Raised when a member tries to re-enable a key that an admin has disabled. The
+ * admin lock takes priority: only an admin can restore such a key, so the
+ * member is denied (decision: admin disable is irreversible from the portal).
+ */
+export class AdminLockedKeyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AdminLockedKeyError";
+  }
+}
+
 export interface UserKeyCreateInput {
   name: string;
   upstreamIds: string[];
@@ -174,6 +186,16 @@ export async function updateOwnApiKey(
   input: UserKeyUpdateInput
 ): Promise<ApiKeyListItem> {
   const key = await requireOwnedKey(userId, keyId);
+
+  // An admin-disabled key cannot be re-enabled from the portal. The member may
+  // still change other fields, but flipping is_active back to true is refused
+  // while the admin lock stands; the lock is never written from this surface, so
+  // a member-initiated disable stays self-reversible.
+  if (input.isActive === true && key.disabledByAdmin) {
+    throw new AdminLockedKeyError(
+      "This key was disabled by an administrator and cannot be re-enabled here"
+    );
+  }
 
   if (input.upstreamIds !== undefined) {
     await assertUpstreamsAllowed(userId, input.upstreamIds);

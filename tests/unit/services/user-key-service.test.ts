@@ -102,6 +102,7 @@ import {
   KeyOwnershipError,
   UpstreamNotAllowedError,
   SpendingRuleRelaxationError,
+  AdminLockedKeyError,
 } from "@/lib/services/user-key-service";
 
 async function seedUser(username: string): Promise<{ id: string }> {
@@ -321,6 +322,61 @@ describe("updateOwnApiKey", () => {
 
     expect(withRules.spendingRules).toEqual([{ period_type: "daily", limit: 3 }]);
     expect(withRules.isActive).toBe(false);
+  });
+
+  it("lets the member re-enable a key they disabled themselves", async () => {
+    const alice = await seedUser("alice");
+    const upstream = await seedUpstream("granted");
+    await grantUpstreams(alice.id, [upstream.id]);
+    const key = await createOwnApiKey(alice.id, { name: "my key", upstreamIds: [upstream.id] });
+
+    await updateOwnApiKey(alice.id, key.id, { isActive: false });
+    const reenabled = await updateOwnApiKey(alice.id, key.id, { isActive: true });
+
+    expect(reenabled.isActive).toBe(true);
+    const row = await db.query.apiKeys.findFirst({ where: eq(apiKeys.id, key.id) });
+    // A member-initiated disable never sets the admin lock.
+    expect(row?.disabledByAdmin).toBe(false);
+  });
+
+  it("refuses to re-enable a key an admin disabled and leaves it inactive", async () => {
+    const alice = await seedUser("alice");
+    const upstream = await seedUpstream("granted");
+    await grantUpstreams(alice.id, [upstream.id]);
+    const key = await createOwnApiKey(alice.id, { name: "my key", upstreamIds: [upstream.id] });
+
+    // Simulate an admin disabling the key (sets the lock alongside is_active).
+    await db
+      .update(apiKeys)
+      .set({ isActive: false, disabledByAdmin: true })
+      .where(eq(apiKeys.id, key.id));
+
+    await expect(updateOwnApiKey(alice.id, key.id, { isActive: true })).rejects.toBeInstanceOf(
+      AdminLockedKeyError
+    );
+
+    const row = await db.query.apiKeys.findFirst({ where: eq(apiKeys.id, key.id) });
+    expect(row?.isActive).toBe(false);
+    expect(row?.disabledByAdmin).toBe(true);
+  });
+
+  it("still lets the member edit other fields of an admin-disabled key without lifting the lock", async () => {
+    const alice = await seedUser("alice");
+    const upstream = await seedUpstream("granted");
+    await grantUpstreams(alice.id, [upstream.id]);
+    const key = await createOwnApiKey(alice.id, { name: "my key", upstreamIds: [upstream.id] });
+
+    await db
+      .update(apiKeys)
+      .set({ isActive: false, disabledByAdmin: true })
+      .where(eq(apiKeys.id, key.id));
+
+    const updated = await updateOwnApiKey(alice.id, key.id, { name: "renamed" });
+
+    expect(updated.name).toBe("renamed");
+    expect(updated.isActive).toBe(false);
+    const row = await db.query.apiKeys.findFirst({ where: eq(apiKeys.id, key.id) });
+    expect(row?.disabledByAdmin).toBe(true);
   });
 });
 

@@ -36,6 +36,7 @@ vi.mock("@/lib/services/user-key-service", () => {
   class KeyOwnershipError extends Error {}
   class UpstreamNotAllowedError extends Error {}
   class SpendingRuleRelaxationError extends Error {}
+  class AdminLockedKeyError extends Error {}
   return {
     listOwnApiKeys: vi.fn(),
     createOwnApiKey: vi.fn(),
@@ -44,6 +45,7 @@ vi.mock("@/lib/services/user-key-service", () => {
     KeyOwnershipError,
     UpstreamNotAllowedError,
     SpendingRuleRelaxationError,
+    AdminLockedKeyError,
   };
 });
 
@@ -52,6 +54,7 @@ import {
   KeyOwnershipError,
   UpstreamNotAllowedError,
   SpendingRuleRelaxationError,
+  AdminLockedKeyError,
 } from "@/lib/services/user-key-service";
 import { GET as listRoute, POST as createRoute } from "@/app/api/user/keys/route";
 import { PUT as updateRoute, DELETE as deleteRoute } from "@/app/api/user/keys/[id]/route";
@@ -96,6 +99,7 @@ function makeKeyItem() {
     spendingRuleStatuses: [],
     isQuotaExceeded: false,
     isActive: true,
+    disabledByAdmin: false,
     expiresAt: null,
     createdAt: new Date("2026-06-01T00:00:00.000Z"),
     updatedAt: new Date("2026-06-01T00:00:00.000Z"),
@@ -360,6 +364,23 @@ describe("PUT /api/user/keys/[id]", () => {
       makeContext()
     );
     expect(res.status).toBe(400);
+  });
+
+  it("maps AdminLockedKeyError to 403 when re-enabling an admin-disabled key", async () => {
+    vi.mocked(userKeyService.updateOwnApiKey).mockRejectedValue(
+      new AdminLockedKeyError(
+        "This key was disabled by an administrator and cannot be re-enabled here"
+      )
+    );
+
+    const res = await updateRoute(
+      makeRequest(`http://localhost/api/user/keys/${KEY_ID}`, MEMBER, {
+        method: "PUT",
+        body: { is_active: true },
+      }),
+      makeContext()
+    );
+    expect(res.status).toBe(403);
   });
 });
 

@@ -274,6 +274,13 @@
       "when": 1780732894237,
       "tag": "0038_blushing_white_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1781326989515,
+      "tag": "0039_daffy_abomination",
+      "breakpoints": true
     }
   ]
 }

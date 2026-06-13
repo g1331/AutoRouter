@@ -60,6 +60,8 @@ export interface APIKeyResponse {
   spending_rule_statuses: APIKeySpendingRuleStatus[];
   is_quota_exceeded: boolean;
   is_active: boolean;
+  /** True when an admin disabled the key; members cannot self-re-enable it. */
+  disabled_by_admin: boolean;
   expires_at: string | null; // ISO 8601 date string
   created_at: string; // ISO 8601 date string
   updated_at: string; // ISO 8601 date string
