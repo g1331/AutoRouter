@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import {
   createFailureRule,
   formatFailureRule,
@@ -35,9 +34,9 @@ const createFailureRuleSchema = z.object({
  * Lists failure rules scoped to one upstream.
  */
 export async function GET(request: NextRequest, context: RouteContext): Promise<Response> {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {
@@ -54,9 +53,9 @@ export async function GET(request: NextRequest, context: RouteContext): Promise<
  * Creates a failure rule scoped to one upstream.
  */
 export async function POST(request: NextRequest, context: RouteContext): Promise<Response> {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {

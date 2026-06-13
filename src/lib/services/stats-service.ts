@@ -146,7 +146,7 @@ function getGranularity(rangeType: TimeRange | "custom", diffMs?: number): "hour
 /**
  * Build time bucket SQL expression for grouping.
  */
-function buildTimeBucketExpr(granularity: "hour" | "day") {
+export function buildTimeBucketExpr(granularity: "hour" | "day") {
   if (config.dbType === "sqlite") {
     return granularity === "hour"
       ? sql<Date>`strftime('%Y-%m-%d %H:00:00', datetime(${requestLogs.createdAt} / 1000, 'unixepoch'))`
@@ -184,7 +184,11 @@ function buildTimeseriesSelectFields(
   };
 }
 
-function parseTimeBucket(rawTimeBucket: unknown): Date {
+/**
+ * Normalize a raw GROUP BY time bucket (Date on PostgreSQL, string on SQLite)
+ * into a UTC Date.
+ */
+export function parseTimeBucket(rawTimeBucket: unknown): Date {
   if (rawTimeBucket instanceof Date) {
     return rawTimeBucket;
   }

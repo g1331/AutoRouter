@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse, getPaginationParams } from "@/lib/utils/api-auth";
+import { errorResponse, getPaginationParams, requireAdmin } from "@/lib/utils/api-auth";
 import { createLogger } from "@/lib/utils/logger";
 import { listBillingModelPrices } from "@/lib/services/billing-price-service";
 import { transformPaginatedBillingModelPrices } from "@/lib/utils/api-transformers";
@@ -11,9 +10,9 @@ const log = createLogger("admin-billing-prices");
  * GET /api/admin/billing/prices - Paginated model price catalog.
  */
 export async function GET(request: NextRequest): Promise<Response> {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {

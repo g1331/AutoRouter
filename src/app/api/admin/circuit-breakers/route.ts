@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse, getPaginationParams } from "@/lib/utils/api-auth";
+import { errorResponse, getPaginationParams, requireAdmin } from "@/lib/utils/api-auth";
 import { db, circuitBreakerStates, upstreams } from "@/lib/db";
 import { desc, eq, sql } from "drizzle-orm";
 import { createLogger } from "@/lib/utils/logger";
@@ -78,9 +77,9 @@ export interface CircuitBreakerListResponse {
  * - page_size: Items per page (default: 20, max: 100)
  */
 export async function GET(request: NextRequest): Promise<Response> {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {

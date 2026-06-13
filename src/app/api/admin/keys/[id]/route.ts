@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import {
   getApiKeyById,
   deleteApiKey,
@@ -21,9 +20,9 @@ type RouteContext = { params: Promise<{ id: string }> };
  * GET /api/admin/keys/[id] - Get API key details
  */
 export async function GET(request: NextRequest, context: RouteContext) {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {
@@ -45,9 +44,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
  * DELETE /api/admin/keys/[id] - Delete (revoke) an API key
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {
@@ -95,9 +94,9 @@ const updateApiKeySchema = z
  * PUT /api/admin/keys/[id] - Update an API key
  */
 export async function PUT(request: NextRequest, context: RouteContext) {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {
@@ -122,6 +121,10 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
     if (validated.is_active !== undefined) {
       input.isActive = validated.is_active;
+      // The admin is the lock authority: disabling a key imposes the admin lock
+      // (members cannot self-re-enable), enabling it clears the lock and returns
+      // pause/resume control to the owner.
+      input.disabledByAdmin = !validated.is_active;
     }
     if (validated.access_mode !== undefined) {
       input.accessMode = validated.access_mode;

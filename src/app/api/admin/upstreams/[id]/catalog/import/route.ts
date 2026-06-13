@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import {
   importUpstreamCatalogModels,
   UpstreamNotFoundError,
@@ -21,9 +20,9 @@ const importCatalogSchema = z.object({
  * Imports selected cached catalog models into upstream model rules.
  */
 export async function POST(request: NextRequest, context: RouteContext) {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {

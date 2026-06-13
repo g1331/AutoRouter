@@ -8,15 +8,27 @@ vi.mock("@/lib/utils/config", () => ({
   validateAdminToken: vi.fn((token: string | null) => token === "test-admin-token"),
 }));
 
-vi.mock("@/lib/utils/auth", () => ({
-  validateAdminAuth: vi.fn((authHeader: string | null) => {
-    if (!authHeader) return false;
-    const token = authHeader.toLowerCase().startsWith("bearer ")
-      ? authHeader.slice(7).trim()
-      : authHeader.trim();
-    return token === "test-admin-token";
-  }),
-}));
+// Mock admin authorization: the route now calls requireAdmin (the role-aware
+// guard) directly. importActual keeps errorResponse and
+// getPaginationParams real so response shapes are unchanged; only the gate
+// decision is driven by the request token.
+vi.mock("@/lib/utils/api-auth", async (importActual) => {
+  const actual = await importActual<typeof import("@/lib/utils/api-auth")>();
+  return {
+    ...actual,
+    requireAdmin: vi.fn(async (request: Request) => {
+      const authHeader = request.headers.get("authorization");
+      if (!authHeader) return actual.errorResponse("Unauthorized", 401);
+      const token = authHeader.toLowerCase().startsWith("bearer ")
+        ? authHeader.slice(7).trim()
+        : authHeader.trim();
+      if (token === "test-admin-token") {
+        return { kind: "admin_token" };
+      }
+      return actual.errorResponse("Unauthorized", 401);
+    }),
+  };
+});
 
 const mockRefreshUpstreamCatalog = vi.fn();
 const mockImportUpstreamCatalogModels = vi.fn();

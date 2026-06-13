@@ -68,6 +68,36 @@ function loadEncryptionKey(): void {
 }
 
 /**
+ * Resolve the configured Fernet key as a base64 string, honoring both
+ * ENCRYPTION_KEY and ENCRYPTION_KEY_FILE (the latter used by container/prod
+ * deployments). Returns null when neither source is configured.
+ *
+ * This lets other security domains (e.g. JWT signing-key derivation) reuse the
+ * same key-source resolution — including the file fallback — without
+ * duplicating it, so a deployment that only sets ENCRYPTION_KEY_FILE does not
+ * leave one domain working and the other failing.
+ *
+ * @returns The base64 key string, or null when no source is configured
+ * @throws EncryptionError when ENCRYPTION_KEY_FILE is set but the file is missing
+ */
+export function getEncryptionKeyBase64(): string | null {
+  const keyStr = process.env.ENCRYPTION_KEY;
+  if (keyStr) {
+    return keyStr;
+  }
+
+  const keyFile = process.env.ENCRYPTION_KEY_FILE;
+  if (keyFile) {
+    if (!existsSync(keyFile)) {
+      throw new EncryptionError(`ENCRYPTION_KEY_FILE not found: ${keyFile}`);
+    }
+    return readFileSync(keyFile, "utf-8").trim();
+  }
+
+  return null;
+}
+
+/**
  * Ensure encryption key is loaded.
  */
 function ensureKeyLoaded(): void {

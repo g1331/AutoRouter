@@ -1,9 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-vi.mock("@/lib/utils/auth", () => ({
-  validateAdminAuth: vi.fn((authHeader: string | null) => authHeader === "Bearer test-admin-token"),
-}));
+// Mock admin authorization: the route now calls requireAdmin (the role-aware
+// guard) instead of validateAdminAuth. importActual keeps errorResponse and
+// getPaginationParams real so response shapes are unchanged; only the gate
+// decision is driven by the request token.
+vi.mock("@/lib/utils/api-auth", async (importActual) => {
+  const actual = await importActual<typeof import("@/lib/utils/api-auth")>();
+  return {
+    ...actual,
+    requireAdmin: vi.fn(async (request: Request) => {
+      const authHeader = request.headers.get("authorization");
+      if (authHeader === "Bearer test-admin-token") {
+        return { kind: "admin_token" };
+      }
+      return actual.errorResponse("Unauthorized", 401);
+    }),
+  };
+});
 
 const mockCreateApiKey = vi.fn();
 const mockUpdateApiKey = vi.fn();
@@ -48,6 +62,7 @@ function buildServiceApiKey(overrides?: Record<string, unknown>) {
     ],
     isQuotaExceeded: false,
     isActive: true,
+    disabledByAdmin: false,
     expiresAt: null,
     createdAt: new Date("2024-01-01T00:00:00.000Z"),
     updatedAt: new Date("2024-01-01T00:00:00.000Z"),
@@ -196,6 +211,54 @@ describe("admin keys routes spending rules", () => {
         ],
         is_quota_exceeded: true,
       })
+    );
+  });
+
+  it("PUT /api/admin/keys/[id] disabling a key imposes the admin lock", async () => {
+    const { PUT } = await import("@/app/api/admin/keys/[id]/route");
+    mockUpdateApiKey.mockResolvedValueOnce(
+      buildServiceApiKey({ isActive: false, disabledByAdmin: true })
+    );
+
+    const request = new NextRequest(`http://localhost:3000/api/admin/keys/${KEY_ID}`, {
+      method: "PUT",
+      headers: {
+        authorization: "Bearer test-admin-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ is_active: false }),
+    });
+
+    const response = await PUT(request, { params: Promise.resolve({ id: KEY_ID }) });
+
+    expect(response.status).toBe(200);
+    expect(mockUpdateApiKey).toHaveBeenCalledWith(
+      KEY_ID,
+      expect.objectContaining({ isActive: false, disabledByAdmin: true })
+    );
+  });
+
+  it("PUT /api/admin/keys/[id] enabling a key clears the admin lock", async () => {
+    const { PUT } = await import("@/app/api/admin/keys/[id]/route");
+    mockUpdateApiKey.mockResolvedValueOnce(
+      buildServiceApiKey({ isActive: true, disabledByAdmin: false })
+    );
+
+    const request = new NextRequest(`http://localhost:3000/api/admin/keys/${KEY_ID}`, {
+      method: "PUT",
+      headers: {
+        authorization: "Bearer test-admin-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ is_active: true }),
+    });
+
+    const response = await PUT(request, { params: Promise.resolve({ id: KEY_ID }) });
+
+    expect(response.status).toBe(200);
+    expect(mockUpdateApiKey).toHaveBeenCalledWith(
+      KEY_ID,
+      expect.objectContaining({ isActive: true, disabledByAdmin: false })
     );
   });
 });

@@ -5,6 +5,7 @@ import {
   apiKeys,
   apiKeyUpstreams,
   upstreams,
+  users,
   circuitBreakerStates,
   type Upstream,
 } from "@/lib/db";
@@ -218,6 +219,7 @@ async function logApiKeyQuotaRejectedRequest(input: {
   apiKeyId: string;
   apiKeyName: string | null;
   apiKeyPrefix: string | null;
+  userId: string | null;
   request: NextRequest;
   path: string;
   model: string | null;
@@ -255,6 +257,7 @@ async function logApiKeyQuotaRejectedRequest(input: {
     apiKeyId: input.apiKeyId,
     apiKeyName: input.apiKeyName,
     apiKeyPrefix: input.apiKeyPrefix,
+    userId: input.userId,
     upstreamId: null,
     method: input.request.method,
     path: input.path,
@@ -284,6 +287,7 @@ async function logApiKeyModelRejectedRequest(input: {
   apiKeyId: string;
   apiKeyName: string | null;
   apiKeyPrefix: string | null;
+  userId: string | null;
   request: NextRequest;
   path: string;
   model: string | null;
@@ -323,6 +327,7 @@ async function logApiKeyModelRejectedRequest(input: {
     apiKeyId: input.apiKeyId,
     apiKeyName: input.apiKeyName,
     apiKeyPrefix: input.apiKeyPrefix,
+    userId: input.userId,
     upstreamId: null,
     method: input.request.method,
     path: input.path,
@@ -352,6 +357,7 @@ async function logLocalApiKeyModelListRequest(input: {
   apiKeyId: string;
   apiKeyName: string | null;
   apiKeyPrefix: string | null;
+  userId: string | null;
   request: NextRequest;
   path: string;
   requestId: string;
@@ -386,6 +392,7 @@ async function logLocalApiKeyModelListRequest(input: {
     apiKeyId: input.apiKeyId,
     apiKeyName: input.apiKeyName,
     apiKeyPrefix: input.apiKeyPrefix,
+    userId: input.userId,
     upstreamId: null,
     method: input.request.method,
     path: input.path,
@@ -2478,9 +2485,27 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
   }
 
+  // Deactivating a user cascades to their keys at the proxy boundary: a key
+  // owned by an inactive user is rejected here. Ownerless keys (user_id NULL)
+  // keep the legacy behaviour and are unaffected.
+  if (validApiKey.userId) {
+    const owner = await db.query.users.findFirst({
+      where: eq(users.id, validApiKey.userId),
+      columns: { isActive: true },
+    });
+    if (!owner?.isActive) {
+      log.warn(
+        { requestId, keyPrefix: validApiKey.keyPrefix, ownerId: validApiKey.userId },
+        "proxy auth: rejected API key owned by an inactive user"
+      );
+      return NextResponse.json({ error: "API key is disabled" }, { status: 401 });
+    }
+  }
+
   const apiKeySnapshot = {
     apiKeyName: validApiKey.name ?? null,
     apiKeyPrefix: validApiKey.keyPrefix ?? null,
+    userId: validApiKey.userId ?? null,
   };
 
   // Recorder setup
@@ -2528,6 +2553,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         apiKeyId: validApiKey.id,
         apiKeyName: apiKeySnapshot.apiKeyName,
         apiKeyPrefix: apiKeySnapshot.apiKeyPrefix,
+        userId: apiKeySnapshot.userId,
         request,
         path,
         model,
@@ -2681,6 +2707,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           apiKeyId: validApiKey.id,
           apiKeyName: apiKeySnapshot.apiKeyName,
           apiKeyPrefix: apiKeySnapshot.apiKeyPrefix,
+          userId: apiKeySnapshot.userId,
           request,
           path,
           requestId,
@@ -2891,6 +2918,7 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         apiKeyId: validApiKey.id,
         apiKeyName: apiKeySnapshot.apiKeyName,
         apiKeyPrefix: apiKeySnapshot.apiKeyPrefix,
+        userId: apiKeySnapshot.userId,
         request,
         path,
         model: resolvedModel,

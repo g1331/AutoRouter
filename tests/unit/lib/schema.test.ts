@@ -1,20 +1,29 @@
 import { describe, it, expect } from "vitest";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import {
+  users,
+  userUpstreams,
   apiKeys,
   upstreams,
   upstreamProbeResults,
   apiKeyUpstreams,
   requestLogs,
+  requestBillingSnapshots,
   trafficRecordingSettings,
   trafficRecordings,
   backgroundSyncTasks,
   backgroundSyncTaskRuns,
+  usersRelations,
+  userUpstreamsRelations,
   apiKeysRelations,
   upstreamsRelations,
   apiKeyUpstreamsRelations,
   requestLogsRelations,
   trafficRecordingsRelations,
+  type User,
+  type NewUser,
+  type UserUpstream,
+  type NewUserUpstream,
   type ApiKey,
   type NewApiKey,
   type Upstream,
@@ -578,6 +587,108 @@ describe("lib/db/schema", () => {
       expect(_newTask).toBeNull();
       expect(_run).toBeNull();
       expect(_newRun).toBeNull();
+    });
+  });
+
+  describe("users table", () => {
+    it("has identity and credential columns", () => {
+      expect(users.id.name).toBe("id");
+      expect(users.username.name).toBe("username");
+      expect(users.passwordHash.name).toBe("password_hash");
+      expect(users.displayName.name).toBe("display_name");
+    });
+
+    it("has role column defaulting to member", () => {
+      expect(users.role.name).toBe("role");
+      expect(users.role.default).toBe("member");
+    });
+
+    it("has isActive column defaulting to true", () => {
+      expect(users.isActive.name).toBe("is_active");
+      expect(users.isActive.default).toBe(true);
+    });
+
+    it("has timestamps", () => {
+      expect(users.createdAt.name).toBe("created_at");
+      expect(users.updatedAt.name).toBe("updated_at");
+    });
+
+    it("has role index and unique username", () => {
+      const tableConfig = getTableConfig(users);
+      const indexNames = tableConfig.indexes.map((i) => i.config.name);
+      expect(indexNames).toContain("users_role_idx");
+      expect(users.username.isUnique).toBe(true);
+    });
+  });
+
+  describe("userUpstreams table", () => {
+    it("has association columns", () => {
+      expect(userUpstreams.id.name).toBe("id");
+      expect(userUpstreams.userId.name).toBe("user_id");
+      expect(userUpstreams.upstreamId.name).toBe("upstream_id");
+      expect(userUpstreams.createdAt.name).toBe("created_at");
+    });
+
+    it("has indexes and unique pair constraint", () => {
+      const tableConfig = getTableConfig(userUpstreams);
+      const indexNames = tableConfig.indexes.map((i) => i.config.name);
+      expect(indexNames).toContain("user_upstreams_user_id_idx");
+      expect(indexNames).toContain("user_upstreams_upstream_id_idx");
+      expect(tableConfig.uniqueConstraints.map((u) => u.name)).toContain("uq_user_upstream");
+    });
+
+    it("references users and upstreams via foreign keys", () => {
+      const fks = getTableConfig(userUpstreams).foreignKeys;
+      const targets = fks.map((fk) => fk.reference().foreignTable);
+      expect(targets).toContain(users);
+      expect(targets).toContain(upstreams);
+    });
+  });
+
+  describe("api_keys user ownership", () => {
+    it("has user_id index", () => {
+      const indexNames = getTableConfig(apiKeys).indexes.map((i) => i.config.name);
+      expect(indexNames).toContain("api_keys_user_id_idx");
+    });
+
+    it("has foreign key to users with set null", () => {
+      const fks = getTableConfig(apiKeys).foreignKeys;
+      const userFk = fks.find((fk) => fk.reference().columns.some((c) => c.name === "user_id"));
+      expect(userFk).toBeDefined();
+      expect(userFk!.reference().foreignTable).toBe(users);
+      expect(userFk!.onDelete).toBe("set null");
+    });
+  });
+
+  describe("fact-table redundant user_id", () => {
+    it("requestLogs has user_id column and index", () => {
+      expect(requestLogs.userId.name).toBe("user_id");
+      const indexNames = getTableConfig(requestLogs).indexes.map((i) => i.config.name);
+      expect(indexNames).toContain("request_logs_user_id_idx");
+    });
+
+    it("requestBillingSnapshots has user_id column and index", () => {
+      expect(requestBillingSnapshots.userId.name).toBe("user_id");
+      const indexNames = getTableConfig(requestBillingSnapshots).indexes.map((i) => i.config.name);
+      expect(indexNames).toContain("request_billing_snapshots_user_id_idx");
+    });
+  });
+
+  describe("user relations and types", () => {
+    it("exports usersRelations and userUpstreamsRelations", () => {
+      expect(usersRelations).toBeDefined();
+      expect(userUpstreamsRelations).toBeDefined();
+    });
+
+    it("exports user types", () => {
+      const _u: User | null = null;
+      const _nu: NewUser | null = null;
+      const _uu: UserUpstream | null = null;
+      const _nuu: NewUserUpstream | null = null;
+      expect(_u).toBeNull();
+      expect(_nu).toBeNull();
+      expect(_uu).toBeNull();
+      expect(_nuu).toBeNull();
     });
   });
 });

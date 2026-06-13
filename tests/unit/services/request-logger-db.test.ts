@@ -169,6 +169,7 @@ describe("request-logger (db flows)", () => {
       apiKeyId: "key-1",
       apiKeyName: "Production Key",
       apiKeyPrefix: "sk-prod",
+      userId: "user-1",
       upstreamId: null,
       method: "POST",
       path: "/v1/chat/completions",
@@ -184,6 +185,7 @@ describe("request-logger (db flows)", () => {
         apiKeyId: "key-1",
         apiKeyName: "Production Key",
         apiKeyPrefix: "sk-prod",
+        userId: "user-1",
         method: "POST",
         path: "/v1/chat/completions",
         model: "gpt-4.1",
@@ -221,6 +223,8 @@ describe("request-logger (db flows)", () => {
       expect.objectContaining({
         apiKeyName: "Transient Key",
         apiKeyPrefix: "sk-temp",
+        // The owner snapshot defaults to NULL for ownerless / legacy traffic.
+        userId: null,
         cachedTokens: 0,
         reasoningTokens: 0,
         reasoningEffort: null,

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import { db, compensationRules } from "@/lib/db";
 import {
   normalizeCompensationRuleCapabilities,
@@ -30,9 +29,9 @@ interface UpdateRuleBody {
  * Handle PUT /api/admin/compensation-rules/[id] and update the targeted compensation rule.
  */
 export async function PUT(request: NextRequest, context: RouteContext): Promise<Response> {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   const { id } = await context.params;
@@ -140,9 +139,9 @@ export async function PUT(request: NextRequest, context: RouteContext): Promise<
  * Handle DELETE /api/admin/compensation-rules/[id] and remove the targeted rule when deletion is allowed.
  */
 export async function DELETE(request: NextRequest, context: RouteContext): Promise<Response> {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   const { id } = await context.params;

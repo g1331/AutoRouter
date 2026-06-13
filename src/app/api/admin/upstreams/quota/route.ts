@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { requireAdmin } from "@/lib/utils/api-auth";
 import { quotaTracker } from "@/lib/services/upstream-quota-tracker";
 
 /**
  * GET /api/admin/upstreams/quota - Get spending quota status for all upstreams
  */
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   await quotaTracker.initialize();
@@ -54,9 +53,9 @@ export async function GET(request: NextRequest) {
  * POST /api/admin/upstreams/quota - Force sync quota data from database
  */
 export async function POST(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   await quotaTracker.syncFromDb();

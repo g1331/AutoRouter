@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import { createLogger } from "@/lib/utils/logger";
 import {
   BillingTierRuleConflictError,
@@ -28,9 +27,9 @@ const createTierRuleSchema = z.object({
  * GET /api/admin/billing/tier-rules - List billing tier rules.
  */
 export async function GET(request: NextRequest): Promise<Response> {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {
@@ -54,9 +53,9 @@ export async function GET(request: NextRequest): Promise<Response> {
  * POST /api/admin/billing/tier-rules - Create a manual tier rule.
  */
 export async function POST(request: NextRequest): Promise<Response> {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {

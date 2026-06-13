@@ -60,6 +60,12 @@ import type {
   TrafficRecordingSettingsValue,
   TrafficRecordingStats,
 } from "@/lib/services/traffic-recording-service";
+import type { UserListItem, PaginatedUsers } from "@/lib/services/user-service";
+import type {
+  UserOverview,
+  UserUsagePoint,
+  UserUsageStats,
+} from "@/lib/services/user-data-service";
 
 // ========== Helper Utilities ==========
 
@@ -305,6 +311,7 @@ export interface ApiKeyApiResponse {
   }[];
   is_quota_exceeded: boolean;
   is_active: boolean;
+  disabled_by_admin: boolean;
   expires_at: string | null;
   created_at: string;
   updated_at: string;
@@ -357,6 +364,7 @@ export function transformApiKeyToApi(apiKey: ApiKeyListItem): ApiKeyApiResponse 
     })),
     is_quota_exceeded: apiKey.isQuotaExceeded,
     is_active: apiKey.isActive,
+    disabled_by_admin: apiKey.disabledByAdmin,
     expires_at: toISOStringOrNull(apiKey.expiresAt),
     created_at: apiKey.createdAt.toISOString(),
     updated_at: apiKey.updatedAt.toISOString(),
@@ -390,6 +398,7 @@ export function transformApiKeyCreateToApi(result: ApiKeyCreateResult): ApiKeyCr
     })),
     is_quota_exceeded: result.isQuotaExceeded,
     is_active: result.isActive,
+    disabled_by_admin: result.disabledByAdmin,
     expires_at: toISOStringOrNull(result.expiresAt),
     created_at: result.createdAt.toISOString(),
     updated_at: result.updatedAt.toISOString(),
@@ -1605,5 +1614,122 @@ export function transformStatsLeaderboardToApi(
     api_keys: stats.apiKeys.map(transformLeaderboardApiKeyToApi),
     upstreams: stats.upstreams.map(transformLeaderboardUpstreamToApi),
     models: stats.models.map(transformLeaderboardModelToApi),
+  };
+}
+
+// ========== User Transformers ==========
+
+/**
+ * API response format for a user (snake_case). The password hash is never
+ * included in any API response.
+ */
+export interface UserApiResponse {
+  id: string;
+  username: string;
+  display_name: string;
+  role: "admin" | "member";
+  is_active: boolean;
+  api_key_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Transform a user list item to API response format. The password hash is
+ * structurally absent from {@link UserListItem}, so it cannot leak here.
+ */
+export function transformUserToApi(user: UserListItem): UserApiResponse {
+  return {
+    id: user.id,
+    username: user.username,
+    display_name: user.displayName,
+    role: user.role,
+    is_active: user.isActive,
+    api_key_count: user.apiKeyCount,
+    created_at: user.createdAt.toISOString(),
+    updated_at: user.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * Paginated user list response. Extends the shared pagination envelope with the
+ * table-wide count of active admins so the admin console can guard the last
+ * active admin even when admins span multiple pages.
+ */
+export interface PaginatedUsersApiResponse extends PaginatedApiResponse<UserApiResponse> {
+  active_admin_total: number;
+}
+
+/**
+ * Transform paginated user results to API response format.
+ */
+export function transformPaginatedUsers(result: PaginatedUsers): PaginatedUsersApiResponse {
+  return {
+    items: result.items.map(transformUserToApi),
+    total: result.total,
+    page: result.page,
+    page_size: result.pageSize,
+    total_pages: result.totalPages,
+    active_admin_total: result.activeAdminTotal,
+  };
+}
+
+// ========== User Portal API Response Types ==========
+
+export interface UserOverviewApiResponse {
+  today_requests: number;
+  month_requests: number;
+  month_cost_usd: number;
+  total_requests: number;
+  total_cost_usd: number;
+  active_key_count: number;
+  total_key_count: number;
+}
+
+export interface UserUsagePointApiResponse {
+  timestamp: string;
+  request_count: number;
+  total_tokens: number;
+  total_cost_usd: number;
+}
+
+export interface UserUsageApiResponse {
+  range: "7d" | "30d";
+  granularity: "day";
+  points: UserUsagePointApiResponse[];
+}
+
+/**
+ * Transform the personal overview aggregates to API response format.
+ */
+export function transformUserOverviewToApi(overview: UserOverview): UserOverviewApiResponse {
+  return {
+    today_requests: overview.todayRequests,
+    month_requests: overview.monthRequests,
+    month_cost_usd: overview.monthCostUsd,
+    total_requests: overview.totalRequests,
+    total_cost_usd: overview.totalCostUsd,
+    active_key_count: overview.activeKeyCount,
+    total_key_count: overview.totalKeyCount,
+  };
+}
+
+function transformUserUsagePointToApi(point: UserUsagePoint): UserUsagePointApiResponse {
+  return {
+    timestamp: point.timestamp.toISOString(),
+    request_count: point.requestCount,
+    total_tokens: point.totalTokens,
+    total_cost_usd: point.totalCostUsd,
+  };
+}
+
+/**
+ * Transform the personal day-bucketed usage trend to API response format.
+ */
+export function transformUserUsageToApi(usage: UserUsageStats): UserUsageApiResponse {
+  return {
+    range: usage.range,
+    granularity: usage.granularity,
+    points: usage.points.map(transformUserUsagePointToApi),
   };
 }

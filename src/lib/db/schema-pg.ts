@@ -39,6 +39,24 @@ type UpstreamFailureRuleMatch = {
 };
 
 /**
+ * Platform users for the multi-user admin/member system.
+ */
+export const users = pgTable(
+  "users",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    username: varchar("username", { length: 255 }).notNull().unique(),
+    passwordHash: varchar("password_hash", { length: 128 }).notNull(),
+    displayName: varchar("display_name", { length: 255 }).notNull(),
+    role: varchar("role", { length: 16 }).notNull().default("member"), // 'admin' | 'member'
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("users_role_idx").on(table.role)]
+);
+
+/**
  * API keys distributed to downstream clients.
  */
 export const apiKeys = pgTable(
@@ -50,7 +68,7 @@ export const apiKeys = pgTable(
     keyPrefix: varchar("key_prefix", { length: 16 }).notNull(),
     name: varchar("name", { length: 255 }).notNull(),
     description: text("description"),
-    userId: uuid("user_id"), // Reserved for future user system
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
     accessMode: varchar("access_mode", { length: 16 }).notNull().default("unrestricted"),
     allowedModels: json("allowed_models").$type<string[] | null>(),
     spendingRules: json("spending_rules").$type<
@@ -58,6 +76,11 @@ export const apiKeys = pgTable(
       | null
     >(),
     isActive: boolean("is_active").notNull().default(true),
+    // Records that the inactive state was imposed by an admin. A member cannot
+    // re-enable a key while this is set; an admin clears it by re-enabling the
+    // key. Member-initiated disables leave this false so the member keeps
+    // self-service control over their own pause/resume.
+    disabledByAdmin: boolean("disabled_by_admin").notNull().default(false),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -65,6 +88,7 @@ export const apiKeys = pgTable(
   (table) => [
     index("api_keys_key_hash_idx").on(table.keyHash),
     index("api_keys_is_active_idx").on(table.isActive),
+    index("api_keys_user_id_idx").on(table.userId),
   ]
 );
 
@@ -217,6 +241,28 @@ export const apiKeyUpstreams = pgTable(
 );
 
 /**
+ * Upstreams a user is allowed to authorize for self-service API keys.
+ */
+export const userUpstreams = pgTable(
+  "user_upstreams",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    upstreamId: uuid("upstream_id")
+      .notNull()
+      .references(() => upstreams.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("user_upstreams_user_id_idx").on(table.userId),
+    index("user_upstreams_upstream_id_idx").on(table.upstreamId),
+    unique("uq_user_upstream").on(table.userId, table.upstreamId),
+  ]
+);
+
+/**
  * Circuit breaker states for upstream health management.
  */
 export const circuitBreakerStates = pgTable(
@@ -281,6 +327,7 @@ export const requestLogs = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     apiKeyId: uuid("api_key_id").references(() => apiKeys.id, { onDelete: "set null" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
     apiKeyName: varchar("api_key_name", { length: 255 }),
     apiKeyPrefix: varchar("api_key_prefix", { length: 16 }),
     upstreamId: uuid("upstream_id").references(() => upstreams.id, { onDelete: "set null" }),
@@ -335,6 +382,7 @@ export const requestLogs = pgTable(
   },
   (table) => [
     index("request_logs_api_key_id_idx").on(table.apiKeyId),
+    index("request_logs_user_id_idx").on(table.userId),
     index("request_logs_upstream_id_idx").on(table.upstreamId),
     index("request_logs_created_at_idx").on(table.createdAt),
     index("request_logs_routing_type_idx").on(table.routingType),
@@ -550,6 +598,7 @@ export const requestBillingSnapshots = pgTable(
       .unique()
       .references(() => requestLogs.id, { onDelete: "cascade" }),
     apiKeyId: uuid("api_key_id").references(() => apiKeys.id, { onDelete: "set null" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
     upstreamId: uuid("upstream_id").references(() => upstreams.id, { onDelete: "set null" }),
     model: varchar("model", { length: 255 }),
     billingStatus: varchar("billing_status", { length: 16 }).notNull(), // billed | unbilled
@@ -580,6 +629,7 @@ export const requestBillingSnapshots = pgTable(
   },
   (table) => [
     index("request_billing_snapshots_request_log_id_idx").on(table.requestLogId),
+    index("request_billing_snapshots_user_id_idx").on(table.userId),
     index("request_billing_snapshots_billing_status_idx").on(table.billingStatus),
     index("request_billing_snapshots_model_idx").on(table.model),
     index("request_billing_snapshots_created_at_idx").on(table.createdAt),
@@ -607,7 +657,27 @@ export const compensationRules = pgTable(
 );
 
 // Relations
-export const apiKeysRelations = relations(apiKeys, ({ many }) => ({
+export const usersRelations = relations(users, ({ many }) => ({
+  apiKeys: many(apiKeys),
+  upstreams: many(userUpstreams),
+}));
+
+export const userUpstreamsRelations = relations(userUpstreams, ({ one }) => ({
+  user: one(users, {
+    fields: [userUpstreams.userId],
+    references: [users.id],
+  }),
+  upstream: one(upstreams, {
+    fields: [userUpstreams.upstreamId],
+    references: [upstreams.id],
+  }),
+}));
+
+export const apiKeysRelations = relations(apiKeys, ({ one, many }) => ({
+  user: one(users, {
+    fields: [apiKeys.userId],
+    references: [users.id],
+  }),
   upstreams: many(apiKeyUpstreams),
   requestLogs: many(requestLogs),
 }));

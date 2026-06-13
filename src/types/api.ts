@@ -60,6 +60,8 @@ export interface APIKeyResponse {
   spending_rule_statuses: APIKeySpendingRuleStatus[];
   is_quota_exceeded: boolean;
   is_active: boolean;
+  /** True when an admin disabled the key; members cannot self-re-enable it. */
+  disabled_by_admin: boolean;
   expires_at: string | null; // ISO 8601 date string
   created_at: string; // ISO 8601 date string
   updated_at: string; // ISO 8601 date string
@@ -77,6 +79,48 @@ export interface APIKeyRevealResponse {
   key_value: string; // Full decrypted key value
   key_prefix: string;
   name: string;
+}
+
+// ========== User Management Types ==========
+
+export type UserRole = "admin" | "member";
+
+export interface User {
+  id: string; // UUID
+  username: string;
+  display_name: string;
+  role: UserRole;
+  is_active: boolean;
+  api_key_count: number;
+  created_at: string; // ISO 8601 date string
+  updated_at: string; // ISO 8601 date string
+}
+
+export interface PaginatedUsersResponse {
+  items: User[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  /** Table-wide count of active admins, used to guard the last active admin across pages. */
+  active_admin_total: number;
+}
+
+export interface UserCreate {
+  username: string;
+  password: string;
+  display_name: string;
+  role?: UserRole;
+}
+
+export interface UserUpdate {
+  display_name?: string;
+  role?: UserRole;
+  is_active?: boolean;
+}
+
+export interface UserUpstreamsResponse {
+  upstream_ids: string[]; // UUID[]
 }
 
 // ========== Load Balancing Types ==========
@@ -1188,4 +1232,62 @@ export interface StatsLeaderboardResponse {
   api_keys: LeaderboardAPIKeyItem[];
   upstreams: LeaderboardUpstreamItem[];
   models: LeaderboardModelItem[];
+}
+
+// ========== Portal (member self-service) Types ==========
+
+export interface PortalOverviewResponse {
+  today_requests: number;
+  month_requests: number;
+  month_cost_usd: number;
+  total_requests: number;
+  total_cost_usd: number;
+  active_key_count: number;
+  total_key_count: number;
+}
+
+export interface PortalUsagePoint {
+  timestamp: string; // ISO 8601 date string
+  request_count: number;
+  total_tokens: number;
+  total_cost_usd: number;
+}
+
+export type PortalUsageRange = "7d" | "30d";
+
+export interface PortalUsageResponse {
+  range: PortalUsageRange;
+  granularity: "day";
+  points: PortalUsagePoint[];
+}
+
+export interface PortalUpstreamOption {
+  id: string; // UUID
+  name: string;
+}
+
+export interface PortalUpstreamOptionsResponse {
+  items: PortalUpstreamOption[];
+}
+
+// Self-service key payloads: no owner or access_mode fields — both are forced
+// server-side, and unknown fields are stripped by the API schema.
+export interface PortalKeyCreate {
+  name: string;
+  upstream_ids: string[]; // UUID[]
+  description?: string | null;
+  spending_rules?: APIKeySpendingRule[] | null;
+}
+
+export interface PortalKeyUpdate {
+  name?: string;
+  description?: string | null;
+  is_active?: boolean;
+  upstream_ids?: string[]; // UUID[]
+  spending_rules?: APIKeySpendingRule[] | null;
+}
+
+export interface PasswordChangeRequest {
+  current_password: string;
+  new_password: string;
 }

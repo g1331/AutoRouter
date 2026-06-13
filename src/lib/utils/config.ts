@@ -24,6 +24,12 @@ const configSchema = z
     encryptionKeyFile: z.string().optional(),
     adminToken: z.string().min(1).optional(),
 
+    // JWT — optional; when unset the signing key is derived from ENCRYPTION_KEY
+    // via HKDF. When set explicitly it is used verbatim as the HS256 HMAC key,
+    // so a minimum length is enforced to reject trivially brute-forceable
+    // secrets (mirrors the fail-fast length guard on ENCRYPTION_KEY).
+    jwtSecret: z.string().min(32).optional(),
+
     // Logging
     logLevel: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).optional(),
 
@@ -76,6 +82,7 @@ function loadConfig(): Config {
     encryptionKey: process.env.ENCRYPTION_KEY,
     encryptionKeyFile: process.env.ENCRYPTION_KEY_FILE,
     adminToken: process.env.ADMIN_TOKEN,
+    jwtSecret: process.env.JWT_SECRET,
     logLevel: process.env.LOG_LEVEL,
     allowKeyReveal: process.env.ALLOW_KEY_REVEAL,
     debugLogHeaders: process.env.DEBUG_LOG_HEADERS,

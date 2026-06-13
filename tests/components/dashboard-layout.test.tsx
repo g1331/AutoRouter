@@ -14,6 +14,7 @@ vi.mock("next-intl", () => ({
 
 const mockBack = vi.fn();
 const mockPush = vi.fn();
+const mockReplace = vi.fn();
 let mockPathname = "/logs/details";
 
 vi.mock("@/i18n/navigation", () => ({
@@ -21,12 +22,18 @@ vi.mock("@/i18n/navigation", () => ({
   useRouter: () => ({
     back: mockBack,
     push: mockPush,
+    replace: mockReplace,
   }),
 }));
 
+// principal 可变：用于验证 member 访问管理后台时被送回门户（决策九）。
+const authState = vi.hoisted(() => ({
+  principal: null as { kind: string; role: "admin" | "member" } | null,
+}));
 vi.mock("@/providers/auth-provider", () => ({
   useAuth: () => ({
     token: "test-token",
+    principal: authState.principal,
   }),
 }));
 
@@ -48,6 +55,7 @@ describe("DashboardLayout", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPathname = "/logs/details";
+    authState.principal = null;
     window.localStorage.clear();
   });
 
@@ -62,5 +70,31 @@ describe("DashboardLayout", () => {
 
     expect(main.className).toContain("min-w-0");
     expect(main.className).toContain("overflow-y-auto");
+  });
+
+  it("redirects a member principal to the portal and renders nothing", () => {
+    authState.principal = { kind: "user", role: "member" };
+
+    render(
+      <DashboardLayout>
+        <div>content</div>
+      </DashboardLayout>
+    );
+
+    expect(mockReplace).toHaveBeenCalledWith("/portal");
+    expect(screen.queryByRole("main")).not.toBeInTheDocument();
+  });
+
+  it("renders normally for an admin principal", () => {
+    authState.principal = { kind: "user", role: "admin" };
+
+    render(
+      <DashboardLayout>
+        <div>content</div>
+      </DashboardLayout>
+    );
+
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(screen.getByRole("main")).toBeInTheDocument();
   });
 });

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { getPaginationParams, errorResponse } from "@/lib/utils/api-auth";
+import {
+  getPaginationParams,
+  errorResponse,
+  requireAdmin,
+  parseIntFilterParam,
+  parseDateFilterParam,
+} from "@/lib/utils/api-auth";
 import { listRequestLogs, type ListRequestLogsFilter } from "@/lib/services/request-logger";
 import { transformPaginatedRequestLogs } from "@/lib/utils/api-transformers";
 import { createLogger } from "@/lib/utils/logger";
@@ -21,9 +26,9 @@ const log = createLogger("admin-logs");
  * - end_time: ISO datetime (filter)
  */
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {
@@ -41,14 +46,17 @@ export async function GET(request: NextRequest) {
     const upstreamId = url.searchParams.get("upstream_id");
     if (upstreamId) filters.upstreamId = upstreamId;
 
-    const statusCode = url.searchParams.get("status_code");
-    if (statusCode) filters.statusCode = parseInt(statusCode, 10);
+    const statusCode = parseIntFilterParam(url.searchParams.get("status_code"));
+    if (statusCode === null) return errorResponse("Invalid status_code", 400);
+    if (statusCode !== undefined) filters.statusCode = statusCode;
 
-    const startTime = url.searchParams.get("start_time");
-    if (startTime) filters.startTime = new Date(startTime);
+    const startTime = parseDateFilterParam(url.searchParams.get("start_time"));
+    if (startTime === null) return errorResponse("Invalid start_time", 400);
+    if (startTime !== undefined) filters.startTime = startTime;
 
-    const endTime = url.searchParams.get("end_time");
-    if (endTime) filters.endTime = new Date(endTime);
+    const endTime = parseDateFilterParam(url.searchParams.get("end_time"));
+    if (endTime === null) return errorResponse("Invalid end_time", 400);
+    if (endTime !== undefined) filters.endTime = endTime;
 
     const result = await listRequestLogs(page, pageSize, filters);
 

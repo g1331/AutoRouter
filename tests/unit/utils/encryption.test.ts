@@ -1,5 +1,14 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import { encrypt, decrypt, generateEncryptionKey, EncryptionError } from "@/lib/utils/encryption";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
+import {
+  encrypt,
+  decrypt,
+  generateEncryptionKey,
+  getEncryptionKeyBase64,
+  EncryptionError,
+} from "@/lib/utils/encryption";
+import { mkdtempSync, writeFileSync, rmSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 
 describe("encryption utilities", () => {
   const testEncryptionKey = "dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleXRlc3Q="; // 32 bytes base64
@@ -122,5 +131,45 @@ describe("encryption utilities", () => {
 
       expect(() => decrypt(modified)).toThrow(EncryptionError);
     });
+  });
+});
+
+describe("getEncryptionKeyBase64", () => {
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  afterAll(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("returns the ENCRYPTION_KEY value when set", () => {
+    vi.stubEnv("ENCRYPTION_KEY", "some-base64-key");
+    expect(getEncryptionKeyBase64()).toBe("some-base64-key");
+  });
+
+  it("returns null when neither source is configured", () => {
+    vi.stubEnv("ENCRYPTION_KEY", "");
+    vi.stubEnv("ENCRYPTION_KEY_FILE", "");
+    expect(getEncryptionKeyBase64()).toBeNull();
+  });
+
+  it("falls back to ENCRYPTION_KEY_FILE when ENCRYPTION_KEY is absent", () => {
+    const dir = mkdtempSync(join(tmpdir(), "enc-key-"));
+    const file = join(dir, "key.txt");
+    writeFileSync(file, "file-base64-key\n");
+    vi.stubEnv("ENCRYPTION_KEY", "");
+    vi.stubEnv("ENCRYPTION_KEY_FILE", file);
+    try {
+      expect(getEncryptionKeyBase64()).toBe("file-base64-key");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("throws when ENCRYPTION_KEY_FILE points to a missing file", () => {
+    vi.stubEnv("ENCRYPTION_KEY", "");
+    vi.stubEnv("ENCRYPTION_KEY_FILE", join(tmpdir(), "does-not-exist-xyz.key"));
+    expect(() => getEncryptionKeyBase64()).toThrow(EncryptionError);
   });
 });

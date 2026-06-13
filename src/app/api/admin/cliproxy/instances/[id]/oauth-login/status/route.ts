@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import { pollCliproxyOAuthStatus } from "@/lib/services/cliproxy-oauth-login-service";
 import { handleCliproxyRouteError } from "@/lib/utils/cliproxy-route-errors";
 import { createLogger } from "@/lib/utils/logger";
@@ -13,8 +12,9 @@ type RouteContext = { params: Promise<{ id: string }> };
  * GET /api/admin/cliproxy/instances/:id/oauth-login/status?state=... - 轮询登录状态。
  */
 export async function GET(request: NextRequest, context: RouteContext): Promise<Response> {
-  if (!validateAdminAuth(request.headers.get("authorization"))) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   const { id } = await context.params;

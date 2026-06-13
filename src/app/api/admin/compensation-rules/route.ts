@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import { db, compensationRules } from "@/lib/db";
 import {
   normalizeCompensationRuleCapabilities,
@@ -59,9 +58,9 @@ function toResponse(rule: {
  * GET /api/admin/compensation-rules - List all compensation rules
  */
 export async function GET(request: NextRequest): Promise<Response> {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {
@@ -88,9 +87,9 @@ interface CreateRuleBody {
  * POST /api/admin/compensation-rules - Create a new compensation rule
  */
 export async function POST(request: NextRequest): Promise<Response> {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   let body: CreateRuleBody;

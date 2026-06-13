@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import {
   deleteCliproxyAuthAccount,
   downloadCliproxyAuthFile,
@@ -30,8 +29,9 @@ function buildContentDisposition(filename: string): string {
  * GET /api/admin/cliproxy/instances/:id/auth-files/:name - 下载认证文件原始 JSON。
  */
 export async function GET(request: NextRequest, context: RouteContext): Promise<Response> {
-  if (!validateAdminAuth(request.headers.get("authorization"))) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   const { id, name } = await context.params;
@@ -60,8 +60,9 @@ export async function GET(request: NextRequest, context: RouteContext): Promise<
  * DELETE /api/admin/cliproxy/instances/:id/auth-files/:name - 删除认证文件并清理本地缓存。
  */
 export async function DELETE(request: NextRequest, context: RouteContext): Promise<Response> {
-  if (!validateAdminAuth(request.headers.get("authorization"))) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   const { id, name } = await context.params;

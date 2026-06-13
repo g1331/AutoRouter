@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import { submitCliproxyOAuthCallback } from "@/lib/services/cliproxy-oauth-login-service";
 import { CLIPROXY_OAUTH_PROVIDERS } from "@/lib/services/cliproxy-management-client";
 import { handleCliproxyRouteError } from "@/lib/utils/cliproxy-route-errors";
@@ -37,8 +36,9 @@ const callbackSchema = z.object({
  * POST /api/admin/cliproxy/instances/:id/oauth-callback - 手动提交 OAuth 回调 URL。
  */
 export async function POST(request: NextRequest, context: RouteContext): Promise<Response> {
-  if (!validateAdminAuth(request.headers.get("authorization"))) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   const { id } = await context.params;

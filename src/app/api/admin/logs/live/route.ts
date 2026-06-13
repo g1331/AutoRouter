@@ -1,6 +1,5 @@
-import { NextRequest } from "next/server";
-import { errorResponse } from "@/lib/utils/api-auth";
-import { validateAdminAuth } from "@/lib/utils/auth";
+import { NextRequest, NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/utils/api-auth";
 import { subscribeRequestLogLiveUpdates } from "@/lib/services/request-log-live-updates";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -18,9 +17,9 @@ function formatSseEvent(eventName: string, data: unknown): string {
  * Stream live request log updates over Server-Sent Events for authenticated admins.
  */
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   const encoder = new TextEncoder();

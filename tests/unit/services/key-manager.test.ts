@@ -28,7 +28,9 @@ vi.mock("@/lib/db", () => {
       },
     },
     select: vi.fn(() => ({
-      from: vi.fn(() => Promise.resolve([{ value: 0 }])),
+      from: vi.fn(() => ({
+        where: vi.fn(() => Promise.resolve([{ value: 0 }])),
+      })),
     })),
     insert: vi.fn(() => ({
       values: vi.fn(() => ({
@@ -515,7 +517,7 @@ describe("key-manager", () => {
       ];
 
       vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockResolvedValue([{ value: 1 }]),
+        from: vi.fn(() => ({ where: vi.fn().mockResolvedValue([{ value: 1 }]) })),
       } as unknown as ReturnType<typeof db.select>);
 
       vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce(mockKeys as never);
@@ -537,7 +539,7 @@ describe("key-manager", () => {
       const { listApiKeys } = await import("@/lib/services/key-manager");
 
       vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockResolvedValue([{ value: 0 }]),
+        from: vi.fn(() => ({ where: vi.fn().mockResolvedValue([{ value: 0 }]) })),
       } as unknown as ReturnType<typeof db.select>);
 
       vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([]);
@@ -552,7 +554,7 @@ describe("key-manager", () => {
       const { listApiKeys } = await import("@/lib/services/key-manager");
 
       vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockResolvedValue([{ value: 0 }]),
+        from: vi.fn(() => ({ where: vi.fn().mockResolvedValue([{ value: 0 }]) })),
       } as unknown as ReturnType<typeof db.select>);
 
       vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([]);
@@ -567,7 +569,7 @@ describe("key-manager", () => {
       const { listApiKeys } = await import("@/lib/services/key-manager");
 
       vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockResolvedValue([{ value: 0 }]),
+        from: vi.fn(() => ({ where: vi.fn().mockResolvedValue([{ value: 0 }]) })),
       } as unknown as ReturnType<typeof db.select>);
 
       vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([]);

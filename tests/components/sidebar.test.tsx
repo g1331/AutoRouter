@@ -37,6 +37,7 @@ vi.mock("@/i18n/navigation", () => ({
 vi.mock("lucide-react", () => ({
   LayoutDashboard: () => <svg data-testid="icon-dashboard" />,
   Key: () => <svg data-testid="icon-key" />,
+  KeyRound: () => <svg data-testid="icon-key-round" />,
   Server: () => <svg data-testid="icon-server" />,
   ScrollText: () => <svg data-testid="icon-scroll" />,
   Menu: () => <svg data-testid="icon-menu" />,
@@ -56,16 +57,20 @@ vi.mock("lucide-react", () => ({
   Wallet: () => <svg data-testid="icon-wallet" />,
   RefreshCw: () => <svg data-testid="icon-refresh-cw" />,
   Github: () => <svg data-testid="icon-github" />,
+  Users: () => <svg data-testid="icon-users" />,
 }));
 
 // Mock useAuth hook
 const mockLogout = vi.fn();
+// 可变角色：用于验证用户管理入口按角色显隐
+const authState = vi.hoisted(() => ({ role: "admin" as "admin" | "member" }));
 vi.mock("@/providers/auth-provider", () => ({
   useAuth: () => ({
     logout: mockLogout,
     token: "test-token",
     setToken: vi.fn(),
     apiClient: {},
+    principal: { kind: "user", role: authState.role, username: "u", displayName: "U" },
   }),
 }));
 
@@ -121,6 +126,7 @@ describe("Sidebar", () => {
     mockPathname = "/dashboard";
     onToggleCollapse.mockReset();
     mockLogout.mockReset();
+    authState.role = "admin";
   });
 
   describe("Rendering", () => {
@@ -348,6 +354,75 @@ describe("Sidebar", () => {
 
       // Sidebar should be in the document
       expect(screen.getByRole("navigation", { name: "Main navigation" })).toBeInTheDocument();
+    });
+  });
+
+  describe("Role-based navigation", () => {
+    it("shows user management entry for admin principal", () => {
+      authState.role = "admin";
+      renderSidebar();
+
+      expect(screen.getAllByText("users").length).toBeGreaterThan(0);
+    });
+
+    it("hides user management entry for member principal", () => {
+      authState.role = "member";
+      renderSidebar();
+
+      expect(screen.queryByText("users")).not.toBeInTheDocument();
+    });
+
+    it("renders the portal navigation set for member principal", () => {
+      authState.role = "member";
+      mockPathname = "/portal";
+      renderSidebar();
+
+      // 门户四项在桌面与移动导航各出现一次
+      expect(screen.getAllByText("overview").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("myRequests").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("myKeys").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("changePassword").length).toBeGreaterThan(0);
+
+      // 管理后台导航与 System 组对 member 不可见
+      expect(screen.queryByText("dashboard")).not.toBeInTheDocument();
+      expect(screen.queryByText("apiKeys")).not.toBeInTheDocument();
+      expect(screen.queryByText("upstreams")).not.toBeInTheDocument();
+      expect(screen.queryByText("system")).not.toBeInTheDocument();
+      expect(screen.queryByText("billing")).not.toBeInTheDocument();
+    });
+
+    it("does not render the portal navigation set for admin principal", () => {
+      authState.role = "admin";
+      renderSidebar();
+
+      expect(screen.queryByText("overview")).not.toBeInTheDocument();
+      expect(screen.queryByText("myKeys")).not.toBeInTheDocument();
+    });
+
+    it("uses a four-column mobile grid for member and five for admin", () => {
+      authState.role = "member";
+      const { unmount } = renderSidebar();
+      const memberNav = screen.getByRole("navigation", { name: "Bottom navigation" });
+      expect(memberNav.querySelector(".grid")?.className).toContain("grid-cols-4");
+      unmount();
+
+      authState.role = "admin";
+      renderSidebar();
+      const adminNav = screen.getByRole("navigation", { name: "Bottom navigation" });
+      expect(adminNav.querySelector(".grid")?.className).toContain("grid-cols-5");
+    });
+
+    it("matches the portal overview entry exactly so subpages do not highlight it", () => {
+      authState.role = "member";
+      mockPathname = "/portal/keys";
+      renderSidebar();
+
+      const overviewLinks = screen.getAllByRole("link", { name: /overview/i });
+      const myKeysLinks = screen.getAllByRole("link", { name: /myKeys/i });
+      overviewLinks.forEach((link) => {
+        expect(link).not.toHaveAttribute("aria-current", "page");
+      });
+      expect(myKeysLinks[0]).toHaveAttribute("aria-current", "page");
     });
   });
 });

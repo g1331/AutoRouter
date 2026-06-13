@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { validateAdminAuth } from "@/lib/utils/auth";
-import { errorResponse } from "@/lib/utils/api-auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import { createLogger } from "@/lib/utils/logger";
 import {
   BillingTierRuleConflictError,
@@ -44,9 +43,9 @@ const updateTierRuleSchema = z
  * PUT /api/admin/billing/tier-rules/[id] - Update a tier rule.
  */
 export async function PUT(request: NextRequest, context: RouteContext): Promise<Response> {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {
@@ -87,9 +86,9 @@ export async function PUT(request: NextRequest, context: RouteContext): Promise<
  * DELETE /api/admin/billing/tier-rules/[id] - Delete a manual tier rule.
  */
 export async function DELETE(request: NextRequest, context: RouteContext): Promise<Response> {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {

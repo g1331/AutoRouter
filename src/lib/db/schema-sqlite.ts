@@ -28,6 +28,26 @@ type UpstreamFailureRuleMatch = {
 };
 
 /**
+ * Platform users for the multi-user admin/member system.
+ */
+export const users = sqliteTable(
+  "users",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    username: text("username").notNull().unique(),
+    passwordHash: text("password_hash").notNull(),
+    displayName: text("display_name").notNull(),
+    role: text("role").notNull().default("member"), // 'admin' | 'member'
+    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+  },
+  (table) => [index("users_role_idx").on(table.role)]
+);
+
+/**
  * API keys distributed to downstream clients.
  */
 export const apiKeys = sqliteTable(
@@ -41,7 +61,7 @@ export const apiKeys = sqliteTable(
     keyPrefix: text("key_prefix").notNull(),
     name: text("name").notNull(),
     description: text("description"),
-    userId: text("user_id"), // Reserved for future user system
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
     accessMode: text("access_mode").notNull().default("unrestricted"),
     allowedModels: text("allowed_models", { mode: "json" }).$type<string[] | null>(),
     spendingRules: text("spending_rules", { mode: "json" }).$type<
@@ -49,6 +69,9 @@ export const apiKeys = sqliteTable(
       | null
     >(),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    // Mirror of schema-pg: records that the inactive state was imposed by an
+    // admin. A member cannot re-enable a key while this is set.
+    disabledByAdmin: integer("disabled_by_admin", { mode: "boolean" }).notNull().default(false),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
@@ -56,6 +79,7 @@ export const apiKeys = sqliteTable(
   (table) => [
     index("api_keys_key_hash_idx").on(table.keyHash),
     index("api_keys_is_active_idx").on(table.isActive),
+    index("api_keys_user_id_idx").on(table.userId),
   ]
 );
 
@@ -225,6 +249,30 @@ export const apiKeyUpstreams = sqliteTable(
 );
 
 /**
+ * Upstreams a user is allowed to authorize for self-service API keys.
+ */
+export const userUpstreams = sqliteTable(
+  "user_upstreams",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    upstreamId: text("upstream_id")
+      .notNull()
+      .references(() => upstreams.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("user_upstreams_user_id_idx").on(table.userId),
+    index("user_upstreams_upstream_id_idx").on(table.upstreamId),
+    unique("uq_user_upstream").on(table.userId, table.upstreamId),
+  ]
+);
+
+/**
  * Circuit breaker states for upstream health management.
  */
 export const circuitBreakerStates = sqliteTable(
@@ -295,6 +343,7 @@ export const requestLogs = sqliteTable(
       .primaryKey()
       .$defaultFn(() => randomUUID()),
     apiKeyId: text("api_key_id").references(() => apiKeys.id, { onDelete: "set null" }),
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
     apiKeyName: text("api_key_name"),
     apiKeyPrefix: text("api_key_prefix"),
     upstreamId: text("upstream_id").references(() => upstreams.id, { onDelete: "set null" }),
@@ -351,6 +400,7 @@ export const requestLogs = sqliteTable(
   },
   (table) => [
     index("request_logs_api_key_id_idx").on(table.apiKeyId),
+    index("request_logs_user_id_idx").on(table.userId),
     index("request_logs_upstream_id_idx").on(table.upstreamId),
     index("request_logs_created_at_idx").on(table.createdAt),
     index("request_logs_routing_type_idx").on(table.routingType),
@@ -579,6 +629,7 @@ export const requestBillingSnapshots = sqliteTable(
       .unique()
       .references(() => requestLogs.id, { onDelete: "cascade" }),
     apiKeyId: text("api_key_id").references(() => apiKeys.id, { onDelete: "set null" }),
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
     upstreamId: text("upstream_id").references(() => upstreams.id, { onDelete: "set null" }),
     model: text("model"),
     billingStatus: text("billing_status").notNull(), // billed | unbilled
@@ -609,6 +660,7 @@ export const requestBillingSnapshots = sqliteTable(
   },
   (table) => [
     index("request_billing_snapshots_request_log_id_idx").on(table.requestLogId),
+    index("request_billing_snapshots_user_id_idx").on(table.userId),
     index("request_billing_snapshots_billing_status_idx").on(table.billingStatus),
     index("request_billing_snapshots_model_idx").on(table.model),
     index("request_billing_snapshots_created_at_idx").on(table.createdAt),
@@ -638,7 +690,27 @@ export const compensationRules = sqliteTable(
 );
 
 // Relations
-export const apiKeysRelations = relations(apiKeys, ({ many }) => ({
+export const usersRelations = relations(users, ({ many }) => ({
+  apiKeys: many(apiKeys),
+  upstreams: many(userUpstreams),
+}));
+
+export const userUpstreamsRelations = relations(userUpstreams, ({ one }) => ({
+  user: one(users, {
+    fields: [userUpstreams.userId],
+    references: [users.id],
+  }),
+  upstream: one(upstreams, {
+    fields: [userUpstreams.upstreamId],
+    references: [upstreams.id],
+  }),
+}));
+
+export const apiKeysRelations = relations(apiKeys, ({ one, many }) => ({
+  user: one(users, {
+    fields: [apiKeys.userId],
+    references: [users.id],
+  }),
   upstreams: many(apiKeyUpstreams),
   requestLogs: many(requestLogs),
 }));

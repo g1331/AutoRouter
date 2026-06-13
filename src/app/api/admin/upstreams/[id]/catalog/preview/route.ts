@@ -6,8 +6,7 @@ import {
   UpstreamNotFoundError,
   type UpstreamCatalogPreviewInput,
 } from "@/lib/services/upstream-service";
-import { errorResponse } from "@/lib/utils/api-auth";
-import { validateAdminAuth } from "@/lib/utils/auth";
+import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("admin-upstream-catalog-preview");
@@ -39,9 +38,9 @@ const previewCatalogSchema = z.object({
  * Preview the model catalog for an upstream using the current editor values.
  */
 export async function POST(request: NextRequest, context: RouteContext) {
-  const authHeader = request.headers.get("authorization");
-  if (!validateAdminAuth(authHeader)) {
-    return errorResponse("Unauthorized", 401);
+  const auth = await requireAdmin(request);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
   try {
