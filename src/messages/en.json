@@ -10,7 +10,7 @@
     "ctaPrimary": "Get started",
     "ctaSecondary": "View docs",
     "terminal": {
-      "caption": "Point your base URL at the gateway — AutoRouter handles routing, balancing, and billing."
+      "caption": "Point one base URL at the gateway — AutoRouter handles routing, balancing, and billing."
     },
     "features": {
       "title": "Core capabilities",

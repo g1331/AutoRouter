@@ -7,3 +7,4 @@ if (!appVersion) {
 export const APP_VERSION = appVersion;
 export const APP_VERSION_TAG = `v${APP_VERSION}`;
 export const APP_REPOSITORY_URL = "https://github.com/g1331/AutoRouter";
+export const APP_DOCS_URL = "https://g1331.github.io/AutoRouter/";

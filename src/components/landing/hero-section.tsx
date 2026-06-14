@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { ArrowRight, BookOpen } from "lucide-react";
 
-import { APP_REPOSITORY_URL } from "@/lib/app-version";
+import { APP_DOCS_URL } from "@/lib/app-version";
 import { Button } from "@/components/ui/button";
 import { RippleLinkButton } from "@/components/landing/ripple-button";
 import { HeroTerminal } from "@/components/landing/hero-terminal";
@@ -53,12 +53,7 @@ export function HeroSection() {
           </RippleLinkButton>
 
           <Button asChild variant="outline" size="lg">
-            <a
-              href={APP_REPOSITORY_URL}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="gap-2"
-            >
+            <a href={APP_DOCS_URL} target="_blank" rel="noreferrer noopener" className="gap-2">
               <BookOpen className="h-4 w-4" aria-hidden="true" />
               {t("ctaSecondary")}
             </a>

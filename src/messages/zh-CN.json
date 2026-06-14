@@ -10,7 +10,7 @@
     "ctaPrimary": "开始使用",
     "ctaSecondary": "查看文档",
     "terminal": {
-      "caption": "只需把 base URL 指向网关，路由、负载均衡与计费由 AutoRouter 接管。"
+      "caption": "改一行 base URL 指向网关，路由、负载均衡与计费由 AutoRouter 接管。"
     },
     "features": {
       "title": "核心能力",
