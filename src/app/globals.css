@@ -431,6 +431,95 @@
   }
 }
 
+/* 落地页：CTA 涟漪水波纹 + Hero 文案依次淡入上移 */
+@keyframes vr-ripple {
+  from {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+@keyframes vr-hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 活终端实时指标带的迷你 sparkline 柱跳动 */
+@keyframes vr-spark {
+  0%,
+  100% {
+    transform: scaleY(0.4);
+  }
+
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+/* 能力卡微动画：路由命中行的 emerald 呼吸（box-shadow + 底色，强调被选中的健康上游）。
+   reduced-motion 时停在 0% 帧，仍是一条可读的 emerald 选中行。 */
+@keyframes vr-cap-select {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgb(16 185 129 / 0.25);
+    background-color: rgb(16 185 129 / 0.08);
+  }
+
+  50% {
+    box-shadow:
+      0 0 0 1px rgb(16 185 129 / 0.5),
+      0 0 12px rgb(16 185 129 / 0.2);
+    background-color: rgb(16 185 129 / 0.16);
+  }
+}
+
+/* 能力卡微动画：一道高光沿进度条 / 命中行横扫，表示流量正在经过（叠加运动层，
+   reduced-motion 时停在屏外起始帧、自动隐去，底层面板不依赖它仍完整可读）。 */
+@keyframes vr-cap-sheen {
+  0% {
+    transform: translateX(-130%);
+  }
+
+  55%,
+  100% {
+    transform: translateX(280%);
+  }
+}
+
+/* 能力卡微动画：一个数据包沿水平链路左→右流动（命中链路 / 故障转移改道）。
+   reduced-motion 时停在 left:0、opacity:0 的起始帧自动隐去，底层链路仍完整可读。 */
+@keyframes vr-cap-trace {
+  0% {
+    left: 0;
+    opacity: 0;
+  }
+
+  12% {
+    opacity: 1;
+  }
+
+  80% {
+    opacity: 1;
+  }
+
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+
 html.theme-switching::before {
   content: "";
   position: fixed;
@@ -757,6 +846,21 @@ html.theme-switching::before {
 
   .animate-log-badge-connect {
     animation: vr-log-badge-connect 1.8s var(--cf-easing-standard) infinite;
+  }
+
+  /* 落地页动效。reduced-motion 时由全局 * 规则压成 0.01ms，
+     ripple(forwards) 与 hero-rise(both) 会停在终帧，文案与按钮保持可见。 */
+  .animate-ripple {
+    animation: vr-ripple 620ms var(--cf-easing-sharp) forwards;
+  }
+
+  .animate-hero-rise {
+    animation: vr-hero-rise var(--cf-duration-slow) var(--cf-easing-standard) both;
+  }
+
+  .animate-spark {
+    transform-origin: bottom;
+    animation: vr-spark 1.2s var(--cf-easing-standard) infinite;
   }
 }
 

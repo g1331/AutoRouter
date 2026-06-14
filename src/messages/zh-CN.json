@@ -1,4 +1,51 @@
 {
+  "hero": {
+    "nav": {
+      "login": "登录",
+      "docs": "文档"
+    },
+    "badge": "自托管 AI API 网关",
+    "headline": "统一调度你的 <hi>AI API 流量</hi>",
+    "subheadline": "API Key 分发、多上游路由、负载均衡与熔断、按请求计费——在一个自托管控制台里管好所有 AI 流量。",
+    "ctaPrimary": "开始使用",
+    "ctaSecondary": "查看文档",
+    "terminal": {
+      "caption": "改一行 base URL 指向网关，路由、负载均衡与计费由 AutoRouter 接管。"
+    },
+    "features": {
+      "title": "核心能力",
+      "subtitle": "为多上游、高可用的 AI 流量分发而构建",
+      "routing": {
+        "title": "按能力路由",
+        "desc": "依据请求路径与模型自动识别能力，将流量精准分发到匹配的上游。"
+      },
+      "balancing": {
+        "title": "负载均衡与熔断",
+        "desc": "按优先级与权重均衡分发，自动熔断异常上游并故障转移到下一候选。"
+      },
+      "quota": {
+        "title": "配额与并发控制",
+        "desc": "对每个密钥施加配额、并发与排队准入限制，保护上游稳定。"
+      },
+      "billing": {
+        "title": "按请求计费",
+        "desc": "基于同步的模型价格、覆盖与倍率，为每次请求生成计费快照。"
+      },
+      "keys": {
+        "title": "API Key 分发",
+        "desc": "签发并管理客户端密钥，按授权上游与有效期精细控制访问范围。"
+      },
+      "failover": {
+        "title": "故障转移与会话亲和",
+        "desc": "请求失败时无缝切换候选上游，并可将同一会话固定到既定上游。"
+      }
+    },
+    "cta": {
+      "title": "准备好接入了吗？",
+      "desc": "登录控制台，几分钟内完成密钥签发与上游配置。",
+      "button": "进入控制台"
+    }
+  },
   "common": {
     "appName": "AutoRouter",
     "adminConsole": "管理控制台",
