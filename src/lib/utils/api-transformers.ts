@@ -34,6 +34,7 @@ import type {
   LeaderboardApiKeyItem,
   LeaderboardUpstreamItem,
   LeaderboardModelItem,
+  LeaderboardUserItem,
 } from "@/lib/services/stats-service";
 import type {
   BillingOverviewStats,
@@ -1473,6 +1474,19 @@ export interface LeaderboardModelApiResponse {
 }
 
 /**
+ * API response format for leaderboard user item (snake_case).
+ */
+export interface LeaderboardUserApiResponse {
+  id: string;
+  username: string;
+  display_name: string;
+  request_count: number;
+  total_tokens: number;
+  total_cost_usd: number;
+  model_distribution: DistributionItemApiResponse[];
+}
+
+/**
  * API response format for leaderboard stats (snake_case).
  */
 export interface StatsLeaderboardApiResponse {
@@ -1480,6 +1494,7 @@ export interface StatsLeaderboardApiResponse {
   api_keys: LeaderboardApiKeyApiResponse[];
   upstreams: LeaderboardUpstreamApiResponse[];
   models: LeaderboardModelApiResponse[];
+  users: LeaderboardUserApiResponse[];
 }
 
 // ========== Stats Transformers ==========
@@ -1603,6 +1618,23 @@ export function transformLeaderboardModelToApi(
 }
 
 /**
+ * Transform a leaderboard user item to API response format.
+ */
+export function transformLeaderboardUserToApi(
+  item: LeaderboardUserItem
+): LeaderboardUserApiResponse {
+  return {
+    id: item.id,
+    username: item.username,
+    display_name: item.displayName,
+    request_count: item.requestCount,
+    total_tokens: item.totalTokens,
+    total_cost_usd: item.totalCostUsd,
+    model_distribution: item.modelDistribution,
+  };
+}
+
+/**
  * Transform a service layer leaderboard stats to API response format.
  * Converts camelCase properties to snake_case for API consistency.
  */
@@ -1614,6 +1646,7 @@ export function transformStatsLeaderboardToApi(
     api_keys: stats.apiKeys.map(transformLeaderboardApiKeyToApi),
     upstreams: stats.upstreams.map(transformLeaderboardUpstreamToApi),
     models: stats.models.map(transformLeaderboardModelToApi),
+    users: stats.users.map(transformLeaderboardUserToApi),
   };
 }
 
