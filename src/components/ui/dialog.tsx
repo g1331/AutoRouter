@@ -46,6 +46,9 @@ const DialogContent = React.forwardRef<
         ref={ref}
         className={cn(
           "fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2",
+          // 矮视口（软键盘弹起 / 横屏 / 小屏）下限制高度并允许内容自身纵向滚动，
+          // 避免标题与操作按钮被推出视口；已显式设置 max-h/overflow 的对话框会经 twMerge 覆盖这里的默认值
+          "max-h-[calc(100dvh-2rem)] overflow-y-auto",
           "gap-5 rounded-cf-md border border-border bg-card p-6 text-foreground shadow-[var(--vr-shadow-lg)]",
           "duration-cf-normal ease-cf-standard",
           // 走容器变形（View Transition）时关闭默认 zoom/slide 进出场，运动交给 VT 接管

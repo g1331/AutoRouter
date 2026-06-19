@@ -93,7 +93,8 @@
     "collapse": "Collapse",
     "showSensitiveInput": "Show input value",
     "hideSensitiveInput": "Hide input value",
-    "logout": "Sign out of your account"
+    "logout": "Sign out of your account",
+    "menu": "Menu"
   },
   "nav": {
     "dashboard": "Dashboard",

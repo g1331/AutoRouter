@@ -220,9 +220,11 @@ describe("TrafficRecordingPage", () => {
     expect(screen.getByText("dashboard.timeRange.7d")).toBeInTheDocument();
     expect(screen.getByText("dashboard.timeRange.30d")).toBeInTheDocument();
     expect(screen.getByText("dashboard.timeRange.custom")).toBeInTheDocument();
-    expect(screen.getByText("gpt-4.1")).toBeInTheDocument();
+    expect(screen.getAllByText("gpt-4.1").length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole("button", { name: /trafficRecording.viewDetail/i }));
+    // 宽表（hidden lg:block）与窄屏卡片（lg:hidden）各渲染一份操作按钮，jsdom 不应用 CSS 隐藏，
+    // 故同名按钮成对出现；点击任一份即可，JSON 详情块与复制按钮在下方独立卡片只渲染一份。
+    fireEvent.click(screen.getAllByRole("button", { name: /trafficRecording.viewDetail/i })[0]);
     expect(screen.getByText('"meta":')).toBeInTheDocument();
     expect(screen.getByText('"requestId":')).toBeInTheDocument();
     expect(screen.getByText('"req-1"')).toBeInTheDocument();
@@ -232,20 +234,22 @@ describe("TrafficRecordingPage", () => {
       JSON.stringify({ meta: { requestId: "req-1" } }, null, 2)
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "trafficRecording.delete" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "trafficRecording.delete" })[0]);
     expect(deleteMutate).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "common.cancel" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "common.cancel" }).length).toBeGreaterThan(0);
     expect(
-      screen.getByRole("button", { name: "trafficRecording.deleteConfirmAction" })
-    ).toBeInTheDocument();
+      screen.getAllByRole("button", { name: "trafficRecording.deleteConfirmAction" }).length
+    ).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole("button", { name: "common.cancel" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "common.cancel" })[0]);
     expect(
-      screen.queryByRole("button", { name: "trafficRecording.deleteConfirmAction" })
-    ).not.toBeInTheDocument();
+      screen.queryAllByRole("button", { name: "trafficRecording.deleteConfirmAction" })
+    ).toHaveLength(0);
 
-    fireEvent.click(screen.getByRole("button", { name: "trafficRecording.delete" }));
-    fireEvent.click(screen.getByRole("button", { name: "trafficRecording.deleteConfirmAction" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "trafficRecording.delete" })[0]);
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "trafficRecording.deleteConfirmAction" })[0]
+    );
     expect(deleteMutate).toHaveBeenCalledWith("recording-1");
   });
 
@@ -303,8 +307,12 @@ describe("TrafficRecordingPage", () => {
 
     render(<TrafficRecordingPage />);
 
+    // 宽表与窄屏卡片各渲染一份链接：含 request_log_id 的记录产生 2 个链接，无 log 的记录 0 个；
+    // 总数为 2（而非 4）即证明链接仅对存在源日志的记录渲染。
     const links = screen.getAllByRole("link", { name: /trafficRecording.openSourceLog/i });
-    expect(links).toHaveLength(1);
-    expect(links[0]).toHaveAttribute("href", "/logs?focus=log-1");
+    expect(links).toHaveLength(2);
+    for (const link of links) {
+      expect(link).toHaveAttribute("href", "/logs?focus=log-1");
+    }
   });
 });

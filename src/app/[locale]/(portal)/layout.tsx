@@ -4,6 +4,7 @@ import { useEffect } from "react";
 
 import { Sidebar } from "@/components/admin/sidebar";
 import { AppShell } from "@/components/layout/app-shell";
+import { MobileAccountMenu } from "@/components/layout/mobile-account-menu";
 import { useRouter } from "@/i18n/navigation";
 import { useAuth } from "@/providers/auth-provider";
 
@@ -35,6 +36,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
       )}
       mobileRootRoutes={MOBILE_ROOT_ROUTES}
       getMobileBackHref={() => "/portal"}
+      mobileHeaderRight={<MobileAccountMenu />}
     >
       {children}
     </AppShell>

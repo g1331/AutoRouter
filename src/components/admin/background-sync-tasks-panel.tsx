@@ -259,7 +259,7 @@ export function BackgroundSyncTasksPanel() {
         </div>
       </div>
 
-      <div className="hidden md:block">
+      <div className="hidden lg:block">
         <Table className="min-w-[1182px] table-fixed" containerClassName="rounded-cf-sm">
           <TableHeader>
             <TableRow>
@@ -328,7 +328,7 @@ export function BackgroundSyncTasksPanel() {
         </Table>
       </div>
 
-      <div className="space-y-3 md:hidden">
+      <div className="space-y-3 lg:hidden">
         {rows.map((task) => (
           <div key={task.task_name} className="rounded-cf-sm border border-divider p-3">
             <div className="flex items-start justify-between gap-3">
