@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
 import {
+  BarChart3,
   KeyRound,
   Link2,
   MoreHorizontal,
@@ -43,6 +44,7 @@ interface UsersTableProps {
   activeAdminCount: number;
   /** 调用者是否为 ADMIN_TOKEN 超级令牌；为真时豁免“最后一个启用管理员”的禁用。 */
   bypassLastAdminGuard?: boolean;
+  onViewUsage: (user: User) => void;
   onEdit: (user: User, source: HTMLElement | null) => void;
   onChangeUsername: (user: User, source: HTMLElement | null) => void;
   onResetPassword: (user: User, source: HTMLElement | null) => void;
@@ -60,6 +62,7 @@ export function UsersTable({
   users,
   activeAdminCount,
   bypassLastAdminGuard = false,
+  onViewUsage,
   onEdit,
   onChangeUsername,
   onResetPassword,
@@ -184,6 +187,11 @@ export function UsersTable({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-52">
+                      <DropdownMenuItem onClick={() => onViewUsage(user)}>
+                        <BarChart3 className="mr-2 h-4 w-4" aria-hidden="true" />
+                        {t("viewUsage")}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => onEdit(user, rowSource(user.id))}>
                         <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
                         {t("edit")}

@@ -14,6 +14,7 @@ vi.mock("lucide-react", () => ({
   Key: () => <svg data-testid="key-icon" />,
   Server: () => <svg data-testid="server-icon" />,
   Cpu: () => <svg data-testid="cpu-icon" />,
+  Users: () => <svg data-testid="users-icon" />,
   Trophy: ({ className }: { className?: string }) => (
     <svg data-testid="trophy-icon" className={className} />
   ),
@@ -124,6 +125,26 @@ describe("LeaderboardSection", () => {
         upstream_distribution: [],
       },
     ],
+    users: [
+      {
+        id: "user-1",
+        username: "alice",
+        display_name: "Alice Zhang",
+        request_count: 9000,
+        total_tokens: 320000,
+        total_cost_usd: 7.8,
+        model_distribution: [],
+      },
+      {
+        id: "user-2",
+        username: "bob",
+        display_name: "Bob Li",
+        request_count: 2000,
+        total_tokens: 60000,
+        total_cost_usd: 1.4,
+        model_distribution: [],
+      },
+    ],
   };
 
   describe("Loading State", () => {
@@ -134,7 +155,8 @@ describe("LeaderboardSection", () => {
       expect(screen.getByText("stats.apiKeyRanking")).toBeInTheDocument();
       expect(screen.getByText("stats.upstreamRanking")).toBeInTheDocument();
       expect(screen.getByText("stats.modelRanking")).toBeInTheDocument();
-      expect(screen.getAllByTestId("leaderboard-loading-row")).toHaveLength(9);
+      expect(screen.getByText("stats.userRanking")).toBeInTheDocument();
+      expect(screen.getAllByTestId("leaderboard-loading-row")).toHaveLength(12);
     });
 
     it("renders section header when loading", () => {
@@ -176,6 +198,15 @@ describe("LeaderboardSection", () => {
       expect(screen.getByText("gpt-3.5-turbo")).toBeInTheDocument();
     });
 
+    it("renders user rankings with display name and username", () => {
+      render(<LeaderboardSection data={mockData} isLoading={false} />);
+
+      expect(screen.getByText("Alice Zhang")).toBeInTheDocument();
+      expect(screen.getByText("@alice")).toBeInTheDocument();
+      expect(screen.getByText("Bob Li")).toBeInTheDocument();
+      expect(screen.getByText("@bob")).toBeInTheDocument();
+    });
+
     it("renders rank badges with correct numbers", () => {
       render(<LeaderboardSection data={mockData} isLoading={false} />);
 
@@ -184,9 +215,9 @@ describe("LeaderboardSection", () => {
       const rank2s = screen.getAllByText("#2");
       const rank3s = screen.getAllByText("#3");
 
-      expect(rank1s.length).toBe(3); // One for each table
-      expect(rank2s.length).toBe(3);
-      expect(rank3s.length).toBe(2); // Models only has 3, upstreams has 2
+      expect(rank1s.length).toBe(4); // One for each of the four tables
+      expect(rank2s.length).toBe(4);
+      expect(rank3s.length).toBe(2); // Only API keys and models have a third entry
     });
 
     it("renders formatted request counts", () => {
@@ -220,6 +251,7 @@ describe("LeaderboardSection", () => {
         ],
         upstreams: [],
         models: [],
+        users: [],
       };
 
       render(<LeaderboardSection data={data} isLoading={false} />);
@@ -267,6 +299,7 @@ describe("LeaderboardSection", () => {
       api_keys: [],
       upstreams: [],
       models: [],
+      users: [],
     };
 
     it("renders empty messages when no data", () => {
@@ -275,6 +308,7 @@ describe("LeaderboardSection", () => {
       expect(screen.getByText("stats.noApiKeys")).toBeInTheDocument();
       expect(screen.getByText("stats.noUpstreams")).toBeInTheDocument();
       expect(screen.getByText("stats.noModels")).toBeInTheDocument();
+      expect(screen.getByText("stats.noUsers")).toBeInTheDocument();
     });
   });
 
@@ -303,6 +337,12 @@ describe("LeaderboardSection", () => {
 
       expect(screen.getByTestId("cpu-icon")).toBeInTheDocument();
     });
+
+    it("renders users icon for users table", () => {
+      render(<LeaderboardSection data={mockData} isLoading={false} />);
+
+      expect(screen.getByTestId("users-icon")).toBeInTheDocument();
+    });
   });
 
   describe("Undefined Data", () => {
@@ -313,6 +353,7 @@ describe("LeaderboardSection", () => {
       expect(screen.getByText("stats.noApiKeys")).toBeInTheDocument();
       expect(screen.getByText("stats.noUpstreams")).toBeInTheDocument();
       expect(screen.getByText("stats.noModels")).toBeInTheDocument();
+      expect(screen.getByText("stats.noUsers")).toBeInTheDocument();
     });
   });
 });

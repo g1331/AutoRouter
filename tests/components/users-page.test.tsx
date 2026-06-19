@@ -9,6 +9,12 @@ vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
 }));
 
+// i18n 路由：捕获导航目标，供查看使用量入口断言
+const routerPush = vi.hoisted(() => vi.fn());
+vi.mock("@/i18n/navigation", () => ({
+  useRouter: () => ({ push: routerPush }),
+}));
+
 // useUsers：返回值可在用例间切换（加载态 / 数据态）
 const usersState = vi.hoisted(() => ({
   current: { data: undefined, isLoading: true } as {
@@ -38,7 +44,12 @@ vi.mock("@/components/admin/topbar", () => ({
 // 用户表格：捕获页面传入的 props，断言 activeAdminCount 计算
 const tableProps = vi.hoisted(() => ({
   current: undefined as
-    | { users: User[]; activeAdminCount: number; bypassLastAdminGuard?: boolean }
+    | {
+        users: User[];
+        activeAdminCount: number;
+        bypassLastAdminGuard?: boolean;
+        onViewUsage: (user: User) => void;
+      }
     | undefined,
 }));
 vi.mock("@/components/admin/users-table", () => ({
@@ -46,6 +57,7 @@ vi.mock("@/components/admin/users-table", () => ({
     users: User[];
     activeAdminCount: number;
     bypassLastAdminGuard?: boolean;
+    onViewUsage: (user: User) => void;
   }) => {
     tableProps.current = props;
     return <div data-testid="users-table" />;
@@ -88,6 +100,7 @@ beforeEach(() => {
   usersState.current = { data: undefined, isLoading: true };
   authState.current = { principal: { kind: "user", role: "admin" } };
   tableProps.current = undefined;
+  routerPush.mockClear();
 });
 
 describe("UsersPage", () => {
@@ -143,5 +156,23 @@ describe("UsersPage", () => {
     render(<UsersPage />);
 
     expect(tableProps.current?.bypassLastAdminGuard).toBe(true);
+  });
+
+  it("查看使用量入口导航到对应用户详情页", () => {
+    usersState.current = {
+      data: {
+        items: [makeUser({ id: "u9", username: "alice", role: "member", is_active: true })],
+        total: 1,
+        page: 1,
+        page_size: 10,
+        total_pages: 1,
+        active_admin_total: 0,
+      },
+      isLoading: false,
+    };
+    render(<UsersPage />);
+
+    tableProps.current?.onViewUsage(makeUser({ id: "u9" }));
+    expect(routerPush).toHaveBeenCalledWith("/system/users/u9");
   });
 });

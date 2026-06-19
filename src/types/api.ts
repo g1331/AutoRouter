@@ -1227,11 +1227,22 @@ export interface LeaderboardModelItem {
   upstream_distribution: DistributionItem[];
 }
 
+export interface LeaderboardUserItem {
+  id: string; // UUID
+  username: string;
+  display_name: string;
+  request_count: number;
+  total_tokens: number;
+  total_cost_usd: number;
+  model_distribution: DistributionItem[];
+}
+
 export interface StatsLeaderboardResponse {
   range: string;
   api_keys: LeaderboardAPIKeyItem[];
   upstreams: LeaderboardUpstreamItem[];
   models: LeaderboardModelItem[];
+  users: LeaderboardUserItem[];
 }
 
 // ========== Portal (member self-service) Types ==========

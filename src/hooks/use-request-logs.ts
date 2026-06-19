@@ -5,6 +5,7 @@ import type { PaginatedRequestLogsResponse } from "@/types/api";
 export interface RequestLogsFilters {
   id?: string;
   api_key_id?: string;
+  user_id?: string;
   upstream_id?: string;
   status_code?: number;
   start_time?: string; // ISO 8601
@@ -38,6 +39,9 @@ export function useRequestLogs(
       }
       if (filters?.api_key_id) {
         params.set("api_key_id", filters.api_key_id);
+      }
+      if (filters?.user_id) {
+        params.set("user_id", filters.user_id);
       }
       if (filters?.upstream_id) {
         params.set("upstream_id", filters.upstream_id);
