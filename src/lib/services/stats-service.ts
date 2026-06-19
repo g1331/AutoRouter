@@ -1,5 +1,5 @@
 import { and, gte, lt, sql, count, sum, inArray, isNotNull, ne, eq } from "drizzle-orm";
-import { db, requestLogs, apiKeys, upstreams, requestBillingSnapshots } from "../db";
+import { db, requestLogs, apiKeys, upstreams, users, requestBillingSnapshots } from "../db";
 import { config } from "../utils/config";
 import { getPrimaryProviderByCapabilities } from "@/lib/route-capabilities";
 import { reconcileStaleInProgressRequestLogs } from "./request-logger";
@@ -95,11 +95,22 @@ export interface LeaderboardModelItem {
   upstreamDistribution: DistributionItem[];
 }
 
+export interface LeaderboardUserItem {
+  id: string;
+  username: string;
+  displayName: string;
+  requestCount: number;
+  totalTokens: number;
+  totalCostUsd: number;
+  modelDistribution: DistributionItem[];
+}
+
 export interface StatsLeaderboard {
   range: TimeRange;
   apiKeys: LeaderboardApiKeyItem[];
   upstreams: LeaderboardUpstreamItem[];
   models: LeaderboardModelItem[];
+  users: LeaderboardUserItem[];
 }
 
 const MIN_TPS_COMPLETION_TOKENS = 10;
@@ -812,10 +823,97 @@ export async function getLeaderboardStats(
     };
   });
 
+  // === Users Leaderboard ===
+  // Owner-level usage attributed through the redundant request_logs.user_id
+  // snapshot. Requests without an owner (user_id is null, e.g. admin-token
+  // traffic) are excluded so the board only ranks real member accounts.
+  const usersResult = await db
+    .select({
+      userId: requestLogs.userId,
+      requestCount: count(requestLogs.id),
+      totalTokens: sum(requestLogs.totalTokens),
+    })
+    .from(requestLogs)
+    .where(and(timeFilter, isNotNull(requestLogs.userId)))
+    .groupBy(requestLogs.userId)
+    .orderBy(sql`count(${requestLogs.id}) DESC`)
+    .limit(limit);
+
+  const userIds = usersResult.map((r) => r.userId!);
+  const userMap = new Map<string, { username: string; displayName: string }>();
+
+  if (userIds.length > 0) {
+    const userDetails = await db.query.users.findMany({
+      where: inArray(users.id, userIds),
+      columns: { id: true, username: true, displayName: true },
+    });
+    for (const u of userDetails) {
+      userMap.set(u.id, { username: u.username, displayName: u.displayName });
+    }
+  }
+
+  // User costs
+  const userCostMap = new Map<string, number>();
+  if (userIds.length > 0) {
+    const costRows = await db
+      .select({
+        userId: requestLogs.userId,
+        totalCost: sql<
+          string | null
+        >`sum(case when ${requestBillingSnapshots.billingStatus} = 'billed' then ${requestBillingSnapshots.finalCost} else 0 end)`,
+      })
+      .from(requestLogs)
+      .leftJoin(requestBillingSnapshots, eq(requestLogs.id, requestBillingSnapshots.requestLogId))
+      .where(and(timeFilter, inArray(requestLogs.userId, userIds)))
+      .groupBy(requestLogs.userId);
+    for (const row of costRows) {
+      if (row.userId) {
+        userCostMap.set(row.userId, row.totalCost ? Number(row.totalCost) : 0);
+      }
+    }
+  }
+
+  // User model distributions
+  const userModelDistMap = new Map<string, DistributionItem[]>();
+  if (userIds.length > 0) {
+    const distRows = await db
+      .select({
+        groupKey: requestLogs.userId,
+        name: requestLogs.model,
+        cnt: count(requestLogs.id),
+      })
+      .from(requestLogs)
+      .where(
+        and(
+          timeFilter,
+          inArray(requestLogs.userId, userIds),
+          isNotNull(requestLogs.model),
+          ne(requestLogs.model, "")
+        )
+      )
+      .groupBy(requestLogs.userId, requestLogs.model);
+
+    const mapped = buildDistributionMap(
+      distRows.map((r) => ({ groupKey: r.groupKey, name: r.name, cnt: r.cnt }))
+    );
+    for (const [k, v] of mapped) userModelDistMap.set(k, v);
+  }
+
+  const usersLeaderboard: LeaderboardUserItem[] = usersResult.map((row) => ({
+    id: row.userId!,
+    username: userMap.get(row.userId!)?.username || "Unknown",
+    displayName: userMap.get(row.userId!)?.displayName || "Unknown",
+    requestCount: row.requestCount,
+    totalTokens: row.totalTokens ? Number(row.totalTokens) : 0,
+    totalCostUsd: userCostMap.get(row.userId!) ?? 0,
+    modelDistribution: userModelDistMap.get(row.userId!) ?? [],
+  }));
+
   return {
     range: rangeType,
     apiKeys: apiKeysLeaderboard,
     upstreams: upstreamsLeaderboard,
     models: modelsLeaderboard,
+    users: usersLeaderboard,
   };
 }

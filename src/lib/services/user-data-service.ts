@@ -8,11 +8,12 @@ import {
 } from "./request-logger";
 import { buildTimeBucketExpr, parseTimeBucket } from "./stats-service";
 
-// User-side personal data service (decision 7): every query is scoped to the
-// caller's userId over the redundant user_id snapshot columns on the fact
-// tables, so attribution survives key deletion and user deactivation. The
-// userId always comes from the authenticated principal, never from request
-// parameters.
+// Personal data service (decision 7): every query is scoped to a single
+// userId over the redundant user_id snapshot columns on the fact tables, so
+// attribution survives key deletion and user deactivation. On the member
+// self-service path the userId is forced from the authenticated principal; on
+// the admin path it is the target user id from the route, reached only after
+// requireAdmin authorization.
 
 export type UserUsageRange = "7d" | "30d";
 

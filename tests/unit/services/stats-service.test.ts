@@ -10,6 +10,9 @@ vi.mock("@/lib/db", () => ({
       apiKeys: {
         findMany: vi.fn(),
       },
+      users: {
+        findMany: vi.fn(),
+      },
     },
     select: vi.fn(() => ({
       from: vi.fn(() => ({
@@ -31,6 +34,7 @@ vi.mock("@/lib/db", () => ({
   requestLogs: {
     id: "id",
     apiKeyId: "apiKeyId",
+    userId: "userId",
     upstreamId: "upstreamId",
     model: "model",
     createdAt: "createdAt",
@@ -48,6 +52,11 @@ vi.mock("@/lib/db", () => ({
     id: "id",
     name: "name",
     keyPrefix: "keyPrefix",
+  },
+  users: {
+    id: "id",
+    username: "username",
+    displayName: "displayName",
   },
   upstreams: {
     id: "id",
@@ -683,7 +692,8 @@ describe("stats-service", () => {
             }),
           }),
         } as unknown as ReturnType<typeof db.select>)
-        .mockReturnValueOnce(emptyDistQuery); // model upstream dist
+        .mockReturnValueOnce(emptyDistQuery) // model upstream dist
+        .mockReturnValueOnce(emptyMainQuery); // users
 
       vi.mocked(db.query.apiKeys.findMany).mockResolvedValue([]);
       vi.mocked(db.query.upstreams.findMany).mockResolvedValue([]);
@@ -800,7 +810,8 @@ describe("stats-service", () => {
         } as unknown as ReturnType<typeof db.select>)
         .mockReturnValueOnce(emptyCostQuery) // upstream cost
         .mockReturnValueOnce(emptyDistQuery) // upstream model dist
-        .mockReturnValueOnce(emptyMainQuery); // models
+        .mockReturnValueOnce(emptyMainQuery) // models
+        .mockReturnValueOnce(emptyMainQuery); // users
 
       // Return empty arrays - simulating deleted keys/upstreams
       vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([]);
@@ -875,7 +886,8 @@ describe("stats-service", () => {
         } as unknown as ReturnType<typeof db.select>)
         .mockReturnValueOnce(emptyCostQuery) // upstream cost
         .mockReturnValueOnce(emptyDistQuery) // upstream model dist
-        .mockReturnValueOnce(emptyMainQuery); // models
+        .mockReturnValueOnce(emptyMainQuery) // models
+        .mockReturnValueOnce(emptyMainQuery); // users
 
       vi.mocked(db.query.apiKeys.findMany).mockReset();
       vi.mocked(db.query.upstreams.findMany).mockReset();
@@ -948,7 +960,8 @@ describe("stats-service", () => {
         .mockReturnValueOnce(emptyCostQuery) // api key cost
         .mockReturnValueOnce(emptyDistQuery) // api key model dist
         .mockReturnValueOnce(emptyMainQuery) // upstreams
-        .mockReturnValueOnce(emptyMainQuery); // models
+        .mockReturnValueOnce(emptyMainQuery) // models
+        .mockReturnValueOnce(emptyMainQuery); // users
 
       vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
         { id: "key-1", name: "Test Key", keyPrefix: "sk-test-" },
@@ -1050,7 +1063,8 @@ describe("stats-service", () => {
             }),
           }),
         } as unknown as ReturnType<typeof db.select>)
-        .mockReturnValueOnce(emptyMainQuery);
+        .mockReturnValueOnce(emptyMainQuery) // models
+        .mockReturnValueOnce(emptyMainQuery); // users
 
       vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
         { id: "key-1", name: "Quota Key", keyPrefix: "sk-quota-" },
@@ -1145,7 +1159,8 @@ describe("stats-service", () => {
         } as unknown as ReturnType<typeof db.select>)
         .mockReturnValueOnce(emptyCostQuery) // upstream cost
         .mockReturnValueOnce(emptyDistQuery) // upstream model dist
-        .mockReturnValueOnce(emptyMainQuery); // models
+        .mockReturnValueOnce(emptyMainQuery) // models
+        .mockReturnValueOnce(emptyMainQuery); // users
 
       vi.mocked(db.query.apiKeys.findMany).mockResolvedValue([]);
       vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
@@ -1209,7 +1224,18 @@ describe("stats-service", () => {
               groupBy: vi.fn().mockResolvedValue([]),
             }),
           }),
-        } as unknown as ReturnType<typeof db.select>);
+        } as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              groupBy: vi.fn().mockReturnValue({
+                orderBy: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue([]),
+                }),
+              }),
+            }),
+          }),
+        } as unknown as ReturnType<typeof db.select>); // users
 
       vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([]);
       vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([]);
@@ -1243,6 +1269,91 @@ describe("stats-service", () => {
       expect(result.apiKeys).toHaveLength(0);
       expect(result.upstreams).toHaveLength(0);
       expect(result.models).toHaveLength(0);
+      expect(result.users).toHaveLength(0);
+    });
+
+    it("should aggregate user leaderboard with cost, tokens and model distribution", async () => {
+      const { db } = await import("@/lib/db");
+      const { getLeaderboardStats } = await import("@/lib/services/stats-service");
+
+      const emptyMainQuery = {
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            groupBy: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue([]),
+              }),
+            }),
+          }),
+        }),
+      } as unknown as ReturnType<typeof db.select>;
+
+      // Order: api keys (empty), upstreams (empty), models (empty),
+      // users (with data), user cost, user model dist.
+      vi.mocked(db.select)
+        .mockReturnValueOnce(emptyMainQuery) // api keys
+        .mockReturnValueOnce(emptyMainQuery) // upstreams
+        .mockReturnValueOnce(emptyMainQuery) // models
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              groupBy: vi.fn().mockReturnValue({
+                orderBy: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue([
+                    { userId: "user-1", requestCount: 12, totalTokens: "3400" },
+                    { userId: "user-deleted", requestCount: 5, totalTokens: "900" },
+                  ]),
+                }),
+              }),
+            }),
+          }),
+        } as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValue({
+            leftJoin: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                groupBy: vi.fn().mockResolvedValue([{ userId: "user-1", totalCost: "2.5" }]),
+              }),
+            }),
+          }),
+        } as unknown as ReturnType<typeof db.select>)
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              groupBy: vi.fn().mockResolvedValue([{ groupKey: "user-1", name: "gpt-4o", cnt: 7 }]),
+            }),
+          }),
+        } as unknown as ReturnType<typeof db.select>);
+
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([]);
+      vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([]);
+      vi.mocked(db.query.users.findMany).mockResolvedValueOnce([
+        { id: "user-1", username: "alice", displayName: "Alice" },
+      ]);
+
+      const result = await getLeaderboardStats("7d", 5);
+
+      expect(result.users).toHaveLength(2);
+      expect(result.users[0]).toMatchObject({
+        id: "user-1",
+        username: "alice",
+        displayName: "Alice",
+        requestCount: 12,
+        totalTokens: 3400,
+        totalCostUsd: 2.5,
+        modelDistribution: [{ name: "gpt-4o", count: 7 }],
+      });
+      // A user whose account record is missing (e.g. deleted) falls back to Unknown
+      // while still being counted, mirroring the api key / upstream behavior.
+      expect(result.users[1]).toMatchObject({
+        id: "user-deleted",
+        username: "Unknown",
+        displayName: "Unknown",
+        requestCount: 5,
+        totalTokens: 900,
+        totalCostUsd: 0,
+        modelDistribution: [],
+      });
     });
   });
 

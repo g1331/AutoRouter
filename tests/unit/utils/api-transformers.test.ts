@@ -1539,6 +1539,17 @@ describe("api-transformers", () => {
             totalTokens: 2400000,
           },
         ],
+        users: [
+          {
+            id: "user-1",
+            username: "alice",
+            displayName: "Alice",
+            requestCount: 4000,
+            totalTokens: 1200000,
+            totalCostUsd: 12.5,
+            modelDistribution: [{ name: "gpt-4", count: 4000 }],
+          },
+        ],
       };
 
       const result = transformStatsLeaderboardToApi(stats);
@@ -1550,6 +1561,16 @@ describe("api-transformers", () => {
       expect(result.upstreams[0].request_count).toBe(10000);
       expect(result.models).toHaveLength(1);
       expect(result.models[0].total_tokens).toBe(2400000);
+      expect(result.users).toHaveLength(1);
+      expect(result.users[0]).toEqual({
+        id: "user-1",
+        username: "alice",
+        display_name: "Alice",
+        request_count: 4000,
+        total_tokens: 1200000,
+        total_cost_usd: 12.5,
+        model_distribution: [{ name: "gpt-4", count: 4000 }],
+      });
     });
 
     it("should handle empty arrays", () => {
@@ -1558,6 +1579,7 @@ describe("api-transformers", () => {
         apiKeys: [],
         upstreams: [],
         models: [],
+        users: [],
       };
 
       const result = transformStatsLeaderboardToApi(stats);
@@ -1566,6 +1588,7 @@ describe("api-transformers", () => {
       expect(result.api_keys).toHaveLength(0);
       expect(result.upstreams).toHaveLength(0);
       expect(result.models).toHaveLength(0);
+      expect(result.users).toHaveLength(0);
     });
   });
 });

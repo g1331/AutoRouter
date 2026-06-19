@@ -71,6 +71,17 @@ describe("GET /api/admin/stats/leaderboard", () => {
           totalTokens: 7777,
         },
       ],
+      users: [
+        {
+          id: "user-1",
+          username: "alice",
+          displayName: "Alice",
+          requestCount: 50,
+          totalTokens: 3210,
+          totalCostUsd: 1.5,
+          modelDistribution: [{ name: "gpt-5", count: 50 }],
+        },
+      ],
     });
 
     const request = new Request("http://localhost/api/admin/stats/leaderboard?range=7d&limit=5", {
@@ -90,6 +101,15 @@ describe("GET /api/admin/stats/leaderboard", () => {
       total_tokens: 9999,
       avg_ttft_ms: 1222.2,
       avg_tps: 66.6,
+    });
+    expect(data.users[0]).toEqual({
+      id: "user-1",
+      username: "alice",
+      display_name: "Alice",
+      request_count: 50,
+      total_tokens: 3210,
+      total_cost_usd: 1.5,
+      model_distribution: [{ name: "gpt-5", count: 50 }],
     });
   });
 

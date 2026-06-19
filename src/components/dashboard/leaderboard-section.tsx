@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Cpu, Key, Server, Trophy } from "lucide-react";
+import { Cpu, Key, Server, Trophy, Users } from "lucide-react";
 import { Cell, Pie, PieChart, Tooltip } from "recharts";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -387,6 +387,65 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
                   </div>
 
                   <div className="hidden shrink-0 lg:block">
+                    <MiniPieChart
+                      data={item.model_distribution}
+                      label={t("stats.modelDistribution")}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* User Ranking */}
+      <Card className="border-border bg-card">
+        <CardContent className="p-4 sm:p-5">
+          <div className="mb-3 flex items-center gap-2 border-b border-divider pb-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-cf-sm border border-amber-500/35 bg-amber-500/10 text-amber-500">
+              <Users className="h-3.5 w-3.5" />
+            </div>
+            <h4 className="type-label-medium text-foreground">{t("stats.userRanking")}</h4>
+          </div>
+
+          {isLoading ? (
+            <DashboardLoadingSurface loadingLabel={tCommon("loading")} className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <LeaderboardLoadingRow key={i} cols={3} />
+              ))}
+            </DashboardLoadingSurface>
+          ) : !data?.users.length ? (
+            <p className="type-body-small py-6 text-center text-muted-foreground">
+              {t("stats.noUsers")}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {data.users.map((item, index) => (
+                <div key={item.id} className={getRankRowClass(index)}>
+                  <RankBadge rank={index + 1} />
+
+                  <div className="w-[140px] shrink-0">
+                    <p className="type-body-small truncate text-foreground">{item.display_name}</p>
+                    <p className="type-caption truncate text-muted-foreground">@{item.username}</p>
+                  </div>
+
+                  <div className="ml-2 grid flex-1 grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
+                    <MetricCell
+                      label={t("stats.requests")}
+                      value={formatNumber(item.request_count)}
+                    />
+                    <MetricCell
+                      label={t("stats.tokens")}
+                      value={`${formatNumber(item.total_tokens)} tok`}
+                    />
+                    <MetricCell
+                      label={t("stats.upstreamCost")}
+                      value={formatCost(item.total_cost_usd)}
+                    />
+                  </div>
+
+                  <div className="hidden shrink-0 sm:block">
                     <MiniPieChart
                       data={item.model_distribution}
                       label={t("stats.modelDistribution")}

@@ -20,6 +20,7 @@ const log = createLogger("admin-logs");
  * - page_size: number
  * - id: string (filter - exact log id, used by /logs?focus=<id>)
  * - api_key_id: string (filter)
+ * - user_id: string (filter - owner of the request via the user_id snapshot)
  * - upstream_id: string (filter)
  * - status_code: number (filter)
  * - start_time: ISO datetime (filter)
@@ -42,6 +43,9 @@ export async function GET(request: NextRequest) {
 
     const apiKeyId = url.searchParams.get("api_key_id");
     if (apiKeyId) filters.apiKeyId = apiKeyId;
+
+    const userId = url.searchParams.get("user_id");
+    if (userId) filters.userId = userId;
 
     const upstreamId = url.searchParams.get("upstream_id");
     if (upstreamId) filters.upstreamId = upstreamId;

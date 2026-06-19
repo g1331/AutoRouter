@@ -83,6 +83,7 @@ function makeUser(overrides: Partial<User>): User {
 }
 
 const handlers = {
+  onViewUsage: vi.fn(),
   onEdit: vi.fn(),
   onChangeUsername: vi.fn(),
   onResetPassword: vi.fn(),
@@ -132,6 +133,14 @@ describe("UsersTable", () => {
 
     expect(screen.getByRole("switch")).not.toBeDisabled();
     expect(screen.getByRole("button", { name: "deleteUser" })).not.toBeDisabled();
+  });
+
+  it("点击查看使用量触发回调（仅传用户，无需变形源）", () => {
+    const user = makeUser({});
+    render(<UsersTable users={[user]} activeAdminCount={0} {...handlers} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "viewUsage" }));
+    expect(handlers.onViewUsage).toHaveBeenCalledWith(user);
   });
 
   it("点击编辑与删除触发对应回调", () => {

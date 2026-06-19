@@ -173,4 +173,57 @@ describe("LogsPage focus query param", () => {
     expect(screen.getByText("logs.focusNotFound")).toBeInTheDocument();
     expect(screen.getByText("missing")).toBeInTheDocument();
   });
+
+  it("shows user filter banner and forwards user_id filter when user_id param hits", () => {
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => (key === "user_id" ? "user-42" : null),
+    });
+    useRequestLogsMock.mockReturnValueOnce({
+      isLoading: false,
+      data: { items: [{ id: "log-1" }], total: 1, total_pages: 1, page: 1, page_size: 20 },
+      refetch: vi.fn(),
+    });
+
+    render(<LogsPage />);
+
+    expect(useRequestLogsMock).toHaveBeenCalledWith(
+      1,
+      20,
+      { user_id: "user-42" },
+      expect.objectContaining({ refetchInterval: 5000 })
+    );
+
+    expect(screen.getByText("logs.userFilterActive")).toBeInTheDocument();
+    expect(screen.getByText("user-42")).toBeInTheDocument();
+    // Management header still renders alongside the filter banner.
+    expect(screen.getByText("logs.management")).toBeInTheDocument();
+
+    const clearLink = screen.getByRole("link", { name: /logs.userFilterClear/i });
+    expect(clearLink).toHaveAttribute("href", "/logs");
+  });
+
+  it("ignores user_id filter when focus param is also present", () => {
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => {
+        if (key === "focus") return "log-1";
+        if (key === "user_id") return "user-42";
+        return null;
+      },
+    });
+    useRequestLogsMock.mockReturnValueOnce({
+      isLoading: false,
+      data: { items: [{ id: "log-1" }], total: 1, total_pages: 1, page: 1, page_size: 1 },
+      refetch: vi.fn(),
+    });
+
+    render(<LogsPage />);
+
+    expect(useRequestLogsMock).toHaveBeenCalledWith(
+      1,
+      1,
+      { id: "log-1" },
+      expect.objectContaining({ refetchInterval: false })
+    );
+    expect(screen.queryByText("logs.userFilterActive")).not.toBeInTheDocument();
+  });
 });

@@ -130,6 +130,7 @@ export default function LogsPage() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const focusId = searchParams.get("focus")?.trim() || null;
+  const userId = focusId ? null : searchParams.get("user_id")?.trim() || null;
 
   const { connectionState, fallbackRefetchIntervalMs } = useRequestLogLive({
     enabled: focusId === null,
@@ -137,12 +138,16 @@ export default function LogsPage() {
   const effectiveRefetchInterval =
     refetchInterval !== false ? refetchInterval : fallbackRefetchIntervalMs;
 
-  const focusFilters = useMemo(() => (focusId ? { id: focusId } : undefined), [focusId]);
+  const filters = useMemo(() => {
+    if (focusId) return { id: focusId };
+    if (userId) return { user_id: userId };
+    return undefined;
+  }, [focusId, userId]);
   const focusInitialExpanded = useMemo(() => (focusId ? [focusId] : []), [focusId]);
   const { data, isLoading, refetch } = useRequestLogs(
     focusId ? 1 : page,
     focusId ? 1 : pageSize,
-    focusFilters,
+    filters,
     {
       refetchInterval: focusId ? false : effectiveRefetchInterval,
     }
@@ -201,49 +206,73 @@ export default function LogsPage() {
             </CardContent>
           </Card>
         ) : (
-          <Card
-            variant="outlined"
-            className={cn("border-divider bg-surface-200/70", LOGS_SECTION_ENTER_CLASS)}
-          >
-            <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2 text-amber-500">
-                  <ScrollText className="h-4 w-4" aria-hidden="true" />
-                  <span className="type-label-medium">{t("management")}</span>
-                </div>
-                <p className="type-body-medium text-muted-foreground">{t("managementDesc")}</p>
-                <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-muted-foreground">
-                  <Badge
-                    variant={
-                      connectionState === "live"
-                        ? "success"
+          <>
+            {userId && (
+              <Card
+                variant="outlined"
+                className={cn(
+                  "border-divider bg-surface-200/70 border-amber-500/40",
+                  LOGS_SECTION_ENTER_CLASS
+                )}
+              >
+                <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0 space-y-1">
+                    <p className="type-caption text-muted-foreground">{t("userFilterActive")}</p>
+                    <p className="type-body-medium truncate font-mono text-xs">{userId}</p>
+                  </div>
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={pathname}>
+                      <X className="h-4 w-4" />
+                      {t("userFilterClear")}
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+            <Card
+              variant="outlined"
+              className={cn("border-divider bg-surface-200/70", LOGS_SECTION_ENTER_CLASS)}
+            >
+              <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2 text-amber-500">
+                    <ScrollText className="h-4 w-4" aria-hidden="true" />
+                    <span className="type-label-medium">{t("management")}</span>
+                  </div>
+                  <p className="type-body-medium text-muted-foreground">{t("managementDesc")}</p>
+                  <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-muted-foreground">
+                    <Badge
+                      variant={
+                        connectionState === "live"
+                          ? "success"
+                          : connectionState === "connecting"
+                            ? "info"
+                            : "warning"
+                      }
+                      className={cn("px-2 py-0.5 text-[10px] leading-none", liveStatusMotionClass)}
+                    >
+                      {connectionState === "live"
+                        ? t("liveStatusLive")
                         : connectionState === "connecting"
-                          ? "info"
-                          : "warning"
-                    }
-                    className={cn("px-2 py-0.5 text-[10px] leading-none", liveStatusMotionClass)}
-                  >
-                    {connectionState === "live"
-                      ? t("liveStatusLive")
-                      : connectionState === "connecting"
-                        ? t("liveStatusConnecting")
-                        : t("liveStatusFallback")}
-                  </Badge>
-                  <span>
-                    {connectionState === "fallback"
-                      ? t("liveStatusFallbackDesc")
-                      : t("liveStatusLiveDesc")}
-                  </span>
+                          ? t("liveStatusConnecting")
+                          : t("liveStatusFallback")}
+                    </Badge>
+                    <span>
+                      {connectionState === "fallback"
+                        ? t("liveStatusFallbackDesc")
+                        : t("liveStatusLiveDesc")}
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              <RefreshIntervalSelect
-                onIntervalChange={handleIntervalChange}
-                onManualRefresh={handleManualRefresh}
-                isRefreshing={isManualRefreshPending}
-              />
-            </CardContent>
-          </Card>
+                <RefreshIntervalSelect
+                  onIntervalChange={handleIntervalChange}
+                  onManualRefresh={handleManualRefresh}
+                  isRefreshing={isManualRefreshPending}
+                />
+              </CardContent>
+            </Card>
+          </>
         )}
 
         {isLoading ? (

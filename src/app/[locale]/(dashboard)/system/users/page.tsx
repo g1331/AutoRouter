@@ -15,6 +15,7 @@ import { Topbar } from "@/components/admin/topbar";
 import { UsersTable } from "@/components/admin/users-table";
 import { UserUpstreamsDialog } from "@/components/admin/user-upstreams-dialog";
 import { Card } from "@/components/ui/card";
+import { useRouter } from "@/i18n/navigation";
 import { useUsers } from "@/hooks/use-users";
 import { useContainerMorph } from "@/hooks/use-container-morph";
 import { useAuth } from "@/providers/auth-provider";
@@ -35,6 +36,7 @@ export default function UsersPage() {
 
   const t = useTranslations("users");
   const tCommon = useTranslations("common");
+  const router = useRouter();
   const { data, isLoading } = useUsers(page, pageSize);
   const { principal } = useAuth();
 
@@ -89,6 +91,7 @@ export default function UsersPage() {
               users={users}
               activeAdminCount={activeAdminCount}
               bypassLastAdminGuard={bypassLastAdminGuard}
+              onViewUsage={(user) => router.push(`/system/users/${user.id}`)}
               onEdit={(user, source) => openDialog("edit", user, source)}
               onChangeUsername={(user, source) => openDialog("username", user, source)}
               onResetPassword={(user, source) => openDialog("password", user, source)}

@@ -71,6 +71,51 @@ describe("admin logs route", () => {
     );
   });
 
+  it("forwards the user_id query parameter into list filters", async () => {
+    const { GET } = await import("@/app/api/admin/logs/route");
+    listRequestLogsMock.mockResolvedValueOnce({
+      items: [{ id: "log-9" }],
+      total: 1,
+      page: 1,
+      pageSize: 1,
+      totalPages: 1,
+    });
+
+    const response = await GET(
+      new NextRequest("http://localhost/api/admin/logs?user_id=user-1&page_size=1", {
+        headers: { authorization: AUTH_HEADER },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(listRequestLogsMock).toHaveBeenCalledWith(
+      1,
+      1,
+      expect.objectContaining({ userId: "user-1" })
+    );
+  });
+
+  it("ignores empty user_id query parameter", async () => {
+    const { GET } = await import("@/app/api/admin/logs/route");
+    listRequestLogsMock.mockResolvedValueOnce({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+    });
+
+    const response = await GET(
+      new NextRequest("http://localhost/api/admin/logs?user_id=", {
+        headers: { authorization: AUTH_HEADER },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const callArgs = listRequestLogsMock.mock.calls[0][2] as Record<string, unknown>;
+    expect(callArgs.userId).toBeUndefined();
+  });
+
   it("ignores empty id query parameter", async () => {
     const { GET } = await import("@/app/api/admin/logs/route");
     listRequestLogsMock.mockResolvedValueOnce({
