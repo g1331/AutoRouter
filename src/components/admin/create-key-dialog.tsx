@@ -263,7 +263,7 @@ export function CreateKeyDialog() {
             {t("createKey")}
           </Button>
         </DialogTrigger>
-        <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-2xl flex-col overflow-hidden p-0">
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-2xl flex-col overflow-hidden p-0">
           <DialogHeader className="shrink-0 px-6 pb-0 pr-12 pt-6">
             <DialogTitle>{t("createKeyTitle")}</DialogTitle>
             <DialogDescription>{t("createKeyDesc")}</DialogDescription>

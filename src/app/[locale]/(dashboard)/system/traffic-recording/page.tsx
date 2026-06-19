@@ -190,6 +190,61 @@ export default function TrafficRecordingPage() {
     setSelectedId((current) => (current === recordingId ? null : current));
   };
 
+  // 表格行与窄屏卡片共用同一套操作按钮（查看详情 / 跳源日志 / 删除含二次确认），避免重复实现
+  const renderRecordingActions = (recording: TrafficRecordingResponse) => (
+    <>
+      <Button size="sm" variant="outline" onClick={() => handleSelect(recording)}>
+        <FileJson className="h-4 w-4" />
+        {selectedId === recording.id ? t("hideDetail") : t("viewDetail")}
+      </Button>
+      {recording.request_log_id ? (
+        <Button asChild size="sm" variant="outline">
+          <Link href={`/logs?focus=${encodeURIComponent(recording.request_log_id)}`}>
+            <ExternalLink className="h-4 w-4" />
+            {t("openSourceLog")}
+          </Link>
+        </Button>
+      ) : null}
+      {confirmingDeleteId === recording.id ? (
+        <div className="inline-flex animate-in items-center gap-1.5 duration-200 fade-in-0 zoom-in-95 motion-reduce:animate-none">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setConfirmingDeleteId(null)}
+            disabled={deleteRecording.isPending}
+          >
+            {tCommon("cancel")}
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={() => handleConfirmDelete(recording.id)}
+            disabled={deleteRecording.isPending}
+            className="min-w-[6.25rem]"
+          >
+            {deleteRecording.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
+            {deleteRecording.isPending ? tCommon("loading") : t("deleteConfirmAction")}
+          </Button>
+        </div>
+      ) : (
+        <Button
+          size="sm"
+          variant="destructive"
+          onClick={() => setConfirmingDeleteId(recording.id)}
+          disabled={deleteRecording.isPending}
+          className="transition-[transform,opacity] duration-200 ease-cf-standard"
+        >
+          <Trash2 className="h-4 w-4" />
+          {t("delete")}
+        </Button>
+      )}
+    </>
+  );
+
   return (
     <>
       <Topbar title={t("pageTitle")} />
@@ -380,111 +435,103 @@ export default function TrafficRecordingPage() {
             ) : rows.length === 0 ? (
               <div className="py-10 text-center text-sm text-muted-foreground">{t("empty")}</div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("tableTime")}</TableHead>
-                    <TableHead>{t("tableStatus")}</TableHead>
-                    <TableHead>{t("tableModel")}</TableHead>
-                    <TableHead>{t("tablePath")}</TableHead>
-                    <TableHead className="text-right">{t("tableSize")}</TableHead>
-                    <TableHead>{t("tableRedaction")}</TableHead>
-                    <TableHead className="text-right">{t("tableActions")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <>
+                {/* lg 以上宽表，lg 以下转卡片，避免 7 列窄屏横滚够不到操作按钮（与 background-sync 面板一致） */}
+                <div className="hidden lg:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t("tableTime")}</TableHead>
+                        <TableHead>{t("tableStatus")}</TableHead>
+                        <TableHead>{t("tableModel")}</TableHead>
+                        <TableHead>{t("tablePath")}</TableHead>
+                        <TableHead className="text-right">{t("tableSize")}</TableHead>
+                        <TableHead>{t("tableRedaction")}</TableHead>
+                        <TableHead className="text-right">{t("tableActions")}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {rows.map((recording) => (
+                        <TableRow
+                          key={recording.id}
+                          className={cn(selectedId === recording.id && "bg-surface-300/55")}
+                        >
+                          <TableCell className="font-mono text-xs">
+                            {formatDate(recording.created_at)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={getStatusVariant(recording.status_code)}>
+                              {recording.status_code ?? recording.outcome}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="max-w-[14rem] truncate font-mono text-xs">
+                            {recording.model ?? "-"}
+                          </TableCell>
+                          <TableCell className="max-w-[18rem] truncate font-mono text-xs">
+                            {recording.method ?? "-"} {recording.path ?? ""}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs">
+                            {formatBytes(recording.fixture_size_bytes)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={recording.redacted ? "success" : "warning"}>
+                              {recording.redacted ? t("redacted") : t("notRedacted")}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex justify-end gap-2">
+                              {renderRecordingActions(recording)}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                <div className="space-y-3 lg:hidden">
                   {rows.map((recording) => (
-                    <TableRow
+                    <div
                       key={recording.id}
-                      className={cn(selectedId === recording.id && "bg-surface-300/55")}
+                      className={cn(
+                        "rounded-cf-sm border border-divider p-3",
+                        selectedId === recording.id && "bg-surface-300/55"
+                      )}
                     >
-                      <TableCell className="font-mono text-xs">
-                        {formatDate(recording.created_at)}
-                      </TableCell>
-                      <TableCell>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 space-y-1">
+                          <p className="font-mono text-xs text-muted-foreground">
+                            {formatDate(recording.created_at)}
+                          </p>
+                          <p className="truncate font-mono text-sm text-foreground">
+                            {recording.model ?? "-"}
+                          </p>
+                        </div>
                         <Badge variant={getStatusVariant(recording.status_code)}>
                           {recording.status_code ?? recording.outcome}
                         </Badge>
-                      </TableCell>
-                      <TableCell className="max-w-[14rem] truncate font-mono text-xs">
-                        {recording.model ?? "-"}
-                      </TableCell>
-                      <TableCell className="max-w-[18rem] truncate font-mono text-xs">
+                      </div>
+
+                      <p className="mt-2 break-all font-mono text-xs text-muted-foreground">
                         {recording.method ?? "-"} {recording.path ?? ""}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-xs">
-                        {formatBytes(recording.fixture_size_bytes)}
-                      </TableCell>
-                      <TableCell>
+                      </p>
+
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                        <span className="font-mono text-muted-foreground">
+                          {formatBytes(recording.fixture_size_bytes)}
+                        </span>
                         <Badge variant={recording.redacted ? "success" : "warning"}>
                           {recording.redacted ? t("redacted") : t("notRedacted")}
                         </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleSelect(recording)}
-                          >
-                            <FileJson className="h-4 w-4" />
-                            {selectedId === recording.id ? t("hideDetail") : t("viewDetail")}
-                          </Button>
-                          {recording.request_log_id ? (
-                            <Button asChild size="sm" variant="outline">
-                              <Link
-                                href={`/logs?focus=${encodeURIComponent(recording.request_log_id)}`}
-                              >
-                                <ExternalLink className="h-4 w-4" />
-                                {t("openSourceLog")}
-                              </Link>
-                            </Button>
-                          ) : null}
-                          {confirmingDeleteId === recording.id ? (
-                            <div className="inline-flex animate-in items-center gap-1.5 duration-200 fade-in-0 zoom-in-95 motion-reduce:animate-none">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setConfirmingDeleteId(null)}
-                                disabled={deleteRecording.isPending}
-                              >
-                                {tCommon("cancel")}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleConfirmDelete(recording.id)}
-                                disabled={deleteRecording.isPending}
-                                className="min-w-[6.25rem]"
-                              >
-                                {deleteRecording.isPending ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Trash2 className="h-4 w-4" />
-                                )}
-                                {deleteRecording.isPending
-                                  ? tCommon("loading")
-                                  : t("deleteConfirmAction")}
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => setConfirmingDeleteId(recording.id)}
-                              disabled={deleteRecording.isPending}
-                              className="transition-[transform,opacity] duration-200 ease-cf-standard"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              {t("delete")}
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap justify-end gap-2">
+                        {renderRecordingActions(recording)}
+                      </div>
+                    </div>
                   ))}
-                </TableBody>
-              </Table>
+                </div>
+              </>
             )}
 
             {recordings.data && recordings.data.total_pages > 1 ? (

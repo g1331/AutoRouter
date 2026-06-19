@@ -41,7 +41,9 @@ const AlertDialogContent = React.forwardRef<
     <AlertDialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%]",
+        "fixed left-[50%] top-[50%] z-50 grid w-[calc(100%-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%]",
+        // 与 dialog.tsx 同根因：矮视口（软键盘 / 横屏 / 小屏）下限高 + 内滚，避免标题与确认按钮被推出视口
+        "max-h-[calc(100dvh-2rem)] overflow-y-auto",
         "gap-6 p-6 rounded-cf-sm",
         "bg-surface-300 border-2 border-amber-500 shadow-cf-glow-subtle",
         "duration-cf-normal ease-cf-standard",

@@ -93,7 +93,8 @@
     "collapse": "收起",
     "showSensitiveInput": "显示输入内容",
     "hideSensitiveInput": "隐藏输入内容",
-    "logout": "退出当前账户"
+    "logout": "退出当前账户",
+    "menu": "菜单"
   },
   "nav": {
     "dashboard": "仪表盘",

@@ -28,6 +28,9 @@ const PopoverContent = React.forwardRef<
       className={cn(
         // Layout
         "z-50 w-72 p-4",
+        // 矮视口下限制高度为 Radix 计算出的可用高度并允许面板自身滚动，
+        // 让日期选择器等长内容（月份导航、底部按钮）始终可滚到
+        "max-h-[var(--radix-popover-content-available-height)] overflow-y-auto",
         // Cassette Futurism styling
         "rounded-cf-sm border-2 border-amber-500 bg-surface-300",
         "shadow-cf-glow-subtle",

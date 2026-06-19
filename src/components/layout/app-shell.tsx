@@ -19,6 +19,8 @@ interface AppShellProps {
   getMobileBackHref: (pathname: string) => string;
   // Optional center slot of the mobile header (the dashboard mounts its pulse strip here).
   mobileHeaderCenter?: React.ReactNode;
+  // Optional right slot of the mobile header (the portal mounts its account menu here).
+  mobileHeaderRight?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -34,6 +36,7 @@ export function AppShell({
   mobileRootRoutes,
   getMobileBackHref,
   mobileHeaderCenter,
+  mobileHeaderRight,
   children,
 }: AppShellProps) {
   const router = useRouter();
@@ -132,7 +135,9 @@ export function AppShell({
               )}
             </div>
             {mobileHeaderCenter ?? <span aria-hidden="true" />}
-            <span aria-hidden="true" />
+            <div className="flex min-w-0 items-center justify-end">
+              {mobileHeaderRight ?? <span aria-hidden="true" />}
+            </div>
           </div>
         </header>
         {children}
