@@ -40,8 +40,10 @@ function getTtftClass(ttftMs: number): string {
   return "text-status-success";
 }
 
+// <lg 垂直堆叠：名称行在上、指标网格全宽在下，避免窄屏下固定宽度名称块挤压指标导致数值被截断；
+// lg+ 恢复横向单行（含右侧饼图），与桌面信息密度保持一致。
 const RANK_ROW_BASE =
-  "flex items-center gap-3 rounded-cf-sm border-l-2 px-2.5 py-1.5 transition-colors bg-surface-300/42 hover:bg-surface-400/55";
+  "flex flex-col items-stretch gap-2 rounded-cf-sm border-l-2 px-2.5 py-2 transition-colors bg-surface-300/42 hover:bg-surface-400/55 lg:flex-row lg:items-center lg:gap-3 lg:py-1.5";
 
 function getRankRowClass(index: number): string {
   if (index < RANK_LEFT_BORDERS.length) {
@@ -217,16 +219,18 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
             <div className="space-y-2">
               {data.upstreams.map((item, index) => (
                 <div key={item.id} className={getRankRowClass(index)}>
-                  <RankBadge rank={index + 1} />
+                  <div className="flex items-center gap-3 lg:contents">
+                    <RankBadge rank={index + 1} />
 
-                  <div className="w-[120px] shrink-0">
-                    <p className="type-body-small truncate text-foreground">{item.name}</p>
-                    <p className="type-caption truncate text-muted-foreground">
-                      {item.provider_type}
-                    </p>
+                    <div className="min-w-0 flex-1 lg:w-[120px] lg:flex-none lg:shrink-0">
+                      <p className="type-body-small truncate text-foreground">{item.name}</p>
+                      <p className="type-caption truncate text-muted-foreground">
+                        {item.provider_type}
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="ml-2 grid flex-1 grid-cols-3 gap-x-4 gap-y-1 sm:grid-cols-6">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3 lg:ml-2 lg:grid-cols-6 lg:flex-1">
                     <MetricCell
                       label={t("stats.requests")}
                       value={formatNumber(item.request_count)}
@@ -254,7 +258,7 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
                     />
                   </div>
 
-                  <div className="hidden shrink-0 sm:block">
+                  <div className="hidden shrink-0 lg:block">
                     <MiniPieChart
                       data={item.model_distribution}
                       label={t("stats.modelDistribution")}
@@ -291,13 +295,15 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
             <div className="space-y-2">
               {data.models.map((item, index) => (
                 <div key={item.model} className={getRankRowClass(index)}>
-                  <RankBadge rank={index + 1} />
+                  <div className="flex items-center gap-3 lg:contents">
+                    <RankBadge rank={index + 1} />
 
-                  <div className="w-[160px] shrink-0">
-                    <p className="type-body-small truncate text-foreground">{item.model}</p>
+                    <div className="min-w-0 flex-1 lg:w-[160px] lg:flex-none lg:shrink-0">
+                      <p className="type-body-small truncate text-foreground">{item.model}</p>
+                    </div>
                   </div>
 
-                  <div className="ml-2 grid flex-1 grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 lg:ml-2 lg:grid-cols-4 lg:flex-1">
                     <MetricCell
                       label={t("stats.tokens")}
                       value={`${formatNumber(item.total_tokens)} tok`}
@@ -317,7 +323,7 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
                     />
                   </div>
 
-                  <div className="hidden shrink-0 sm:block">
+                  <div className="hidden shrink-0 lg:block">
                     <MiniPieChart
                       data={item.upstream_distribution}
                       label={t("stats.upstreamDistribution")}
@@ -354,16 +360,18 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
             <div className="space-y-2">
               {data.api_keys.map((item, index) => (
                 <div key={item.id} className={getRankRowClass(index)}>
-                  <RankBadge rank={index + 1} />
+                  <div className="flex items-center gap-3 lg:contents">
+                    <RankBadge rank={index + 1} />
 
-                  <div className="w-[140px] shrink-0">
-                    <p className="type-body-small truncate text-foreground">{item.name}</p>
-                    <p className="type-caption truncate font-mono text-muted-foreground">
-                      {item.key_prefix}
-                    </p>
+                    <div className="min-w-0 flex-1 lg:w-[140px] lg:flex-none lg:shrink-0">
+                      <p className="type-body-small truncate text-foreground">{item.name}</p>
+                      <p className="type-caption truncate font-mono text-muted-foreground">
+                        {item.key_prefix}
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="ml-2 grid flex-1 grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 lg:ml-2 lg:grid-cols-3 lg:flex-1">
                     <MetricCell
                       label={t("stats.requests")}
                       value={formatNumber(item.request_count)}
@@ -378,7 +386,7 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
                     />
                   </div>
 
-                  <div className="hidden shrink-0 sm:block">
+                  <div className="hidden shrink-0 lg:block">
                     <MiniPieChart
                       data={item.model_distribution}
                       label={t("stats.modelDistribution")}

@@ -88,7 +88,8 @@ export function HeroTerminal() {
         </div>
 
         {/* 实时指标带（升级点）：LIVE 呼吸点 + 实时数字 + 跳动 sparkline */}
-        <div className="flex items-center gap-2.5 border-t border-border/60 px-4 py-2.5 font-mono text-[11px] text-muted-foreground">
+        {/* 窄屏 flex-wrap 换行，避免被外层 overflow-hidden 永久裁切（与上方路由结果条一致） */}
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 border-t border-border/60 px-4 py-2.5 font-mono text-[11px] text-muted-foreground">
           <span className="inline-flex items-center gap-1.5 text-amber-500">
             <span
               className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500"
