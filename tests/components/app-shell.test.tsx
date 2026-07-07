@@ -102,4 +102,35 @@ describe("AppShell", () => {
 
     expect(screen.getByTestId("pulse-strip")).toBeInTheDocument();
   });
+
+  it("pins the shell to the viewport so <main> is the scroll container", () => {
+    renderShell();
+
+    const main = screen.getByRole("main");
+    // h-dvh (not min-h-dvh) on the wrapper keeps sticky topbars working.
+    expect(main.parentElement?.className).toContain("h-dvh");
+    expect(main.parentElement?.className).not.toContain("min-h-dvh");
+  });
+
+  it("resets the main scroll position on navigation", () => {
+    const { rerender } = renderShell();
+
+    const main = screen.getByRole("main");
+    main.scrollTop = 500;
+
+    mockPathname = "/somewhere/else";
+    rerender(
+      <AppShell
+        sidebar={({ collapsed }) => (
+          <nav data-testid="sidebar" data-collapsed={String(collapsed)} />
+        )}
+        mobileRootRoutes={["/portal"]}
+        getMobileBackHref={() => "/portal"}
+      >
+        <div>content</div>
+      </AppShell>
+    );
+
+    expect(main.scrollTop).toBe(0);
+  });
 });

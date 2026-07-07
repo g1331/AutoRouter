@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ChevronLeft } from "lucide-react";
 
@@ -44,6 +44,8 @@ export function AppShell({
   const tCommon = useTranslations("common");
   const { token } = useAuth();
 
+  const mainRef = useRef<HTMLElement>(null);
+
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") {
       return false;
@@ -60,6 +62,14 @@ export function AppShell({
   useEffect(() => {
     localStorage.setItem("autorouter.sidebar.collapsed", String(isSidebarCollapsed));
   }, [isSidebarCollapsed]);
+
+  // The shell scrolls inside <main>, not the window, so the browser's native
+  // scroll restoration never resets it on navigation — do it ourselves.
+  useEffect(() => {
+    if (mainRef.current) {
+      mainRef.current.scrollTop = 0;
+    }
+  }, [pathname]);
 
   useEffect(() => {
     const proto = Element.prototype;
@@ -104,13 +114,16 @@ export function AppShell({
   }
 
   return (
-    <div className="flex min-h-dvh w-full overflow-hidden bg-background text-foreground">
+    // h-dvh (not min-h-dvh) pins the shell to the viewport so <main> is the
+    // real scroll container — required for the sticky topbars to work.
+    <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
       {sidebar({
         collapsed: isSidebarCollapsed,
         onToggleCollapse: () => setIsSidebarCollapsed((value) => !value),
       })}
 
       <main
+        ref={mainRef}
         className={cn(
           "min-w-0 flex-1 overflow-y-auto transition-[margin] duration-cf-normal ease-cf-standard",
           "pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0",
