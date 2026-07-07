@@ -2,6 +2,7 @@ import { stat, readFile, unlink } from "fs/promises";
 import path from "path";
 import { and, count, desc, eq, gte, lte, lt, sql } from "drizzle-orm";
 import { db, trafficRecordings, trafficRecordingSettings, type TrafficRecording } from "@/lib/db";
+import { caseInsensitiveLike } from "@/lib/db/sql-helpers";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("traffic-recording-service");
@@ -287,9 +288,7 @@ export async function listTrafficRecordings(
   if (filters.startTime) conditions.push(gte(trafficRecordings.createdAt, filters.startTime));
   if (filters.endTime) conditions.push(lte(trafficRecordings.createdAt, filters.endTime));
   if (filters.model?.trim()) {
-    conditions.push(
-      sql`lower(${trafficRecordings.model}) like ${`%${filters.model.trim().toLowerCase()}%`}`
-    );
+    conditions.push(caseInsensitiveLike(trafficRecordings.model, filters.model));
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;

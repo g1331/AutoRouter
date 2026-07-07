@@ -1,5 +1,6 @@
 import { eq, desc, count, and, gte, lte, lt, asc, isNull, sql } from "drizzle-orm";
 import { db, requestLogs, type RequestLog } from "../db";
+import { caseInsensitiveLike } from "../db/sql-helpers";
 import type {
   FailoverErrorType,
   RequestThinkingConfig,
@@ -798,10 +799,7 @@ export async function listRequestLogs(
     conditions.push(gte(requestLogs.statusCode, min), lt(requestLogs.statusCode, max));
   }
   if (filters.model?.trim()) {
-    // lower(...) like keeps the match case-insensitive on both PG and SQLite.
-    conditions.push(
-      sql`lower(${requestLogs.model}) like ${`%${filters.model.trim().toLowerCase()}%`}`
-    );
+    conditions.push(caseInsensitiveLike(requestLogs.model, filters.model));
   }
   if (filters.startTime) {
     conditions.push(gte(requestLogs.createdAt, filters.startTime));

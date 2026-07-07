@@ -1,5 +1,6 @@
 import { and, count, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { db, users, apiKeys, userUpstreams, upstreams, type User } from "../db";
+import { caseInsensitiveLike } from "../db/sql-helpers";
 import { hashPassword, isPasswordStrong, normalizeUsername, verifyPassword } from "../utils/auth";
 import { getUsersMonthUsage } from "./user-data-service";
 import { createLogger } from "../utils/logger";
@@ -255,11 +256,11 @@ export async function listUsers(
   page = Math.max(1, page);
   pageSize = Math.min(100, Math.max(1, pageSize));
 
-  const needle = search?.trim().toLowerCase();
+  const needle = search?.trim();
   const searchCondition = needle
     ? or(
-        sql`lower(${users.username}) like ${`%${needle}%`}`,
-        sql`lower(${users.displayName}) like ${`%${needle}%`}`
+        caseInsensitiveLike(users.username, needle),
+        caseInsensitiveLike(users.displayName, needle)
       )
     : undefined;
 

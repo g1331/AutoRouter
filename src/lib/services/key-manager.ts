@@ -1,6 +1,7 @@
 import { eq, desc, inArray, count, and, sql } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { db, apiKeys, apiKeyUpstreams, upstreams, type ApiKey } from "../db";
+import { caseInsensitiveLike } from "../db/sql-helpers";
 import { hashApiKey, verifyApiKey } from "../utils/auth";
 import { encrypt, decrypt, EncryptionError } from "../utils/encryption";
 import { createLogger } from "../utils/logger";
@@ -413,8 +414,7 @@ export async function listApiKeys(
     conditions.push(eq(apiKeys.userId, filter.userId));
   }
   if (filter.search?.trim()) {
-    // lower(...) like keeps the match case-insensitive on both PG and SQLite.
-    conditions.push(sql`lower(${apiKeys.name}) like ${`%${filter.search.trim().toLowerCase()}%`}`);
+    conditions.push(caseInsensitiveLike(apiKeys.name, filter.search));
   }
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 

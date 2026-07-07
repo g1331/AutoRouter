@@ -260,6 +260,26 @@ describe("user-service", () => {
       expect(noMatch.items).toEqual([]);
     });
 
+    it("treats LIKE metacharacters in the search term as literals", async () => {
+      await createUser({ username: "john_doe", password: "password123", displayName: "J" });
+      await createUser({ username: "johnxdoe", password: "password123", displayName: "J" });
+      await createUser({ username: "percent", password: "password123", displayName: "50%off" });
+
+      // "_" must not act as a single-char wildcard.
+      const underscore = await listUsers(1, 10, "john_doe");
+      expect(underscore.items.map((u) => u.username)).toEqual(["john_doe"]);
+
+      // "%" must not act as a match-anything wildcard.
+      const percent = await listUsers(1, 10, "50%");
+      expect(percent.items.map((u) => u.username)).toEqual(["percent"]);
+      const lonePercent = await listUsers(1, 10, "%");
+      expect(lonePercent.items.map((u) => u.username)).toEqual(["percent"]);
+
+      // A trailing backslash must not corrupt the pattern into matching nothing valid.
+      const trailingBackslash = await listUsers(1, 10, "john\\");
+      expect(trailingBackslash.total).toBe(0);
+    });
+
     it("aggregates month-to-date usage per user from the request_logs snapshot", async () => {
       const a = await createUser({ username: "a", password: "password123", displayName: "A" });
       const b = await createUser({ username: "b", password: "password123", displayName: "B" });
