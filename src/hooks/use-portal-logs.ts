@@ -1,12 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/providers/auth-provider";
-import type { PaginatedRequestLogsResponse } from "@/types/api";
+import { resolveTimeRangeStart } from "@/hooks/use-request-logs";
+import type { PaginatedRequestLogsResponse, TimeRange } from "@/types/api";
 
 export interface PortalRequestLogsFilters {
   api_key_id?: string;
   status_code?: number;
+  status_class?: "2xx" | "4xx" | "5xx";
+  model?: string;
   start_time?: string; // ISO 8601
   end_time?: string; // ISO 8601
+  // Preset resolved to start_time at fetch time; ignored when start_time is set.
+  time_range?: TimeRange;
 }
 
 export interface UsePortalRequestLogsOptions {
@@ -38,8 +43,16 @@ export function usePortalRequestLogs(
       if (filters?.status_code !== undefined) {
         params.set("status_code", String(filters.status_code));
       }
+      if (filters?.status_class) {
+        params.set("status_class", filters.status_class);
+      }
+      if (filters?.model) {
+        params.set("model", filters.model);
+      }
       if (filters?.start_time) {
         params.set("start_time", filters.start_time);
+      } else if (filters?.time_range) {
+        params.set("start_time", resolveTimeRangeStart(filters.time_range).toISOString());
       }
       if (filters?.end_time) {
         params.set("end_time", filters.end_time);

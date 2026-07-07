@@ -22,6 +22,7 @@ vi.mock("@/lib/db", () => ({
     apiKeyId: "api_key_id",
     upstreamId: "upstream_id",
     statusCode: "status_code",
+    model: "model",
     createdAt: "created_at",
   },
 }));
@@ -37,7 +38,16 @@ vi.mock("drizzle-orm", async (importOriginal) => {
     eq: vi.fn((a, b) => ({ __op: "eq", a, b })),
     gte: vi.fn((a, b) => ({ __op: "gte", a, b })),
     isNull: vi.fn((arg) => ({ __op: "isNull", arg })),
+    lt: vi.fn((a, b) => ({ __op: "lt", a, b })),
     lte: vi.fn((a, b) => ({ __op: "lte", a, b })),
+    sql: Object.assign(
+      vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({
+        __op: "sql",
+        strings,
+        values,
+      })),
+      actual.sql
+    ),
   };
 });
 
@@ -459,6 +469,57 @@ describe("request-logger (db flows)", () => {
 
     expect(result.total).toBe(0);
     expect(result.items).toEqual([]);
+  });
+
+  it("listRequestLogs maps statusClass to a gte/lt range on statusCode", async () => {
+    const { listRequestLogs } = await import("@/lib/services/request-logger");
+    const { gte, lt } = await import("drizzle-orm");
+
+    const whereMock = vi.fn().mockResolvedValueOnce([{ value: 0 }]);
+    dbSelectMock.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({ where: whereMock }),
+    });
+    requestLogsFindManyMock.mockResolvedValueOnce([]);
+
+    await listRequestLogs(1, 20, { statusClass: "5xx" });
+
+    expect(gte).toHaveBeenCalledWith("status_code", 500);
+    expect(lt).toHaveBeenCalledWith("status_code", 600);
+  });
+
+  it("listRequestLogs ignores statusClass when an exact statusCode is set", async () => {
+    const { listRequestLogs } = await import("@/lib/services/request-logger");
+    const { eq, gte, lt } = await import("drizzle-orm");
+
+    const whereMock = vi.fn().mockResolvedValueOnce([{ value: 0 }]);
+    dbSelectMock.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({ where: whereMock }),
+    });
+    requestLogsFindManyMock.mockResolvedValueOnce([]);
+
+    await listRequestLogs(1, 20, { statusCode: 404, statusClass: "5xx" });
+
+    expect(eq).toHaveBeenCalledWith("status_code", 404);
+    expect(gte).not.toHaveBeenCalled();
+    expect(lt).not.toHaveBeenCalled();
+  });
+
+  it("listRequestLogs matches model case-insensitively via lower(...) like", async () => {
+    const { listRequestLogs } = await import("@/lib/services/request-logger");
+    const { sql } = await import("drizzle-orm");
+
+    const whereMock = vi.fn().mockResolvedValueOnce([{ value: 0 }]);
+    dbSelectMock.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({ where: whereMock }),
+    });
+    requestLogsFindManyMock.mockResolvedValueOnce([]);
+
+    await listRequestLogs(1, 20, { model: "  GPT-4  " });
+
+    const sqlMock = vi.mocked(sql);
+    expect(sqlMock).toHaveBeenCalledTimes(1);
+    // Trimmed + lowercased needle wrapped in like wildcards.
+    expect(sqlMock.mock.calls[0].slice(1)).toEqual(["model", "%gpt-4%"]);
   });
 
   it("reconcileStaleInProgressRequestLogs skips streams and persists billing snapshots", async () => {

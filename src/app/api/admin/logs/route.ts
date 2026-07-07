@@ -23,6 +23,8 @@ const log = createLogger("admin-logs");
  * - user_id: string (filter - owner of the request via the user_id snapshot)
  * - upstream_id: string (filter)
  * - status_code: number (filter)
+ * - status_class: "2xx" | "4xx" | "5xx" (filter - status code range, ignored when status_code is set)
+ * - model: string (filter - case-insensitive substring match)
  * - start_time: ISO datetime (filter)
  * - end_time: ISO datetime (filter)
  */
@@ -53,6 +55,17 @@ export async function GET(request: NextRequest) {
     const statusCode = parseIntFilterParam(url.searchParams.get("status_code"));
     if (statusCode === null) return errorResponse("Invalid status_code", 400);
     if (statusCode !== undefined) filters.statusCode = statusCode;
+
+    const statusClass = url.searchParams.get("status_class");
+    if (statusClass) {
+      if (statusClass !== "2xx" && statusClass !== "4xx" && statusClass !== "5xx") {
+        return errorResponse("Invalid status_class", 400);
+      }
+      filters.statusClass = statusClass;
+    }
+
+    const model = url.searchParams.get("model")?.trim();
+    if (model) filters.model = model;
 
     const startTime = parseDateFilterParam(url.searchParams.get("start_time"));
     if (startTime === null) return errorResponse("Invalid start_time", 400);

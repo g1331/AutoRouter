@@ -532,6 +532,7 @@
     "filterStatus5xx": "5xx - Server Error",
     "filterModel": "Filter by model...",
     "quickFilters": "Quick Filters",
+    "quickFiltersPageOnly": "Filters current page only",
     "presetAll": "All",
     "presetHighTtft": "TTFT > 5s",
     "presetLowTps": "TPS < 30",

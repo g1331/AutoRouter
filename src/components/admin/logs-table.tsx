@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef, Fragment, type ReactNode } from "react";
-import { subDays, startOfDay } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
 import { ScrollText, Filter, ChevronDown, Loader2 } from "lucide-react";
 import type {
@@ -40,6 +39,23 @@ import { matchRouteCapability } from "@/lib/services/route-capability-matcher";
 import { ROUTE_CAPABILITY_DEFINITIONS } from "@/lib/route-capabilities";
 import { getRequestThinkingBadgeLabel } from "@/lib/utils/request-thinking-config";
 
+/**
+ * Filters resolved server-side: the parent owns this state, feeds it into its
+ * logs query (so filtering spans all pages, not just the fetched one) and
+ * resets pagination on change.
+ */
+export interface LogsServerFilters {
+  statusClass: "all" | "2xx" | "4xx" | "5xx";
+  model: string;
+  timeRange: TimeRange;
+}
+
+export const DEFAULT_LOGS_SERVER_FILTERS: LogsServerFilters = {
+  statusClass: "all",
+  model: "",
+  timeRange: "30d",
+};
+
 interface LogsTableProps {
   logs: RequestLog[];
   isLive?: boolean;
@@ -53,6 +69,10 @@ interface LogsTableProps {
    * this true.
    */
   hideRecordingSection?: boolean;
+  /** Current server-side filters (controlled by the parent page). */
+  serverFilters?: LogsServerFilters;
+  /** Called when the user changes a server-side filter. */
+  onServerFiltersChange?: (next: LogsServerFilters) => void;
 }
 
 type PerformancePreset = "all" | "high_ttft" | "low_tps" | "slow_duration";
@@ -727,6 +747,8 @@ export function LogsTable({
   isLive = false,
   initialExpandedIds,
   hideRecordingSection = false,
+  serverFilters = DEFAULT_LOGS_SERVER_FILTERS,
+  onServerFiltersChange,
 }: LogsTableProps) {
   const t = useTranslations("logs");
   const locale = useLocale();
@@ -821,10 +843,19 @@ export function LogsTable({
     return usdFormatter.format(value);
   };
 
-  // Filter state
-  const [statusCodeFilter, setStatusCodeFilter] = useState<string>("all");
-  const [modelFilter, setModelFilter] = useState<string>("");
-  const [timeRangeFilter, setTimeRangeFilter] = useState<TimeRange>("30d");
+  // Server-side filters are controlled by the parent; the model input keeps a
+  // local echo so typing stays responsive while updates are debounced upward.
+  const [modelInput, setModelInput] = useState<string>(serverFilters.model);
+  const modelDebounceRef = useRef<number | null>(null);
+  useEffect(() => {
+    return () => {
+      if (modelDebounceRef.current != null) {
+        window.clearTimeout(modelDebounceRef.current);
+      }
+    };
+  }, []);
+  // Performance presets stay client-side: they derive from runtime-computed
+  // metrics (TPS is calculated in the frontend) and only narrow the fetched page.
   const [performancePreset, setPerformancePreset] = useState<PerformancePreset>("all");
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [desktopBreakpointState, setDesktopBreakpointState] = useState({
@@ -1005,61 +1036,10 @@ export function LogsTable({
     setExpandedRows(newExpanded);
   };
 
-  // Filter logs based on criteria
+  // Status/model/time filters are resolved server-side via serverFilters; only
+  // the performance presets (runtime-computed metrics) narrow the fetched page.
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
-      // Status code filter
-      if (statusCodeFilter !== "all") {
-        if (
-          statusCodeFilter === "2xx" &&
-          (log.status_code === null || log.status_code < 200 || log.status_code >= 300)
-        ) {
-          return false;
-        }
-        if (
-          statusCodeFilter === "4xx" &&
-          (log.status_code === null || log.status_code < 400 || log.status_code >= 500)
-        ) {
-          return false;
-        }
-        if (
-          statusCodeFilter === "5xx" &&
-          (log.status_code === null || log.status_code < 500 || log.status_code >= 600)
-        ) {
-          return false;
-        }
-      }
-
-      // Model filter (case-insensitive partial match)
-      if (
-        modelFilter &&
-        log.model &&
-        !log.model.toLowerCase().includes(modelFilter.toLowerCase())
-      ) {
-        return false;
-      }
-
-      // Time range filter
-      const logDate = new Date(log.created_at);
-      const now = new Date();
-
-      if (timeRangeFilter === "today") {
-        const todayStart = startOfDay(now);
-        if (logDate < todayStart) {
-          return false;
-        }
-      } else if (timeRangeFilter === "7d") {
-        const sevenDaysAgo = subDays(now, 7);
-        if (logDate < sevenDaysAgo) {
-          return false;
-        }
-      } else if (timeRangeFilter === "30d") {
-        const thirtyDaysAgo = subDays(now, 30);
-        if (logDate < thirtyDaysAgo) {
-          return false;
-        }
-      }
-
       if (performancePreset === "high_ttft") {
         if (log.ttft_ms == null || log.ttft_ms <= HIGH_TTFT_THRESHOLD_MS) {
           return false;
@@ -1077,7 +1057,7 @@ export function LogsTable({
 
       return true;
     });
-  }, [logs, statusCodeFilter, modelFilter, timeRangeFilter, performancePreset]);
+  }, [logs, performancePreset]);
 
   const performanceSummary = useMemo(() => {
     const streamLogs = filteredLogs.filter((log) => log.is_stream);
@@ -3021,7 +3001,14 @@ export function LogsTable({
   const desktopModelColumnStyle = { width: `${desktopModelColumnWidth}px` };
   const desktopTableStyle = { minWidth: `${desktopTableMinWidth}px` };
 
-  if (logs.length === 0) {
+  // Keep the filter bar visible when active server filters produced an empty
+  // page — otherwise the user could never clear them.
+  const hasActiveServerFilters =
+    serverFilters.statusClass !== DEFAULT_LOGS_SERVER_FILTERS.statusClass ||
+    serverFilters.model.trim() !== DEFAULT_LOGS_SERVER_FILTERS.model ||
+    serverFilters.timeRange !== DEFAULT_LOGS_SERVER_FILTERS.timeRange;
+
+  if (logs.length === 0 && !hasActiveServerFilters) {
     return (
       <div
         className={cn(
@@ -3062,7 +3049,15 @@ export function LogsTable({
           </div>
 
           <div className="w-full sm:w-[180px]">
-            <Select value={statusCodeFilter} onValueChange={setStatusCodeFilter}>
+            <Select
+              value={serverFilters.statusClass}
+              onValueChange={(value) =>
+                onServerFiltersChange?.({
+                  ...serverFilters,
+                  statusClass: value as LogsServerFilters["statusClass"],
+                })
+              }
+            >
               <SelectTrigger>
                 <SelectValue placeholder={t("filterStatus")} />
               </SelectTrigger>
@@ -3082,15 +3077,26 @@ export function LogsTable({
               aria-label={t("filterModel")}
               type="text"
               placeholder={t("filterModel")}
-              value={modelFilter}
-              onChange={(e) => setModelFilter(e.target.value)}
+              value={modelInput}
+              onChange={(e) => {
+                const nextValue = e.target.value;
+                setModelInput(nextValue);
+                if (modelDebounceRef.current != null) {
+                  window.clearTimeout(modelDebounceRef.current);
+                }
+                modelDebounceRef.current = window.setTimeout(() => {
+                  onServerFiltersChange?.({ ...serverFilters, model: nextValue.trim() });
+                }, 300);
+              }}
             />
           </div>
 
           <div className="w-full sm:ml-auto sm:w-auto">
             <TimeRangeSelector
-              value={timeRangeFilter}
-              onChange={(value) => setTimeRangeFilter(value as TimeRange)}
+              value={serverFilters.timeRange}
+              onChange={(value) =>
+                onServerFiltersChange?.({ ...serverFilters, timeRange: value as TimeRange })
+              }
               hideCustom
             />
           </div>
@@ -3122,6 +3128,7 @@ export function LogsTable({
               {label}
             </button>
           ))}
+          <span className="type-caption text-muted-foreground/70">{t("quickFiltersPageOnly")}</span>
         </div>
       </div>
 

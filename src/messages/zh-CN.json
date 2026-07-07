@@ -536,6 +536,7 @@
     "filterStatus5xx": "5xx - 服务器错误",
     "filterModel": "按模型筛选...",
     "quickFilters": "快捷筛选",
+    "quickFiltersPageOnly": "仅筛选当前页",
     "presetAll": "全部",
     "presetHighTtft": "TTFT > 5秒",
     "presetLowTps": "TPS < 30",
