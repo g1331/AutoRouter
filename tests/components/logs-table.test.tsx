@@ -1500,6 +1500,17 @@ describe("LogsTable", () => {
           expect.objectContaining({ timeRange: "7d" })
         );
       });
+
+      it("offers an all-time preset so entries older than 30d stay reachable", () => {
+        const onServerFiltersChange = vi.fn();
+        render(<LogsTable logs={logsForFiltering} onServerFiltersChange={onServerFiltersChange} />);
+
+        fireEvent.click(screen.getByText("timeRange.all"));
+
+        expect(onServerFiltersChange).toHaveBeenCalledWith(
+          expect.objectContaining({ timeRange: "all" })
+        );
+      });
     });
 
     describe("Combined Filters", () => {

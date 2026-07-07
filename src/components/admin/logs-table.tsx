@@ -47,7 +47,7 @@ import { getRequestThinkingBadgeLabel } from "@/lib/utils/request-thinking-confi
 export interface LogsServerFilters {
   statusClass: "all" | "2xx" | "4xx" | "5xx";
   model: string;
-  timeRange: TimeRange;
+  timeRange: TimeRange | "all";
 }
 
 export const DEFAULT_LOGS_SERVER_FILTERS: LogsServerFilters = {
@@ -3001,34 +3001,14 @@ export function LogsTable({
   const desktopModelColumnStyle = { width: `${desktopModelColumnWidth}px` };
   const desktopTableStyle = { minWidth: `${desktopTableMinWidth}px` };
 
-  // Keep the filter bar visible when active server filters produced an empty
-  // page — otherwise the user could never clear them.
+  // The filter bar always stays mounted, even on an empty page: the default
+  // 30d window may hide older entries, and without the bar there would be no
+  // way to widen the range or clear a filter. The empty-state copy below
+  // distinguishes "nothing at all" from "nothing matching".
   const hasActiveServerFilters =
     serverFilters.statusClass !== DEFAULT_LOGS_SERVER_FILTERS.statusClass ||
     serverFilters.model.trim() !== DEFAULT_LOGS_SERVER_FILTERS.model ||
     serverFilters.timeRange !== DEFAULT_LOGS_SERVER_FILTERS.timeRange;
-
-  if (logs.length === 0 && !hasActiveServerFilters) {
-    return (
-      <div
-        className={cn(
-          "flex flex-col items-center justify-center py-16 text-center",
-          LOGS_SECTION_ENTER_CLASS
-        )}
-      >
-        <div
-          className={cn(
-            "mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80",
-            LOGS_CARD_ENTER_CLASS
-          )}
-        >
-          <ScrollText className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
-        </div>
-        <h3 className="type-title-medium mb-2 text-foreground">{t("noLogs")}</h3>
-        <p className="type-body-medium text-muted-foreground">{t("noLogsDesc")}</p>
-      </div>
-    );
-  }
 
   return (
     <div
@@ -3095,9 +3075,13 @@ export function LogsTable({
             <TimeRangeSelector
               value={serverFilters.timeRange}
               onChange={(value) =>
-                onServerFiltersChange?.({ ...serverFilters, timeRange: value as TimeRange })
+                onServerFiltersChange?.({
+                  ...serverFilters,
+                  timeRange: value as LogsServerFilters["timeRange"],
+                })
               }
               hideCustom
+              includeAll
             />
           </div>
         </div>
@@ -3231,10 +3215,23 @@ export function LogsTable({
               LOGS_CARD_ENTER_CLASS
             )}
           >
-            <Filter className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
+            {hasActiveServerFilters || performancePreset !== "all" ? (
+              <Filter className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
+            ) : (
+              <ScrollText className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
+            )}
           </div>
-          <h3 className="type-title-medium mb-2 text-foreground">{t("noMatchingLogs")}</h3>
-          <p className="type-body-medium text-muted-foreground">{t("noMatchingLogsDesc")}</p>
+          {hasActiveServerFilters || performancePreset !== "all" ? (
+            <>
+              <h3 className="type-title-medium mb-2 text-foreground">{t("noMatchingLogs")}</h3>
+              <p className="type-body-medium text-muted-foreground">{t("noMatchingLogsDesc")}</p>
+            </>
+          ) : (
+            <>
+              <h3 className="type-title-medium mb-2 text-foreground">{t("noLogs")}</h3>
+              <p className="type-body-medium text-muted-foreground">{t("noLogsDesc")}</p>
+            </>
+          )}
         </div>
       ) : (
         <>

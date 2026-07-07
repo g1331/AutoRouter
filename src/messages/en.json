@@ -299,6 +299,7 @@
       "noChange": "Same as yesterday"
     },
     "timeRange": {
+      "all": "ALL",
       "today": "TODAY",
       "7d": "7 DAYS",
       "30d": "30 DAYS",
