@@ -300,6 +300,12 @@ describe("user-service", () => {
       expect(byName.a.monthRequests).toBe(2);
       expect(byName.b.monthRequests).toBe(1);
       expect(byName.a.monthCostUsd).toBe(0);
+
+      // The detail/update paths must report the same month usage as the list.
+      const detail = await getUserById(a.id);
+      expect(detail?.monthRequests).toBe(2);
+      const updated = await updateUser(b.id, { displayName: "B2" });
+      expect(updated.monthRequests).toBe(1);
     });
 
     it("reports the table-wide active admin total independent of the page", async () => {

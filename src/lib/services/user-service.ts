@@ -264,33 +264,34 @@ export async function listUsers(
       )
     : undefined;
 
-  const [{ value: total }] = await db.select({ value: count() }).from(users).where(searchCondition);
-
-  const [{ value: activeAdminTotal }] = await db
-    .select({ value: count() })
-    .from(users)
-    .where(and(eq(users.role, "admin"), eq(users.isActive, true)));
-
   const offset = (page - 1) * pageSize;
-  const rows = await db
-    .select({
-      id: users.id,
-      username: users.username,
-      passwordHash: users.passwordHash,
-      displayName: users.displayName,
-      role: users.role,
-      isActive: users.isActive,
-      createdAt: users.createdAt,
-      updatedAt: users.updatedAt,
-      apiKeyCount: count(apiKeys.id),
-    })
-    .from(users)
-    .leftJoin(apiKeys, eq(apiKeys.userId, users.id))
-    .where(searchCondition)
-    .groupBy(users.id)
-    .orderBy(desc(users.createdAt))
-    .limit(pageSize)
-    .offset(offset);
+  // The count, admin-count, and page queries are independent — run them together.
+  const [[{ value: total }], [{ value: activeAdminTotal }], rows] = await Promise.all([
+    db.select({ value: count() }).from(users).where(searchCondition),
+    db
+      .select({ value: count() })
+      .from(users)
+      .where(and(eq(users.role, "admin"), eq(users.isActive, true))),
+    db
+      .select({
+        id: users.id,
+        username: users.username,
+        passwordHash: users.passwordHash,
+        displayName: users.displayName,
+        role: users.role,
+        isActive: users.isActive,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+        apiKeyCount: count(apiKeys.id),
+      })
+      .from(users)
+      .leftJoin(apiKeys, eq(apiKeys.userId, users.id))
+      .where(searchCondition)
+      .groupBy(users.id)
+      .orderBy(desc(users.createdAt))
+      .limit(pageSize)
+      .offset(offset),
+  ]);
 
   const monthUsage = await getUsersMonthUsage(rows.map((row) => row.id));
 
@@ -327,11 +328,11 @@ export async function getUserById(id: string): Promise<UserListItem | null> {
   if (!user) {
     return null;
   }
-  const [{ value: apiKeyCount }] = await db
-    .select({ value: count() })
-    .from(apiKeys)
-    .where(eq(apiKeys.userId, id));
-  return toListItem(user, apiKeyCount);
+  const [[{ value: apiKeyCount }], monthUsage] = await Promise.all([
+    db.select({ value: count() }).from(apiKeys).where(eq(apiKeys.userId, id)),
+    getUsersMonthUsage([id]),
+  ]);
+  return toListItem(user, apiKeyCount, monthUsage.get(id));
 }
 
 /**
@@ -409,13 +410,13 @@ export async function updateUser(
     return row;
   });
 
-  const [{ value: apiKeyCount }] = await db
-    .select({ value: count() })
-    .from(apiKeys)
-    .where(eq(apiKeys.userId, id));
+  const [[{ value: apiKeyCount }], monthUsage] = await Promise.all([
+    db.select({ value: count() }).from(apiKeys).where(eq(apiKeys.userId, id)),
+    getUsersMonthUsage([id]),
+  ]);
 
   log.info({ userId: id, role: updated.role, isActive: updated.isActive }, "updated user");
-  return toListItem(updated, apiKeyCount);
+  return toListItem(updated, apiKeyCount, monthUsage.get(id));
 }
 
 /**
@@ -464,13 +465,13 @@ export async function changeUsername(id: string, rawUsername: string): Promise<U
     throw err;
   }
 
-  const [{ value: apiKeyCount }] = await db
-    .select({ value: count() })
-    .from(apiKeys)
-    .where(eq(apiKeys.userId, id));
+  const [[{ value: apiKeyCount }], monthUsage] = await Promise.all([
+    db.select({ value: count() }).from(apiKeys).where(eq(apiKeys.userId, id)),
+    getUsersMonthUsage([id]),
+  ]);
 
   log.info({ userId: id, username }, "changed username");
-  return toListItem(updated, apiKeyCount);
+  return toListItem(updated, apiKeyCount, monthUsage.get(id));
 }
 
 /**
