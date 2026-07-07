@@ -9,6 +9,23 @@ vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
 }));
 
+// Mock the locale-aware Link (its real implementation pulls next/navigation).
+vi.mock("@/i18n/navigation", () => ({
+  Link: ({
+    href,
+    children,
+    className,
+  }: {
+    href: string;
+    children: ReactNode;
+    className?: string;
+  }) => (
+    <a href={href} className={className}>
+      {children}
+    </a>
+  ),
+}));
+
 // Mock lucide-react icons
 vi.mock("lucide-react", () => ({
   Key: () => <svg data-testid="key-icon" />,
