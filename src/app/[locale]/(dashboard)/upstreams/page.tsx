@@ -30,7 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { useAllUpstreams, useUpstreams, useTestUpstream } from "@/hooks/use-upstreams";
+import { useAllUpstreams, useTestUpstream } from "@/hooks/use-upstreams";
 import { useContainerMorph } from "@/hooks/use-container-morph";
 import type { RouteCapability, Upstream } from "@/types/api";
 import { ROUTE_CAPABILITY_DEFINITIONS } from "@/lib/route-capabilities";
@@ -112,19 +112,17 @@ export default function UpstreamsPage() {
   const t = useTranslations("upstreams");
   const tCommon = useTranslations("common");
 
-  const { data: upstreamsData, isLoading: isUpstreamsLoading } = useUpstreams(
-    upstreamPage,
-    pageSize
-  );
-  const { data: allUpstreamsData } = useAllUpstreams();
+  // Filters and pagination both run over the full upstream set so a search
+  // matches every page, not just the currently fetched one.
+  const { data: allUpstreamsData, isLoading: isUpstreamsLoading } = useAllUpstreams();
   const {
     mutate: testUpstreamMutation,
     data: testResult,
     isPending: isTestLoading,
   } = useTestUpstream();
 
-  const upstreams = useMemo(() => upstreamsData?.items || [], [upstreamsData?.items]);
-  const overviewUpstreams = allUpstreamsData ?? upstreams;
+  const upstreams = useMemo(() => allUpstreamsData ?? [], [allUpstreamsData]);
+  const overviewUpstreams = upstreams;
 
   const filteredUpstreams = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -154,7 +152,7 @@ export default function UpstreamsPage() {
   }, [capabilityFilter, includeInactive, searchQuery, statusFilter, upstreams]);
 
   const overview = useMemo(() => {
-    const total = upstreamsData?.total ?? overviewUpstreams.length;
+    const total = overviewUpstreams.length;
     const active = overviewUpstreams.filter((upstream) => upstream.is_active).length;
     const fullConcurrency = overviewUpstreams.filter((upstream) => {
       if (upstream.max_concurrency == null) return false;
@@ -167,13 +165,38 @@ export default function UpstreamsPage() {
       fullConcurrency,
       filtered: filteredUpstreams.length,
     };
-  }, [filteredUpstreams.length, overviewUpstreams, upstreamsData?.total]);
+  }, [filteredUpstreams.length, overviewUpstreams]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredUpstreams.length / pageSize));
+  const currentPage = Math.min(upstreamPage, totalPages);
+  const paginatedUpstreams = useMemo(
+    () => filteredUpstreams.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [filteredUpstreams, currentPage, pageSize]
+  );
 
   const hasActiveFilters =
     searchQuery.trim().length > 0 ||
     statusFilter !== "all" ||
     capabilityFilter !== "all" ||
     !includeInactive;
+
+  // Filter changes restart pagination from the first page.
+  const updateSearchQuery = (value: string) => {
+    setSearchQuery(value);
+    setUpstreamPage(1);
+  };
+  const updateStatusFilter = (value: UpstreamStatusFilter) => {
+    setStatusFilter(value);
+    setUpstreamPage(1);
+  };
+  const updateCapabilityFilter = (value: RouteCapability | "all") => {
+    setCapabilityFilter(value);
+    setUpstreamPage(1);
+  };
+  const updateIncludeInactive = (value: boolean) => {
+    setIncludeInactive(value);
+    setUpstreamPage(1);
+  };
 
   useEffect(() => {
     if (testUpstream?.id) {
@@ -186,6 +209,7 @@ export default function UpstreamsPage() {
     setStatusFilter("all");
     setCapabilityFilter("all");
     setIncludeInactive(true);
+    setUpstreamPage(1);
   };
 
   return (
@@ -231,7 +255,7 @@ export default function UpstreamsPage() {
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
+                    onChange={(event) => updateSearchQuery(event.target.value)}
                     placeholder={t("workbenchSearchPlaceholder")}
                     className="border-surface-400/70 bg-surface-200/70 pl-9 transition-colors duration-cf-fast hover:border-surface-400 focus-visible:border-amber-400/45 focus-visible:ring-amber-400/20"
                     aria-label={t("workbenchSearchPlaceholder")}
@@ -241,7 +265,7 @@ export default function UpstreamsPage() {
                 <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:w-[460px]">
                   <Select
                     value={statusFilter}
-                    onValueChange={(value) => setStatusFilter(value as UpstreamStatusFilter)}
+                    onValueChange={(value) => updateStatusFilter(value as UpstreamStatusFilter)}
                   >
                     <SelectTrigger className="border-surface-400/70 bg-surface-200/70 transition-colors duration-cf-fast hover:border-surface-400 focus:border-amber-400/45">
                       <div className="flex items-center gap-2">
@@ -260,7 +284,9 @@ export default function UpstreamsPage() {
 
                   <Select
                     value={capabilityFilter}
-                    onValueChange={(value) => setCapabilityFilter(value as RouteCapability | "all")}
+                    onValueChange={(value) =>
+                      updateCapabilityFilter(value as RouteCapability | "all")
+                    }
                   >
                     <SelectTrigger className="border-surface-400/70 bg-surface-200/70 transition-colors duration-cf-fast hover:border-surface-400 focus:border-amber-400/45">
                       <div className="flex items-center gap-2">
@@ -357,7 +383,7 @@ export default function UpstreamsPage() {
                   <div className="flex items-center gap-2 rounded-cf-sm border border-surface-400/70 bg-surface-200/65 px-2.5 py-1 text-xs text-muted-foreground">
                     <Switch
                       checked={includeInactive}
-                      onCheckedChange={setIncludeInactive}
+                      onCheckedChange={updateIncludeInactive}
                       className="h-5 w-10"
                       aria-label={t("includeInactive")}
                     />
@@ -385,7 +411,7 @@ export default function UpstreamsPage() {
         ) : (
           <div className="space-y-4 animate-in fade-in-0 slide-in-from-top-1 duration-300">
             <UpstreamsTable
-              upstreams={filteredUpstreams}
+              upstreams={paginatedUpstreams}
               onEdit={(upstream, source) => {
                 morphSourceRef.current = source;
                 startMorph(() => setEditUpstream(upstream), {
@@ -407,15 +433,15 @@ export default function UpstreamsPage() {
               hasActiveFilters={hasActiveFilters}
             />
 
-            {upstreamsData && upstreamsData.total_pages > 1 && (
+            {totalPages > 1 && (
               <Card
                 variant="filled"
                 className="border border-surface-400/65 bg-surface-300/35 shadow-[var(--vr-shadow-xs)]"
               >
                 <PaginationControls
-                  total={upstreamsData.total}
-                  page={upstreamPage}
-                  totalPages={upstreamsData.total_pages}
+                  total={filteredUpstreams.length}
+                  page={currentPage}
+                  totalPages={totalPages}
                   onPageChange={setUpstreamPage}
                   className="p-4"
                 />
