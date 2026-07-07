@@ -2,7 +2,6 @@
 
 ## Purpose
 Define runtime administration for proxy request recording, including recording settings, indexed fixture storage, query and detail inspection, deletion, and the management UI surface.
-
 ## Requirements
 ### Requirement: 请求录制配置必须可运行时管理
 系统 MUST 提供受管理员认证保护的请求录制配置能力，使管理员可以在不重启服务的情况下启停录制、选择录制模式、配置脱敏策略和保留天数。
@@ -62,8 +61,15 @@ Define runtime administration for proxy request recording, including recording s
 - **AND** 响应 SHALL 包含总数、当前页和总页数
 
 #### Scenario: 按条件筛选录制记录
-- **WHEN** 管理员提供时间范围、状态码、模型、API key 或上游筛选条件
+- **WHEN** 管理员提供时间范围、状态码、模型、API key、上游或请求日志 ID 筛选条件
 - **THEN** 系统 SHALL 只返回匹配条件的录制记录
+
+#### Scenario: 按请求日志 ID 精确反查
+- **WHEN** 管理员通过 `request_log_id` 参数请求录制列表
+- **AND** 该日志存在对应的录制记录
+- **THEN** 系统 SHALL 返回与该日志关联的录制记录
+- **WHEN** 该日志不存在对应的录制记录
+- **THEN** 系统 SHALL 返回空结果
 
 #### Scenario: 读取录制详情
 - **WHEN** 管理员请求某条录制记录详情
@@ -106,3 +112,4 @@ Define runtime administration for proxy request recording, including recording s
 #### Scenario: 查看和删除记录
 - **WHEN** 管理员在录制记录列表中操作某条记录
 - **THEN** 页面 SHALL 支持查看详情和删除该记录
+
