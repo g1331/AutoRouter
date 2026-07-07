@@ -92,6 +92,10 @@ export interface User {
   role: UserRole;
   is_active: boolean;
   api_key_count: number;
+  /** Month-to-date request count. */
+  month_requests: number;
+  /** Month-to-date billed cost in USD. */
+  month_cost_usd: number;
   created_at: string; // ISO 8601 date string
   updated_at: string; // ISO 8601 date string
 }

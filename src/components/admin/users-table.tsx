@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
 import {
@@ -27,6 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu,
@@ -51,6 +52,12 @@ interface UsersTableProps {
   onConfigureUpstreams: (user: User, source: HTMLElement | null) => void;
   onAssignKeys: (user: User, source: HTMLElement | null) => void;
   onDelete: (user: User, source: HTMLElement | null) => void;
+  /**
+   * Server-side username/display-name search (controlled by the parent page,
+   * which feeds it into the paginated query so matches span all pages).
+   */
+  searchQuery?: string;
+  onSearchQueryChange?: (value: string) => void;
 }
 
 /**
@@ -69,11 +76,49 @@ export function UsersTable({
   onConfigureUpstreams,
   onAssignKeys,
   onDelete,
+  searchQuery = "",
+  onSearchQueryChange,
 }: UsersTableProps) {
   const toggleActive = useToggleUserActive();
   const t = useTranslations("users");
   const locale = useLocale();
   const dateLocale = getDateLocale(locale);
+  const currencyFormatter = new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  });
+
+  // Local echo keeps typing responsive; updates are debounced up to the parent.
+  const [searchInput, setSearchInput] = useState(searchQuery);
+  const searchDebounceRef = useRef<number | null>(null);
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current != null) {
+        window.clearTimeout(searchDebounceRef.current);
+      }
+    };
+  }, []);
+  const handleSearchInputChange = (value: string) => {
+    setSearchInput(value);
+    if (searchDebounceRef.current != null) {
+      window.clearTimeout(searchDebounceRef.current);
+    }
+    searchDebounceRef.current = window.setTimeout(() => {
+      onSearchQueryChange?.(value.trim());
+    }, 300);
+  };
+
+  const searchBar = (
+    <Input
+      type="text"
+      placeholder={t("searchUsers")}
+      value={searchInput}
+      onChange={(e) => handleSearchInputChange(e.target.value)}
+      className="max-w-sm"
+    />
+  );
 
   // 操作入口都在 DropdownMenu 内（菜单内容经 Portal 挂到 body，无法用 closest 取到行），
   // 因此按 user.id 收集每一行元素，作为容器变形动画的源元素。
@@ -94,7 +139,9 @@ export function UsersTable({
     }
   };
 
-  if (users.length === 0) {
+  // Plain empty state only when nothing is searched — with an active search
+  // the input must stay visible so it can be cleared.
+  if (users.length === 0 && !searchQuery && !searchInput) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80">
@@ -105,132 +152,163 @@ export function UsersTable({
     );
   }
 
+  if (users.length === 0) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">{searchBar}</div>
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80">
+            <Users className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
+          </div>
+          <h3 className="type-title-medium text-foreground">{t("noUsersFound")}</h3>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="overflow-hidden rounded-cf-md border border-divider bg-surface-200/70">
-      <Table frame="none" containerClassName="rounded-none bg-transparent">
-        <TableHeader>
-          <TableRow>
-            <TableHead>{t("username")}</TableHead>
-            <TableHead>{t("displayName")}</TableHead>
-            <TableHead>{t("role")}</TableHead>
-            <TableHead>{t("status")}</TableHead>
-            <TableHead className="hidden md:table-cell">{t("apiKeys")}</TableHead>
-            <TableHead className="hidden whitespace-nowrap 2xl:table-cell">
-              {t("createdAt")}
-            </TableHead>
-            <TableHead className="text-right">{t("actions")}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {users.map((user) => {
-            const lastAdmin = isLastActiveAdmin(user);
-            return (
-              <TableRow
-                key={user.id}
-                data-morph-source
-                ref={(el) => {
-                  if (el) {
-                    rowRefs.current.set(user.id, el);
-                  } else {
-                    rowRefs.current.delete(user.id);
-                  }
-                }}
-              >
-                <TableCell className="font-medium">{user.username}</TableCell>
-                <TableCell>{user.display_name}</TableCell>
-                <TableCell>
-                  <Badge variant={user.role === "admin" ? "info" : "neutral"}>
-                    {user.role === "admin" ? t("roleAdmin") : t("roleMember")}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="inline-flex items-center gap-2">
-                    <Switch
-                      checked={user.is_active}
-                      onCheckedChange={(next) => handleToggle(user, next)}
-                      disabled={
-                        lastAdmin ||
-                        (toggleActive.isPending && toggleActive.variables?.id === user.id)
-                      }
-                      className="h-5 w-10"
-                      aria-label={`${user.is_active ? t("disable") : t("enable")}: ${user.username}`}
-                    />
-                    <span
-                      className={cn(
-                        "type-caption whitespace-nowrap",
-                        user.is_active ? "text-status-success" : "text-muted-foreground"
-                      )}
-                    >
-                      {user.is_active ? t("active") : t("inactive")}
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell className="hidden tabular-nums md:table-cell">
-                  {user.api_key_count}
-                </TableCell>
-                <TableCell className="hidden whitespace-nowrap 2xl:table-cell">
-                  {formatDistanceToNow(new Date(user.created_at), {
-                    addSuffix: true,
-                    locale: dateLocale,
-                  })}
-                </TableCell>
-                <TableCell className="text-right">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        aria-label={`${t("actions")}: ${user.username}`}
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">{searchBar}</div>
+      <div className="overflow-hidden rounded-cf-md border border-divider bg-surface-200/70">
+        <Table frame="none" containerClassName="rounded-none bg-transparent">
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t("username")}</TableHead>
+              <TableHead>{t("displayName")}</TableHead>
+              <TableHead>{t("role")}</TableHead>
+              <TableHead>{t("status")}</TableHead>
+              <TableHead className="hidden md:table-cell">{t("apiKeys")}</TableHead>
+              <TableHead className="hidden whitespace-nowrap tabular-nums lg:table-cell">
+                {t("monthRequests")}
+              </TableHead>
+              <TableHead className="hidden whitespace-nowrap tabular-nums lg:table-cell">
+                {t("monthCost")}
+              </TableHead>
+              <TableHead className="hidden whitespace-nowrap 2xl:table-cell">
+                {t("createdAt")}
+              </TableHead>
+              <TableHead className="text-right">{t("actions")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {users.map((user) => {
+              const lastAdmin = isLastActiveAdmin(user);
+              return (
+                <TableRow
+                  key={user.id}
+                  data-morph-source
+                  ref={(el) => {
+                    if (el) {
+                      rowRefs.current.set(user.id, el);
+                    } else {
+                      rowRefs.current.delete(user.id);
+                    }
+                  }}
+                >
+                  <TableCell className="font-medium">{user.username}</TableCell>
+                  <TableCell>{user.display_name}</TableCell>
+                  <TableCell>
+                    <Badge variant={user.role === "admin" ? "info" : "neutral"}>
+                      {user.role === "admin" ? t("roleAdmin") : t("roleMember")}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="inline-flex items-center gap-2">
+                      <Switch
+                        checked={user.is_active}
+                        onCheckedChange={(next) => handleToggle(user, next)}
+                        disabled={
+                          lastAdmin ||
+                          (toggleActive.isPending && toggleActive.variables?.id === user.id)
+                        }
+                        className="h-5 w-10"
+                        aria-label={`${user.is_active ? t("disable") : t("enable")}: ${user.username}`}
+                      />
+                      <span
+                        className={cn(
+                          "type-caption whitespace-nowrap",
+                          user.is_active ? "text-status-success" : "text-muted-foreground"
+                        )}
                       >
-                        <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-52">
-                      <DropdownMenuItem onClick={() => onViewUsage(user)}>
-                        <BarChart3 className="mr-2 h-4 w-4" aria-hidden="true" />
-                        {t("viewUsage")}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => onEdit(user, rowSource(user.id))}>
-                        <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
-                        {t("edit")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => onChangeUsername(user, rowSource(user.id))}>
-                        <UserCog className="mr-2 h-4 w-4" aria-hidden="true" />
-                        {t("changeUsername")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => onResetPassword(user, rowSource(user.id))}>
-                        <KeyRound className="mr-2 h-4 w-4" aria-hidden="true" />
-                        {t("resetPassword")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => onConfigureUpstreams(user, rowSource(user.id))}
-                      >
-                        <Server className="mr-2 h-4 w-4" aria-hidden="true" />
-                        {t("configureUpstreams")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => onAssignKeys(user, rowSource(user.id))}>
-                        <Link2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                        {t("assignKeys")}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => onDelete(user, rowSource(user.id))}
-                        disabled={lastAdmin}
-                        className="text-status-error focus:text-status-error"
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                        {t("deleteUser")}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+                        {user.is_active ? t("active") : t("inactive")}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="hidden tabular-nums md:table-cell">
+                    {user.api_key_count}
+                  </TableCell>
+                  <TableCell className="hidden tabular-nums lg:table-cell">
+                    {user.month_requests}
+                  </TableCell>
+                  <TableCell className="hidden tabular-nums lg:table-cell">
+                    {currencyFormatter.format(user.month_cost_usd)}
+                  </TableCell>
+                  <TableCell className="hidden whitespace-nowrap 2xl:table-cell">
+                    {formatDistanceToNow(new Date(user.created_at), {
+                      addSuffix: true,
+                      locale: dateLocale,
+                    })}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          aria-label={`${t("actions")}: ${user.username}`}
+                        >
+                          <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-52">
+                        <DropdownMenuItem onClick={() => onViewUsage(user)}>
+                          <BarChart3 className="mr-2 h-4 w-4" aria-hidden="true" />
+                          {t("viewUsage")}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => onEdit(user, rowSource(user.id))}>
+                          <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
+                          {t("edit")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => onChangeUsername(user, rowSource(user.id))}
+                        >
+                          <UserCog className="mr-2 h-4 w-4" aria-hidden="true" />
+                          {t("changeUsername")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onResetPassword(user, rowSource(user.id))}>
+                          <KeyRound className="mr-2 h-4 w-4" aria-hidden="true" />
+                          {t("resetPassword")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => onConfigureUpstreams(user, rowSource(user.id))}
+                        >
+                          <Server className="mr-2 h-4 w-4" aria-hidden="true" />
+                          {t("configureUpstreams")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onAssignKeys(user, rowSource(user.id))}>
+                          <Link2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                          {t("assignKeys")}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => onDelete(user, rowSource(user.id))}
+                          disabled={lastAdmin}
+                          className="text-status-error focus:text-status-error"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                          {t("deleteUser")}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

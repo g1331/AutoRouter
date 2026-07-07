@@ -93,7 +93,7 @@ vi.mock("@/lib/db", async () => {
 });
 
 import { eq } from "drizzle-orm";
-import { db, users, apiKeys, upstreams, userUpstreams } from "@/lib/db";
+import { db, users, apiKeys, upstreams, userUpstreams, requestLogs } from "@/lib/db";
 import {
   createUser,
   listUsers,
@@ -159,6 +159,7 @@ async function seedUpstream(name: string): Promise<{ id: string }> {
 }
 
 beforeEach(async () => {
+  await db.delete(requestLogs);
   await db.delete(userUpstreams);
   await db.delete(apiKeys);
   await db.delete(upstreams);
@@ -239,6 +240,46 @@ describe("user-service", () => {
       expect(counts.a).toBe(2);
       expect(counts.b).toBe(1);
       expect(counts.c).toBe(0);
+    });
+
+    it("filters by username or display name case-insensitively, keeping totals in sync", async () => {
+      await createUser({ username: "alice", password: "password123", displayName: "生产环境" });
+      await createUser({ username: "bob", password: "password123", displayName: "Test Account" });
+      await createUser({ username: "carol", password: "password123", displayName: "C" });
+
+      const byUsername = await listUsers(1, 10, "ALI");
+      expect(byUsername.total).toBe(1);
+      expect(byUsername.items.map((u) => u.username)).toEqual(["alice"]);
+
+      const byDisplayName = await listUsers(1, 10, "test");
+      expect(byDisplayName.total).toBe(1);
+      expect(byDisplayName.items.map((u) => u.username)).toEqual(["bob"]);
+
+      const noMatch = await listUsers(1, 10, "nonexistent");
+      expect(noMatch.total).toBe(0);
+      expect(noMatch.items).toEqual([]);
+    });
+
+    it("aggregates month-to-date usage per user from the request_logs snapshot", async () => {
+      const a = await createUser({ username: "a", password: "password123", displayName: "A" });
+      const b = await createUser({ username: "b", password: "password123", displayName: "B" });
+
+      const now = new Date();
+      const inMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 12));
+      const lastMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 15));
+
+      await db.insert(requestLogs).values([
+        { userId: a.id, method: "POST", path: "/v1/chat/completions", createdAt: inMonth },
+        { userId: a.id, method: "POST", path: "/v1/chat/completions", createdAt: inMonth },
+        { userId: a.id, method: "POST", path: "/v1/chat/completions", createdAt: lastMonth },
+        { userId: b.id, method: "POST", path: "/v1/chat/completions", createdAt: inMonth },
+      ]);
+
+      const all = await listUsers(1, 50);
+      const byName = Object.fromEntries(all.items.map((u) => [u.username, u]));
+      expect(byName.a.monthRequests).toBe(2);
+      expect(byName.b.monthRequests).toBe(1);
+      expect(byName.a.monthCostUsd).toBe(0);
     });
 
     it("reports the table-wide active admin total independent of the page", async () => {

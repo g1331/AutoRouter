@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Users } from "lucide-react";
 
@@ -25,9 +25,15 @@ type UserDialog = "edit" | "username" | "password" | "upstreams" | "keys" | "del
 
 export default function UsersPage() {
   const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
   const pageSize = 10;
   const [activeUser, setActiveUser] = useState<User | null>(null);
   const [dialog, setDialog] = useState<UserDialog>(null);
+
+  const handleSearchQueryChange = useCallback((value: string) => {
+    setSearchQuery(value);
+    setPage(1);
+  }, []);
 
   // 容器变形动画：所有用户操作都从该行的下拉菜单触发，统一以行元素为变形源，
   // 同一时刻只会打开一个弹窗，故共用单个 view-transition-name。
@@ -37,7 +43,7 @@ export default function UsersPage() {
   const t = useTranslations("users");
   const tCommon = useTranslations("common");
   const router = useRouter();
-  const { data, isLoading } = useUsers(page, pageSize);
+  const { data, isLoading } = useUsers(page, pageSize, searchQuery);
   const { principal } = useAuth();
 
   // ADMIN_TOKEN 超级令牌独立于用户表、始终能管理系统，因此豁免“保留最后一个启用
@@ -91,6 +97,8 @@ export default function UsersPage() {
               users={users}
               activeAdminCount={activeAdminCount}
               bypassLastAdminGuard={bypassLastAdminGuard}
+              searchQuery={searchQuery}
+              onSearchQueryChange={handleSearchQueryChange}
               onViewUsage={(user) => router.push(`/system/users/${user.id}`)}
               onEdit={(user, source) => openDialog("edit", user, source)}
               onChangeUsername={(user, source) => openDialog("username", user, source)}

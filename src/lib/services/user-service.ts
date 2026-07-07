@@ -1,6 +1,7 @@
-import { and, count, desc, eq, inArray, ne } from "drizzle-orm";
+import { and, count, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { db, users, apiKeys, userUpstreams, upstreams, type User } from "../db";
 import { hashPassword, isPasswordStrong, normalizeUsername, verifyPassword } from "../utils/auth";
+import { getUsersMonthUsage } from "./user-data-service";
 import { createLogger } from "../utils/logger";
 
 const log = createLogger("user-service");
@@ -139,6 +140,10 @@ export interface UserListItem {
   role: UserRole;
   isActive: boolean;
   apiKeyCount: number;
+  /** Month-to-date request count over the request_logs user_id snapshot. */
+  monthRequests: number;
+  /** Month-to-date billed cost in USD, same accounting basis as getUserOverview. */
+  monthCostUsd: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -158,7 +163,11 @@ export interface PaginatedUsers {
   activeAdminTotal: number;
 }
 
-function toListItem(row: User, apiKeyCount: number): UserListItem {
+function toListItem(
+  row: User,
+  apiKeyCount: number,
+  monthUsage?: { requests: number; costUsd: number }
+): UserListItem {
   return {
     id: row.id,
     username: row.username,
@@ -166,6 +175,8 @@ function toListItem(row: User, apiKeyCount: number): UserListItem {
     role: normalizeRole(row.role),
     isActive: row.isActive,
     apiKeyCount,
+    monthRequests: monthUsage?.requests ?? 0,
+    monthCostUsd: monthUsage?.costUsd ?? 0,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -228,17 +239,31 @@ export async function createUser(input: UserCreateInput): Promise<UserListItem> 
 
 /**
  * List users with pagination, aggregating each user's owned API key count via a
- * left join so users without keys report zero rather than being dropped.
+ * left join so users without keys report zero rather than being dropped. Each
+ * page is enriched with month-to-date usage aggregates in one grouped query.
  *
  * @param page - 1-based page number
  * @param pageSize - Page size, clamped to [1, 100]
- * @returns A page of users with owned key counts
+ * @param search - Optional case-insensitive substring match on username/display name
+ * @returns A page of users with owned key counts and month-to-date usage
  */
-export async function listUsers(page: number = 1, pageSize: number = 20): Promise<PaginatedUsers> {
+export async function listUsers(
+  page: number = 1,
+  pageSize: number = 20,
+  search?: string
+): Promise<PaginatedUsers> {
   page = Math.max(1, page);
   pageSize = Math.min(100, Math.max(1, pageSize));
 
-  const [{ value: total }] = await db.select({ value: count() }).from(users);
+  const needle = search?.trim().toLowerCase();
+  const searchCondition = needle
+    ? or(
+        sql`lower(${users.username}) like ${`%${needle}%`}`,
+        sql`lower(${users.displayName}) like ${`%${needle}%`}`
+      )
+    : undefined;
+
+  const [{ value: total }] = await db.select({ value: count() }).from(users).where(searchCondition);
 
   const [{ value: activeAdminTotal }] = await db
     .select({ value: count() })
@@ -260,10 +285,13 @@ export async function listUsers(page: number = 1, pageSize: number = 20): Promis
     })
     .from(users)
     .leftJoin(apiKeys, eq(apiKeys.userId, users.id))
+    .where(searchCondition)
     .groupBy(users.id)
     .orderBy(desc(users.createdAt))
     .limit(pageSize)
     .offset(offset);
+
+  const monthUsage = await getUsersMonthUsage(rows.map((row) => row.id));
 
   const items = rows.map((row) =>
     toListItem(
@@ -277,7 +305,8 @@ export async function listUsers(page: number = 1, pageSize: number = 20): Promis
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
       },
-      Number(row.apiKeyCount)
+      Number(row.apiKeyCount),
+      monthUsage.get(row.id)
     )
   );
 

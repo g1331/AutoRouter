@@ -25,6 +25,10 @@ const createUserSchema = z
 
 /**
  * GET /api/admin/users - List users with owned API key counts
+ *
+ * Query params:
+ * - page / page_size: pagination
+ * - search: string (filter - case-insensitive substring match on username/display name)
  */
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -34,7 +38,8 @@ export async function GET(request: NextRequest) {
 
   try {
     const { page, pageSize } = getPaginationParams(request);
-    const result = await listUsers(page, pageSize);
+    const search = new URL(request.url).searchParams.get("search")?.trim() || undefined;
+    const result = await listUsers(page, pageSize, search);
 
     return NextResponse.json(transformPaginatedUsers(result));
   } catch (error) {

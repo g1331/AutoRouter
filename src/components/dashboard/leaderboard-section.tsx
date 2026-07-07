@@ -5,6 +5,7 @@ import { Cpu, Key, Server, Trophy, Users } from "lucide-react";
 import { Cell, Pie, PieChart, Tooltip } from "recharts";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { Link } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import type { StatsLeaderboardResponse, DistributionItem } from "@/types/api";
 
@@ -422,7 +423,15 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
           ) : (
             <div className="space-y-2">
               {data.users.map((item, index) => (
-                <div key={item.id} className={getRankRowClass(index)}>
+                <Link
+                  key={item.id}
+                  href={`/system/users/${item.id}`}
+                  aria-label={`${t("stats.userRanking")}: ${item.display_name}`}
+                  className={cn(
+                    getRankRowClass(index),
+                    "transition-colors hover:bg-surface-300/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  )}
+                >
                   <RankBadge rank={index + 1} />
 
                   <div className="w-[140px] shrink-0">
@@ -451,7 +460,7 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
                       label={t("stats.modelDistribution")}
                     />
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}

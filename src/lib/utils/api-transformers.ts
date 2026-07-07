@@ -1663,6 +1663,8 @@ export interface UserApiResponse {
   role: "admin" | "member";
   is_active: boolean;
   api_key_count: number;
+  month_requests: number;
+  month_cost_usd: number;
   created_at: string;
   updated_at: string;
 }
@@ -1679,6 +1681,8 @@ export function transformUserToApi(user: UserListItem): UserApiResponse {
     role: user.role,
     is_active: user.isActive,
     api_key_count: user.apiKeyCount,
+    month_requests: user.monthRequests,
+    month_cost_usd: user.monthCostUsd,
     created_at: user.createdAt.toISOString(),
     updated_at: user.updatedAt.toISOString(),
   };

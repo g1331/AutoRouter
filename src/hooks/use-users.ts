@@ -11,15 +11,25 @@ import type {
 } from "@/types/api";
 
 /**
- * Fetch paginated users with their owned API key counts.
+ * Fetch paginated users with their owned API key counts, with an optional
+ * server-side username/display-name search.
  */
-export function useUsers(page: number = 1, pageSize: number = 10) {
+export function useUsers(page: number = 1, pageSize: number = 10, search: string = "") {
   const { apiClient } = useAuth();
 
   return useQuery({
-    queryKey: ["users", page, pageSize],
-    queryFn: () =>
-      apiClient.get<PaginatedUsersResponse>(`/admin/users?page=${page}&page_size=${pageSize}`),
+    queryKey: ["users", page, pageSize, search],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("page_size", String(pageSize));
+      if (search) {
+        params.set("search", search);
+      }
+      return apiClient.get<PaginatedUsersResponse>(`/admin/users?${params.toString()}`);
+    },
+    // Keep previous data during search/pagination to avoid layout jumps.
+    placeholderData: (previous) => previous,
   });
 }
 
