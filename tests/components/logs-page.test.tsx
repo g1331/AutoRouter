@@ -32,6 +32,7 @@ vi.mock("@/hooks/use-request-log-live", () => ({
 }));
 
 vi.mock("@/components/admin/logs-table", () => ({
+  DEFAULT_LOGS_SERVER_FILTERS: { statusClass: "all", model: "", timeRange: "30d" },
   LogsTable: ({
     logs,
     initialExpandedIds,
@@ -189,7 +190,7 @@ describe("LogsPage focus query param", () => {
     expect(useRequestLogsMock).toHaveBeenCalledWith(
       1,
       20,
-      { user_id: "user-42" },
+      { user_id: "user-42", time_range: "30d" },
       expect.objectContaining({ refetchInterval: 5000 })
     );
 

@@ -466,70 +466,52 @@ describe("KeysTable", () => {
       expect(searchInput).toHaveAttribute("type", "text");
     });
 
-    it("filters keys by name (case-insensitive)", () => {
+    it("renders all provided keys regardless of local input (filtering is server-side)", () => {
       render(<KeysTable keys={mockKeys} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
 
       const searchInput = screen.getByPlaceholderText("searchKeys");
       fireEvent.change(searchInput, { target: { value: "production" } });
 
-      // Should show only Production API Key
-      expect(screen.getByText("Production API Key")).toBeInTheDocument();
-      expect(screen.queryByText("Development API Key")).not.toBeInTheDocument();
-      expect(screen.queryByText("Testing Key")).not.toBeInTheDocument();
-    });
-
-    it("filters keys case-insensitively with uppercase search", () => {
-      render(<KeysTable keys={mockKeys} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
-
-      const searchInput = screen.getByPlaceholderText("searchKeys");
-      fireEvent.change(searchInput, { target: { value: "DEVELOPMENT" } });
-
-      // Should show only Development API Key
-      expect(screen.getByText("Development API Key")).toBeInTheDocument();
-      expect(screen.queryByText("Production API Key")).not.toBeInTheDocument();
-      expect(screen.queryByText("Testing Key")).not.toBeInTheDocument();
-    });
-
-    it("filters keys with partial name match", () => {
-      render(<KeysTable keys={mockKeys} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
-
-      const searchInput = screen.getByPlaceholderText("searchKeys");
-      fireEvent.change(searchInput, { target: { value: "api" } });
-
-      // Should show both Production and Development API Keys
-      expect(screen.getByText("Production API Key")).toBeInTheDocument();
-      expect(screen.getByText("Development API Key")).toBeInTheDocument();
-      expect(screen.queryByText("Testing Key")).not.toBeInTheDocument();
-    });
-
-    it("shows all keys when search is empty", () => {
-      render(<KeysTable keys={mockKeys} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
-
-      const searchInput = screen.getByPlaceholderText("searchKeys");
-
-      // Initially all keys should be visible
-      expect(screen.getByText("Production API Key")).toBeInTheDocument();
-      expect(screen.getByText("Development API Key")).toBeInTheDocument();
-      expect(screen.getByText("Testing Key")).toBeInTheDocument();
-
-      // Type search query
-      fireEvent.change(searchInput, { target: { value: "production" } });
-      expect(screen.queryByText("Testing Key")).not.toBeInTheDocument();
-
-      // Clear search
-      fireEvent.change(searchInput, { target: { value: "" } });
-
-      // All keys should be visible again
+      // The table shows whatever page the server returned; typing alone
+      // must not narrow it locally.
       expect(screen.getByText("Production API Key")).toBeInTheDocument();
       expect(screen.getByText("Development API Key")).toBeInTheDocument();
       expect(screen.getByText("Testing Key")).toBeInTheDocument();
     });
 
-    it("shows no results state when search returns no matches", () => {
-      render(<KeysTable keys={mockKeys} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
+    it("debounces typed input up to onSearchQueryChange", async () => {
+      const onSearchQueryChange = vi.fn();
+      render(
+        <KeysTable
+          keys={mockKeys}
+          onRevoke={mockOnRevoke}
+          onEdit={mockOnEdit}
+          onSearchQueryChange={onSearchQueryChange}
+        />
+      );
 
       const searchInput = screen.getByPlaceholderText("searchKeys");
-      fireEvent.change(searchInput, { target: { value: "nonexistent" } });
+      fireEvent.change(searchInput, { target: { value: "p" } });
+      fireEvent.change(searchInput, { target: { value: "pr" } });
+      fireEvent.change(searchInput, { target: { value: " prod " } });
+
+      // Debounced: not called synchronously.
+      expect(onSearchQueryChange).not.toHaveBeenCalled();
+
+      await waitFor(() => expect(onSearchQueryChange).toHaveBeenCalledWith("prod"));
+      // Intermediate keystrokes are coalesced into the final value.
+      expect(onSearchQueryChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows no results state when the server returns no matches for a search", () => {
+      render(
+        <KeysTable
+          keys={[]}
+          onRevoke={mockOnRevoke}
+          onEdit={mockOnEdit}
+          searchQuery="nonexistent"
+        />
+      );
 
       // Should show no results message
       expect(screen.getByText("noKeysFound")).toBeInTheDocument();
@@ -537,38 +519,22 @@ describe("KeysTable", () => {
 
       // Should not show any keys
       expect(screen.queryByText("Production API Key")).not.toBeInTheDocument();
-      expect(screen.queryByText("Development API Key")).not.toBeInTheDocument();
-      expect(screen.queryByText("Testing Key")).not.toBeInTheDocument();
     });
 
     it("maintains search input when showing no results", () => {
-      render(<KeysTable keys={mockKeys} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
-
-      const searchInput = screen.getByPlaceholderText("searchKeys");
-      fireEvent.change(searchInput, { target: { value: "nonexistent" } });
+      render(
+        <KeysTable
+          keys={[]}
+          onRevoke={mockOnRevoke}
+          onEdit={mockOnEdit}
+          searchQuery="nonexistent"
+        />
+      );
 
       // Search input should still be visible and contain the search query
+      const searchInput = screen.getByPlaceholderText("searchKeys");
       expect(searchInput).toBeInTheDocument();
       expect(searchInput).toHaveValue("nonexistent");
-    });
-
-    it("updates filtered results dynamically as user types", () => {
-      render(<KeysTable keys={mockKeys} onRevoke={mockOnRevoke} onEdit={mockOnEdit} />);
-
-      const searchInput = screen.getByPlaceholderText("searchKeys");
-
-      // Type "p" - should show Production
-      fireEvent.change(searchInput, { target: { value: "p" } });
-      expect(screen.getByText("Production API Key")).toBeInTheDocument();
-
-      // Type "pr" - should still show Production
-      fireEvent.change(searchInput, { target: { value: "pr" } });
-      expect(screen.getByText("Production API Key")).toBeInTheDocument();
-
-      // Type "prod" - should still show Production
-      fireEvent.change(searchInput, { target: { value: "prod" } });
-      expect(screen.getByText("Production API Key")).toBeInTheDocument();
-      expect(screen.queryByText("Development API Key")).not.toBeInTheDocument();
     });
 
     it("search input has correct styling class", () => {

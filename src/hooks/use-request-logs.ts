@@ -81,5 +81,8 @@ export function useRequestLogs(
       return apiClient.get<PaginatedRequestLogsResponse>(`/admin/logs?${params.toString()}`);
     },
     refetchInterval: options?.refetchInterval,
+    // Keep previous data during filter/pagination changes so the filter bar
+    // stays mounted instead of flashing the loading skeleton.
+    placeholderData: (previous) => previous,
   });
 }

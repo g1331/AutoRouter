@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Key } from "lucide-react";
 
@@ -58,9 +58,15 @@ function KeysLoadingSkeleton({ loadingLabel }: KeysLoadingSkeletonProps) {
 
 export default function KeysPage() {
   const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
   const [revokeKey, setRevokeKey] = useState<APIKey | null>(null);
   const [editingKey, setEditingKey] = useState<APIKey | null>(null);
   const pageSize = 10;
+
+  const handleSearchQueryChange = useCallback((value: string) => {
+    setSearchQuery(value);
+    setPage(1);
+  }, []);
 
   // 容器变形动画：记录触发弹窗的源元素（表格行 / 卡片），关闭时收回同一元素。
   const { startMorph, canMorph } = useContainerMorph();
@@ -68,7 +74,7 @@ export default function KeysPage() {
 
   const t = useTranslations("keys");
   const tCommon = useTranslations("common");
-  const { data, isLoading } = useAPIKeys(page, pageSize);
+  const { data, isLoading } = useAPIKeys(page, pageSize, searchQuery);
 
   return (
     <>
@@ -89,6 +95,8 @@ export default function KeysPage() {
           <>
             <KeysTable
               keys={data?.items || []}
+              searchQuery={searchQuery}
+              onSearchQueryChange={handleSearchQueryChange}
               onRevoke={(key, source) => {
                 morphSourceRef.current = source;
                 startMorph(() => setRevokeKey(key), {

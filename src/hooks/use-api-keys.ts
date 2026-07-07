@@ -14,15 +14,24 @@ import { ApiError } from "@/lib/api";
 import { toast } from "sonner";
 
 /**
- * Fetch paginated API keys
+ * Fetch paginated API keys with an optional server-side name search
  */
-export function useAPIKeys(page: number = 1, pageSize: number = 10) {
+export function useAPIKeys(page: number = 1, pageSize: number = 10, search: string = "") {
   const { apiClient } = useAuth();
 
   return useQuery({
-    queryKey: ["api-keys", page, pageSize],
-    queryFn: () =>
-      apiClient.get<PaginatedAPIKeysResponse>(`/admin/keys?page=${page}&page_size=${pageSize}`),
+    queryKey: ["api-keys", page, pageSize, search],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("page_size", String(pageSize));
+      if (search) {
+        params.set("search", search);
+      }
+      return apiClient.get<PaginatedAPIKeysResponse>(`/admin/keys?${params.toString()}`);
+    },
+    // Keep previous data during search/pagination to avoid layout jumps.
+    placeholderData: (previous) => previous,
   });
 }
 
