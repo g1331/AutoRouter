@@ -24,8 +24,10 @@ export default function PortalRequestsPage() {
   const pageSize = 20;
 
   const [tableFilters, setTableFilters] = useState<LogsServerFilters>(DEFAULT_LOGS_SERVER_FILTERS);
-  const handleTableFiltersChange = useCallback((next: LogsServerFilters) => {
-    setTableFilters(next);
+  // Functional merge: a debounced patch (e.g. the model input) can arrive after
+  // a newer status/time change and must not overwrite it.
+  const handleTableFiltersChange = useCallback((patch: Partial<LogsServerFilters>) => {
+    setTableFilters((prev) => ({ ...prev, ...patch }));
     setPage(1);
   }, []);
 

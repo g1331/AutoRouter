@@ -143,8 +143,10 @@ export default function LogsPage() {
     refetchInterval !== false ? refetchInterval : fallbackRefetchIntervalMs;
 
   const [tableFilters, setTableFilters] = useState<LogsServerFilters>(DEFAULT_LOGS_SERVER_FILTERS);
-  const handleTableFiltersChange = useCallback((next: LogsServerFilters) => {
-    setTableFilters(next);
+  // Functional merge: a debounced patch (e.g. the model input) can arrive after
+  // a newer status/time change and must not overwrite it.
+  const handleTableFiltersChange = useCallback((patch: Partial<LogsServerFilters>) => {
+    setTableFilters((prev) => ({ ...prev, ...patch }));
     setPage(1);
   }, []);
 
@@ -303,8 +305,8 @@ export default function LogsPage() {
                   (connectionState === "live" || effectiveRefetchInterval !== false)
                 }
                 initialExpandedIds={focusInitialExpanded}
-                serverFilters={tableFilters}
-                onServerFiltersChange={handleTableFiltersChange}
+                serverFilters={focusId ? undefined : tableFilters}
+                onServerFiltersChange={focusId ? undefined : handleTableFiltersChange}
               />
             </div>
 

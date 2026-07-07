@@ -92,6 +92,15 @@ export function UsersTable({
 
   // Local echo keeps typing responsive; updates are debounced up to the parent.
   const [searchInput, setSearchInput] = useState(searchQuery);
+  // Resync the echo when the controlled value changes from outside (e.g. a
+  // parent-level reset) — render-phase adjustment, not an effect.
+  const [lastSearchQuery, setLastSearchQuery] = useState(searchQuery);
+  if (searchQuery !== lastSearchQuery) {
+    setLastSearchQuery(searchQuery);
+    if (searchQuery !== searchInput.trim()) {
+      setSearchInput(searchQuery);
+    }
+  }
   const searchDebounceRef = useRef<number | null>(null);
   useEffect(() => {
     return () => {
@@ -106,7 +115,11 @@ export function UsersTable({
       window.clearTimeout(searchDebounceRef.current);
     }
     searchDebounceRef.current = window.setTimeout(() => {
-      onSearchQueryChange?.(value.trim());
+      const trimmed = value.trim();
+      // Skip no-op commits so an unchanged query does not reset pagination.
+      if (trimmed !== searchQuery) {
+        onSearchQueryChange?.(trimmed);
+      }
     }, 300);
   };
 

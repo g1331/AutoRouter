@@ -84,7 +84,15 @@ export function useRequestLogs(
     },
     refetchInterval: options?.refetchInterval,
     // Keep previous data during filter/pagination changes so the filter bar
-    // stays mounted instead of flashing the loading skeleton.
-    placeholderData: (previous) => previous,
+    // stays mounted instead of flashing the loading skeleton. Never carry data
+    // across the list/focus boundary: a focus query must not render the stale
+    // list page (and vice versa), so those transitions show the skeleton.
+    placeholderData: (previous, previousQuery) => {
+      const previousFilters = previousQuery?.queryKey[3] as RequestLogsFilters | undefined;
+      if ((previousFilters?.id ?? null) !== (filters?.id ?? null)) {
+        return undefined;
+      }
+      return previous;
+    },
   });
 }

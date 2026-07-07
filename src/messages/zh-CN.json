@@ -561,6 +561,8 @@
     "perfSampleShort": "样本偏短",
     "noMatchingLogs": "未找到匹配日志",
     "noMatchingLogsDesc": "没有符合当前筛选条件的日志",
+    "noLogsInRange": "当前时间范围内暂无日志",
+    "noLogsInRangeDesc": "切换时间范围为「全部」可查看更早的历史记录",
     "indicatorRedirect": "模型重定向",
     "indicatorFailover": "故障转移",
     "indicatorExcluded": "有上游被排除",

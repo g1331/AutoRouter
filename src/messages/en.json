@@ -557,6 +557,8 @@
     "perfSampleShort": "short sample",
     "noMatchingLogs": "No matching logs",
     "noMatchingLogsDesc": "No logs match your current filter criteria",
+    "noLogsInRange": "No logs in the selected time range",
+    "noLogsInRangeDesc": "Switch the time range to ALL to see older history",
     "routingProviderType": "Provider",
     "routingPathCapability": "Path Capability",
     "routingNone": "None",

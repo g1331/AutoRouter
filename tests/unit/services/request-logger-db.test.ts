@@ -471,21 +471,30 @@ describe("request-logger (db flows)", () => {
     expect(result.items).toEqual([]);
   });
 
-  it("listRequestLogs maps statusClass to a gte/lt range on statusCode", async () => {
-    const { listRequestLogs } = await import("@/lib/services/request-logger");
-    const { gte, lt } = await import("drizzle-orm");
+  it.each([
+    ["2xx", 200, 300],
+    ["4xx", 400, 500],
+    ["5xx", 500, 600],
+  ] as const)(
+    "listRequestLogs maps statusClass %s to the [%i, %i) range on statusCode",
+    async (statusClass, min, max) => {
+      const { listRequestLogs } = await import("@/lib/services/request-logger");
+      const { gte, lt } = await import("drizzle-orm");
+      vi.mocked(gte).mockClear();
+      vi.mocked(lt).mockClear();
 
-    const whereMock = vi.fn().mockResolvedValueOnce([{ value: 0 }]);
-    dbSelectMock.mockReturnValueOnce({
-      from: vi.fn().mockReturnValue({ where: whereMock }),
-    });
-    requestLogsFindManyMock.mockResolvedValueOnce([]);
+      const whereMock = vi.fn().mockResolvedValueOnce([{ value: 0 }]);
+      dbSelectMock.mockReturnValueOnce({
+        from: vi.fn().mockReturnValue({ where: whereMock }),
+      });
+      requestLogsFindManyMock.mockResolvedValueOnce([]);
 
-    await listRequestLogs(1, 20, { statusClass: "5xx" });
+      await listRequestLogs(1, 20, { statusClass });
 
-    expect(gte).toHaveBeenCalledWith("status_code", 500);
-    expect(lt).toHaveBeenCalledWith("status_code", 600);
-  });
+      expect(gte).toHaveBeenCalledWith("status_code", min);
+      expect(lt).toHaveBeenCalledWith("status_code", max);
+    }
+  );
 
   it("listRequestLogs ignores statusClass when an exact statusCode is set", async () => {
     const { listRequestLogs } = await import("@/lib/services/request-logger");

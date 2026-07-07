@@ -1285,109 +1285,20 @@ describe("LogsTable", () => {
         expect(rows.length).toBe(8);
       });
 
-      it("shows only 2xx logs when filter is '2xx'", () => {
-        const { container } = render(<LogsTable logs={logsForFiltering} />);
+      it("hides the server filter controls when onServerFiltersChange is omitted", () => {
+        // The focus view pins a single entry: without a change callback the
+        // status/model/time controls would be silent no-ops, so they are hidden.
+        render(<LogsTable logs={logsForFiltering} />);
 
-        // Find and click status filter
-        const selectTrigger = container.querySelector('[role="combobox"]');
-        expect(selectTrigger).toBeInTheDocument();
-      });
-
-      it("filters out null status codes for 2xx filter", () => {
-        render(
-          <LogsTable
-            logs={[
-              { ...mockLog, id: "log-1", status_code: 200 },
-              { ...mockLog, id: "log-2", status_code: null },
-            ]}
-          />
-        );
-
-        // Both logs should be visible with "all" filter
-        const rows = screen.getAllByRole("row");
-        expect(rows.length).toBeGreaterThan(0);
-      });
-
-      it("filters out null status codes for 4xx filter", () => {
-        render(
-          <LogsTable
-            logs={[
-              { ...mockLog, id: "log-1", status_code: 400 },
-              { ...mockLog, id: "log-2", status_code: null },
-            ]}
-          />
-        );
-
-        const rows = screen.getAllByRole("row");
-        expect(rows.length).toBeGreaterThan(0);
-      });
-
-      it("filters out null status codes for 5xx filter", () => {
-        render(
-          <LogsTable
-            logs={[
-              { ...mockLog, id: "log-1", status_code: 500 },
-              { ...mockLog, id: "log-2", status_code: null },
-            ]}
-          />
-        );
-
-        const rows = screen.getAllByRole("row");
-        expect(rows.length).toBeGreaterThan(0);
-      });
-
-      it("correctly filters boundary status codes for 2xx", () => {
-        render(
-          <LogsTable
-            logs={[
-              { ...mockLog, id: "log-1", status_code: 199 },
-              { ...mockLog, id: "log-2", status_code: 200 },
-              { ...mockLog, id: "log-3", status_code: 299 },
-              { ...mockLog, id: "log-4", status_code: 300 },
-            ]}
-          />
-        );
-
-        // With default "all" filter, all should be visible
-        const rows = screen.getAllByRole("row");
-        expect(rows.length).toBe(5); // 1 header + 4 data rows
-      });
-
-      it("correctly filters boundary status codes for 4xx", () => {
-        render(
-          <LogsTable
-            logs={[
-              { ...mockLog, id: "log-1", status_code: 399 },
-              { ...mockLog, id: "log-2", status_code: 400 },
-              { ...mockLog, id: "log-3", status_code: 499 },
-              { ...mockLog, id: "log-4", status_code: 500 },
-            ]}
-          />
-        );
-
-        const rows = screen.getAllByRole("row");
-        expect(rows.length).toBe(5); // 1 header + 4 data rows
-      });
-
-      it("correctly filters boundary status codes for 5xx", () => {
-        render(
-          <LogsTable
-            logs={[
-              { ...mockLog, id: "log-1", status_code: 499 },
-              { ...mockLog, id: "log-2", status_code: 500 },
-              { ...mockLog, id: "log-3", status_code: 599 },
-              { ...mockLog, id: "log-4", status_code: 600 },
-            ]}
-          />
-        );
-
-        const rows = screen.getAllByRole("row");
-        expect(rows.length).toBe(5); // 1 header + 4 data rows
+        expect(screen.queryByPlaceholderText("filterModel")).not.toBeInTheDocument();
+        expect(screen.queryByText("timeRange.7d")).not.toBeInTheDocument();
+        // The client-side quick filters stay available.
+        expect(screen.getByText("presetAll")).toBeInTheDocument();
       });
     });
 
     describe("Model Filter", () => {
-      it("debounces model input changes up to onServerFiltersChange", async () => {
+      it("debounces model input changes up to onServerFiltersChange as a model-only patch", async () => {
         const onServerFiltersChange = vi.fn();
         render(<LogsTable logs={logsForFiltering} onServerFiltersChange={onServerFiltersChange} />);
 
@@ -1397,91 +1308,56 @@ describe("LogsTable", () => {
         // Debounced: not called synchronously.
         expect(onServerFiltersChange).not.toHaveBeenCalled();
 
+        // The patch must contain ONLY the model: merging in the parent's
+        // functional setState is what prevents a stale-snapshot clobber of a
+        // concurrent status/time change.
         await waitFor(() =>
-          expect(onServerFiltersChange).toHaveBeenCalledWith(
-            expect.objectContaining({ model: "Claude" })
-          )
+          expect(onServerFiltersChange).toHaveBeenCalledWith({ model: "Claude" })
         );
       });
 
-      it("filters logs by exact model name", () => {
+      it("does not commit a model patch when the trimmed value is unchanged", async () => {
+        const onServerFiltersChange = vi.fn();
         render(
           <LogsTable
-            logs={[
-              { ...mockLog, id: "log-1", model: "gpt-4" },
-              { ...mockLog, id: "log-2", model: "gpt-3.5-turbo" },
-              { ...mockLog, id: "log-3", model: "claude-3-opus" },
-            ]}
+            logs={logsForFiltering}
+            serverFilters={{ statusClass: "all", model: "claude", timeRange: "30d" }}
+            onServerFiltersChange={onServerFiltersChange}
           />
         );
 
-        // All should be visible with no filter
-        const rows = screen.getAllByRole("row");
-        expect(rows.length).toBe(4); // 1 header + 3 data rows
+        const input = screen.getByPlaceholderText("filterModel");
+        // Same effective value with extra whitespace must not reset pagination.
+        fireEvent.change(input, { target: { value: " claude " } });
+
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        expect(onServerFiltersChange).not.toHaveBeenCalled();
       });
 
-      it("filters logs by partial model name", () => {
-        render(
+      it("resyncs the model echo when the controlled value changes from outside", () => {
+        const { rerender } = render(
           <LogsTable
-            logs={[
-              { ...mockLog, id: "log-1", model: "gpt-4" },
-              { ...mockLog, id: "log-2", model: "gpt-3.5-turbo" },
-              { ...mockLog, id: "log-3", model: "claude-3-opus" },
-            ]}
+            logs={logsForFiltering}
+            serverFilters={{ statusClass: "all", model: "claude", timeRange: "30d" }}
+            onServerFiltersChange={vi.fn()}
           />
         );
 
-        const rows = screen.getAllByRole("row");
-        expect(rows.length).toBe(4); // 1 header + 3 data rows
-      });
+        expect(screen.getByPlaceholderText("filterModel")).toHaveValue("claude");
 
-      it("filters out logs with null model", () => {
-        render(
+        rerender(
           <LogsTable
-            logs={[
-              { ...mockLog, id: "log-1", model: "gpt-4" },
-              { ...mockLog, id: "log-2", model: null },
-            ]}
+            logs={logsForFiltering}
+            serverFilters={{ statusClass: "all", model: "", timeRange: "30d" }}
+            onServerFiltersChange={vi.fn()}
           />
         );
 
-        const rows = screen.getAllByRole("row");
-        expect(rows.length).toBe(3); // 1 header + 2 data rows
-      });
-
-      it("returns no results when no models match", () => {
-        render(
-          <LogsTable
-            logs={[
-              { ...mockLog, id: "log-1", model: "gpt-4" },
-              { ...mockLog, id: "log-2", model: "gpt-3.5-turbo" },
-            ]}
-          />
-        );
-
-        // With no filter applied, all logs should be visible
-        const rows = screen.getAllByRole("row");
-        expect(rows.length).toBe(3); // 1 header + 2 data rows
+        expect(screen.getByPlaceholderText("filterModel")).toHaveValue("");
       });
     });
 
     describe("Time Range Filter", () => {
-      it("filters logs for 'today' range", () => {
-        render(<LogsTable logs={logsForFiltering} />);
-
-        // Default is "30d", which should include recent logs
-        const rows = screen.getAllByRole("row");
-        expect(rows.length).toBeGreaterThan(1);
-      });
-
-      it("filters logs for '7d' range", () => {
-        render(<LogsTable logs={logsForFiltering} />);
-
-        // Default filter shows logs within 30 days
-        const rows = screen.getAllByRole("row");
-        expect(rows.length).toBeGreaterThan(1);
-      });
-
       it("renders logs of any age (time filtering happens server-side)", () => {
         render(<LogsTable logs={logsForFiltering} />);
 
@@ -1496,9 +1372,7 @@ describe("LogsTable", () => {
 
         fireEvent.click(screen.getByText("timeRange.7d"));
 
-        expect(onServerFiltersChange).toHaveBeenCalledWith(
-          expect.objectContaining({ timeRange: "7d" })
-        );
+        expect(onServerFiltersChange).toHaveBeenCalledWith({ timeRange: "7d" });
       });
 
       it("offers an all-time preset so entries older than 30d stay reachable", () => {
@@ -1507,9 +1381,7 @@ describe("LogsTable", () => {
 
         fireEvent.click(screen.getByText("timeRange.all"));
 
-        expect(onServerFiltersChange).toHaveBeenCalledWith(
-          expect.objectContaining({ timeRange: "all" })
-        );
+        expect(onServerFiltersChange).toHaveBeenCalledWith({ timeRange: "all" });
       });
     });
 
@@ -1521,16 +1393,6 @@ describe("LogsTable", () => {
         const rows = screen.getAllByRole("row");
         expect(rows.length).toBe(8); // 1 header + 7 data rows
       });
-
-      it("shows empty state when no logs match combined filters", () => {
-        render(
-          <LogsTable logs={[{ ...mockLog, id: "log-1", status_code: 200, model: "gpt-4" }]} />
-        );
-
-        // Single log should be visible
-        const rows = screen.getAllByRole("row");
-        expect(rows.length).toBe(2); // 1 header + 1 data row
-      });
     });
 
     describe("Empty State After Filtering", () => {
@@ -1539,6 +1401,7 @@ describe("LogsTable", () => {
           <LogsTable
             logs={[]}
             serverFilters={{ statusClass: "all", model: "gpt-999", timeRange: "30d" }}
+            onServerFiltersChange={vi.fn()}
           />
         );
 
@@ -1548,7 +1411,28 @@ describe("LogsTable", () => {
         expect(screen.getByPlaceholderText("filterModel")).toBeInTheDocument();
       });
 
-      it("shows the plain empty state when no filters are active", () => {
+      it("points at the ALL preset when only the default 30d window is active", () => {
+        // A user whose logs are all older than 30 days is not out of data —
+        // the default window is hiding it, and the copy must say so.
+        render(<LogsTable logs={[]} onServerFiltersChange={vi.fn()} />);
+
+        expect(screen.getByText("noLogsInRange")).toBeInTheDocument();
+        expect(screen.getByText("noLogsInRangeDesc")).toBeInTheDocument();
+      });
+
+      it("shows the plain empty state when the ALL range confirms there is no data", () => {
+        render(
+          <LogsTable
+            logs={[]}
+            serverFilters={{ statusClass: "all", model: "", timeRange: "all" }}
+            onServerFiltersChange={vi.fn()}
+          />
+        );
+
+        expect(screen.getByText("noLogs")).toBeInTheDocument();
+      });
+
+      it("shows the plain empty state when filters are not interactive", () => {
         render(<LogsTable logs={[]} />);
 
         expect(screen.getByText("noLogs")).toBeInTheDocument();
