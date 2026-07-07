@@ -407,9 +407,11 @@ export async function getTimeseriesStats(
   const timeBucketExpr = buildTimeBucketExpr(granularity);
   const selectFields = buildTimeseriesSelectFields(metric, timeBucketExpr);
 
+  // No upstreamId filter: requests that never reached an upstream (routing
+  // failures, model-list calls) must still count toward the period totals —
+  // they surface as the "Unknown" series in the by-upstream view.
   const whereConditions = [
     gte(requestLogs.createdAt, startTime),
-    isNotNull(requestLogs.upstreamId),
     ...(endTime ? [lt(requestLogs.createdAt, endTime)] : []),
   ];
 
