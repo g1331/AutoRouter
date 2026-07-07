@@ -366,45 +366,65 @@ export function UsageChart({
   }, [data, displayMode, metric, mode, t]);
 
   const totals = useMemo(() => {
-    const totalSeries = data?.total_series ?? [];
-    if (totalSeries.length > 0) {
-      return totalSeries.reduce(
-        (acc, point) => ({
-          requests: acc.requests + point.request_count,
-          tokens: acc.tokens + point.total_tokens,
-        }),
-        { requests: 0, tokens: 0 }
-      );
-    }
-
-    if (!data?.series?.length) {
-      return { requests: 0, tokens: 0 };
-    }
+    const points = data?.total_series?.length
+      ? data.total_series
+      : (data?.series ?? []).flatMap((series) => series.data);
 
     let requests = 0;
     let tokens = 0;
+    let cost = 0;
+    let weightedMetricSum = 0;
 
-    data.series.forEach((series) => {
-      series.data.forEach((point) => {
-        requests += point.request_count;
-        tokens += point.total_tokens;
-      });
-    });
+    for (const point of points) {
+      requests += point.request_count;
+      tokens += point.total_tokens;
+      cost += point.total_cost ?? 0;
+      weightedMetricSum += getPointMetricValue(point, metric) * point.request_count;
+    }
 
-    return { requests, tokens };
-  }, [data]);
+    // Request-count-weighted mean of the per-bucket averages; buckets only
+    // average successful/eligible requests, so this is an approximation.
+    return { requests, tokens, cost, average: requests > 0 ? weightedMetricSum / requests : 0 };
+  }, [data, metric]);
+
+  const requestsSummaryItem = {
+    key: "requests",
+    label: t("stats.totalRequests"),
+    value: formatNumber(totals.requests),
+  };
+  const tokensSummaryItem = {
+    key: "tokens",
+    label: t("stats.totalTokensUsed"),
+    value: formatNumber(totals.tokens),
+  };
+
+  const metricSummaryItem = (() => {
+    switch (metric) {
+      case "tokens":
+        return tokensSummaryItem;
+      case "cost":
+        return {
+          key: "cost",
+          label: t("stats.totalCostUsed"),
+          value: formatMetricValue(totals.cost, "cost"),
+        };
+      case "ttft":
+      case "tps":
+      case "duration":
+        return {
+          key: metric,
+          label: metricLabels[metric],
+          value: formatMetricValue(totals.average, metric),
+        };
+      case "requests":
+      default:
+        return requestsSummaryItem;
+    }
+  })();
 
   const summaryItems = [
-    {
-      key: "requests",
-      label: t("stats.totalRequests"),
-      value: formatNumber(totals.requests),
-    },
-    {
-      key: "tokens",
-      label: t("stats.totalTokensUsed"),
-      value: formatNumber(totals.tokens),
-    },
+    metricSummaryItem,
+    metric === "requests" ? tokensSummaryItem : requestsSummaryItem,
   ] as const;
 
   const chartHeightClass =

@@ -305,6 +305,49 @@ describe("UsageChart", () => {
       expect(screen.getByText("15.0K")).toBeInTheDocument();
       expect(screen.getByText("1.5M")).toBeInTheDocument();
     });
+
+    it("shows the selected metric's period summary with total requests as anchor", () => {
+      renderChart({ metric: "tps" });
+
+      // Request-count-weighted mean: (31*180 + 38*270) / 450 = 35.2
+      // The metric label shows both as the tab and as the summary caption.
+      expect(screen.getAllByText("stats.chartTabTps")).toHaveLength(2);
+      expect(screen.getByText("35.2 tok/s")).toBeInTheDocument();
+      expect(screen.getByText("stats.totalRequests")).toBeInTheDocument();
+      expect(screen.getByText("450")).toBeInTheDocument();
+      expect(screen.queryByText("stats.totalTokensUsed")).not.toBeInTheDocument();
+    });
+
+    it("sums period cost for the cost metric", () => {
+      renderChart({
+        metric: "cost",
+        data: {
+          range: "7d",
+          granularity: "day",
+          series: [],
+          total_series: [
+            {
+              timestamp: "2024-01-01T00:00:00Z",
+              request_count: 10,
+              total_tokens: 100,
+              avg_duration_ms: 100,
+              total_cost: 1.25,
+            },
+            {
+              timestamp: "2024-01-02T00:00:00Z",
+              request_count: 20,
+              total_tokens: 200,
+              avg_duration_ms: 100,
+              total_cost: 2.5,
+            },
+          ],
+        },
+      });
+
+      expect(screen.getByText("stats.totalCostUsed")).toBeInTheDocument();
+      expect(screen.getByText("$3.7500")).toBeInTheDocument();
+      expect(screen.getByText("stats.totalRequests")).toBeInTheDocument();
+    });
   });
 
   describe("interaction", () => {
@@ -364,7 +407,8 @@ describe("UsageChart", () => {
     it("formats tooltip values for TPS metric with tok/s suffix", () => {
       renderChart({ metric: "tps" });
 
-      expect(screen.getByText(/tok\/s/)).toBeInTheDocument();
+      // tok/s appears in both the tooltip and the header summary.
+      expect(screen.getAllByText(/tok\/s/).length).toBeGreaterThan(0);
     });
   });
 });

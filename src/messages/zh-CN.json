@@ -266,6 +266,7 @@
       "usageStatistics": "使用统计",
       "totalRequests": "总请求数",
       "totalTokensUsed": "总 Token",
+      "totalCostUsed": "总消费",
       "loading": "加载中...",
       "noData": "暂无数据",
       "leaderboard": "排行榜",

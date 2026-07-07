@@ -264,6 +264,7 @@
       "usageStatistics": "USAGE STATISTICS",
       "totalRequests": "Total Requests",
       "totalTokensUsed": "Total Tokens",
+      "totalCostUsed": "Total Cost",
       "loading": "Loading...",
       "noData": "No data available",
       "leaderboard": "LEADERBOARD",
