@@ -188,6 +188,9 @@ export function AppShell({
         ref={mainRef}
         className={cn(
           "min-w-0 flex-1 overflow-y-auto transition-[margin] duration-cf-normal ease-cf-standard",
+          // Keep programmatic scrollIntoView targets clear of the sticky
+          // topbars (h-14 desktop / h-12 mobile) that overlay this container.
+          "scroll-pt-14",
           "pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0",
           isSidebarCollapsed ? "md:ml-20" : "md:ml-64"
         )}

@@ -212,7 +212,7 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
                 <LeaderboardLoadingRow key={i} cols={5} />
               ))}
             </DashboardLoadingSurface>
-          ) : !data?.upstreams.length ? (
+          ) : !data?.upstreams?.length ? (
             <p className="type-body-small py-6 text-center text-muted-foreground">
               {t("stats.noUpstreams")}
             </p>
@@ -288,7 +288,7 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
                 <LeaderboardLoadingRow key={i} cols={4} />
               ))}
             </DashboardLoadingSurface>
-          ) : !data?.models.length ? (
+          ) : !data?.models?.length ? (
             <p className="type-body-small py-6 text-center text-muted-foreground">
               {t("stats.noModels")}
             </p>
@@ -353,7 +353,7 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
                 <LeaderboardLoadingRow key={i} cols={3} />
               ))}
             </DashboardLoadingSurface>
-          ) : !data?.api_keys.length ? (
+          ) : !data?.api_keys?.length ? (
             <p className="type-body-small py-6 text-center text-muted-foreground">
               {t("stats.noApiKeys")}
             </p>
@@ -416,7 +416,7 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
                 <LeaderboardLoadingRow key={i} cols={3} />
               ))}
             </DashboardLoadingSurface>
-          ) : !data?.users.length ? (
+          ) : !data?.users?.length ? (
             <p className="type-body-small py-6 text-center text-muted-foreground">
               {t("stats.noUsers")}
             </p>

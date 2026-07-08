@@ -83,8 +83,12 @@ export function LivePulseBar({
         ? t("statusConnectingTooltip")
         : t("statusLiveTooltip");
 
+  // A partial snapshot (fallback polling, stubbed responses) may omit the
+  // gateway block; a layout-level crash here white-screens every admin page.
+  const gateway = data.gateway ?? ZERO_SNAPSHOT.gateway;
+
   const errorEmphasis = data.errorRatePct > ERROR_RATE_WARN_THRESHOLD_PCT;
-  const breakersEmphasis = data.gateway.openCircuitBreakers > 0;
+  const breakersEmphasis = gateway.openCircuitBreakers > 0;
 
   return (
     <div
@@ -143,7 +147,7 @@ export function LivePulseBar({
           <span className="inline-flex items-center gap-1 whitespace-nowrap">
             <Server className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
             <span className="tabular-nums text-foreground">
-              {data.gateway.healthyUpstreams}/{data.gateway.totalUpstreams}
+              {gateway.healthyUpstreams}/{gateway.totalUpstreams}
             </span>
             <span className="text-muted-foreground">{t("upstreamsHealthy")}</span>
           </span>
@@ -165,7 +169,7 @@ export function LivePulseBar({
                 breakersEmphasis ? "text-status-warning" : "text-foreground"
               )}
             >
-              {data.gateway.openCircuitBreakers}
+              {gateway.openCircuitBreakers}
             </span>
             <span className="text-muted-foreground">{t("circuitBreakersOpen")}</span>
           </span>
