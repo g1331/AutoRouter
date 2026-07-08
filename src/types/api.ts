@@ -1192,11 +1192,21 @@ export interface UpstreamTimeseriesData {
   data: TimeseriesDataPoint[];
 }
 
+export interface TimeseriesPeriodSummary {
+  request_count: number;
+  total_tokens: number;
+  avg_ttft_ms: number;
+  avg_duration_ms: number;
+  avg_tps: number;
+  total_cost: number;
+}
+
 export interface StatsTimeseriesResponse {
   range: string;
   granularity: string;
   series: UpstreamTimeseriesData[];
   total_series: TimeseriesDataPoint[];
+  period_summary: TimeseriesPeriodSummary;
 }
 
 export interface LeaderboardAPIKeyItem {

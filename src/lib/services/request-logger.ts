@@ -1,4 +1,4 @@
-import { eq, desc, count, and, gte, lte, lt, asc, isNull, sql } from "drizzle-orm";
+import { eq, desc, count, and, gte, lte, lt, asc, isNull } from "drizzle-orm";
 import { db, requestLogs, type RequestLog } from "../db";
 import { caseInsensitiveLike } from "../db/sql-helpers";
 import type {

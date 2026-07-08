@@ -1,5 +1,6 @@
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { format, parseISO } from "date-fns";
 import { describe, it, expect, vi } from "vitest";
 
 import { UsageChart } from "@/components/dashboard/usage-chart";
@@ -122,6 +123,14 @@ const mockTimeseriesData: StatsTimeseriesResponse = {
       avg_tps: 38,
     },
   ],
+  period_summary: {
+    request_count: 450,
+    total_tokens: 22500,
+    avg_ttft_ms: 320.5,
+    avg_duration_ms: 195.4,
+    avg_tps: 35.2,
+    total_cost: 0,
+  },
 };
 
 const mockHourlyData: StatsTimeseriesResponse = {
@@ -161,6 +170,14 @@ const mockHourlyData: StatsTimeseriesResponse = {
       avg_duration_ms: 160,
     },
   ],
+  period_summary: {
+    request_count: 110,
+    total_tokens: 5500,
+    avg_ttft_ms: 0,
+    avg_duration_ms: 155,
+    avg_tps: 0,
+    total_cost: 0,
+  },
 };
 
 function renderChart(overrides: Partial<React.ComponentProps<typeof UsageChart>> = {}) {
@@ -198,6 +215,14 @@ describe("UsageChart", () => {
           granularity: "day",
           series: [],
           total_series: [],
+          period_summary: {
+            request_count: 0,
+            total_tokens: 0,
+            avg_ttft_ms: 0,
+            avg_duration_ms: 0,
+            avg_tps: 0,
+            total_cost: 0,
+          },
         },
       });
 
@@ -249,15 +274,17 @@ describe("UsageChart", () => {
       const chartData = JSON.parse(
         screen.getByTestId("area-chart").getAttribute("data-chart") ?? "[]"
       );
+      // formattedTime renders in the machine-local timezone, so compute the
+      // expectation the same way instead of hardcoding a UTC date string.
       expect(chartData).toEqual([
         {
           timestamp: "2024-01-01T00:00:00Z",
-          formattedTime: "01/01",
+          formattedTime: format(parseISO("2024-01-01T00:00:00Z"), "MM/dd"),
           totalValue: 31,
         },
         {
           timestamp: "2024-01-02T00:00:00Z",
-          formattedTime: "01/02",
+          formattedTime: format(parseISO("2024-01-02T00:00:00Z"), "MM/dd"),
           totalValue: 38,
         },
       ]);
@@ -299,6 +326,14 @@ describe("UsageChart", () => {
               avg_duration_ms: 200,
             },
           ],
+          period_summary: {
+            request_count: 15000,
+            total_tokens: 1500000,
+            avg_ttft_ms: 0,
+            avg_duration_ms: 200,
+            avg_tps: 0,
+            total_cost: 0,
+          },
         },
       });
 
@@ -309,7 +344,7 @@ describe("UsageChart", () => {
     it("shows the selected metric's period summary with total requests as anchor", () => {
       renderChart({ metric: "tps" });
 
-      // Request-count-weighted mean: (31*180 + 38*270) / 450 = 35.2
+      // avg_tps comes straight from the server-side period_summary aggregate.
       // The metric label shows both as the tab and as the summary caption.
       expect(screen.getAllByText("stats.chartTabTps")).toHaveLength(2);
       expect(screen.getByText("35.2 tok/s")).toBeInTheDocument();
@@ -341,6 +376,14 @@ describe("UsageChart", () => {
               total_cost: 2.5,
             },
           ],
+          period_summary: {
+            request_count: 30,
+            total_tokens: 300,
+            avg_ttft_ms: 0,
+            avg_duration_ms: 100,
+            avg_tps: 0,
+            total_cost: 3.75,
+          },
         },
       });
 

@@ -1,4 +1,4 @@
-import { eq, desc, inArray, count, and, sql } from "drizzle-orm";
+import { eq, desc, inArray, count, and } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { db, apiKeys, apiKeyUpstreams, upstreams, type ApiKey } from "../db";
 import { caseInsensitiveLike } from "../db/sql-helpers";

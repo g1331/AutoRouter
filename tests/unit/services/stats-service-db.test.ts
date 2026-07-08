@@ -140,6 +140,10 @@ describe("getTimeseriesStats", () => {
     expect(totalRequests).toBe(3);
     expect(totalTokens).toBe(150);
 
+    // The whole-period aggregate matches the bucket totals exactly.
+    expect(result.periodSummary.requestCount).toBe(3);
+    expect(result.periodSummary.totalTokens).toBe(150);
+
     const names = result.series.map((s) => s.upstreamName);
     expect(names).toContain("primary");
     expect(names).toContain("Unknown");
@@ -155,5 +159,13 @@ describe("getTimeseriesStats", () => {
     const result = await getTimeseriesStats("today", "requests");
     expect(result.series).toEqual([]);
     expect(result.totalSeries).toEqual([]);
+    expect(result.periodSummary).toEqual({
+      requestCount: 0,
+      totalTokens: 0,
+      avgTtftMs: 0,
+      avgDurationMs: 0,
+      avgTps: 0,
+      totalCost: 0,
+    });
   });
 });

@@ -73,6 +73,15 @@ describe("use-dashboard-stats hooks", () => {
   });
 
   describe("useStatsTimeseries", () => {
+    const emptyPeriodSummary = {
+      request_count: 0,
+      total_tokens: 0,
+      avg_ttft_ms: 0,
+      avg_duration_ms: 0,
+      avg_tps: 0,
+      total_cost: 0,
+    };
+
     it("fetches timeseries with default range (7d)", async () => {
       const mockResponse: StatsTimeseriesResponse = {
         range: "7d",
@@ -99,6 +108,14 @@ describe("use-dashboard-stats hooks", () => {
             avg_duration_ms: 200,
           },
         ],
+        period_summary: {
+          request_count: 100,
+          total_tokens: 5000,
+          avg_ttft_ms: 0,
+          avg_duration_ms: 200,
+          avg_tps: 0,
+          total_cost: 0,
+        },
       };
       mockGet.mockResolvedValueOnce(mockResponse);
 
@@ -116,6 +133,7 @@ describe("use-dashboard-stats hooks", () => {
         granularity: "hour",
         series: [],
         total_series: [],
+        period_summary: emptyPeriodSummary,
       };
       mockGet.mockResolvedValueOnce(mockResponse);
 
@@ -132,6 +150,7 @@ describe("use-dashboard-stats hooks", () => {
         granularity: "day",
         series: [],
         total_series: [],
+        period_summary: emptyPeriodSummary,
       };
       mockGet.mockResolvedValueOnce(mockResponse);
 

@@ -71,6 +71,14 @@ describe("GET /api/admin/stats/timeseries", () => {
           avgTps: 57.8,
         },
       ],
+      periodSummary: {
+        requestCount: 120,
+        totalTokens: 9000,
+        avgTtftMs: 980.1,
+        avgDurationMs: 1500.5,
+        avgTps: 57.8,
+        totalCost: 0,
+      },
     });
 
     const request = new Request(
@@ -103,6 +111,14 @@ describe("GET /api/admin/stats/timeseries", () => {
       avg_duration_ms: 1500.5,
       avg_ttft_ms: 980.1,
       avg_tps: 57.8,
+    });
+    expect(data.period_summary).toEqual({
+      request_count: 120,
+      total_tokens: 9000,
+      avg_ttft_ms: 980.1,
+      avg_duration_ms: 1500.5,
+      avg_tps: 57.8,
+      total_cost: 0,
     });
   });
 

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, ne, or } from "drizzle-orm";
 import { db, users, apiKeys, userUpstreams, upstreams, type User } from "../db";
 import { caseInsensitiveLike } from "../db/sql-helpers";
 import { hashPassword, isPasswordStrong, normalizeUsername, verifyPassword } from "../utils/auth";

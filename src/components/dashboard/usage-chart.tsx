@@ -365,37 +365,20 @@ export function UsageChart({
     };
   }, [data, displayMode, metric, mode, t]);
 
-  const totals = useMemo(() => {
-    const points = data?.total_series?.length
-      ? data.total_series
-      : (data?.series ?? []).flatMap((series) => series.data);
-
-    let requests = 0;
-    let tokens = 0;
-    let cost = 0;
-    let weightedMetricSum = 0;
-
-    for (const point of points) {
-      requests += point.request_count;
-      tokens += point.total_tokens;
-      cost += point.total_cost ?? 0;
-      weightedMetricSum += getPointMetricValue(point, metric) * point.request_count;
-    }
-
-    // Request-count-weighted mean of the per-bucket averages; buckets only
-    // average successful/eligible requests, so this is an approximation.
-    return { requests, tokens, cost, average: requests > 0 ? weightedMetricSum / requests : 0 };
-  }, [data, metric]);
+  // Exact whole-period aggregates computed server-side: bucket averages only
+  // cover successful requests, so re-deriving a period mean from them with
+  // request-count weights would be wrong.
+  const summary = data?.period_summary;
 
   const requestsSummaryItem = {
     key: "requests",
     label: t("stats.totalRequests"),
-    value: formatNumber(totals.requests),
+    value: formatNumber(summary?.request_count ?? 0),
   };
   const tokensSummaryItem = {
     key: "tokens",
     label: t("stats.totalTokensUsed"),
-    value: formatNumber(totals.tokens),
+    value: formatNumber(summary?.total_tokens ?? 0),
   };
 
   const metricSummaryItem = (() => {
@@ -406,7 +389,7 @@ export function UsageChart({
         return {
           key: "cost",
           label: t("stats.totalCostUsed"),
-          value: formatMetricValue(totals.cost, "cost"),
+          value: formatMetricValue(summary?.total_cost ?? 0, "cost"),
         };
       case "ttft":
       case "tps":
@@ -414,7 +397,14 @@ export function UsageChart({
         return {
           key: metric,
           label: metricLabels[metric],
-          value: formatMetricValue(totals.average, metric),
+          value: formatMetricValue(
+            metric === "ttft"
+              ? (summary?.avg_ttft_ms ?? 0)
+              : metric === "tps"
+                ? (summary?.avg_tps ?? 0)
+                : (summary?.avg_duration_ms ?? 0),
+            metric
+          ),
         };
       case "requests":
       default:

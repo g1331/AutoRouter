@@ -1414,6 +1414,14 @@ describe("api-transformers", () => {
             avgDurationMs: 250,
           },
         ],
+        periodSummary: {
+          requestCount: 100,
+          totalTokens: 30000,
+          avgTtftMs: 320.5,
+          avgDurationMs: 250,
+          avgTps: 42.1,
+          totalCost: 1.5,
+        },
       };
 
       const result = transformStatsTimeseriesToApi(stats);
@@ -1430,6 +1438,14 @@ describe("api-transformers", () => {
           avg_duration_ms: 250,
         },
       ]);
+      expect(result.period_summary).toEqual({
+        request_count: 100,
+        total_tokens: 30000,
+        avg_ttft_ms: 320.5,
+        avg_duration_ms: 250,
+        avg_tps: 42.1,
+        total_cost: 1.5,
+      });
     });
 
     it("should default total_series to an empty array when aggregate data is omitted", () => {
@@ -1437,6 +1453,14 @@ describe("api-transformers", () => {
         range: "7d" as const,
         granularity: "day" as const,
         series: [],
+        periodSummary: {
+          requestCount: 0,
+          totalTokens: 0,
+          avgTtftMs: 0,
+          avgDurationMs: 0,
+          avgTps: 0,
+          totalCost: 0,
+        },
       };
 
       const result = transformStatsTimeseriesToApi(stats);
@@ -1445,6 +1469,7 @@ describe("api-transformers", () => {
       expect(result.granularity).toBe("day");
       expect(result.series).toHaveLength(0);
       expect(result.total_series).toEqual([]);
+      expect(result.period_summary.request_count).toBe(0);
     });
   });
 

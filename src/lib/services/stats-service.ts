@@ -46,11 +46,24 @@ export interface UpstreamTimeseriesData {
   data: TimeseriesDataPoint[];
 }
 
+export interface TimeseriesPeriodSummary {
+  requestCount: number;
+  totalTokens: number;
+  /** Mean over successful requests in the whole period (not bucket-weighted). */
+  avgTtftMs: number;
+  avgDurationMs: number;
+  /** sum(eligible completion tokens) / sum(eligible duration) over the period. */
+  avgTps: number;
+  /** Billed cost total; only computed when the requested metric is "cost". */
+  totalCost: number;
+}
+
 export interface StatsTimeseries {
   range: TimeRange | "custom";
   granularity: "hour" | "day";
   series: UpstreamTimeseriesData[];
   totalSeries: TimeseriesDataPoint[];
+  periodSummary: TimeseriesPeriodSummary;
 }
 
 interface TimeseriesAggregationRow {
@@ -377,8 +390,9 @@ export async function getOverviewStats(): Promise<StatsOverview> {
 }
 
 /**
- * Get time series statistics grouped by upstream.
- * Filters out null upstreamId (deleted upstreams).
+ * Get time series statistics grouped by upstream, plus an exact whole-period
+ * aggregate. Requests without an upstream (routing failures, model-list calls)
+ * are included and surface as the "Unknown" series.
  */
 export async function getTimeseriesStats(
   rangeType: TimeRange | "custom" = "7d",
@@ -415,7 +429,7 @@ export async function getTimeseriesStats(
     ...(endTime ? [lt(requestLogs.createdAt, endTime)] : []),
   ];
 
-  const [result, totalResult] = await Promise.all([
+  const [result, totalResult, [summaryRow]] = await Promise.all([
     db
       .select({
         upstreamId: requestLogs.upstreamId,
@@ -431,6 +445,28 @@ export async function getTimeseriesStats(
       .where(and(...whereConditions))
       .groupBy(timeBucketExpr)
       .orderBy(timeBucketExpr),
+    // Whole-period aggregate: averages here are computed over the full window
+    // (success-only, same predicates as the buckets), so the header summary
+    // does not have to re-derive them from bucket averages with wrong weights.
+    db
+      .select({
+        requestCount: count(requestLogs.id),
+        totalTokens: sum(requestLogs.totalTokens),
+        avgTtft: sql<
+          string | null
+        >`avg(case when ${successfulRequestCondition} then ${requestLogs.ttftMs} end)`,
+        avgDuration: sql<
+          string | null
+        >`avg(case when ${successfulRequestCondition} then ${requestLogs.durationMs} end)`,
+        tpsCompletionTokens: sql<
+          number | string | null
+        >`sum(case when ${tpsEligibleCondition} then ${requestLogs.completionTokens} else 0 end)`,
+        tpsDurationMs: sql<
+          number | string | null
+        >`sum(case when ${tpsEligibleCondition} then ${requestLogs.durationMs} else 0 end)`,
+      })
+      .from(requestLogs)
+      .where(and(...whereConditions)),
   ]);
 
   const costMap = new Map<string, number>();
@@ -528,11 +564,31 @@ export async function getTimeseriesStats(
     )
     .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
+  const summaryTpsCompletion =
+    summaryRow?.tpsCompletionTokens != null ? Number(summaryRow.tpsCompletionTokens) : 0;
+  const summaryTpsDuration =
+    summaryRow?.tpsDurationMs != null ? Number(summaryRow.tpsDurationMs) : 0;
+  const periodSummary: TimeseriesPeriodSummary = {
+    requestCount: summaryRow?.requestCount ?? 0,
+    totalTokens: summaryRow?.totalTokens != null ? Number(summaryRow.totalTokens) : 0,
+    avgTtftMs: summaryRow?.avgTtft != null ? Math.round(Number(summaryRow.avgTtft) * 10) / 10 : 0,
+    avgDurationMs:
+      summaryRow?.avgDuration != null ? Math.round(Number(summaryRow.avgDuration) * 10) / 10 : 0,
+    avgTps:
+      summaryTpsDuration > 0
+        ? Math.round((summaryTpsCompletion / summaryTpsDuration) * 1000 * 10) / 10
+        : 0,
+    // Bucket-level billed costs sum exactly to the period total.
+    totalCost:
+      metric === "cost" ? [...totalCostMap.values()].reduce((acc, value) => acc + value, 0) : 0,
+  };
+
   return {
     range: rangeType,
     granularity,
     series,
     totalSeries,
+    periodSummary,
   };
 }
 
