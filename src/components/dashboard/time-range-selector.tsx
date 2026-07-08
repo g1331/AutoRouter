@@ -15,7 +15,6 @@ import type { TimeRange } from "@/types/api";
 import type { CustomDateRange } from "@/hooks/use-dashboard-stats";
 
 export type TimeRangeOrCustom = TimeRange | "custom";
-export type TimeRangeOrAll = TimeRange | "all";
 
 const PRESET_RANGES: TimeRange[] = ["today", "7d", "30d"];
 

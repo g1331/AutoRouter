@@ -13,6 +13,7 @@ import { Topbar } from "@/components/admin/topbar";
 import { Card } from "@/components/ui/card";
 import { useAPIKeys } from "@/hooks/use-api-keys";
 import { useContainerMorph } from "@/hooks/use-container-morph";
+import { cn } from "@/lib/utils";
 import type { APIKey } from "@/types/api";
 
 interface KeysLoadingSkeletonProps {
@@ -74,7 +75,7 @@ export default function KeysPage() {
 
   const t = useTranslations("keys");
   const tCommon = useTranslations("common");
-  const { data, isLoading } = useAPIKeys(page, pageSize, searchQuery);
+  const { data, isLoading, isFetching } = useAPIKeys(page, pageSize, searchQuery);
 
   return (
     <>
@@ -92,7 +93,13 @@ export default function KeysPage() {
         {isLoading ? (
           <KeysLoadingSkeleton loadingLabel={tCommon("loading")} />
         ) : (
-          <>
+          // Dim the stale placeholder content while a search/page refetch is
+          // in flight — the only in-place feedback since the skeleton is
+          // reserved for the initial load.
+          <div
+            aria-busy={isFetching}
+            className={cn("space-y-4 transition-opacity", isFetching && "opacity-70")}
+          >
             <KeysTable
               keys={data?.items || []}
               searchQuery={searchQuery}
@@ -128,7 +135,7 @@ export default function KeysPage() {
                 />
               </Card>
             )}
-          </>
+          </div>
         )}
       </div>
 

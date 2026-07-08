@@ -19,6 +19,7 @@ import { useRouter } from "@/i18n/navigation";
 import { useUsers } from "@/hooks/use-users";
 import { useContainerMorph } from "@/hooks/use-container-morph";
 import { useAuth } from "@/providers/auth-provider";
+import { cn } from "@/lib/utils";
 import type { User } from "@/types/api";
 
 type UserDialog = "edit" | "username" | "password" | "upstreams" | "keys" | "delete" | null;
@@ -43,7 +44,7 @@ export default function UsersPage() {
   const t = useTranslations("users");
   const tCommon = useTranslations("common");
   const router = useRouter();
-  const { data, isLoading } = useUsers(page, pageSize, searchQuery);
+  const { data, isLoading, isFetching } = useUsers(page, pageSize, searchQuery);
   const { principal } = useAuth();
 
   // ADMIN_TOKEN 超级令牌独立于用户表、始终能管理系统，因此豁免“保留最后一个启用
@@ -92,7 +93,13 @@ export default function UsersPage() {
             {tCommon("loading")}
           </div>
         ) : (
-          <>
+          // Dim the stale placeholder content while a search/page refetch is
+          // in flight — the only in-place feedback since the loading state is
+          // reserved for the initial load.
+          <div
+            aria-busy={isFetching}
+            className={cn("space-y-4 transition-opacity", isFetching && "opacity-70")}
+          >
             <UsersTable
               users={users}
               activeAdminCount={activeAdminCount}
@@ -121,7 +128,7 @@ export default function UsersPage() {
                 />
               </Card>
             )}
-          </>
+          </div>
         )}
       </div>
 

@@ -122,7 +122,6 @@ export default function UpstreamsPage() {
   } = useTestUpstream();
 
   const upstreams = useMemo(() => allUpstreamsData ?? [], [allUpstreamsData]);
-  const overviewUpstreams = upstreams;
 
   const filteredUpstreams = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -152,9 +151,9 @@ export default function UpstreamsPage() {
   }, [capabilityFilter, includeInactive, searchQuery, statusFilter, upstreams]);
 
   const overview = useMemo(() => {
-    const total = overviewUpstreams.length;
-    const active = overviewUpstreams.filter((upstream) => upstream.is_active).length;
-    const fullConcurrency = overviewUpstreams.filter((upstream) => {
+    const total = upstreams.length;
+    const active = upstreams.filter((upstream) => upstream.is_active).length;
+    const fullConcurrency = upstreams.filter((upstream) => {
       if (upstream.max_concurrency == null) return false;
       return (upstream.current_concurrency ?? 0) >= upstream.max_concurrency;
     }).length;
@@ -165,7 +164,7 @@ export default function UpstreamsPage() {
       fullConcurrency,
       filtered: filteredUpstreams.length,
     };
-  }, [filteredUpstreams.length, overviewUpstreams]);
+  }, [filteredUpstreams.length, upstreams]);
 
   const totalPages = Math.max(1, Math.ceil(filteredUpstreams.length / pageSize));
   const currentPage = Math.min(upstreamPage, totalPages);

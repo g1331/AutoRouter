@@ -425,6 +425,9 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
               {data.users.map((item, index) => (
                 <Link
                   key={item.id}
+                  // The list refreshes on an interval; prefetching a detail
+                  // route per row on every cycle is wasted work.
+                  prefetch={false}
                   href={`/system/users/${item.id}`}
                   aria-label={`${t("stats.userRanking")}: ${item.display_name}`}
                   className={cn(

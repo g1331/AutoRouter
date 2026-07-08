@@ -349,6 +349,18 @@ export function KeysTable({
     );
   };
 
+  const searchBar = (
+    <div className="flex items-center gap-3">
+      <Input
+        type="text"
+        placeholder={t("searchKeys")}
+        value={searchInput}
+        onChange={(e) => handleSearchInputChange(e.target.value)}
+        className="max-w-sm"
+      />
+    </div>
+  );
+
   // Plain empty state only when nothing is searched — with an active search
   // the input must stay visible so it can be cleared.
   if (keys.length === 0 && !searchQuery && !searchInput) {
@@ -366,15 +378,7 @@ export function KeysTable({
   if (keys.length === 0) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <Input
-            type="text"
-            placeholder={t("searchKeys")}
-            value={searchInput}
-            onChange={(e) => handleSearchInputChange(e.target.value)}
-            className="max-w-sm"
-          />
-        </div>
+        {searchBar}
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80">
             <Key className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
@@ -388,15 +392,7 @@ export function KeysTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <Input
-          type="text"
-          placeholder={t("searchKeys")}
-          value={searchInput}
-          onChange={(e) => handleSearchInputChange(e.target.value)}
-          className="max-w-sm"
-        />
-      </div>
+      {searchBar}
       {isMobileLayout ? (
         <div className="space-y-3">
           {keys.map((key) => (
