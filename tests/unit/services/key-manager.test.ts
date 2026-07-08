@@ -62,6 +62,7 @@ vi.mock("@/lib/db", () => {
     },
     apiKeys: {
       id: "id",
+      name: "name",
       keyPrefix: "keyPrefix",
       allowedModels: "allowedModels",
       createdAt: "createdAt",
@@ -75,6 +76,16 @@ vi.mock("@/lib/db", () => {
 vi.mock("@/lib/services/api-key-quota-tracker", () => ({
   apiKeyQuotaTracker: mockApiKeyQuotaTracker,
 }));
+
+// Spy on the shared LIKE helper so listApiKeys tests can assert the search
+// term is routed through the case-insensitive, wildcard-escaping path.
+vi.mock("@/lib/db/sql-helpers", async (importActual) => {
+  const actual = await importActual<typeof import("@/lib/db/sql-helpers")>();
+  return {
+    ...actual,
+    caseInsensitiveLike: vi.fn(actual.caseInsensitiveLike),
+  };
+});
 
 // Mock auth utilities
 vi.mock("@/lib/utils/auth", () => ({
@@ -579,6 +590,36 @@ describe("key-manager", () => {
       expect(result.items).toHaveLength(0);
       expect(result.total).toBe(0);
       expect(result.totalPages).toBe(1);
+    });
+
+    it("routes the search term through the case-insensitive LIKE helper", async () => {
+      const { db, apiKeys } = await import("@/lib/db");
+      const { caseInsensitiveLike } = await import("@/lib/db/sql-helpers");
+      const { listApiKeys } = await import("@/lib/services/key-manager");
+
+      vi.mocked(db.select).mockReturnValue({
+        from: vi.fn(() => ({ where: vi.fn().mockResolvedValue([{ value: 0 }]) })),
+      } as unknown as ReturnType<typeof db.select>);
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([]);
+
+      await listApiKeys(1, 20, { search: "Prod Key" });
+
+      expect(caseInsensitiveLike).toHaveBeenCalledWith(apiKeys.name, "Prod Key");
+    });
+
+    it("skips the search filter for a blank search term", async () => {
+      const { db } = await import("@/lib/db");
+      const { caseInsensitiveLike } = await import("@/lib/db/sql-helpers");
+      const { listApiKeys } = await import("@/lib/services/key-manager");
+
+      vi.mocked(db.select).mockReturnValue({
+        from: vi.fn(() => ({ where: vi.fn().mockResolvedValue([{ value: 0 }]) })),
+      } as unknown as ReturnType<typeof db.select>);
+      vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([]);
+
+      await listApiKeys(1, 20, { search: "   " });
+
+      expect(caseInsensitiveLike).not.toHaveBeenCalled();
     });
   });
 

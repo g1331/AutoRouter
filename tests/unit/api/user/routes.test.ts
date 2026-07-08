@@ -208,6 +208,29 @@ describe("GET /api/user/logs", () => {
     expect(userDataService.listUserRequestLogs).not.toHaveBeenCalled();
   });
 
+  it("forwards a valid status_class into list filters", async () => {
+    vi.mocked(userDataService.listUserRequestLogs).mockResolvedValue(makeEmptyLogsPage());
+
+    const res = await logsRoute(
+      makeRequest("http://localhost/api/user/logs?status_class=4xx", MEMBER)
+    );
+    expect(res.status).toBe(200);
+    expect(userDataService.listUserRequestLogs).toHaveBeenCalledWith(
+      SELF_ID,
+      1,
+      20,
+      expect.objectContaining({ statusClass: "4xx" })
+    );
+  });
+
+  it("rejects an invalid status_class with 400", async () => {
+    const res = await logsRoute(
+      makeRequest("http://localhost/api/user/logs?status_class=3xx", MEMBER)
+    );
+    expect(res.status).toBe(400);
+    expect(userDataService.listUserRequestLogs).not.toHaveBeenCalled();
+  });
+
   it("rejects an invalid start_time with 400", async () => {
     const res = await logsRoute(
       makeRequest("http://localhost/api/user/logs?start_time=not-a-date", MEMBER)

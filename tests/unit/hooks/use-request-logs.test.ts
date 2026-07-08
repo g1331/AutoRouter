@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
-import { useRequestLogs } from "@/hooks/use-request-logs";
+import { resolveTimeRangeStart, useRequestLogs } from "@/hooks/use-request-logs";
 
 // Mock API client
 const mockGet = vi.fn();
@@ -162,6 +162,70 @@ describe("use-request-logs hooks", () => {
       expect(params.api_key_id).toBe("key-123");
       expect(params.upstream_id).toBe("upstream-456");
       expect(params.status_code).toBe("500");
+    });
+
+    it("serializes status_class into the query", async () => {
+      mockGet.mockResolvedValueOnce({ items: [], total: 0 });
+
+      const { result } = renderHook(() => useRequestLogs(1, 20, { status_class: "5xx" }), {
+        wrapper,
+      });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      expect(mockGet).toHaveBeenCalledWith("/admin/logs?page=1&page_size=20&status_class=5xx");
+    });
+
+    it("serializes the model filter into the query", async () => {
+      mockGet.mockResolvedValueOnce({ items: [], total: 0 });
+
+      const { result } = renderHook(() => useRequestLogs(1, 20, { model: "claude" }), { wrapper });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      expect(mockGet).toHaveBeenCalledWith("/admin/logs?page=1&page_size=20&model=claude");
+    });
+
+    it("maps a time_range preset to a start_time lower bound", async () => {
+      mockGet.mockResolvedValueOnce({ items: [], total: 0 });
+
+      const { result } = renderHook(() => useRequestLogs(1, 20, { time_range: "today" }), {
+        wrapper,
+      });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      const params = parseUrlParams(mockGet.mock.calls[0][0] as string);
+      expect(params.time_range).toBeUndefined();
+      expect(params.start_time).toBe(resolveTimeRangeStart("today").toISOString());
+    });
+
+    it("applies no lower bound for the all time range", async () => {
+      mockGet.mockResolvedValueOnce({ items: [], total: 0 });
+
+      const { result } = renderHook(() => useRequestLogs(1, 20, { time_range: "all" }), {
+        wrapper,
+      });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      const params = parseUrlParams(mockGet.mock.calls[0][0] as string);
+      expect(params.start_time).toBeUndefined();
+      expect(params.time_range).toBeUndefined();
+    });
+
+    it("prefers an explicit start_time over the time_range preset", async () => {
+      mockGet.mockResolvedValueOnce({ items: [], total: 0 });
+
+      const { result } = renderHook(
+        () => useRequestLogs(1, 20, { time_range: "7d", start_time: "2024-01-01T00:00:00Z" }),
+        { wrapper }
+      );
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      const params = parseUrlParams(mockGet.mock.calls[0][0] as string);
+      expect(params.start_time).toBe("2024-01-01T00:00:00Z");
     });
 
     it("handles fetch error", async () => {
