@@ -40,6 +40,7 @@ vi.mock("@/components/portal/portal-usage-chart", () => ({
 }));
 
 vi.mock("@/components/admin/logs-table", () => ({
+  DEFAULT_LOGS_SERVER_FILTERS: { statusClass: "all", model: "", timeRange: "30d" },
   LogsTable: ({
     logs,
     hideRecordingSection,

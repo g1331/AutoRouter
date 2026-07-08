@@ -365,46 +365,56 @@ export function UsageChart({
     };
   }, [data, displayMode, metric, mode, t]);
 
-  const totals = useMemo(() => {
-    const totalSeries = data?.total_series ?? [];
-    if (totalSeries.length > 0) {
-      return totalSeries.reduce(
-        (acc, point) => ({
-          requests: acc.requests + point.request_count,
-          tokens: acc.tokens + point.total_tokens,
-        }),
-        { requests: 0, tokens: 0 }
-      );
+  // Exact whole-period aggregates computed server-side: bucket averages only
+  // cover successful requests, so re-deriving a period mean from them with
+  // request-count weights would be wrong.
+  const summary = data?.period_summary;
+
+  const requestsSummaryItem = {
+    key: "requests",
+    label: t("stats.totalRequests"),
+    value: formatNumber(summary?.request_count ?? 0),
+  };
+  const tokensSummaryItem = {
+    key: "tokens",
+    label: t("stats.totalTokensUsed"),
+    value: formatNumber(summary?.total_tokens ?? 0),
+  };
+
+  const metricSummaryItem = (() => {
+    switch (metric) {
+      case "tokens":
+        return tokensSummaryItem;
+      case "cost":
+        return {
+          key: "cost",
+          label: t("stats.totalCostUsed"),
+          value: formatMetricValue(summary?.total_cost ?? 0, "cost"),
+        };
+      case "ttft":
+      case "tps":
+      case "duration":
+        return {
+          key: metric,
+          label: metricLabels[metric],
+          value: formatMetricValue(
+            metric === "ttft"
+              ? (summary?.avg_ttft_ms ?? 0)
+              : metric === "tps"
+                ? (summary?.avg_tps ?? 0)
+                : (summary?.avg_duration_ms ?? 0),
+            metric
+          ),
+        };
+      case "requests":
+      default:
+        return requestsSummaryItem;
     }
-
-    if (!data?.series?.length) {
-      return { requests: 0, tokens: 0 };
-    }
-
-    let requests = 0;
-    let tokens = 0;
-
-    data.series.forEach((series) => {
-      series.data.forEach((point) => {
-        requests += point.request_count;
-        tokens += point.total_tokens;
-      });
-    });
-
-    return { requests, tokens };
-  }, [data]);
+  })();
 
   const summaryItems = [
-    {
-      key: "requests",
-      label: t("stats.totalRequests"),
-      value: formatNumber(totals.requests),
-    },
-    {
-      key: "tokens",
-      label: t("stats.totalTokensUsed"),
-      value: formatNumber(totals.tokens),
-    },
+    metricSummaryItem,
+    metric === "requests" ? tokensSummaryItem : requestsSummaryItem,
   ] as const;
 
   const chartHeightClass =

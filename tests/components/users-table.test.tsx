@@ -76,6 +76,8 @@ function makeUser(overrides: Partial<User>): User {
     role: "member",
     is_active: true,
     api_key_count: 2,
+    month_requests: 12,
+    month_cost_usd: 3.5,
     created_at: "2024-01-01T00:00:00.000Z",
     updated_at: "2024-01-01T00:00:00.000Z",
     ...overrides,

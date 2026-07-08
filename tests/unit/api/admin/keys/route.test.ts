@@ -149,6 +149,49 @@ describe("admin keys routes spending rules", () => {
     expect(mockCreateApiKey).not.toHaveBeenCalled();
   });
 
+  it("GET /api/admin/keys passes the search param through to listApiKeys", async () => {
+    const { GET } = await import("@/app/api/admin/keys/route");
+    const { listApiKeys } = await import("@/lib/services/key-manager");
+    vi.mocked(listApiKeys).mockResolvedValueOnce({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 10,
+      totalPages: 1,
+    } as never);
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/admin/keys?page=1&page_size=10&search=%20prod%20",
+      { headers: { authorization: "Bearer test-admin-token" } }
+    );
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(200);
+    expect(listApiKeys).toHaveBeenCalledWith(1, 10, { search: "prod" });
+  });
+
+  it("GET /api/admin/keys omits the search filter when the param is absent", async () => {
+    const { GET } = await import("@/app/api/admin/keys/route");
+    const { listApiKeys } = await import("@/lib/services/key-manager");
+    vi.mocked(listApiKeys).mockResolvedValueOnce({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 10,
+      totalPages: 1,
+    } as never);
+
+    const request = new NextRequest("http://localhost:3000/api/admin/keys?page=1&page_size=10", {
+      headers: { authorization: "Bearer test-admin-token" },
+    });
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(200);
+    expect(listApiKeys).toHaveBeenCalledWith(1, 10, {});
+  });
+
   it("PUT /api/admin/keys/[id] should pass spending_rules into updateApiKey and return quota fields", async () => {
     const { PUT } = await import("@/app/api/admin/keys/[id]/route");
     mockUpdateApiKey.mockResolvedValueOnce(

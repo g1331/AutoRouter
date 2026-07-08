@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ChevronLeft } from "lucide-react";
 
@@ -44,6 +44,8 @@ export function AppShell({
   const tCommon = useTranslations("common");
   const { token } = useAuth();
 
+  const mainRef = useRef<HTMLElement>(null);
+
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") {
       return false;
@@ -60,6 +62,76 @@ export function AppShell({
   useEffect(() => {
     localStorage.setItem("autorouter.sidebar.collapsed", String(isSidebarCollapsed));
   }, [isSidebarCollapsed]);
+
+  // The shell scrolls inside <main>, not the window, so the browser's native
+  // scroll restoration never applies — reimplement it: forward navigations
+  // start at the top, back/forward (popstate) restores the saved position.
+  const scrollPositionsRef = useRef(new Map<string, number>());
+  const isPopNavigationRef = useRef(false);
+
+  useEffect(() => {
+    // Next drives back/forward through the Navigation API where available and
+    // commits the React navigation BEFORE popstate fires, so the flag must be
+    // set from the earlier `navigate` event (traverse = back/forward).
+    // popstate stays as the fallback for browsers without the API (and jsdom).
+    const navigation = (
+      window as { navigation?: { addEventListener: EventTarget["addEventListener"] } & EventTarget }
+    ).navigation;
+    if (navigation) {
+      const handleNavigate = (event: Event) => {
+        if ((event as { navigationType?: string }).navigationType === "traverse") {
+          isPopNavigationRef.current = true;
+        }
+      };
+      navigation.addEventListener("navigate", handleNavigate);
+      return () => navigation.removeEventListener("navigate", handleNavigate);
+    }
+    const handlePopState = () => {
+      isPopNavigationRef.current = true;
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    const main = mainRef.current;
+    if (!main) {
+      return;
+    }
+    const handleScroll = () => {
+      scrollPositionsRef.current.set(pathname, main.scrollTop);
+    };
+    main.addEventListener("scroll", handleScroll, { passive: true });
+    return () => main.removeEventListener("scroll", handleScroll);
+  }, [pathname]);
+
+  useEffect(() => {
+    const main = mainRef.current;
+    if (!main) {
+      return;
+    }
+    if (isPopNavigationRef.current) {
+      isPopNavigationRef.current = false;
+      const saved = scrollPositionsRef.current.get(pathname) ?? 0;
+      // On the commit frame the page content (charts, media) has not laid out
+      // yet, so the browser clamps the offset to the shorter height. Retry
+      // over the next frames until it sticks or the content never grows tall
+      // enough (data not in the query cache — degrade to top).
+      let attempts = 10;
+      const restore = () => {
+        if (!mainRef.current) {
+          return;
+        }
+        mainRef.current.scrollTop = saved;
+        if (Math.abs(mainRef.current.scrollTop - saved) > 1 && attempts-- > 0) {
+          requestAnimationFrame(restore);
+        }
+      };
+      restore();
+      return;
+    }
+    main.scrollTop = 0;
+  }, [pathname]);
 
   useEffect(() => {
     const proto = Element.prototype;
@@ -104,15 +176,21 @@ export function AppShell({
   }
 
   return (
-    <div className="flex min-h-dvh w-full overflow-hidden bg-background text-foreground">
+    // h-dvh (not min-h-dvh) pins the shell to the viewport so <main> is the
+    // real scroll container — required for the sticky topbars to work.
+    <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
       {sidebar({
         collapsed: isSidebarCollapsed,
         onToggleCollapse: () => setIsSidebarCollapsed((value) => !value),
       })}
 
       <main
+        ref={mainRef}
         className={cn(
           "min-w-0 flex-1 overflow-y-auto transition-[margin] duration-cf-normal ease-cf-standard",
+          // Keep programmatic scrollIntoView targets clear of the sticky
+          // topbars (h-14 desktop / h-12 mobile) that overlay this container.
+          "scroll-pt-14",
           "pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0",
           isSidebarCollapsed ? "md:ml-20" : "md:ml-64"
         )}

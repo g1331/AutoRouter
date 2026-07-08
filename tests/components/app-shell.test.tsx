@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { ButtonHTMLAttributes } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -101,5 +101,62 @@ describe("AppShell", () => {
     renderShell({ mobileHeaderCenter: <div data-testid="pulse-strip" /> });
 
     expect(screen.getByTestId("pulse-strip")).toBeInTheDocument();
+  });
+
+  it("pins the shell to the viewport so <main> is the scroll container", () => {
+    renderShell();
+
+    const main = screen.getByRole("main");
+    // h-dvh (not min-h-dvh) on the wrapper keeps sticky topbars working.
+    expect(main.parentElement?.className).toContain("h-dvh");
+    expect(main.parentElement?.className).not.toContain("min-h-dvh");
+  });
+
+  function rerenderShell(rerender: (ui: React.ReactElement) => void, pathname: string) {
+    mockPathname = pathname;
+    rerender(
+      <AppShell
+        sidebar={({ collapsed }) => (
+          <nav data-testid="sidebar" data-collapsed={String(collapsed)} />
+        )}
+        mobileRootRoutes={["/portal"]}
+        getMobileBackHref={() => "/portal"}
+      >
+        <div>content</div>
+      </AppShell>
+    );
+  }
+
+  it("resets the main scroll position on forward navigation", () => {
+    const { rerender } = renderShell();
+
+    const main = screen.getByRole("main");
+    main.scrollTop = 500;
+
+    rerenderShell(rerender, "/somewhere/else");
+
+    expect(main.scrollTop).toBe(0);
+  });
+
+  it("restores the saved scroll position on back/forward navigation", () => {
+    const { rerender } = renderShell();
+
+    const main = screen.getByRole("main");
+    // Scroll on /portal: the shell records the offset from the scroll event.
+    main.scrollTop = 500;
+    fireEvent.scroll(main);
+
+    // Forward navigation away resets to top.
+    rerenderShell(rerender, "/somewhere/else");
+    expect(main.scrollTop).toBe(0);
+
+    // popstate (browser back) to /portal restores the saved offset.
+    fireEvent.popState(window);
+    rerenderShell(rerender, "/portal");
+    expect(main.scrollTop).toBe(500);
+
+    // A later forward navigation still resets: the pop flag must not linger.
+    rerenderShell(rerender, "/somewhere/else");
+    expect(main.scrollTop).toBe(0);
   });
 });

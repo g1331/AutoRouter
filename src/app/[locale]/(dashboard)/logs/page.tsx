@@ -5,7 +5,11 @@ import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ScrollText, X } from "lucide-react";
 
-import { LogsTable } from "@/components/admin/logs-table";
+import {
+  DEFAULT_LOGS_SERVER_FILTERS,
+  LogsTable,
+  type LogsServerFilters,
+} from "@/components/admin/logs-table";
 import { PaginationControls } from "@/components/admin/pagination-controls";
 import { RefreshIntervalSelect } from "@/components/admin/refresh-interval-select";
 import { Topbar } from "@/components/admin/topbar";
@@ -24,7 +28,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { useRequestLogLive } from "@/hooks/use-request-log-live";
-import { useRequestLogs } from "@/hooks/use-request-logs";
+import { useRequestLogs, type RequestLogsFilters } from "@/hooks/use-request-logs";
 
 interface LogsLoadingSkeletonProps {
   loadingLabel: string;
@@ -138,11 +142,23 @@ export default function LogsPage() {
   const effectiveRefetchInterval =
     refetchInterval !== false ? refetchInterval : fallbackRefetchIntervalMs;
 
-  const filters = useMemo(() => {
+  const [tableFilters, setTableFilters] = useState<LogsServerFilters>(DEFAULT_LOGS_SERVER_FILTERS);
+  // Functional merge: a debounced patch (e.g. the model input) can arrive after
+  // a newer status/time change and must not overwrite it.
+  const handleTableFiltersChange = useCallback((patch: Partial<LogsServerFilters>) => {
+    setTableFilters((prev) => ({ ...prev, ...patch }));
+    setPage(1);
+  }, []);
+
+  const filters = useMemo<RequestLogsFilters>(() => {
     if (focusId) return { id: focusId };
-    if (userId) return { user_id: userId };
-    return undefined;
-  }, [focusId, userId]);
+    return {
+      ...(userId ? { user_id: userId } : {}),
+      ...(tableFilters.statusClass !== "all" ? { status_class: tableFilters.statusClass } : {}),
+      ...(tableFilters.model ? { model: tableFilters.model } : {}),
+      time_range: tableFilters.timeRange,
+    };
+  }, [focusId, userId, tableFilters]);
   const focusInitialExpanded = useMemo(() => (focusId ? [focusId] : []), [focusId]);
   const { data, isLoading, refetch } = useRequestLogs(
     focusId ? 1 : page,
@@ -289,6 +305,8 @@ export default function LogsPage() {
                   (connectionState === "live" || effectiveRefetchInterval !== false)
                 }
                 initialExpandedIds={focusInitialExpanded}
+                serverFilters={focusId ? undefined : tableFilters}
+                onServerFiltersChange={focusId ? undefined : handleTableFiltersChange}
               />
             </div>
 

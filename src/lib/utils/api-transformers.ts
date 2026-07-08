@@ -1420,11 +1420,21 @@ export interface UpstreamTimeseriesApiResponse {
 /**
  * API response format for timeseries stats (snake_case).
  */
+export interface TimeseriesPeriodSummaryApiResponse {
+  request_count: number;
+  total_tokens: number;
+  avg_ttft_ms: number;
+  avg_duration_ms: number;
+  avg_tps: number;
+  total_cost: number;
+}
+
 export interface StatsTimeseriesApiResponse {
   range: TimeRange | "custom";
   granularity: "hour" | "day";
   series: UpstreamTimeseriesApiResponse[];
   total_series: TimeseriesDataPointApiResponse[];
+  period_summary: TimeseriesPeriodSummaryApiResponse;
 }
 
 export interface DistributionItemApiResponse {
@@ -1561,6 +1571,14 @@ export function transformStatsTimeseriesToApi(stats: StatsTimeseries): StatsTime
     granularity: stats.granularity,
     series: stats.series.map(transformUpstreamTimeseriesToApi),
     total_series: (stats.totalSeries ?? []).map(transformTimeseriesDataPointToApi),
+    period_summary: {
+      request_count: stats.periodSummary.requestCount,
+      total_tokens: stats.periodSummary.totalTokens,
+      avg_ttft_ms: stats.periodSummary.avgTtftMs,
+      avg_duration_ms: stats.periodSummary.avgDurationMs,
+      avg_tps: stats.periodSummary.avgTps,
+      total_cost: stats.periodSummary.totalCost,
+    },
   };
 }
 
@@ -1663,6 +1681,8 @@ export interface UserApiResponse {
   role: "admin" | "member";
   is_active: boolean;
   api_key_count: number;
+  month_requests: number;
+  month_cost_usd: number;
   created_at: string;
   updated_at: string;
 }
@@ -1679,6 +1699,8 @@ export function transformUserToApi(user: UserListItem): UserApiResponse {
     role: user.role,
     is_active: user.isActive,
     api_key_count: user.apiKeyCount,
+    month_requests: user.monthRequests,
+    month_cost_usd: user.monthCostUsd,
     created_at: user.createdAt.toISOString(),
     updated_at: user.updatedAt.toISOString(),
   };

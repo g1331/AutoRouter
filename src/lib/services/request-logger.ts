@@ -1,5 +1,6 @@
-import { eq, desc, count, and, gte, lte, asc, isNull } from "drizzle-orm";
+import { eq, desc, count, and, gte, lte, lt, asc, isNull } from "drizzle-orm";
 import { db, requestLogs, type RequestLog } from "../db";
+import { caseInsensitiveLike } from "../db/sql-helpers";
 import type {
   FailoverErrorType,
   RequestThinkingConfig,
@@ -234,6 +235,8 @@ export interface PaginatedRequestLogs {
   totalPages: number;
 }
 
+export type RequestLogStatusClass = "2xx" | "4xx" | "5xx";
+
 export interface ListRequestLogsFilter {
   id?: string;
   apiKeyId?: string;
@@ -242,9 +245,19 @@ export interface ListRequestLogsFilter {
   userId?: string;
   upstreamId?: string;
   statusCode?: number;
+  // Status code range filter (e.g. all 5xx); ignored when statusCode is set.
+  statusClass?: RequestLogStatusClass;
+  // Case-insensitive substring match on the model column.
+  model?: string;
   startTime?: Date;
   endTime?: Date;
 }
+
+const STATUS_CLASS_RANGES: Record<RequestLogStatusClass, [number, number]> = {
+  "2xx": [200, 300],
+  "4xx": [400, 500],
+  "5xx": [500, 600],
+};
 
 function parseRequestLogCreatedAt(value: Date | string | number | null | undefined): Date | null {
   if (value instanceof Date) {
@@ -781,6 +794,12 @@ export async function listRequestLogs(
   }
   if (filters.statusCode !== undefined) {
     conditions.push(eq(requestLogs.statusCode, filters.statusCode));
+  } else if (filters.statusClass) {
+    const [min, max] = STATUS_CLASS_RANGES[filters.statusClass];
+    conditions.push(gte(requestLogs.statusCode, min), lt(requestLogs.statusCode, max));
+  }
+  if (filters.model?.trim()) {
+    conditions.push(caseInsensitiveLike(requestLogs.model, filters.model));
   }
   if (filters.startTime) {
     conditions.push(gte(requestLogs.createdAt, filters.startTime));

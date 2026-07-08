@@ -158,4 +158,41 @@ describe("admin logs route", () => {
     expect(response.status).toBe(400);
     expect(listRequestLogsMock).not.toHaveBeenCalled();
   });
+
+  it("forwards a valid status_class into list filters", async () => {
+    const { GET } = await import("@/app/api/admin/logs/route");
+    listRequestLogsMock.mockResolvedValueOnce({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+    });
+
+    const response = await GET(
+      new NextRequest("http://localhost/api/admin/logs?status_class=5xx", {
+        headers: { authorization: AUTH_HEADER },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(listRequestLogsMock).toHaveBeenCalledWith(
+      1,
+      20,
+      expect.objectContaining({ statusClass: "5xx" })
+    );
+  });
+
+  it("rejects an invalid status_class with 400", async () => {
+    const { GET } = await import("@/app/api/admin/logs/route");
+
+    const response = await GET(
+      new NextRequest("http://localhost/api/admin/logs?status_class=3xx", {
+        headers: { authorization: AUTH_HEADER },
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(listRequestLogsMock).not.toHaveBeenCalled();
+  });
 });

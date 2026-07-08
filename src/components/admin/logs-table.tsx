@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef, Fragment, type ReactNode } from "react";
-import { subDays, startOfDay } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
 import { ScrollText, Filter, ChevronDown, Loader2 } from "lucide-react";
 import type {
@@ -40,6 +39,23 @@ import { matchRouteCapability } from "@/lib/services/route-capability-matcher";
 import { ROUTE_CAPABILITY_DEFINITIONS } from "@/lib/route-capabilities";
 import { getRequestThinkingBadgeLabel } from "@/lib/utils/request-thinking-config";
 
+/**
+ * Filters resolved server-side: the parent owns this state, feeds it into its
+ * logs query (so filtering spans all pages, not just the fetched one) and
+ * resets pagination on change.
+ */
+export interface LogsServerFilters {
+  statusClass: "all" | "2xx" | "4xx" | "5xx";
+  model: string;
+  timeRange: TimeRange | "all";
+}
+
+export const DEFAULT_LOGS_SERVER_FILTERS: LogsServerFilters = {
+  statusClass: "all",
+  model: "",
+  timeRange: "30d",
+};
+
 interface LogsTableProps {
   logs: RequestLog[];
   isLive?: boolean;
@@ -53,6 +69,15 @@ interface LogsTableProps {
    * this true.
    */
   hideRecordingSection?: boolean;
+  /** Current server-side filters (controlled by the parent page). */
+  serverFilters?: LogsServerFilters;
+  /**
+   * Called with a partial patch when the user changes a server-side filter.
+   * Parents must merge functionally (setState(prev => ({...prev, ...patch})))
+   * so a debounced patch cannot clobber a concurrent change. When omitted the
+   * server-filter controls are hidden (e.g. the focus view pins one entry).
+   */
+  onServerFiltersChange?: (patch: Partial<LogsServerFilters>) => void;
 }
 
 type PerformancePreset = "all" | "high_ttft" | "low_tps" | "slow_duration";
@@ -727,6 +752,8 @@ export function LogsTable({
   isLive = false,
   initialExpandedIds,
   hideRecordingSection = false,
+  serverFilters = DEFAULT_LOGS_SERVER_FILTERS,
+  onServerFiltersChange,
 }: LogsTableProps) {
   const t = useTranslations("logs");
   const locale = useLocale();
@@ -821,10 +848,28 @@ export function LogsTable({
     return usdFormatter.format(value);
   };
 
-  // Filter state
-  const [statusCodeFilter, setStatusCodeFilter] = useState<string>("all");
-  const [modelFilter, setModelFilter] = useState<string>("");
-  const [timeRangeFilter, setTimeRangeFilter] = useState<TimeRange>("30d");
+  // Server-side filters are controlled by the parent; the model input keeps a
+  // local echo so typing stays responsive while updates are debounced upward.
+  const [modelInput, setModelInput] = useState<string>(serverFilters.model);
+  // Resync the echo when the controlled value changes from outside (e.g. a
+  // parent-level filter reset) — render-phase adjustment, not an effect.
+  const [lastServerModel, setLastServerModel] = useState<string>(serverFilters.model);
+  if (serverFilters.model !== lastServerModel) {
+    setLastServerModel(serverFilters.model);
+    if (serverFilters.model !== modelInput.trim()) {
+      setModelInput(serverFilters.model);
+    }
+  }
+  const modelDebounceRef = useRef<number | null>(null);
+  useEffect(() => {
+    return () => {
+      if (modelDebounceRef.current != null) {
+        window.clearTimeout(modelDebounceRef.current);
+      }
+    };
+  }, []);
+  // Performance presets stay client-side: they derive from runtime-computed
+  // metrics (TPS is calculated in the frontend) and only narrow the fetched page.
   const [performancePreset, setPerformancePreset] = useState<PerformancePreset>("all");
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [desktopBreakpointState, setDesktopBreakpointState] = useState({
@@ -1005,61 +1050,10 @@ export function LogsTable({
     setExpandedRows(newExpanded);
   };
 
-  // Filter logs based on criteria
+  // Status/model/time filters are resolved server-side via serverFilters; only
+  // the performance presets (runtime-computed metrics) narrow the fetched page.
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
-      // Status code filter
-      if (statusCodeFilter !== "all") {
-        if (
-          statusCodeFilter === "2xx" &&
-          (log.status_code === null || log.status_code < 200 || log.status_code >= 300)
-        ) {
-          return false;
-        }
-        if (
-          statusCodeFilter === "4xx" &&
-          (log.status_code === null || log.status_code < 400 || log.status_code >= 500)
-        ) {
-          return false;
-        }
-        if (
-          statusCodeFilter === "5xx" &&
-          (log.status_code === null || log.status_code < 500 || log.status_code >= 600)
-        ) {
-          return false;
-        }
-      }
-
-      // Model filter (case-insensitive partial match)
-      if (
-        modelFilter &&
-        log.model &&
-        !log.model.toLowerCase().includes(modelFilter.toLowerCase())
-      ) {
-        return false;
-      }
-
-      // Time range filter
-      const logDate = new Date(log.created_at);
-      const now = new Date();
-
-      if (timeRangeFilter === "today") {
-        const todayStart = startOfDay(now);
-        if (logDate < todayStart) {
-          return false;
-        }
-      } else if (timeRangeFilter === "7d") {
-        const sevenDaysAgo = subDays(now, 7);
-        if (logDate < sevenDaysAgo) {
-          return false;
-        }
-      } else if (timeRangeFilter === "30d") {
-        const thirtyDaysAgo = subDays(now, 30);
-        if (logDate < thirtyDaysAgo) {
-          return false;
-        }
-      }
-
       if (performancePreset === "high_ttft") {
         if (log.ttft_ms == null || log.ttft_ms <= HIGH_TTFT_THRESHOLD_MS) {
           return false;
@@ -1077,7 +1071,7 @@ export function LogsTable({
 
       return true;
     });
-  }, [logs, statusCodeFilter, modelFilter, timeRangeFilter, performancePreset]);
+  }, [logs, performancePreset]);
 
   const performanceSummary = useMemo(() => {
     const streamLogs = filteredLogs.filter((log) => log.is_stream);
@@ -3021,27 +3015,22 @@ export function LogsTable({
   const desktopModelColumnStyle = { width: `${desktopModelColumnWidth}px` };
   const desktopTableStyle = { minWidth: `${desktopTableMinWidth}px` };
 
-  if (logs.length === 0) {
-    return (
-      <div
-        className={cn(
-          "flex flex-col items-center justify-center py-16 text-center",
-          LOGS_SECTION_ENTER_CLASS
-        )}
-      >
-        <div
-          className={cn(
-            "mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80",
-            LOGS_CARD_ENTER_CLASS
-          )}
-        >
-          <ScrollText className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
-        </div>
-        <h3 className="type-title-medium mb-2 text-foreground">{t("noLogs")}</h3>
-        <p className="type-body-medium text-muted-foreground">{t("noLogsDesc")}</p>
-      </div>
-    );
-  }
+  // The filter bar always stays mounted, even on an empty page: the default
+  // 30d window may hide older entries, and without the bar there would be no
+  // way to widen the range or clear a filter. The empty-state copy below
+  // distinguishes "nothing matching" / "nothing in this window" / "nothing at all".
+  const hasNarrowingFilters =
+    serverFilters.statusClass !== "all" ||
+    serverFilters.model.trim() !== "" ||
+    performancePreset !== "all";
+  // Any time window short of ALL is still a filter: users whose logs are all
+  // older must be pointed at the ALL preset instead of "no logs yet".
+  const emptyState = hasNarrowingFilters
+    ? { icon: Filter, title: "noMatchingLogs", description: "noMatchingLogsDesc" }
+    : onServerFiltersChange && serverFilters.timeRange !== "all"
+      ? { icon: Filter, title: "noLogsInRange", description: "noLogsInRangeDesc" }
+      : { icon: ScrollText, title: "noLogs", description: "noLogsDesc" };
+  const EmptyStateIcon = emptyState.icon;
 
   return (
     <div
@@ -3061,39 +3050,71 @@ export function LogsTable({
             <span className="type-caption text-muted-foreground">{t("filters")}</span>
           </div>
 
-          <div className="w-full sm:w-[180px]">
-            <Select value={statusCodeFilter} onValueChange={setStatusCodeFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder={t("filterStatus")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("filterStatusAll")}</SelectItem>
-                <SelectItem value="2xx">{t("filterStatus2xx")}</SelectItem>
-                <SelectItem value="4xx">{t("filterStatus4xx")}</SelectItem>
-                <SelectItem value="5xx">{t("filterStatus5xx")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {onServerFiltersChange && (
+            <>
+              <div className="w-full sm:w-[180px]">
+                <Select
+                  value={serverFilters.statusClass}
+                  onValueChange={(value) =>
+                    onServerFiltersChange({
+                      statusClass: value as LogsServerFilters["statusClass"],
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("filterStatus")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t("filterStatusAll")}</SelectItem>
+                    <SelectItem value="2xx">{t("filterStatus2xx")}</SelectItem>
+                    <SelectItem value="4xx">{t("filterStatus4xx")}</SelectItem>
+                    <SelectItem value="5xx">{t("filterStatus5xx")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-          <div className="w-full sm:w-[220px]">
-            <Input
-              id="logs-model-filter"
-              name="logs-model-filter"
-              aria-label={t("filterModel")}
-              type="text"
-              placeholder={t("filterModel")}
-              value={modelFilter}
-              onChange={(e) => setModelFilter(e.target.value)}
-            />
-          </div>
+              <div className="w-full sm:w-[220px]">
+                <Input
+                  id="logs-model-filter"
+                  name="logs-model-filter"
+                  aria-label={t("filterModel")}
+                  type="text"
+                  placeholder={t("filterModel")}
+                  value={modelInput}
+                  onChange={(e) => {
+                    const nextValue = e.target.value;
+                    setModelInput(nextValue);
+                    if (modelDebounceRef.current != null) {
+                      window.clearTimeout(modelDebounceRef.current);
+                    }
+                    modelDebounceRef.current = window.setTimeout(() => {
+                      // Patch only the model: merging happens in the parent's
+                      // functional setState, so a concurrent status/time change
+                      // made during the debounce window is never clobbered.
+                      const trimmed = nextValue.trim();
+                      // Skip no-op commits so an unchanged value does not reset pagination.
+                      if (trimmed !== serverFilters.model) {
+                        onServerFiltersChange({ model: trimmed });
+                      }
+                    }, 300);
+                  }}
+                />
+              </div>
 
-          <div className="w-full sm:ml-auto sm:w-auto">
-            <TimeRangeSelector
-              value={timeRangeFilter}
-              onChange={(value) => setTimeRangeFilter(value as TimeRange)}
-              hideCustom
-            />
-          </div>
+              <div className="w-full sm:ml-auto sm:w-auto">
+                <TimeRangeSelector
+                  value={serverFilters.timeRange}
+                  onChange={(value) =>
+                    onServerFiltersChange({
+                      timeRange: value as LogsServerFilters["timeRange"],
+                    })
+                  }
+                  hideCustom
+                  includeAll
+                />
+              </div>
+            </>
+          )}
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -3122,6 +3143,7 @@ export function LogsTable({
               {label}
             </button>
           ))}
+          <span className="type-caption text-muted-foreground/70">{t("quickFiltersPageOnly")}</span>
         </div>
       </div>
 
@@ -3224,10 +3246,10 @@ export function LogsTable({
               LOGS_CARD_ENTER_CLASS
             )}
           >
-            <Filter className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
+            <EmptyStateIcon className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
           </div>
-          <h3 className="type-title-medium mb-2 text-foreground">{t("noMatchingLogs")}</h3>
-          <p className="type-body-medium text-muted-foreground">{t("noMatchingLogsDesc")}</p>
+          <h3 className="type-title-medium mb-2 text-foreground">{t(emptyState.title)}</h3>
+          <p className="type-body-medium text-muted-foreground">{t(emptyState.description)}</p>
         </div>
       ) : (
         <>

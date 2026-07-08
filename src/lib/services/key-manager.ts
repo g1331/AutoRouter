@@ -1,6 +1,7 @@
-import { eq, desc, inArray, count } from "drizzle-orm";
+import { eq, desc, inArray, count, and } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { db, apiKeys, apiKeyUpstreams, upstreams, type ApiKey } from "../db";
+import { caseInsensitiveLike } from "../db/sql-helpers";
 import { hashApiKey, verifyApiKey } from "../utils/auth";
 import { encrypt, decrypt, EncryptionError } from "../utils/encryption";
 import { createLogger } from "../utils/logger";
@@ -392,6 +393,8 @@ export async function deleteApiKey(keyId: string): Promise<void> {
 export interface ListApiKeysFilter {
   // Owner filter; the self-service portal injects the authenticated userId.
   userId?: string;
+  // Case-insensitive substring match on the key name.
+  search?: string;
 }
 
 /**
@@ -406,7 +409,14 @@ export async function listApiKeys(
   page = Math.max(1, page);
   pageSize = Math.min(100, Math.max(1, pageSize));
 
-  const whereClause = filter.userId ? eq(apiKeys.userId, filter.userId) : undefined;
+  const conditions = [];
+  if (filter.userId) {
+    conditions.push(eq(apiKeys.userId, filter.userId));
+  }
+  if (filter.search?.trim()) {
+    conditions.push(caseInsensitiveLike(apiKeys.name, filter.search));
+  }
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   // Count total keys
   const [{ value: total }] = await db.select({ value: count() }).from(apiKeys).where(whereClause);

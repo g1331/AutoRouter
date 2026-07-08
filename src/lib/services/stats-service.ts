@@ -46,11 +46,24 @@ export interface UpstreamTimeseriesData {
   data: TimeseriesDataPoint[];
 }
 
+export interface TimeseriesPeriodSummary {
+  requestCount: number;
+  totalTokens: number;
+  /** Mean over successful requests in the whole period (not bucket-weighted). */
+  avgTtftMs: number;
+  avgDurationMs: number;
+  /** sum(eligible completion tokens) / sum(eligible duration) over the period. */
+  avgTps: number;
+  /** Billed cost total; only computed when the requested metric is "cost". */
+  totalCost: number;
+}
+
 export interface StatsTimeseries {
   range: TimeRange | "custom";
   granularity: "hour" | "day";
   series: UpstreamTimeseriesData[];
   totalSeries: TimeseriesDataPoint[];
+  periodSummary: TimeseriesPeriodSummary;
 }
 
 interface TimeseriesAggregationRow {
@@ -128,20 +141,29 @@ const tpsEligibleCondition = sql`
 /**
  * Calculate the start datetime for a given time range.
  */
-function getTimeRangeStart(rangeType: TimeRange): Date {
+/**
+ * Start of the calendar day containing `at`, in the timezone described by
+ * `tzOffsetMinutes` (minutes east of UTC, i.e. `-Date#getTimezoneOffset()`).
+ */
+function localDayStartUtc(at: Date, tzOffsetMinutes: number): Date {
+  const shifted = new Date(at.getTime() + tzOffsetMinutes * 60_000);
+  const dayStart = Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate());
+  return new Date(dayStart - tzOffsetMinutes * 60_000);
+}
+
+/**
+ * Preset range windows share the request-logs list semantics so the same
+ * label means the same window everywhere: "today" starts at the caller's
+ * local midnight, "7d"/"30d" are exact rolling windows.
+ */
+export function getTimeRangeStart(rangeType: TimeRange, tzOffsetMinutes = 0): Date {
   const now = new Date();
 
-  if (rangeType === "today") {
-    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  } else if (rangeType === "7d") {
-    const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    return new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
-  } else if (rangeType === "30d") {
-    const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    return new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+  if (rangeType === "7d" || rangeType === "30d") {
+    return new Date(now.getTime() - (rangeType === "7d" ? 7 : 30) * 24 * 60 * 60 * 1000);
   }
 
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return localDayStartUtc(now, tzOffsetMinutes);
 }
 
 /**
@@ -277,15 +299,12 @@ function buildDistributionMap<TKey extends string>(
 /**
  * Get overview statistics for the dashboard (today + yesterday comparison + cost).
  */
-export async function getOverviewStats(): Promise<StatsOverview> {
+export async function getOverviewStats(tzOffsetMinutes = 0): Promise<StatsOverview> {
   if (process.env.NODE_ENV !== "test") {
     await reconcileStaleInProgressRequestLogs().catch(() => undefined);
   }
 
-  const now = new Date();
-  const startOfToday = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-  );
+  const startOfToday = localDayStartUtc(new Date(), tzOffsetMinutes);
   const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000);
 
   const selectFields = {
@@ -377,14 +396,16 @@ export async function getOverviewStats(): Promise<StatsOverview> {
 }
 
 /**
- * Get time series statistics grouped by upstream.
- * Filters out null upstreamId (deleted upstreams).
+ * Get time series statistics grouped by upstream, plus an exact whole-period
+ * aggregate. Requests without an upstream (routing failures, model-list calls)
+ * are included and surface as the "Unknown" series.
  */
 export async function getTimeseriesStats(
   rangeType: TimeRange | "custom" = "7d",
   metric: TimeseriesMetric = "requests",
   customStart?: Date,
-  customEnd?: Date
+  customEnd?: Date,
+  tzOffsetMinutes = 0
 ): Promise<StatsTimeseries> {
   if (process.env.NODE_ENV !== "test") {
     await reconcileStaleInProgressRequestLogs().catch(() => undefined);
@@ -397,7 +418,7 @@ export async function getTimeseriesStats(
     startTime = customStart;
     endTime = customEnd;
   } else {
-    startTime = getTimeRangeStart(rangeType as TimeRange);
+    startTime = getTimeRangeStart(rangeType as TimeRange, tzOffsetMinutes);
   }
 
   const diffMs = endTime
@@ -407,13 +428,15 @@ export async function getTimeseriesStats(
   const timeBucketExpr = buildTimeBucketExpr(granularity);
   const selectFields = buildTimeseriesSelectFields(metric, timeBucketExpr);
 
+  // No upstreamId filter: requests that never reached an upstream (routing
+  // failures, model-list calls) must still count toward the period totals —
+  // they surface as the "Unknown" series in the by-upstream view.
   const whereConditions = [
     gte(requestLogs.createdAt, startTime),
-    isNotNull(requestLogs.upstreamId),
     ...(endTime ? [lt(requestLogs.createdAt, endTime)] : []),
   ];
 
-  const [result, totalResult] = await Promise.all([
+  const [result, totalResult, [summaryRow]] = await Promise.all([
     db
       .select({
         upstreamId: requestLogs.upstreamId,
@@ -429,6 +452,28 @@ export async function getTimeseriesStats(
       .where(and(...whereConditions))
       .groupBy(timeBucketExpr)
       .orderBy(timeBucketExpr),
+    // Whole-period aggregate: averages here are computed over the full window
+    // (success-only, same predicates as the buckets), so the header summary
+    // does not have to re-derive them from bucket averages with wrong weights.
+    db
+      .select({
+        requestCount: count(requestLogs.id),
+        totalTokens: sum(requestLogs.totalTokens),
+        avgTtft: sql<
+          string | null
+        >`avg(case when ${successfulRequestCondition} then ${requestLogs.ttftMs} end)`,
+        avgDuration: sql<
+          string | null
+        >`avg(case when ${successfulRequestCondition} then ${requestLogs.durationMs} end)`,
+        tpsCompletionTokens: sql<
+          number | string | null
+        >`sum(case when ${tpsEligibleCondition} then ${requestLogs.completionTokens} else 0 end)`,
+        tpsDurationMs: sql<
+          number | string | null
+        >`sum(case when ${tpsEligibleCondition} then ${requestLogs.durationMs} else 0 end)`,
+      })
+      .from(requestLogs)
+      .where(and(...whereConditions)),
   ]);
 
   const costMap = new Map<string, number>();
@@ -526,11 +571,31 @@ export async function getTimeseriesStats(
     )
     .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
+  const summaryTpsCompletion =
+    summaryRow?.tpsCompletionTokens != null ? Number(summaryRow.tpsCompletionTokens) : 0;
+  const summaryTpsDuration =
+    summaryRow?.tpsDurationMs != null ? Number(summaryRow.tpsDurationMs) : 0;
+  const periodSummary: TimeseriesPeriodSummary = {
+    requestCount: summaryRow?.requestCount ?? 0,
+    totalTokens: summaryRow?.totalTokens != null ? Number(summaryRow.totalTokens) : 0,
+    avgTtftMs: summaryRow?.avgTtft != null ? Math.round(Number(summaryRow.avgTtft) * 10) / 10 : 0,
+    avgDurationMs:
+      summaryRow?.avgDuration != null ? Math.round(Number(summaryRow.avgDuration) * 10) / 10 : 0,
+    avgTps:
+      summaryTpsDuration > 0
+        ? Math.round((summaryTpsCompletion / summaryTpsDuration) * 1000 * 10) / 10
+        : 0,
+    // Bucket-level billed costs sum exactly to the period total.
+    totalCost:
+      metric === "cost" ? [...totalCostMap.values()].reduce((acc, value) => acc + value, 0) : 0,
+  };
+
   return {
     range: rangeType,
     granularity,
     series,
     totalSeries,
+    periodSummary,
   };
 }
 
@@ -541,13 +606,14 @@ export async function getLeaderboardStats(
   rangeType: TimeRange = "7d",
   limit: number = 5,
   customStart?: Date,
-  customEnd?: Date
+  customEnd?: Date,
+  tzOffsetMinutes = 0
 ): Promise<StatsLeaderboard> {
   if (process.env.NODE_ENV !== "test") {
     await reconcileStaleInProgressRequestLogs().catch(() => undefined);
   }
 
-  const startTime = customStart ?? getTimeRangeStart(rangeType);
+  const startTime = customStart ?? getTimeRangeStart(rangeType, tzOffsetMinutes);
   const endTime = customEnd ?? null;
   const timeFilter = endTime
     ? and(gte(requestLogs.createdAt, startTime), lt(requestLogs.createdAt, endTime))

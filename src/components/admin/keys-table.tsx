@@ -3,7 +3,7 @@
 import { formatDistanceToNow } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
 import { Trash2, Copy, Check, Key, Eye, EyeOff, Pencil, ChevronRight } from "lucide-react";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type { APIKey } from "@/types/api";
 import { useRevealAPIKey } from "@/hooks/use-api-keys";
 import { useToggleAPIKeyActive } from "@/hooks/use-api-keys";
@@ -27,6 +27,12 @@ interface KeysTableProps {
   keys: APIKey[];
   onRevoke: (key: APIKey, source: HTMLElement | null) => void;
   onEdit: (key: APIKey, source: HTMLElement | null) => void;
+  /**
+   * Server-side name search (controlled by the parent page, which feeds it
+   * into the paginated query so matches span all pages, not just this one).
+   */
+  searchQuery?: string;
+  onSearchQueryChange?: (value: string) => void;
 }
 
 function formatAccessModeLabel(key: APIKey, t: ReturnType<typeof useTranslations>): string {
@@ -64,11 +70,35 @@ function formatQuotaPeriodLabel(
   return t(`quotaPeriodType_${rule.period_type}`);
 }
 
-export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
+export function KeysTable({
+  keys,
+  onRevoke,
+  onEdit,
+  searchQuery = "",
+  onSearchQueryChange,
+}: KeysTableProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [visibleKeyIds, setVisibleKeyIds] = useState<Set<string>>(new Set());
   const [revealedKeys, setRevealedKeys] = useState<Map<string, string>>(new Map());
-  const [searchQuery, setSearchQuery] = useState("");
+  // Local echo keeps typing responsive; updates are debounced up to the parent.
+  const [searchInput, setSearchInput] = useState(searchQuery);
+  // Resync the echo when the controlled value changes from outside (e.g. a
+  // parent-level reset) — render-phase adjustment, not an effect.
+  const [lastSearchQuery, setLastSearchQuery] = useState(searchQuery);
+  if (searchQuery !== lastSearchQuery) {
+    setLastSearchQuery(searchQuery);
+    if (searchQuery !== searchInput.trim()) {
+      setSearchInput(searchQuery);
+    }
+  }
+  const searchDebounceRef = useRef<number | null>(null);
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current != null) {
+        window.clearTimeout(searchDebounceRef.current);
+      }
+    };
+  }, []);
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const { mutateAsync: revealKey, isPending: isRevealing } = useRevealAPIKey();
@@ -84,9 +114,19 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
     maximumFractionDigits: 4,
   });
 
-  const filteredKeys = keys.filter((key) =>
-    key.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const handleSearchInputChange = (value: string) => {
+    setSearchInput(value);
+    if (searchDebounceRef.current != null) {
+      window.clearTimeout(searchDebounceRef.current);
+    }
+    searchDebounceRef.current = window.setTimeout(() => {
+      const trimmed = value.trim();
+      // Skip no-op commits so an unchanged query does not reset pagination.
+      if (trimmed !== searchQuery) {
+        onSearchQueryChange?.(trimmed);
+      }
+    }, 300);
+  };
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
@@ -309,7 +349,21 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
     );
   };
 
-  if (keys.length === 0) {
+  const searchBar = (
+    <div className="flex items-center gap-3">
+      <Input
+        type="text"
+        placeholder={t("searchKeys")}
+        value={searchInput}
+        onChange={(e) => handleSearchInputChange(e.target.value)}
+        className="max-w-sm"
+      />
+    </div>
+  );
+
+  // Plain empty state only when nothing is searched — with an active search
+  // the input must stay visible so it can be cleared.
+  if (keys.length === 0 && !searchQuery && !searchInput) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80">
@@ -321,21 +375,10 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
     );
   }
 
-  if (filteredKeys.length === 0) {
+  if (keys.length === 0) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <Input
-            type="text"
-            placeholder={t("searchKeys")}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="max-w-sm"
-          />
-          <span className="type-caption text-muted-foreground">
-            {filteredKeys.length} / {keys.length}
-          </span>
-        </div>
+        {searchBar}
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-cf-md border border-divider bg-surface-300/80">
             <Key className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
@@ -349,21 +392,10 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <Input
-          type="text"
-          placeholder={t("searchKeys")}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="max-w-sm"
-        />
-        <span className="type-caption text-muted-foreground">
-          {filteredKeys.length} / {keys.length}
-        </span>
-      </div>
+      {searchBar}
       {isMobileLayout ? (
         <div className="space-y-3">
-          {filteredKeys.map((key) => (
+          {keys.map((key) => (
             <div
               key={key.id}
               data-morph-source
@@ -538,7 +570,7 @@ export function KeysTable({ keys, onRevoke, onEdit }: KeysTableProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredKeys.map((key) => {
+              {keys.map((key) => {
                 const hasQuota = !!(key.spending_rules && key.spending_rules.length > 0);
                 const isExpanded = expandedKeys.has(key.id);
                 return (

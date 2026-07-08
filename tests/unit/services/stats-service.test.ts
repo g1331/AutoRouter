@@ -71,6 +71,35 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
+// getTimeseriesStats issues three concurrent select() queries: two bucketed
+// queries consumed via `.groupBy().orderBy()` and a whole-period summary
+// awaited directly after `.where()`. The mocked where() result supports both
+// shapes by exposing groupBy() and acting as a thenable.
+const emptyPeriodSummaryRow = {
+  requestCount: 0,
+  totalTokens: null,
+  avgTtft: null,
+  avgDuration: null,
+  tpsCompletionTokens: null,
+  tpsDurationMs: null,
+};
+
+function timeseriesSelectMock(
+  rows: unknown[],
+  summaryRow: Record<string, unknown> = emptyPeriodSummaryRow
+) {
+  return {
+    from: vi.fn().mockReturnValue({
+      where: vi.fn().mockReturnValue({
+        groupBy: vi.fn().mockReturnValue({
+          orderBy: vi.fn().mockResolvedValue(rows),
+        }),
+        then: (resolve: (value: unknown[]) => unknown) => resolve([summaryRow]),
+      }),
+    }),
+  };
+}
+
 describe("stats-service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -278,30 +307,24 @@ describe("stats-service", () => {
       const { db } = await import("@/lib/db");
       const { getTimeseriesStats } = await import("@/lib/services/stats-service");
 
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockResolvedValue([
-                {
-                  upstreamId: "upstream-1",
-                  timeBucket: "2024-06-15 10:00:00",
-                  requestCount: 50,
-                  totalTokens: "5000",
-                  avgDuration: "200.5",
-                },
-                {
-                  upstreamId: "upstream-1",
-                  timeBucket: "2024-06-15 11:00:00",
-                  requestCount: 60,
-                  totalTokens: "6000",
-                  avgDuration: "180.3",
-                },
-              ]),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>);
+      vi.mocked(db.select).mockReturnValue(
+        timeseriesSelectMock([
+          {
+            upstreamId: "upstream-1",
+            timeBucket: "2024-06-15 10:00:00",
+            requestCount: 50,
+            totalTokens: "5000",
+            avgDuration: "200.5",
+          },
+          {
+            upstreamId: "upstream-1",
+            timeBucket: "2024-06-15 11:00:00",
+            requestCount: 60,
+            totalTokens: "6000",
+            avgDuration: "180.3",
+          },
+        ]) as unknown as ReturnType<typeof db.select>
+      );
 
       vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
         { id: "upstream-1", name: "OpenAI" },
@@ -320,15 +343,9 @@ describe("stats-service", () => {
       const { db } = await import("@/lib/db");
       const { getTimeseriesStats } = await import("@/lib/services/stats-service");
 
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockResolvedValue([]),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>);
+      vi.mocked(db.select).mockReturnValue(
+        timeseriesSelectMock([]) as unknown as ReturnType<typeof db.select>
+      );
 
       vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([]);
 
@@ -342,15 +359,9 @@ describe("stats-service", () => {
       const { db } = await import("@/lib/db");
       const { getTimeseriesStats } = await import("@/lib/services/stats-service");
 
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockResolvedValue([]),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>);
+      vi.mocked(db.select).mockReturnValue(
+        timeseriesSelectMock([]) as unknown as ReturnType<typeof db.select>
+      );
 
       vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([]);
 
@@ -364,23 +375,17 @@ describe("stats-service", () => {
       const { db } = await import("@/lib/db");
       const { getTimeseriesStats } = await import("@/lib/services/stats-service");
 
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockResolvedValue([
-                {
-                  upstreamId: null,
-                  timeBucket: "2024-06-15 10:00:00",
-                  requestCount: 10,
-                  totalTokens: "1000",
-                  avgDuration: "100",
-                },
-              ]),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>);
+      vi.mocked(db.select).mockReturnValue(
+        timeseriesSelectMock([
+          {
+            upstreamId: null,
+            timeBucket: "2024-06-15 10:00:00",
+            requestCount: 10,
+            totalTokens: "1000",
+            avgDuration: "100",
+          },
+        ]) as unknown as ReturnType<typeof db.select>
+      );
 
       vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([]);
 
@@ -395,30 +400,24 @@ describe("stats-service", () => {
       const { db } = await import("@/lib/db");
       const { getTimeseriesStats } = await import("@/lib/services/stats-service");
 
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockResolvedValue([
-                {
-                  upstreamId: "upstream-1",
-                  timeBucket: "2024-06-15 10:00:00",
-                  requestCount: 10,
-                  totalTokens: "1000",
-                  avgDuration: "100",
-                },
-                {
-                  upstreamId: "upstream-1",
-                  timeBucket: "2024-06-15 11:00:00",
-                  requestCount: 20,
-                  totalTokens: "2000",
-                  avgDuration: "200",
-                },
-              ]),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>);
+      vi.mocked(db.select).mockReturnValue(
+        timeseriesSelectMock([
+          {
+            upstreamId: "upstream-1",
+            timeBucket: "2024-06-15 10:00:00",
+            requestCount: 10,
+            totalTokens: "1000",
+            avgDuration: "100",
+          },
+          {
+            upstreamId: "upstream-1",
+            timeBucket: "2024-06-15 11:00:00",
+            requestCount: 20,
+            totalTokens: "2000",
+            avgDuration: "200",
+          },
+        ]) as unknown as ReturnType<typeof db.select>
+      );
 
       vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([]);
 
@@ -436,46 +435,44 @@ describe("stats-service", () => {
       const { getTimeseriesStats } = await import("@/lib/services/stats-service");
 
       vi.mocked(db.select)
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi.fn().mockReturnValue({
-                orderBy: vi.fn().mockResolvedValue([
-                  {
-                    upstreamId: "upstream-1",
-                    timeBucket: "2024-06-15 10:00:00",
-                    requestCount: 10,
-                    totalTokens: "1000",
-                    avgDuration: "100",
-                  },
-                  {
-                    upstreamId: "upstream-2",
-                    timeBucket: "2024-06-15 10:00:00",
-                    requestCount: 8,
-                    totalTokens: "800",
-                    avgDuration: "160",
-                  },
-                ]),
-              }),
-            }),
-          }),
-        } as unknown as ReturnType<typeof db.select>)
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              groupBy: vi.fn().mockReturnValue({
-                orderBy: vi.fn().mockResolvedValue([
-                  {
-                    timeBucket: "2024-06-15 10:00:00",
-                    requestCount: 18,
-                    totalTokens: "1800",
-                    avgDuration: "126.7",
-                  },
-                ]),
-              }),
-            }),
-          }),
-        } as unknown as ReturnType<typeof db.select>);
+        .mockReturnValueOnce(
+          timeseriesSelectMock([
+            {
+              upstreamId: "upstream-1",
+              timeBucket: "2024-06-15 10:00:00",
+              requestCount: 10,
+              totalTokens: "1000",
+              avgDuration: "100",
+            },
+            {
+              upstreamId: "upstream-2",
+              timeBucket: "2024-06-15 10:00:00",
+              requestCount: 8,
+              totalTokens: "800",
+              avgDuration: "160",
+            },
+          ]) as unknown as ReturnType<typeof db.select>
+        )
+        .mockReturnValueOnce(
+          timeseriesSelectMock([
+            {
+              timeBucket: "2024-06-15 10:00:00",
+              requestCount: 18,
+              totalTokens: "1800",
+              avgDuration: "126.7",
+            },
+          ]) as unknown as ReturnType<typeof db.select>
+        )
+        .mockReturnValueOnce(
+          timeseriesSelectMock([], {
+            requestCount: 18,
+            totalTokens: "1800",
+            avgTtft: null,
+            avgDuration: "126.7",
+            tpsCompletionTokens: null,
+            tpsDurationMs: null,
+          }) as unknown as ReturnType<typeof db.select>
+        );
 
       vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
         { id: "upstream-1", name: "OpenAI" },
@@ -493,21 +490,23 @@ describe("stats-service", () => {
           avgDurationMs: 126.7,
         },
       ]);
+      expect(result.periodSummary).toEqual({
+        requestCount: 18,
+        totalTokens: 1800,
+        avgTtftMs: 0,
+        avgDurationMs: 126.7,
+        avgTps: 0,
+        totalCost: 0,
+      });
     });
 
     it("should handle empty result", async () => {
       const { db } = await import("@/lib/db");
       const { getTimeseriesStats } = await import("@/lib/services/stats-service");
 
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockResolvedValue([]),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>);
+      vi.mocked(db.select).mockReturnValue(
+        timeseriesSelectMock([]) as unknown as ReturnType<typeof db.select>
+      );
 
       vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([]);
 
@@ -520,23 +519,17 @@ describe("stats-service", () => {
       const { db } = await import("@/lib/db");
       const { getTimeseriesStats } = await import("@/lib/services/stats-service");
 
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockResolvedValue([
-                {
-                  upstreamId: "upstream-1",
-                  timeBucket: "2024-06-15 10:00:00",
-                  requestCount: 10,
-                  totalTokens: null,
-                  avgDuration: null,
-                },
-              ]),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>);
+      vi.mocked(db.select).mockReturnValue(
+        timeseriesSelectMock([
+          {
+            upstreamId: "upstream-1",
+            timeBucket: "2024-06-15 10:00:00",
+            requestCount: 10,
+            totalTokens: null,
+            avgDuration: null,
+          },
+        ]) as unknown as ReturnType<typeof db.select>
+      );
 
       vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
         { id: "upstream-1", name: "Test" },
@@ -552,25 +545,29 @@ describe("stats-service", () => {
       const { db } = await import("@/lib/db");
       const { getTimeseriesStats } = await import("@/lib/services/stats-service");
 
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockResolvedValue([
-                {
-                  upstreamId: "upstream-1",
-                  timeBucket: "2024-06-15 10:00:00",
-                  requestCount: 5,
-                  totalTokens: "1000",
-                  avgDuration: "1200",
-                  totalCompletionTokens: "600",
-                  totalDurationMs: "10000",
-                },
-              ]),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>);
+      vi.mocked(db.select).mockReturnValue(
+        timeseriesSelectMock(
+          [
+            {
+              upstreamId: "upstream-1",
+              timeBucket: "2024-06-15 10:00:00",
+              requestCount: 5,
+              totalTokens: "1000",
+              avgDuration: "1200",
+              totalCompletionTokens: "600",
+              totalDurationMs: "10000",
+            },
+          ],
+          {
+            requestCount: 5,
+            totalTokens: "1000",
+            avgTtft: "320.46",
+            avgDuration: "1200",
+            tpsCompletionTokens: "600",
+            tpsDurationMs: "10000",
+          }
+        ) as unknown as ReturnType<typeof db.select>
+      );
 
       vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
         { id: "upstream-1", name: "OpenAI" },
@@ -581,31 +578,43 @@ describe("stats-service", () => {
       expect(result.series).toHaveLength(1);
       expect(result.series[0].data[0].avgTps).toBe(60);
       expect(result.totalSeries[0].avgTps).toBe(60);
+      expect(result.periodSummary).toEqual({
+        requestCount: 5,
+        totalTokens: 1000,
+        avgTtftMs: 320.5,
+        avgDurationMs: 1200,
+        avgTps: 60,
+        totalCost: 0,
+      });
     });
 
     it("should return avgTps as 0 when no eligible stream samples exist", async () => {
       const { db } = await import("@/lib/db");
       const { getTimeseriesStats } = await import("@/lib/services/stats-service");
 
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockResolvedValue([
-                {
-                  upstreamId: "upstream-1",
-                  timeBucket: "2024-06-15 10:00:00",
-                  requestCount: 5,
-                  totalTokens: "1000",
-                  avgDuration: "1200",
-                  totalCompletionTokens: "0",
-                  totalDurationMs: "0",
-                },
-              ]),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>);
+      vi.mocked(db.select).mockReturnValue(
+        timeseriesSelectMock(
+          [
+            {
+              upstreamId: "upstream-1",
+              timeBucket: "2024-06-15 10:00:00",
+              requestCount: 5,
+              totalTokens: "1000",
+              avgDuration: "1200",
+              totalCompletionTokens: "0",
+              totalDurationMs: "0",
+            },
+          ],
+          {
+            requestCount: 5,
+            totalTokens: "1000",
+            avgTtft: null,
+            avgDuration: "1200",
+            tpsCompletionTokens: "0",
+            tpsDurationMs: "0",
+          }
+        ) as unknown as ReturnType<typeof db.select>
+      );
 
       vi.mocked(db.query.upstreams.findMany).mockResolvedValueOnce([
         { id: "upstream-1", name: "OpenAI" },
@@ -615,6 +624,7 @@ describe("stats-service", () => {
 
       expect(result.series).toHaveLength(1);
       expect(result.series[0].data[0].avgTps).toBe(0);
+      expect(result.periodSummary.avgTps).toBe(0);
     });
   });
 
@@ -1357,20 +1367,33 @@ describe("stats-service", () => {
     });
   });
 
+  describe("getTimeRangeStart", () => {
+    it("aligns today to the caller's local midnight via tz offset", async () => {
+      const { getTimeRangeStart } = await import("@/lib/services/stats-service");
+
+      expect(getTimeRangeStart("today")).toEqual(new Date("2024-06-15T00:00:00Z"));
+      // UTC+8: local 2024-06-15 00:00 is 2024-06-14T16:00:00Z.
+      expect(getTimeRangeStart("today", 480)).toEqual(new Date("2024-06-14T16:00:00Z"));
+      // UTC-8: local midnight falls later in UTC.
+      expect(getTimeRangeStart("today", -480)).toEqual(new Date("2024-06-15T08:00:00Z"));
+    });
+
+    it("uses exact rolling windows for 7d/30d regardless of tz offset", async () => {
+      const { getTimeRangeStart } = await import("@/lib/services/stats-service");
+
+      expect(getTimeRangeStart("7d")).toEqual(new Date("2024-06-08T12:00:00Z"));
+      expect(getTimeRangeStart("30d", 480)).toEqual(new Date("2024-05-16T12:00:00Z"));
+    });
+  });
+
   describe("TimeRange types", () => {
     it("should accept valid time ranges", async () => {
       const { getTimeseriesStats } = await import("@/lib/services/stats-service");
       const { db } = await import("@/lib/db");
 
-      vi.mocked(db.select).mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            groupBy: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockResolvedValue([]),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof db.select>);
+      vi.mocked(db.select).mockReturnValue(
+        timeseriesSelectMock([]) as unknown as ReturnType<typeof db.select>
+      );
 
       vi.mocked(db.query.upstreams.findMany).mockResolvedValue([]);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Users } from "lucide-react";
 
@@ -19,15 +19,22 @@ import { useRouter } from "@/i18n/navigation";
 import { useUsers } from "@/hooks/use-users";
 import { useContainerMorph } from "@/hooks/use-container-morph";
 import { useAuth } from "@/providers/auth-provider";
+import { cn } from "@/lib/utils";
 import type { User } from "@/types/api";
 
 type UserDialog = "edit" | "username" | "password" | "upstreams" | "keys" | "delete" | null;
 
 export default function UsersPage() {
   const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
   const pageSize = 10;
   const [activeUser, setActiveUser] = useState<User | null>(null);
   const [dialog, setDialog] = useState<UserDialog>(null);
+
+  const handleSearchQueryChange = useCallback((value: string) => {
+    setSearchQuery(value);
+    setPage(1);
+  }, []);
 
   // 容器变形动画：所有用户操作都从该行的下拉菜单触发，统一以行元素为变形源，
   // 同一时刻只会打开一个弹窗，故共用单个 view-transition-name。
@@ -37,7 +44,7 @@ export default function UsersPage() {
   const t = useTranslations("users");
   const tCommon = useTranslations("common");
   const router = useRouter();
-  const { data, isLoading } = useUsers(page, pageSize);
+  const { data, isLoading, isFetching } = useUsers(page, pageSize, searchQuery);
   const { principal } = useAuth();
 
   // ADMIN_TOKEN 超级令牌独立于用户表、始终能管理系统，因此豁免“保留最后一个启用
@@ -86,11 +93,19 @@ export default function UsersPage() {
             {tCommon("loading")}
           </div>
         ) : (
-          <>
+          // Dim the stale placeholder content while a search/page refetch is
+          // in flight — the only in-place feedback since the loading state is
+          // reserved for the initial load.
+          <div
+            aria-busy={isFetching}
+            className={cn("space-y-4 transition-opacity", isFetching && "opacity-70")}
+          >
             <UsersTable
               users={users}
               activeAdminCount={activeAdminCount}
               bypassLastAdminGuard={bypassLastAdminGuard}
+              searchQuery={searchQuery}
+              onSearchQueryChange={handleSearchQueryChange}
               onViewUsage={(user) => router.push(`/system/users/${user.id}`)}
               onEdit={(user, source) => openDialog("edit", user, source)}
               onChangeUsername={(user, source) => openDialog("username", user, source)}
@@ -100,7 +115,9 @@ export default function UsersPage() {
               onDelete={(user, source) => openDialog("delete", user, source)}
             />
 
-            {data && data.total_pages > 1 && (
+            {/* While searching, keep the controls visible even on a single
+                page — the total is the only match-count feedback. */}
+            {data && (data.total_pages > 1 || searchQuery.trim() !== "") && (
               <Card variant="filled" className="border border-divider">
                 <PaginationControls
                   total={data.total}
@@ -111,7 +128,7 @@ export default function UsersPage() {
                 />
               </Card>
             )}
-          </>
+          </div>
         )}
       </div>
 

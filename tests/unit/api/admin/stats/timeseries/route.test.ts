@@ -71,10 +71,18 @@ describe("GET /api/admin/stats/timeseries", () => {
           avgTps: 57.8,
         },
       ],
+      periodSummary: {
+        requestCount: 120,
+        totalTokens: 9000,
+        avgTtftMs: 980.1,
+        avgDurationMs: 1500.5,
+        avgTps: 57.8,
+        totalCost: 0,
+      },
     });
 
     const request = new Request(
-      "http://localhost/api/admin/stats/timeseries?range=30d&metric=tps",
+      "http://localhost/api/admin/stats/timeseries?range=30d&metric=tps&tz_offset=480",
       {
         headers: { authorization: "Bearer valid-admin-token" },
       }
@@ -82,7 +90,7 @@ describe("GET /api/admin/stats/timeseries", () => {
 
     const response = await GET(request);
     expect(response.status).toBe(200);
-    expect(getTimeseriesStats).toHaveBeenCalledWith("30d", "tps", undefined, undefined);
+    expect(getTimeseriesStats).toHaveBeenCalledWith("30d", "tps", undefined, undefined, 480);
 
     const data = await response.json();
     expect(data.range).toBe("30d");
@@ -103,6 +111,14 @@ describe("GET /api/admin/stats/timeseries", () => {
       avg_duration_ms: 1500.5,
       avg_ttft_ms: 980.1,
       avg_tps: 57.8,
+    });
+    expect(data.period_summary).toEqual({
+      request_count: 120,
+      total_tokens: 9000,
+      avg_ttft_ms: 980.1,
+      avg_duration_ms: 1500.5,
+      avg_tps: 57.8,
+      total_cost: 0,
     });
   });
 

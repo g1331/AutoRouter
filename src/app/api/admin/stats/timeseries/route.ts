@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
+import { errorResponse, getTzOffsetParam, requireAdmin } from "@/lib/utils/api-auth";
 import {
   getTimeseriesStats,
   type TimeRange,
@@ -18,6 +18,8 @@ const log = createLogger("admin-stats");
  * - metric: "requests" | "ttft" | "tps" | "tokens" | "duration" | "cost"
  * - start_date: ISO date string (only for range=custom)
  * - end_date: ISO date string (only for range=custom)
+ * - tz_offset: caller timezone offset in minutes east of UTC (aligns "today"
+ *   to the caller's local midnight; defaults to UTC)
  */
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -50,7 +52,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const stats = await getTimeseriesStats(range, metric, customStart, customEnd);
+    const stats = await getTimeseriesStats(
+      range,
+      metric,
+      customStart,
+      customEnd,
+      getTzOffsetParam(request)
+    );
     return NextResponse.json(transformStatsTimeseriesToApi(stats));
   } catch (error) {
     log.error({ err: error }, "failed to get timeseries stats");

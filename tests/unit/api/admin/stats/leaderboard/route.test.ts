@@ -84,13 +84,16 @@ describe("GET /api/admin/stats/leaderboard", () => {
       ],
     });
 
-    const request = new Request("http://localhost/api/admin/stats/leaderboard?range=7d&limit=5", {
-      headers: { authorization: "Bearer valid-admin-token" },
-    });
+    const request = new Request(
+      "http://localhost/api/admin/stats/leaderboard?range=7d&limit=5&tz_offset=-300",
+      {
+        headers: { authorization: "Bearer valid-admin-token" },
+      }
+    );
 
     const response = await GET(request);
     expect(response.status).toBe(200);
-    expect(getLeaderboardStats).toHaveBeenCalledWith("7d", 5, undefined, undefined);
+    expect(getLeaderboardStats).toHaveBeenCalledWith("7d", 5, undefined, undefined, -300);
 
     const data = await response.json();
     expect(data.upstreams[0]).toEqual({

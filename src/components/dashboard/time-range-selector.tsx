@@ -19,10 +19,14 @@ export type TimeRangeOrCustom = TimeRange | "custom";
 const PRESET_RANGES: TimeRange[] = ["today", "7d", "30d"];
 
 interface TimeRangeSelectorProps {
-  value: TimeRangeOrCustom;
-  onChange: (value: TimeRangeOrCustom, customRange?: CustomDateRange) => void;
+  value: TimeRangeOrCustom | "all";
+  // Method syntax keeps parameter bivariance: callers that never enable
+  // includeAll can keep handlers typed to the narrower TimeRangeOrCustom.
+  onChange(value: TimeRangeOrCustom | "all", customRange?: CustomDateRange): void;
   customRange?: CustomDateRange;
   hideCustom?: boolean;
+  /** Prepend an "all time" preset (used by the logs view to reach old entries). */
+  includeAll?: boolean;
 }
 
 export function TimeRangeSelector({
@@ -30,6 +34,7 @@ export function TimeRangeSelector({
   onChange,
   customRange,
   hideCustom,
+  includeAll,
 }: TimeRangeSelectorProps) {
   const t = useTranslations("dashboard");
   const tCommon = useTranslations("common");
@@ -40,8 +45,10 @@ export function TimeRangeSelector({
     customRange ? { from: customRange.start, to: customRange.end } : undefined
   );
 
-  const getLabel = (range: TimeRange): string => {
+  const getLabel = (range: TimeRange | "all"): string => {
     switch (range) {
+      case "all":
+        return t("timeRange.all");
       case "today":
         return t("timeRange.today");
       case "7d":
@@ -50,6 +57,10 @@ export function TimeRangeSelector({
         return t("timeRange.30d");
     }
   };
+
+  const presetRanges: Array<TimeRange | "all"> = includeAll
+    ? ["all", ...PRESET_RANGES]
+    : PRESET_RANGES;
 
   const customLabel = (() => {
     if (value !== "custom" || !customRange) return t("timeRange.custom");
@@ -73,7 +84,7 @@ export function TimeRangeSelector({
   return (
     <div className="flex items-stretch gap-1">
       <div className="inline-flex rounded-cf-sm border border-border bg-surface-200 p-1">
-        {PRESET_RANGES.map((range) => (
+        {presetRanges.map((range) => (
           <button
             key={range}
             type="button"

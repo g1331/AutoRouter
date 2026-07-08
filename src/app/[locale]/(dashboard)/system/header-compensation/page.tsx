@@ -198,6 +198,7 @@ interface RuleFormDialogProps {
 
 function RuleFormDialog({ open, onClose, initial, morph = false }: RuleFormDialogProps) {
   const t = useTranslations("compensation");
+  const tCommon = useTranslations("common");
   const createMutation = useCreateCompensationRule();
   const updateMutation = useUpdateCompensationRule();
 
@@ -300,7 +301,7 @@ function RuleFormDialog({ open, onClose, initial, morph = false }: RuleFormDialo
           <DialogFooter>
             <Button type="button" variant="outline" size="sm" onClick={onClose}>
               <X className="mr-1.5 h-3.5 w-3.5" />
-              Cancel
+              {tCommon("cancel")}
             </Button>
             <Button type="submit" size="sm" disabled={isPending}>
               {isPending ? (
@@ -308,7 +309,7 @@ function RuleFormDialog({ open, onClose, initial, morph = false }: RuleFormDialo
               ) : (
                 <>
                   <Check className="mr-1.5 h-3.5 w-3.5" />
-                  {isEditing ? "Save" : t("addRule")}
+                  {isEditing ? tCommon("save") : t("addRule")}
                 </>
               )}
             </Button>

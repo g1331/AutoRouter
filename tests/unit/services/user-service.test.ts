@@ -27,73 +27,12 @@ vi.mock("@/lib/utils/auth", async (importActual) => {
 });
 
 vi.mock("@/lib/db", async () => {
-  const { createClient } = await import("@libsql/client");
-  const { drizzle } = await import("drizzle-orm/libsql");
-  const { is } = await import("drizzle-orm");
-  const { SQLiteTable, getTableConfig } = await import("drizzle-orm/sqlite-core");
-  const fs = await import("fs");
-  const pathMod = await import("path");
-  const schema = await import("@/lib/db/schema-sqlite");
-
-  // A bare ":memory:" libsql database is scoped to a single connection, so the
-  // migration connection and drizzle's query connection would see different
-  // empty databases. A shared-cache in-memory URI gives every connection in
-  // this process the same backing store while staying file-free.
-  const client = createClient({ url: "file::memory:?cache=shared" });
-
-  // Apply the drizzle-sqlite migrations statement by statement. drizzle's libsql
-  // migrator instead batches every fragment including the empty pieces left by
-  // `--> statement-breakpoint` splitting, which makes libsql raise a spurious
-  // "not an error"; splitting and dropping empties ourselves avoids that.
-  const dir = pathMod.resolve(process.cwd(), "drizzle-sqlite");
-  const files = fs
-    .readdirSync(dir)
-    .filter((file) => file.endsWith(".sql"))
-    .sort();
-  for (const file of files) {
-    const raw = fs.readFileSync(pathMod.join(dir, file), "utf8");
-    const statements = raw
-      .split("--> statement-breakpoint")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    for (const stmt of statements) {
-      await client.execute(stmt);
-    }
-  }
-
-  // The drizzle-sqlite migrations have drifted from schema-sqlite: some columns
-  // (for example upstreams.official_website_url) are recorded in the snapshot
-  // metadata but no .sql migration ever adds them, and some tables in the schema
-  // are never created by any .sql migration at all. The user-management tests
-  // only touch users / api_keys / upstreams / user_upstreams, which the
-  // migrations do create. Reconcile every migrated table to schema-sqlite by
-  // adding any missing columns (added nullable, which is enough to insert and
-  // read rows in tests), and skip tables the migrations never created.
-  for (const exported of Object.values(schema)) {
-    if (!is(exported, SQLiteTable)) {
-      continue;
-    }
-    const cfg = getTableConfig(exported);
-    const info = await client.execute(`PRAGMA table_info(\`${cfg.name}\`)`);
-    if (info.rows.length === 0) {
-      continue;
-    }
-    const existing = new Set(info.rows.map((row) => String(row.name)));
-    for (const column of cfg.columns) {
-      if (!existing.has(column.name)) {
-        await client.execute(
-          `ALTER TABLE \`${cfg.name}\` ADD COLUMN \`${column.name}\` ${column.getSQLType()}`
-        );
-      }
-    }
-  }
-
-  const db = drizzle(client, { schema });
-  return { db, ...schema };
+  const { createLibsqlMemoryDbModule } = await import("../../helpers/libsql-memory-db");
+  return createLibsqlMemoryDbModule();
 });
 
 import { eq } from "drizzle-orm";
-import { db, users, apiKeys, upstreams, userUpstreams } from "@/lib/db";
+import { db, users, apiKeys, upstreams, userUpstreams, requestLogs } from "@/lib/db";
 import {
   createUser,
   listUsers,
@@ -159,6 +98,7 @@ async function seedUpstream(name: string): Promise<{ id: string }> {
 }
 
 beforeEach(async () => {
+  await db.delete(requestLogs);
   await db.delete(userUpstreams);
   await db.delete(apiKeys);
   await db.delete(upstreams);
@@ -239,6 +179,72 @@ describe("user-service", () => {
       expect(counts.a).toBe(2);
       expect(counts.b).toBe(1);
       expect(counts.c).toBe(0);
+    });
+
+    it("filters by username or display name case-insensitively, keeping totals in sync", async () => {
+      await createUser({ username: "alice", password: "password123", displayName: "生产环境" });
+      await createUser({ username: "bob", password: "password123", displayName: "Test Account" });
+      await createUser({ username: "carol", password: "password123", displayName: "C" });
+
+      const byUsername = await listUsers(1, 10, "ALI");
+      expect(byUsername.total).toBe(1);
+      expect(byUsername.items.map((u) => u.username)).toEqual(["alice"]);
+
+      const byDisplayName = await listUsers(1, 10, "test");
+      expect(byDisplayName.total).toBe(1);
+      expect(byDisplayName.items.map((u) => u.username)).toEqual(["bob"]);
+
+      const noMatch = await listUsers(1, 10, "nonexistent");
+      expect(noMatch.total).toBe(0);
+      expect(noMatch.items).toEqual([]);
+    });
+
+    it("treats LIKE metacharacters in the search term as literals", async () => {
+      await createUser({ username: "john_doe", password: "password123", displayName: "J" });
+      await createUser({ username: "johnxdoe", password: "password123", displayName: "J" });
+      await createUser({ username: "percent", password: "password123", displayName: "50%off" });
+
+      // "_" must not act as a single-char wildcard.
+      const underscore = await listUsers(1, 10, "john_doe");
+      expect(underscore.items.map((u) => u.username)).toEqual(["john_doe"]);
+
+      // "%" must not act as a match-anything wildcard.
+      const percent = await listUsers(1, 10, "50%");
+      expect(percent.items.map((u) => u.username)).toEqual(["percent"]);
+      const lonePercent = await listUsers(1, 10, "%");
+      expect(lonePercent.items.map((u) => u.username)).toEqual(["percent"]);
+
+      // A trailing backslash must not corrupt the pattern into matching nothing valid.
+      const trailingBackslash = await listUsers(1, 10, "john\\");
+      expect(trailingBackslash.total).toBe(0);
+    });
+
+    it("aggregates month-to-date usage per user from the request_logs snapshot", async () => {
+      const a = await createUser({ username: "a", password: "password123", displayName: "A" });
+      const b = await createUser({ username: "b", password: "password123", displayName: "B" });
+
+      const now = new Date();
+      const inMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 12));
+      const lastMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 15));
+
+      await db.insert(requestLogs).values([
+        { userId: a.id, method: "POST", path: "/v1/chat/completions", createdAt: inMonth },
+        { userId: a.id, method: "POST", path: "/v1/chat/completions", createdAt: inMonth },
+        { userId: a.id, method: "POST", path: "/v1/chat/completions", createdAt: lastMonth },
+        { userId: b.id, method: "POST", path: "/v1/chat/completions", createdAt: inMonth },
+      ]);
+
+      const all = await listUsers(1, 50);
+      const byName = Object.fromEntries(all.items.map((u) => [u.username, u]));
+      expect(byName.a.monthRequests).toBe(2);
+      expect(byName.b.monthRequests).toBe(1);
+      expect(byName.a.monthCostUsd).toBe(0);
+
+      // The detail/update paths must report the same month usage as the list.
+      const detail = await getUserById(a.id);
+      expect(detail?.monthRequests).toBe(2);
+      const updated = await updateUser(b.id, { displayName: "B2" });
+      expect(updated.monthRequests).toBe(1);
     });
 
     it("reports the table-wide active admin total independent of the page", async () => {

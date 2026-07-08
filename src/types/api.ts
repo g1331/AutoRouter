@@ -92,6 +92,10 @@ export interface User {
   role: UserRole;
   is_active: boolean;
   api_key_count: number;
+  /** Month-to-date request count. */
+  month_requests: number;
+  /** Month-to-date billed cost in USD. */
+  month_cost_usd: number;
   created_at: string; // ISO 8601 date string
   updated_at: string; // ISO 8601 date string
 }
@@ -1188,11 +1192,21 @@ export interface UpstreamTimeseriesData {
   data: TimeseriesDataPoint[];
 }
 
+export interface TimeseriesPeriodSummary {
+  request_count: number;
+  total_tokens: number;
+  avg_ttft_ms: number;
+  avg_duration_ms: number;
+  avg_tps: number;
+  total_cost: number;
+}
+
 export interface StatsTimeseriesResponse {
   range: string;
   granularity: string;
   series: UpstreamTimeseriesData[];
   total_series: TimeseriesDataPoint[];
+  period_summary: TimeseriesPeriodSummary;
 }
 
 export interface LeaderboardAPIKeyItem {

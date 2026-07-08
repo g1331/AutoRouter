@@ -1,16 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ScrollText } from "lucide-react";
 
-import { LogsTable } from "@/components/admin/logs-table";
+import {
+  DEFAULT_LOGS_SERVER_FILTERS,
+  LogsTable,
+  type LogsServerFilters,
+} from "@/components/admin/logs-table";
 import { PaginationControls } from "@/components/admin/pagination-controls";
 import { RefreshIntervalSelect } from "@/components/admin/refresh-interval-select";
 import { Topbar } from "@/components/admin/topbar";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { usePortalRequestLogs } from "@/hooks/use-portal-logs";
+import { usePortalRequestLogs, type PortalRequestLogsFilters } from "@/hooks/use-portal-logs";
 
 export default function PortalRequestsPage() {
   const t = useTranslations("portal");
@@ -19,7 +23,24 @@ export default function PortalRequestsPage() {
   const [refreshInterval, setRefreshInterval] = useState<number | false>(false);
   const pageSize = 20;
 
-  const { data, isLoading, isFetching, refetch } = usePortalRequestLogs(page, pageSize, undefined, {
+  const [tableFilters, setTableFilters] = useState<LogsServerFilters>(DEFAULT_LOGS_SERVER_FILTERS);
+  // Functional merge: a debounced patch (e.g. the model input) can arrive after
+  // a newer status/time change and must not overwrite it.
+  const handleTableFiltersChange = useCallback((patch: Partial<LogsServerFilters>) => {
+    setTableFilters((prev) => ({ ...prev, ...patch }));
+    setPage(1);
+  }, []);
+
+  const filters = useMemo<PortalRequestLogsFilters>(
+    () => ({
+      ...(tableFilters.statusClass !== "all" ? { status_class: tableFilters.statusClass } : {}),
+      ...(tableFilters.model ? { model: tableFilters.model } : {}),
+      time_range: tableFilters.timeRange,
+    }),
+    [tableFilters]
+  );
+
+  const { data, isLoading, isFetching, refetch } = usePortalRequestLogs(page, pageSize, filters, {
     refetchInterval: refreshInterval,
   });
 
@@ -56,7 +77,12 @@ export default function PortalRequestsPage() {
           </Card>
         ) : (
           <>
-            <LogsTable logs={data?.items ?? []} hideRecordingSection />
+            <LogsTable
+              logs={data?.items ?? []}
+              hideRecordingSection
+              serverFilters={tableFilters}
+              onServerFiltersChange={handleTableFiltersChange}
+            />
 
             {data && data.total_pages > 1 && (
               <Card variant="filled" className="border border-divider">

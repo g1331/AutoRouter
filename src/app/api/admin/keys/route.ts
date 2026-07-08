@@ -36,6 +36,10 @@ const createApiKeySchema = z
 
 /**
  * GET /api/admin/keys - List all API keys
+ *
+ * Query params:
+ * - page / page_size: pagination
+ * - search: string (filter - case-insensitive substring match on key name)
  */
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -45,7 +49,8 @@ export async function GET(request: NextRequest) {
 
   try {
     const { page, pageSize } = getPaginationParams(request);
-    const result = await listApiKeys(page, pageSize);
+    const search = new URL(request.url).searchParams.get("search")?.trim();
+    const result = await listApiKeys(page, pageSize, search ? { search } : {});
 
     return NextResponse.json(transformPaginatedApiKeys(result));
   } catch (error) {

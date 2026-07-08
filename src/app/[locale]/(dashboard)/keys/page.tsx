@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Key } from "lucide-react";
 
@@ -13,6 +13,7 @@ import { Topbar } from "@/components/admin/topbar";
 import { Card } from "@/components/ui/card";
 import { useAPIKeys } from "@/hooks/use-api-keys";
 import { useContainerMorph } from "@/hooks/use-container-morph";
+import { cn } from "@/lib/utils";
 import type { APIKey } from "@/types/api";
 
 interface KeysLoadingSkeletonProps {
@@ -58,9 +59,15 @@ function KeysLoadingSkeleton({ loadingLabel }: KeysLoadingSkeletonProps) {
 
 export default function KeysPage() {
   const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
   const [revokeKey, setRevokeKey] = useState<APIKey | null>(null);
   const [editingKey, setEditingKey] = useState<APIKey | null>(null);
   const pageSize = 10;
+
+  const handleSearchQueryChange = useCallback((value: string) => {
+    setSearchQuery(value);
+    setPage(1);
+  }, []);
 
   // 容器变形动画：记录触发弹窗的源元素（表格行 / 卡片），关闭时收回同一元素。
   const { startMorph, canMorph } = useContainerMorph();
@@ -68,7 +75,7 @@ export default function KeysPage() {
 
   const t = useTranslations("keys");
   const tCommon = useTranslations("common");
-  const { data, isLoading } = useAPIKeys(page, pageSize);
+  const { data, isLoading, isFetching } = useAPIKeys(page, pageSize, searchQuery);
 
   return (
     <>
@@ -86,9 +93,17 @@ export default function KeysPage() {
         {isLoading ? (
           <KeysLoadingSkeleton loadingLabel={tCommon("loading")} />
         ) : (
-          <>
+          // Dim the stale placeholder content while a search/page refetch is
+          // in flight — the only in-place feedback since the skeleton is
+          // reserved for the initial load.
+          <div
+            aria-busy={isFetching}
+            className={cn("space-y-4 transition-opacity", isFetching && "opacity-70")}
+          >
             <KeysTable
               keys={data?.items || []}
+              searchQuery={searchQuery}
+              onSearchQueryChange={handleSearchQueryChange}
               onRevoke={(key, source) => {
                 morphSourceRef.current = source;
                 startMorph(() => setRevokeKey(key), {
@@ -107,7 +122,9 @@ export default function KeysPage() {
               }}
             />
 
-            {data && data.total_pages > 1 && (
+            {/* While searching, keep the controls visible even on a single
+                page — the total is the only match-count feedback. */}
+            {data && (data.total_pages > 1 || searchQuery.trim() !== "") && (
               <Card variant="filled" className="border border-divider">
                 <PaginationControls
                   total={data.total}
@@ -118,7 +135,7 @@ export default function KeysPage() {
                 />
               </Card>
             )}
-          </>
+          </div>
         )}
       </div>
 

@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gte, sql } from "drizzle-orm";
+import { and, asc, count, eq, gte, inArray, sql } from "drizzle-orm";
 import { db, apiKeys, requestLogs, requestBillingSnapshots, upstreams, userUpstreams } from "../db";
 import {
   listRequestLogs,
@@ -110,6 +110,45 @@ export async function getUserOverview(userId: string): Promise<UserOverview> {
     activeKeyCount: keyRows[0]?.active ?? 0,
     totalKeyCount: keyRows[0]?.total ?? 0,
   };
+}
+
+export interface UserMonthUsage {
+  requests: number;
+  costUsd: number;
+}
+
+/**
+ * Month-to-date usage aggregates for a batch of users in one grouped query
+ * (no N+1). Shares the billed-snapshot accounting basis with getUserOverview
+ * so the users list and the user detail page report the same numbers.
+ */
+export async function getUsersMonthUsage(userIds: string[]): Promise<Map<string, UserMonthUsage>> {
+  const usage = new Map<string, UserMonthUsage>();
+  if (userIds.length === 0) {
+    return usage;
+  }
+
+  const now = new Date();
+  const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
+  const rows = await db
+    .select({
+      userId: requestLogs.userId,
+      requests: count(requestLogs.id),
+      cost: billedCostExpr,
+    })
+    .from(requestLogs)
+    .leftJoin(requestBillingSnapshots, eq(requestLogs.id, requestBillingSnapshots.requestLogId))
+    .where(and(inArray(requestLogs.userId, userIds), gte(requestLogs.createdAt, startOfMonth)))
+    .groupBy(requestLogs.userId);
+
+  for (const row of rows) {
+    if (row.userId) {
+      usage.set(row.userId, { requests: row.requests, costUsd: parseCost(row.cost) });
+    }
+  }
+
+  return usage;
 }
 
 /**
