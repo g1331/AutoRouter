@@ -64,11 +64,45 @@ export function AppShell({
   }, [isSidebarCollapsed]);
 
   // The shell scrolls inside <main>, not the window, so the browser's native
-  // scroll restoration never resets it on navigation — do it ourselves.
+  // scroll restoration never applies — reimplement it: forward navigations
+  // start at the top, back/forward (popstate) restores the saved position.
+  const scrollPositionsRef = useRef(new Map<string, number>());
+  const isPopNavigationRef = useRef(false);
+
   useEffect(() => {
-    if (mainRef.current) {
-      mainRef.current.scrollTop = 0;
+    const handlePopState = () => {
+      isPopNavigationRef.current = true;
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    const main = mainRef.current;
+    if (!main) {
+      return;
     }
+    const handleScroll = () => {
+      scrollPositionsRef.current.set(pathname, main.scrollTop);
+    };
+    main.addEventListener("scroll", handleScroll, { passive: true });
+    return () => main.removeEventListener("scroll", handleScroll);
+  }, [pathname]);
+
+  useEffect(() => {
+    const main = mainRef.current;
+    if (!main) {
+      return;
+    }
+    if (isPopNavigationRef.current) {
+      isPopNavigationRef.current = false;
+      // ponytail: if the page's data isn't in the query cache yet the content
+      // is shorter than the saved offset and the browser clamps this to 0 —
+      // graceful degradation, no reflow tracking.
+      main.scrollTop = scrollPositionsRef.current.get(pathname) ?? 0;
+      return;
+    }
+    main.scrollTop = 0;
   }, [pathname]);
 
   useEffect(() => {
