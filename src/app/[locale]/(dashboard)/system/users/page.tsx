@@ -108,7 +108,9 @@ export default function UsersPage() {
               onDelete={(user, source) => openDialog("delete", user, source)}
             />
 
-            {data && data.total_pages > 1 && (
+            {/* While searching, keep the controls visible even on a single
+                page — the total is the only match-count feedback. */}
+            {data && (data.total_pages > 1 || searchQuery.trim() !== "") && (
               <Card variant="filled" className="border border-divider">
                 <PaginationControls
                   total={data.total}

@@ -36,6 +36,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { formatCost } from "@/components/dashboard/chart-theme";
 import { getDateLocale } from "@/lib/date-locale";
 import { cn } from "@/lib/utils";
 
@@ -83,13 +84,6 @@ export function UsersTable({
   const t = useTranslations("users");
   const locale = useLocale();
   const dateLocale = getDateLocale(locale);
-  const currencyFormatter = new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 4,
-  });
-
   // Local echo keeps typing responsive; updates are debounced up to the parent.
   const [searchInput, setSearchInput] = useState(searchQuery);
   // Resync the echo when the controlled value changes from outside (e.g. a
@@ -254,7 +248,7 @@ export function UsersTable({
                     {user.month_requests}
                   </TableCell>
                   <TableCell className="hidden tabular-nums lg:table-cell">
-                    {currencyFormatter.format(user.month_cost_usd)}
+                    {formatCost(user.month_cost_usd)}
                   </TableCell>
                   <TableCell className="hidden whitespace-nowrap 2xl:table-cell">
                     {formatDistanceToNow(new Date(user.created_at), {
