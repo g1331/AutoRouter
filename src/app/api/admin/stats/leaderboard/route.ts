@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { errorResponse, requireAdmin } from "@/lib/utils/api-auth";
+import { errorResponse, getTzOffsetParam, requireAdmin } from "@/lib/utils/api-auth";
 import { getLeaderboardStats, type TimeRange } from "@/lib/services/stats-service";
 import { transformStatsLeaderboardToApi } from "@/lib/utils/api-transformers";
 import { createLogger } from "@/lib/utils/logger";
@@ -14,6 +14,8 @@ const log = createLogger("admin-stats");
  * - limit: number (default: 5, max: 50)
  * - start_date: ISO 8601 string (required when range=custom)
  * - end_date: ISO 8601 string (required when range=custom, exclusive upper bound)
+ * - tz_offset: caller timezone offset in minutes east of UTC (aligns "today"
+ *   to the caller's local midnight; defaults to UTC)
  */
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -45,7 +47,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const stats = await getLeaderboardStats(range, limit, customStart, customEnd);
+    const stats = await getLeaderboardStats(
+      range,
+      limit,
+      customStart,
+      customEnd,
+      getTzOffsetParam(request)
+    );
     return NextResponse.json(transformStatsLeaderboardToApi(stats));
   } catch (error) {
     log.error({ err: error }, "failed to get leaderboard stats");

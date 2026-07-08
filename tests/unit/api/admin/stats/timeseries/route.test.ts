@@ -82,7 +82,7 @@ describe("GET /api/admin/stats/timeseries", () => {
     });
 
     const request = new Request(
-      "http://localhost/api/admin/stats/timeseries?range=30d&metric=tps",
+      "http://localhost/api/admin/stats/timeseries?range=30d&metric=tps&tz_offset=480",
       {
         headers: { authorization: "Bearer valid-admin-token" },
       }
@@ -90,7 +90,7 @@ describe("GET /api/admin/stats/timeseries", () => {
 
     const response = await GET(request);
     expect(response.status).toBe(200);
-    expect(getTimeseriesStats).toHaveBeenCalledWith("30d", "tps", undefined, undefined);
+    expect(getTimeseriesStats).toHaveBeenCalledWith("30d", "tps", undefined, undefined, 480);
 
     const data = await response.json();
     expect(data.range).toBe("30d");

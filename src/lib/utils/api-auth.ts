@@ -31,6 +31,17 @@ export function getPaginationParams(request: NextRequest): { page: number; pageS
 }
 
 /**
+ * Parse the caller's timezone offset (`tz_offset`, minutes east of UTC, i.e.
+ * `-Date#getTimezoneOffset()`), used to align "today"-style preset ranges to
+ * the caller's local midnight. Clamped to the real-world offset range;
+ * absent or invalid values fall back to UTC (0).
+ */
+export function getTzOffsetParam(request: NextRequest): number {
+  const parsed = parseInt(new URL(request.url).searchParams.get("tz_offset") || "0", 10);
+  return Math.min(840, Math.max(-840, isNaN(parsed) ? 0 : parsed));
+}
+
+/**
  * Parse an optional integer filter query param into one of three states:
  * `undefined` when absent or empty (no filter applied), `null` when present but
  * not a valid integer (the caller should reject with 400), or the parsed

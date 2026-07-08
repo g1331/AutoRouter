@@ -141,20 +141,29 @@ const tpsEligibleCondition = sql`
 /**
  * Calculate the start datetime for a given time range.
  */
-function getTimeRangeStart(rangeType: TimeRange): Date {
+/**
+ * Start of the calendar day containing `at`, in the timezone described by
+ * `tzOffsetMinutes` (minutes east of UTC, i.e. `-Date#getTimezoneOffset()`).
+ */
+function localDayStartUtc(at: Date, tzOffsetMinutes: number): Date {
+  const shifted = new Date(at.getTime() + tzOffsetMinutes * 60_000);
+  const dayStart = Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate());
+  return new Date(dayStart - tzOffsetMinutes * 60_000);
+}
+
+/**
+ * Preset range windows share the request-logs list semantics so the same
+ * label means the same window everywhere: "today" starts at the caller's
+ * local midnight, "7d"/"30d" are exact rolling windows.
+ */
+export function getTimeRangeStart(rangeType: TimeRange, tzOffsetMinutes = 0): Date {
   const now = new Date();
 
-  if (rangeType === "today") {
-    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  } else if (rangeType === "7d") {
-    const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    return new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
-  } else if (rangeType === "30d") {
-    const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    return new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+  if (rangeType === "7d" || rangeType === "30d") {
+    return new Date(now.getTime() - (rangeType === "7d" ? 7 : 30) * 24 * 60 * 60 * 1000);
   }
 
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return localDayStartUtc(now, tzOffsetMinutes);
 }
 
 /**
@@ -290,15 +299,12 @@ function buildDistributionMap<TKey extends string>(
 /**
  * Get overview statistics for the dashboard (today + yesterday comparison + cost).
  */
-export async function getOverviewStats(): Promise<StatsOverview> {
+export async function getOverviewStats(tzOffsetMinutes = 0): Promise<StatsOverview> {
   if (process.env.NODE_ENV !== "test") {
     await reconcileStaleInProgressRequestLogs().catch(() => undefined);
   }
 
-  const now = new Date();
-  const startOfToday = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-  );
+  const startOfToday = localDayStartUtc(new Date(), tzOffsetMinutes);
   const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000);
 
   const selectFields = {
@@ -398,7 +404,8 @@ export async function getTimeseriesStats(
   rangeType: TimeRange | "custom" = "7d",
   metric: TimeseriesMetric = "requests",
   customStart?: Date,
-  customEnd?: Date
+  customEnd?: Date,
+  tzOffsetMinutes = 0
 ): Promise<StatsTimeseries> {
   if (process.env.NODE_ENV !== "test") {
     await reconcileStaleInProgressRequestLogs().catch(() => undefined);
@@ -411,7 +418,7 @@ export async function getTimeseriesStats(
     startTime = customStart;
     endTime = customEnd;
   } else {
-    startTime = getTimeRangeStart(rangeType as TimeRange);
+    startTime = getTimeRangeStart(rangeType as TimeRange, tzOffsetMinutes);
   }
 
   const diffMs = endTime
@@ -599,13 +606,14 @@ export async function getLeaderboardStats(
   rangeType: TimeRange = "7d",
   limit: number = 5,
   customStart?: Date,
-  customEnd?: Date
+  customEnd?: Date,
+  tzOffsetMinutes = 0
 ): Promise<StatsLeaderboard> {
   if (process.env.NODE_ENV !== "test") {
     await reconcileStaleInProgressRequestLogs().catch(() => undefined);
   }
 
-  const startTime = customStart ?? getTimeRangeStart(rangeType);
+  const startTime = customStart ?? getTimeRangeStart(rangeType, tzOffsetMinutes);
   const endTime = customEnd ?? null;
   const timeFilter = endTime
     ? and(gte(requestLogs.createdAt, startTime), lt(requestLogs.createdAt, endTime))

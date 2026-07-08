@@ -1367,6 +1367,25 @@ describe("stats-service", () => {
     });
   });
 
+  describe("getTimeRangeStart", () => {
+    it("aligns today to the caller's local midnight via tz offset", async () => {
+      const { getTimeRangeStart } = await import("@/lib/services/stats-service");
+
+      expect(getTimeRangeStart("today")).toEqual(new Date("2024-06-15T00:00:00Z"));
+      // UTC+8: local 2024-06-15 00:00 is 2024-06-14T16:00:00Z.
+      expect(getTimeRangeStart("today", 480)).toEqual(new Date("2024-06-14T16:00:00Z"));
+      // UTC-8: local midnight falls later in UTC.
+      expect(getTimeRangeStart("today", -480)).toEqual(new Date("2024-06-15T08:00:00Z"));
+    });
+
+    it("uses exact rolling windows for 7d/30d regardless of tz offset", async () => {
+      const { getTimeRangeStart } = await import("@/lib/services/stats-service");
+
+      expect(getTimeRangeStart("7d")).toEqual(new Date("2024-06-08T12:00:00Z"));
+      expect(getTimeRangeStart("30d", 480)).toEqual(new Date("2024-05-16T12:00:00Z"));
+    });
+  });
+
   describe("TimeRange types", () => {
     it("should accept valid time ranges", async () => {
       const { getTimeseriesStats } = await import("@/lib/services/stats-service");

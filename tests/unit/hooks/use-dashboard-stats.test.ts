@@ -41,6 +41,10 @@ describe("use-dashboard-stats hooks", () => {
     vi.clearAllMocks();
   });
 
+  // The hooks append the browser timezone offset so preset ranges align to
+  // local midnight; mirror the same computation to stay timezone-agnostic.
+  const tzOffset = -new Date().getTimezoneOffset();
+
   describe("useStatsOverview", () => {
     it("fetches overview stats", async () => {
       const mockResponse: StatsOverviewResponse = {
@@ -57,7 +61,7 @@ describe("use-dashboard-stats hooks", () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(mockGet).toHaveBeenCalledWith("/admin/stats/overview");
+      expect(mockGet).toHaveBeenCalledWith(`/admin/stats/overview?tz_offset=${tzOffset}`);
       expect(result.current.data).toEqual(mockResponse);
     });
 
@@ -123,7 +127,9 @@ describe("use-dashboard-stats hooks", () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(mockGet).toHaveBeenCalledWith("/admin/stats/timeseries?range=7d&metric=requests");
+      expect(mockGet).toHaveBeenCalledWith(
+        `/admin/stats/timeseries?range=7d&metric=requests&tz_offset=${tzOffset}`
+      );
       expect(result.current.data).toEqual(mockResponse);
     });
 
@@ -141,7 +147,9 @@ describe("use-dashboard-stats hooks", () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(mockGet).toHaveBeenCalledWith("/admin/stats/timeseries?range=today&metric=requests");
+      expect(mockGet).toHaveBeenCalledWith(
+        `/admin/stats/timeseries?range=today&metric=requests&tz_offset=${tzOffset}`
+      );
     });
 
     it("fetches timeseries with 30d range", async () => {
@@ -158,7 +166,9 @@ describe("use-dashboard-stats hooks", () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(mockGet).toHaveBeenCalledWith("/admin/stats/timeseries?range=30d&metric=requests");
+      expect(mockGet).toHaveBeenCalledWith(
+        `/admin/stats/timeseries?range=30d&metric=requests&tz_offset=${tzOffset}`
+      );
     });
 
     it("handles fetch error", async () => {
@@ -202,7 +212,9 @@ describe("use-dashboard-stats hooks", () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(mockGet).toHaveBeenCalledWith("/admin/stats/leaderboard?range=7d&limit=5");
+      expect(mockGet).toHaveBeenCalledWith(
+        `/admin/stats/leaderboard?range=7d&limit=5&tz_offset=${tzOffset}`
+      );
       expect(result.current.data).toEqual(mockResponse);
     });
 
@@ -219,7 +231,9 @@ describe("use-dashboard-stats hooks", () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(mockGet).toHaveBeenCalledWith("/admin/stats/leaderboard?range=30d&limit=5");
+      expect(mockGet).toHaveBeenCalledWith(
+        `/admin/stats/leaderboard?range=30d&limit=5&tz_offset=${tzOffset}`
+      );
     });
 
     it("fetches leaderboard with custom limit", async () => {
@@ -235,7 +249,9 @@ describe("use-dashboard-stats hooks", () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(mockGet).toHaveBeenCalledWith("/admin/stats/leaderboard?range=7d&limit=10");
+      expect(mockGet).toHaveBeenCalledWith(
+        `/admin/stats/leaderboard?range=7d&limit=10&tz_offset=${tzOffset}`
+      );
     });
 
     it("fetches leaderboard with today range and custom limit", async () => {
@@ -251,7 +267,9 @@ describe("use-dashboard-stats hooks", () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(mockGet).toHaveBeenCalledWith("/admin/stats/leaderboard?range=today&limit=3");
+      expect(mockGet).toHaveBeenCalledWith(
+        `/admin/stats/leaderboard?range=today&limit=3&tz_offset=${tzOffset}`
+      );
     });
 
     it("handles fetch error", async () => {

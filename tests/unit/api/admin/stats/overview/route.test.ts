@@ -51,12 +51,13 @@ describe("GET /api/admin/stats/overview", () => {
       cacheHitRate: 44.4,
     });
 
-    const request = new Request("http://localhost/api/admin/stats/overview", {
+    const request = new Request("http://localhost/api/admin/stats/overview?tz_offset=480", {
       headers: { authorization: "Bearer valid-admin-token" },
     });
 
     const response = await GET(request);
     expect(response.status).toBe(200);
+    expect(getOverviewStats).toHaveBeenCalledWith(480);
 
     const data = await response.json();
     expect(data).toEqual({
