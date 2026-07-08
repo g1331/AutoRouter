@@ -70,6 +70,22 @@ export function AppShell({
   const isPopNavigationRef = useRef(false);
 
   useEffect(() => {
+    // Next drives back/forward through the Navigation API where available and
+    // commits the React navigation BEFORE popstate fires, so the flag must be
+    // set from the earlier `navigate` event (traverse = back/forward).
+    // popstate stays as the fallback for browsers without the API (and jsdom).
+    const navigation = (
+      window as { navigation?: { addEventListener: EventTarget["addEventListener"] } & EventTarget }
+    ).navigation;
+    if (navigation) {
+      const handleNavigate = (event: Event) => {
+        if ((event as { navigationType?: string }).navigationType === "traverse") {
+          isPopNavigationRef.current = true;
+        }
+      };
+      navigation.addEventListener("navigate", handleNavigate);
+      return () => navigation.removeEventListener("navigate", handleNavigate);
+    }
     const handlePopState = () => {
       isPopNavigationRef.current = true;
     };
@@ -96,10 +112,22 @@ export function AppShell({
     }
     if (isPopNavigationRef.current) {
       isPopNavigationRef.current = false;
-      // ponytail: if the page's data isn't in the query cache yet the content
-      // is shorter than the saved offset and the browser clamps this to 0 —
-      // graceful degradation, no reflow tracking.
-      main.scrollTop = scrollPositionsRef.current.get(pathname) ?? 0;
+      const saved = scrollPositionsRef.current.get(pathname) ?? 0;
+      // On the commit frame the page content (charts, media) has not laid out
+      // yet, so the browser clamps the offset to the shorter height. Retry
+      // over the next frames until it sticks or the content never grows tall
+      // enough (data not in the query cache — degrade to top).
+      let attempts = 10;
+      const restore = () => {
+        if (!mainRef.current) {
+          return;
+        }
+        mainRef.current.scrollTop = saved;
+        if (Math.abs(mainRef.current.scrollTop - saved) > 1 && attempts-- > 0) {
+          requestAnimationFrame(restore);
+        }
+      };
+      restore();
       return;
     }
     main.scrollTop = 0;
