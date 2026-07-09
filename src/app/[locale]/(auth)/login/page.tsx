@@ -206,7 +206,7 @@ export default function LoginPage() {
       completeLogin(inputValue, "admin");
     } catch {
       if (typeof window !== "undefined") {
-        sessionStorage.removeItem("admin_token");
+        localStorage.removeItem("admin_token");
       }
       setError(t("invalidToken"));
       toast.error(t("invalidToken"));

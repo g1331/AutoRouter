@@ -16,7 +16,7 @@ function makeUserJwt(role: "admin" | "member"): string {
 
 function seedToken(page: Page, token: string): Promise<void> {
   return page.addInitScript((value) => {
-    window.sessionStorage.setItem("admin_token", value);
+    window.localStorage.setItem("admin_token", value);
   }, token);
 }
 

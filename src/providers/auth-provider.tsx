@@ -14,7 +14,9 @@ import { createApiClient } from "@/lib/api";
 import { toast } from "sonner";
 
 /**
- * sessionStorage 键名
+ * localStorage 键名。登录凭据持久化到 localStorage，使登录态跨标签页共享、
+ * 跨浏览器会话保留（直到 24h JWT 过期或主动登出）；ADMIN_TOKEN 超级令牌
+ * 同样持久化。键名沿用历史值以避免无谓改动。
  */
 const STORAGE_KEY = "admin_token";
 
@@ -54,7 +56,9 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /**
- * 订阅 sessionStorage 变化
+ * 订阅 localStorage 变化。localStorage 的原生 storage 事件会在其他标签页修改时
+ * 派发，从而在标签页之间自动同步登录/登出；同窗口的变更由 set/clear 手动派发的
+ * StorageEvent 通知。
  */
 function subscribeToStorage(callback: () => void) {
   window.addEventListener("storage", callback);
@@ -62,10 +66,10 @@ function subscribeToStorage(callback: () => void) {
 }
 
 /**
- * 获取 sessionStorage 中的 token
+ * 获取 localStorage 中的 token
  */
 function getStorageSnapshot() {
-  return sessionStorage.getItem(STORAGE_KEY);
+  return localStorage.getItem(STORAGE_KEY);
 }
 
 /**
@@ -142,16 +146,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsHydrated(true);
   }, []);
 
-  // 设置 token（写入 sessionStorage 会触发 useSyncExternalStore 更新）
+  // 设置 token（写入 localStorage 会触发 useSyncExternalStore 更新）
   const setToken = useCallback((newToken: string) => {
-    sessionStorage.setItem(STORAGE_KEY, newToken);
+    localStorage.setItem(STORAGE_KEY, newToken);
     // 手动触发 storage 事件以更新同一窗口的状态
     window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY }));
   }, []);
 
   // 清除 token
   const clearToken = useCallback(() => {
-    sessionStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY);
     window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY }));
   }, []);
 

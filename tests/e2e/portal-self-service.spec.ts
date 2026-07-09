@@ -14,7 +14,7 @@ function makeMemberJwt(): string {
 
 function seedMemberToken(page: Page): Promise<void> {
   return page.addInitScript((value) => {
-    window.sessionStorage.setItem("admin_token", value);
+    window.localStorage.setItem("admin_token", value);
   }, makeMemberJwt());
 }
 

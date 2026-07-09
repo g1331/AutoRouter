@@ -78,7 +78,7 @@ function renderProvider() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  sessionStorage.clear();
+  localStorage.clear();
   global.fetch = vi.fn();
 });
 
@@ -93,7 +93,7 @@ describe("AuthProvider principal 派生", () => {
   });
 
   it("非 JWT 的 ADMIN_TOKEN 派生为超级管理员，且不请求用户档案", async () => {
-    sessionStorage.setItem("admin_token", "plain-admin-token");
+    localStorage.setItem("admin_token", "plain-admin-token");
     renderProvider();
     await screen.findByTestId("ready");
 
@@ -113,7 +113,7 @@ describe("AuthProvider principal 派生", () => {
         displayName: "Alice",
       }),
     });
-    sessionStorage.setItem("admin_token", makeJwt({ role: "member" }));
+    localStorage.setItem("admin_token", makeJwt({ role: "member" }));
     renderProvider();
     await screen.findByTestId("ready");
 
@@ -141,7 +141,7 @@ describe("AuthProvider principal 派生", () => {
         displayName: "Root",
       }),
     });
-    sessionStorage.setItem("admin_token", makeJwt({ role: "admin" }));
+    localStorage.setItem("admin_token", makeJwt({ role: "admin" }));
     renderProvider();
     await screen.findByTestId("ready");
 
@@ -151,7 +151,7 @@ describe("AuthProvider principal 派生", () => {
   });
 
   it("JWT 形态但 payload 缺少有效 role 时退化为未认证", async () => {
-    sessionStorage.setItem("admin_token", makeJwt({ foo: "bar" }));
+    localStorage.setItem("admin_token", makeJwt({ foo: "bar" }));
     renderProvider();
     await screen.findByTestId("ready");
 
@@ -161,7 +161,7 @@ describe("AuthProvider principal 派生", () => {
   });
 
   it("JWT 形态但 payload 无法解码时退化为未认证", async () => {
-    sessionStorage.setItem("admin_token", "eyJhbGciOiJIUzI1NiJ9.@@@@.signature");
+    localStorage.setItem("admin_token", "eyJhbGciOiJIUzI1NiJ9.@@@@.signature");
     renderProvider();
     await screen.findByTestId("ready");
 
@@ -169,7 +169,7 @@ describe("AuthProvider principal 派生", () => {
     expect(screen.getByTestId("kind")).toHaveTextContent("none");
   });
 
-  it("setToken 写入 sessionStorage 并同步更新主体", async () => {
+  it("setToken 写入 localStorage 并同步更新主体", async () => {
     renderProvider();
     await screen.findByTestId("ready");
     expect(screen.getByTestId("authenticated")).toHaveTextContent("false");
@@ -177,12 +177,12 @@ describe("AuthProvider principal 派生", () => {
     fireEvent.click(screen.getByText("do-set"));
 
     await waitFor(() => expect(screen.getByTestId("kind")).toHaveTextContent("admin_token"));
-    expect(sessionStorage.getItem("admin_token")).toBe("plain-admin-token");
+    expect(localStorage.getItem("admin_token")).toBe("plain-admin-token");
     expect(screen.getByTestId("authenticated")).toHaveTextContent("true");
   });
 
   it("logout 清除凭据并跳转登录页", async () => {
-    sessionStorage.setItem("admin_token", "plain-admin-token");
+    localStorage.setItem("admin_token", "plain-admin-token");
     renderProvider();
     await screen.findByTestId("ready");
     expect(screen.getByTestId("authenticated")).toHaveTextContent("true");
@@ -190,7 +190,7 @@ describe("AuthProvider principal 派生", () => {
     fireEvent.click(screen.getByText("do-logout"));
 
     await waitFor(() => expect(screen.getByTestId("authenticated")).toHaveTextContent("false"));
-    expect(sessionStorage.getItem("admin_token")).toBeNull();
+    expect(localStorage.getItem("admin_token")).toBeNull();
     expect(pushMock).toHaveBeenCalledWith("/login");
   });
 });

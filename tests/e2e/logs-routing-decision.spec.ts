@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 function seedAdminToken(page: Page): Promise<void> {
   return page.addInitScript(() => {
-    window.sessionStorage.setItem("admin_token", "e2e-admin-token");
+    window.localStorage.setItem("admin_token", "e2e-admin-token");
   });
 }
 
