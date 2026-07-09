@@ -18,7 +18,7 @@ type TierRuleApiItem = {
 
 function seedAdminToken(page: Page): Promise<void> {
   return page.addInitScript(() => {
-    window.localStorage.setItem("admin_token", "e2e-admin-token");
+    window.sessionStorage.setItem("admin_token", "e2e-admin-token");
   });
 }
 

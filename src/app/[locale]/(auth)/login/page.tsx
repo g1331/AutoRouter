@@ -206,7 +206,8 @@ export default function LoginPage() {
       completeLogin(inputValue, "admin");
     } catch {
       if (typeof window !== "undefined") {
-        localStorage.removeItem("admin_token");
+        // 令牌模式登录的是 ADMIN_TOKEN，仅存于 sessionStorage。
+        sessionStorage.removeItem("admin_token");
       }
       setError(t("invalidToken"));
       toast.error(t("invalidToken"));

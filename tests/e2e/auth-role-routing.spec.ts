@@ -16,7 +16,9 @@ function makeUserJwt(role: "admin" | "member"): string {
 
 function seedToken(page: Page, token: string): Promise<void> {
   return page.addInitScript((value) => {
-    window.localStorage.setItem("admin_token", value);
+    // 用户 JWT（三段式）持久化到 localStorage；ADMIN_TOKEN 存 sessionStorage（会话级）。
+    const storage = value.split(".").length === 3 ? window.localStorage : window.sessionStorage;
+    storage.setItem("admin_token", value);
   }, token);
 }
 
