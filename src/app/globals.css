@@ -5,71 +5,82 @@
 .dark {
   color-scheme: dark;
 
-  /* Visual rule: neutral base + restrained accent. Avoid large blue/purple solids or flashy blue/purple gradients. */
-  --vr-surface-0: #111315;
-  --vr-surface-1: #161a1d;
-  --vr-surface-2: #1d2227;
-  --vr-surface-3: #242a31;
-  --vr-surface-4: #2d343c;
+  /* Ops Console 2.0 暗色主人格：近黑冷灰基底 + amber 强调。
+     Visual rule: neutral base + restrained accent. Avoid large blue/purple solids or flashy blue/purple gradients. */
+  --vr-surface-0: #0a0b0e;
+  --vr-surface-1: #101216;
+  --vr-surface-2: #15181d;
+  --vr-surface-3: #1a1e24;
+  --vr-surface-4: #20242b;
 
-  --vr-border: #3a424c;
-  --vr-border-subtle: #2b3139;
+  --vr-border: #21262e;
+  --vr-border-subtle: #2b323c;
 
-  --vr-text: #edf1f4;
-  --vr-text-muted: #b8c0c8;
-  --vr-text-dim: #8d97a1;
+  --vr-text: #e8e4da;
+  --vr-text-muted: #9aa2ae;
+  /* 3.48:1，仅限装饰/大字号；正文级弱文字用 #7d8794（5.15:1） */
+  --vr-text-dim: #626b78;
 
-  --vr-accent-50: #f4ede3;
-  --vr-accent-100: #eadcc7;
-  --vr-accent-200: #dfc8a8;
-  --vr-accent-300: #d1b182;
-  --vr-accent-400: #c6a06a;
-  --vr-accent-500: #bf965c;
-  --vr-accent-600: #a27f4d;
-  --vr-accent-700: #856842;
-  --vr-accent-800: #695136;
-  --vr-accent-900: #4f3d29;
+  --vr-accent-50: #fef7ec;
+  --vr-accent-100: #fdeacf;
+  --vr-accent-200: #fbdbab;
+  --vr-accent-300: #ffd28f;
+  --vr-accent-400: #ffc46e;
+  --vr-accent-500: #f2a950;
+  --vr-accent-600: #cf8b3c;
+  --vr-accent-700: #a86f2f;
+  --vr-accent-800: #825523;
+  --vr-accent-900: #5c3c18;
 
-  --vr-status-success: #48a476;
-  --vr-status-warning: #c38d4c;
-  --vr-status-error: #cc6156;
-  --vr-status-info: #6694b8;
+  --vr-accent-ink: #1c1204;
+  --vr-accent-dim: color-mix(in srgb, var(--vr-accent-500) 13%, transparent);
+  --vr-accent-line: color-mix(in srgb, var(--vr-accent-500) 38%, transparent);
+  --vr-glow: 0 0 14px color-mix(in srgb, var(--vr-accent-500) 22%, transparent);
+  --vr-atmo: color-mix(in srgb, var(--vr-accent-500) 13%, transparent);
 
-  --vr-status-success-muted: rgb(72 164 118 / 0.2);
-  --vr-status-warning-muted: rgb(195 141 76 / 0.2);
-  --vr-status-error-muted: rgb(204 97 86 / 0.2);
-  --vr-status-info-muted: rgb(102 148 184 / 0.2);
+  --vr-status-success: #46d68c;
+  --vr-status-warning: #ff9f43;
+  --vr-status-error: #ff6b5e;
+  --vr-status-info: #7aa5c8;
 
-  --vr-disabled-bg: #1b1f24;
-  --vr-disabled-text: #6d7781;
-  --vr-disabled-border: #2a3139;
+  --vr-status-success-muted: color-mix(in srgb, var(--vr-status-success) 12%, transparent);
+  --vr-status-warning-muted: color-mix(in srgb, var(--vr-status-warning) 12%, transparent);
+  --vr-status-error-muted: color-mix(in srgb, var(--vr-status-error) 12%, transparent);
+  --vr-status-info-muted: color-mix(in srgb, var(--vr-status-info) 12%, transparent);
 
-  --vr-overlay: rgb(8 10 12 / 0.72);
-  --vr-overlay-soft: rgb(8 10 12 / 0.42);
+  --vr-disabled-bg: #14171c;
+  --vr-disabled-text: #626b78;
+  --vr-disabled-border: #21262e;
 
-  --vr-grid-dot-rgb: 101 108 117;
+  --vr-overlay: rgb(6 7 9 / 0.72);
+  --vr-overlay-soft: rgb(6 7 9 / 0.42);
+
+  --vr-grid-dot: rgb(101 108 117 / 0.16);
 
   --vr-font-sans:
     var(--font-sans), "Manrope", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
   --vr-font-mono: var(--font-mono), "JetBrains Mono", "IBM Plex Mono", "Consolas", monospace;
   --vr-font-display: var(--vr-font-sans);
 
-  --vr-radius-xs: 6px;
-  --vr-radius-sm: 10px;
-  --vr-radius-md: 14px;
-  --vr-radius-lg: 18px;
+  --vr-radius-xs: 4px;
+  --vr-radius-sm: 8px;
+  --vr-radius-md: 12px;
+  --vr-radius-lg: 16px;
 
   --vr-focus-ring-width: 2px;
   --vr-focus-ring-offset: 2px;
-  --vr-focus-ring-shadow: 0 0 0 3px rgb(191 150 92 / 0.38);
+  --vr-focus-ring-shadow: 0 0 0 3px color-mix(in srgb, var(--vr-accent-500) 38%, transparent);
 
   --vr-shadow-xs: 0 1px 2px rgb(0 0 0 / 0.22);
   --vr-shadow-sm: 0 6px 18px rgb(0 0 0 / 0.24);
   --vr-shadow-md: 0 10px 30px rgb(0 0 0 / 0.32);
   --vr-shadow-lg: 0 18px 42px rgb(0 0 0 / 0.4);
-  --vr-shadow-glow-subtle: 0 0 0 1px rgb(191 150 92 / 0.22), 0 10px 24px rgb(0 0 0 / 0.24);
-  --vr-shadow-glow-medium: 0 0 0 1px rgb(191 150 92 / 0.28), 0 14px 30px rgb(0 0 0 / 0.34);
-  --vr-shadow-glow-strong: 0 0 0 1px rgb(191 150 92 / 0.34), 0 20px 40px rgb(0 0 0 / 0.42);
+  --vr-shadow-glow-subtle:
+    0 0 0 1px color-mix(in srgb, var(--vr-accent-500) 22%, transparent),
+    0 10px 24px rgb(0 0 0 / 0.24);
+  --vr-shadow-glow-medium:
+    0 0 0 1px color-mix(in srgb, var(--vr-accent-500) 28%, transparent),
+    0 14px 30px rgb(0 0 0 / 0.34);
 
   --vr-motion-fast: 140ms;
   --vr-motion-normal: 220ms;
@@ -84,7 +95,7 @@
   --popover: var(--vr-surface-2);
   --popover-foreground: var(--vr-text);
   --primary: var(--vr-accent-500);
-  --primary-foreground: #14171a;
+  --primary-foreground: var(--vr-accent-ink);
   --secondary: var(--vr-surface-3);
   --secondary-foreground: var(--vr-text);
   --muted: var(--vr-surface-3);
@@ -96,12 +107,11 @@
   --border: var(--vr-border);
   --input: var(--vr-border);
   --ring: var(--vr-accent-500);
-  --radius: var(--vr-radius-sm);
 
   --sidebar: var(--vr-surface-1);
   --sidebar-foreground: var(--vr-text);
   --sidebar-primary: var(--vr-accent-500);
-  --sidebar-primary-foreground: #14171a;
+  --sidebar-primary-foreground: var(--vr-accent-ink);
   --sidebar-accent: var(--vr-surface-3);
   --sidebar-accent-foreground: var(--vr-text);
   --sidebar-border: var(--vr-border-subtle);
@@ -112,197 +122,123 @@
   --shape-corner-medium: var(--vr-radius-md);
   --shape-corner-full: 9999px;
 
-  --status-success: var(--vr-status-success);
-  --status-warning: var(--vr-status-warning);
-  --status-error: var(--vr-status-error);
-  --status-info: var(--vr-status-info);
-
-  --md-sys-color-primary: 191 150 92;
-  --md-sys-color-on-primary: 20 23 26;
-  --md-sys-color-primary-container: 60 49 36;
-  --md-sys-color-on-primary-container: 237 226 208;
-  --md-sys-color-tertiary-container: 42 56 68;
-  --md-sys-color-on-tertiary-container: 207 224 236;
-  --md-sys-color-success: 72 164 118;
-  --md-sys-color-success-container: 35 61 47;
-  --md-sys-color-on-success-container: 208 235 222;
-  --md-sys-color-warning-container: 67 51 34;
-  --md-sys-color-on-warning-container: 246 225 201;
-  --md-sys-color-error: 204 97 86;
-  --md-sys-color-error-container: 66 36 34;
-  --md-sys-color-on-error-container: 245 214 210;
-  --md-sys-color-surface-container-low: 22 26 29;
-  --md-sys-color-surface-container-highest: 45 52 60;
-  --md-sys-color-inverse-surface: 231 225 216;
-  --md-sys-color-on-surface: 237 241 244;
-  --md-sys-color-on-surface-variant: 184 192 200;
-  --md-sys-color-outline: 58 66 76;
-  --md-sys-color-outline-variant: 43 49 57;
+  /* md-sys Material 兼容层：仅重派生数值适配新调色板，迁移删层见 openspec restyle-ops-console-2 Phase 6b */
+  --md-sys-color-primary: 242 169 80;
+  --md-sys-color-on-primary: 28 18 4;
+  --md-sys-color-primary-container: 50 43 36;
+  --md-sys-color-on-primary-container: 253 234 207;
+  --md-sys-color-tertiary-container: 35 44 53;
+  --md-sys-color-on-tertiary-container: 205 222 235;
+  --md-sys-color-success: 70 214 140;
+  --md-sys-color-success-container: 28 51 45;
+  --md-sys-color-on-success-container: 208 240 224;
+  --md-sys-color-warning-container: 54 43 34;
+  --md-sys-color-on-warning-container: 255 231 205;
+  --md-sys-color-error: 255 107 94;
+  --md-sys-color-error-container: 54 36 38;
+  --md-sys-color-on-error-container: 255 218 213;
+  --md-sys-color-surface-container-low: 16 18 22;
+  --md-sys-color-surface-container-highest: 32 36 43;
+  --md-sys-color-inverse-surface: 232 228 218;
+  --md-sys-color-on-surface: 232 228 218;
+  --md-sys-color-on-surface-variant: 154 162 174;
+  --md-sys-color-outline: 33 38 46;
+  --md-sys-color-outline-variant: 43 50 60;
 }
 
 .light {
   color-scheme: light;
 
-  --vr-surface-0: #f2f5f8;
-  --vr-surface-1: #ffffff;
-  --vr-surface-2: #f6f8fb;
-  --vr-surface-3: #edf1f6;
-  --vr-surface-4: #e2e8f0;
+  /* Ops Console 2.0 亮色：中性冷灰基底 + 青铜强调，禁暖黄底、无辉光。 */
+  --vr-surface-0: #eef0f2;
+  --vr-surface-1: #f8f9fa;
+  --vr-surface-2: #fdfdfe;
+  --vr-surface-3: #eaedf0;
+  --vr-surface-4: #e2e6ea;
 
-  --vr-border: #c7d0da;
-  --vr-border-subtle: #d8dfe8;
+  --vr-border: #dcdfe4;
+  --vr-border-subtle: #c6cbd2;
 
-  --vr-text: #1f2933;
-  --vr-text-muted: #5f6b79;
-  --vr-text-dim: #768293;
+  --vr-text: #212327;
+  --vr-text-muted: #5f6570;
+  /* 2.61:1，仅限装饰 */
+  --vr-text-dim: #8f96a0;
 
-  --vr-accent-50: #f5f2ee;
-  --vr-accent-100: #eae3da;
-  --vr-accent-200: #dacfbf;
-  --vr-accent-300: #c5b49d;
-  --vr-accent-400: #9f896d;
-  --vr-accent-500: #857058;
-  --vr-accent-600: #6f5d49;
-  --vr-accent-700: #5b4d3d;
-  --vr-accent-800: #483d30;
-  --vr-accent-900: #382f25;
+  --vr-accent-50: #f7f1e6;
+  --vr-accent-100: #eee0c8;
+  --vr-accent-200: #e0c99e;
+  --vr-accent-300: #cca66a;
+  --vr-accent-400: #b3853a;
+  /* 4.37:1，仅限大字号/边框/填充；文字级 accent 用 600（6.29:1） */
+  --vr-accent-500: #9a6410;
+  --vr-accent-600: #7a4e0a;
+  --vr-accent-700: #634007;
+  --vr-accent-800: #4c3105;
+  --vr-accent-900: #382404;
 
-  --vr-status-success: #2c7d58;
-  --vr-status-warning: #9c6b36;
-  --vr-status-error: #b24a43;
+  --vr-accent-ink: #ffffff;
+  --vr-accent-dim: color-mix(in srgb, var(--vr-accent-500) 9%, transparent);
+  --vr-accent-line: color-mix(in srgb, var(--vr-accent-500) 32%, transparent);
+  --vr-glow: 0 0 0 transparent;
+  --vr-atmo: rgb(90 110 140 / 0.07);
+
+  --vr-status-success: #17804d;
+  /* 文字级 warn 用 #7d490a（7.04:1） */
+  --vr-status-warning: #a5610d;
+  --vr-status-error: #bb3f34;
   --vr-status-info: #3f6f95;
 
-  --vr-status-success-muted: rgb(44 125 88 / 0.16);
-  --vr-status-warning-muted: rgb(156 107 54 / 0.16);
-  --vr-status-error-muted: rgb(178 74 67 / 0.16);
-  --vr-status-info-muted: rgb(63 111 149 / 0.16);
+  --vr-disabled-bg: #e7eaee;
+  --vr-disabled-text: #8f96a0;
+  --vr-disabled-border: #d5d9df;
 
-  --vr-disabled-bg: #e7edf4;
-  --vr-disabled-text: #8a95a3;
-  --vr-disabled-border: #d4dce5;
+  --vr-overlay: rgb(238 240 242 / 0.78);
+  --vr-overlay-soft: rgb(238 240 242 / 0.48);
 
-  --vr-overlay: rgb(242 245 248 / 0.78);
-  --vr-overlay-soft: rgb(242 245 248 / 0.48);
+  --vr-grid-dot: rgb(70 80 100 / 0.07);
 
-  --vr-grid-dot-rgb: 143 154 167;
-
-  --vr-focus-ring-shadow: 0 0 0 3px rgb(133 112 88 / 0.24);
+  --vr-focus-ring-shadow: 0 0 0 3px color-mix(in srgb, var(--vr-accent-500) 28%, transparent);
 
   --vr-shadow-xs: 0 1px 2px rgb(15 23 42 / 0.08);
   --vr-shadow-sm: 0 8px 20px rgb(15 23 42 / 0.11);
   --vr-shadow-md: 0 12px 28px rgb(15 23 42 / 0.14);
   --vr-shadow-lg: 0 20px 44px rgb(15 23 42 / 0.18);
-  --vr-shadow-glow-subtle: 0 0 0 1px rgb(133 112 88 / 0.16), 0 10px 24px rgb(15 23 42 / 0.1);
-  --vr-shadow-glow-medium: 0 0 0 1px rgb(133 112 88 / 0.2), 0 14px 30px rgb(15 23 42 / 0.13);
-  --vr-shadow-glow-strong: 0 0 0 1px rgb(133 112 88 / 0.24), 0 18px 38px rgb(15 23 42 / 0.16);
+  --vr-shadow-glow-subtle:
+    0 0 0 1px color-mix(in srgb, var(--vr-accent-500) 16%, transparent),
+    0 10px 24px rgb(15 23 42 / 0.1);
+  --vr-shadow-glow-medium:
+    0 0 0 1px color-mix(in srgb, var(--vr-accent-500) 20%, transparent),
+    0 14px 30px rgb(15 23 42 / 0.13);
 
-  --primary-foreground: #fffdf9;
   --secondary: var(--vr-surface-2);
   --muted: var(--vr-surface-2);
   --accent-foreground: #fffdf9;
   --destructive-foreground: #fff7f6;
 
   --sidebar: var(--vr-surface-1);
-  --sidebar-primary-foreground: #fffdf9;
   --sidebar-accent: var(--vr-surface-2);
 
-  --md-sys-color-primary: 133 112 88;
+  --md-sys-color-primary: 154 100 16;
   --md-sys-color-on-primary: 255 255 255;
-  --md-sys-color-primary-container: 234 227 215;
-  --md-sys-color-on-primary-container: 56 47 37;
-  --md-sys-color-tertiary-container: 218 229 239;
+  --md-sys-color-primary-container: 244 239 233;
+  --md-sys-color-on-primary-container: 76 49 5;
+  --md-sys-color-tertiary-container: 230 236 241;
   --md-sys-color-on-tertiary-container: 43 65 86;
-  --md-sys-color-success: 44 125 88;
-  --md-sys-color-success-container: 213 232 220;
-  --md-sys-color-on-success-container: 23 69 47;
-  --md-sys-color-warning-container: 242 231 214;
-  --md-sys-color-on-warning-container: 83 57 29;
-  --md-sys-color-error: 178 74 67;
-  --md-sys-color-error-container: 244 218 215;
-  --md-sys-color-on-error-container: 92 30 25;
-  --md-sys-color-surface-container-low: 255 255 255;
-  --md-sys-color-surface-container-highest: 226 232 240;
-  --md-sys-color-inverse-surface: 43 51 60;
-  --md-sys-color-on-surface: 31 41 51;
-  --md-sys-color-on-surface-variant: 95 107 121;
-  --md-sys-color-outline: 199 208 219;
-  --md-sys-color-outline-variant: 216 223 232;
-}
-
-:root,
-.dark,
-.light {
-  --cf-amber-50: var(--vr-accent-50);
-  --cf-amber-100: var(--vr-accent-100);
-  --cf-amber-200: var(--vr-accent-200);
-  --cf-amber-300: var(--vr-accent-300);
-  --cf-amber-400: var(--vr-accent-400);
-  --cf-amber-500: var(--vr-accent-500);
-  --cf-amber-600: var(--vr-accent-600);
-  --cf-amber-700: var(--vr-accent-700);
-  --cf-amber-800: var(--vr-accent-800);
-  --cf-amber-900: var(--vr-accent-900);
-
-  --cf-black-900: var(--vr-surface-0);
-  --cf-black-800: var(--vr-surface-1);
-  --cf-black-700: var(--vr-surface-2);
-  --cf-black-600: var(--vr-surface-3);
-  --cf-black-500: var(--vr-surface-4);
-
-  --cf-surface-100: var(--vr-surface-0);
-  --cf-surface-200: var(--vr-surface-1);
-  --cf-surface-300: var(--vr-surface-2);
-  --cf-surface-400: var(--vr-surface-3);
-  --cf-surface-500: var(--vr-surface-4);
-  --cf-surface-600: var(--vr-surface-4);
-
-  --cf-status-success: var(--vr-status-success);
-  --cf-status-success-muted: var(--vr-status-success-muted);
-  --cf-status-warning: var(--vr-status-warning);
-  --cf-status-warning-muted: var(--vr-status-warning-muted);
-  --cf-status-error: var(--vr-status-error);
-  --cf-status-error-muted: var(--vr-status-error-muted);
-  --cf-status-info: var(--vr-status-info);
-  --cf-status-info-muted: var(--vr-status-info-muted);
-
-  --cf-disabled-bg: var(--vr-disabled-bg);
-  --cf-disabled-text: var(--vr-disabled-text);
-  --cf-disabled-border: var(--vr-disabled-border);
-  --cf-divider: var(--vr-border);
-  --cf-divider-subtle: var(--vr-border-subtle);
-  --cf-overlay: var(--vr-overlay);
-  --cf-overlay-light: var(--vr-overlay-soft);
-
-  --cf-focus-ring: var(--vr-accent-500);
-  --cf-focus-ring-width: var(--vr-focus-ring-width);
-  --cf-focus-ring-offset: var(--vr-focus-ring-offset);
-  --cf-focus-glow: var(--vr-focus-ring-shadow);
-
-  --cf-font-sans: var(--vr-font-sans);
-  --cf-font-mono: var(--vr-font-mono);
-  --cf-font-display: var(--vr-font-display);
-
-  --cf-corner-none: 0;
-  --cf-corner-small: var(--vr-radius-xs);
-  --cf-corner-medium: var(--vr-radius-sm);
-  --cf-corner-bevel: var(--vr-radius-md);
-
-  --cf-border-thin: 1px solid var(--vr-border);
-  --cf-border-medium: 2px solid var(--vr-border);
-  --cf-border-thick: 3px solid var(--vr-border);
-
-  --cf-glow-subtle: var(--vr-shadow-glow-subtle);
-  --cf-glow-medium: var(--vr-shadow-glow-medium);
-  --cf-glow-strong: var(--vr-shadow-glow-strong);
-  --cf-glow-success: 0 0 0 1px rgb(72 164 118 / 0.3);
-  --cf-glow-error: 0 0 0 1px rgb(204 97 86 / 0.3);
-  --cf-glow-info: 0 0 0 1px rgb(102 148 184 / 0.3);
-
-  --cf-duration-fast: var(--vr-motion-fast);
-  --cf-duration-normal: var(--vr-motion-normal);
-  --cf-duration-slow: var(--vr-motion-slow);
-  --cf-easing-standard: var(--vr-easing-standard);
-  --cf-easing-sharp: var(--vr-easing-sharp);
+  --md-sys-color-success: 23 128 77;
+  --md-sys-color-success-container: 225 238 233;
+  --md-sys-color-on-success-container: 16 74 46;
+  --md-sys-color-warning-container: 242 234 225;
+  --md-sys-color-on-warning-container: 125 73 10;
+  --md-sys-color-error: 187 63 52;
+  --md-sys-color-error-container: 245 230 230;
+  --md-sys-color-on-error-container: 111 32 25;
+  --md-sys-color-surface-container-low: 248 249 250;
+  --md-sys-color-surface-container-highest: 226 230 234;
+  --md-sys-color-inverse-surface: 33 35 39;
+  --md-sys-color-on-surface: 33 35 39;
+  --md-sys-color-on-surface-variant: 95 101 112;
+  --md-sys-color-outline: 220 223 228;
+  --md-sys-color-outline-variant: 198 203 210;
 }
 
 @keyframes vr-theme-fade {
@@ -344,37 +280,37 @@
 
 @keyframes vr-log-row-flash {
   0% {
-    background-color: rgb(102 148 184 / 0.24);
-    box-shadow: inset 0 0 0 1px rgb(102 148 184 / 0.12);
+    background-color: color-mix(in srgb, var(--vr-status-info) 24%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vr-status-info) 12%, transparent);
   }
 
   55% {
-    background-color: rgb(102 148 184 / 0.12);
-    box-shadow: inset 0 0 0 1px rgb(102 148 184 / 0.08);
+    background-color: color-mix(in srgb, var(--vr-status-info) 12%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vr-status-info) 8%, transparent);
   }
 
   100% {
-    background-color: rgb(102 148 184 / 0);
-    box-shadow: inset 0 0 0 1px rgb(102 148 184 / 0);
+    background-color: transparent;
+    box-shadow: inset 0 0 0 1px transparent;
   }
 }
 
 @keyframes vr-log-live-highlight {
   0% {
-    background-color: rgb(102 148 184 / 0);
-    box-shadow: 0 0 0 0 rgb(102 148 184 / 0);
+    background-color: transparent;
+    box-shadow: 0 0 0 0 transparent;
   }
 
   35% {
-    background-color: rgb(102 148 184 / 0.12);
+    background-color: color-mix(in srgb, var(--vr-status-info) 12%, transparent);
     box-shadow:
-      0 0 0 1px rgb(102 148 184 / 0.2),
-      0 12px 28px rgb(102 148 184 / 0.08);
+      0 0 0 1px color-mix(in srgb, var(--vr-status-info) 20%, transparent),
+      0 12px 28px color-mix(in srgb, var(--vr-status-info) 8%, transparent);
   }
 
   100% {
-    background-color: rgb(102 148 184 / 0);
-    box-shadow: 0 0 0 0 rgb(102 148 184 / 0);
+    background-color: transparent;
+    box-shadow: 0 0 0 0 transparent;
   }
 }
 
@@ -410,12 +346,12 @@
 @keyframes vr-log-badge-live {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgb(72 164 118 / 0);
+    box-shadow: 0 0 0 0 transparent;
     transform: translateY(0);
   }
 
   50% {
-    box-shadow: 0 0 0 4px rgb(72 164 118 / 0.14);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--vr-status-success) 14%, transparent);
     transform: translateY(-1px);
   }
 }
@@ -423,11 +359,11 @@
 @keyframes vr-log-badge-connect {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgb(102 148 184 / 0);
+    box-shadow: 0 0 0 0 transparent;
   }
 
   50% {
-    box-shadow: 0 0 0 4px rgb(102 148 184 / 0.16);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--vr-status-info) 16%, transparent);
   }
 }
 
@@ -456,6 +392,19 @@
   }
 }
 
+/* 控制台进场瀑布：区块依次淡入上移（配合 animation-delay 递增使用） */
+@keyframes vr-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* 活终端实时指标带的迷你 sparkline 柱跳动 */
 @keyframes vr-spark {
   0%,
@@ -468,20 +417,20 @@
   }
 }
 
-/* 能力卡微动画：路由命中行的 emerald 呼吸（box-shadow + 底色，强调被选中的健康上游）。
-   reduced-motion 时停在 0% 帧，仍是一条可读的 emerald 选中行。 */
+/* 能力卡微动画：路由命中行的成功色呼吸（box-shadow + 底色，强调被选中的健康上游）。
+   reduced-motion 时停在 0% 帧，仍是一条可读的选中行。 */
 @keyframes vr-cap-select {
   0%,
   100% {
-    box-shadow: 0 0 0 1px rgb(16 185 129 / 0.25);
-    background-color: rgb(16 185 129 / 0.08);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--vr-status-success) 25%, transparent);
+    background-color: color-mix(in srgb, var(--vr-status-success) 8%, transparent);
   }
 
   50% {
     box-shadow:
-      0 0 0 1px rgb(16 185 129 / 0.5),
-      0 0 12px rgb(16 185 129 / 0.2);
-    background-color: rgb(16 185 129 / 0.16);
+      0 0 0 1px color-mix(in srgb, var(--vr-status-success) 50%, transparent),
+      0 0 12px color-mix(in srgb, var(--vr-status-success) 20%, transparent);
+    background-color: color-mix(in srgb, var(--vr-status-success) 16%, transparent);
   }
 }
 
@@ -546,12 +495,14 @@ html.theme-switching::before {
     min-height: 100dvh;
     color: var(--foreground);
     background-color: var(--background);
-    background-image: radial-gradient(
-      circle at 1px 1px,
-      rgb(var(--vr-grid-dot-rgb) / 0.16) 1px,
-      transparent 0
-    );
-    background-size: 24px 24px;
+    /* 氛围层：顶部主题光晕（fixed，不随滚动）+ 点阵网格 */
+    background-image:
+      radial-gradient(ellipse 120% 60% at 50% -12%, var(--vr-atmo), transparent 60%),
+      radial-gradient(circle at 1px 1px, var(--vr-grid-dot) 1px, transparent 0);
+    background-size:
+      100% 100%,
+      26px 26px;
+    background-attachment: fixed, scroll;
     font-family: var(--vr-font-sans);
     font-feature-settings:
       "liga" 1,
@@ -693,13 +644,6 @@ html.theme-switching::before {
     line-height: 1.55;
   }
 
-  .type-data,
-  .type-code {
-    font-family: var(--vr-font-mono);
-    font-size: 0.8125rem;
-    line-height: 1.6;
-  }
-
   .type-label {
     font-family: var(--vr-font-display);
     font-size: 0.75rem;
@@ -731,30 +675,6 @@ html.theme-switching::before {
     line-height: 1.45;
   }
 
-  .text-amber {
-    color: var(--vr-accent-500);
-  }
-
-  .text-amber-muted {
-    color: var(--vr-accent-700);
-  }
-
-  .text-success {
-    color: var(--vr-status-success);
-  }
-
-  .text-warning {
-    color: var(--vr-status-warning);
-  }
-
-  .text-error {
-    color: var(--vr-status-error);
-  }
-
-  .text-info {
-    color: var(--vr-status-info);
-  }
-
   .text-disabled {
     color: var(--vr-disabled-text);
   }
@@ -775,18 +695,6 @@ html.theme-switching::before {
     background: var(--vr-surface-3);
   }
 
-  .bg-surface-500 {
-    background: var(--vr-surface-4);
-  }
-
-  .bg-surface-600 {
-    background: var(--vr-surface-4);
-  }
-
-  .border-amber {
-    border-color: var(--vr-accent-500);
-  }
-
   .border-divider {
     border-color: var(--vr-border);
   }
@@ -795,72 +703,66 @@ html.theme-switching::before {
     border-color: var(--vr-border-subtle);
   }
 
-  .glow-amber {
-    box-shadow: var(--vr-shadow-glow-subtle);
-  }
-
-  .glow-success {
-    box-shadow: 0 0 0 1px rgb(72 164 118 / 0.34);
-  }
-
-  .glow-error {
-    box-shadow: 0 0 0 1px rgb(204 97 86 / 0.34);
-  }
-
   .animate-log-section-enter {
-    animation: vr-log-section-enter var(--cf-duration-slow) var(--cf-easing-standard) both;
+    animation: vr-log-section-enter var(--vr-motion-slow) var(--vr-easing-standard) both;
   }
 
   .animate-log-detail-enter {
-    animation: vr-log-detail-enter var(--cf-duration-normal) var(--cf-easing-standard) both;
+    animation: vr-log-detail-enter var(--vr-motion-normal) var(--vr-easing-standard) both;
   }
 
   .animate-log-card-enter {
-    animation: vr-log-card-enter var(--cf-duration-normal) var(--cf-easing-standard) both;
+    animation: vr-log-card-enter var(--vr-motion-normal) var(--vr-easing-standard) both;
   }
 
   .animate-log-card-emphasis {
     animation:
-      vr-log-card-enter var(--cf-duration-normal) var(--cf-easing-standard) both,
-      vr-log-row-flash 960ms var(--cf-easing-standard) both;
+      vr-log-card-enter var(--vr-motion-normal) var(--vr-easing-standard) both,
+      vr-log-row-flash 960ms var(--vr-easing-standard) both;
   }
 
   .animate-log-row-enter {
-    animation: vr-log-row-enter var(--cf-duration-normal) var(--cf-easing-standard) both;
+    animation: vr-log-row-enter var(--vr-motion-normal) var(--vr-easing-standard) both;
   }
 
   .animate-log-row-emphasis {
     animation:
-      vr-log-row-enter var(--cf-duration-normal) var(--cf-easing-standard) both,
-      vr-log-row-flash 960ms var(--cf-easing-standard) both;
+      vr-log-row-enter var(--vr-motion-normal) var(--vr-easing-standard) both,
+      vr-log-row-flash 960ms var(--vr-easing-standard) both;
   }
 
   .animate-log-live-highlight {
-    animation: vr-log-live-highlight calc(var(--cf-duration-slow) + 180ms) var(--cf-easing-standard)
+    animation: vr-log-live-highlight calc(var(--vr-motion-slow) + 180ms) var(--vr-easing-standard)
       both;
   }
 
   .animate-log-badge-live {
-    animation: vr-log-badge-live 2.4s var(--cf-easing-standard) infinite;
+    animation: vr-log-badge-live 2.4s var(--vr-easing-standard) infinite;
   }
 
   .animate-log-badge-connect {
-    animation: vr-log-badge-connect 1.8s var(--cf-easing-standard) infinite;
+    animation: vr-log-badge-connect 1.8s var(--vr-easing-standard) infinite;
+  }
+
+  /* 进场瀑布：配合 style={{ animationDelay }} 递增使用；
+     reduced-motion 时由全局 * 规则压成 0.01ms，both 停在终帧、内容可见。 */
+  .animate-rise {
+    animation: vr-rise var(--vr-motion-slow) var(--vr-easing-standard) both;
   }
 
   /* 落地页动效。reduced-motion 时由全局 * 规则压成 0.01ms，
      ripple(forwards) 与 hero-rise(both) 会停在终帧，文案与按钮保持可见。 */
   .animate-ripple {
-    animation: vr-ripple 620ms var(--cf-easing-sharp) forwards;
+    animation: vr-ripple 620ms var(--vr-easing-sharp) forwards;
   }
 
   .animate-hero-rise {
-    animation: vr-hero-rise var(--cf-duration-slow) var(--cf-easing-standard) both;
+    animation: vr-hero-rise var(--vr-motion-slow) var(--vr-easing-standard) both;
   }
 
   .animate-spark {
     transform-origin: bottom;
-    animation: vr-spark 1.2s var(--cf-easing-standard) infinite;
+    animation: vr-spark 1.2s var(--vr-easing-standard) infinite;
   }
 }
 
@@ -868,12 +770,14 @@ html.theme-switching::before {
   :root,
   .dark,
   .light {
-    --vr-radius-sm: 12px;
-    --vr-radius-md: 16px;
+    --vr-radius-sm: 10px;
+    --vr-radius-md: 14px;
   }
 
   body {
-    background-size: 20px 20px;
+    background-size:
+      100% 100%,
+      22px 22px;
   }
 }
 
