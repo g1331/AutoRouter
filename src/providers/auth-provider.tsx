@@ -14,9 +14,21 @@ import { createApiClient } from "@/lib/api";
 import { toast } from "sonner";
 
 /**
- * sessionStorage 键名
+ * 登录凭据的存储键名。按 token 类型分流存储：
+ * - 用户账号 JWT（有 24h 过期兜底）→ localStorage，跨标签页与浏览器会话保留，实现「记住登录」。
+ * - ADMIN_TOKEN 超级令牌（权限最大、服务端永不过期）→ sessionStorage，会话级、关标签即清、
+ *   绝不落盘，避免永久有效的令牌驻留磁盘而扩大 XSS / 共享设备下的暴露面。
+ * 两处沿用同一历史键名。
  */
 const STORAGE_KEY = "admin_token";
+
+/**
+ * 判定 token 是否为用户账号 JWT（标准三段式）。ADMIN_TOKEN 是不透明字符串、非 JWT 形态。
+ * 存储位置据此分流：用户 JWT 持久化，ADMIN_TOKEN 仅会话级。
+ */
+function isUserJwt(token: string): boolean {
+  return token.split(".").length === 3;
+}
 
 export type AuthRole = "admin" | "member";
 
@@ -54,7 +66,9 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /**
- * 订阅 sessionStorage 变化
+ * 订阅存储变化。localStorage 的原生 storage 事件会在其他标签页修改时派发，使持久化的
+ * 用户 JWT 在标签页之间自动同步登录/登出；ADMIN_TOKEN 存于 sessionStorage，不跨标签。
+ * 同窗口的变更由 set/clear 手动派发的 StorageEvent 通知。
  */
 function subscribeToStorage(callback: () => void) {
   window.addEventListener("storage", callback);
@@ -62,10 +76,10 @@ function subscribeToStorage(callback: () => void) {
 }
 
 /**
- * 获取 sessionStorage 中的 token
+ * 读取当前 token。用户 JWT 在 localStorage、ADMIN_TOKEN 在 sessionStorage，依次回退读取。
  */
 function getStorageSnapshot() {
-  return sessionStorage.getItem(STORAGE_KEY);
+  return localStorage.getItem(STORAGE_KEY) ?? sessionStorage.getItem(STORAGE_KEY);
 }
 
 /**
@@ -76,28 +90,23 @@ function getServerSnapshot() {
 }
 
 /**
- * Decode the role claim from a token without verifying its signature. This is a
- * best-effort, client-side hint used only to choose the right UI before the
- * server confirms the session; the server stays the source of truth and rejects
- * an invalid token with 401.
+ * Decode a JWT payload without verifying its signature. Best-effort client-side
+ * hint used only to choose the right UI before the server confirms the session;
+ * the server stays the source of truth and rejects an invalid token with 401.
  *
- * Returns the role for a well-formed user JWT, `undefined` when the token is not
- * JWT-shaped (treated as an ADMIN_TOKEN super-admin credential), and `null` when
- * the token looks like a JWT but its payload is malformed (degraded to
- * unauthenticated rather than throwing).
+ * Returns the decoded payload for a three-part JWT, `undefined` when the token
+ * is not JWT-shaped (treated as a raw ADMIN_TOKEN super-admin credential), and
+ * `null` when the token looks like a JWT but its payload cannot be decoded
+ * (degraded to unauthenticated rather than throwing).
  */
-function decodeTokenRole(token: string): AuthRole | null | undefined {
+function decodeTokenPayload(token: string): { role?: unknown; scope?: unknown } | null | undefined {
   const parts = token.split(".");
   if (parts.length !== 3) {
     return undefined;
   }
   try {
     const normalized = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const payload = JSON.parse(atob(normalized)) as { role?: unknown };
-    if (payload.role === "admin" || payload.role === "member") {
-      return payload.role;
-    }
-    return null;
+    return JSON.parse(atob(normalized)) as { role?: unknown; scope?: unknown };
   } catch {
     return null;
   }
@@ -111,14 +120,24 @@ function deriveBasePrincipal(token: string | null): AuthPrincipal | null {
   if (!token) {
     return null;
   }
-  const role = decodeTokenRole(token);
-  if (role === undefined) {
+  const payload = decodeTokenPayload(token);
+  // Not JWT-shaped → a raw ADMIN_TOKEN credential. Kept for backward
+  // compatibility (e.g. a directly-injected token); the token-login flow now
+  // stores an admin session JWT instead.
+  if (payload === undefined) {
     return { kind: "admin_token", role: "admin", username: null, displayName: null };
   }
-  if (role === null) {
+  if (payload === null) {
     return null;
   }
-  return { kind: "user", role, username: null, displayName: null };
+  // ADMIN_TOKEN-derived super-admin session JWT (minted by /api/auth/token-login).
+  if (payload.scope === "admin_session") {
+    return { kind: "admin_token", role: "admin", username: null, displayName: null };
+  }
+  if (payload.role === "admin" || payload.role === "member") {
+    return { kind: "user", role: payload.role, username: null, displayName: null };
+  }
+  return null;
 }
 
 /**
@@ -142,15 +161,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsHydrated(true);
   }, []);
 
-  // 设置 token（写入 sessionStorage 会触发 useSyncExternalStore 更新）
+  // 设置 token：按类型分流存储。用户 JWT 持久化到 localStorage 以「记住登录」；
+  // ADMIN_TOKEN 仅存 sessionStorage（会话级、不落盘）。写入前清除另一存储避免残留。
+  // 写入触发 useSyncExternalStore 更新。
   const setToken = useCallback((newToken: string) => {
-    sessionStorage.setItem(STORAGE_KEY, newToken);
+    if (isUserJwt(newToken)) {
+      sessionStorage.removeItem(STORAGE_KEY);
+      localStorage.setItem(STORAGE_KEY, newToken);
+    } else {
+      localStorage.removeItem(STORAGE_KEY);
+      sessionStorage.setItem(STORAGE_KEY, newToken);
+    }
     // 手动触发 storage 事件以更新同一窗口的状态
     window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY }));
   }, []);
 
-  // 清除 token
+  // 清除 token（两处存储都清）
   const clearToken = useCallback(() => {
+    localStorage.removeItem(STORAGE_KEY);
     sessionStorage.removeItem(STORAGE_KEY);
     window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY }));
   }, []);

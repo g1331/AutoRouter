@@ -14,9 +14,21 @@ function makeUserJwt(role: "admin" | "member"): string {
   return `${header}.${payload}.e2e-signature`;
 }
 
+// The admin session JWT minted by /api/auth/token-login carries only the
+// admin_session scope; the client decodes (does not verify) it to derive the
+// super-admin principal.
+function makeAdminSessionJwt(): string {
+  const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const header = encode({ alg: "HS256", typ: "JWT" });
+  const payload = encode({ scope: "admin_session" });
+  return `${header}.${payload}.e2e-signature`;
+}
+
 function seedToken(page: Page, token: string): Promise<void> {
   return page.addInitScript((value) => {
-    window.sessionStorage.setItem("admin_token", value);
+    // 用户 JWT（三段式）持久化到 localStorage；ADMIN_TOKEN 存 sessionStorage（会话级）。
+    const storage = value.split(".").length === 3 ? window.localStorage : window.sessionStorage;
+    storage.setItem("admin_token", value);
   }, token);
 }
 
@@ -99,6 +111,10 @@ test.describe("Login role routing", () => {
 
   test("admin token login lands on the dashboard", async ({ page }) => {
     await mockAdminApis(page);
+    // Token-mode login exchanges the ADMIN_TOKEN for a short-lived session JWT.
+    await page.route("**/api/auth/token-login", (route) =>
+      fulfillJson(route, 200, { token: makeAdminSessionJwt() })
+    );
 
     await page.goto("/en/login");
     await waitForLoginForm(page);

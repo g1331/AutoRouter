@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { db, users } from "@/lib/db";
 import { config } from "./config";
 import { extractApiKey } from "./auth";
-import { verifyUserToken } from "./jwt";
+import { verifyUserToken, verifyAdminSessionToken } from "./jwt";
 import { createLogger } from "./logger";
 
 const log = createLogger("api-auth");
@@ -98,7 +98,7 @@ export type AuthPrincipal =
  * @param b - Second string
  * @returns True when the strings are equal
  */
-function safeEqual(a: string, b: string): boolean {
+export function safeEqual(a: string, b: string): boolean {
   const aBuf = Buffer.from(a);
   const bBuf = Buffer.from(b);
   if (aBuf.length !== bBuf.length) {
@@ -125,6 +125,13 @@ export async function authenticate(request: NextRequest): Promise<AuthPrincipal>
   }
 
   if (config.adminToken && safeEqual(token, config.adminToken)) {
+    return { kind: "admin_token" };
+  }
+
+  // A short-lived session JWT minted by the token-login endpoint after an
+  // ADMIN_TOKEN check resolves to the same super-admin principal, so the browser
+  // never has to store the permanent ADMIN_TOKEN to stay logged in.
+  if (await verifyAdminSessionToken(token)) {
     return { kind: "admin_token" };
   }
 

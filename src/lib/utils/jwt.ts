@@ -180,3 +180,69 @@ export async function signUserToken(claims: UserTokenClaims): Promise<string> {
 export async function verifyUserToken(token: string): Promise<UserTokenClaims | null> {
   return verifyJwt(token, await getSigningKey());
 }
+
+/**
+ * Claim scope marking a JWT as an ADMIN_TOKEN-derived super-admin session. The
+ * bootstrap ADMIN_TOKEN never leaves the browser as a stored credential after
+ * login; the token-login endpoint mints this short-lived JWT instead, so the
+ * browser can persist a "remember me" session without ever writing the
+ * permanent, non-expiring ADMIN_TOKEN to disk.
+ */
+const ADMIN_SESSION_SCOPE = "admin_session";
+
+/**
+ * Sign a super-admin session JWT with an explicit key (no user identity, 24h
+ * expiry). The payload carries only the admin-session scope marker.
+ *
+ * @param key - The HMAC signing key
+ * @returns The signed compact JWT
+ */
+export async function signAdminSessionJwt(key: Uint8Array): Promise<string> {
+  return new SignJWT({ scope: ADMIN_SESSION_SCOPE })
+    .setProtectedHeader({ alg: JWT_ALG })
+    .setIssuedAt()
+    .setExpirationTime(JWT_EXPIRATION)
+    .sign(key);
+}
+
+/**
+ * Verify a super-admin session JWT with an explicit key. Returns true only for a
+ * well-formed, unexpired token whose scope claim marks it as an admin session;
+ * any failure (bad signature, expiry, wrong or absent scope) resolves to false.
+ * Pins HS256 to reject alg=none and downgrade attempts.
+ *
+ * @param token - The compact JWT to verify
+ * @param key - The HMAC signing key
+ * @returns True when the token is a valid admin session JWT
+ */
+export async function verifyAdminSessionJwt(token: string, key: Uint8Array): Promise<boolean> {
+  try {
+    const { payload } = await jwtVerify(token, key, {
+      algorithms: [JWT_ALG],
+      requiredClaims: ["exp"],
+    });
+    return payload.scope === ADMIN_SESSION_SCOPE;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Sign a super-admin session JWT using the configured signing key.
+ *
+ * @returns The signed compact JWT
+ */
+export async function signAdminSessionToken(): Promise<string> {
+  return signAdminSessionJwt(await getSigningKey());
+}
+
+/**
+ * Verify a super-admin session JWT using the configured signing key.
+ * authenticate() maps a valid token to the `admin_token` principal.
+ *
+ * @param token - The compact JWT to verify
+ * @returns True when the token is a valid admin session JWT
+ */
+export async function verifyAdminSessionToken(token: string): Promise<boolean> {
+  return verifyAdminSessionJwt(token, await getSigningKey());
+}

@@ -9,10 +9,9 @@ vi.mock("next-intl", () => ({
 }));
 
 // 路由跳转来自 @/i18n/navigation 的本地化 useRouter。
-const { pushMock, setTokenMock, tokenGetMock, searchParamsState, authState } = vi.hoisted(() => ({
+const { pushMock, setTokenMock, searchParamsState, authState } = vi.hoisted(() => ({
   pushMock: vi.fn(),
   setTokenMock: vi.fn(),
-  tokenGetMock: vi.fn(),
   // 登录页使用 next/navigation 的 useSearchParams，默认无 redirect 参数。
   searchParamsState: { redirect: null as string | null },
   // token + principal 可变，用于验证已登录态与按角色分流。
@@ -38,11 +37,6 @@ vi.mock("@/providers/auth-provider", () => ({
     token: authState.token,
     principal: authState.principal,
   }),
-}));
-
-// 令牌模式探针经 createApiClient().get 发起，这里桩掉以便断言与控制结果。
-vi.mock("@/lib/api", () => ({
-  createApiClient: () => ({ get: tokenGetMock }),
 }));
 
 vi.mock("@/lib/utils", () => ({
@@ -207,8 +201,12 @@ describe("LoginPage 双模式登录", () => {
     expect(setTokenMock).not.toHaveBeenCalled();
   });
 
-  it("令牌模式探针成功后写入 token", async () => {
-    tokenGetMock.mockResolvedValue({ data: [] });
+  it("令牌模式换取会话 JWT 后写入返回的 token", async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ token: "admin-session-jwt" }),
+    });
 
     render(<LoginPage />);
     await waitForForm();
@@ -217,9 +215,15 @@ describe("LoginPage 双模式登录", () => {
     fireEvent.change(screen.getByLabelText("adminToken"), { target: { value: "admin-secret" } });
     fireEvent.click(screen.getByRole("button", { name: "loginButton" }));
 
-    await waitFor(() => expect(setTokenMock).toHaveBeenCalledWith("admin-secret"));
-    expect(tokenGetMock).toHaveBeenCalledWith("/admin/keys?page=1&page_size=1");
-    expect(global.fetch).not.toHaveBeenCalled();
+    // ADMIN_TOKEN 原文只提交给 /api/auth/token-login，写入的是换回的短期会话 JWT。
+    await waitFor(() => expect(setTokenMock).toHaveBeenCalledWith("admin-session-jwt"));
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/auth/token-login",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ token: "admin-secret" }),
+      })
+    );
   });
 
   it("member 账号登录成功后跳转到自助门户", async () => {
@@ -307,8 +311,12 @@ describe("LoginPage 双模式登录", () => {
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/dashboard"));
   });
 
-  it("令牌模式探针成功后按 admin 落地管理后台", async () => {
-    tokenGetMock.mockResolvedValue({ data: [] });
+  it("令牌模式换取会话 JWT 后按 admin 落地管理后台", async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ token: "admin-session-jwt" }),
+    });
 
     render(<LoginPage />);
     await waitForForm();
@@ -320,8 +328,12 @@ describe("LoginPage 双模式登录", () => {
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/dashboard"));
   });
 
-  it("令牌模式探针失败时显示令牌无效", async () => {
-    tokenGetMock.mockRejectedValue(new Error("unauthorized"));
+  it("令牌模式换取失败（401）时显示令牌无效且不写入 token", async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({ error: "Invalid admin token" }),
+    });
 
     render(<LoginPage />);
     await waitForForm();
@@ -331,6 +343,24 @@ describe("LoginPage 双模式登录", () => {
     fireEvent.click(screen.getByRole("button", { name: "loginButton" }));
 
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("invalidToken"));
+    expect(setTokenMock).not.toHaveBeenCalled();
+  });
+
+  it("令牌模式被限流（429）时提示尝试次数过多", async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: false,
+      status: 429,
+      json: async () => ({ error: "Too many failed attempts. Try again later." }),
+    });
+
+    render(<LoginPage />);
+    await waitForForm();
+
+    fireEvent.click(screen.getByRole("tab", { name: "tokenTab" }));
+    fireEvent.change(screen.getByLabelText("adminToken"), { target: { value: "admin-secret" } });
+    fireEvent.click(screen.getByRole("button", { name: "loginButton" }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("tooManyAttempts"));
     expect(setTokenMock).not.toHaveBeenCalled();
   });
 });
