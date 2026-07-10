@@ -34,11 +34,11 @@
 
 ## 5. 路由拓扑面板（提交 `feat(dashboard)`）
 
-- [ ] 5.1 新增 `src/components/dashboard/routing-topology.tsx`：SVG viewBox 720×280，数据契约与节点状态规则按 design.md D8（`useUpstreams(1,50)` + `useUpstreamHealth(true)` + `useLivePulse()`，前 6–8 节点 + 「+N」溢出）
-- [ ] 5.2 流量包 SMIL `<animateMotion><mpath/>`；reduced-motion 用 JS matchMedia 判定不渲染动画子树；a11y：`role="img"` + `<title>/<desc>` + visually-hidden 摘要
-- [ ] 5.3 i18n：`dashboard.topology.*` 同落 `en.json`/`zh-CN.json`；面板落位 StatsCards 与 usage 区块之间
-- [ ] 5.4 新增 `tests/components/routing-topology.test.tsx`（真实 next-intl 消息 + mock 三 hooks：N 节点渲染 / open 离线样式 / reduced-motion 无动画 / 空态）；更新 auth-role-routing.spec.ts 等 dashboard mock spec 的新增请求 stub
-- [ ] 5.5 验收：新组件测试 + `tsc` + lint 绿；本地 `pnpm e2e --workers=2` 绿；双主题 spot check；提交
+- [x] 5.1 新增 `src/components/dashboard/routing-topology.tsx`：SVG viewBox 720×280，数据契约与节点状态规则按 design.md D8（`useUpstreams(1,50)` + `useUpstreamHealth(true)` + `useLivePulse()`，前 6–8 节点 + 「+N」溢出；实际取前 8 个）
+- [x] 5.2 流量包 SMIL `<animateMotion><mpath/>`；reduced-motion 用 JS matchMedia 判定不渲染动画子树（`useSyncExternalStore`，与 theme-toggle 同模式）；a11y：`role="img"` + `<title>/<desc>` + visually-hidden 摘要
+- [x] 5.3 i18n：`dashboard.topology.*` 同落 `en.json`/`zh-CN.json`；面板落位 StatsCards 与 usage 区块之间
+- [x] 5.4 新增 `tests/components/dashboard/routing-topology.test.tsx`（真实 next-intl 消息 + mock 三 hooks，8 场景）；auth-role-routing.spec.ts 补 upstreams/health/live-pulse 三个 stub（进 /dashboard 的 mock spec 仅此一个）
+- [x] 5.5 验收：新组件测试 8/8 + `tsc` + lint 绿；本地 `pnpm e2e --workers=2` 11/11 绿；双主题 spot check（真实 dev 数据：ok/bad/inactive 三态 + 溢出「+1」）；提交
 
 ## 6. 硬编码清理（提交 `refactor(admin)`）
 
