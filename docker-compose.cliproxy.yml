@@ -32,7 +32,7 @@ services:
       # 运行日志目录，named volume 持久化。
       - cliproxy-logs:/CLIProxyAPI/logs
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:${CLIPROXY_PORT:-8317}/healthz"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:${CLIPROXY_PORT:-8317}/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3
