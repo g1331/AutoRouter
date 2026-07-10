@@ -276,15 +276,11 @@ export function KeyModelAllowlistSection({
   };
 
   return (
-    <div className="space-y-3 rounded-[var(--shape-corner-medium)] border border-[rgb(var(--md-sys-color-outline-variant))] bg-[rgb(var(--md-sys-color-surface-container-low))] p-4">
+    <div className="space-y-3 rounded-md border border-divider-subtle bg-surface-200 p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
-          <p className="type-body-medium text-[rgb(var(--md-sys-color-on-surface))]">
-            {t("allowedModels")}
-          </p>
-          <p className="type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
-            {t("allowedModelsDesc")}
-          </p>
+          <p className="type-body-medium text-foreground">{t("allowedModels")}</p>
+          <p className="type-body-small text-muted-foreground">{t("allowedModelsDesc")}</p>
         </div>
       </div>
 
@@ -468,9 +464,7 @@ export function KeyModelAllowlistSection({
           )}
         </div>
       ) : (
-        <p className="type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
-          {t("allowedModelsEmpty")}
-        </p>
+        <p className="type-body-small text-muted-foreground">{t("allowedModelsEmpty")}</p>
       )}
     </div>
   );

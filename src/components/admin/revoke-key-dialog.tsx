@@ -54,8 +54,8 @@ export function RevokeKeyDialog({ apiKey, open, onClose, morph = false }: Revoke
       <DialogContent className="max-w-md" morph={morph} morphName="morph-key-revoke">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-[var(--shape-corner-medium)] bg-[rgb(var(--md-sys-color-error-container))] flex items-center justify-center">
-              <AlertTriangle className="h-5 w-5 text-[rgb(var(--md-sys-color-on-error-container))]" />
+            <div className="w-10 h-10 rounded-md bg-status-error-muted flex items-center justify-center">
+              <AlertTriangle className="h-5 w-5 text-status-error" />
             </div>
             {t("revokeKeyTitle")}
           </DialogTitle>
@@ -63,30 +63,24 @@ export function RevokeKeyDialog({ apiKey, open, onClose, morph = false }: Revoke
         </DialogHeader>
 
         <div className="space-y-3 py-4">
-          <div className="bg-[rgb(var(--md-sys-color-error-container))] rounded-[var(--shape-corner-medium)] p-4">
+          <div className="bg-status-error-muted rounded-md p-4">
             <div className="space-y-2">
               <div className="flex justify-between">
-                <span className="type-label-large text-[rgb(var(--md-sys-color-on-error-container))]">
-                  {tCommon("name")}:
-                </span>
-                <span className="type-body-medium text-[rgb(var(--md-sys-color-on-error-container))]">
-                  {apiKey.name}
-                </span>
+                <span className="type-label-large text-status-error">{tCommon("name")}:</span>
+                <span className="type-body-medium text-status-error">{apiKey.name}</span>
               </div>
               <div className="flex justify-between">
-                <span className="type-label-large text-[rgb(var(--md-sys-color-on-error-container))]">
-                  {t("tableKeyPrefix")}:
-                </span>
-                <code className="type-body-medium font-mono text-[rgb(var(--md-sys-color-on-error-container))]">
+                <span className="type-label-large text-status-error">{t("tableKeyPrefix")}:</span>
+                <code className="type-body-medium font-mono text-status-error">
                   {apiKey.key_prefix}
                 </code>
               </div>
               {apiKey.description && (
                 <div className="flex justify-between">
-                  <span className="type-label-large text-[rgb(var(--md-sys-color-on-error-container))]">
+                  <span className="type-label-large text-status-error">
                     {tCommon("description")}:
                   </span>
-                  <span className="type-body-medium text-[rgb(var(--md-sys-color-on-error-container))] max-w-xs text-right truncate">
+                  <span className="type-body-medium text-status-error max-w-xs text-right truncate">
                     {apiKey.description}
                   </span>
                 </div>
@@ -94,11 +88,9 @@ export function RevokeKeyDialog({ apiKey, open, onClose, morph = false }: Revoke
             </div>
           </div>
 
-          <div className="flex items-start gap-3 bg-[rgb(var(--md-sys-color-warning-container))] rounded-[var(--shape-corner-medium)] p-3">
-            <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5 text-[rgb(var(--md-sys-color-on-warning-container))]" />
-            <p className="type-body-small text-[rgb(var(--md-sys-color-on-warning-container))]">
-              {t("revokeKeyWarning")}
-            </p>
+          <div className="flex items-start gap-3 bg-status-warning-muted rounded-md p-3">
+            <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5 text-status-warning" />
+            <p className="type-body-small text-status-warning">{t("revokeKeyWarning")}</p>
           </div>
         </div>
 

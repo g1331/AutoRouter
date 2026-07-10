@@ -49,9 +49,9 @@
 
 ## 7. md-sys 迁移与删层（提交 `refactor(ui)`）
 
-- [ ] 7.1 按 design.md D4 映射表机械替换 14 文件 179 处 `--md-sys-color-*` 引用 → `--vr-*`/既有类；逐文件浏览器 spot check（重点：create/edit/show-key-dialog、test-upstream-dialog、calendar）
-- [ ] 7.2 精确字面 grep 复核 `--md-sys-color-` 零命中后删除 globals.css 两个 md-sys 块与 `--shape-corner-*`（若同为零引用）
-- [ ] 7.3 验收：`tsc` + lint 绿；morph 弹窗冒烟；本地 `pnpm e2e --workers=2` 绿；提交
+- [x] 7.1 按 design.md D4 映射表机械替换 14 文件 179 处 `--md-sys-color-*` 引用 → `--vr-*`/既有类；逐文件浏览器 spot check（重点：create/edit/show-key-dialog、test-upstream-dialog、calendar）（实测 13 文件 157 处——前序阶段已消化部分；批量脚本会丢失双类替换中第二个类的变体前缀，calendar.tsx 两处手工修正为 `dark:aria-selected:text-amber-100`；show-key-dialog key 值块由 inverse-surface 反色底改为 `border-divider bg-surface-300` 主题内方案；shape-corner 类一并迁移：medium→rounded-md、small→rounded-cf-md、extra-small→rounded-cf-sm、full→rounded-full）
+- [x] 7.2 精确字面 grep 复核 `--md-sys-color-` 零命中后删除 globals.css 两个 md-sys 块与 `--shape-corner-*`（若同为零引用）（src/ 与 tailwind.config 零命中——tests/fixtures 命中为录制流量数据非代码；已删暗色块 21 行 + 亮色块 21 行 + `--shape-corner-*` 4 行）
+- [x] 7.3 验收：`tsc` + lint 绿；morph 弹窗冒烟；本地 `pnpm e2e --workers=2` 绿；提交（tsc/lint 0 err；create-key/edit-key morph 冒烟正常，calendar 选中日 computed bg=rgb(242,169,80) 确认 amber-500 令牌生效；components+unit 209 文件 3153 passed | 1 skipped；e2e 11/11 16.0s）
 
 ## 8. portal + login + landing 对齐（提交 `refactor(portal)`）
 

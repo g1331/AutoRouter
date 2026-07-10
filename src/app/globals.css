@@ -118,34 +118,6 @@
   --sidebar-accent-foreground: var(--vr-text);
   --sidebar-border: var(--vr-border-subtle);
   --sidebar-ring: var(--vr-accent-500);
-
-  --shape-corner-extra-small: var(--vr-radius-xs);
-  --shape-corner-small: var(--vr-radius-sm);
-  --shape-corner-medium: var(--vr-radius-md);
-  --shape-corner-full: 9999px;
-
-  /* md-sys Material 兼容层：仅重派生数值适配新调色板，迁移删层见 openspec restyle-ops-console-2 Phase 6b */
-  --md-sys-color-primary: 242 169 80;
-  --md-sys-color-on-primary: 28 18 4;
-  --md-sys-color-primary-container: 50 43 36;
-  --md-sys-color-on-primary-container: 253 234 207;
-  --md-sys-color-tertiary-container: 35 44 53;
-  --md-sys-color-on-tertiary-container: 205 222 235;
-  --md-sys-color-success: 70 214 140;
-  --md-sys-color-success-container: 28 51 45;
-  --md-sys-color-on-success-container: 208 240 224;
-  --md-sys-color-warning-container: 54 43 34;
-  --md-sys-color-on-warning-container: 255 231 205;
-  --md-sys-color-error: 255 107 94;
-  --md-sys-color-error-container: 54 36 38;
-  --md-sys-color-on-error-container: 255 218 213;
-  --md-sys-color-surface-container-low: 16 18 22;
-  --md-sys-color-surface-container-highest: 32 36 43;
-  --md-sys-color-inverse-surface: 232 228 218;
-  --md-sys-color-on-surface: 232 228 218;
-  --md-sys-color-on-surface-variant: 154 162 174;
-  --md-sys-color-outline: 33 38 46;
-  --md-sys-color-outline-variant: 43 50 60;
 }
 
 .light {
@@ -219,28 +191,6 @@
 
   --sidebar: var(--vr-surface-1);
   --sidebar-accent: var(--vr-surface-2);
-
-  --md-sys-color-primary: 154 100 16;
-  --md-sys-color-on-primary: 255 255 255;
-  --md-sys-color-primary-container: 244 239 233;
-  --md-sys-color-on-primary-container: 76 49 5;
-  --md-sys-color-tertiary-container: 230 236 241;
-  --md-sys-color-on-tertiary-container: 43 65 86;
-  --md-sys-color-success: 23 128 77;
-  --md-sys-color-success-container: 225 238 233;
-  --md-sys-color-on-success-container: 16 74 46;
-  --md-sys-color-warning-container: 242 234 225;
-  --md-sys-color-on-warning-container: 125 73 10;
-  --md-sys-color-error: 187 63 52;
-  --md-sys-color-error-container: 245 230 230;
-  --md-sys-color-on-error-container: 111 32 25;
-  --md-sys-color-surface-container-low: 248 249 250;
-  --md-sys-color-surface-container-highest: 226 230 234;
-  --md-sys-color-inverse-surface: 33 35 39;
-  --md-sys-color-on-surface: 33 35 39;
-  --md-sys-color-on-surface-variant: 95 101 112;
-  --md-sys-color-outline: 220 223 228;
-  --md-sys-color-outline-variant: 198 203 210;
 }
 
 @keyframes vr-theme-fade {

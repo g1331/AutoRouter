@@ -3096,7 +3096,7 @@ export function UpstreamFormDialog({
                                                       />
                                                     </FormControl>
                                                     {fieldState.error?.message ? (
-                                                      <p className="type-body-small text-[rgb(var(--md-sys-color-error))]">
+                                                      <p className="type-body-small text-status-error">
                                                         {fieldState.error.message ===
                                                         MODEL_RULE_ALIAS_TARGET_REQUIRED_MESSAGE
                                                           ? t("modelRuleAliasTargetRequired")
