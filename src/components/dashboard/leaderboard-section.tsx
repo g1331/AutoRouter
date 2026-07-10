@@ -140,7 +140,7 @@ function MiniPieChart({ data, label }: { data: DistributionItem[]; label: string
               {d.name}
             </span>
             <span
-              className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs shadow-[var(--vr-shadow-md)] group-hover/legend:block"
+              className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-cf-sm px-2.5 py-1.5 text-xs shadow-[var(--vr-shadow-md)] group-hover/legend:block"
               style={LEGEND_TOOLTIP_STYLE}
             >
               {d.name}: {formatNumber(d.count)} ({((d.count / total) * 100).toFixed(1)}%)

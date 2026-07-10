@@ -340,7 +340,7 @@ export function EditKeyDialog({
                 control={form.control}
                 name="is_active"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-lg border p-4">
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-cf-sm border p-4">
                     <FormControl>
                       <Checkbox checked={field.value} onCheckedChange={field.onChange} />
                     </FormControl>

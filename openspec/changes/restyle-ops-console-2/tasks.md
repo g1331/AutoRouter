@@ -42,10 +42,10 @@
 
 ## 6. 硬编码清理（提交 `refactor(admin)`）
 
-- [ ] 6.1 状态三连 class 收敛：新增 STATUS_TONE 小工具并替换 10 文件 ×44 处
-- [ ] 6.2 硬编码色值清理：`logs-table.tsx`（emerald:1136 + 10 处 inline style）、`routing-decision-timeline.tsx:403`、`cliproxy-connection-result`、`cliproxy-oauth-login-dialog:230`、`cliproxy-instance-logs-panel:23`、`lifecycle-track.tsx:442-446`（违禁蓝紫→info/中性）、`billing/page.tsx` text-green-600 ×5
-- [ ] 6.3 全仓 64 处裸 `rounded-*`（23 文件）→ 令牌化圆角类；`test-upstream-dialog`(25)/`create-key-dialog`(18)/`edit-key-dialog`(18)/`show-key-dialog`(14) inline 样式令牌化；`upstream-form-dialog.tsx` 类对齐
-- [ ] 6.4 验收：`tsc` + lint + 现有相关测试绿；本地 `pnpm e2e --workers=2` 绿；logs/billing/cliproxy 页 spot check；提交
+- [x] 6.1 状态三连 class 收敛：新增 `src/lib/status-tone.ts`（soft/faint 两档静态映射表，附单测）并替换 8 文件（status-led/login/settings/header-compensation/lifecycle-track/logs-table/upstream-form-dialog/upstreams-table；Phase 1–5 已消掉部分实例，实测收敛 28 处）
+- [x] 6.2 硬编码色值清理：`logs-table.tsx`（emerald:1136；10 处 inline style 均为 animationDelay 动态值，保留）、`routing-decision-timeline.tsx`（emerald 选中态 + 裸 red/orange 共 9 处）、`cliproxy-connection-result`（emerald/amber 双连）、`cliproxy-oauth-login-dialog`、`cliproxy-instance-logs-panel`（WARN/INFO 级别色一并令牌化）、`lifecycle-track.tsx`（蓝紫→info/中性；红绿 rgba 渐变→color-mix 令牌）、`billing/page.tsx` text-green-600 ×5、`upstream-form-dialog.tsx` sky rgba ring→color-mix（stats-cards:223 为 Phase 4 新定告警形态，保留）
+- [x] 6.3 裸 `rounded-*` 清零（规划时 64 处，前序阶段已顺手消化，收尾剩 7 处：login/billing×3/edit-key-dialog/leaderboard-section/skeleton，按 xl→cf-md、md/lg→cf-sm 就近映射）；四个 key/test dialog 的“inline 样式”实为 `[rgb(var(--md-sys-color-*))]` 任意值类，归并至任务 7 用统一映射表迁移
+- [x] 6.4 验收：`tsc` + lint 0 错误；status-tone 单测 9/9 + tests/components 全量 882/882 绿；本地 `pnpm e2e --workers=2` 11/11 绿；logs/upstreams 页双主题 spot check；提交
 
 ## 7. md-sys 迁移与删层（提交 `refactor(ui)`）
 

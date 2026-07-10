@@ -10,6 +10,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
+import { statusTone } from "@/lib/status-tone";
 import { cn } from "@/lib/utils";
 import { sanitizeRedirect } from "@/lib/utils/safe-redirect";
 import { useRouter } from "@/i18n/navigation";
@@ -98,7 +99,12 @@ function SystemStatus() {
         <Shield className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
         <span>SECURE MODE</span>
       </div>
-      <div className="inline-flex items-center gap-2 rounded-[8px] border border-status-success/35 bg-status-success-muted px-2.5 py-1.5 font-mono text-status-success">
+      <div
+        className={cn(
+          "inline-flex items-center gap-2 rounded-[8px] border px-2.5 py-1.5 font-mono",
+          statusTone("success")
+        )}
+      >
         <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
         <span>NETWORK ONLINE</span>
       </div>
@@ -257,14 +263,19 @@ export default function LoginPage() {
       </div>
 
       <div className="relative z-10 grid min-h-screen place-items-center px-4 py-10 sm:px-6">
-        <div className="w-full max-w-md overflow-hidden rounded-xl border border-border bg-card/90 shadow-[var(--vr-shadow-lg)] backdrop-blur">
+        <div className="w-full max-w-md overflow-hidden rounded-cf-md border border-border bg-card/90 shadow-[var(--vr-shadow-lg)] backdrop-blur">
           <div className="border-b border-divider px-5 py-4 sm:px-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h1 className="type-title-large text-foreground">{t("title")}</h1>
                 <p className="type-body-small mt-1 text-muted-foreground">{t("subtitle")}</p>
               </div>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-status-success/35 bg-status-success-muted px-2.5 py-1 font-mono text-[11px] text-status-success">
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px]",
+                  statusTone("success")
+                )}
+              >
                 <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
                 SECURE
               </span>

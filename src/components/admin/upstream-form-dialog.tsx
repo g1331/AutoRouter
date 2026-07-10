@@ -116,6 +116,7 @@ import { RouteCapabilityMultiSelect } from "@/components/admin/route-capability-
 import { UpstreamFailureRulesEditor } from "@/components/admin/upstream-failure-rules-editor";
 import { DEFAULT_CIRCUIT_BREAKER_CONFIG } from "@/lib/circuit-breaker-defaults";
 import { inferDefaultModelDiscoveryConfig } from "@/lib/services/upstream-model-types";
+import { statusTone } from "@/lib/status-tone";
 import { cn } from "@/lib/utils";
 
 interface UpstreamFormDialogProps {
@@ -1555,7 +1556,7 @@ export function UpstreamFormDialog({
     cn(
       "scroll-mt-28 rounded-cf-sm border p-4 transition-all duration-cf-normal ease-cf-standard",
       highlightedSectionId === sectionId
-        ? "border-status-info/55 bg-status-info-muted shadow-[0_0_0_1px_rgba(56,189,248,0.18)]"
+        ? "border-status-info/55 bg-status-info-muted shadow-[0_0_0_1px_color-mix(in_srgb,var(--vr-status-info)_18%,transparent)]"
         : "border-divider bg-surface-300/35",
       extra
     );
@@ -2256,12 +2257,22 @@ export function UpstreamFormDialog({
                       />
 
                       {endpointPreview?.autoAppendV1Applied && (
-                        <p className="mt-2 rounded-cf-sm border border-status-info/30 bg-status-info-muted px-3 py-2 text-xs text-status-info">
+                        <p
+                          className={cn(
+                            "mt-2 rounded-cf-sm border px-3 py-2 text-xs",
+                            statusTone("info")
+                          )}
+                        >
                           {t("baseUrlAutoAppendV1Hint")}
                         </p>
                       )}
                       {endpointPreview?.duplicateV1Warning && (
-                        <div className="mt-2 flex items-start gap-2 rounded-cf-sm border border-status-warning/40 bg-status-warning-muted px-3 py-2 text-xs text-status-warning">
+                        <div
+                          className={cn(
+                            "mt-2 flex items-start gap-2 rounded-cf-sm border px-3 py-2 text-xs",
+                            statusTone("warning")
+                          )}
+                        >
                           <AlertTriangle
                             className="mt-0.5 h-3.5 w-3.5 shrink-0"
                             aria-hidden="true"
@@ -2442,7 +2453,12 @@ export function UpstreamFormDialog({
                         ) : null}
 
                         {probeConfigDirty && (
-                          <div className="mt-3 flex items-start gap-2 rounded-cf-sm border border-status-warning/40 bg-status-warning-muted px-3 py-2 text-xs text-status-warning">
+                          <div
+                            className={cn(
+                              "mt-3 flex items-start gap-2 rounded-cf-sm border px-3 py-2 text-xs",
+                              statusTone("warning")
+                            )}
+                          >
                             <AlertTriangle
                               className="mt-0.5 h-3.5 w-3.5 shrink-0"
                               aria-hidden="true"
@@ -3166,7 +3182,12 @@ export function UpstreamFormDialog({
                               </div>
 
                               {catalogState.modelCatalogLastStatus === "failed" && (
-                                <div className="rounded-cf-sm border border-status-error/45 bg-status-error-muted px-3 py-3 text-xs text-status-error">
+                                <div
+                                  className={cn(
+                                    "rounded-cf-sm border px-3 py-3 text-xs",
+                                    statusTone("error")
+                                  )}
+                                >
                                   <div className="font-medium">{t("catalogFailureTitle")}</div>
                                   <div className="mt-1">
                                     {catalogState.modelCatalogLastError ||

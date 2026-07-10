@@ -227,7 +227,7 @@ export function CliproxyOAuthLoginDialog({
                   </div>
                 </div>
               ) : status === "ok" ? (
-                <div className="flex items-center gap-2 text-emerald-500">
+                <div className="flex items-center gap-2 text-status-success">
                   <CheckCircle2 className="h-4 w-4" aria-hidden />
                   <span className="type-body-small">{t("oauthLoginSuccess")}</span>
                 </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { statusTone } from "@/lib/status-tone";
 import { cn } from "@/lib/utils";
 
 export type LedStatus = "healthy" | "degraded" | "offline";
@@ -20,15 +21,15 @@ const LED_CONFIG: Record<
 > = {
   healthy: {
     compactLabel: "OK",
-    toneClass: "border-status-success/35 bg-status-success-muted text-status-success",
+    toneClass: statusTone("success"),
   },
   degraded: {
     compactLabel: "WARN",
-    toneClass: "border-status-warning/35 bg-status-warning-muted text-status-warning",
+    toneClass: statusTone("warning"),
   },
   offline: {
     compactLabel: "DOWN",
-    toneClass: "border-status-error/35 bg-status-error-muted text-status-error",
+    toneClass: statusTone("error"),
   },
 };
 

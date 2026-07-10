@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { statusTone } from "@/lib/status-tone";
 import { cn } from "@/lib/utils";
 import type {
   RequestLifecycleStatus,
@@ -271,17 +272,17 @@ const CARD_CONTAINER_CLS: Record<SegState, string> = {
     "border-foreground/15 bg-surface-200 shadow-[0_10px_28px_rgba(15,23,42,0.08)] -translate-y-0.5",
   pending: "border-divider/70 bg-surface-200/40 opacity-70",
   failed:
-    "border-status-error/20 bg-[linear-gradient(180deg,rgba(220,38,38,0.08),rgba(15,23,42,0.02))] shadow-[var(--vr-shadow-xs)]",
+    "border-status-error/20 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--vr-status-error)_8%,transparent),rgba(15,23,42,0.02))] shadow-[var(--vr-shadow-xs)]",
   success:
-    "border-status-success/20 bg-[linear-gradient(180deg,rgba(22,163,74,0.08),rgba(15,23,42,0.02))] shadow-[var(--vr-shadow-xs)]",
+    "border-status-success/20 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--vr-status-success)_8%,transparent),rgba(15,23,42,0.02))] shadow-[var(--vr-shadow-xs)]",
 };
 
 const NUMBER_CLS: Record<SegState, string> = {
   done: "border-divider bg-surface-300 text-muted-foreground",
   active: "border-foreground/15 bg-surface-300 text-foreground",
   pending: "border-divider/60 bg-surface-300/50 text-muted-foreground/50",
-  failed: "border-status-error/25 bg-status-error-muted/30 text-status-error",
-  success: "border-status-success/25 bg-status-success-muted/35 text-status-success",
+  failed: statusTone("error", "faint"),
+  success: statusTone("success", "faint"),
 };
 
 const LABEL_CLS: Record<SegState, string> = {
@@ -439,13 +440,11 @@ export function LifecycleTrack({
 
     switch (seg.key) {
       case "decision":
-        return "bg-blue-500/12 text-blue-300";
+        return "bg-status-info/12 text-status-info";
       case "request":
-        return "bg-violet-500/12 text-violet-300";
       case "first_output":
-        return "bg-violet-500/12 text-violet-300";
+        return "bg-surface-300/60 text-foreground/80";
       case "response":
-        return "bg-amber-500/12 text-amber-300";
       case "generation":
         return "bg-amber-500/12 text-amber-300";
       case "complete":

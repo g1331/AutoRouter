@@ -19,8 +19,8 @@ interface CliproxyInstanceLogsPanelProps {
 function classifyLineLevel(line: string): string {
   const normalized = line.toUpperCase();
   if (/\b(ERROR|ERR|FATAL|PANIC)\b/.test(normalized)) return "text-destructive";
-  if (/\b(WARN|WARNING)\b/.test(normalized)) return "text-amber-500";
-  if (/\b(INFO|NOTICE)\b/.test(normalized)) return "text-emerald-500";
+  if (/\b(WARN|WARNING)\b/.test(normalized)) return "text-status-warning";
+  if (/\b(INFO|NOTICE)\b/.test(normalized)) return "text-status-success";
   if (/\b(DEBUG|TRACE)\b/.test(normalized)) return "text-muted-foreground";
   return "text-foreground";
 }
