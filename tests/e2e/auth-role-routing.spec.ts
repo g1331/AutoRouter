@@ -78,10 +78,46 @@ async function mockPortalApis(page: Page): Promise<void> {
   await page.route("**/api/user/usage**", (route) => fulfillJson(route, 200, MEMBER_USAGE));
 }
 
+// KPI 卡 sparkline（requests/tokens/cost 三个 metric）与用量图共用的
+// timeseries 接口返回最小合法结构，避免仪表盘挂载期请求打到 catch-all
+// 后组件走进非真实的数据分支。
+const ADMIN_TIMESERIES = {
+  range: "today",
+  granularity: "hour",
+  series: [],
+  total_series: [
+    {
+      timestamp: new Date("2026-06-10T08:00:00.000Z").toISOString(),
+      request_count: 12,
+      total_tokens: 3400,
+      avg_duration_ms: 820,
+      total_cost: 0.12,
+    },
+    {
+      timestamp: new Date("2026-06-10T09:00:00.000Z").toISOString(),
+      request_count: 20,
+      total_tokens: 5100,
+      avg_duration_ms: 760,
+      total_cost: 0.2,
+    },
+  ],
+  period_summary: {
+    request_count: 32,
+    total_tokens: 8500,
+    avg_ttft_ms: 640,
+    avg_duration_ms: 790,
+    avg_tps: 42,
+    total_cost: 0.32,
+  },
+};
+
 // 管理后台接口兜底：令牌探针与仪表盘数据请求都以空对象成功返回，
 // 该流程只断言路由落点，不断言后台页面内容。
 async function mockAdminApis(page: Page): Promise<void> {
   await page.route("**/api/admin/**", (route) => fulfillJson(route, 200, {}));
+  await page.route("**/api/admin/stats/timeseries**", (route) =>
+    fulfillJson(route, 200, ADMIN_TIMESERIES)
+  );
 }
 
 async function waitForLoginForm(page: Page): Promise<void> {

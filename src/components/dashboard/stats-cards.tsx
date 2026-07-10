@@ -13,7 +13,9 @@ import {
 } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { useStatsTimeseries, type TimeseriesMetric } from "@/hooks/use-dashboard-stats";
 import { cn } from "@/lib/utils";
+import type { TimeseriesDataPoint } from "@/types/api";
 
 import { formatCost, formatDuration, formatNumber } from "./chart-theme";
 import { DashboardLoadingBlock, DashboardLoadingSurface } from "./dashboard-loading";
@@ -99,6 +101,55 @@ function DeltaBadge({ today, yesterday, lowerIsBetter = false }: DeltaBadgeProps
   );
 }
 
+function metricPointValue(point: TimeseriesDataPoint, metric: TimeseriesMetric): number {
+  if (metric === "tokens") return point.total_tokens;
+  if (metric === "cost") return point.total_cost ?? 0;
+  return point.request_count;
+}
+
+// 当日逐小时 sparkline 数据；接口未返回（加载中/被 mock 成空对象）时给空数组。
+function useSparklineValues(metric: TimeseriesMetric): number[] {
+  const { data } = useStatsTimeseries("today", metric);
+  const series = data?.total_series;
+  if (!series?.length) return [];
+  return series.map((point) => metricPointValue(point, metric));
+}
+
+function Sparkline({ values }: { values: number[] }) {
+  if (values.length < 2) return null;
+
+  const width = 100;
+  const height = 24;
+  const max = Math.max(...values, 1);
+  const step = width / (values.length - 1);
+  // 上下各留 1.5px，避免线条贴边被裁切。
+  const coords = values.map((value, index) => ({
+    x: index * step,
+    y: height - 1.5 - (value / max) * (height - 3),
+  }));
+  const points = coords.map(({ x, y }) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const last = coords[coords.length - 1];
+
+  return (
+    <svg
+      data-testid="stat-sparkline"
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      aria-hidden="true"
+      className="mt-2 h-6 w-full"
+    >
+      <polyline
+        points={points}
+        className="fill-none stroke-amber-500/80"
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+      <circle cx={last.x} cy={last.y} r={2} className="fill-amber-500" />
+    </svg>
+  );
+}
+
 function AnimatedCounter({
   value,
   isLoading,
@@ -136,6 +187,8 @@ function StatCard({
   valueClassName,
   loadingLabel,
   delta,
+  sparkline,
+  alert = false,
 }: {
   title: string;
   value: string;
@@ -146,19 +199,31 @@ function StatCard({
   valueClassName?: string;
   loadingLabel: string;
   delta?: React.ReactNode;
+  sparkline?: number[];
+  alert?: boolean;
 }) {
   return (
     <Card
+      data-alert={alert || undefined}
       className={cn(
         "h-full border-border bg-card shadow-[var(--vr-shadow-sm)]",
-        "hover:border-amber-500/35 hover:shadow-cf-glow-subtle"
+        alert
+          ? "border-status-error/60 hover:border-status-error"
+          : "hover:border-amber-500/35 hover:shadow-cf-glow-subtle"
       )}
       style={{ animationDelay: `${delay}ms` }}
     >
       <CardContent className="p-5 sm:p-6">
         <div className="flex items-center justify-between">
-          <p className="type-label-medium text-muted-foreground">{title}</p>
-          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-cf-sm border border-amber-500/35 bg-amber-500/10 text-amber-500">
+          <p className="type-label text-muted-foreground">{title}</p>
+          <div
+            className={cn(
+              "flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-cf-sm border",
+              alert
+                ? "border-status-error/45 bg-status-error/10 text-status-error"
+                : "border-amber-500/35 bg-amber-500/10 text-amber-500"
+            )}
+          >
             <Icon className="h-3.5 w-3.5" />
           </div>
         </div>
@@ -174,6 +239,7 @@ function StatCard({
           <p className="type-body-small text-muted-foreground">{subtitle}</p>
           {!isLoading && delta}
         </div>
+        {!isLoading && sparkline ? <Sparkline values={sparkline} /> : null}
       </CardContent>
     </Card>
   );
@@ -197,6 +263,10 @@ export function StatsCards({
   const t = useTranslations("dashboard");
   const tCommon = useTranslations("common");
 
+  const requestsSparkline = useSparklineValues("requests");
+  const tokensSparkline = useSparklineValues("tokens");
+  const costSparkline = useSparklineValues("cost");
+
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
       <StatCard
@@ -208,6 +278,7 @@ export function StatsCards({
         delay={0}
         loadingLabel={tCommon("loading")}
         delta={<DeltaBadge today={todayRequests} yesterday={yesterdayRequests} />}
+        sparkline={requestsSparkline}
       />
       <StatCard
         title={t("stats.totalTokens")}
@@ -218,6 +289,7 @@ export function StatsCards({
         delay={50}
         loadingLabel={tCommon("loading")}
         delta={<DeltaBadge today={totalTokensToday} yesterday={yesterdayTotalTokens} />}
+        sparkline={tokensSparkline}
       />
       <StatCard
         title={t("stats.totalCost")}
@@ -228,6 +300,7 @@ export function StatsCards({
         delay={100}
         loadingLabel={tCommon("loading")}
         delta={<DeltaBadge today={totalCostToday} yesterday={yesterdayCostUsd} />}
+        sparkline={costSparkline}
       />
       <StatCard
         title={t("stats.avgTtft")}
@@ -237,6 +310,7 @@ export function StatsCards({
         isLoading={isLoading}
         delay={150}
         valueClassName={avgTtftMs > 0 ? getTtftPerformanceClass(avgTtftMs) : "text-foreground"}
+        alert={avgTtftMs >= 1000}
         loadingLabel={tCommon("loading")}
         delta={
           avgTtftMs > 0 && yesterdayAvgTtftMs > 0 ? (

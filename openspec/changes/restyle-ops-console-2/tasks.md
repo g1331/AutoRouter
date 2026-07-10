@@ -26,11 +26,11 @@
 
 ## 4. dashboard 图表与指标卡（提交 `feat(dashboard)`）
 
-- [ ] 4.1 `chart-theme.ts` 全量重配色（primary、grid/tooltip 走令牌、8 色上游序列），保留 `chartTheme` 向后兼容导出，同步更新其单测
-- [ ] 4.2 `usage-chart.tsx` AreaChart → ComposedChart（total=柱+面积线，by-upstream=堆叠柱），修 `rgba(245,158,11,…)` 硬编码（:461、:482）
-- [ ] 4.3 `stats-cards.tsx`：uppercase 微标签 + display 数值 + requests/tokens/cost 三卡 sparkline（`useStatsTimeseries("24h", metric)` + 纯 SVG polyline）+ 告警红框变体（复用 `getTtftPerformanceClass` 阈值）
-- [ ] 4.4 同步补 dashboard mock E2E 的 3 个 timeseries stub；leaderboard-section/dashboard-loading/time-range-selector 令牌对齐
-- [ ] 4.5 验收：chart-theme 单测 + `tsc` + lint 绿；本地 `pnpm e2e --workers=2` 绿；双主题 spot check；提交
+- [x] 4.1 `chart-theme.ts` 全量重配色（primary、grid/tooltip 走令牌、8 色上游序列），保留 `chartTheme` 向后兼容导出，同步更新其单测
+- [x] 4.2 `usage-chart.tsx` AreaChart → ComposedChart（total=柱+面积线，by-upstream=堆叠柱），修 `rgba(245,158,11,…)` 硬编码（:461、:482）
+- [x] 4.3 `stats-cards.tsx`：uppercase 微标签 + display 数值 + requests/tokens/cost 三卡 sparkline（`useStatsTimeseries("today", metric)` + 纯 SVG polyline；`TimeRange` 无 `"24h"` 档，用当日小时粒度）+ 告警红框变体（复用 `getTtftPerformanceClass` 阈值）
+- [x] 4.4 同步补 dashboard mock E2E 的 timeseries stub（auth-role-routing 单 route 覆盖三个 metric 请求）；leaderboard-section 饼图改随主题取色/time-range-selector 令牌对齐（dashboard-loading 复核已达标）
+- [x] 4.5 验收：chart-theme 单测 + `tsc` + lint 绿；本地 `pnpm e2e --workers=2` 绿；双主题 spot check；提交
 
 ## 5. 路由拓扑面板（提交 `feat(dashboard)`）
 
