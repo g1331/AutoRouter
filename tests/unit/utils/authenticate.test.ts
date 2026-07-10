@@ -5,8 +5,10 @@ import { NextRequest, NextResponse } from "next/server";
 // (token extraction, ADMIN_TOKEN compare, DB lookup, role/active resolution)
 // without depending on real JWT key material.
 const mockVerifyUserToken = vi.fn();
+const mockVerifyAdminSessionToken = vi.fn();
 vi.mock("@/lib/utils/jwt", () => ({
   verifyUserToken: (...args: unknown[]) => mockVerifyUserToken(...args),
+  verifyAdminSessionToken: (...args: unknown[]) => mockVerifyAdminSessionToken(...args),
 }));
 
 // mockSelect captures the selected columns so a test can guard against silently
@@ -68,6 +70,9 @@ function makeRequest(authHeader: string | null): NextRequest {
 describe("authenticate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // clearAllMocks resets call history but not implementations; pin the default
+    // so a test that sets it true does not leak into later suites.
+    mockVerifyAdminSessionToken.mockResolvedValue(false);
   });
 
   it("returns null without an Authorization header", async () => {
@@ -142,11 +147,24 @@ describe("authenticate", () => {
     expect(await authenticate(makeRequest("Bearer bad"))).toBeNull();
     expect(mockSelect).not.toHaveBeenCalled();
   });
+
+  it("resolves an admin session JWT to the super-admin principal without a DB lookup", async () => {
+    mockVerifyAdminSessionToken.mockResolvedValue(true);
+    const principal = await authenticate(makeRequest("Bearer admin-session-jwt"));
+    expect(principal).toEqual({ kind: "admin_token" });
+    // An admin session token carries no user identity, so it must never trigger
+    // the user lookup or fall through to the user-token path.
+    expect(mockVerifyUserToken).not.toHaveBeenCalled();
+    expect(mockSelect).not.toHaveBeenCalled();
+  });
 });
 
 describe("requireAdmin", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // clearAllMocks resets call history but not implementations; pin the default
+    // so a test that sets it true does not leak into later suites.
+    mockVerifyAdminSessionToken.mockResolvedValue(false);
   });
 
   it("passes the ADMIN_TOKEN super-admin", async () => {
@@ -195,6 +213,9 @@ describe("requireAdmin", () => {
 describe("requireUser", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // clearAllMocks resets call history but not implementations; pin the default
+    // so a test that sets it true does not leak into later suites.
+    mockVerifyAdminSessionToken.mockResolvedValue(false);
   });
 
   it("passes a member user and carries the userId", async () => {
@@ -234,6 +255,9 @@ describe("requireUser", () => {
 describe("requireMember", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // clearAllMocks resets call history but not implementations; pin the default
+    // so a test that sets it true does not leak into later suites.
+    mockVerifyAdminSessionToken.mockResolvedValue(false);
   });
 
   it("passes a member user and carries the userId", async () => {

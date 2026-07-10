@@ -10,7 +10,6 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
-import { createApiClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { sanitizeRedirect } from "@/lib/utils/safe-redirect";
 import { useRouter } from "@/i18n/navigation";
@@ -190,7 +189,9 @@ export default function LoginPage() {
     }
   };
 
-  // 令牌模式：沿用对受保护接口的探针校验，通过即认定 ADMIN_TOKEN 有效。
+  // 令牌模式：用 ADMIN_TOKEN 向 /api/auth/token-login 换取短期会话 JWT。
+  // ADMIN_TOKEN 原文只在此次请求体中提交、绝不落盘；换回的会话 JWT 由
+  // completeLogin 持久化到 localStorage，从而令牌登录也能记住登录。
   const handleTokenLogin = async () => {
     if (!inputValue.trim()) {
       setError(t("tokenPlaceholder"));
@@ -201,16 +202,24 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const tempClient = createApiClient({ getToken: () => inputValue });
-      await tempClient.get("/admin/keys?page=1&page_size=1");
-      completeLogin(inputValue, "admin");
-    } catch {
-      if (typeof window !== "undefined") {
-        // 令牌模式登录的是 ADMIN_TOKEN，仅存于 sessionStorage。
-        sessionStorage.removeItem("admin_token");
+      const response = await fetch("/api/auth/token-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: inputValue.trim() }),
+      });
+
+      if (response.ok) {
+        const data = (await response.json()) as { token: string };
+        completeLogin(data.token, "admin");
+        return;
       }
-      setError(t("invalidToken"));
-      toast.error(t("invalidToken"));
+
+      const message = response.status === 429 ? t("tooManyAttempts") : t("invalidToken");
+      setError(message);
+      toast.error(message);
+    } catch {
+      setError(t("loginFailed"));
+      toast.error(t("loginFailed"));
     } finally {
       setIsLoading(false);
     }

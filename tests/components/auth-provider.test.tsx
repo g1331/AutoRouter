@@ -107,6 +107,17 @@ describe("AuthProvider principal 派生", () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it("admin session JWT（scope=admin_session）派生为超级管理员，且不请求用户档案", async () => {
+    localStorage.setItem("admin_token", makeJwt({ scope: "admin_session" }));
+    renderProvider();
+    await screen.findByTestId("ready");
+
+    expect(screen.getByTestId("authenticated")).toHaveTextContent("true");
+    expect(screen.getByTestId("kind")).toHaveTextContent("admin_token");
+    expect(screen.getByTestId("role")).toHaveTextContent("admin");
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it("member JWT 派生为普通用户并从 /api/auth/me 补充显示档案", async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,

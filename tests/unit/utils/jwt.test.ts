@@ -1,7 +1,14 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { SignJWT } from "jose";
-import { deriveJwtKey, signJwt, verifyJwt, type UserTokenClaims } from "@/lib/utils/jwt";
+import {
+  deriveJwtKey,
+  signJwt,
+  verifyJwt,
+  signAdminSessionJwt,
+  verifyAdminSessionJwt,
+  type UserTokenClaims,
+} from "@/lib/utils/jwt";
 
 // 32-byte key [0,1,...,31] encoded as base64 — deterministic test material.
 const TEST_ENCRYPTION_KEY = btoa(String.fromCharCode(...Array.from({ length: 32 }, (_, i) => i)));
@@ -143,6 +150,67 @@ describe("lib/utils/jwt", () => {
         .setExpirationTime("24h")
         .sign(key);
       expect(await verifyJwt(token, key)).toBeNull();
+    });
+  });
+
+  describe("signAdminSessionJwt / verifyAdminSessionJwt", () => {
+    it("round-trips an admin session token to true", async () => {
+      const key = await deriveJwtKey(undefined, TEST_ENCRYPTION_KEY);
+      const token = await signAdminSessionJwt(key);
+      expect(await verifyAdminSessionJwt(token, key)).toBe(true);
+    });
+
+    it("embeds only the admin-session scope and an expiry, no user identity", async () => {
+      const key = await deriveJwtKey(undefined, TEST_ENCRYPTION_KEY);
+      const token = await signAdminSessionJwt(key);
+      const payload = decodeJwtPayload(token);
+      expect(payload).toHaveProperty("scope", "admin_session");
+      expect(payload).toHaveProperty("exp");
+      expect(payload).not.toHaveProperty("userId");
+      expect(payload).not.toHaveProperty("role");
+    });
+
+    it("a user JWT is not accepted as an admin session (no scope claim)", async () => {
+      const key = await deriveJwtKey(undefined, TEST_ENCRYPTION_KEY);
+      const userToken = await signJwt({ userId: "u1", role: "admin" }, key);
+      expect(await verifyAdminSessionJwt(userToken, key)).toBe(false);
+    });
+
+    it("an admin session JWT is not accepted as a user token (no userId/role)", async () => {
+      const key = await deriveJwtKey(undefined, TEST_ENCRYPTION_KEY);
+      const token = await signAdminSessionJwt(key);
+      expect(await verifyJwt(token, key)).toBeNull();
+    });
+
+    it("rejects an admin session token signed with a different key", async () => {
+      const key = await deriveJwtKey(undefined, TEST_ENCRYPTION_KEY);
+      const otherKey = await deriveJwtKey("another-secret", undefined);
+      const token = await signAdminSessionJwt(key);
+      expect(await verifyAdminSessionJwt(token, otherKey)).toBe(false);
+    });
+
+    it("rejects an expired admin session token", async () => {
+      const key = await deriveJwtKey(undefined, TEST_ENCRYPTION_KEY);
+      const token = await new SignJWT({ scope: "admin_session" })
+        .setProtectedHeader({ alg: "HS256" })
+        .setIssuedAt(0)
+        .setExpirationTime(1)
+        .sign(key);
+      expect(await verifyAdminSessionJwt(token, key)).toBe(false);
+    });
+
+    it("rejects a scoped token without an exp claim", async () => {
+      const key = await deriveJwtKey(undefined, TEST_ENCRYPTION_KEY);
+      const token = await new SignJWT({ scope: "admin_session" })
+        .setProtectedHeader({ alg: "HS256" })
+        .setIssuedAt()
+        .sign(key);
+      expect(await verifyAdminSessionJwt(token, key)).toBe(false);
+    });
+
+    it("rejects a malformed token", async () => {
+      const key = await deriveJwtKey(undefined, TEST_ENCRYPTION_KEY);
+      expect(await verifyAdminSessionJwt("not-a-jwt", key)).toBe(false);
     });
   });
 });

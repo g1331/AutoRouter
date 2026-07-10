@@ -15,6 +15,7 @@ import { NextRequest } from "next/server";
 const mockVerifyUserToken = vi.fn();
 vi.mock("@/lib/utils/jwt", () => ({
   verifyUserToken: (...args: unknown[]) => mockVerifyUserToken(...args),
+  verifyAdminSessionToken: vi.fn().mockResolvedValue(false),
 }));
 
 const mockLimit = vi.fn();
