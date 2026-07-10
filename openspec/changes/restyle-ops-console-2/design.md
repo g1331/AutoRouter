@@ -265,5 +265,5 @@ KPI 卡视觉层级：微标签（uppercase dim）→ display 大数值（tabula
 
 ## Open Questions
 
-- Saira 的 `tnum`（tabular figures）支持度待 Phase 2 实测——不支持则数据数字维持 JetBrains Mono，不阻塞。
+- ~~Saira 的 `tnum`（tabular figures）支持度待 Phase 2 实测~~ **已实测（Chrome，2026-07-10）：支持**——开启 `tabular-nums` 后 `1111` 与 `8888` 同宽（158.73px vs 未开启 96.3/174.9px），body 已全局启用 `font-variant-numeric: tabular-nums`。
 - `--vr-surface-4` 与 accent 外推档的最终值在 Phase 1 末对照 demo 截图校准（允许 ±1 档微调，不改契约结构）。

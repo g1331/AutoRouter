@@ -60,7 +60,9 @@
   --vr-font-sans:
     var(--font-sans), "Manrope", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
   --vr-font-mono: var(--font-mono), "JetBrains Mono", "IBM Plex Mono", "Consolas", monospace;
-  --vr-font-display: var(--vr-font-sans);
+  --vr-font-display:
+    var(--font-display), "Saira", "Bahnschrift", "Noto Sans SC", "Microsoft YaHei", system-ui,
+    sans-serif;
 
   --vr-radius-xs: 4px;
   --vr-radius-sm: 8px;
@@ -504,6 +506,8 @@ html.theme-switching::before {
       26px 26px;
     background-attachment: fixed, scroll;
     font-family: var(--vr-font-sans);
+    /* Saira/Manrope 均支持 tnum（浏览器实测），数据数字全局等宽对齐 */
+    font-variant-numeric: tabular-nums;
     font-feature-settings:
       "liga" 1,
       "calt" 1;
@@ -650,7 +654,7 @@ html.theme-switching::before {
     font-weight: 600;
     line-height: 1.35;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.08em;
   }
 
   .type-label-medium {

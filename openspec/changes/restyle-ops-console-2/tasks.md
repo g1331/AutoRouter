@@ -1,20 +1,20 @@
 ## 1. 令牌层全量替换 + 死代码清除（提交 `feat(design-tokens)`）
 
-- [ ] 1.1 `globals.css`：暗/亮两块 `--vr-*` 按 design.md D2 表全量替换；新增 `--vr-accent-dim/-line/-ink`、`--vr-glow`、`--vr-atmo`；`--vr-grid-dot-rgb` 改完整颜色令牌 `--vr-grid-dot`；半径收紧 xs4/sm8/md12/lg16（移动端 sm10/md14）
-- [ ] 1.2 accent 10 档梯度按 D2 定值重建（暗 500=`#f2a950`/400=hot，亮 500=`#9a6410`/600=hot）；`--vr-status-*-muted` 改 `color-mix` 派生
-- [ ] 1.3 死代码删除（每项删除前精确字面 grep 复核）：`ui/tag-input.tsx`、`ui/key-value-input.tsx`、`ui/alert.tsx`；52 个死 `--cf-*` + 死 `--radius` + 死 `--status-*`；12 个死工具类；tailwind.config 的 shimmer/scanline、未用 cf-* 令牌、冗余色板；`badgeVariants`/`cardVariants` 取消命名导出
-- [ ] 1.4 `--cf-*` 塌缩：tailwind.config 中 `rounded-cf-*`/`animate-log-*` 等类映射直指 `--vr-*`（类名不变）；globals 内部 `vr-log-*` 关键帧、glow 系列的 rgb 字面量改 `color-mix` 派生；`vr-cap-select` 裸 emerald 改 status-success
-- [ ] 1.5 `--md-sys-color-*` 各角色数值按新调色板重派生（值换层不删，13 个弹窗不掉队）
-- [ ] 1.6 body 氛围层：顶部 `--vr-atmo` 径向光晕（`background-attachment: fixed`）+ 26px `--vr-grid-dot` 点阵；新增 `vr-rise` keyframe + `.animate-rise`
-- [ ] 1.7 视觉守卫修复（`src/lib/utils.ts`）：正则补 `(?:\/\d{1,3})?` alpha 后缀与 `text-(blue|indigo|violet|purple)-\d{3}`
-- [ ] 1.8 新增 `tests/unit/visual-style-guard.test.ts` 与 `tests/unit/design-tokens-contrast.test.ts`（D3 表 ✅ 行断言 ≥4.5:1）并通过
-- [ ] 1.9 验收：`tsc --noEmit` + lint + 两个新单测绿；暗/亮双主题浏览器 spot check（dashboard/keys），对照 demo 校准 surface-4 与 accent 外推档；提交
+- [x] 1.1 `globals.css`：暗/亮两块 `--vr-*` 按 design.md D2 表全量替换；新增 `--vr-accent-dim/-line/-ink`、`--vr-glow`、`--vr-atmo`；`--vr-grid-dot-rgb` 改完整颜色令牌 `--vr-grid-dot`；半径收紧 xs4/sm8/md12/lg16（移动端 sm10/md14）
+- [x] 1.2 accent 10 档梯度按 D2 定值重建（暗 500=`#f2a950`/400=hot，亮 500=`#9a6410`/600=hot）；`--vr-status-*-muted` 改 `color-mix` 派生
+- [x] 1.3 死代码删除（每项删除前精确字面 grep 复核）：`ui/tag-input.tsx`、`ui/key-value-input.tsx`、`ui/alert.tsx`；52 个死 `--cf-*` + 死 `--radius` + 死 `--status-*`；12 个死工具类；tailwind.config 的 shimmer/scanline、未用 cf-* 令牌、冗余色板；`badgeVariants`/`cardVariants` 取消命名导出
+- [x] 1.4 `--cf-*` 塌缩：tailwind.config 中 `rounded-cf-*`/`animate-log-*` 等类映射直指 `--vr-*`（类名不变）；globals 内部 `vr-log-*` 关键帧、glow 系列的 rgb 字面量改 `color-mix` 派生；`vr-cap-select` 裸 emerald 改 status-success
+- [x] 1.5 `--md-sys-color-*` 各角色数值按新调色板重派生（值换层不删，13 个弹窗不掉队）
+- [x] 1.6 body 氛围层：顶部 `--vr-atmo` 径向光晕（`background-attachment: fixed`）+ 26px `--vr-grid-dot` 点阵；新增 `vr-rise` keyframe + `.animate-rise`
+- [x] 1.7 视觉守卫修复（`src/lib/utils.ts`）：正则补 `(?:\/\d{1,3})?` alpha 后缀与 `text-(blue|indigo|violet|purple)-\d{3}`
+- [x] 1.8 新增 `tests/unit/visual-style-guard.test.ts` 与 `tests/unit/design-tokens-contrast.test.ts`（D3 表 ✅ 行断言 ≥4.5:1）并通过
+- [x] 1.9 验收：`tsc --noEmit` + lint + 两个新单测绿；暗/亮双主题浏览器 spot check（dashboard/keys），对照 demo 校准 surface-4 与 accent 外推档；提交
 
 ## 2. Saira display 字体（提交 `feat(fonts)`）
 
-- [ ] 2.1 拷入 `saira-latin-wght-normal.woff2` 至 `src/app/fonts/`（附 OFL 1.1 许可说明）；`layout.tsx` 新增第三个 localFont（weight "100 900"，variable `--font-display`，fallback Bahnschrift + CJK 栈）
-- [ ] 2.2 `--vr-font-display` 接 `--font-display`；`.type-label` 字距提至 0.08–0.1em；实测 Saira tnum——支持则 body 加 `font-variant-numeric: tabular-nums`，不支持则数据数字维持 JetBrains Mono 并在 design.md Open Questions 记录结论
-- [ ] 2.3 验收：`tsc` + lint 绿；浏览器确认标题/大数值走 Saira、正文不受影响；提交
+- [x] 2.1 拷入 `saira-latin-wght-normal.woff2` 至 `src/app/fonts/`（附 OFL 1.1 许可说明）；`layout.tsx` 新增第三个 localFont（weight "100 900"，variable `--font-display`，fallback Bahnschrift + CJK 栈）
+- [x] 2.2 `--vr-font-display` 接 `--font-display`；`.type-label` 字距提至 0.08–0.1em；实测 Saira tnum——支持则 body 加 `font-variant-numeric: tabular-nums`，不支持则数据数字维持 JetBrains Mono 并在 design.md Open Questions 记录结论
+- [x] 2.3 验收：`tsc` + lint 绿；浏览器确认标题/大数值走 Saira、正文不受影响；提交
 
 ## 3. ui primitives + 框架 chrome（提交 `refactor(ui)`）
 
