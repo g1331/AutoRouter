@@ -44,11 +44,11 @@ export function LandingPage() {
           className="absolute inset-x-0 top-0 h-[760px]"
           style={{
             background:
-              "radial-gradient(1100px 560px at 50% -180px, rgba(201,157,82,0.16), transparent 72%)",
+              "radial-gradient(1100px 560px at 50% -180px, var(--vr-atmo), transparent 72%)",
           }}
         />
         <div
-          className="absolute inset-0 opacity-[0.18] [background-image:linear-gradient(to_right,rgba(134,146,158,0.1)_1px,transparent_1px),linear-gradient(to_bottom,rgba(134,146,158,0.08)_1px,transparent_1px)] [background-size:44px_44px]"
+          className="absolute inset-0 opacity-[0.18] [background-image:linear-gradient(to_right,var(--vr-grid-dot)_1px,transparent_1px),linear-gradient(to_bottom,var(--vr-grid-dot)_1px,transparent_1px)] [background-size:44px_44px]"
           style={{
             maskImage: "linear-gradient(to bottom, black, transparent 72%)",
             WebkitMaskImage: "linear-gradient(to bottom, black, transparent 72%)",

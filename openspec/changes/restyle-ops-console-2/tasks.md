@@ -55,9 +55,9 @@
 
 ## 8. portal + login + landing 对齐（提交 `refactor(portal)`）
 
-- [ ] 8.1 portal 四页随令牌自动更新核验 + PortalUsageChart 接新 chart-theme；login 终端 boot 布局不动只换令牌
-- [ ] 8.2 landing 色相对齐（`capability-animations.tsx` emerald 字面量→status-success），浏览器验证（CSR，curl 无效）
-- [ ] 8.3 验收：`tsc` + lint 绿；本地 `pnpm e2e --workers=2` 绿；portal/login/landing 双主题 spot check；提交
+- [x] 8.1 portal 四页随令牌自动更新核验 + PortalUsageChart 接新 chart-theme；login 终端 boot 布局不动只换令牌（PortalUsageChart 已消费 getChartTheme 无需改动；login 氛围层 2 处旧 amber/冷灰 rgba → var(--vr-atmo)/color-mix(--vr-text-dim)/var(--vr-grid-dot)，布局未动）
+- [x] 8.2 landing 色相对齐（`capability-animations.tsx` emerald 字面量→status-success），浏览器验证（CSR，curl 无效）（emerald 3 处 + 注释 → status-success；另收敛 landing-page/cta-section 氛围层 3 处旧 amber rgba(201,157,82) → --vr-atmo/--vr-grid-dot/color-mix(--vr-accent-500)；ripple-button 白色涟漪高光为中性刻意保留）
+- [x] 8.3 验收：`tsc` + lint 绿；本地 `pnpm e2e --workers=2` 绿；portal/login/landing 双主题 spot check；提交（tsc/lint 0 err；e2e 11/11 16.1s；浏览器实测：landing 双主题 hero+核心能力区、选中行 computed border=status-success + vr-cap-select 动画、login 双主题氛围层、portal 概览/请求/密钥/改密四页 + portal-key-dialog 冒烟双主题均正常）
 
 ## 9. 测试接线 + 全量验证 + 交接（提交 `test(visual)` 等）
 

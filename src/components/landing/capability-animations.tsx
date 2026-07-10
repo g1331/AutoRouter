@@ -124,7 +124,7 @@ function MeterRow({
 
 // 按能力路由：识别请求能力（路径 + 模型）后，在候选上游里做决策——命中健康上游、
 // 排除熔断上游。借后台「路由决策时间线」的视觉语言：●/○/✗ 三态、熔断状态图标、
-// w 权重、emerald 选中行。命中行做 emerald 呼吸，并有一个数据包沿命中链路流过。
+// w 权重、status-success 选中行。命中行做 success 呼吸，并有一个数据包沿命中链路流过。
 const ROUTING_CANDIDATES = [
   { name: "azure-gpt-01", weight: 5, pick: "selected" as const },
   { name: "openai-pool-02", weight: 3, pick: "alt" as const },
@@ -145,7 +145,7 @@ function RoutingAnim() {
           key={c.name}
           className={cn(
             "relative flex items-center gap-1.5 overflow-hidden rounded-cf-sm border px-1.5 py-[3px] text-[9px]",
-            c.pick === "selected" && "border-emerald-500/40",
+            c.pick === "selected" && "border-status-success/40",
             c.pick === "alt" && "border-divider/60 bg-surface-300/40",
             c.pick === "excluded" && "border-status-error/25 bg-status-error/5"
           )}
@@ -158,7 +158,7 @@ function RoutingAnim() {
           <span
             className={cn(
               "shrink-0",
-              c.pick === "selected" && "text-emerald-500",
+              c.pick === "selected" && "text-status-success",
               c.pick === "alt" && "text-muted-foreground",
               c.pick === "excluded" && "text-status-error"
             )}
@@ -351,7 +351,7 @@ function FailoverAnim() {
         <span>failover</span>
       </div>
       <div
-        className="relative flex items-center gap-1.5 overflow-hidden rounded-cf-sm border border-emerald-500/40 px-1.5 py-[3px] text-[9px]"
+        className="relative flex items-center gap-1.5 overflow-hidden rounded-cf-sm border border-status-success/40 px-1.5 py-[3px] text-[9px]"
         style={{ animation: "vr-cap-select 2.8s ease-in-out infinite" }}
       >
         <span className="shrink-0 text-[8px] text-muted-foreground">2</span>

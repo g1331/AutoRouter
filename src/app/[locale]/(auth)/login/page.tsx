@@ -251,11 +251,11 @@ export default function LoginPage() {
         aria-hidden="true"
         style={{
           backgroundImage:
-            "radial-gradient(circle at 20% 18%, rgba(201,157,82,0.14), transparent 44%), radial-gradient(circle at 78% 4%, rgba(89,111,131,0.16), transparent 34%)",
+            "radial-gradient(circle at 20% 18%, var(--vr-atmo), transparent 44%), radial-gradient(circle at 78% 4%, color-mix(in srgb, var(--vr-text-dim) 16%, transparent), transparent 34%)",
         }}
       />
       <div className="pointer-events-none absolute inset-0 opacity-35" aria-hidden="true">
-        <div className="h-full w-full [background-image:linear-gradient(to_right,rgba(134,146,158,0.12)_1px,transparent_1px),linear-gradient(to_bottom,rgba(134,146,158,0.1)_1px,transparent_1px)] [background-size:44px_44px]" />
+        <div className="h-full w-full [background-image:linear-gradient(to_right,var(--vr-grid-dot)_1px,transparent_1px),linear-gradient(to_bottom,var(--vr-grid-dot)_1px,transparent_1px)] [background-size:44px_44px]" />
       </div>
 
       <div className="fixed right-4 top-4 z-30">
