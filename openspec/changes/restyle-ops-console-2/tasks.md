@@ -18,11 +18,11 @@
 
 ## 3. ui primitives + 框架 chrome（提交 `refactor(ui)`）
 
-- [ ] 3.1 `ui/button.tsx`：primary=amber 实心 + `--vr-accent-ink` 文字、hover glow 仅暗色（cva class only，API 不动）；`ui/badge.tsx` 删冗余 `dark:`
-- [ ] 3.2 新增 `ui/status-led.tsx`（三态 LED，暗色 glow+呼吸，reduced-motion 常亮）+ `ui/state-chip.tsx`（CLOSED/HALF/OPEN 芯片），含组件测试
-- [ ] 3.3 `ui/sonner.tsx` 修 `theme="dark"` 固定值 → 读 next-themes `resolvedTheme`；`ui/dialog.tsx` 仅样式类（morph props/结构一行不动）
-- [ ] 3.4 `admin/sidebar.tsx`/`topbar.tsx`/`app-shell.tsx` 令牌类对齐（不动结构与移动端 bottom tabs）；topbar 保留 `>>` 前缀并接 StatusLed；app-shell 接 `.animate-rise` stagger
-- [ ] 3.5 验收：`tsc` + lint + 相关组件测试绿；morph 冒烟（keys/upstreams/portal-keys 各一）；本地 `pnpm e2e --workers=2` 绿；提交
+- [x] 3.1 `ui/button.tsx`：primary=amber 实心 + `--vr-accent-ink` 文字、hover glow 仅暗色（cva class only，API 不动）；`ui/badge.tsx` 删冗余 `dark:`
+- [x] 3.2 新增 `ui/status-led.tsx`（三态 LED，暗色 glow+呼吸，reduced-motion 常亮）+ `ui/state-chip.tsx`（CLOSED/HALF/OPEN 芯片），含组件测试
+- [x] 3.3 `ui/sonner.tsx` 修 `theme="dark"` 固定值 → 读 next-themes `resolvedTheme`；`ui/dialog.tsx` 仅样式类（morph props/结构一行不动）
+- [x] 3.4 `admin/sidebar.tsx`/`topbar.tsx`/`app-shell.tsx` 令牌类对齐（不动结构与移动端 bottom tabs）；topbar 保留 `>>` 前缀并接 StatusLed；app-shell 接 `.animate-rise` stagger
+- [x] 3.5 验收：`tsc` + lint + 相关组件测试绿；morph 冒烟（keys/upstreams/portal-keys 各一）；本地 `pnpm e2e --workers=2` 绿；提交
 
 ## 4. dashboard 图表与指标卡（提交 `feat(dashboard)`）
 

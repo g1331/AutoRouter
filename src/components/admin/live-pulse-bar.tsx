@@ -4,6 +4,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { AlertTriangle, Server, Zap } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { StatusLed } from "@/components/ui/status-led";
 import type { LivePulseConnectionState, LivePulseSnapshot } from "@/hooks/use-live-pulse";
 
 const ERROR_RATE_WARN_THRESHOLD_PCT = 5;
@@ -27,14 +28,10 @@ interface LivePulseBarProps {
 }
 
 function StatusDot({ connectionState }: { connectionState: LivePulseConnectionState }) {
-  const dotClass =
-    connectionState === "live"
-      ? "bg-status-success animate-log-badge-live motion-reduce:animate-none"
-      : connectionState === "connecting"
-        ? "bg-muted-foreground animate-log-badge-connect motion-reduce:animate-none"
-        : "bg-status-warning";
+  const tone =
+    connectionState === "live" ? "ok" : connectionState === "connecting" ? "neutral" : "warn";
 
-  return <span className={cn("inline-block h-2 w-2 rounded-full", dotClass)} aria-hidden="true" />;
+  return <StatusLed tone={tone} pulse={connectionState !== "fallback"} />;
 }
 
 function Metric({ value, label, emphasis }: { value: string; label: string; emphasis?: boolean }) {

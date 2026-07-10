@@ -407,6 +407,18 @@
   }
 }
 
+/* LED 状态灯呼吸：只动 opacity，不与 LED 自身的辉光 box-shadow 冲突 */
+@keyframes vr-led-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.45;
+  }
+}
+
 /* 活终端实时指标带的迷你 sparkline 柱跳动 */
 @keyframes vr-spark {
   0%,
@@ -752,6 +764,28 @@ html.theme-switching::before {
      reduced-motion 时由全局 * 规则压成 0.01ms，both 停在终帧、内容可见。 */
   .animate-rise {
     animation: vr-rise var(--vr-motion-slow) var(--vr-easing-standard) both;
+  }
+
+  /* 进场瀑布 stagger：动画加在直接子元素自身而非容器——祖先带 transform
+     会让子孙的 position: sticky 失效（Topbar / 表格吸顶头都在这棵树里）。 */
+  .rise-stagger > * {
+    animation: vr-rise var(--vr-motion-slow) var(--vr-easing-standard) both;
+  }
+
+  .rise-stagger > *:nth-child(2) {
+    animation-delay: 60ms;
+  }
+
+  .rise-stagger > *:nth-child(3) {
+    animation-delay: 120ms;
+  }
+
+  .rise-stagger > *:nth-child(n + 4) {
+    animation-delay: 180ms;
+  }
+
+  .animate-led-breathe {
+    animation: vr-led-breathe 2.2s var(--vr-easing-standard) infinite;
   }
 
   /* 落地页动效。reduced-motion 时由全局 * 规则压成 0.01ms，
