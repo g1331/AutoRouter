@@ -47,6 +47,13 @@ function contrast(fg: string, bg: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+/** 复现 color-mix(in srgb, fg N%, transparent) 叠在不透明底上的合成色。 */
+function mixOver(fg: string, bg: string, fgRatio: number): string {
+  const ch = (hex: string, i: number) => parseInt(hex.slice(1).slice(i * 2, i * 2 + 2), 16);
+  const mixed = [0, 1, 2].map((i) => Math.round(ch(fg, i) * fgRatio + ch(bg, i) * (1 - fgRatio)));
+  return `#${mixed.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+}
+
 describe("暗色主题正文级配对 ≥ 4.5:1 (WCAG AA)", () => {
   const d = (name: string) => token(darkBlock, name);
 
@@ -70,6 +77,17 @@ describe("暗色主题正文级配对 ≥ 4.5:1 (WCAG AA)", () => {
   it("text-dim 仅限装饰（大字号 3:1 底线）", () => {
     expect(contrast(d("--vr-text-dim"), d("--vr-surface-1"))).toBeGreaterThanOrEqual(3);
   });
+
+  // StatusBadge/StateChip 模式：text-status-* 叠在 12% muted 底上。
+  // 暗色最坏底 = 最亮表面 surface-3 与 muted 合成后的颜色。
+  it.each(["success", "warning", "error", "info"])(
+    "status-%s / 12%% muted over surface-3",
+    (tone) => {
+      const fg = d(`--vr-status-${tone}`);
+      const bg = mixOver(fg, d("--vr-surface-3"), 0.12);
+      expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
+    }
+  );
 });
 
 describe("亮色主题正文级配对 ≥ 4.5:1 (WCAG AA)", () => {
@@ -87,6 +105,7 @@ describe("亮色主题正文级配对 ≥ 4.5:1 (WCAG AA)", () => {
     ["status-success / surface-1", "--vr-status-success", "--vr-surface-1"],
     ["status-warning / surface-1", "--vr-status-warning", "--vr-surface-1"],
     ["status-error / surface-1", "--vr-status-error", "--vr-surface-1"],
+    ["status-info / surface-1", "--vr-status-info", "--vr-surface-1"],
   ];
 
   it.each(pairs)("%s", (_label, fg, bg) => {
@@ -96,4 +115,14 @@ describe("亮色主题正文级配对 ≥ 4.5:1 (WCAG AA)", () => {
   it("accent-500 大字号/图形级底线 3:1", () => {
     expect(contrast(l("--vr-accent-500"), l("--vr-surface-0"))).toBeGreaterThanOrEqual(3);
   });
+
+  // 亮色最坏底 = 最深表面 surface-3 与 12% muted 合成（axe 实测暴露的配对）。
+  it.each(["success", "warning", "error", "info"])(
+    "status-%s / 12%% muted over surface-3",
+    (tone) => {
+      const fg = l(`--vr-status-${tone}`);
+      const bg = mixOver(fg, l("--vr-surface-3"), 0.12);
+      expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
+    }
+  );
 });

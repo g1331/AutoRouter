@@ -383,8 +383,8 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
             <div className={cn("pt-2", !collapsed && "border-t border-divider/60 mt-2")}>
               {!collapsed && (
                 <div className="flex items-center gap-1.5 px-3 pb-1.5 pt-1">
-                  <Wrench className="h-3 w-3 text-muted-foreground/60" aria-hidden="true" />
-                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                  <Wrench className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
                     {tNav("system")}
                   </span>
                 </div>

@@ -266,7 +266,10 @@ export default function UpstreamsPage() {
                     value={statusFilter}
                     onValueChange={(value) => updateStatusFilter(value as UpstreamStatusFilter)}
                   >
-                    <SelectTrigger className="border-surface-400/70 bg-surface-200/70 transition-colors duration-cf-fast hover:border-surface-400 focus:border-amber-400/45">
+                    <SelectTrigger
+                      aria-label={t("statusFilterPlaceholder")}
+                      className="border-surface-400/70 bg-surface-200/70 transition-colors duration-cf-fast hover:border-surface-400 focus:border-amber-400/45"
+                    >
                       <div className="flex items-center gap-2">
                         <Filter className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
                         <SelectValue placeholder={t("statusFilterPlaceholder")} />
@@ -287,7 +290,10 @@ export default function UpstreamsPage() {
                       updateCapabilityFilter(value as RouteCapability | "all")
                     }
                   >
-                    <SelectTrigger className="border-surface-400/70 bg-surface-200/70 transition-colors duration-cf-fast hover:border-surface-400 focus:border-amber-400/45">
+                    <SelectTrigger
+                      aria-label={t("capabilityFilterPlaceholder")}
+                      className="border-surface-400/70 bg-surface-200/70 transition-colors duration-cf-fast hover:border-surface-400 focus:border-amber-400/45"
+                    >
                       <div className="flex items-center gap-2">
                         <SlidersHorizontal
                           className="h-3.5 w-3.5 text-muted-foreground"

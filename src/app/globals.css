@@ -156,11 +156,11 @@
   --vr-glow: 0 0 0 transparent;
   --vr-atmo: rgb(90 110 140 / 0.07);
 
-  --vr-status-success: #17804d;
-  /* 文字级 warn 用 #7d490a（7.04:1） */
-  --vr-status-warning: #a5610d;
-  --vr-status-error: #bb3f34;
-  --vr-status-info: #3f6f95;
+  /* 亮色状态色统一深档：text-status-* 叠 12% muted 底（最坏 surface-3 合成）仍 ≥4.5:1 */
+  --vr-status-success: #106b3f;
+  --vr-status-warning: #7d490a;
+  --vr-status-error: #a53228;
+  --vr-status-info: #325a7d;
 
   --vr-disabled-bg: #e7eaee;
   --vr-disabled-text: #8f96a0;

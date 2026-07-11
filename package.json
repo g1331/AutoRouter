@@ -16,6 +16,8 @@
     "test:proxy-stability": "node scripts/ci/proxy-stability-check.mjs",
     "e2e": "playwright test -c playwright.e2e.config.ts",
     "e2e:headed": "playwright test -c playwright.e2e.config.ts --headed",
+    "test:visual": "playwright test -c playwright.visual.config.ts --project=visual",
+    "test:a11y": "playwright test -c playwright.visual.config.ts --project=a11y",
     "db:generate": "drizzle-kit generate",
     "db:generate:sqlite": "drizzle-kit generate --config drizzle-sqlite.config.ts",
     "db:check:consistency": "node scripts/ci/check-drizzle-consistency.mjs",

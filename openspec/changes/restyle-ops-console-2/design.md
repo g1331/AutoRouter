@@ -92,10 +92,10 @@
 | `--vr-text` | `#1f2933` | `#212327` | 主文字 |
 | `--vr-text-muted` | `#5f6b79` | `#5f6570` | 次文字 |
 | `--vr-text-dim` | `#768293` | `#8f96a0`（2.61:1，仅装饰） | 弱文字 |
-| `--vr-status-success` | `#2c7d58` | `#17804d` | ok |
-| `--vr-status-warning` | `#9c6b36` | `#a5610d`（文字级用深档 `#7d490a`=7.04:1） | warn |
-| `--vr-status-error` | `#b24a43` | `#bb3f34` | bad |
-| `--vr-status-info` | `#3f6f95` | `#3f6f95`（保留） | info |
+| `--vr-status-success` | `#2c7d58` | `#106b3f`（axe 兜底加深，原 `#17804d` 在 muted 底上 3.8–4.3:1） | ok |
+| `--vr-status-warning` | `#9c6b36` | `#7d490a`（整档采用深档，7.04:1 on surface-0） | warn |
+| `--vr-status-error` | `#b24a43` | `#a53228`（axe 兜底加深，原 `#bb3f34`） | bad |
+| `--vr-status-info` | `#3f6f95` | `#325a7d`（axe 兜底加深，原值在 muted 底上 4.49:1 卡线） | info |
 | `--vr-accent-dim` | — | `rgba(154,100,16,.09)` | accent 弱底 |
 | `--vr-accent-line` | — | `rgba(154,100,16,.32)` | accent 边线 |
 | `--vr-accent-ink` | — | `#ffffff`（4.99:1 on `#9a6410`） | 实心钮文字 |
@@ -134,8 +134,9 @@
 | 亮 bronze `#9a6410` /surface-0 | 4.37:1 | ⚠️ 大字号/边框/填充 only |
 | 亮 bronze-hot `#7a4e0a` /surface-0 | 6.29:1 | ✅ AA（文字级 accent） |
 | 亮 白字/bronze 实心钮 | 4.99:1 | ✅ AA |
-| 亮 ok / bad on surface-1 | 4.71 / 5.14 | ✅ AA |
-| 亮 warn `#a5610d` on surface-1 | 4.62:1 | ⚠️ 边缘达标，文字级统一走深档 `#7d490a`（7.04:1） |
+| 亮 ok / bad on surface-1 | 4.71 / 5.14 | ✅ AA（Phase 8 axe 兜底后进一步加深，见下） |
+| 亮 warn `#a5610d` on surface-1 | 4.62:1 | ⚠️ 边缘达标 → Phase 8 起整档采用深档 `#7d490a`（7.04:1） |
+| 亮 ok/warn/bad/info 叠 12% muted over surface-3（最坏合成底） | 4.73 / 4.67+ / 4.83 / 5.2+ | ✅ AA（Phase 8 axe 实测兜底：`#106b3f`/`#7d490a`/`#a53228`/`#325a7d`） |
 
 **规则**：亮色文字级 accent 一律 `accent-600`（hot 深档）；`#9a6410` 留给大字号、边框、图形填充。`tests/unit/design-tokens-contrast.test.ts` 对上表 ✅ 行断言 ≥4.5（AA），锁死回归。
 
