@@ -55,10 +55,10 @@
 
 ## 6. Phase C2 · keys 列表接线 + 删 edit-key-dialog（提交 `feat(keys)` C2）
 
-- [ ] 6.1 keys-table 行内 Edit 改跳 `/keys/[id]` 详情页；`morph-key-revoke` 保留
-- [ ] 6.2 删除 `edit-key-dialog.tsx`（788 行）
-- [ ] 6.3 更新 keys 页已有 visual/a11y 基线；user-management/相关 spec 锚点保持
-- [ ] 6.4 验收并提交：tsc + lint + keys 相关单测/e2e 绿；revoke morph 冒烟；本地 e2e --workers=2 绿；提交
+- [x] 6.1 keys-table 行内 Edit 改跳 `/keys/[id]` 详情页；`morph-key-revoke` 保留
+- [x] 6.2 删除 `edit-key-dialog.tsx`（788 行）
+- [x] 6.3 更新 keys 页已有 visual/a11y 基线；user-management/相关 spec 锚点保持
+- [x] 6.4 验收并提交：tsc + lint + keys 相关单测/e2e 绿；revoke morph 冒烟；本地 e2e --workers=2 绿；提交
 
 ## 7. Phase D1 · billing 组件化去重（提交 `refactor(billing)` D1）
 
