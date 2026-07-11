@@ -62,9 +62,9 @@
 
 ## 7. Phase D1 · billing 组件化去重（提交 `refactor(billing)` D1）
 
-- [ ] 7.1 抽 `BillingPriceRow` + `useBillingPriceRowEdit` 统一四路重复编辑逻辑，页面拆到 `src/components/admin/billing/*`；排印/半径对齐；**IA 不动**；`morph-billing-override-reset` 保留
-- [ ] 7.2 billing 相关单测（编辑逻辑去重后行为等价）；`billing-tier-flow.spec` 全程守护 + 为 billing 补 visual/a11y 覆盖
-- [ ] 7.3 验收并提交：tsc + lint + billing 单测 + billing-tier-flow 绿；billing-reset morph 冒烟；本地 e2e --workers=2 绿；提交
+- [x] 7.1 抽 `BillingPriceRow` + `useBillingPriceRowEdit` 统一四路重复编辑逻辑，页面拆到 `src/components/admin/billing/*`；排印/半径对齐；**IA 不动**；`morph-billing-override-reset` 保留
+- [x] 7.2 billing 相关单测（编辑逻辑去重后行为等价）；`billing-tier-flow.spec` 全程守护 + 为 billing 补 visual/a11y 覆盖
+- [x] 7.3 验收并提交：tsc + lint + billing 单测 + billing-tier-flow 绿；billing-reset morph 冒烟；本地 e2e --workers=2 绿；提交
 
 ## 8. Phase D2 · logs-table 抽子组件（提交 `refactor(logs)` D2）
 
