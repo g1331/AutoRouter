@@ -276,7 +276,7 @@ export function KeyModelAllowlistSection({
   };
 
   return (
-    <div className="space-y-3 rounded-md border border-divider-subtle bg-surface-200 p-4">
+    <div className="space-y-3 rounded-cf-md border border-divider-subtle bg-surface-200 p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <p className="type-body-medium text-foreground">{t("allowedModels")}</p>

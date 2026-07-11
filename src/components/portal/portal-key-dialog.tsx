@@ -283,7 +283,7 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
                 <FormItem>
                   <FormLabel>{t("selectUpstreams")} *</FormLabel>
                   <FormDescription>{tPortal("keys.upstreamsDesc")}</FormDescription>
-                  <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-md border border-divider-subtle bg-surface-200 p-3">
+                  <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-cf-md border border-divider-subtle bg-surface-200 p-3">
                     {upstreamsLoading ? (
                       <div className="py-4 text-center type-body-medium text-muted-foreground">
                         {tCommon("loading")}
@@ -325,7 +325,7 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
               )}
             />
 
-            <div className="space-y-3 rounded-md border border-divider-subtle bg-surface-200 p-4">
+            <div className="space-y-3 rounded-cf-md border border-divider-subtle bg-surface-200 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="type-body-medium text-foreground">{t("spendingRules")}</p>

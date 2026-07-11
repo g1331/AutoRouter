@@ -46,7 +46,7 @@ export function StatusLed({ status, label, showLabel = false, className }: Statu
     >
       <span
         className={cn(
-          "inline-flex items-center whitespace-nowrap rounded-[6px] border px-1.5 py-0.5 text-[11px] leading-none",
+          "inline-flex items-center whitespace-nowrap rounded-cf-sm border px-1.5 py-0.5 text-[11px] leading-none",
           config.toneClass
         )}
       >

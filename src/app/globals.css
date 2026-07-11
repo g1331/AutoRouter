@@ -635,6 +635,15 @@ html.theme-switching::before {
     letter-spacing: 0.03em;
   }
 
+  .type-label-small {
+    font-family: var(--vr-font-display);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.35;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
   .type-caption {
     font-family: var(--vr-font-sans);
     font-size: 0.6875rem;

@@ -60,7 +60,7 @@ export function HeroTerminal() {
             <span className="text-foreground">true</span>
             <span className="text-foreground/80">{" }'"}</span>
             <span
-              className="ml-1 inline-block h-3.5 w-[7px] translate-y-[2px] animate-pulse rounded-[1px] bg-amber-500 align-middle"
+              className="ml-1 inline-block h-3.5 w-[7px] translate-y-[2px] animate-pulse rounded-cf-sm bg-amber-500 align-middle"
               aria-hidden="true"
             />
           </code>

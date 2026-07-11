@@ -27,7 +27,7 @@ export default function GlobalFailureRulesPage() {
 
         <section className="space-y-3" aria-label={t("editorLabel")}>
           <div className="space-y-1">
-            <h2 className="type-heading-small text-foreground">{t("editorTitle")}</h2>
+            <h2 className="type-title-medium text-foreground">{t("editorTitle")}</h2>
             <p className="type-caption text-muted-foreground">{t("editorDescription")}</p>
           </div>
           <UpstreamFailureRulesEditor scope="global" />

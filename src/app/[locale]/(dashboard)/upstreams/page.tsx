@@ -316,7 +316,7 @@ export default function UpstreamsPage() {
                             <span className="flex items-center gap-2">
                               <span
                                 className={cn(
-                                  "inline-flex h-4 w-4 items-center justify-center rounded-[5px] border",
+                                  "inline-flex h-4 w-4 items-center justify-center rounded-cf-sm border",
                                   iconMeta.iconContainerClass
                                 )}
                               >

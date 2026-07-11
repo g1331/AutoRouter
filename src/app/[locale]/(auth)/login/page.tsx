@@ -75,7 +75,7 @@ function BootSequence({ onComplete }: { onComplete: () => void }) {
           <span className="text-status-warning">[...]</span>
           <span>{BOOT_MESSAGES[visibleLines]?.text || "..."}</span>
           <span
-            className="inline-block h-3 w-1 animate-pulse rounded-[2px] bg-muted-foreground"
+            className="inline-block h-3 w-1 animate-pulse rounded-cf-sm bg-muted-foreground"
             aria-hidden="true"
           />
         </div>
@@ -91,17 +91,17 @@ function SystemStatus() {
       role="status"
       aria-label="System status"
     >
-      <div className="inline-flex items-center gap-2 rounded-[8px] border border-divider bg-surface-300/70 px-2.5 py-1.5 font-mono text-muted-foreground">
+      <div className="inline-flex items-center gap-2 rounded-cf-md border border-divider bg-surface-300/70 px-2.5 py-1.5 font-mono text-muted-foreground">
         <Cpu className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
         <span>CPU READY</span>
       </div>
-      <div className="inline-flex items-center gap-2 rounded-[8px] border border-divider bg-surface-300/70 px-2.5 py-1.5 font-mono text-muted-foreground">
+      <div className="inline-flex items-center gap-2 rounded-cf-md border border-divider bg-surface-300/70 px-2.5 py-1.5 font-mono text-muted-foreground">
         <Shield className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
         <span>SECURE MODE</span>
       </div>
       <div
         className={cn(
-          "inline-flex items-center gap-2 rounded-[8px] border px-2.5 py-1.5 font-mono",
+          "inline-flex items-center gap-2 rounded-cf-md border px-2.5 py-1.5 font-mono",
           statusTone("success")
         )}
       >
@@ -284,7 +284,7 @@ export default function LoginPage() {
 
           <div className="space-y-5 p-5 sm:p-6">
             {!bootComplete && (
-              <div className="rounded-[10px] border border-divider bg-surface-300/70 px-3.5 py-3">
+              <div className="rounded-cf-md border border-divider bg-surface-300/70 px-3.5 py-3">
                 <BootSequence onComplete={handleBootComplete} />
               </div>
             )}
@@ -312,7 +312,7 @@ export default function LoginPage() {
                       onClick={() => switchMode(tab.value)}
                       disabled={!showForm}
                       className={cn(
-                        "rounded-[8px] border px-3 py-2 text-center font-mono type-label-small transition-colors",
+                        "rounded-cf-md border px-3 py-2 text-center font-mono type-label-small transition-colors",
                         selected
                           ? "border-amber-500/55 bg-surface-300/80 text-foreground"
                           : "border-divider bg-surface-300/40 text-muted-foreground hover:text-foreground"
@@ -324,7 +324,7 @@ export default function LoginPage() {
                 })}
               </div>
 
-              <div className="rounded-[10px] border border-divider bg-surface-300/55 px-3.5 py-3">
+              <div className="rounded-cf-md border border-divider bg-surface-300/55 px-3.5 py-3">
                 <div className="mb-1.5 flex items-center gap-2 text-muted-foreground">
                   <Terminal className="h-4 w-4 text-amber-500" aria-hidden="true" />
                   <span className="type-label-small">{t("systemMessage")}</span>

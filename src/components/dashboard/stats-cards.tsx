@@ -67,7 +67,7 @@ function DeltaBadge({ today, yesterday, lowerIsBetter = false }: DeltaBadgeProps
 
   if (yesterday === 0) {
     return (
-      <span className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 type-caption bg-status-success/10 text-status-success">
+      <span className="inline-flex items-center gap-0.5 rounded-cf-sm px-1 py-0.5 type-caption bg-status-success/10 text-status-success">
         <TrendingUp className="h-2.5 w-2.5" />
         NEW
       </span>
@@ -86,7 +86,7 @@ function DeltaBadge({ today, yesterday, lowerIsBetter = false }: DeltaBadgeProps
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-0.5 rounded px-1 py-0.5 type-caption",
+        "inline-flex items-center gap-0.5 rounded-cf-sm px-1 py-0.5 type-caption",
         isGood ? "bg-status-success/10 text-status-success" : "bg-status-error/10 text-status-error"
       )}
     >

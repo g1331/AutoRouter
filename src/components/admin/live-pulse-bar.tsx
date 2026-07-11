@@ -40,7 +40,7 @@ function Metric({ value, label, emphasis }: { value: string; label: string; emph
       {emphasis && <AlertTriangle className="h-3 w-3 text-status-error" aria-hidden="true" />}
       <span
         className={cn(
-          "tabular-nums",
+          "font-display tabular-nums",
           emphasis ? "font-semibold text-status-error" : "text-foreground"
         )}
       >
@@ -143,7 +143,7 @@ export function LivePulseBar({
           </span>
           <span className="inline-flex items-center gap-1 whitespace-nowrap">
             <Server className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
-            <span className="tabular-nums text-foreground">
+            <span className="font-display tabular-nums text-foreground">
               {gateway.healthyUpstreams}/{gateway.totalUpstreams}
             </span>
             <span className="text-muted-foreground">{t("upstreamsHealthy")}</span>
@@ -162,7 +162,7 @@ export function LivePulseBar({
             />
             <span
               className={cn(
-                "tabular-nums",
+                "font-display tabular-nums",
                 breakersEmphasis ? "text-status-warning" : "text-foreground"
               )}
             >

@@ -322,7 +322,7 @@ function SegCard({
     <div
       data-state={seg.state}
       className={cn(
-        "group relative min-w-0 overflow-hidden rounded-[18px] border px-3 py-2.5 transition-all duration-200 ease-out",
+        "group relative min-w-0 overflow-hidden rounded-full border px-3 py-2.5 transition-all duration-200 ease-out",
         "before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.55),transparent)]",
         compact ? "flex-1 px-2.5 py-2" : "min-h-[86px]",
         CARD_CONTAINER_CLS[seg.state]

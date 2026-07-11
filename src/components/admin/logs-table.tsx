@@ -495,7 +495,7 @@ function ThinkingConfigPanel({
             <button
               type="button"
               onClick={() => setIsExpanded((prev) => !prev)}
-              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded border border-divider px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-cf-sm border border-divider px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
               aria-expanded={isExpanded}
               aria-label={isExpanded ? collapseLabel : expandLabel}
             >
@@ -569,7 +569,7 @@ function ThinkingConfigPanel({
           <button
             type="button"
             onClick={() => setIsExpanded((prev) => !prev)}
-            className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded border border-divider px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+            className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-cf-sm border border-divider px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
             aria-expanded={isExpanded}
             aria-label={isExpanded ? collapseLabel : expandLabel}
           >
@@ -2500,7 +2500,7 @@ export function LogsTable({
                     <div
                       key={`journey-panel-${activeJourneyStep.index}-${journeyViewMode}`}
                       className={cn(
-                        "relative overflow-hidden rounded-[22px] border p-3 shadow-[var(--vr-shadow-xs)] transition-[background-color,border-color,box-shadow,opacity] duration-cf-normal ease-cf-standard motion-reduce:transition-none",
+                        "relative overflow-hidden rounded-full border p-3 shadow-[var(--vr-shadow-xs)] transition-[background-color,border-color,box-shadow,opacity] duration-cf-normal ease-cf-standard motion-reduce:transition-none",
                         LOGS_CARD_ENTER_CLASS,
                         activeJourneyTone.panel
                       )}
@@ -2550,7 +2550,7 @@ export function LogsTable({
                           key={step.index}
                           aria-label={step.title}
                           className={cn(
-                            "relative overflow-hidden rounded-[22px] border p-3 shadow-[var(--vr-shadow-xs)] transition-[background-color,border-color,box-shadow,opacity] duration-cf-normal ease-cf-standard motion-reduce:transition-none sm:p-3.5",
+                            "relative overflow-hidden rounded-full border p-3 shadow-[var(--vr-shadow-xs)] transition-[background-color,border-color,box-shadow,opacity] duration-cf-normal ease-cf-standard motion-reduce:transition-none sm:p-3.5",
                             LOGS_CARD_ENTER_CLASS,
                             tone.panel
                           )}
