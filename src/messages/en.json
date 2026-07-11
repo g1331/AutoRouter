@@ -821,6 +821,7 @@
     "apiKeyPlaceholder": "sk-...",
     "apiKeyRequired": "API Key is required",
     "apiKeyEditHint": "Leave empty to keep unchanged",
+    "apiKeyKeepPlaceholder": "Leave empty to keep the current key",
     "upstreamDescription": "Description",
     "upstreamDescriptionPlaceholder": "Optional description...",
     "creating": "Creating...",

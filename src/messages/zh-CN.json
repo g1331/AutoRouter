@@ -826,6 +826,7 @@
     "apiKeyPlaceholder": "sk-...",
     "apiKeyRequired": "API 密钥不能为空",
     "apiKeyEditHint": "留空表示不更新",
+    "apiKeyKeepPlaceholder": "留空保持不变",
     "upstreamDescription": "描述",
     "upstreamDescriptionPlaceholder": "可选的描述信息...",
     "creating": "创建中...",

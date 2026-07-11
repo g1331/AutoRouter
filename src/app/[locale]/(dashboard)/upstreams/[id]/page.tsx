@@ -1,5 +1,6 @@
 "use client";
 
+import type { ComponentType } from "react";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
@@ -24,6 +25,19 @@ import {
 import { PageHeader } from "@/components/admin/page-header";
 import { PageShell } from "@/components/admin/page-shell";
 import { Topbar } from "@/components/admin/topbar";
+import { AffinityMigrationSection } from "@/components/admin/upstream/sections/affinity-migration-section";
+import { BasicApiKeySection } from "@/components/admin/upstream/sections/basic-api-key-section";
+import { BasicDiagnosticsSection } from "@/components/admin/upstream/sections/basic-diagnostics-section";
+import { BasicNameSection } from "@/components/admin/upstream/sections/basic-name-section";
+import { BasicProfileSection } from "@/components/admin/upstream/sections/basic-profile-section";
+import { BasicRouteEndpointSection } from "@/components/admin/upstream/sections/basic-route-endpoint-section";
+import { BillingMultipliersSection } from "@/components/admin/upstream/sections/billing-multipliers-section";
+import { CapacityControlSection } from "@/components/admin/upstream/sections/capacity-control-section";
+import { CircuitBreakerSection } from "@/components/admin/upstream/sections/circuit-breaker-section";
+import { FailureRulesSection } from "@/components/admin/upstream/sections/failure-rules-section";
+import { ModelRoutingSection } from "@/components/admin/upstream/sections/model-routing-section";
+import { PriorityWeightSection } from "@/components/admin/upstream/sections/priority-weight-section";
+import { SpendingQuotaSection } from "@/components/admin/upstream/sections/spending-quota-section";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { IconBox } from "@/components/ui/icon-box";
@@ -31,6 +45,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "@/i18n/navigation";
 import { useUpstream } from "@/hooks/use-upstreams";
 import { ApiError } from "@/lib/api";
+import type { Upstream } from "@/types/api";
 
 type UpstreamDetailCategory =
   | "configCategoryBasic"
@@ -124,6 +139,25 @@ const DETAIL_CATEGORY_ORDER: UpstreamDetailCategory[] = [
   "configCategoryReliability",
 ];
 
+// Maps each section id to its self-saving form component (Phase B2). Each
+// component renders its own titled card (SectionForm shell or, for diagnostics,
+// a plain card), owns its react-hook-form instance, and persists a partial PUT.
+const SECTION_COMPONENTS: Record<string, ComponentType<{ upstream: Upstream }>> = {
+  "basic-name": BasicNameSection,
+  "basic-profile": BasicProfileSection,
+  "basic-route-endpoint": BasicRouteEndpointSection,
+  "basic-api-key": BasicApiKeySection,
+  "basic-diagnostics": BasicDiagnosticsSection,
+  "priority-weight": PriorityWeightSection,
+  "model-routing": ModelRoutingSection,
+  "billing-multipliers": BillingMultipliersSection,
+  "spending-quota": SpendingQuotaSection,
+  "capacity-control": CapacityControlSection,
+  "circuit-breaker": CircuitBreakerSection,
+  "failure-rules": FailureRulesSection,
+  "affinity-migration": AffinityMigrationSection,
+};
+
 export default function UpstreamDetailPage() {
   const params = useParams<{ id: string }>();
   const upstreamId = params.id;
@@ -189,30 +223,31 @@ export default function UpstreamDetailPage() {
               </aside>
 
               <div className="min-w-0 flex-1 space-y-6">
-                {UPSTREAM_DETAIL_SECTIONS.map((section) => (
-                  <section key={section.id} id={section.id} className="scroll-mt-14">
-                    <Card variant="outlined" className="border-divider bg-surface-200/70">
-                      <div className="flex items-center gap-3 border-b border-divider px-5 py-3.5">
-                        <IconBox>
-                          <section.icon className="h-4 w-4" aria-hidden="true" />
-                        </IconBox>
-                        <h3 className="type-label-medium text-foreground">{t(section.labelKey)}</h3>
-                      </div>
-                      <CardContent className="space-y-2 p-5">
-                        {isLoading ? (
-                          <>
+                {UPSTREAM_DETAIL_SECTIONS.map((section) => {
+                  const SectionComponent = SECTION_COMPONENTS[section.id];
+                  return (
+                    <section key={section.id} id={section.id} className="scroll-mt-14">
+                      {isLoading || !upstream ? (
+                        <Card variant="outlined" className="border-divider bg-surface-200/70">
+                          <div className="flex items-center gap-3 border-b border-divider px-5 py-3.5">
+                            <IconBox>
+                              <section.icon className="h-4 w-4" aria-hidden="true" />
+                            </IconBox>
+                            <h3 className="type-label-medium text-foreground">
+                              {t(section.labelKey)}
+                            </h3>
+                          </div>
+                          <CardContent className="space-y-2 p-5">
                             <Skeleton className="h-4 w-40" />
                             <Skeleton className="h-9 w-full" />
-                          </>
-                        ) : (
-                          <p className="type-body-small text-muted-foreground">
-                            {t("detailSectionPlaceholder")}
-                          </p>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </section>
-                ))}
+                          </CardContent>
+                        </Card>
+                      ) : SectionComponent ? (
+                        <SectionComponent key={upstream.id} upstream={upstream} />
+                      ) : null}
+                    </section>
+                  );
+                })}
               </div>
             </div>
           </>
