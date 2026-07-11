@@ -1,18 +1,8 @@
 "use client";
 
-import {
-  useDeferredValue,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type RefObject,
-  type UIEvent,
-} from "react";
+import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useForm, useWatch, useFieldArray, type DeepPartial } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import {
   AlertTriangle,
   ArrowDownToLine,
@@ -106,7 +96,6 @@ import type {
 } from "@/types/api";
 import { Switch } from "@/components/ui/switch";
 import {
-  ROUTE_CAPABILITY_VALUES,
   ROUTE_CAPABILITY_DEFINITIONS,
   areSingleProviderCapabilities,
   getPrimaryProviderByCapabilities,
@@ -117,6 +106,24 @@ import { UpstreamFailureRulesEditor } from "@/components/admin/upstream-failure-
 import { DEFAULT_CIRCUIT_BREAKER_CONFIG } from "@/lib/circuit-breaker-defaults";
 import { inferDefaultModelDiscoveryConfig } from "@/lib/services/upstream-model-types";
 import { statusTone } from "@/lib/status-tone";
+import {
+  coerceNumericInput,
+  coerceOptionalNumber,
+  getNumericInputValue,
+} from "@/components/admin/upstream/coerce";
+import { resolveEndpointPreview } from "@/components/admin/upstream/endpoint-preview";
+import { VirtualCatalogEntryList } from "@/components/admin/upstream/virtual-catalog-entry-list";
+import {
+  DEFAULT_QUEUE_POLICY_TIMEOUT_MS,
+  MODEL_DISCOVERY_MODE_VALUES,
+  MODEL_RULE_ALIAS_TARGET_REQUIRED_MESSAGE,
+  MODEL_RULE_TYPE_VALUES,
+  ROLLING_DEFAULT_PERIOD_HOURS,
+  createUpstreamFormSchema,
+  editUpstreamFormSchema,
+  type UpstreamFormData,
+  type UpstreamFormValues,
+} from "@/components/admin/upstream/section-schemas";
 import { cn } from "@/lib/utils";
 
 interface UpstreamFormDialogProps {
@@ -130,123 +137,7 @@ interface UpstreamFormDialogProps {
   morphName?: string;
 }
 
-// Circuit breaker config schema
-const circuitBreakerConfigSchema = z
-  .object({
-    failure_threshold: z.number().int().min(1).max(100).optional(),
-    success_threshold: z.number().int().min(1).max(100).optional(),
-    open_duration: z.number().int().min(1).max(300).optional(),
-    probe_interval: z.number().int().min(1).max(60).optional(),
-    first_byte_timeout: z.number().int().min(1).max(300).optional(),
-    stream_idle_timeout: z.number().int().min(1).max(300).optional(),
-  })
-  .nullable();
-
-const failureRuleConfigSchema = z.object({
-  use_global_rules: z.boolean(),
-});
-
-// Affinity migration config schema
-const affinityMigrationConfigSchema = z
-  .object({
-    enabled: z.boolean(),
-    metric: z.enum(["tokens", "length"]),
-    threshold: z.preprocess(
-      (value) => coerceNumericInput(value, undefined),
-      z.number().int().min(1).max(10000000)
-    ),
-  })
-  .nullable();
-
-const spendingRuleSchema = z.object({
-  period_type: z.enum(["daily", "monthly", "rolling"]),
-  limit: z.coerce.number().positive(),
-  period_hours: z.number().int().min(1).max(8760).nullable(),
-});
-
-const queuePolicyFormSchema = z.object({
-  enabled: z.boolean(),
-  timeout_ms: z.preprocess(
-    (value) => coerceNumericInput(value, undefined),
-    z.number().int().positive()
-  ),
-  max_queue_length: z.preprocess(
-    (value) => coerceNumericInput(value, null),
-    z.number().int().positive().nullable()
-  ),
-});
-
-const ROLLING_DEFAULT_PERIOD_HOURS = 24;
-const DEFAULT_QUEUE_POLICY_TIMEOUT_MS = 30000;
 const PROBE_RESPONSE_PREVIEW_LIMIT = 1600;
-const MODEL_DISCOVERY_MODE_VALUES = [
-  "openai_compatible",
-  "anthropic_native",
-  "gemini_native",
-  "gemini_openai_compatible",
-  "custom",
-  "litellm",
-] as const satisfies readonly UpstreamModelDiscoveryMode[];
-const MODEL_RULE_TYPE_VALUES = [
-  "exact",
-  "regex",
-  "alias",
-] as const satisfies readonly UpstreamModelRuleType[];
-const MODEL_RULE_SOURCE_VALUES = [
-  "manual",
-  "native",
-  "inferred",
-  "litellm",
-] as const satisfies readonly UpstreamModelRuleSource[];
-const MODEL_ROW_HEIGHT = 42;
-const MODEL_LIST_OVERSCAN = 8;
-const DEFAULT_MODEL_LIST_HEIGHT = 436;
-const MODEL_RULE_ALIAS_TARGET_REQUIRED_MESSAGE = "modelRuleAliasTargetRequired";
-
-const modelDiscoverySchema = z.object({
-  mode: z.enum(MODEL_DISCOVERY_MODE_VALUES),
-  custom_endpoint: z.string(),
-  enable_lite_llm_fallback: z.boolean(),
-  auto_refresh_enabled: z.boolean(),
-});
-
-const modelRuleSchema = z
-  .object({
-    type: z.enum(MODEL_RULE_TYPE_VALUES),
-    value: z.string().trim().min(1),
-    target_model: z.string().trim().nullable().optional(),
-    source: z.enum(MODEL_RULE_SOURCE_VALUES),
-    display_label: z.string().trim().nullable().optional(),
-  })
-  .refine((rule) => rule.type !== "alias" || Boolean(rule.target_model?.trim()), {
-    message: MODEL_RULE_ALIAS_TARGET_REQUIRED_MESSAGE,
-    path: ["target_model"],
-  });
-
-// Preserve transient empty-string edits in the input, and only coerce to numbers at validation time.
-function coerceNumericInput(
-  value: unknown,
-  emptyValue: null | undefined
-): number | null | undefined | unknown {
-  if (typeof value !== "string") {
-    return value;
-  }
-
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return emptyValue;
-  }
-
-  return Number(trimmed);
-}
-
-function getNumericInputValue(value: unknown): string | number {
-  return typeof value === "string" || typeof value === "number" ? value : "";
-}
-
-function coerceOptionalNumber(value: unknown): number | undefined {
-  return coerceNumericInput(value, undefined) as number | undefined;
-}
 
 function normalizeUpstreamFormValuesForDirtyCheck(
   values: Readonly<DeepPartial<UpstreamFormValues>> | undefined
@@ -330,101 +221,6 @@ function normalizeUpstreamFormValuesForDirtyCheck(
   };
 }
 
-function hasValidRollingPeriodHours(rules: z.input<typeof spendingRuleSchema>[]): boolean {
-  return rules.every(
-    (rule) =>
-      rule.period_type !== "rolling" || (rule.period_hours != null && rule.period_hours >= 1)
-  );
-}
-
-// Schema for create mode - api_key is required
-const createUpstreamFormSchema = z
-  .object({
-    name: z.string().min(1).max(100),
-    base_url: z.string().url(),
-    official_website_url: z.union([z.literal(""), z.string().url()]),
-    api_key: z.string().min(1),
-    description: z.string().max(500),
-    max_concurrency: z.number().int().positive().nullable(),
-    priority: z.preprocess(
-      (value) => coerceNumericInput(value, undefined),
-      z.number().int().min(0).max(100)
-    ),
-    weight: z.preprocess(
-      (value) => coerceNumericInput(value, undefined),
-      z.number().int().min(1).max(100)
-    ),
-    billing_input_multiplier: z.preprocess(
-      (value) => coerceNumericInput(value, undefined),
-      z.number().min(0).max(100)
-    ),
-    billing_output_multiplier: z.preprocess(
-      (value) => coerceNumericInput(value, undefined),
-      z.number().min(0).max(100)
-    ),
-    queue_policy: queuePolicyFormSchema,
-    spending_rules: z.array(spendingRuleSchema),
-    route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
-    model_discovery: modelDiscoverySchema,
-    model_rules: z.array(modelRuleSchema),
-    circuit_breaker_config: circuitBreakerConfigSchema,
-    failure_rule_config: failureRuleConfigSchema,
-    affinity_migration: affinityMigrationConfigSchema,
-  })
-  .refine((data) => hasValidRollingPeriodHours(data.spending_rules), {
-    message: "period_hours is required when period_type is 'rolling'",
-    path: ["spending_rules"],
-  })
-  .refine((data) => areSingleProviderCapabilities(data.route_capabilities), {
-    message: "All route capabilities must belong to the same provider",
-    path: ["route_capabilities"],
-  });
-
-// Schema for edit mode - api_key is optional (leave empty to keep unchanged)
-const editUpstreamFormSchema = z
-  .object({
-    name: z.string().min(1).max(100),
-    base_url: z.string().url(),
-    official_website_url: z.union([z.literal(""), z.string().url()]),
-    api_key: z.string(),
-    description: z.string().max(500),
-    max_concurrency: z.number().int().positive().nullable(),
-    priority: z.preprocess(
-      (value) => coerceNumericInput(value, undefined),
-      z.number().int().min(0).max(100)
-    ),
-    weight: z.preprocess(
-      (value) => coerceNumericInput(value, undefined),
-      z.number().int().min(1).max(100)
-    ),
-    billing_input_multiplier: z.preprocess(
-      (value) => coerceNumericInput(value, undefined),
-      z.number().min(0).max(100)
-    ),
-    billing_output_multiplier: z.preprocess(
-      (value) => coerceNumericInput(value, undefined),
-      z.number().min(0).max(100)
-    ),
-    queue_policy: queuePolicyFormSchema,
-    spending_rules: z.array(spendingRuleSchema),
-    route_capabilities: z.array(z.enum(ROUTE_CAPABILITY_VALUES)),
-    model_discovery: modelDiscoverySchema,
-    model_rules: z.array(modelRuleSchema),
-    circuit_breaker_config: circuitBreakerConfigSchema,
-    failure_rule_config: failureRuleConfigSchema,
-    affinity_migration: affinityMigrationConfigSchema,
-  })
-  .refine((data) => hasValidRollingPeriodHours(data.spending_rules), {
-    message: "period_hours is required when period_type is 'rolling'",
-    path: ["spending_rules"],
-  })
-  .refine((data) => areSingleProviderCapabilities(data.route_capabilities), {
-    message: "All route capabilities must belong to the same provider",
-    path: ["route_capabilities"],
-  });
-
-type UpstreamFormValues = z.input<typeof editUpstreamFormSchema>;
-type UpstreamFormData = z.output<typeof editUpstreamFormSchema>;
 type CatalogSourceFilter = "all" | UpstreamModelCatalogSource;
 
 function buildQueuePolicyFormValue(
@@ -664,26 +460,6 @@ function buildCatalogRefreshDependencySnapshot(
   };
 }
 
-const V1_AUTO_APPEND_CAPABILITIES = new Set<RouteCapability>([
-  "openai_responses",
-  "codex_cli_responses",
-  "anthropic_messages",
-  "claude_code_messages",
-  "openai_chat_compatible",
-  "openai_extended",
-]);
-
-const CAPABILITY_PREVIEW_PATHS: Record<RouteCapability, string> = {
-  openai_responses: "responses",
-  codex_cli_responses: "responses",
-  anthropic_messages: "messages",
-  claude_code_messages: "messages",
-  openai_chat_compatible: "chat/completions",
-  openai_extended: "completions",
-  gemini_native_generate: "v1beta/models/{model}:generateContent",
-  gemini_code_assist_internal: "v1internal:generateContent",
-};
-
 const PROBE_CAPABILITY_CLIENT_PROFILES: Partial<
   Record<RouteCapability, readonly UpstreamProbeClientProfile[]>
 > = {
@@ -765,71 +541,10 @@ interface ConfigSectionGroup {
   sections: ConfigSectionEntry[];
 }
 
-interface EndpointPreviewState {
-  normalizedBaseUrl: string;
-  previewUrl: string;
-  previewPath: string;
-  duplicateV1Warning: boolean;
-  autoAppendV1Applied: boolean;
-}
-
 interface ModelDiscoveryPreviewState {
   apiRoot: string;
   requestUrl: string | null;
   authProfile: "bearer" | "anthropic" | "query_key" | "public";
-}
-
-function shouldAutoAppendV1(routeCapabilities: RouteCapability[] | null | undefined): boolean {
-  return (routeCapabilities ?? []).some((capability) =>
-    V1_AUTO_APPEND_CAPABILITIES.has(capability)
-  );
-}
-
-function getPreviewPath(routeCapabilities: RouteCapability[] | null | undefined): string {
-  const firstCapability = (routeCapabilities ?? [])[0];
-  if (!firstCapability) {
-    return CAPABILITY_PREVIEW_PATHS.openai_chat_compatible;
-  }
-  return (
-    CAPABILITY_PREVIEW_PATHS[firstCapability] ?? CAPABILITY_PREVIEW_PATHS.openai_chat_compatible
-  );
-}
-
-function resolveEndpointPreview(
-  rawBaseUrl: string,
-  routeCapabilities: RouteCapability[] | null | undefined
-): EndpointPreviewState | null {
-  const trimmed = rawBaseUrl.trim();
-  if (!trimmed) return null;
-
-  try {
-    const url = new URL(trimmed);
-    const autoAppendV1 = shouldAutoAppendV1(routeCapabilities);
-    const normalizedPathname = url.pathname.replace(/\/+$/, "") || "/";
-    const manualV1Present = normalizedPathname.toLowerCase().endsWith("/v1");
-
-    let finalPathname = normalizedPathname;
-    let autoAppendV1Applied = false;
-    if (autoAppendV1 && !manualV1Present) {
-      finalPathname = `${normalizedPathname === "/" ? "" : normalizedPathname}/v1`;
-      autoAppendV1Applied = true;
-    }
-
-    url.pathname = finalPathname || "/";
-    const normalizedBaseUrl = url.toString().replace(/\/$/, "");
-    const previewPath = getPreviewPath(routeCapabilities);
-    const previewUrl = `${normalizedBaseUrl}/${previewPath.replace(/^\//, "")}`;
-
-    return {
-      normalizedBaseUrl,
-      previewUrl,
-      previewPath,
-      duplicateV1Warning: autoAppendV1 && manualV1Present,
-      autoAppendV1Applied,
-    };
-  } catch {
-    return null;
-  }
 }
 
 function stripTrailingSlash(value: string): string {
@@ -935,110 +650,6 @@ function formatCatalogTimestamp(value: string | null): string | null {
   }
 
   return parsed.toLocaleString();
-}
-
-function useVirtualCatalogRows(
-  itemCount: number,
-  resetKey: string,
-  scrollRef: RefObject<HTMLDivElement | null>
-) {
-  const [viewport, setViewport] = useState({
-    scrollTop: 0,
-    height: DEFAULT_MODEL_LIST_HEIGHT,
-    resetKey,
-  });
-  const currentViewport =
-    viewport.resetKey === resetKey
-      ? viewport
-      : {
-          scrollTop: 0,
-          height: DEFAULT_MODEL_LIST_HEIGHT,
-          resetKey,
-        };
-
-  useEffect(() => {
-    const viewportElement = scrollRef.current;
-    if (viewportElement) {
-      viewportElement.scrollTop = 0;
-    }
-  }, [resetKey, scrollRef]);
-
-  const startIndex =
-    itemCount === 0
-      ? 0
-      : Math.min(
-          Math.max(
-            0,
-            Math.floor(currentViewport.scrollTop / MODEL_ROW_HEIGHT) - MODEL_LIST_OVERSCAN
-          ),
-          itemCount - 1
-        );
-  const endIndex = Math.min(
-    itemCount,
-    Math.ceil((currentViewport.scrollTop + currentViewport.height) / MODEL_ROW_HEIGHT) +
-      MODEL_LIST_OVERSCAN
-  );
-
-  return {
-    startIndex,
-    endIndex,
-    totalHeight: itemCount * MODEL_ROW_HEIGHT,
-    onScroll: (event: UIEvent<HTMLDivElement>) => {
-      setViewport({
-        scrollTop: event.currentTarget.scrollTop,
-        height: event.currentTarget.clientHeight || DEFAULT_MODEL_LIST_HEIGHT,
-        resetKey,
-      });
-    },
-  };
-}
-
-function VirtualCatalogEntryList({
-  entries,
-  selectedModels,
-  onToggle,
-}: {
-  entries: UpstreamModelCatalogEntry[];
-  selectedModels: ReadonlySet<string>;
-  onToggle: (model: string, checked: boolean) => void;
-}) {
-  const resetKey = entries.map((entry) => `${entry.model}:${entry.source}`).join("\u0000");
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const virtualRows = useVirtualCatalogRows(entries.length, resetKey, scrollRef);
-  const visibleEntries = entries.slice(virtualRows.startIndex, virtualRows.endIndex);
-
-  return (
-    <div
-      ref={scrollRef}
-      className="min-h-0 flex-1 overflow-auto rounded-cf-sm border border-divider/70 bg-card/15"
-      onScroll={virtualRows.onScroll}
-    >
-      <div className="relative" style={{ height: virtualRows.totalHeight }}>
-        {visibleEntries.map((entry, index) => {
-          const checked = selectedModels.has(entry.model);
-          return (
-            <label
-              key={entry.model}
-              className="absolute left-0 flex min-w-full cursor-pointer items-center gap-3 px-2.5 transition-colors hover:bg-surface-200/55"
-              style={{
-                top: (virtualRows.startIndex + index) * MODEL_ROW_HEIGHT,
-                height: MODEL_ROW_HEIGHT,
-                width: "max-content",
-              }}
-            >
-              <Checkbox
-                checked={checked}
-                onCheckedChange={(nextChecked) => onToggle(entry.model, nextChecked === true)}
-              />
-              <span className="whitespace-nowrap font-mono text-sm text-foreground">
-                {entry.model}
-              </span>
-            </label>
-          );
-        })}
-      </div>
-    </div>
-  );
 }
 
 function getRuleSourceBadgeVariant(

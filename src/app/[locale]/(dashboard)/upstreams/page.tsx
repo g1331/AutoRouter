@@ -13,6 +13,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 
+import { CreateUpstreamDialog } from "@/components/admin/create-upstream-dialog";
 import { DeleteUpstreamDialog } from "@/components/admin/delete-upstream-dialog";
 import { PaginationControls } from "@/components/admin/pagination-controls";
 import { TestUpstreamDialog } from "@/components/admin/test-upstream-dialog";
@@ -456,7 +457,7 @@ export default function UpstreamsPage() {
         )}
       </div>
 
-      <UpstreamFormDialog
+      <CreateUpstreamDialog
         open={createDialogOpen}
         onOpenChange={(open) => {
           if (open) {

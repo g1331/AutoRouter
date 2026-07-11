@@ -1255,7 +1255,14 @@
       "concurrency_full": "Concurrency full",
       "circuit_open": "Circuit open",
       "inactive": "Inactive"
-    }
+    },
+    "routeCapabilitiesRequired": "Select at least one route capability",
+    "routeCapabilitiesSameProvider": "All route capabilities must belong to the same provider",
+    "detailTitle": "Upstream Detail",
+    "backToUpstreams": "Back to upstreams",
+    "upstreamNotFound": "Upstream not found",
+    "upstreamNotFoundHint": "This upstream may have been deleted, or the link is invalid.",
+    "detailSectionPlaceholder": "This section's fields load on the detail page."
   },
   "circuitBreaker": {
     "title": "Circuit Breaker Status",

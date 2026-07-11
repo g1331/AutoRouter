@@ -130,6 +130,10 @@ const UPSTREAMS_PAGE = {
   total_pages: 1,
 };
 
+// 详情页 GET /admin/upstreams/{id}：与列表首项（openai-primary）保持同一份数据，
+// 避免列表页与详情页之间出现不一致的 mock 快照。
+const UPSTREAM_DETAIL = UPSTREAMS_PAGE.items[0];
+
 const UPSTREAM_HEALTH = {
   data: [
     {
@@ -210,6 +214,9 @@ export async function mockAdminApis(page: Page): Promise<void> {
   );
   await page.route("**/api/admin/upstreams/health**", (route) =>
     fulfillJson(route, 200, UPSTREAM_HEALTH)
+  );
+  await page.route(`**/api/admin/upstreams/${UPSTREAM_DETAIL.id}`, (route) =>
+    fulfillJson(route, 200, UPSTREAM_DETAIL)
   );
   // useLivePulse 的 SSE 读不到事件流会降级为快照轮询，两种形态都回同一份快照。
   await page.route("**/api/admin/stats/live**", (route) =>

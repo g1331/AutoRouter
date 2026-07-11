@@ -1260,7 +1260,14 @@
       "concurrency_full": "并发已满",
       "circuit_open": "熔断中",
       "inactive": "已停用"
-    }
+    },
+    "routeCapabilitiesRequired": "请至少选择一种路由能力",
+    "routeCapabilitiesSameProvider": "所有路由能力必须属于同一服务商",
+    "detailTitle": "上游详情",
+    "backToUpstreams": "返回上游列表",
+    "upstreamNotFound": "未找到该上游",
+    "upstreamNotFoundHint": "该上游可能已被删除，或链接无效。",
+    "detailSectionPlaceholder": "该分区表单将在后续阶段接入。"
   },
   "circuitBreaker": {
     "title": "熔断器状态",

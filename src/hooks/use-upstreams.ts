@@ -130,6 +130,19 @@ export function useUpdateUpstream() {
   });
 }
 
+/**
+ * Fetch a single upstream by id (detail page).
+ */
+export function useUpstream(id: string | undefined, enabled: boolean = true) {
+  const { apiClient } = useAuth();
+
+  return useQuery({
+    queryKey: ["upstreams", id],
+    queryFn: () => apiClient.get<Upstream>(`/admin/upstreams/${id}`),
+    enabled: enabled && !!id,
+  });
+}
+
 export function useUpstreamFailureRules(upstreamId: string | undefined, enabled: boolean = true) {
   const { apiClient } = useAuth();
 
