@@ -85,5 +85,13 @@ test.describe("Visual Regression", () => {
 
       await expect(page).toHaveScreenshot("billing.png", SNAPSHOT_OPTIONS);
     });
+
+    test("logs page visual snapshot", async ({ page }) => {
+      // LogsTable 按 isMobileLayout 状态二选一渲染桌面表格/移动卡片（不像 billing
+      // 价目目录那样两套布局都常驻 DOM），默认桌面视口下 text= 定位不会有重复命中。
+      await gotoAndSettle(page, "/en/logs", "text=gpt-4.1");
+
+      await expect(page).toHaveScreenshot("logs.png", SNAPSHOT_OPTIONS);
+    });
   });
 });

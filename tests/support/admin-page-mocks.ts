@@ -295,6 +295,113 @@ const BILLING_TIER_RULES = {
   total: 1,
 };
 
+// 详情页/日志页共用同一份 key 与 upstream 身份，避免测试文件里出现重复的魔法 UUID。
+const LOGS_PAGE = {
+  items: [
+    {
+      id: "00000000-0000-4000-8000-00000000ff01",
+      api_key_id: KEYS_PAGE.items[0].id,
+      api_key_name: KEYS_PAGE.items[0].name,
+      api_key_prefix: KEYS_PAGE.items[0].key_prefix,
+      upstream_id: UPSTREAMS_PAGE.items[0].id,
+      upstream_name: UPSTREAMS_PAGE.items[0].name,
+      method: "POST",
+      path: "/v1/chat/completions",
+      model: "gpt-4.1",
+      reasoning_effort: "high",
+      prompt_tokens: 128,
+      completion_tokens: 512,
+      total_tokens: 640,
+      cached_tokens: 0,
+      reasoning_tokens: 64,
+      cache_creation_tokens: 0,
+      cache_creation_5m_tokens: 0,
+      cache_creation_1h_tokens: 0,
+      cache_read_tokens: 0,
+      status_code: 200,
+      duration_ms: 820,
+      routing_duration_ms: 40,
+      error_message: null,
+      routing_type: "direct",
+      group_name: null,
+      lb_strategy: null,
+      priority_tier: 1,
+      failover_attempts: 0,
+      failover_history: null,
+      routing_decision: null,
+      thinking_config: {
+        provider: "openai",
+        protocol: "openai_chat",
+        mode: "reasoning",
+        level: "high",
+        budget_tokens: null,
+        include_thoughts: null,
+        source_paths: ["reasoning_effort"],
+      },
+      session_id: null,
+      affinity_hit: false,
+      affinity_migrated: false,
+      ttft_ms: null,
+      is_stream: false,
+      session_id_compensated: false,
+      header_diff: null,
+      billing_status: "billed",
+      final_cost: 0.842,
+      currency: "USD",
+      created_at: new Date("2026-06-10T08:58:00.000Z").toISOString(),
+    },
+    {
+      id: "00000000-0000-4000-8000-00000000ff02",
+      api_key_id: null,
+      api_key_name: null,
+      api_key_prefix: null,
+      upstream_id: UPSTREAMS_PAGE.items[1].id,
+      upstream_name: UPSTREAMS_PAGE.items[1].name,
+      method: "POST",
+      path: "/v1/messages",
+      model: "claude-3-opus",
+      reasoning_effort: null,
+      prompt_tokens: 64,
+      completion_tokens: 0,
+      total_tokens: 64,
+      cached_tokens: 0,
+      reasoning_tokens: 0,
+      cache_creation_tokens: 0,
+      cache_creation_5m_tokens: 0,
+      cache_creation_1h_tokens: 0,
+      cache_read_tokens: 0,
+      status_code: 503,
+      duration_ms: 2100,
+      routing_duration_ms: 60,
+      error_message: "upstream connect timeout",
+      routing_type: "direct",
+      group_name: null,
+      lb_strategy: null,
+      priority_tier: 2,
+      failover_attempts: 1,
+      failover_history: null,
+      routing_decision: null,
+      thinking_config: null,
+      session_id: null,
+      affinity_hit: false,
+      affinity_migrated: false,
+      ttft_ms: null,
+      is_stream: false,
+      session_id_compensated: false,
+      header_diff: null,
+      billing_status: "unbilled",
+      unbillable_reason: "usage_missing",
+      final_cost: null,
+      currency: null,
+      created_at: new Date("2026-06-10T08:55:00.000Z").toISOString(),
+    },
+  ],
+  total: 2,
+  page: 1,
+  page_size: 20,
+  total_pages: 1,
+};
+
 const BILLING_MODEL_PRICES = {
   items: [
     {
@@ -375,5 +482,11 @@ export async function mockAdminApis(page: Page): Promise<void> {
   );
   await page.route("**/api/admin/billing/prices?**", (route) =>
     fulfillJson(route, 200, BILLING_MODEL_PRICES)
+  );
+  await page.route("**/api/admin/logs?**", (route) => fulfillJson(route, 200, LOGS_PAGE));
+  // useRequestLogLive 读取 text/event-stream；给一个立即结束的空流即可让它稳定
+  // 降级为 fallback 轮询，不必等 10s 重连超时或让请求悬挂拖慢页面就绪。
+  await page.route("**/api/admin/logs/live**", (route) =>
+    route.fulfill({ status: 200, contentType: "text/event-stream", body: "" })
   );
 }

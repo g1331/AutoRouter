@@ -38,7 +38,13 @@ import { HeaderDiffPanel } from "@/components/logs/header-diff-panel";
 import { LogRecordingSection } from "@/components/admin/log-recording-section";
 import { matchRouteCapability } from "@/lib/services/route-capability-matcher";
 import { ROUTE_CAPABILITY_DEFINITIONS } from "@/lib/route-capabilities";
-import { getRequestThinkingBadgeLabel } from "@/lib/utils/request-thinking-config";
+import { TruncatedTextTooltip } from "@/components/logs/truncated-text-tooltip";
+import {
+  RequestKeyIdentity,
+  getRequestKeyDisplayMeta,
+} from "@/components/logs/request-key-identity";
+import { ModelIdentity, getReasoningEffortLevel } from "@/components/logs/model-identity";
+import { ThinkingConfigPanel } from "@/components/logs/thinking-config-panel";
 
 /**
  * Filters resolved server-side: the parent owns this state, feeds it into its
@@ -113,7 +119,6 @@ const DETAIL_PANEL_ROW_CLASS =
   "flex items-start gap-3 border-b border-divider/35 py-2 first:pt-0 last:border-b-0 last:pb-0";
 const DETAIL_PANEL_LABEL_CLASS =
   "min-w-0 shrink-0 text-[10px] uppercase tracking-[0.14em] text-muted-foreground/82";
-const DETAIL_PANEL_VALUE_CLASS = "ml-auto min-w-0 text-right text-foreground break-all";
 const DETAIL_PANEL_MUTED_TEXT_CLASS = "text-[12px] text-muted-foreground";
 const DETAIL_SUMMARY_BANNER_CLASS =
   "relative overflow-hidden rounded-cf-md border px-4 py-3 shadow-[var(--vr-shadow-xs)]";
@@ -146,241 +151,6 @@ function ExpandChevron({ expanded, className }: { expanded: boolean; className?:
   );
 }
 
-type ReasoningEffortLevel = NonNullable<RequestLog["reasoning_effort"]>;
-
-type RequestLogReasoningMeta = RequestLog & {
-  reasoning_effort?: unknown;
-  reasoningEffort?: unknown;
-  thinking_level?: unknown;
-  thinkingLevel?: unknown;
-};
-
-const REASONING_EFFORT_LABELS: Record<ReasoningEffortLevel, string> = {
-  none: "None",
-  enabled: "Think",
-  minimal: "Minimal",
-  low: "Low",
-  medium: "Medium",
-  high: "High",
-  xhigh: "XHigh",
-};
-
-const REASONING_EFFORT_BADGE_CLASSES: Record<ReasoningEffortLevel, string> = {
-  none: "border-divider/70 bg-surface-300/65 text-muted-foreground/85",
-  enabled: statusTone("info", "faint"),
-  minimal: "border-divider/70 bg-surface-300/70 text-muted-foreground",
-  low: "border-divider bg-surface-300/85 text-foreground/85",
-  medium: statusTone("info", "faint"),
-  high: "border-amber-500/35 bg-amber-500/10 text-amber-300",
-  xhigh: statusTone("warning"),
-};
-
-const THINKING_BADGE_BASE_CLASS =
-  "h-5 shrink-0 rounded-full px-1.5 py-0 font-mono text-[9px] font-medium leading-none tracking-[0.12em] shadow-none";
-
-function extractThinkingBudgetBadgeValue(label: string): string | null {
-  return label.startsWith("budget:") ? label.slice("budget:".length).trim() : null;
-}
-
-function TruncatedTextTooltip({ text, className }: { text: string; className?: string }) {
-  return (
-    <Tooltip delayDuration={200}>
-      <TooltipTrigger asChild>
-        <span className={cn("block min-w-0 truncate", className)}>{text}</span>
-      </TooltipTrigger>
-      <TooltipContent
-        side="top"
-        align="start"
-        className={cn(
-          "p-2.5",
-          "border-divider bg-surface-200 text-foreground",
-          "shadow-[var(--vr-shadow-md)]",
-          "max-w-[80vw] sm:max-w-[640px]"
-        )}
-      >
-        <div className="font-mono text-[11px] leading-snug whitespace-pre-wrap break-words">
-          {text}
-        </div>
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-function getRequestKeyDisplayMeta(options: {
-  keyName: string | null | undefined;
-  keyPrefix: string | null | undefined;
-  fallbackLabel: string;
-}) {
-  const keyName = options.keyName?.trim() ? options.keyName.trim() : null;
-  const keyPrefix = options.keyPrefix?.trim() ? options.keyPrefix.trim() : null;
-
-  if (keyName && keyPrefix) {
-    return {
-      primaryLabel: keyName,
-      secondaryLabel: keyPrefix,
-      tooltipLabel: `${keyName} · ${keyPrefix}`,
-      hasKeyData: true,
-    };
-  }
-
-  if (keyName) {
-    return {
-      primaryLabel: keyName,
-      secondaryLabel: null,
-      tooltipLabel: keyName,
-      hasKeyData: true,
-    };
-  }
-
-  if (keyPrefix) {
-    return {
-      primaryLabel: keyPrefix,
-      secondaryLabel: null,
-      tooltipLabel: keyPrefix,
-      hasKeyData: true,
-    };
-  }
-
-  return {
-    primaryLabel: options.fallbackLabel,
-    secondaryLabel: null,
-    tooltipLabel: options.fallbackLabel,
-    hasKeyData: false,
-  };
-}
-
-function RequestKeyIdentity({
-  keyName,
-  keyPrefix,
-  className,
-  textClassName,
-  compact = false,
-}: {
-  keyName: RequestLog["api_key_name"] | null | undefined;
-  keyPrefix: RequestLog["api_key_prefix"] | null | undefined;
-  className?: string;
-  textClassName?: string;
-  compact?: boolean;
-}) {
-  const t = useTranslations("logs");
-  const keyMeta = getRequestKeyDisplayMeta({
-    keyName,
-    keyPrefix,
-    fallbackLabel: t("unknownKey"),
-  });
-
-  if (!keyMeta.hasKeyData) {
-    return <span className="text-muted-foreground">{keyMeta.primaryLabel}</span>;
-  }
-
-  return (
-    <div className={cn("flex min-w-0 max-w-full items-center gap-1.5", className)}>
-      <TruncatedTextTooltip text={keyMeta.primaryLabel} className={cn("shrink", textClassName)} />
-      {keyMeta.secondaryLabel ? (
-        <span
-          className={cn(
-            "shrink-0 rounded-cf-sm border border-divider bg-surface-300 px-1.5 py-0.5 font-mono text-[10px] leading-none text-muted-foreground",
-            compact && "px-1 py-0 text-[9px]"
-          )}
-          title={keyMeta.secondaryLabel}
-        >
-          {keyMeta.secondaryLabel}
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-function getReasoningEffortLevel(log: RequestLog): ReasoningEffortLevel | null {
-  const requestLogWithMeta = log as RequestLogReasoningMeta;
-  const rawValue =
-    requestLogWithMeta.reasoning_effort ??
-    requestLogWithMeta.reasoningEffort ??
-    requestLogWithMeta.thinking_level ??
-    requestLogWithMeta.thinkingLevel;
-
-  if (typeof rawValue !== "string") {
-    return null;
-  }
-
-  const normalizedValue = rawValue.trim().toLowerCase();
-  return normalizedValue === "none" ||
-    normalizedValue === "enabled" ||
-    normalizedValue === "minimal" ||
-    normalizedValue === "low" ||
-    normalizedValue === "medium" ||
-    normalizedValue === "high" ||
-    normalizedValue === "xhigh"
-    ? normalizedValue
-    : null;
-}
-
-function ReasoningEffortBadge({ level }: { level: ReasoningEffortLevel }) {
-  const label = REASONING_EFFORT_LABELS[level];
-
-  return (
-    <Badge
-      variant="neutral"
-      className={cn(
-        "h-5 shrink-0 rounded-full px-1.5 py-0 font-mono text-[9px] font-medium leading-none tracking-[0.12em] shadow-none",
-        REASONING_EFFORT_BADGE_CLASSES[level]
-      )}
-      aria-label={label}
-      title={label}
-    >
-      <span>{label}</span>
-    </Badge>
-  );
-}
-
-function isThinkingBadgeDuplicatedByReasoningEffort(
-  thinkingConfig: RequestLog["thinking_config"] | null | undefined,
-  reasoningEffort: ReasoningEffortLevel | null | undefined
-): boolean {
-  if (!thinkingConfig || !reasoningEffort) {
-    return false;
-  }
-
-  const badgeLabel = getRequestThinkingBadgeLabel(thinkingConfig);
-  if (!badgeLabel) {
-    return false;
-  }
-
-  return badgeLabel.trim().toLowerCase() === reasoningEffort;
-}
-
-function ModelIdentity({
-  label,
-  reasoningEffort,
-  thinkingConfig,
-  compactBadges = false,
-  className,
-  textClassName,
-}: {
-  label: string | null | undefined;
-  reasoningEffort?: ReasoningEffortLevel | null;
-  thinkingConfig?: RequestLog["thinking_config"] | null;
-  compactBadges?: boolean;
-  className?: string;
-  textClassName?: string;
-}) {
-  if (!label) {
-    return <span className="text-muted-foreground">-</span>;
-  }
-
-  return (
-    <div className={cn("flex min-w-0 max-w-full items-center gap-1", className)}>
-      <TruncatedTextTooltip text={label} className={cn("shrink", textClassName)} />
-      {reasoningEffort ? <ReasoningEffortBadge level={reasoningEffort} /> : null}
-      <ThinkingConfigBadge
-        thinkingConfig={thinkingConfig}
-        dedupeWithReasoningEffort={reasoningEffort}
-        compact={compactBadges}
-      />
-    </div>
-  );
-}
-
 function RequestModeBadge({ isStream, compact = false }: { isStream: boolean; compact?: boolean }) {
   const t = useTranslations("logs");
   const label = isStream ? t("requestModeStreaming") : t("requestModeNonStreaming");
@@ -398,200 +168,6 @@ function RequestModeBadge({ isStream, compact = false }: { isStream: boolean; co
     >
       <span>{compact ? shortLabel : label}</span>
     </Badge>
-  );
-}
-
-function ThinkingConfigBadge({
-  thinkingConfig,
-  dedupeWithReasoningEffort,
-  compact = false,
-}: {
-  thinkingConfig: RequestLog["thinking_config"] | null | undefined;
-  dedupeWithReasoningEffort?: ReasoningEffortLevel | null;
-  compact?: boolean;
-}) {
-  const t = useTranslations("logs");
-  const badgeLabel = getRequestThinkingBadgeLabel(thinkingConfig ?? null);
-  const budgetValue = badgeLabel ? extractThinkingBudgetBadgeValue(badgeLabel) : null;
-
-  if (
-    !badgeLabel ||
-    isThinkingBadgeDuplicatedByReasoningEffort(thinkingConfig, dedupeWithReasoningEffort)
-  ) {
-    return null;
-  }
-
-  if (budgetValue) {
-    return (
-      <Badge
-        variant="success"
-        className={cn(
-          THINKING_BADGE_BASE_CLASS,
-          "gap-1",
-          statusTone("success", "faint"),
-          compact && "gap-0.5 px-1 py-0 text-[8px]"
-        )}
-        aria-label={t("thinkingBadgeAria", { value: badgeLabel })}
-        title={t("thinkingBadgeAria", { value: badgeLabel })}
-      >
-        <span className="uppercase tracking-[0.16em]">Budget</span>
-        <span
-          className={cn(
-            "rounded-full bg-background/65 px-1 py-[1px] text-[8px] leading-none tracking-[0.08em] text-foreground/85",
-            compact && "px-0.5 text-[7px]"
-          )}
-        >
-          {budgetValue}
-        </span>
-      </Badge>
-    );
-  }
-
-  return (
-    <Badge
-      variant="outline"
-      className={cn(
-        "shrink-0 border-divider px-1.5 py-0 font-mono text-[10px] leading-4 text-muted-foreground",
-        compact && "px-1 py-0 text-[9px]"
-      )}
-      aria-label={t("thinkingBadgeAria", { value: badgeLabel })}
-      title={t("thinkingBadgeAria", { value: badgeLabel })}
-    >
-      [{badgeLabel}]
-    </Badge>
-  );
-}
-
-function ThinkingConfigPanel({
-  thinkingConfig,
-}: {
-  thinkingConfig: RequestLog["thinking_config"] | null | undefined;
-}) {
-  const t = useTranslations("logs");
-  const locale = useLocale();
-  const [isExpanded, setIsExpanded] = useState(false);
-  const isZh = locale === "zh-CN" || locale === "zh";
-  const panelTitle = t("thinkingConfig");
-  const expandLabel = isZh ? "展开思考信息" : "Expand thinking details";
-  const collapseLabel = isZh ? "收起思考信息" : "Collapse thinking details";
-
-  const summaryText = thinkingConfig
-    ? [
-        t(`thinkingProviderValue.${thinkingConfig.provider}`),
-        t(`thinkingModeValue.${thinkingConfig.mode}`),
-        getRequestThinkingBadgeLabel(thinkingConfig),
-      ]
-        .filter(Boolean)
-        .join(" · ")
-    : t("thinkingNotExplicitlySpecified");
-
-  if (!thinkingConfig) {
-    return (
-      <div className={DETAIL_PANEL_CLASS}>
-        <div className={DETAIL_PANEL_HEADER_CLASS}>{panelTitle}</div>
-        <div className={DETAIL_PANEL_BODY_CLASS}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className={cn(DETAIL_PANEL_MUTED_TEXT_CLASS, "min-w-0 flex-1")}>{summaryText}</div>
-            <button
-              type="button"
-              onClick={() => setIsExpanded((prev) => !prev)}
-              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-cf-sm border border-divider px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
-              aria-expanded={isExpanded}
-              aria-label={isExpanded ? collapseLabel : expandLabel}
-            >
-              <ChevronDown
-                className={cn("h-3 w-3", LOGS_ICON_TRANSFORM_CLASS, isExpanded && "rotate-180")}
-                aria-hidden="true"
-              />
-              <span>{isExpanded ? collapseLabel : expandLabel}</span>
-            </button>
-          </div>
-          {isExpanded ? (
-            <div
-              className={cn("mt-3 border-t border-divider/40 pt-3", DETAIL_PANEL_MUTED_TEXT_CLASS)}
-            >
-              {t("thinkingNotExplicitlySpecified")}
-            </div>
-          ) : null}
-        </div>
-      </div>
-    );
-  }
-
-  const detailRows = [
-    {
-      label: t("thinkingProvider"),
-      value: t(`thinkingProviderValue.${thinkingConfig.provider}`),
-    },
-    {
-      label: t("thinkingProtocol"),
-      value: t(`thinkingProtocolValue.${thinkingConfig.protocol}`),
-    },
-    {
-      label: t("thinkingMode"),
-      value: t(`thinkingModeValue.${thinkingConfig.mode}`),
-    },
-    {
-      label: t("thinkingLevel"),
-      value: thinkingConfig.level ?? t("thinkingValueUnset"),
-    },
-    {
-      label: t("thinkingBudgetTokens"),
-      value:
-        thinkingConfig.budget_tokens != null
-          ? thinkingConfig.budget_tokens.toLocaleString(locale)
-          : t("thinkingValueUnset"),
-    },
-    {
-      label: t("thinkingIncludeThoughts"),
-      value:
-        thinkingConfig.include_thoughts == null
-          ? t("thinkingValueUnset")
-          : thinkingConfig.include_thoughts
-            ? t("thinkingBooleanEnabled")
-            : t("thinkingBooleanDisabled"),
-    },
-    {
-      label: t("thinkingSourcePaths"),
-      value:
-        thinkingConfig.source_paths.length > 0
-          ? thinkingConfig.source_paths.join(" · ")
-          : t("thinkingValueUnset"),
-    },
-  ];
-
-  return (
-    <div className={DETAIL_PANEL_CLASS}>
-      <div className={DETAIL_PANEL_HEADER_CLASS}>{panelTitle}</div>
-      <div className={DETAIL_PANEL_BODY_CLASS}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0 flex-1 text-[12px] text-muted-foreground">{summaryText}</div>
-          <button
-            type="button"
-            onClick={() => setIsExpanded((prev) => !prev)}
-            className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-cf-sm border border-divider px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
-            aria-expanded={isExpanded}
-            aria-label={isExpanded ? collapseLabel : expandLabel}
-          >
-            <ChevronDown
-              className={cn("h-3 w-3", LOGS_ICON_TRANSFORM_CLASS, isExpanded && "rotate-180")}
-              aria-hidden="true"
-            />
-            <span>{isExpanded ? collapseLabel : expandLabel}</span>
-          </button>
-        </div>
-        {isExpanded ? (
-          <div className={cn("mt-3 border-t border-divider/40 pt-3", DETAIL_PANEL_STACK_CLASS)}>
-            {detailRows.map((row) => (
-              <div key={row.label} className={DETAIL_PANEL_ROW_CLASS}>
-                <span className={DETAIL_PANEL_LABEL_CLASS}>{row.label}</span>
-                <span className={DETAIL_PANEL_VALUE_CLASS}>{row.value}</span>
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </div>
-    </div>
   );
 }
 
@@ -3073,7 +2649,7 @@ export function LogsTable({
                     })
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label={t("filterStatus")}>
                     <SelectValue placeholder={t("filterStatus")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -3148,14 +2724,14 @@ export function LogsTable({
                 LOGS_SURFACE_TRANSITION_CLASS,
                 LOGS_INTERACTIVE_RAISE_CLASS,
                 performancePreset === value
-                  ? "border-amber-500/45 bg-amber-500/10 text-amber-500"
+                  ? "border-amber-500/45 bg-amber-500/10 text-amber-700 dark:text-amber-500"
                   : "border-divider bg-surface-300 text-muted-foreground hover:bg-surface-300/70"
               )}
             >
               {label}
             </button>
           ))}
-          <span className="type-caption text-muted-foreground/70">{t("quickFiltersPageOnly")}</span>
+          <span className="type-caption text-muted-foreground">{t("quickFiltersPageOnly")}</span>
         </div>
       </div>
 

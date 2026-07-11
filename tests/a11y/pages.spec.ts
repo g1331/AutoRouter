@@ -97,6 +97,15 @@ for (const theme of THEMES) {
 
         await expectNoViolations(page);
       });
+
+      test("logs page has no WCAG A/AA violations", async ({ page }) => {
+        // LogsTable 按 isMobileLayout 状态二选一渲染桌面表格/移动卡片，默认桌面
+        // 视口下不会像 billing 价目目录那样重复命中，first() 只是防御性写法。
+        await page.goto("/en/logs");
+        await expect(page.getByText("gpt-4.1").first()).toBeVisible({ timeout: 15_000 });
+
+        await expectNoViolations(page);
+      });
     });
   });
 }
