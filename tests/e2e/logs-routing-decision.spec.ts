@@ -75,6 +75,26 @@ function mockLogsApi(page: Page): Promise<void> {
   });
 }
 
+// Expanding a log row mounts LogRecordingSection, whose recording probe hits
+// /api/admin/traffic-recordings. Left unmocked it reaches the real server with
+// the fake e2e token, and the resulting 401 logs the session out mid-test.
+function mockTrafficRecordingsApi(page: Page): Promise<void> {
+  return page.route("**/api/admin/traffic-recordings**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        items: [],
+        total: 0,
+        page: 1,
+        page_size: 1,
+        total_pages: 0,
+        stats: { total: 0, total_size_bytes: 0, latest_created_at: null },
+      }),
+    });
+  });
+}
+
 // The live pulse bar in the dashboard layout opens a stats/live connection on
 // every page. Stub it so this mocked flow stays isolated from the real server.
 function mockLivePulse(page: Page): Promise<void> {
@@ -106,6 +126,7 @@ test.describe("Logs routing diagnostics", () => {
   test("does not show selected upstream when request was never sent upstream", async ({ page }) => {
     await seedAdminToken(page);
     await mockLogsApi(page);
+    await mockTrafficRecordingsApi(page);
 
     await page.goto("/en/logs");
 
