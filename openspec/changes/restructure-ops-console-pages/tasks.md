@@ -80,10 +80,10 @@
 
 ## 10. Phase D4 · portal + login 对齐（提交 `refactor(portal)` D4）
 
-- [ ] 10.1 portal 四页接共享 StatCard；portal-usage-chart 仅 retheme 不合并形态；portal-key-dialog 半径/排印对齐（3 个 portal morph 保留）
-- [ ] 10.2 login 半径令牌化 + type-label-small 修复（保留终端视觉身份）
-- [ ] 10.3 `portal-self-service.spec` 守护；portal 已有 visual/a11y 基线更新
-- [ ] 10.4 验收并提交：tsc + lint + portal 单测/spec 绿；portal 3 morph + login 双主题冒烟；本地 e2e --workers=2 绿；提交
+- [x] 10.1 portal 四页接共享 StatCard；portal-usage-chart 仅 retheme 不合并形态；portal-key-dialog 半径/排印对齐（3 个 portal morph 保留）
+- [x] 10.2 login 半径令牌化 + type-label-small 修复（保留终端视觉身份）
+- [x] 10.3 `portal-self-service.spec` 守护；portal 已有 visual/a11y 基线更新
+- [x] 10.4 验收并提交：tsc + lint + portal 单测/spec 绿；portal 3 morph + login 双主题冒烟；本地 e2e --workers=2 绿；提交
 
 ## 11. Phase E · 全量验证与基线 + PR（提交 `test(ops-console)` E）
 
