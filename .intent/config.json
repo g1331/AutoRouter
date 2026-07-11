@@ -1,0 +1,136 @@
+{
+  "scripts": [
+    {
+      "name": "dev",
+      "command": "pnpm dev",
+      "mode": "service",
+      "category": "dev"
+    },
+    {
+      "name": "build",
+      "command": "pnpm build",
+      "mode": "command",
+      "category": "build"
+    },
+    {
+      "name": "start",
+      "command": "pnpm start",
+      "mode": "service",
+      "category": "dev"
+    },
+    {
+      "name": "lint",
+      "command": "pnpm lint",
+      "mode": "command",
+      "category": "lint"
+    },
+    {
+      "name": "format",
+      "command": "pnpm format",
+      "mode": "command",
+      "category": "format"
+    },
+    {
+      "name": "format:check",
+      "command": "pnpm format:check",
+      "mode": "command",
+      "category": "format"
+    },
+    {
+      "name": "test",
+      "command": "pnpm test",
+      "mode": "command",
+      "category": "test"
+    },
+    {
+      "name": "test:run",
+      "command": "pnpm test:run",
+      "mode": "command",
+      "category": "test"
+    },
+    {
+      "name": "test:proxy-stability",
+      "command": "pnpm test:proxy-stability",
+      "mode": "command",
+      "category": "test"
+    },
+    {
+      "name": "e2e",
+      "command": "pnpm e2e",
+      "mode": "command",
+      "category": "other"
+    },
+    {
+      "name": "e2e:headed",
+      "command": "pnpm e2e:headed",
+      "mode": "command",
+      "category": "other"
+    },
+    {
+      "name": "db:generate",
+      "command": "pnpm db:generate",
+      "mode": "command",
+      "category": "other"
+    },
+    {
+      "name": "db:generate:sqlite",
+      "command": "pnpm db:generate:sqlite",
+      "mode": "command",
+      "category": "other"
+    },
+    {
+      "name": "db:check:consistency",
+      "command": "pnpm db:check:consistency",
+      "mode": "command",
+      "category": "other"
+    },
+    {
+      "name": "db:migrate",
+      "command": "pnpm db:migrate",
+      "mode": "command",
+      "category": "other"
+    },
+    {
+      "name": "db:migrate:sqlite",
+      "command": "pnpm db:migrate:sqlite",
+      "mode": "command",
+      "category": "other"
+    },
+    {
+      "name": "db:push",
+      "command": "pnpm db:push",
+      "mode": "command",
+      "category": "other"
+    },
+    {
+      "name": "db:seed",
+      "command": "pnpm db:seed",
+      "mode": "command",
+      "category": "other"
+    },
+    {
+      "name": "db:studio",
+      "command": "pnpm db:studio",
+      "mode": "command",
+      "category": "other"
+    },
+    {
+      "name": "docs:dev",
+      "command": "pnpm docs:dev",
+      "mode": "command",
+      "category": "other"
+    },
+    {
+      "name": "docs:build",
+      "command": "pnpm docs:build",
+      "mode": "command",
+      "category": "build"
+    },
+    {
+      "name": "docs:preview",
+      "command": "pnpm docs:preview",
+      "mode": "command",
+      "category": "other"
+    }
+  ]
+}
