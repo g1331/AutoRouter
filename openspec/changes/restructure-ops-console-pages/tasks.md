@@ -68,9 +68,9 @@
 
 ## 8. Phase D2 · logs-table 抽子组件（提交 `refactor(logs)` D2）
 
-- [ ] 8.1 抽最大 3-4 子组件到 `src/components/logs/*`（ThinkingConfigPanel、RequestKeyIdentity、ModelIdentity、LogRecordingSection 挂载点），**DOM 逐字不变**；完整拆分留后续
-- [ ] 8.2 logs 相关组件测试；`logs-routing-decision.spec` 守护 + 为 logs 补 visual/a11y 覆盖（扩 admin-page-mocks）
-- [ ] 8.3 验收并提交：tsc + lint + logs 单测 + logs-routing-decision 绿；本地 e2e --workers=2 绿；logs 页双主题 spot check；提交
+- [x] 8.1 抽最大 3-4 子组件到 `src/components/logs/*`（ThinkingConfigPanel、RequestKeyIdentity、ModelIdentity、LogRecordingSection 挂载点），**DOM 逐字不变**；完整拆分留后续
+- [x] 8.2 logs 相关组件测试；`logs-routing-decision.spec` 守护 + 为 logs 补 visual/a11y 覆盖（扩 admin-page-mocks）
+- [x] 8.3 验收并提交：tsc + lint + logs 单测 + logs-routing-decision 绿；本地 e2e --workers=2 绿；logs 页双主题 spot check；提交
 
 ## 9. Phase D3 · admin 对齐组（提交 `refactor(admin)` D3）
 
