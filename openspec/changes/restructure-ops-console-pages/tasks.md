@@ -47,11 +47,11 @@
 
 ## 5. Phase C1 · useApiKey + /keys/[id] 详情页 + 瘦 create（提交 `feat(keys)` C1）
 
-- [ ] 5.1 新增 `useApiKey(id)` hook（queryKey `["keys", id]`），含 hook 单测；`admin-page-mocks` 补 `GET /admin/keys/[id]` stub
-- [ ] 5.2 新增 `/keys/[id]/page.tsx` 详情页 + 分区：基础信息 / 访问模式与上游授权（合区提交避跨字段校验失败）/ 花费规则 / 模型白名单（key-model-allowlist-section 整块迁入）/ 到期；复用 SectionForm + partial PUT
-- [ ] 5.3 瘦 create dialog（必填项）→ 创建成功先展示一次性密钥（沿用 show-key 逻辑）→ 跳详情页补全；`morph-key-form` 留给 create
-- [ ] 5.4 分区 payload 单测（partial 只含本区字段、access_mode/upstream_ids 同区、spending_rules 空省略语义）；keys 详情页 e2e + visual/a11y
-- [ ] 5.5 验收并提交：tsc + lint + keys 单测/e2e 绿；create + 一次性密钥展示 morph 冒烟；本地 e2e --workers=2 绿；双主题 spot check；提交
+- [x] 5.1 新增 `useApiKey(id)` hook（queryKey `["keys", id]`），含 hook 单测；`admin-page-mocks` 补 `GET /admin/keys/[id]` stub
+- [x] 5.2 新增 `/keys/[id]/page.tsx` 详情页 + 分区：基础信息 / 访问模式与上游授权（合区提交避跨字段校验失败）/ 花费规则 / 模型白名单（key-model-allowlist-section 整块迁入）/ 到期；复用 SectionForm + partial PUT
+- [x] 5.3 瘦 create dialog（必填项）→ 创建成功先展示一次性密钥（沿用 show-key 逻辑）→ 跳详情页补全；`morph-key-form` 留给 create
+- [x] 5.4 分区 payload 单测（partial 只含本区字段、access_mode/upstream_ids 同区、spending_rules 空规则集显式 [] 清空语义）；keys 详情页 e2e + visual/a11y
+- [x] 5.5 验收并提交：tsc + lint + keys 单测/e2e 绿；create + 一次性密钥展示 morph 冒烟；本地 e2e --workers=2 绿；双主题 spot check；提交
 
 ## 6. Phase C2 · keys 列表接线 + 删 edit-key-dialog（提交 `feat(keys)` C2）
 
