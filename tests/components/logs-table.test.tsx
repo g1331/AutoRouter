@@ -984,6 +984,7 @@ describe("LogsTable", () => {
       render(<LogsTable logs={[streamLog]} />);
 
       fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleResponse" })[0]);
       expect(screen.getByText("journeyGenerationFinished")).toBeInTheDocument();
       expect(screen.getAllByText(/450ms/).length).toBeGreaterThan(0);
     });
@@ -2047,7 +2048,7 @@ describe("LogsTable", () => {
       expect(screen.getByText(/journeySelectedCircuitState/)).toBeInTheDocument();
     });
 
-    it("shows queue termination chain in focused and sequential views", () => {
+    it("shows queue termination chain in the request stage detail", () => {
       const logWithQueuedTimeout: RequestLog = {
         ...mockLog,
         status_code: 504,
@@ -2076,11 +2077,6 @@ describe("LogsTable", () => {
       expect(screen.getAllByText("queueStatus.timed_out").length).toBeGreaterThan(0);
       expect(screen.getByText("journeyQueueLifecycle.timed_out")).toBeInTheDocument();
       expect(screen.getByText(/journeyQueueTarget/)).toBeInTheDocument();
-
-      fireEvent.click(screen.getByRole("button", { name: "journeyViewSequential" }));
-
-      expect(screen.getAllByText("journeyQueueLifecycle.timed_out").length).toBeGreaterThan(0);
-      expect(screen.getAllByText(/journeyQueueTarget/).length).toBeGreaterThan(0);
     });
 
     it("uses error styling for circuit-open excluded upstreams in expanded view", () => {
@@ -2270,7 +2266,7 @@ describe("LogsTable", () => {
       expect(focusRail).toBeInTheDocument();
     });
 
-    it("supports switching lifecycle details to sequential full view", () => {
+    it("shows each lifecycle stage detail when its journey step is selected", () => {
       const logWithRouting: RequestLog = {
         ...logWithFailoverBase,
         routing_decision: mockRoutingDecision,
@@ -2292,12 +2288,15 @@ describe("LogsTable", () => {
       render(<LogsTable logs={[logWithRouting]} />);
 
       fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
-      fireEvent.click(screen.getByRole("button", { name: "journeyViewSequential" }));
 
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleDecision" })[0]);
       expect(screen.getByText("journeyDecisionResult")).toBeInTheDocument();
+
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleRequest" })[0]);
       expect(screen.getByText("timelineExecutionRetries")).toBeInTheDocument();
+
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleResponse" })[0]);
       expect(screen.getAllByText(/1\.65s \(\+400ms\)/).length).toBeGreaterThan(0);
-      expect(screen.getByRole("button", { name: "journeyViewFocused" })).toBeInTheDocument();
     });
 
     it("falls back to request-arrived content in focused view when no focused detail exists", () => {

@@ -795,9 +795,7 @@
       "concurrency_full": "并发已满",
       "unknown": "未知原因"
     },
-    "journeyInitialUpstream": "首次选中上游",
-    "journeyViewFocused": "焦点查看",
-    "journeyViewSequential": "顺序全览"
+    "journeyInitialUpstream": "首次选中上游"
   },
   "upstreams": {
     "title": "上游管理",

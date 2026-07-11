@@ -790,9 +790,7 @@
       "concurrency_full": "concurrency full",
       "unknown": "unknown reason"
     },
-    "journeyInitialUpstream": "Initially selected upstream",
-    "journeyViewFocused": "Focused",
-    "journeyViewSequential": "Sequential"
+    "journeyInitialUpstream": "Initially selected upstream"
   },
   "upstreams": {
     "title": "Upstreams",

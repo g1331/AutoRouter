@@ -464,7 +464,6 @@ export function LogsTable({
   );
   const [hasExpansionInteraction, setHasExpansionInteraction] = useState(false);
   const [focusedJourneySteps, setFocusedJourneySteps] = useState<Record<string, number>>({});
-  const [journeyViewMode, setJourneyViewMode] = useState<"focused" | "sequential">("focused");
 
   // Track new log IDs for scan animation
   const [newLogIds, setNewLogIds] = useState<Set<string>>(new Set());
@@ -1197,9 +1196,6 @@ export function LogsTable({
       if (routingDecision?.failure_stage === "downstream_streaming") {
         return 4;
       }
-      if (log.is_stream && (ttftMs != null || genMs != null)) {
-        return 4;
-      }
       if (isError) {
         return 5;
       }
@@ -1850,10 +1846,6 @@ export function LogsTable({
       activeJourneyStep.focusedContent != null
         ? activeJourneyStep.focusedContent
         : activeJourneyStep.content;
-    const journeyViewOptions = [
-      { value: "focused" as const, label: t("journeyViewFocused") },
-      { value: "sequential" as const, label: t("journeyViewSequential") },
-    ];
 
     return (
       <div className={cn("space-y-4 font-mono text-xs", className)}>
@@ -1981,196 +1973,110 @@ export function LogsTable({
               </div>
 
               <div className="space-y-3">
-                <div className="px-1">
-                  <div className="flex w-full max-w-full flex-wrap items-center justify-start gap-1">
-                    {journeyViewOptions.map((option) => {
-                      const isActive = journeyViewMode === option.value;
+                <div className="relative">
+                  <div className="flex flex-wrap items-center gap-1.5 xl:grid-cols-5">
+                    {journeySteps.map((step, index) => {
+                      const tone = JOURNEY_TONE_STYLES[step.tone];
+                      const isActive = step.index === activeJourneyStep.index;
+                      const progressState = getJourneyProgressState(step.index);
+                      const progressTone = JOURNEY_PROGRESS_STYLES[progressState];
                       return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() => setJourneyViewMode(option.value)}
-                          aria-pressed={isActive}
-                          aria-label={option.label}
-                          className={cn(
-                            "rounded-full px-3 py-1.5 text-[10px] uppercase tracking-[0.16em]",
-                            LOGS_SURFACE_TRANSITION_CLASS,
-                            LOGS_INTERACTIVE_RAISE_CLASS,
-                            isActive
-                              ? "border border-divider bg-surface-300 text-foreground shadow-[var(--vr-shadow-xs)]"
-                              : "text-muted-foreground hover:bg-surface-200/70 hover:text-foreground"
-                          )}
-                        >
-                          {option.label}
-                        </button>
+                        <Fragment key={step.index}>
+                          <button
+                            type="button"
+                            onClick={() => setActiveJourneyStep(step.index)}
+                            aria-pressed={isActive}
+                            aria-label={step.title}
+                            className={cn(
+                              "group relative inline-flex min-w-0 items-center gap-2 overflow-hidden rounded-full border px-3 py-2 text-left",
+                              LOGS_SURFACE_TRANSITION_CLASS,
+                              "motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0",
+                              progressTone.tab,
+                              isActive && cn("motion-safe:-translate-y-0.5", tone.tabActive)
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                "absolute inset-x-0 top-0 h-0.5 opacity-0 transition-opacity duration-cf-fast ease-cf-standard motion-reduce:transition-none",
+                                progressTone.accent,
+                                isActive && "opacity-100"
+                              )}
+                            />
+                            <span
+                              className={cn(
+                                "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold transition-[background-color,border-color,color] duration-cf-fast ease-cf-standard motion-reduce:transition-none",
+                                progressTone.number
+                              )}
+                            >
+                              {step.index}
+                            </span>
+                            <div className="min-w-0">
+                              <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                                {step.title}
+                              </div>
+                              <div className="truncate text-[11px] text-foreground">
+                                {step.summary}
+                              </div>
+                            </div>
+                          </button>
+                          {index < journeySteps.length - 1 ? (
+                            <span
+                              className={cn(
+                                "inline-flex h-6 items-center px-0.5",
+                                progressTone.arrow
+                              )}
+                              aria-hidden="true"
+                            >
+                              →
+                            </span>
+                          ) : null}
+                        </Fragment>
                       );
                     })}
                   </div>
                 </div>
 
-                {journeyViewMode === "focused" ? (
-                  <>
-                    <div className="relative">
-                      <div className="flex flex-wrap items-center gap-1.5 xl:grid-cols-5">
-                        {journeySteps.map((step, index) => {
-                          const tone = JOURNEY_TONE_STYLES[step.tone];
-                          const isActive = step.index === activeJourneyStep.index;
-                          const progressState = getJourneyProgressState(step.index);
-                          const progressTone = JOURNEY_PROGRESS_STYLES[progressState];
-                          return (
-                            <Fragment key={step.index}>
-                              <button
-                                type="button"
-                                onClick={() => setActiveJourneyStep(step.index)}
-                                aria-pressed={isActive}
-                                aria-label={step.title}
-                                className={cn(
-                                  "group relative inline-flex min-w-0 items-center gap-2 overflow-hidden rounded-full border px-3 py-2 text-left",
-                                  LOGS_SURFACE_TRANSITION_CLASS,
-                                  "motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0",
-                                  progressTone.tab,
-                                  isActive && cn("motion-safe:-translate-y-0.5", tone.tabActive)
-                                )}
-                              >
-                                <div
-                                  className={cn(
-                                    "absolute inset-x-0 top-0 h-0.5 opacity-0 transition-opacity duration-cf-fast ease-cf-standard motion-reduce:transition-none",
-                                    progressTone.accent,
-                                    isActive && "opacity-100"
-                                  )}
-                                />
-                                <span
-                                  className={cn(
-                                    "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold transition-[background-color,border-color,color] duration-cf-fast ease-cf-standard motion-reduce:transition-none",
-                                    progressTone.number
-                                  )}
-                                >
-                                  {step.index}
-                                </span>
-                                <div className="min-w-0">
-                                  <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                                    {step.title}
-                                  </div>
-                                  <div className="truncate text-[11px] text-foreground">
-                                    {step.summary}
-                                  </div>
-                                </div>
-                              </button>
-                              {index < journeySteps.length - 1 ? (
-                                <span
-                                  className={cn(
-                                    "inline-flex h-6 items-center px-0.5",
-                                    progressTone.arrow
-                                  )}
-                                  aria-hidden="true"
-                                >
-                                  →
-                                </span>
-                              ) : null}
-                            </Fragment>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div
-                      key={`journey-panel-${activeJourneyStep.index}-${journeyViewMode}`}
-                      className={cn(
-                        "relative overflow-hidden rounded-full border p-3 shadow-[var(--vr-shadow-xs)] transition-[background-color,border-color,box-shadow,opacity] duration-cf-normal ease-cf-standard motion-reduce:transition-none",
-                        LOGS_CARD_ENTER_CLASS,
-                        activeJourneyTone.panel
-                      )}
-                    >
-                      <div
-                        className={cn("absolute inset-x-0 top-0 h-0.5", activeJourneyTone.accent)}
-                      />
-                      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={cn(
-                                "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold",
-                                activeJourneyTone.number
-                              )}
-                            >
-                              {activeJourneyStep.index}
-                            </span>
-                            <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                              {activeJourneyStep.title}
-                            </div>
-                          </div>
-                          <div className="mt-2 text-[11px] leading-relaxed text-foreground">
-                            {activeJourneyStep.summary}
-                          </div>
-                          {activeJourneyStep.meta ? (
-                            <div className="mt-1 text-[10px] leading-relaxed text-muted-foreground/80">
-                              {activeJourneyStep.meta}
-                            </div>
-                          ) : null}
-                        </div>
-                        <div className="flex flex-wrap justify-end gap-1">
-                          {activeJourneyStep.metrics}
+                <div
+                  key={`journey-panel-${activeJourneyStep.index}`}
+                  className={cn(
+                    "relative overflow-hidden rounded-cf-md border p-3 shadow-[var(--vr-shadow-xs)] transition-[background-color,border-color,box-shadow,opacity] duration-cf-normal ease-cf-standard motion-reduce:transition-none",
+                    LOGS_CARD_ENTER_CLASS,
+                    activeJourneyTone.panel
+                  )}
+                >
+                  <div className={cn("absolute inset-x-0 top-0 h-0.5", activeJourneyTone.accent)} />
+                  <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold",
+                            activeJourneyTone.number
+                          )}
+                        >
+                          {activeJourneyStep.index}
+                        </span>
+                        <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                          {activeJourneyStep.title}
                         </div>
                       </div>
-                      {activeJourneyDetail ? (
-                        <div className="space-y-2 text-[11px]">{activeJourneyDetail}</div>
+                      <div className="mt-2 text-[11px] leading-relaxed text-foreground">
+                        {activeJourneyStep.summary}
+                      </div>
+                      {activeJourneyStep.meta ? (
+                        <div className="mt-1 text-[10px] leading-relaxed text-muted-foreground/80">
+                          {activeJourneyStep.meta}
+                        </div>
                       ) : null}
                     </div>
-                  </>
-                ) : (
-                  <div className="space-y-3">
-                    {journeySteps.map((step) => {
-                      const tone = JOURNEY_TONE_STYLES[step.tone];
-                      return (
-                        <section
-                          key={step.index}
-                          aria-label={step.title}
-                          className={cn(
-                            "relative overflow-hidden rounded-full border p-3 shadow-[var(--vr-shadow-xs)] transition-[background-color,border-color,box-shadow,opacity] duration-cf-normal ease-cf-standard motion-reduce:transition-none sm:p-3.5",
-                            LOGS_CARD_ENTER_CLASS,
-                            tone.panel
-                          )}
-                          style={{ animationDelay: `${Math.min(step.index - 1, 4) * 45}ms` }}
-                        >
-                          <div className={cn("absolute inset-x-0 top-0 h-0.5", tone.accent)} />
-                          <div className="flex items-start gap-3">
-                            <div className="relative z-10 pt-0.5">
-                              <span
-                                className={cn(
-                                  "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold",
-                                  tone.number
-                                )}
-                              >
-                                {step.index}
-                              </span>
-                            </div>
-                            <div className="min-w-0 flex-1 space-y-3">
-                              <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div className="min-w-0 flex-1">
-                                  <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                                    {step.title}
-                                  </div>
-                                  <div className="mt-1 text-[11px] leading-relaxed text-foreground">
-                                    {step.summary}
-                                  </div>
-                                  {step.meta ? (
-                                    <div className="mt-1 text-[10px] leading-relaxed text-muted-foreground/80">
-                                      {step.meta}
-                                    </div>
-                                  ) : null}
-                                </div>
-                                <div className="flex flex-wrap justify-end gap-1">
-                                  {step.metrics}
-                                </div>
-                              </div>
-                              <div className="space-y-2 text-[11px]">{step.content}</div>
-                            </div>
-                          </div>
-                        </section>
-                      );
-                    })}
+                    <div className="flex flex-wrap justify-end gap-1">
+                      {activeJourneyStep.metrics}
+                    </div>
                   </div>
-                )}
+                  {activeJourneyDetail ? (
+                    <div className="space-y-2 text-[11px]">{activeJourneyDetail}</div>
+                  ) : null}
+                </div>
               </div>
             </div>
           </section>
