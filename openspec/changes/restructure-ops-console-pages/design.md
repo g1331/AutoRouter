@@ -7,7 +7,7 @@
 - **后端零改动即可支撑分区独立保存**：`PUT /api/admin/upstreams/[id]` 的 `updateUpstreamSchema` 全字段 `optional`（`route.ts:94-154`），是真·partial update；`GET` 单条已存在（`route.ts:159-178`）。`PUT /api/admin/keys/[id]` 的 `updateApiKeySchema` 同样全 optional 且 `.strict()` + `.refine(Object.keys>0)`（`route.ts:64-90`），含 `spending_rules`；`GET` 单条已存在（`route.ts:22`）。仅缺 `useUpstream(id)` / `useApiKey(id)` 两个查询 hook。
 - **分区自保存有现成蓝本**：`useToggleUpstreamActive`（`use-upstreams.ts:320-393`）已实现单字段 PUT + optimistic 写入 + 失败回滚 + `onSettled` 失效；`UpstreamFailureRulesEditor` 自带 CRUD 自保存。分区表单直接照抄该 optimistic 范式。
 - **弹窗内已具备 13 分区三分类左导航结构**（Basic 5 / Strategy 4 / Reliability 4），可直接迁入路由页；`editUpstreamFormSchema`（`upstream-form-dialog.tsx:384`）可按字段切分为分区子 schema。
-- **存量 bug**：`upstreams-table` 的 `onTest` prop 声明但从未调用（连接测试 UI 不可达）；settings 页缺 users / cliproxy 两入口；`ui/terminal/status-led.tsx` 零引用死代码。
+- **存量 bug**：`upstreams-table` 的 `onTest` prop 声明但从未调用（连接测试 UI 不可达）；settings 页缺 users / cliproxy 两入口。（注：初版计划误判 `ui/terminal/status-led.tsx` 为零引用死代码；实为 `upstreams-table.tsx` 的活消费者，见 D1.3。）
 - **半径六套并行**：`rounded-cf-*` 令牌、md-sys 残留 `rounded-md`（30 处 / 8 弹窗文件）、裸 `rounded`（10 处）、任意值 `rounded-[Npx]`（8 种数值 / 13 处），16px 档全域零使用。
 - **数字排印四套无契约**：dashboard KPI 走 Saira、topbar live-pulse 走正文 Manrope、logs/billing 表格走 mono、leaderboard 走 `type-body-small`；另有 3 个未定义 `type-*` 类在 10 处被调用后静默退化。
 - **两处 StatCard 逐字重复**：portal 的 `OverviewStatCard` 与 users/[id] 的 `StatCard` 是重复代码且同带 bug（`type-headline-small` 未定义）。
@@ -61,7 +61,7 @@
 |---|---|---|
 | `rounded-md`（8 个 key/upstream 弹窗文件） | 30 | `rounded-cf-md` |
 | 裸 `rounded`（绕过令牌） | 10 | `rounded-cf-sm` |
-| `rounded-[1px]` / `[2px]` / `[5px]` / `[6px]` | 归并 | `rounded-cf-sm` |
+| `rounded-[1px]` / `[2px]` / `[5px]` / `[6px]`（含 `terminal/status-led:49` 的 `[6px]`——该组件仍被 upstreams-table 消费，Phase A 就地迁移不删） | 归并 | `rounded-cf-sm` |
 | `rounded-[8px]` / `[10px]` | 归并 | `rounded-cf-md` |
 | `rounded-[18px]` / `[22px]`（药丸：login ×6、upstreams:319、hero-terminal:63、logs-table ×2、lifecycle-track:325） | 归并 | `rounded-full` |
 
@@ -80,7 +80,7 @@
 | `IconBox`（`size` / `tone`） | `src/components/ui/icon-box.tsx` | 23 处手写 amber 图标方块（9 文件） |
 | `StatCard`（Tier-1 数字） | `src/components/dashboard/stat-card.tsx` | 合并 portal `OverviewStatCard` 与 users/[id] `StatCard`（逐字重复 + 同带 bug） |
 | `SectionForm`（详情页分区外壳：标题 + dirty 徽标 + 保存/重置底栏） | `src/components/admin/section-form.tsx` | upstreams / keys 详情页共用 |
-| **删死代码** | 删 `ui/terminal/status-led.tsx`（零 import，删前 grep 复核） | 保留 `ui/status-led.tsx` |
+| **删死代码（改期至 Phase B3）** | `ui/terminal/status-led.tsx` **非死代码**：仍被 `upstreams-table.tsx` 消费（import + 3 处渲染 :485/:805/:810），Phase A 仅就地迁半径；待 Phase B3 行表 LED 改用 `ui/status-led.tsx` 后再删该文件、barrel 导出与其测试 | 两个 StatusLed 并存：terminal 版（status/showLabel/label API，upstreams-table 用）vs `ui/status-led.tsx`（tone/pulse API，live-pulse-bar + state-chip 用）；保留后者 |
 
 #### D1.4 未定义 `type-*` 类修复（10 处）
 

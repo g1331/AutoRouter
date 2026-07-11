@@ -14,7 +14,7 @@
 - [ ] 1.9 抽取 `admin/section-form.tsx`（SectionForm：标题 + dirty 徽标 + 保存/重置底栏，disabled-until-dirty），含组件测试
 - [ ] 1.10 `live-pulse-bar.tsx` 全部主指标迁 Tier 1（Saira `font-display` + tabular-nums）；topbar 字号档由双主题实测定档
 - [ ] 1.11 修 settings 页缺 users/cliproxy 两入口 bug；header-compensation 非标骨架归一到 PageShell
-- [ ] 1.12 删死代码 `ui/terminal/status-led.tsx`（删前精确字面 grep 复核零引用；保留 `ui/status-led.tsx`）
+- [ ] 1.12 就地将 `ui/terminal/status-led.tsx` 的 `rounded-[6px]` 迁移为 `rounded-cf-sm`（该组件仍被 `upstreams-table.tsx` 消费，**本阶段不可删**）；注意存在两个 StatusLed：terminal 版（status/showLabel/label API）vs `ui/status-led.tsx`（tone/pulse API），保留后者，terminal 版删除改期至 Phase B3（task 4.4）
 - [ ] 1.13 新增串双语同落 `src/messages/{en,zh-CN}.json`（namespace 顶层无点号）
 - [ ] 1.14 验收并提交：tsc + lint + 半径守护单测 + 新组件测试绿；双主题 spot check（dashboard/settings/portal 概览）；提交
 
@@ -41,8 +41,9 @@
 - [ ] 4.1 上游列表大卡片网格 → 按 priority tier 分组紧凑行表（LED + 名称/base_url + 熔断 StateChip + 关键指标 Tier-2/3 + **最近使用相对时间「N 分钟前」/「未使用」常驻 compact 行内，满足 baseline「时间信息以最近使用为主」** + 展开行装原卡片密集信息）；compact/comfortable 切换沿用
 - [ ] 4.2 行操作：active 开关、**Test（恢复 onTest 调用，修死 bug）**、Edit（跳详情页）、Delete（保留 `morph-upstream-delete`）、熔断恢复；撤除 edit morph
 - [ ] 4.3 拆解后删除 `upstream-form-dialog.tsx`（分区体与 helper 已迁出）
-- [ ] 4.4 新增 upstreams 详情页 e2e；列表 + 详情 visual/a11y 基线；auth-role-routing 锚点（`text=openai-primary` 等）保持渲染
-- [ ] 4.5 验收并提交：tsc + lint + upstreams 相关单测/e2e 绿；本地 e2e --workers=2 绿；列表 + Test 动作 + delete morph 双主题冒烟；提交
+- [ ] 4.4 行表改写后列表 LED 全面改用 `@/components/ui/status-led`（tone/pulse API）；确认 terminal 版 StatusLed 无剩余消费者后（精确字面 grep 复核），删除 `ui/terminal/status-led.tsx`、其 barrel 导出行（`ui/terminal/index.ts`）与 `tests/components/ui/terminal/status-led.test.tsx`
+- [ ] 4.5 新增 upstreams 详情页 e2e；列表 + 详情 visual/a11y 基线；auth-role-routing 锚点（`text=openai-primary` 等）保持渲染
+- [ ] 4.6 验收并提交：tsc + lint + upstreams 相关单测/e2e 绿；本地 e2e --workers=2 绿；列表 + Test 动作 + delete morph 双主题冒烟；提交
 
 ## 5. Phase C1 · useApiKey + /keys/[id] 详情页 + 瘦 create（提交 `feat(keys)` C1）
 

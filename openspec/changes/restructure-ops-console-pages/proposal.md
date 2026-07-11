@@ -17,7 +17,7 @@
 - **上游列表重构**：大卡片网格 → 按 priority tier 分组的紧凑行表（LED + 名称 + 熔断 StateChip + 关键指标 + 行操作），并**恢复连接测试动作**（修 `onTest` 声明却从未调用的死 bug）。
 - **密钥编辑重构**：新增 `/keys/[id]` 详情页（基础信息 / 访问模式与上游授权 / 花费规则 / 模型白名单 / 到期），同分区独立保存模式；瘦 create dialog 保留一次性密钥展示后跳转；`edit-key-dialog.tsx` 删除。
 - **其余页面分级处置**：billing 组件化（IA 不变）、logs-table 抽子组件（DOM 等价）、admin 各页接共享原语与契约对齐、portal + login 排印/半径对齐；**修 settings 页缺 users/cliproxy 两入口 bug**。
-- **删除死代码**：`ui/terminal/status-led.tsx`（零引用，删前 grep 复核）。
+- **清退 terminal 版 StatusLed**：`ui/terminal/status-led.tsx` 仍被 `upstreams-table.tsx` 消费，非死代码；行表改用 `ui/status-led.tsx` 后于 Phase B3 再删（删前 grep 复核无消费者）。
 - 保留 View Transitions morph（create / delete / revoke / portal ×3 / billing-reset），仅撤除被页面跳转取代的 edit morph；单 PR、分阶段提交。
 
 ## Capabilities
@@ -37,7 +37,7 @@
 ## Impact
 
 - **前端页面**：新增 `src/app/[locale]/(dashboard)/upstreams/[id]/page.tsx`、`keys/[id]/page.tsx`；改造 upstreams / keys 列表页、billing、logs、dashboard、system/users、system/cliproxy、traffic-recording、background-sync、failure-rules、header-compensation、settings、portal 四页与 login。
-- **组件**：新增 `admin/page-header.tsx`、`admin/page-shell.tsx`、`ui/icon-box.tsx`、`dashboard/stat-card.tsx`、`admin/section-form.tsx`；新增 `admin/upstream/sections/*.tsx`、`admin/billing/*`、`logs/*` 子组件；删除 `upstream-form-dialog.tsx`、`edit-key-dialog.tsx`、`ui/terminal/status-led.tsx`。
+- **组件**：新增 `admin/page-header.tsx`、`admin/page-shell.tsx`、`ui/icon-box.tsx`、`dashboard/stat-card.tsx`、`admin/section-form.tsx`；新增 `admin/upstream/sections/*.tsx`、`admin/billing/*`、`logs/*` 子组件；删除 `upstream-form-dialog.tsx`、`edit-key-dialog.tsx`；Phase B3 行表迁移后删除 `ui/terminal/status-led.tsx`（消费者迁走后）。
 - **hooks**：新增 `useUpstream(id)`、`useApiKey(id)`；复用 `useToggleUpstreamActive` 的 optimistic + 回滚范式做分区保存。
 - **令牌 / 样式**：`src/app/globals.css` 补 `.type-label-small`；全仓半径 sweep（30 + 10 + 13 处）；`tailwind.config.ts` 删裸 `sm`/`md`/`lg` 半径别名（保留 `--vr-radius-lg` 令牌本体）。
 - **i18n**：`src/messages/{en,zh-CN}.json` 新增详情页 / 分区 / 原语文案，双语同落。
