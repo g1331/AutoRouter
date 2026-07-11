@@ -2395,7 +2395,7 @@ export default function BillingPage() {
                                         <Button
                                           variant="ghost"
                                           size="icon"
-                                          className="h-8 w-8 text-green-600 hover:text-green-700"
+                                          className="h-8 w-8 text-status-success hover:text-status-success/80"
                                           onClick={() => void saveEdit()}
                                           disabled={editIsSaving}
                                         >
@@ -2509,7 +2509,7 @@ export default function BillingPage() {
                                         {hasTiers && (
                                           <button
                                             type="button"
-                                            className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-surface-300/60"
+                                            className="flex h-8 w-8 items-center justify-center rounded-cf-sm hover:bg-surface-300/60"
                                             onClick={() => togglePriceRow(override.model)}
                                             title={t(
                                               isExpanded
@@ -2657,7 +2657,7 @@ export default function BillingPage() {
                                                             <Button
                                                               variant="ghost"
                                                               size="icon"
-                                                              className="h-6 w-6 text-green-600 hover:text-green-700"
+                                                              className="h-6 w-6 text-status-success hover:text-status-success/80"
                                                               onClick={() => void saveEdit()}
                                                               disabled={editIsSaving}
                                                             >
@@ -2821,7 +2821,7 @@ export default function BillingPage() {
                                 >
                                   <button
                                     type="button"
-                                    className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-surface-300/60"
+                                    className="flex h-8 w-8 items-center justify-center rounded-cf-sm hover:bg-surface-300/60"
                                     onClick={() => togglePriceRow(model)}
                                     title={t(
                                       isExpanded
@@ -2949,7 +2949,7 @@ export default function BillingPage() {
                                                         <Button
                                                           variant="ghost"
                                                           size="icon"
-                                                          className="h-6 w-6 text-green-600 hover:text-green-700"
+                                                          className="h-6 w-6 text-status-success hover:text-status-success/80"
                                                           onClick={() => void saveEdit()}
                                                           disabled={editIsSaving}
                                                         >
@@ -3229,7 +3229,7 @@ export default function BillingPage() {
                                         <Button
                                           variant="ghost"
                                           size="icon"
-                                          className="h-8 w-8 text-green-600 hover:text-green-700"
+                                          className="h-8 w-8 text-status-success hover:text-status-success/80"
                                           onClick={() => void saveEdit()}
                                           disabled={editIsSaving}
                                         >
@@ -3345,7 +3345,7 @@ export default function BillingPage() {
                                         {hasTiers && (
                                           <button
                                             type="button"
-                                            className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-surface-300/60"
+                                            className="flex h-8 w-8 items-center justify-center rounded-cf-sm hover:bg-surface-300/60"
                                             onClick={() => togglePriceRow(item.model)}
                                             title={t(
                                               isExpanded
@@ -3493,7 +3493,7 @@ export default function BillingPage() {
                                                             <Button
                                                               variant="ghost"
                                                               size="icon"
-                                                              className="h-6 w-6 text-green-600 hover:text-green-700"
+                                                              className="h-6 w-6 text-status-success hover:text-status-success/80"
                                                               onClick={() => void saveEdit()}
                                                               disabled={editIsSaving}
                                                             >

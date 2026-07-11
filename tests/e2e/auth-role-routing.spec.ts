@@ -78,10 +78,109 @@ async function mockPortalApis(page: Page): Promise<void> {
   await page.route("**/api/user/usage**", (route) => fulfillJson(route, 200, MEMBER_USAGE));
 }
 
+// KPI 卡 sparkline（requests/tokens/cost 三个 metric）与用量图共用的
+// timeseries 接口返回最小合法结构，避免仪表盘挂载期请求打到 catch-all
+// 后组件走进非真实的数据分支。
+const ADMIN_TIMESERIES = {
+  range: "today",
+  granularity: "hour",
+  series: [],
+  total_series: [
+    {
+      timestamp: new Date("2026-06-10T08:00:00.000Z").toISOString(),
+      request_count: 12,
+      total_tokens: 3400,
+      avg_duration_ms: 820,
+      total_cost: 0.12,
+    },
+    {
+      timestamp: new Date("2026-06-10T09:00:00.000Z").toISOString(),
+      request_count: 20,
+      total_tokens: 5100,
+      avg_duration_ms: 760,
+      total_cost: 0.2,
+    },
+  ],
+  period_summary: {
+    request_count: 32,
+    total_tokens: 8500,
+    avg_ttft_ms: 640,
+    avg_duration_ms: 790,
+    avg_tps: 42,
+    total_cost: 0.32,
+  },
+};
+
+// 路由拓扑面板挂载期请求：上游列表、健康状态与 live pulse 快照都返回
+// 最小合法结构（catch-all 的 {} 会让面板走进空态分支）。
+const ADMIN_UPSTREAMS = {
+  items: [
+    {
+      id: "00000000-0000-4000-8000-00000000aa01",
+      name: "openai-primary",
+      priority: 1,
+      weight: 10,
+      is_active: true,
+      circuit_breaker: {
+        state: "closed",
+        failure_count: 0,
+        success_count: 10,
+        last_failure_at: null,
+        opened_at: null,
+        config: null,
+      },
+    },
+  ],
+  total: 1,
+  page: 1,
+  page_size: 50,
+  total_pages: 1,
+};
+
+const ADMIN_UPSTREAM_HEALTH = {
+  data: [
+    {
+      upstream_id: "00000000-0000-4000-8000-00000000aa01",
+      upstream_name: "openai-primary",
+      is_healthy: true,
+      last_check_at: new Date("2026-06-10T09:00:00.000Z").toISOString(),
+      last_success_at: new Date("2026-06-10T09:00:00.000Z").toISOString(),
+      failure_count: 0,
+      latency_ms: 42,
+      error_message: null,
+    },
+  ],
+  total: 1,
+};
+
+const LIVE_PULSE_SNAPSHOT = {
+  requestsPerMinute: 24,
+  errorRatePct: 0,
+  avgLatencyMs: 800,
+  tokensPerMinute: 4200,
+  sampleCount: 24,
+  windowSeconds: 60,
+  generatedAt: new Date("2026-06-10T09:00:00.000Z").toISOString(),
+  gateway: { healthyUpstreams: 1, totalUpstreams: 1, openCircuitBreakers: 0 },
+};
+
 // 管理后台接口兜底：令牌探针与仪表盘数据请求都以空对象成功返回，
 // 该流程只断言路由落点，不断言后台页面内容。
 async function mockAdminApis(page: Page): Promise<void> {
   await page.route("**/api/admin/**", (route) => fulfillJson(route, 200, {}));
+  await page.route("**/api/admin/stats/timeseries**", (route) =>
+    fulfillJson(route, 200, ADMIN_TIMESERIES)
+  );
+  await page.route("**/api/admin/upstreams?page=**", (route) =>
+    fulfillJson(route, 200, ADMIN_UPSTREAMS)
+  );
+  await page.route("**/api/admin/upstreams/health**", (route) =>
+    fulfillJson(route, 200, ADMIN_UPSTREAM_HEALTH)
+  );
+  // useLivePulse 的 SSE 连接读不到事件流会自动降级为快照轮询，两种形态都回同一份快照。
+  await page.route("**/api/admin/stats/live**", (route) =>
+    fulfillJson(route, 200, LIVE_PULSE_SNAPSHOT)
+  );
 }
 
 async function waitForLoginForm(page: Page): Promise<void> {

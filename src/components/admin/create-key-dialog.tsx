@@ -321,34 +321,34 @@ export function CreateKeyDialog() {
                         <button
                           type="button"
                           className={cn(
-                            "rounded-[var(--shape-corner-medium)] border p-4 text-left transition-colors",
+                            "rounded-md border p-4 text-left transition-colors",
                             field.value === "unrestricted"
                               ? "border-primary bg-primary/5"
-                              : "border-[rgb(var(--md-sys-color-outline-variant))] bg-[rgb(var(--md-sys-color-surface-container-low))]"
+                              : "border-divider-subtle bg-surface-200"
                           )}
                           onClick={() => field.onChange("unrestricted")}
                         >
-                          <div className="type-body-medium text-[rgb(var(--md-sys-color-on-surface))]">
+                          <div className="type-body-medium text-foreground">
                             {t("unrestrictedAccess")}
                           </div>
-                          <p className="mt-1 type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                          <p className="mt-1 type-body-small text-muted-foreground">
                             {t("unrestrictedAccessDesc")}
                           </p>
                         </button>
                         <button
                           type="button"
                           className={cn(
-                            "rounded-[var(--shape-corner-medium)] border p-4 text-left transition-colors",
+                            "rounded-md border p-4 text-left transition-colors",
                             field.value === "restricted"
                               ? "border-primary bg-primary/5"
-                              : "border-[rgb(var(--md-sys-color-outline-variant))] bg-[rgb(var(--md-sys-color-surface-container-low))]"
+                              : "border-divider-subtle bg-surface-200"
                           )}
                           onClick={() => field.onChange("restricted")}
                         >
-                          <div className="type-body-medium text-[rgb(var(--md-sys-color-on-surface))]">
+                          <div className="type-body-medium text-foreground">
                             {t("restrictedAccess")}
                           </div>
-                          <p className="mt-1 type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                          <p className="mt-1 type-body-small text-muted-foreground">
                             {t("restrictedAccessDesc")}
                           </p>
                         </button>
@@ -415,17 +415,17 @@ export function CreateKeyDialog() {
                             })}
                           </p>
                         )}
-                        <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-[var(--shape-corner-medium)] border border-[rgb(var(--md-sys-color-outline-variant))] bg-[rgb(var(--md-sys-color-surface-container-low))] p-3">
+                        <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-md border border-divider-subtle bg-surface-200 p-3">
                           {upstreamsLoading ? (
-                            <div className="py-4 text-center type-body-medium text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                            <div className="py-4 text-center type-body-medium text-muted-foreground">
                               {tCommon("loading")}
                             </div>
                           ) : !upstreams || upstreams.length === 0 ? (
-                            <div className="py-4 text-center type-body-medium text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                            <div className="py-4 text-center type-body-medium text-muted-foreground">
                               {tCommon("noData")}
                             </div>
                           ) : filteredUpstreams.length === 0 ? (
-                            <div className="py-4 text-center type-body-medium text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                            <div className="py-4 text-center type-body-medium text-muted-foreground">
                               {t("noMatchingUpstreams")}
                             </div>
                           ) : (
@@ -435,7 +435,7 @@ export function CreateKeyDialog() {
                                 control={form.control}
                                 name="upstream_ids"
                                 render={({ field }) => (
-                                  <FormItem className="flex items-start space-x-3 space-y-0 rounded-[var(--shape-corner-small)] p-2 transition-colors hover:bg-[rgb(var(--md-sys-color-on-surface)_/_0.08)]">
+                                  <FormItem className="flex items-start space-x-3 space-y-0 rounded-cf-md p-2 transition-colors hover:bg-foreground/10">
                                     <FormControl>
                                       <Checkbox
                                         checked={field.value?.includes(upstream.id)}
@@ -448,11 +448,11 @@ export function CreateKeyDialog() {
                                       />
                                     </FormControl>
                                     <div className="flex-1 space-y-1 leading-none">
-                                      <label className="cursor-pointer type-body-medium text-[rgb(var(--md-sys-color-on-surface))]">
+                                      <label className="cursor-pointer type-body-medium text-foreground">
                                         {upstream.name}
                                       </label>
                                       {upstream.description && (
-                                        <p className="type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                                        <p className="type-body-small text-muted-foreground">
                                           {upstream.description}
                                         </p>
                                       )}
@@ -484,13 +484,11 @@ export function CreateKeyDialog() {
                   )}
                 />
 
-                <div className="space-y-3 rounded-[var(--shape-corner-medium)] border border-[rgb(var(--md-sys-color-outline-variant))] bg-[rgb(var(--md-sys-color-surface-container-low))] p-4">
+                <div className="space-y-3 rounded-md border border-divider-subtle bg-surface-200 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="type-body-medium text-[rgb(var(--md-sys-color-on-surface))]">
-                        {t("spendingRules")}
-                      </p>
-                      <p className="mt-1 type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                      <p className="type-body-medium text-foreground">{t("spendingRules")}</p>
+                      <p className="mt-1 type-body-small text-muted-foreground">
                         {t("spendingRulesDesc")}
                       </p>
                     </div>
@@ -512,7 +510,7 @@ export function CreateKeyDialog() {
                   </div>
 
                   {spendingRulesFieldArray.fields.length === 0 ? (
-                    <p className="type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                    <p className="type-body-small text-muted-foreground">
                       {t("spendingRulesEmpty")}
                     </p>
                   ) : (
@@ -522,7 +520,7 @@ export function CreateKeyDialog() {
                         return (
                           <div
                             key={ruleField.id}
-                            className="space-y-3 rounded-[var(--shape-corner-small)] border border-[rgb(var(--md-sys-color-outline-variant))] bg-background/70 p-3"
+                            className="space-y-3 rounded-cf-md border border-divider-subtle bg-background/70 p-3"
                           >
                             <div className="flex items-center justify-between gap-3">
                               <div className="type-body-medium text-foreground">

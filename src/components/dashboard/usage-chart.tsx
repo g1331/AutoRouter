@@ -7,8 +7,9 @@ import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import {
   Area,
-  AreaChart,
+  Bar,
   CartesianGrid,
+  ComposedChart,
   Legend,
   ResponsiveContainer,
   Tooltip,
@@ -109,12 +110,16 @@ function CustomTooltip({
   metric,
 }: {
   active?: boolean;
-  payload?: Array<{ name: string; value: number; color: string }>;
+  payload?: Array<{ name: string; value: number; color: string; type?: string }>;
   label?: string;
   mode: "dark" | "light";
   metric: TimeseriesMetric;
 }) {
-  if (!active || !payload?.length) {
+  // recharts 只在默认 content 里过滤 tooltipType="none" 的系列；自定义
+  // content 收到的是未过滤 payload，需要自己排除（总量模式的趋势 Area）。
+  const entries = payload?.filter((entry) => entry.type !== "none") ?? [];
+
+  if (!active || !entries.length) {
     return null;
   }
 
@@ -131,7 +136,7 @@ function CustomTooltip({
       <p className="type-label-medium mb-2" style={{ color: theme.colors.text }}>
         {label}
       </p>
-      {payload.map((entry) => (
+      {entries.map((entry) => (
         <div key={entry.name} className="mb-1.5 flex items-center gap-2 last:mb-0">
           <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
           <span className="type-body-small" style={{ color: theme.colors.textStrong }}>
@@ -147,10 +152,13 @@ function CustomLegend({
   payload,
   mode,
 }: {
-  payload?: Array<{ value: string; color: string }>;
+  payload?: Array<{ value: string; color: string; type?: string }>;
   mode: "dark" | "light";
 }) {
-  if (!payload?.length) {
+  // 同 CustomTooltip：legendType="none" 的过滤要在自定义 content 里自己做。
+  const entries = payload?.filter((entry) => entry.type !== "none") ?? [];
+
+  if (!entries.length) {
     return null;
   }
 
@@ -158,7 +166,7 @@ function CustomLegend({
 
   return (
     <div className="mt-4 flex flex-wrap justify-center gap-3">
-      {payload.map((entry) => (
+      {entries.map((entry) => (
         <div key={entry.value} className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
           <span className="type-body-small" style={{ color: theme.colors.text }}>
@@ -422,6 +430,7 @@ export function UsageChart({
 
   const currentDisplayModeLabel = displayModeLabels[displayMode];
   const nextDisplayMode: UsageChartDisplayMode = displayMode === "total" ? "byUpstream" : "total";
+  const totalSeries = displayMode === "total" ? seriesDefinitions[0] : undefined;
   const CurrentDisplayModeIcon = DISPLAY_MODE_META[displayMode].icon;
 
   return (
@@ -458,7 +467,7 @@ export function UsageChart({
                 onClick={() => onDisplayModeChange(nextDisplayMode)}
                 aria-label={currentDisplayModeLabel}
                 title={displayModeLabels[nextDisplayMode]}
-                className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 type-label-medium text-amber-500 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.18)] transition-all hover:bg-amber-500/20"
+                className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 type-label-medium text-amber-500 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--vr-accent-500)_18%,transparent)] transition-all hover:bg-amber-500/20"
               >
                 <CurrentDisplayModeIcon className="h-3 w-3" />
                 <span>{currentDisplayModeLabel}</span>
@@ -479,7 +488,7 @@ export function UsageChart({
                       className={cn(
                         "rounded-full px-2.5 py-1 type-label-medium transition-all",
                         metric === m
-                          ? "bg-amber-500/15 text-amber-500 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.18)]"
+                          ? "bg-amber-500/15 text-amber-500 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--vr-accent-500)_18%,transparent)]"
                           : "text-muted-foreground hover:bg-surface-200/65 hover:text-foreground"
                       )}
                     >
@@ -505,32 +514,34 @@ export function UsageChart({
               height="100%"
               initialDimension={{ width: 1, height: 280 }}
             >
-              <AreaChart data={chartData} margin={theme.spacing.margin}>
-                <defs>
-                  {seriesDefinitions.map((series) => {
-                    return (
-                      <linearGradient
-                        key={series.gradientId}
-                        id={series.gradientId}
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor={series.color}
-                          stopOpacity={theme.area.opacityStart}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor={series.color}
-                          stopOpacity={theme.area.opacityEnd}
-                        />
-                      </linearGradient>
-                    );
-                  })}
-                </defs>
+              <ComposedChart data={chartData} margin={theme.spacing.margin}>
+                {displayMode === "total" && (
+                  <defs>
+                    {seriesDefinitions.map((series) => {
+                      return (
+                        <linearGradient
+                          key={series.gradientId}
+                          id={series.gradientId}
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="5%"
+                            stopColor={series.color}
+                            stopOpacity={theme.area.opacityStart}
+                          />
+                          <stop
+                            offset="95%"
+                            stopColor={series.color}
+                            stopOpacity={theme.area.opacityEnd}
+                          />
+                        </linearGradient>
+                      );
+                    })}
+                  </defs>
+                )}
 
                 <CartesianGrid strokeDasharray="4 4" stroke={theme.colors.grid} vertical={false} />
                 <XAxis
@@ -561,21 +572,45 @@ export function UsageChart({
                 <Tooltip content={<CustomTooltip mode={mode} metric={metric} />} />
                 <Legend content={<CustomLegend mode={mode} />} />
 
-                {seriesDefinitions.map((series) => {
-                  return (
-                    <Area
+                {/* 总量模式 = 柱 + 面积线：柱承载逐桶读数，面积线勾勒趋势。
+                    Area 与 Bar 共用同一 dataKey，故 Area 从 tooltip/legend 中
+                    排除，避免同一数值出现两条目。 */}
+                {totalSeries && (
+                  <Bar
+                    dataKey={totalSeries.dataKey}
+                    name={totalSeries.name}
+                    fill={totalSeries.color}
+                    fillOpacity={theme.bar.opacity}
+                    radius={[3, 3, 0, 0]}
+                    maxBarSize={28}
+                  />
+                )}
+                {totalSeries && (
+                  <Area
+                    type="monotone"
+                    dataKey={totalSeries.dataKey}
+                    stroke={totalSeries.color}
+                    strokeWidth={2}
+                    fill={`url(#${totalSeries.gradientId})`}
+                    fillOpacity={1}
+                    tooltipType="none"
+                    legendType="none"
+                  />
+                )}
+                {/* 按上游模式 = 堆叠柱，总高即总量，分段直读各上游占比。 */}
+                {displayMode === "byUpstream" &&
+                  seriesDefinitions.map((series) => (
+                    <Bar
                       key={series.dataKey}
-                      type="monotone"
                       dataKey={series.dataKey}
                       name={series.name}
-                      stroke={series.color}
-                      strokeWidth={2}
-                      fill={`url(#${series.gradientId})`}
-                      fillOpacity={1}
+                      stackId="upstreams"
+                      fill={series.color}
+                      fillOpacity={0.85}
+                      maxBarSize={28}
                     />
-                  );
-                })}
-              </AreaChart>
+                  ))}
+              </ComposedChart>
             </ResponsiveContainer>
           )}
         </div>

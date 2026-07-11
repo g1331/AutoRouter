@@ -50,28 +50,28 @@ export function TestUpstreamDialog({
   const getHeaderIcon = () => {
     if (isLoading) {
       return (
-        <div className="w-10 h-10 rounded-[var(--shape-corner-medium)] bg-[rgb(var(--md-sys-color-primary-container))] flex items-center justify-center">
-          <Loader2 className="h-5 w-5 text-[rgb(var(--md-sys-color-on-primary-container))] animate-spin" />
+        <div className="w-10 h-10 rounded-md bg-[var(--vr-accent-dim)] flex items-center justify-center">
+          <Loader2 className="h-5 w-5 text-amber-800 dark:text-amber-100 animate-spin" />
         </div>
       );
     }
     if (isSuccess) {
       return (
-        <div className="w-10 h-10 rounded-[var(--shape-corner-medium)] bg-[rgb(var(--md-sys-color-tertiary-container))] flex items-center justify-center">
-          <CheckCircle2 className="h-5 w-5 text-[rgb(var(--md-sys-color-on-tertiary-container))]" />
+        <div className="w-10 h-10 rounded-md bg-status-info-muted flex items-center justify-center">
+          <CheckCircle2 className="h-5 w-5 text-status-info" />
         </div>
       );
     }
     if (isFailed) {
       return (
-        <div className="w-10 h-10 rounded-[var(--shape-corner-medium)] bg-[rgb(var(--md-sys-color-error-container))] flex items-center justify-center">
-          <XCircle className="h-5 w-5 text-[rgb(var(--md-sys-color-on-error-container))]" />
+        <div className="w-10 h-10 rounded-md bg-status-error-muted flex items-center justify-center">
+          <XCircle className="h-5 w-5 text-status-error" />
         </div>
       );
     }
     return (
-      <div className="w-10 h-10 rounded-[var(--shape-corner-medium)] bg-[rgb(var(--md-sys-color-surface-container-highest))] flex items-center justify-center">
-        <TestTube2 className="h-5 w-5 text-[rgb(var(--md-sys-color-on-surface))]" />
+      <div className="w-10 h-10 rounded-md bg-surface-500 flex items-center justify-center">
+        <TestTube2 className="h-5 w-5 text-foreground" />
       </div>
     );
   };
@@ -101,21 +101,15 @@ export function TestUpstreamDialog({
 
         <div className="space-y-3 py-4">
           {/* Upstream Info */}
-          <div className="bg-[rgb(var(--md-sys-color-surface-container-highest))] rounded-[var(--shape-corner-medium)] p-4">
+          <div className="bg-surface-500 rounded-md p-4">
             <div className="space-y-2">
               <div className="flex justify-between">
-                <span className="type-label-large text-[rgb(var(--md-sys-color-on-surface))]">
-                  {tCommon("name")}:
-                </span>
-                <span className="type-body-medium text-[rgb(var(--md-sys-color-on-surface))]">
-                  {upstream.name}
-                </span>
+                <span className="type-label-large text-foreground">{tCommon("name")}:</span>
+                <span className="type-body-medium text-foreground">{upstream.name}</span>
               </div>
               <div className="flex justify-between">
-                <span className="type-label-large text-[rgb(var(--md-sys-color-on-surface))]">
-                  {t("baseUrl")}:
-                </span>
-                <code className="type-body-medium font-mono text-[rgb(var(--md-sys-color-on-surface))] max-w-xs text-right truncate">
+                <span className="type-label-large text-foreground">{t("baseUrl")}:</span>
+                <code className="type-body-medium font-mono text-foreground max-w-xs text-right truncate">
                   {upstream.base_url}
                 </code>
               </div>
@@ -130,24 +124,22 @@ export function TestUpstreamDialog({
           )}
 
           {isSuccess && testResult && (
-            <div className="bg-[rgb(var(--md-sys-color-tertiary-container))] rounded-[var(--shape-corner-medium)] p-4">
+            <div className="bg-status-info-muted rounded-md p-4">
               <div className="space-y-2">
                 {testResult.latency_ms !== null && (
                   <div className="flex justify-between">
-                    <span className="type-label-large text-[rgb(var(--md-sys-color-on-tertiary-container))]">
-                      {t("testLatency")}:
-                    </span>
-                    <code className="type-body-medium font-mono text-[rgb(var(--md-sys-color-on-tertiary-container))]">
+                    <span className="type-label-large text-status-info">{t("testLatency")}:</span>
+                    <code className="type-body-medium font-mono text-status-info">
                       {testResult.latency_ms}ms
                     </code>
                   </div>
                 )}
                 {testResult.status_code !== null && (
                   <div className="flex justify-between">
-                    <span className="type-label-large text-[rgb(var(--md-sys-color-on-tertiary-container))]">
+                    <span className="type-label-large text-status-info">
                       {t("testStatusCode")}:
                     </span>
-                    <code className="type-body-medium font-mono text-[rgb(var(--md-sys-color-on-tertiary-container))]">
+                    <code className="type-body-medium font-mono text-status-info">
                       {testResult.status_code}
                     </code>
                   </div>
@@ -157,34 +149,34 @@ export function TestUpstreamDialog({
           )}
 
           {isFailed && testResult && (
-            <div className="bg-[rgb(var(--md-sys-color-error-container))] rounded-[var(--shape-corner-medium)] p-4">
+            <div className="bg-status-error-muted rounded-md p-4">
               <div className="space-y-2">
                 {testResult.error_type && (
                   <div className="flex justify-between">
-                    <span className="type-label-large text-[rgb(var(--md-sys-color-on-error-container))]">
+                    <span className="type-label-large text-status-error">
                       {t("testErrorType")}:
                     </span>
-                    <code className="type-body-medium font-mono text-[rgb(var(--md-sys-color-on-error-container))]">
+                    <code className="type-body-medium font-mono text-status-error">
                       {testResult.error_type}
                     </code>
                   </div>
                 )}
                 {testResult.status_code !== null && (
                   <div className="flex justify-between">
-                    <span className="type-label-large text-[rgb(var(--md-sys-color-on-error-container))]">
+                    <span className="type-label-large text-status-error">
                       {t("testStatusCode")}:
                     </span>
-                    <code className="type-body-medium font-mono text-[rgb(var(--md-sys-color-on-error-container))]">
+                    <code className="type-body-medium font-mono text-status-error">
                       {testResult.status_code}
                     </code>
                   </div>
                 )}
                 {testResult.error_details && (
                   <div className="mt-3">
-                    <span className="type-label-large text-[rgb(var(--md-sys-color-on-error-container))]">
+                    <span className="type-label-large text-status-error">
                       {t("testErrorDetails")}:
                     </span>
-                    <p className="type-body-small font-mono text-[rgb(var(--md-sys-color-on-error-container))] mt-1 break-words">
+                    <p className="type-body-small font-mono text-status-error mt-1 break-words">
                       {testResult.error_details}
                     </p>
                   </div>

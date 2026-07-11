@@ -7,6 +7,7 @@ import { ArrowRight, BarChart3, Key, Server, Zap } from "lucide-react";
 import { Topbar } from "@/components/admin/topbar";
 import {
   LeaderboardSection,
+  RoutingTopology,
   StatsCards,
   TimeRangeSelector,
   UsageChart,
@@ -68,6 +69,8 @@ export default function DashboardPage() {
           yesterdayCacheHitRate={overview?.yesterday_cache_hit_rate ?? 0}
           isLoading={overviewLoading}
         />
+
+        <RoutingTopology />
 
         <section className="space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

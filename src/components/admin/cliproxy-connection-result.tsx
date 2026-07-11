@@ -29,14 +29,16 @@ export function CliproxyConnectionResult({ result, className }: CliproxyConnecti
     <div
       className={cn(
         "flex items-start gap-3 rounded-cf-sm border p-3",
-        ok ? "border-emerald-500/40 bg-emerald-500/5" : "border-amber-500/40 bg-amber-500/5",
+        ok
+          ? "border-status-success/40 bg-status-success/5"
+          : "border-status-warning/40 bg-status-warning/5",
         className
       )}
     >
       {ok ? (
-        <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" aria-hidden />
+        <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-status-success" aria-hidden />
       ) : (
-        <XCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" aria-hidden />
+        <XCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-status-warning" aria-hidden />
       )}
       <div className="min-w-0 space-y-1">
         <Badge variant={BADGE_VARIANT[result.status]}>{t(`testStatus_${result.status}`)}</Badge>

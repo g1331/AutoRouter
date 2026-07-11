@@ -1,30 +1,36 @@
 /**
- * Dashboard chart theme tokens and formatters.
- * Uses restrained neutral-first palette and provides dark/light variants.
+ * Dashboard chart theme tokens and formatters (Ops Console 2.0).
+ *
+ * Recharts 把颜色写进 SVG presentation attribute，无法解析 var()，因此这里
+ * 保留字面色值作为「图表令牌层」——数值必须与 globals.css 的 --vr-* 真源
+ * 保持一致（dark accent-500 #f2a950 / light accent-500 #9a6410、surface 与
+ * text 梯度同源）。改令牌时同步改这里。
  */
 
 export type ChartThemeMode = "dark" | "light";
 
+// 上游序列 8 色：首位 = accent-500，其余为同明度带的低饱和辅助色，
+// 避开状态色（success/warning/error）的色相以免与告警语义混淆。
 export const UPSTREAM_COLORS_DARK = [
-  "#BF965C",
-  "#4C9A8B",
-  "#6BA06A",
-  "#C97A5A",
-  "#8E6EA8",
-  "#9A8555",
-  "#5E7E9A",
-  "#A16D82",
+  "#f2a950",
+  "#56a99a",
+  "#7fae74",
+  "#d98a66",
+  "#9d86c0",
+  "#b3a05e",
+  "#6f95b5",
+  "#b57f96",
 ] as const;
 
 export const UPSTREAM_COLORS_LIGHT = [
-  "#8D6840",
-  "#2F7F71",
-  "#3E7C4E",
-  "#A85E40",
-  "#6E548D",
-  "#7B6A3F",
-  "#486A87",
-  "#85586E",
+  "#9a6410",
+  "#2f7f71",
+  "#3e7c4e",
+  "#a85e40",
+  "#6e548d",
+  "#7b6a3f",
+  "#486a87",
+  "#85586e",
 ] as const;
 
 // Backward-compatible export (defaults to dark palette).
@@ -33,40 +39,46 @@ export const UPSTREAM_COLORS = [...UPSTREAM_COLORS_DARK];
 const CHART_THEME_BY_MODE = {
   dark: {
     colors: {
-      primary: "#BF965C",
-      primaryMuted: "rgba(191, 150, 92, 0.24)",
-      grid: "rgba(191, 150, 92, 0.14)",
-      text: "#B8C0C8",
-      textStrong: "#EDF1F4",
-      textMuted: "rgba(184, 192, 200, 0.7)",
-      background: "#1D2227",
+      primary: "#f2a950",
+      primaryMuted: "rgba(242, 169, 80, 0.24)",
+      grid: "rgba(242, 169, 80, 0.12)",
+      text: "#9aa2ae",
+      textStrong: "#e8e4da",
+      textMuted: "rgba(154, 162, 174, 0.7)",
+      background: "#15181d",
       tooltip: {
-        background: "#2d343c",
-        border: "#2d343c",
+        background: "#1a1e24",
+        border: "#2b323c",
       },
     },
     area: {
       opacityStart: 0.32,
       opacityEnd: 0.02,
     },
+    bar: {
+      opacity: 0.4,
+    },
   },
   light: {
     colors: {
-      primary: "#8D6840",
-      primaryMuted: "rgba(141, 104, 64, 0.2)",
-      grid: "rgba(141, 104, 64, 0.15)",
-      text: "#60584D",
-      textStrong: "#26221B",
-      textMuted: "rgba(96, 88, 77, 0.72)",
-      background: "#FFFFFF",
+      primary: "#9a6410",
+      primaryMuted: "rgba(154, 100, 16, 0.2)",
+      grid: "rgba(154, 100, 16, 0.14)",
+      text: "#5f6570",
+      textStrong: "#212327",
+      textMuted: "rgba(95, 101, 112, 0.72)",
+      background: "#fdfdfe",
       tooltip: {
-        background: "#FFFFFF",
-        border: "#CBC1B3",
+        background: "#fdfdfe",
+        border: "#c6cbd2",
       },
     },
     area: {
       opacityStart: 0.26,
       opacityEnd: 0.04,
+    },
+    bar: {
+      opacity: 0.32,
     },
   },
 } as const;

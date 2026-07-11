@@ -283,7 +283,7 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
                 <FormItem>
                   <FormLabel>{t("selectUpstreams")} *</FormLabel>
                   <FormDescription>{tPortal("keys.upstreamsDesc")}</FormDescription>
-                  <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-[var(--shape-corner-medium)] border border-[rgb(var(--md-sys-color-outline-variant))] bg-[rgb(var(--md-sys-color-surface-container-low))] p-3">
+                  <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-md border border-divider-subtle bg-surface-200 p-3">
                     {upstreamsLoading ? (
                       <div className="py-4 text-center type-body-medium text-muted-foreground">
                         {tCommon("loading")}
@@ -299,7 +299,7 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
                           control={form.control}
                           name="upstream_ids"
                           render={({ field }) => (
-                            <FormItem className="flex items-center space-x-3 space-y-0 rounded-[var(--shape-corner-small)] p-2 transition-colors hover:bg-[rgb(var(--md-sys-color-on-surface)_/_0.08)]">
+                            <FormItem className="flex items-center space-x-3 space-y-0 rounded-cf-md p-2 transition-colors hover:bg-foreground/10">
                               <FormControl>
                                 <Checkbox
                                   checked={field.value?.includes(upstream.id)}
@@ -325,7 +325,7 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
               )}
             />
 
-            <div className="space-y-3 rounded-[var(--shape-corner-medium)] border border-[rgb(var(--md-sys-color-outline-variant))] bg-[rgb(var(--md-sys-color-surface-container-low))] p-4">
+            <div className="space-y-3 rounded-md border border-divider-subtle bg-surface-200 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="type-body-medium text-foreground">{t("spendingRules")}</p>
@@ -359,7 +359,7 @@ function PortalKeyDialogBody({ mode, apiKey, onClose, onCreated }: PortalKeyDial
                   {spendingRules.map((rule, index) => (
                     <div
                       key={`portal-spending-rule-${index}`}
-                      className="space-y-3 rounded-[var(--shape-corner-small)] border border-[rgb(var(--md-sys-color-outline-variant))] bg-background/70 p-3"
+                      className="space-y-3 rounded-cf-md border border-divider-subtle bg-background/70 p-3"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <span className="type-body-medium text-foreground">

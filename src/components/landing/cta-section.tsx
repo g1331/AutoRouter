@@ -19,7 +19,7 @@ export function CtaSection() {
           aria-hidden="true"
           style={{
             backgroundImage:
-              "radial-gradient(circle at 50% 120%, rgba(201,157,82,0.2), transparent 60%)",
+              "radial-gradient(circle at 50% 120%, color-mix(in srgb, var(--vr-accent-500) 20%, transparent), transparent 60%)",
           }}
         />
         <div className="relative z-10 flex flex-col items-center">

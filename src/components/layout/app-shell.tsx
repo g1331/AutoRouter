@@ -218,7 +218,10 @@ export function AppShell({
             </div>
           </div>
         </header>
-        {children}
+        {/* 进场瀑布：key 随路由变化重放；transform 在子元素自身，不破坏 sticky */}
+        <div key={pathname} className="rise-stagger">
+          {children}
+        </div>
       </main>
     </div>
   );

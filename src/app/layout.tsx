@@ -41,6 +41,23 @@ const jetbrainsMono = localFont({
   ],
 });
 
+const saira = localFont({
+  src: "./fonts/saira-latin-wght-normal.woff2",
+  weight: "100 900",
+  style: "normal",
+  display: "swap",
+  variable: "--font-display",
+  fallback: [
+    "Bahnschrift",
+    "Noto Sans SC",
+    "Source Han Sans SC",
+    "PingFang SC",
+    "Microsoft YaHei",
+    "system-ui",
+    "sans-serif",
+  ],
+});
+
 export const metadata: Metadata = {
   title: "AutoRouter Admin",
   description: "AI API Gateway Management Console",
@@ -59,7 +76,7 @@ export default async function RootLayout({ children, params }: RootLayoutProps) 
     <html
       lang={locale}
       suppressHydrationWarning
-      className={`${manrope.variable} ${jetbrainsMono.variable}`}
+      className={`${manrope.variable} ${jetbrainsMono.variable} ${saira.variable}`}
     >
       <head />
       <body className={manrope.className}>

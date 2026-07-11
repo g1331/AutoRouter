@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { TimeRangeSelector } from "@/components/dashboard/time-range-selector";
+import { statusTone } from "@/lib/status-tone";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -166,12 +167,12 @@ const REASONING_EFFORT_LABELS: Record<ReasoningEffortLevel, string> = {
 
 const REASONING_EFFORT_BADGE_CLASSES: Record<ReasoningEffortLevel, string> = {
   none: "border-divider/70 bg-surface-300/65 text-muted-foreground/85",
-  enabled: "border-status-info/25 bg-status-info-muted/25 text-status-info",
+  enabled: statusTone("info", "faint"),
   minimal: "border-divider/70 bg-surface-300/70 text-muted-foreground",
   low: "border-divider bg-surface-300/85 text-foreground/85",
-  medium: "border-status-info/30 bg-status-info-muted/35 text-status-info",
+  medium: statusTone("info", "faint"),
   high: "border-amber-500/35 bg-amber-500/10 text-amber-300",
-  xhigh: "border-status-warning/40 bg-status-warning-muted/25 text-status-warning",
+  xhigh: statusTone("warning"),
 };
 
 const THINKING_BADGE_BASE_CLASS =
@@ -426,7 +427,8 @@ function ThinkingConfigBadge({
         variant="success"
         className={cn(
           THINKING_BADGE_BASE_CLASS,
-          "gap-1 border-status-success/30 bg-status-success-muted/35 text-status-success",
+          "gap-1",
+          statusTone("success", "faint"),
           compact && "gap-0.5 px-1 py-0 text-[8px]"
         )}
         aria-label={t("thinkingBadgeAria", { value: badgeLabel })}
@@ -1133,7 +1135,7 @@ export function LogsTable({
 
     if (isSelected) {
       return {
-        row: "border-emerald-500/30 bg-emerald-500/10",
+        row: "border-status-success/30 bg-status-success/10",
         text: "text-foreground",
         marker: "text-foreground",
       };
@@ -1464,7 +1466,7 @@ export function LogsTable({
         tab: "border-divider/80 bg-surface-200/78 text-foreground hover:border-status-success/20 hover:bg-surface-200",
         tabActive:
           "border-status-success/25 bg-surface-200 text-foreground shadow-[var(--vr-shadow-xs)]",
-        number: "border-status-success/20 bg-status-success-muted/18 text-status-success",
+        number: statusTone("success", "faint"),
         accent: "bg-status-success/80",
         panel: "border-status-success/22 bg-surface-200/82",
       },
@@ -1472,7 +1474,7 @@ export function LogsTable({
         tab: "border-divider/80 bg-surface-200/78 text-foreground hover:border-status-error/20 hover:bg-surface-200",
         tabActive:
           "border-status-error/25 bg-surface-200 text-foreground shadow-[var(--vr-shadow-xs)]",
-        number: "border-status-error/20 bg-status-error-muted/18 text-status-error",
+        number: statusTone("error", "faint"),
         accent: "bg-status-error/85",
         panel: "border-status-error/22 bg-surface-200/82",
       },
@@ -1680,7 +1682,7 @@ export function LogsTable({
     > = {
       done: {
         tab: "border-status-success/30 bg-status-success-muted/16 text-foreground",
-        number: "border-status-success/25 bg-status-success-muted/22 text-status-success",
+        number: statusTone("success", "faint"),
         accent: "bg-status-success/80",
         arrow: "text-status-success/70",
       },
@@ -1692,7 +1694,7 @@ export function LogsTable({
       },
       failed: {
         tab: "border-status-error/30 bg-status-error-muted/14 text-foreground",
-        number: "border-status-error/24 bg-status-error-muted/22 text-status-error",
+        number: statusTone("error", "faint"),
         accent: "bg-status-error/85",
         arrow: "text-status-error/70",
       },
@@ -2119,7 +2121,12 @@ export function LogsTable({
                           })
                         : null}
                       {attempt.error_message ? (
-                        <div className="mt-1 rounded-cf-sm border border-status-error/25 bg-status-error-muted/10 px-2 py-1 text-[11px] text-status-error">
+                        <div
+                          className={cn(
+                            "mt-1 rounded-cf-sm border px-2 py-1 text-[11px]",
+                            statusTone("error", "faint")
+                          )}
+                        >
                           {attempt.error_message}
                         </div>
                       ) : null}
@@ -2354,7 +2361,12 @@ export function LogsTable({
                       ))}
                     </div>
                     {errorSummaryCallout ? (
-                      <div className="rounded-cf-sm border border-status-error/30 bg-status-error-muted/12 px-3 py-2 text-[11px] text-status-error">
+                      <div
+                        className={cn(
+                          "rounded-cf-sm border px-3 py-2 text-[11px]",
+                          statusTone("error", "faint")
+                        )}
+                      >
                         {errorSummaryCallout}
                       </div>
                     ) : null}
@@ -3375,9 +3387,7 @@ export function LogsTable({
                               className={cn(
                                 "flex min-h-6 min-w-6 items-center justify-center px-2 py-0.5 text-[11px] leading-none font-mono tabular-nums",
                                 isLogInProgress(log) &&
-                                  (isLive
-                                    ? "border-status-info/30 bg-status-info-muted/25 text-status-info"
-                                    : "text-muted-foreground")
+                                  (isLive ? statusTone("info", "faint") : "text-muted-foreground")
                               )}
                               aria-label={
                                 isLogInProgress(log) ? t("displayStatusInProgress") : undefined
@@ -3662,7 +3672,7 @@ export function LogsTable({
                                       "flex min-h-5 min-w-5 items-center justify-center px-1.5 py-0.5 text-[10px] leading-none font-mono tabular-nums whitespace-nowrap",
                                       isLogInProgress(log) &&
                                         (isLive
-                                          ? "border-status-info/30 bg-status-info-muted/25 text-status-info"
+                                          ? statusTone("info", "faint")
                                           : "text-muted-foreground")
                                     )}
                                     aria-label={

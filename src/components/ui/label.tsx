@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
  * M3 Label - Using body-medium typography
  */
 const labelVariants = cva(
-  "type-body-medium text-[rgb(var(--md-sys-color-on-surface-variant))] peer-disabled:cursor-not-allowed peer-disabled:opacity-50"
+  "type-body-medium text-muted-foreground peer-disabled:cursor-not-allowed peer-disabled:opacity-50"
 );
 
 const Label = React.forwardRef<

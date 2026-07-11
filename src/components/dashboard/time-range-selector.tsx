@@ -90,7 +90,7 @@ export function TimeRangeSelector({
             type="button"
             onClick={() => onChange(range)}
             className={cn(
-              "rounded-[8px] px-3.5 py-1.5 type-label-medium transition-all duration-cf-fast ease-cf-standard",
+              "rounded-cf-sm px-3.5 py-1.5 type-label-medium transition-all duration-cf-fast ease-cf-standard",
               "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
               value === range
                 ? "bg-amber-500 text-primary-foreground shadow-cf-glow-subtle"
@@ -159,7 +159,6 @@ export function TimeRangeSelector({
                   size="sm"
                   disabled={!pendingRange?.from || !pendingRange?.to}
                   onClick={handleApply}
-                  className="bg-amber-500 text-primary-foreground hover:bg-amber-600"
                 >
                   {t("timeRange.apply")}
                 </Button>

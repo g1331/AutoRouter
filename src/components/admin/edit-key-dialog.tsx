@@ -340,7 +340,7 @@ export function EditKeyDialog({
                 control={form.control}
                 name="is_active"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-lg border p-4">
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-cf-sm border p-4">
                     <FormControl>
                       <Checkbox checked={field.value} onCheckedChange={field.onChange} />
                     </FormControl>
@@ -363,34 +363,34 @@ export function EditKeyDialog({
                       <button
                         type="button"
                         className={cn(
-                          "rounded-[var(--shape-corner-medium)] border p-4 text-left transition-colors",
+                          "rounded-md border p-4 text-left transition-colors",
                           field.value === "unrestricted"
                             ? "border-primary bg-primary/5"
-                            : "border-[rgb(var(--md-sys-color-outline-variant))] bg-[rgb(var(--md-sys-color-surface-container-low))]"
+                            : "border-divider-subtle bg-surface-200"
                         )}
                         onClick={() => field.onChange("unrestricted")}
                       >
-                        <div className="type-body-medium text-[rgb(var(--md-sys-color-on-surface))]">
+                        <div className="type-body-medium text-foreground">
                           {t("unrestrictedAccess")}
                         </div>
-                        <p className="mt-1 type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                        <p className="mt-1 type-body-small text-muted-foreground">
                           {t("unrestrictedAccessDesc")}
                         </p>
                       </button>
                       <button
                         type="button"
                         className={cn(
-                          "rounded-[var(--shape-corner-medium)] border p-4 text-left transition-colors",
+                          "rounded-md border p-4 text-left transition-colors",
                           field.value === "restricted"
                             ? "border-primary bg-primary/5"
-                            : "border-[rgb(var(--md-sys-color-outline-variant))] bg-[rgb(var(--md-sys-color-surface-container-low))]"
+                            : "border-divider-subtle bg-surface-200"
                         )}
                         onClick={() => field.onChange("restricted")}
                       >
-                        <div className="type-body-medium text-[rgb(var(--md-sys-color-on-surface))]">
+                        <div className="type-body-medium text-foreground">
                           {t("restrictedAccess")}
                         </div>
-                        <p className="mt-1 type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                        <p className="mt-1 type-body-small text-muted-foreground">
                           {t("restrictedAccessDesc")}
                         </p>
                       </button>
@@ -463,17 +463,17 @@ export function EditKeyDialog({
                             })}
                           </p>
                         )}
-                        <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-[var(--shape-corner-medium)] border border-[rgb(var(--md-sys-color-outline-variant))] bg-[rgb(var(--md-sys-color-surface-container-low))] p-3">
+                        <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-md border border-divider-subtle bg-surface-200 p-3">
                           {upstreamsLoading ? (
-                            <div className="py-4 text-center type-body-medium text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                            <div className="py-4 text-center type-body-medium text-muted-foreground">
                               {tCommon("loading")}
                             </div>
                           ) : !upstreams || upstreams.length === 0 ? (
-                            <div className="py-4 text-center type-body-medium text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                            <div className="py-4 text-center type-body-medium text-muted-foreground">
                               {tCommon("noData")}
                             </div>
                           ) : filteredUpstreams.length === 0 ? (
-                            <div className="py-4 text-center type-body-medium text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                            <div className="py-4 text-center type-body-medium text-muted-foreground">
                               {t("noMatchingUpstreams")}
                             </div>
                           ) : (
@@ -483,7 +483,7 @@ export function EditKeyDialog({
                                 control={form.control}
                                 name="upstream_ids"
                                 render={({ field }) => (
-                                  <FormItem className="flex items-start space-x-3 space-y-0 rounded-[var(--shape-corner-small)] p-2 transition-colors hover:bg-[rgb(var(--md-sys-color-on-surface)_/_0.08)]">
+                                  <FormItem className="flex items-start space-x-3 space-y-0 rounded-cf-md p-2 transition-colors hover:bg-foreground/10">
                                     <FormControl>
                                       <Checkbox
                                         checked={field.value?.includes(upstream.id)}
@@ -496,11 +496,11 @@ export function EditKeyDialog({
                                       />
                                     </FormControl>
                                     <div className="flex-1 space-y-1 leading-none">
-                                      <label className="cursor-pointer type-body-medium text-[rgb(var(--md-sys-color-on-surface))]">
+                                      <label className="cursor-pointer type-body-medium text-foreground">
                                         {upstream.name}
                                       </label>
                                       {upstream.description && (
-                                        <p className="type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                                        <p className="type-body-small text-muted-foreground">
                                           {upstream.description}
                                         </p>
                                       )}
@@ -533,13 +533,11 @@ export function EditKeyDialog({
                 )}
               />
 
-              <div className="space-y-3 rounded-[var(--shape-corner-medium)] border border-[rgb(var(--md-sys-color-outline-variant))] bg-[rgb(var(--md-sys-color-surface-container-low))] p-4">
+              <div className="space-y-3 rounded-md border border-divider-subtle bg-surface-200 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="type-body-medium text-[rgb(var(--md-sys-color-on-surface))]">
-                      {t("spendingRules")}
-                    </p>
-                    <p className="mt-1 type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
+                    <p className="type-body-medium text-foreground">{t("spendingRules")}</p>
+                    <p className="mt-1 type-body-small text-muted-foreground">
                       {t("spendingRulesDesc")}
                     </p>
                   </div>
@@ -561,9 +559,7 @@ export function EditKeyDialog({
                 </div>
 
                 {spendingRulesFieldArray.fields.length === 0 ? (
-                  <p className="type-body-small text-[rgb(var(--md-sys-color-on-surface-variant))]">
-                    {t("spendingRulesEmpty")}
-                  </p>
+                  <p className="type-body-small text-muted-foreground">{t("spendingRulesEmpty")}</p>
                 ) : (
                   <div className="space-y-3">
                     {spendingRulesFieldArray.fields.map((ruleField, index) => {
@@ -571,7 +567,7 @@ export function EditKeyDialog({
                       return (
                         <div
                           key={ruleField.id}
-                          className="space-y-3 rounded-[var(--shape-corner-small)] border border-[rgb(var(--md-sys-color-outline-variant))] bg-background/70 p-3"
+                          className="space-y-3 rounded-cf-md border border-divider-subtle bg-background/70 p-3"
                         >
                           <div className="flex items-center justify-between gap-3">
                             <div className="type-body-medium text-foreground">

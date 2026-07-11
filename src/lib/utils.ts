@@ -13,9 +13,10 @@ export const VISUAL_STYLE_CHECKLIST = [
 ] as const;
 
 const FORBIDDEN_BLUE_PURPLE_STYLE_PATTERNS = [
-  /\bbg-(?:blue|indigo|violet|purple)-(?:[4-9]00|950)\b/,
-  /\b(?:from|via|to)-(?:blue|indigo|violet|purple)-(?:[3-9]00|950)\b/,
-  /\b(?:bg|from|via|to)-\[[^\]]*(?:#(?:3b82f6|6366f1|8b5cf6|a855f7)|rgb\([^\)]*(?:59,130,246|99,102,241|139,92,246|168,85,247))[^\]]*\]\b/i,
+  /\bbg-(?:blue|indigo|violet|purple)-(?:[4-9]00|950)(?:\/\d{1,3})?\b/,
+  /\b(?:from|via|to)-(?:blue|indigo|violet|purple)-(?:[3-9]00|950)(?:\/\d{1,3})?\b/,
+  /\btext-(?:blue|indigo|violet|purple)-\d{3}(?:\/\d{1,3})?\b/,
+  /\b(?:bg|from|via|to)-\[[^\]]*(?:#(?:3b82f6|6366f1|8b5cf6|a855f7)|rgb\([^\)]*(?:59,130,246|99,102,241|139,92,246|168,85,247))[^\]]*\]/i,
 ];
 
 export function warnIfForbiddenVisualStyle(componentName: string, className?: string): void {

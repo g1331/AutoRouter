@@ -37,6 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { statusTone } from "@/lib/status-tone";
 import { cn } from "@/lib/utils";
 import {
   useCompensationRules,
@@ -359,9 +360,7 @@ function RuleCard({ rule, onEdit, onDelete }: RuleCardProps) {
             variant="outline"
             className={cn(
               "px-1.5 py-0 text-[10px]",
-              rule.enabled
-                ? "border-status-success/40 bg-status-success/10 text-status-success"
-                : "border-divider text-muted-foreground"
+              rule.enabled ? statusTone("success") : "border-divider text-muted-foreground"
             )}
           >
             {rule.enabled ? t("enabled") : t("disabled")}

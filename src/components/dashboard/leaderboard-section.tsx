@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useTheme } from "next-themes";
 import { Cpu, Key, Server, Trophy, Users } from "lucide-react";
 import { Cell, Pie, PieChart, Tooltip } from "recharts";
 
@@ -9,7 +10,7 @@ import { Link } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import type { StatsLeaderboardResponse, DistributionItem } from "@/types/api";
 
-import { formatCost, formatNumber, UPSTREAM_COLORS_DARK } from "./chart-theme";
+import { formatCost, formatNumber, getUpstreamColor } from "./chart-theme";
 import { DashboardLoadingBlock, DashboardLoadingSurface } from "./dashboard-loading";
 
 interface LeaderboardSectionProps {
@@ -25,7 +26,6 @@ const RANK_COLORS = [
   "text-muted-foreground",
 ];
 
-const PIE_COLORS = [...UPSTREAM_COLORS_DARK];
 const MINI_PIE_CHART_SIZE = 40;
 
 const RANK_LEFT_BORDERS = ["border-l-amber-500", "border-l-status-info", "border-l-status-success"];
@@ -83,8 +83,11 @@ function RankBadge({ rank }: { rank: number }) {
 const PIE_CHART_WIDTH = "w-[150px]";
 
 function MiniPieChart({ data, label }: { data: DistributionItem[]; label: string }) {
+  const { resolvedTheme } = useTheme();
+
   if (!data.length) return <div className={cn(PIE_CHART_WIDTH, "shrink-0")} />;
 
+  const mode = resolvedTheme === "light" ? "light" : "dark";
   const total = data.reduce((s, d) => s + d.count, 0);
 
   return (
@@ -103,7 +106,7 @@ function MiniPieChart({ data, label }: { data: DistributionItem[]; label: string
             stroke="var(--vr-surface-2)"
           >
             {data.map((_, i) => (
-              <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} opacity={0.85} />
+              <Cell key={i} fill={getUpstreamColor(i, mode)} opacity={0.85} />
             ))}
           </Pie>
           <Tooltip
@@ -131,13 +134,13 @@ function MiniPieChart({ data, label }: { data: DistributionItem[]; label: string
           >
             <span
               className="h-1.5 w-1.5 shrink-0 rounded-full"
-              style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}
+              style={{ background: getUpstreamColor(i, mode) }}
             />
             <span className="type-caption max-w-[72px] truncate text-muted-foreground/70 leading-tight">
               {d.name}
             </span>
             <span
-              className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs shadow-[var(--vr-shadow-md)] group-hover/legend:block"
+              className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-cf-sm px-2.5 py-1.5 text-xs shadow-[var(--vr-shadow-md)] group-hover/legend:block"
               style={LEGEND_TOOLTIP_STYLE}
             >
               {d.name}: {formatNumber(d.count)} ({((d.count / total) * 100).toFixed(1)}%)

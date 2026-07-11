@@ -34,13 +34,17 @@ vi.mock("recharts", () => ({
       {children}
     </div>
   ),
-  AreaChart: ({ children, data }: { children: React.ReactNode; data: unknown[] }) => (
-    <svg data-testid="area-chart" data-points={data.length} data-chart={JSON.stringify(data)}>
+  ComposedChart: ({ children, data }: { children: React.ReactNode; data: unknown[] }) => (
+    <svg data-testid="composed-chart" data-points={data.length} data-chart={JSON.stringify(data)}>
       {children}
     </svg>
   ),
-  Area: ({ name, dataKey }: { name: string; dataKey: unknown }) => (
-    <div data-testid={`area-${name}`} data-key={String(dataKey)} />
+  Bar: ({ name, dataKey, stackId }: { name?: string; dataKey: unknown; stackId?: string }) => (
+    <div data-testid={`bar-${name}`} data-key={String(dataKey)} data-stack={stackId} />
+  ),
+  // 总量模式的趋势 Area 不再携带 name（tooltip/legend 中被排除），testid 固定。
+  Area: ({ name, dataKey }: { name?: string; dataKey: unknown }) => (
+    <div data-testid={`area-${name ?? "trend"}`} data-key={String(dataKey)} />
   ),
   XAxis: () => <div data-testid="x-axis" />,
   YAxis: (props: unknown) => {
@@ -54,7 +58,12 @@ vi.mock("recharts", () => ({
         ? React.cloneElement(content as React.ReactElement, {
             active: true,
             label: "mock-label",
-            payload: [{ name: "OpenAI", value: 1222, color: "#f59e0b" }],
+            // 第二条模拟 tooltipType="none" 的趋势 Area：自定义 content
+            // 必须自行过滤，否则总量模式同一数值会出现两行。
+            payload: [
+              { name: "OpenAI", value: 1222, color: "#f59e0b" },
+              { name: "hidden-trend", value: 1222, color: "#f59e0b", type: "none" },
+            ],
           })
         : content}
     </div>
@@ -232,12 +241,12 @@ describe("UsageChart", () => {
   });
 
   describe("chart rendering", () => {
-    it("renders one area per upstream in by-upstream mode", () => {
+    it("renders one stacked bar per upstream in by-upstream mode", () => {
       renderChart({ displayMode: "byUpstream" });
 
-      expect(screen.getByTestId("area-OpenAI")).toBeInTheDocument();
-      expect(screen.getByTestId("area-Anthropic")).toBeInTheDocument();
-      expect(screen.getByTestId("area-chart")).toHaveAttribute("data-points", "2");
+      expect(screen.getByTestId("bar-OpenAI")).toHaveAttribute("data-stack", "upstreams");
+      expect(screen.getByTestId("bar-Anthropic")).toHaveAttribute("data-stack", "upstreams");
+      expect(screen.getByTestId("composed-chart")).toHaveAttribute("data-points", "2");
       expect(screen.getByTestId("x-axis")).toBeInTheDocument();
       expect(screen.getByTestId("y-axis")).toBeInTheDocument();
       expect(screen.getByTestId("cartesian-grid")).toBeInTheDocument();
@@ -258,21 +267,22 @@ describe("UsageChart", () => {
     it("renders hourly data correctly", () => {
       renderChart({ data: mockHourlyData, timeRange: "today" });
 
-      expect(screen.getByTestId("area-chart")).toHaveAttribute("data-points", "2");
-      expect(screen.getByTestId("area-OpenAI")).toBeInTheDocument();
+      expect(screen.getByTestId("composed-chart")).toHaveAttribute("data-points", "2");
+      expect(screen.getByTestId("bar-OpenAI")).toBeInTheDocument();
     });
 
-    it("renders total mode from total_series instead of per-upstream values", () => {
+    it("renders total mode as bar plus trend area from total_series", () => {
       renderChart({
         metric: "tps",
         displayMode: "total",
       });
 
-      expect(screen.getByTestId("area-stats.chartModeTotal")).toBeInTheDocument();
-      expect(screen.queryByTestId("area-OpenAI")).not.toBeInTheDocument();
+      expect(screen.getByTestId("bar-stats.chartModeTotal")).toBeInTheDocument();
+      expect(screen.getByTestId("area-trend")).toHaveAttribute("data-key", "totalValue");
+      expect(screen.queryByTestId("bar-OpenAI")).not.toBeInTheDocument();
 
       const chartData = JSON.parse(
-        screen.getByTestId("area-chart").getAttribute("data-chart") ?? "[]"
+        screen.getByTestId("composed-chart").getAttribute("data-chart") ?? "[]"
       );
       // formattedTime renders in the machine-local timezone, so compute the
       // expectation the same way instead of hardcoding a UTC date string.
@@ -452,6 +462,13 @@ describe("UsageChart", () => {
 
       // tok/s appears in both the tooltip and the header summary.
       expect(screen.getAllByText(/tok\/s/).length).toBeGreaterThan(0);
+    });
+
+    it("filters tooltipType none entries out of the custom tooltip", () => {
+      renderChart();
+
+      expect(screen.getByText(/OpenAI: 1.2K/)).toBeInTheDocument();
+      expect(screen.queryByText(/hidden-trend/)).not.toBeInTheDocument();
     });
   });
 });

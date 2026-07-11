@@ -13,7 +13,8 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default: "border-amber-500/45 bg-amber-500/16 text-amber-100 dark:text-amber-200",
+        // 亮色 amber-100 是近白浅底色，做文字不可读：亮色走深档 600，暗色保留浅档
+        default: "border-amber-500/45 bg-amber-500/16 text-amber-600 dark:text-amber-200",
         secondary: "border-border bg-surface-300 text-foreground",
         outline: "border-border bg-transparent text-foreground",
         success: "border-status-success bg-status-success-muted text-status-success",
@@ -38,4 +39,4 @@ function Badge({ className, variant, ...props }: BadgeProps) {
   return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
 }
 
-export { Badge, badgeVariants };
+export { Badge };

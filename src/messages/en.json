@@ -310,6 +310,15 @@
       "endDate": "End Date",
       "apply": "Apply",
       "resetToDefault": "Reset to default time range"
+    },
+    "topology": {
+      "title": "ROUTING TOPOLOGY",
+      "desc": "Live routing topology from the gateway to upstream providers",
+      "gateway": "GATEWAY",
+      "upSummary": "{healthy}/{total} UP",
+      "breakersOpen": "{count} OPEN",
+      "empty": "No upstreams configured",
+      "summary": "{total} upstreams: {ok} healthy, {warn} half-open, {bad} offline, {inactive} disabled."
     }
   },
   "livePulse": {

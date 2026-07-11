@@ -243,12 +243,12 @@ export function RoutingDecisionTimeline({
             )}
             {indicators.failover && (
               <span title={t("indicatorFailover")}>
-                <Zap className="w-3 h-3 text-orange-500" />
+                <Zap className="w-3 h-3 text-status-warning" />
               </span>
             )}
             {indicators.excluded && (
               <span title={t("indicatorExcluded")}>
-                <Lock className="w-3 h-3 text-red-500" />
+                <Lock className="w-3 h-3 text-status-error" />
               </span>
             )}
             {indicators.lowCandidates && (
@@ -400,7 +400,7 @@ export function RoutingDecisionTimeline({
                   key={c.id}
                   className={cn(
                     "flex flex-wrap items-center gap-2 rounded-cf-sm border border-divider bg-surface-300/40 px-2 py-1.5",
-                    isSelected && "border-emerald-500/40 bg-emerald-500/10"
+                    isSelected && "border-status-success/40 bg-status-success/10"
                   )}
                 >
                   {isSelected ? (
@@ -430,16 +430,16 @@ export function RoutingDecisionTimeline({
             })}
             {routingDecision.excluded.length > 0 && (
               <div className="mt-2">
-                <div className="font-medium text-red-500 mb-1 text-[11px] uppercase">
+                <div className="font-medium text-status-error mb-1 text-[11px] uppercase">
                   {t("tooltipExcluded")} ({routingDecision.excluded.length})
                 </div>
                 {routingDecision.excluded.map((e) => (
                   <div
                     key={e.id}
-                    className="flex flex-wrap items-center gap-2 rounded-cf-sm border border-red-500/20 bg-red-500/5 px-2 py-1.5"
+                    className="flex flex-wrap items-center gap-2 rounded-cf-sm border border-status-error/20 bg-status-error/5 px-2 py-1.5"
                   >
-                    <span className="text-red-500">&#x2717;</span>
-                    <Lock className="w-3 h-3 text-red-500" />
+                    <span className="text-status-error">&#x2717;</span>
+                    <Lock className="w-3 h-3 text-status-error" />
                     <span className="min-w-0 flex-1 text-foreground">{e.name}</span>
                     <Badge variant="error" className="text-[11px] px-1.5 py-0">
                       {t(`exclusionReason.${e.reason}`)}
@@ -597,11 +597,11 @@ function RetryTimeline({
       case "http_5xx":
         return <Zap className="w-3 h-3 text-status-error" />;
       case "http_429":
-        return <AlertTriangle className="w-3 h-3 text-orange-500" />;
+        return <AlertTriangle className="w-3 h-3 text-status-warning" />;
       case "http_4xx":
-        return <AlertTriangle className="w-3 h-3 text-red-400" />;
+        return <AlertTriangle className="w-3 h-3 text-status-error" />;
       case "connection_error":
-        return <CircleSlash className="w-3 h-3 text-red-500" />;
+        return <CircleSlash className="w-3 h-3 text-status-error" />;
       case "circuit_open":
         return <Lock className="w-3 h-3 text-status-warning" />;
       case "concurrency_full":
@@ -669,7 +669,7 @@ function RetryTimeline({
                       attempt.error_type === "upstream_no_content_stream" ||
                       attempt.error_type === "stream_idle_timeout") &&
                       "text-status-warning",
-                    attempt.error_type === "http_429" && "text-orange-500",
+                    attempt.error_type === "http_429" && "text-status-warning",
                     attempt.error_type === "concurrency_full" && "text-status-warning"
                   )}
                 >

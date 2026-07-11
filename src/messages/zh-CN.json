@@ -310,6 +310,15 @@
       "endDate": "结束日期",
       "apply": "应用",
       "resetToDefault": "重置为默认时间范围"
+    },
+    "topology": {
+      "title": "路由拓扑",
+      "desc": "网关到上游服务的实时路由拓扑",
+      "gateway": "网关",
+      "upSummary": "{healthy}/{total} 在线",
+      "breakersOpen": "{count} 个熔断",
+      "empty": "暂无已配置的上游",
+      "summary": "共 {total} 个上游：{ok} 个健康，{warn} 个半开，{bad} 个离线，{inactive} 个停用。"
     }
   },
   "livePulse": {

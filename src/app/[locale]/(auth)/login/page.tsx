@@ -10,6 +10,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
+import { statusTone } from "@/lib/status-tone";
 import { cn } from "@/lib/utils";
 import { sanitizeRedirect } from "@/lib/utils/safe-redirect";
 import { useRouter } from "@/i18n/navigation";
@@ -98,7 +99,12 @@ function SystemStatus() {
         <Shield className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
         <span>SECURE MODE</span>
       </div>
-      <div className="inline-flex items-center gap-2 rounded-[8px] border border-status-success/35 bg-status-success-muted px-2.5 py-1.5 font-mono text-status-success">
+      <div
+        className={cn(
+          "inline-flex items-center gap-2 rounded-[8px] border px-2.5 py-1.5 font-mono",
+          statusTone("success")
+        )}
+      >
         <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
         <span>NETWORK ONLINE</span>
       </div>
@@ -245,11 +251,11 @@ export default function LoginPage() {
         aria-hidden="true"
         style={{
           backgroundImage:
-            "radial-gradient(circle at 20% 18%, rgba(201,157,82,0.14), transparent 44%), radial-gradient(circle at 78% 4%, rgba(89,111,131,0.16), transparent 34%)",
+            "radial-gradient(circle at 20% 18%, var(--vr-atmo), transparent 44%), radial-gradient(circle at 78% 4%, color-mix(in srgb, var(--vr-text-dim) 16%, transparent), transparent 34%)",
         }}
       />
       <div className="pointer-events-none absolute inset-0 opacity-35" aria-hidden="true">
-        <div className="h-full w-full [background-image:linear-gradient(to_right,rgba(134,146,158,0.12)_1px,transparent_1px),linear-gradient(to_bottom,rgba(134,146,158,0.1)_1px,transparent_1px)] [background-size:44px_44px]" />
+        <div className="h-full w-full [background-image:linear-gradient(to_right,var(--vr-grid-dot)_1px,transparent_1px),linear-gradient(to_bottom,var(--vr-grid-dot)_1px,transparent_1px)] [background-size:44px_44px]" />
       </div>
 
       <div className="fixed right-4 top-4 z-30">
@@ -257,14 +263,19 @@ export default function LoginPage() {
       </div>
 
       <div className="relative z-10 grid min-h-screen place-items-center px-4 py-10 sm:px-6">
-        <div className="w-full max-w-md overflow-hidden rounded-xl border border-border bg-card/90 shadow-[var(--vr-shadow-lg)] backdrop-blur">
+        <div className="w-full max-w-md overflow-hidden rounded-cf-md border border-border bg-card/90 shadow-[var(--vr-shadow-lg)] backdrop-blur">
           <div className="border-b border-divider px-5 py-4 sm:px-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h1 className="type-title-large text-foreground">{t("title")}</h1>
                 <p className="type-body-small mt-1 text-muted-foreground">{t("subtitle")}</p>
               </div>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-status-success/35 bg-status-success-muted px-2.5 py-1 font-mono text-[11px] text-status-success">
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px]",
+                  statusTone("success")
+                )}
+              >
                 <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
                 SECURE
               </span>

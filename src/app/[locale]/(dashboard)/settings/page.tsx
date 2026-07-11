@@ -23,6 +23,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Link } from "@/i18n/navigation";
 import { APP_REPOSITORY_URL, APP_VERSION_TAG } from "@/lib/app-version";
 import { useAuth } from "@/providers/auth-provider";
+import { statusTone } from "@/lib/status-tone";
 import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
@@ -216,7 +217,12 @@ export default function SettingsPage() {
             <CardContent className="p-4 sm:p-5">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-cf-sm border border-status-error/35 bg-status-error-muted text-status-error">
+                  <div
+                    className={cn(
+                      "flex h-10 w-10 items-center justify-center rounded-cf-sm border",
+                      statusTone("error")
+                    )}
+                  >
                     <LogOut className="h-5 w-5" aria-hidden="true" />
                   </div>
                   <div>

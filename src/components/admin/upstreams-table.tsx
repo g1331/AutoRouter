@@ -14,6 +14,7 @@ import {
   type LedStatus,
   type ProgressVariant,
 } from "@/components/ui/terminal";
+import { statusTone } from "@/lib/status-tone";
 import { cn } from "@/lib/utils";
 import { useToggleUpstreamActive, useUpstreamQuota } from "@/hooks/use-upstreams";
 import { useForceCircuitBreaker } from "@/hooks/use-circuit-breaker";
@@ -706,7 +707,8 @@ export function UpstreamsTable({
                                 size="sm"
                                 type="button"
                                 className={cn(
-                                  "gap-1.5 border-status-warning/45 bg-status-warning-muted px-2.5 text-status-warning",
+                                  "gap-1.5 px-2.5",
+                                  statusTone("warning"),
                                   isCompactDensity ? "h-7 text-xs" : "h-8"
                                 )}
                                 onClick={() => {
@@ -727,7 +729,7 @@ export function UpstreamsTable({
                               size="icon"
                               type="button"
                               className={cn(
-                                "border-status-error/45 bg-status-error-muted text-status-error",
+                                statusTone("error"),
                                 isCompactDensity ? "h-7 w-7" : "h-8 w-8"
                               )}
                               onClick={(event) =>

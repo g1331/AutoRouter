@@ -8,7 +8,6 @@ const config: Config = {
     extend: {
       colors: {
         amber: {
-          50: "var(--vr-accent-50)",
           100: "var(--vr-accent-100)",
           200: "var(--vr-accent-200)",
           300: "var(--vr-accent-300)",
@@ -21,10 +20,6 @@ const config: Config = {
         },
         black: {
           900: "var(--vr-surface-0)",
-          800: "var(--vr-surface-1)",
-          700: "var(--vr-surface-2)",
-          600: "var(--vr-surface-3)",
-          500: "var(--vr-surface-4)",
         },
         surface: {
           100: "var(--vr-surface-0)",
@@ -32,7 +27,6 @@ const config: Config = {
           300: "var(--vr-surface-2)",
           400: "var(--vr-surface-3)",
           500: "var(--vr-surface-4)",
-          600: "var(--vr-surface-4)",
         },
         status: {
           success: "var(--vr-status-success)",
@@ -110,15 +104,8 @@ const config: Config = {
         lg: "var(--vr-radius-lg)",
         md: "var(--vr-radius-md)",
         sm: "var(--vr-radius-sm)",
-        "cf-none": "var(--cf-corner-none)",
-        "cf-sm": "var(--cf-corner-small)",
-        "cf-md": "var(--cf-corner-medium)",
-        "cf-bevel": "var(--cf-corner-bevel)",
-      },
-      borderWidth: {
-        "cf-thin": "1px",
-        "cf-medium": "2px",
-        "cf-thick": "3px",
+        "cf-sm": "var(--vr-radius-xs)",
+        "cf-md": "var(--vr-radius-sm)",
       },
       ringWidth: {
         cf: "var(--vr-focus-ring-width)",
@@ -129,34 +116,13 @@ const config: Config = {
       boxShadow: {
         "cf-glow-subtle": "var(--vr-shadow-glow-subtle)",
         "cf-glow-medium": "var(--vr-shadow-glow-medium)",
-        "cf-glow-strong": "var(--vr-shadow-glow-strong)",
-        "cf-glow-success": "0 0 0 1px rgb(72 164 118 / 0.34)",
-        "cf-glow-error": "0 0 0 1px rgb(204 97 86 / 0.34)",
-        "cf-glow-info": "0 0 0 1px rgb(102 148 184 / 0.34)",
-        "cf-focus": "var(--vr-focus-ring-shadow)",
       },
       transitionDuration: {
         "cf-fast": "var(--vr-motion-fast)",
         "cf-normal": "var(--vr-motion-normal)",
-        "cf-slow": "var(--vr-motion-slow)",
       },
       transitionTimingFunction: {
         "cf-standard": "var(--vr-easing-standard)",
-        "cf-sharp": "var(--vr-easing-sharp)",
-      },
-      keyframes: {
-        shimmer: {
-          "0%": { transform: "translateX(-100%)" },
-          "100%": { transform: "translateX(100%)" },
-        },
-        scanline: {
-          "0%": { transform: "translateY(-100%)" },
-          "100%": { transform: "translateY(100%)" },
-        },
-      },
-      animation: {
-        shimmer: "shimmer 2s linear infinite",
-        scanline: "scanline 1.6s linear infinite",
       },
     },
   },

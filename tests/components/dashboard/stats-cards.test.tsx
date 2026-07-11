@@ -1,11 +1,22 @@
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
 import { StatsCards } from "@/components/dashboard/stats-cards";
 
 // Mock next-intl
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
 }));
+
+// KPI 卡 sparkline 通过 useStatsTimeseries 自取数据；mock 掉该 hook，
+// 组件测试无需 QueryClient / AuthProvider。
+const useStatsTimeseriesMock = vi.fn();
+vi.mock("@/hooks/use-dashboard-stats", () => ({
+  useStatsTimeseries: (...args: unknown[]) => useStatsTimeseriesMock(...args),
+}));
+
+beforeEach(() => {
+  useStatsTimeseriesMock.mockReturnValue({ data: undefined });
+});
 
 // Mock lucide-react icons
 vi.mock("lucide-react", () => ({
@@ -270,6 +281,63 @@ describe("StatsCards", () => {
       );
 
       expect(screen.getByTestId("zap-icon")).toBeInTheDocument();
+    });
+  });
+
+  describe("Sparklines", () => {
+    const timeseriesData = {
+      total_series: [
+        {
+          timestamp: "2024-01-01T10:00:00Z",
+          request_count: 10,
+          total_tokens: 1000,
+          avg_duration_ms: 100,
+          total_cost: 0.1,
+        },
+        {
+          timestamp: "2024-01-01T11:00:00Z",
+          request_count: 20,
+          total_tokens: 2000,
+          avg_duration_ms: 120,
+          total_cost: 0.2,
+        },
+      ],
+    };
+
+    it("renders a sparkline for the requests/tokens/cost cards", () => {
+      useStatsTimeseriesMock.mockReturnValue({ data: timeseriesData });
+
+      render(<StatsCards {...defaultProps} todayRequests={30} />);
+
+      expect(screen.getAllByTestId("stat-sparkline")).toHaveLength(3);
+      expect(useStatsTimeseriesMock).toHaveBeenCalledWith("today", "requests");
+      expect(useStatsTimeseriesMock).toHaveBeenCalledWith("today", "tokens");
+      expect(useStatsTimeseriesMock).toHaveBeenCalledWith("today", "cost");
+    });
+
+    it("skips sparklines while loading or when the series is missing", () => {
+      useStatsTimeseriesMock.mockReturnValue({ data: timeseriesData });
+      const { unmount } = render(<StatsCards {...defaultProps} isLoading={true} />);
+      expect(screen.queryByTestId("stat-sparkline")).not.toBeInTheDocument();
+      unmount();
+
+      useStatsTimeseriesMock.mockReturnValue({ data: undefined });
+      render(<StatsCards {...defaultProps} todayRequests={30} />);
+      expect(screen.queryByTestId("stat-sparkline")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("TTFT alert variant", () => {
+    it("marks the TTFT card as alert when TTFT crosses the error threshold", () => {
+      const { container } = render(<StatsCards {...defaultProps} avgTtftMs={1222} />);
+
+      expect(container.querySelectorAll("[data-alert]")).toHaveLength(1);
+    });
+
+    it("does not mark any card as alert for healthy TTFT", () => {
+      const { container } = render(<StatsCards {...defaultProps} avgTtftMs={220} />);
+
+      expect(container.querySelectorAll("[data-alert]")).toHaveLength(0);
     });
   });
 
