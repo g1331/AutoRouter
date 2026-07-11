@@ -29,12 +29,12 @@
 
 ## 3. Phase B2 · 13 分区表单 + 分区独立保存（提交 `feat(upstreams)` B2）
 
-- [ ] 3.1 分区体迁入 `src/components/admin/upstream/sections/*.tsx`（basic-name/profile/route-endpoint/api-key/diagnostics、priority-weight、model-routing、billing-multipliers、spending-quota、capacity-control、circuit-breaker、failure-rules、affinity-migration）
-- [ ] 3.2 各分区独立 useForm + 分区子 Zod schema + dirty 检测 + SectionForm 外壳 + partial PUT（只含本分区字段），optimistic 照抄 `useToggleUpstreamActive`；onSettled 统一失效 `["upstreams", id]` 与列表缓存
-- [ ] 3.3 api-key 分区 write-only：空不提交 + 占位提示「留空保持不变」；failure-rules 分区含 `use_global_rules` 开关（走 `{ failure_rule_config }` partial PUT）+ 内嵌 `UpstreamFailureRulesEditor`（规则 CRUD 沿用其自保存）
-- [ ] 3.4 移除失效的 `description` 字段：basic-profile 分区不再渲染/提交 description（已确认无 DB 列、create/update schema 均不接收，静默 strip；补列属 Non-Goals 之外的后端改动），仅保留 official_website_url
-- [ ] 3.5 分区 payload 单测：断言各分区 partial 只含本区字段、api_key 空省略、access 语义正确、**basic-profile 载荷只含已持久化字段（official_website_url，不含 description）**
-- [ ] 3.6 验收并提交：tsc + lint + 分区 payload 单测绿；13 分区双主题 spot check + 各分区保存冒烟；提交
+- [x] 3.1 分区体迁入 `src/components/admin/upstream/sections/*.tsx`（basic-name/profile/route-endpoint/api-key/diagnostics、priority-weight、model-routing、billing-multipliers、spending-quota、capacity-control、circuit-breaker、failure-rules、affinity-migration）
+- [x] 3.2 各分区独立 useForm + 分区子 Zod schema + dirty 检测 + SectionForm 外壳 + partial PUT（只含本分区字段），optimistic 照抄 `useToggleUpstreamActive`；onSettled 统一失效 `["upstreams", id]` 与列表缓存
+- [x] 3.3 api-key 分区 write-only：空不提交 + 占位提示「留空保持不变」；failure-rules 分区含 `use_global_rules` 开关（走 `{ failure_rule_config }` partial PUT）+ 内嵌 `UpstreamFailureRulesEditor`（规则 CRUD 沿用其自保存）
+- [x] 3.4 移除失效的 `description` 字段：basic-profile 分区不再渲染/提交 description（已确认无 DB 列、create/update schema 均不接收，静默 strip；补列属 Non-Goals 之外的后端改动），仅保留 official_website_url
+- [x] 3.5 分区 payload 单测：断言各分区 partial 只含本区字段、api_key 空省略、access 语义正确、**basic-profile 载荷只含已持久化字段（official_website_url，不含 description）**
+- [x] 3.6 验收并提交：tsc + lint + 分区 payload 单测绿；13 分区双主题 spot check + 各分区保存冒烟；提交
 
 ## 4. Phase B3 · 列表行表 + Test 修复 + 删旧弹窗（提交 `feat(upstreams)` B3）
 
