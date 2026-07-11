@@ -20,12 +20,12 @@
 
 ## 2. Phase B1 · useUpstream + 瘦 create + 详情页骨架（提交 `feat(upstreams)` B1）
 
-- [ ] 2.1 新增 `useUpstream(id)` hook（queryKey `["upstreams", id]`），含 hook 单测
-- [ ] 2.2 从 `editUpstreamFormSchema` 抽取分区子 schema 片段与共享 helper（coerce 函数、endpoint preview、VirtualCatalogEntryList）下沉 `src/components/admin/upstream/`
-- [ ] 2.3 瘦 `create-upstream-dialog.tsx`：仅必填（name、base_url、route_capabilities、api_key）→ 创建成功 `router.push` 详情页；保留 `morph-upstream-form`（指向 create）
-- [ ] 2.4 新增 `/upstreams/[id]/page.tsx` 详情页骨架：照抄 users/[id] 惯例（useParams + Topbar + ghost 返回 + ApiError 404 分支）+ 左侧 sticky 分区导航（滚动锚点，scroll-pt-14）
-- [ ] 2.5 `admin-page-mocks` 补 `GET /admin/upstreams/[id]` stub；auth-role-routing.spec 现有锚点保持
-- [ ] 2.6 验收并提交：tsc + lint + hook 单测绿；create dialog morph 冒烟；本地 e2e --workers=2 绿；详情页骨架双主题 spot check；提交
+- [x] 2.1 新增 `useUpstream(id)` hook（queryKey `["upstreams", id]`），含 hook 单测
+- [x] 2.2 从 `editUpstreamFormSchema` 抽取分区子 schema 片段与共享 helper（coerce 函数、endpoint preview、VirtualCatalogEntryList）下沉 `src/components/admin/upstream/`
+- [x] 2.3 瘦 `create-upstream-dialog.tsx`：仅必填（name、base_url、route_capabilities、api_key）→ 创建成功 `router.push` 详情页；保留 `morph-upstream-form`（指向 create）
+- [x] 2.4 新增 `/upstreams/[id]/page.tsx` 详情页骨架：照抄 users/[id] 惯例（useParams + Topbar + ghost 返回 + ApiError 404 分支）+ 左侧 sticky 分区导航（滚动锚点，scroll-pt-14）
+- [x] 2.5 `admin-page-mocks` 补 `GET /admin/upstreams/[id]` stub；auth-role-routing.spec 现有锚点保持
+- [x] 2.6 验收并提交：tsc + lint + hook 单测绿；create dialog morph 冒烟；本地 e2e --workers=2 绿；详情页骨架双主题 spot check；提交
 
 ## 3. Phase B2 · 13 分区表单 + 分区独立保存（提交 `feat(upstreams)` B2）
 
