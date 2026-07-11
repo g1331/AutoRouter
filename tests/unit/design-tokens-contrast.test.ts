@@ -28,7 +28,8 @@ const darkBlock = extractBlock(":root,\n.dark {");
 const lightBlock = extractBlock(".light {");
 
 function token(block: string, name: string): string {
-  const m = block.match(new RegExp(`${name.replace(/[-]/g, "\\-")}:\\s*(#[0-9a-fA-F]{6})\\s*;`));
+  // 令牌名只含字母与连字符，连字符在字符类外无正则特殊含义，无需转义。
+  const m = block.match(new RegExp(`${name}:\\s*(#[0-9a-fA-F]{6})\\s*;`));
   if (!m) throw new Error(`hex token not found: ${name}`);
   return m[1];
 }
