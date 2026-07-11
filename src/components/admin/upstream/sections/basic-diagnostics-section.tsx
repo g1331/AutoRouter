@@ -228,7 +228,7 @@ export function BasicDiagnosticsSection({ upstream }: { upstream: Upstream }) {
               }}
               disabled={savedProbeCapabilities.length === 0}
             >
-              <SelectTrigger>
+              <SelectTrigger aria-label={t("probeRouteCapability")}>
                 <SelectValue placeholder={t("probeRouteCapabilityPlaceholder")} />
               </SelectTrigger>
               <SelectContent>
@@ -255,7 +255,7 @@ export function BasicDiagnosticsSection({ upstream }: { upstream: Upstream }) {
               }
               disabled={selectableProbeClientProfiles.length === 0}
             >
-              <SelectTrigger>
+              <SelectTrigger aria-label={t("probeClientProfile")}>
                 <SelectValue placeholder={t("probeClientProfilePlaceholder")} />
               </SelectTrigger>
               <SelectContent>

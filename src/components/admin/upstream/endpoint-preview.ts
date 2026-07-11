@@ -2,8 +2,8 @@ import type { RouteCapability } from "@/types/api";
 
 /**
  * Endpoint preview helper shared by the upstream create dialog and the detail
- * page route/endpoint section. Extracted verbatim from `upstream-form-dialog.tsx`
- * so create and edit surfaces normalize/preview the base URL identically.
+ * page route/endpoint section, so create and edit surfaces normalize/preview
+ * the base URL identically.
  */
 
 export interface EndpointPreviewState {

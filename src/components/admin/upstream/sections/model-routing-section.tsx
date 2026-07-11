@@ -497,7 +497,11 @@ export function ModelRoutingSection({ upstream }: { upstream: Upstream }) {
                         <FormLabel className="m-0 text-xs font-medium leading-none text-foreground">
                           {t("enableLiteLlmFallback")}
                         </FormLabel>
-                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        <Switch
+                          aria-label={t("enableLiteLlmFallback")}
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
                       </FormItem>
                     )}
                   />
@@ -510,7 +514,11 @@ export function ModelRoutingSection({ upstream }: { upstream: Upstream }) {
                         <FormLabel className="m-0 text-xs font-medium leading-none text-foreground">
                           {t("modelDiscoveryAutoRefresh")}
                         </FormLabel>
-                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        <Switch
+                          aria-label={t("modelDiscoveryAutoRefresh")}
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
                       </FormItem>
                     )}
                   />
@@ -821,7 +829,7 @@ export function ModelRoutingSection({ upstream }: { upstream: Upstream }) {
                       value={catalogSourceFilter}
                       onValueChange={(value: CatalogSourceFilter) => setCatalogSourceFilter(value)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label={t("catalogSourceFilterLabel")}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>

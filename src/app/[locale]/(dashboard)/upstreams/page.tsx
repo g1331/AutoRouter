@@ -18,7 +18,6 @@ import { DeleteUpstreamDialog } from "@/components/admin/delete-upstream-dialog"
 import { PaginationControls } from "@/components/admin/pagination-controls";
 import { TestUpstreamDialog } from "@/components/admin/test-upstream-dialog";
 import { Topbar } from "@/components/admin/topbar";
-import { UpstreamFormDialog } from "@/components/admin/upstream-form-dialog";
 import { UpstreamsTable } from "@/components/admin/upstreams-table";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -96,7 +95,6 @@ function matchesStatusFilter(upstream: Upstream, statusFilter: UpstreamStatusFil
 export default function UpstreamsPage() {
   const [upstreamPage, setUpstreamPage] = useState(1);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [editUpstream, setEditUpstream] = useState<Upstream | null>(null);
   const [deleteUpstream, setDeleteUpstream] = useState<Upstream | null>(null);
   const [testUpstream, setTestUpstream] = useState<Upstream | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -418,14 +416,6 @@ export default function UpstreamsPage() {
           <div className="space-y-4 animate-in fade-in-0 slide-in-from-top-1 duration-300">
             <UpstreamsTable
               upstreams={paginatedUpstreams}
-              onEdit={(upstream, source) => {
-                morphSourceRef.current = source;
-                startMorph(() => setEditUpstream(upstream), {
-                  source,
-                  name: "morph-upstream-form",
-                  mode: "enter",
-                });
-              }}
               onDelete={(upstream, source) => {
                 morphSourceRef.current = source;
                 startMorph(() => setDeleteUpstream(upstream), {
@@ -464,22 +454,6 @@ export default function UpstreamsPage() {
             setCreateDialogOpen(true);
           } else {
             startMorph(() => setCreateDialogOpen(false), {
-              source: morphSourceRef.current,
-              name: "morph-upstream-form",
-              mode: "exit",
-            });
-          }
-        }}
-        morph={canMorph}
-        morphName="morph-upstream-form"
-      />
-
-      <UpstreamFormDialog
-        upstream={editUpstream}
-        open={!!editUpstream}
-        onOpenChange={(open) => {
-          if (!open) {
-            startMorph(() => setEditUpstream(null), {
               source: morphSourceRef.current,
               name: "morph-upstream-form",
               mode: "exit",

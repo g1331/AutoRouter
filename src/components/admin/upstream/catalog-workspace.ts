@@ -18,11 +18,9 @@ import type {
 import type { UpstreamFormValues } from "./section-schemas";
 
 /**
- * Model-catalog workspace helpers shared by the upstream detail-page
- * model-routing section (Phase B2). Ported verbatim from
- * `upstream-form-dialog.tsx`; the dialog keeps its own copies until B3 removes
- * it, so these are transitional duplicates that keep the two surfaces behaving
- * identically.
+ * Model-catalog workspace helpers for the upstream detail-page model-routing
+ * section: catalog preview/refresh/import state and the derived view models the
+ * section renders.
  */
 
 export type CatalogSourceFilter = "all" | UpstreamModelCatalogSource;

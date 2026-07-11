@@ -377,7 +377,6 @@ export interface UpstreamUpdate {
   base_url?: string;
   official_website_url?: string | null;
   api_key?: string; // Empty means do not update
-  description?: string | null;
   is_default?: boolean;
   timeout?: number;
   is_active?: boolean;

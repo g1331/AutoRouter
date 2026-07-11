@@ -79,6 +79,7 @@ export function FailoverErrorTypeMultiSelect({
             type="button"
             variant="outline"
             role="combobox"
+            aria-label={placeholder}
             aria-expanded={open}
             className="h-auto min-h-11 w-full justify-between gap-2 px-3 py-2 text-left font-normal"
           >

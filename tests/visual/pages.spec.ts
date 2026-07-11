@@ -1,6 +1,11 @@
 import { test, expect, type Page } from "@playwright/test";
 
-import { mockAdminApis, seedAdminSession, seedTheme } from "../support/admin-page-mocks";
+import {
+  mockAdminApis,
+  seedAdminSession,
+  seedTheme,
+  UPSTREAM_DETAIL,
+} from "../support/admin-page-mocks";
 
 // 视觉回归基线：login / dashboard / keys / upstreams 四张 fullPage 快照。
 // 基线在本地 Windows 生成（快照文件带 -win32 平台后缀）；CI 平台字体渲染
@@ -52,6 +57,17 @@ test.describe("Visual Regression", () => {
       await gotoAndSettle(page, "/en/upstreams", "text=anthropic-backup");
 
       await expect(page).toHaveScreenshot("upstreams.png", SNAPSHOT_OPTIONS);
+    });
+
+    test("upstream detail page visual snapshot", async ({ page }) => {
+      // 分区导航渲染出上游名称后再截图，避免拍到骨架态。
+      await gotoAndSettle(
+        page,
+        `/en/upstreams/${UPSTREAM_DETAIL.id}`,
+        `text=${UPSTREAM_DETAIL.name}`
+      );
+
+      await expect(page).toHaveScreenshot("upstream-detail.png", SNAPSHOT_OPTIONS);
     });
   });
 });

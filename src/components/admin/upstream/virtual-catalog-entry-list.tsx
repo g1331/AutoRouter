@@ -6,10 +6,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import type { UpstreamModelCatalogEntry } from "@/types/api";
 
 /**
- * Virtualized model-catalog picker shared by the upstream model-routing surface.
- * Extracted verbatim from `upstream-form-dialog.tsx` so the dialog and the
- * detail-page model-routing section render the (potentially large) catalog list
- * with the same windowing behavior.
+ * Virtualized model-catalog picker for the upstream detail-page model-routing
+ * section, rendering the (potentially large) catalog list with windowing so the
+ * DOM stays light.
  */
 
 const MODEL_ROW_HEIGHT = 42;

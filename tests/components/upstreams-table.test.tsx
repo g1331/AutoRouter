@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { ReactNode } from "react";
 import { UpstreamsTable } from "@/components/admin/upstreams-table";
 import UpstreamsPage from "@/app/[locale]/(dashboard)/upstreams/page";
 import type { Upstream } from "@/types/api";
@@ -10,6 +11,17 @@ vi.mock("next-intl", () => ({
     return `${key} ${JSON.stringify(values)}`;
   },
   useLocale: () => "en",
+}));
+
+// Edit action navigates to the detail page via the localized Link; the thin
+// create dialog uses useRouter to push to the detail page after creation.
+vi.mock("@/i18n/navigation", () => ({
+  Link: ({ href, children, ...props }: { href: string; children: ReactNode }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
 vi.mock("@/lib/date-locale", () => ({
@@ -49,8 +61,8 @@ vi.mock("@/components/admin/topbar", () => ({
   Topbar: ({ title }: { title: string }) => <div>{title}</div>,
 }));
 
-vi.mock("@/components/admin/upstream-form-dialog", () => ({
-  UpstreamFormDialog: () => null,
+vi.mock("@/components/admin/create-upstream-dialog", () => ({
+  CreateUpstreamDialog: () => null,
 }));
 
 vi.mock("@/components/admin/delete-upstream-dialog", () => ({
@@ -69,6 +81,11 @@ vi.mock("@/hooks/use-circuit-breaker", () => ({
     variables: undefined,
   }),
 }));
+
+// Rows are collapsed by default; the dense detail block only mounts on expand.
+function expandRow(name: string) {
+  fireEvent.click(screen.getByText(name));
+}
 
 describe("UpstreamsTable", () => {
   const baseUpstream: Upstream = {
@@ -122,7 +139,6 @@ describe("UpstreamsTable", () => {
     updated_at: new Date().toISOString(),
   };
 
-  const onEdit = vi.fn();
   const onDelete = vi.fn();
   const onTest = vi.fn();
 
@@ -132,7 +148,7 @@ describe("UpstreamsTable", () => {
   });
 
   it("renders empty state", () => {
-    render(<UpstreamsTable upstreams={[]} onEdit={onEdit} onDelete={onDelete} onTest={onTest} />);
+    render(<UpstreamsTable upstreams={[]} onDelete={onDelete} onTest={onTest} />);
 
     expect(screen.getByText("noUpstreams")).toBeInTheDocument();
     expect(screen.getByText("noUpstreamsDesc")).toBeInTheDocument();
@@ -140,32 +156,23 @@ describe("UpstreamsTable", () => {
 
   it("renders filtered empty state when filters are active", () => {
     render(
-      <UpstreamsTable
-        upstreams={[]}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onTest={onTest}
-        hasActiveFilters={true}
-      />
+      <UpstreamsTable upstreams={[]} onDelete={onDelete} onTest={onTest} hasActiveFilters={true} />
     );
 
     expect(screen.getByText("noFilteredUpstreams")).toBeInTheDocument();
     expect(screen.getByText("noFilteredUpstreamsDesc")).toBeInTheDocument();
   });
 
-  it("renders tier workbench card and upstream basics", () => {
-    render(
-      <UpstreamsTable
-        upstreams={[baseUpstream]}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onTest={onTest}
-      />
-    );
+  it("renders tier group and compact row basics, revealing runtime status on expand", () => {
+    render(<UpstreamsTable upstreams={[baseUpstream]} onDelete={onDelete} onTest={onTest} />);
 
     expect(screen.getByText("tier P0")).toBeInTheDocument();
     expect(screen.getByText("OpenAI Main")).toBeInTheDocument();
     expect(screen.getByText("https://api.openai.com/v1")).toBeInTheDocument();
+    // Dense runtime status only appears once the row is expanded.
+    expect(screen.queryByText("runtimeStatus")).not.toBeInTheDocument();
+
+    expandRow("OpenAI Main");
     expect(screen.getByText("runtimeStatus")).toBeInTheDocument();
   });
 
@@ -200,7 +207,6 @@ describe("UpstreamsTable", () => {
             ],
           },
         ]}
-        onEdit={onEdit}
         onDelete={onDelete}
         onTest={onTest}
       />
@@ -208,10 +214,11 @@ describe("UpstreamsTable", () => {
 
     expect(screen.queryByText("probeStatus.ok · 88ms")).not.toBeInTheDocument();
     expect(screen.queryByText("codex_cli / codex_cli_responses")).not.toBeInTheDocument();
+    // Runtime label is present inline (screen-reader text) even while collapsed.
     expect(screen.getByText("runtimeAvailable")).toBeInTheDocument();
   });
 
-  it("renders queue policy summary in runtime status", () => {
+  it("renders queue policy summary in expanded runtime status", () => {
     render(
       <UpstreamsTable
         upstreams={[
@@ -224,26 +231,20 @@ describe("UpstreamsTable", () => {
             },
           },
         ]}
-        onEdit={onEdit}
         onDelete={onDelete}
         onTest={onTest}
       />
     );
 
+    expandRow("OpenAI Main");
     expect(screen.getByText(/queuePolicyStatus/)).toBeInTheDocument();
     expect(screen.getByText(/queuePolicyRuntimeSummary/)).toBeInTheDocument();
   });
 
-  it("shows a lightweight catalog signal when cached catalog data exists", () => {
-    render(
-      <UpstreamsTable
-        upstreams={[baseUpstream]}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onTest={onTest}
-      />
-    );
+  it("shows a lightweight catalog signal in the expanded row", () => {
+    render(<UpstreamsTable upstreams={[baseUpstream]} onDelete={onDelete} onTest={onTest} />);
 
+    expandRow("OpenAI Main");
     expect(screen.getByText("catalogSignalReady")).toBeInTheDocument();
   });
 
@@ -286,7 +287,6 @@ describe("UpstreamsTable", () => {
     render(
       <UpstreamsTable
         upstreams={[unhealthyInP5, healthyInP0, unhealthyInP0]}
-        onEdit={onEdit}
         onDelete={onDelete}
         onTest={onTest}
       />
@@ -300,14 +300,7 @@ describe("UpstreamsTable", () => {
   });
 
   it("supports collapsing and expanding a tier", async () => {
-    render(
-      <UpstreamsTable
-        upstreams={[baseUpstream]}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onTest={onTest}
-      />
-    );
+    render(<UpstreamsTable upstreams={[baseUpstream]} onDelete={onDelete} onTest={onTest} />);
 
     const tierToggle = screen.getByRole("button", { name: /collapse/i });
     fireEvent.click(tierToggle);
@@ -322,12 +315,7 @@ describe("UpstreamsTable", () => {
 
   it("keeps expanded tier content unconstrained so long mobile lists are not clipped", () => {
     const { container } = render(
-      <UpstreamsTable
-        upstreams={[baseUpstream]}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onTest={onTest}
-      />
+      <UpstreamsTable upstreams={[baseUpstream]} onDelete={onDelete} onTest={onTest} />
     );
 
     const expandedTier = container.querySelector('[data-state="open"]');
@@ -341,14 +329,7 @@ describe("UpstreamsTable", () => {
   it("calls toggle mutation when active switch changes", async () => {
     mockToggleUpstreamActive.mockResolvedValueOnce(undefined);
 
-    render(
-      <UpstreamsTable
-        upstreams={[baseUpstream]}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onTest={onTest}
-      />
-    );
+    render(<UpstreamsTable upstreams={[baseUpstream]} onDelete={onDelete} onTest={onTest} />);
 
     fireEvent.click(screen.getByLabelText("quickDisable: OpenAI Main"));
 
@@ -360,42 +341,25 @@ describe("UpstreamsTable", () => {
     });
   });
 
-  it("hides test action and keeps edit action", () => {
-    render(
-      <UpstreamsTable
-        upstreams={[baseUpstream]}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onTest={onTest}
-      />
-    );
+  it("invokes onTest from the row test action and links edit to the detail page", () => {
+    render(<UpstreamsTable upstreams={[baseUpstream]} onDelete={onDelete} onTest={onTest} />);
 
-    fireEvent.click(screen.getByLabelText("edit: OpenAI Main"));
+    fireEvent.click(screen.getByLabelText("testUpstream: OpenAI Main"));
+    expect(onTest).toHaveBeenCalledWith(baseUpstream);
 
-    expect(screen.queryByLabelText("test: OpenAI Main")).not.toBeInTheDocument();
-    expect(onTest).not.toHaveBeenCalled();
-    expect(onEdit).toHaveBeenCalledWith(baseUpstream, expect.any(HTMLElement));
-    // 容器变形动画的源元素应锚定到卡片（带 data-morph-source）
-    const [, editSource] = onEdit.mock.calls[0];
-    expect(editSource).toHaveAttribute("data-morph-source");
+    const editLink = screen.getByLabelText("edit: OpenAI Main");
+    expect(editLink).toHaveAttribute("href", "/upstreams/upstream-1");
   });
 
-  it("supports delete action directly", async () => {
-    render(
-      <UpstreamsTable
-        upstreams={[baseUpstream]}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onTest={onTest}
-      />
-    );
+  it("supports delete action directly and anchors the morph source to the row", async () => {
+    render(<UpstreamsTable upstreams={[baseUpstream]} onDelete={onDelete} onTest={onTest} />);
 
     fireEvent.click(screen.getByLabelText("delete: OpenAI Main"));
 
     await waitFor(() => {
       expect(onDelete).toHaveBeenCalledWith(baseUpstream, expect.any(HTMLElement));
     });
-    // 删除确认弹窗同样从卡片变形展开
+    // 删除确认弹窗从行容器变形展开
     const [, deleteSource] = onDelete.mock.calls[0];
     expect(deleteSource).toHaveAttribute("data-morph-source");
   });
@@ -415,12 +379,7 @@ describe("UpstreamsTable", () => {
     };
 
     render(
-      <UpstreamsTable
-        upstreams={[openCircuitUpstream]}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onTest={onTest}
-      />
+      <UpstreamsTable upstreams={[openCircuitUpstream]} onDelete={onDelete} onTest={onTest} />
     );
 
     fireEvent.click(screen.getByLabelText("recoverCircuitBreaker: OpenAI Main"));
@@ -433,21 +392,15 @@ describe("UpstreamsTable", () => {
     });
   });
 
-  it("shows official website link when configured", () => {
+  it("shows official website link in the expanded row when configured", () => {
     const withWebsite: Upstream = {
       ...baseUpstream,
       official_website_url: "https://platform.openai.com",
     };
 
-    render(
-      <UpstreamsTable
-        upstreams={[withWebsite]}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onTest={onTest}
-      />
-    );
+    render(<UpstreamsTable upstreams={[withWebsite]} onDelete={onDelete} onTest={onTest} />);
 
+    expandRow("OpenAI Main");
     const links = screen.getAllByRole("link", { name: /officialWebsiteAction/i });
     expect(links.length).toBeGreaterThan(0);
   });
@@ -459,10 +412,9 @@ describe("UpstreamsTable", () => {
       max_concurrency: 10,
     };
 
-    render(
-      <UpstreamsTable upstreams={[full]} onEdit={onEdit} onDelete={onDelete} onTest={onTest} />
-    );
+    render(<UpstreamsTable upstreams={[full]} onDelete={onDelete} onTest={onTest} />);
 
+    // Runtime label surfaces the concurrency-full state inline.
     expect(screen.getAllByText("concurrencyFullStatus").length).toBeGreaterThanOrEqual(1);
   });
 
@@ -472,16 +424,14 @@ describe("UpstreamsTable", () => {
       last_used_at: null,
     };
 
-    render(
-      <UpstreamsTable upstreams={[neverUsed]} onEdit={onEdit} onDelete={onDelete} onTest={onTest} />
-    );
+    render(<UpstreamsTable upstreams={[neverUsed]} onDelete={onDelete} onTest={onTest} />);
 
-    expect(screen.getByText("lastUsed:")).toBeInTheDocument();
+    // Last-used relative time is always visible inline, even collapsed.
     expect(screen.getByText("neverUsed")).toBeInTheDocument();
     expect(screen.queryByText("createdAt")).not.toBeInTheDocument();
   });
 
-  it("renders quota block with timing hints", () => {
+  it("renders quota block with timing hints in the expanded row", () => {
     mockUpstreamQuotaData = {
       items: [
         {
@@ -514,21 +464,15 @@ describe("UpstreamsTable", () => {
       ],
     };
 
-    render(
-      <UpstreamsTable
-        upstreams={[baseUpstream]}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onTest={onTest}
-      />
-    );
+    render(<UpstreamsTable upstreams={[baseUpstream]} onDelete={onDelete} onTest={onTest} />);
 
+    expandRow("OpenAI Main");
     expect(screen.getByText("tableQuota")).toBeInTheDocument();
     expect(screen.getByText(/quotaResets:/)).toBeInTheDocument();
     expect(screen.getByText(/quotaRecovery:/)).toBeInTheDocument();
   });
 
-  it("collapses quota details in compact density until expanded", () => {
+  it("hides quota rule detail until the row is expanded", () => {
     mockUpstreamQuotaData = {
       items: [
         {
@@ -554,35 +498,23 @@ describe("UpstreamsTable", () => {
     render(
       <UpstreamsTable
         upstreams={[baseUpstream]}
-        onEdit={onEdit}
         onDelete={onDelete}
         onTest={onTest}
         density="compact"
       />
     );
 
-    const quotaSummary = screen.getByText("showQuotaDetails");
-    const details = quotaSummary.closest("details");
+    expect(screen.queryByText(/quotaResets:/)).not.toBeInTheDocument();
 
-    expect(quotaSummary).toBeInTheDocument();
-    expect(details).toBeInTheDocument();
-    expect(details).not.toHaveAttribute("open");
-
-    fireEvent.click(quotaSummary);
-    expect(details).toHaveAttribute("open");
+    expandRow("OpenAI Main");
+    expect(screen.getByText("tableQuota")).toBeInTheDocument();
     expect(screen.getByText(/quotaResets:/)).toBeInTheDocument();
   });
 
-  it("renders capability badge text", () => {
-    render(
-      <UpstreamsTable
-        upstreams={[baseUpstream]}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onTest={onTest}
-      />
-    );
+  it("renders capability badge text in the expanded row", () => {
+    render(<UpstreamsTable upstreams={[baseUpstream]} onDelete={onDelete} onTest={onTest} />);
 
+    expandRow("OpenAI Main");
     expect(screen.getByText("capabilityOpenAIChatCompatible")).toBeInTheDocument();
   });
 });

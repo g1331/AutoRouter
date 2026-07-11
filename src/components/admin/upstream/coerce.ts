@@ -1,7 +1,7 @@
 /**
  * Numeric coercion helpers shared by the upstream form schemas and the
- * detail-page section forms. Extracted verbatim from `upstream-form-dialog.tsx`
- * so the dialog and the per-section forms coerce inputs identically.
+ * detail-page section forms, so the create dialog and the per-section forms
+ * coerce inputs identically.
  */
 
 // Preserve transient empty-string edits in the input, and only coerce to numbers at validation time.

@@ -131,8 +131,9 @@ const UPSTREAMS_PAGE = {
 };
 
 // 详情页 GET /admin/upstreams/{id}：与列表首项（openai-primary）保持同一份数据，
-// 避免列表页与详情页之间出现不一致的 mock 快照。
-const UPSTREAM_DETAIL = UPSTREAMS_PAGE.items[0];
+// 避免列表页与详情页之间出现不一致的 mock 快照。导出供 tests/e2e 引用其 id，
+// 避免测试文件里出现重复的魔法 UUID 字面量。
+export const UPSTREAM_DETAIL = UPSTREAMS_PAGE.items[0];
 
 const UPSTREAM_HEALTH = {
   data: [
@@ -217,6 +218,16 @@ export async function mockAdminApis(page: Page): Promise<void> {
   );
   await page.route(`**/api/admin/upstreams/${UPSTREAM_DETAIL.id}`, (route) =>
     fulfillJson(route, 200, UPSTREAM_DETAIL)
+  );
+  // failure-rules 分区的 useUpstreamFailureRules / useGlobalUpstreamFailureRules
+  // 都从响应体里取 `.data`；catch-all 的裸 `{}` 没有该字段，queryFn 会 resolve
+  // 出 undefined，触发 TanStack Query 的 "Query data cannot be undefined" 报错。
+  // 两个端点都回空规则列表，形状与真实 API 对齐。
+  await page.route("**/api/admin/upstreams/*/failure-rules", (route) =>
+    fulfillJson(route, 200, { data: [] })
+  );
+  await page.route("**/api/admin/upstream-failure-rules", (route) =>
+    fulfillJson(route, 200, { data: [] })
   );
   // useLivePulse 的 SSE 读不到事件流会降级为快照轮询，两种形态都回同一份快照。
   await page.route("**/api/admin/stats/live**", (route) =>

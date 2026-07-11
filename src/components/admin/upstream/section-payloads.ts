@@ -19,9 +19,7 @@ import {
  * B2). Each builder is a pure function taking the section's validated (zod
  * output) values and returning a partial {@link UpstreamUpdate} that contains
  * ONLY that section's fields — the request never leaks fields owned by other
- * sections. The field-mapping logic mirrors `upstream-form-dialog.tsx` so the
- * detail-page section forms and the (soon-to-be-removed) dialog persist
- * identically.
+ * sections.
  */
 
 type SectionOutput<K extends keyof typeof upstreamSectionSchemas> = z.output<

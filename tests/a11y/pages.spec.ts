@@ -1,7 +1,12 @@
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
-import { mockAdminApis, seedAdminSession, seedTheme } from "../support/admin-page-mocks";
+import {
+  mockAdminApis,
+  seedAdminSession,
+  seedTheme,
+  UPSTREAM_DETAIL,
+} from "../support/admin-page-mocks";
 
 // axe WCAG 2.1 A/AA 扫描：login / dashboard / keys / upstreams 四页 × 暗/亮
 // 两主题。亮色主题是 bronze 强调色对比度的最终裁判（设计令牌对比度断言见
@@ -59,6 +64,15 @@ for (const theme of THEMES) {
       test("upstreams page has no WCAG A/AA violations", async ({ page }) => {
         await page.goto("/en/upstreams");
         await expect(page.getByText("anthropic-backup").first()).toBeVisible({ timeout: 15_000 });
+
+        await expectNoViolations(page);
+      });
+
+      test("upstream detail page has no WCAG A/AA violations", async ({ page }) => {
+        await page.goto(`/en/upstreams/${UPSTREAM_DETAIL.id}`);
+        await expect(page.getByText(UPSTREAM_DETAIL.name).first()).toBeVisible({
+          timeout: 15_000,
+        });
 
         await expectNoViolations(page);
       });

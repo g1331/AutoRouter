@@ -11,10 +11,10 @@ import {
 } from "./section-schemas";
 
 /**
- * Form-value builders shared by the upstream detail-page section forms (Phase
- * B2). These convert a persisted {@link Upstream} into the per-section
- * react-hook-form default values, mirroring the field mapping in
- * `upstream-form-dialog.tsx` so create/edit surfaces initialize identically.
+ * Form-value builders shared by the upstream detail-page section forms. These
+ * convert a persisted {@link Upstream} into the per-section react-hook-form
+ * default values so the create dialog and the section forms initialize
+ * identically.
  */
 
 type SectionInput<K extends keyof typeof upstreamSectionSchemas> = z.input<
