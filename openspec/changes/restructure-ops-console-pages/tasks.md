@@ -3,20 +3,20 @@
 
 ## 1. Phase A · 设计统一契约与共享原语（提交 `feat(ops-console)` A）
 
-- [ ] 1.1 `globals.css` 补 `.type-label-small` 定义（label 尺度底端档，含字距）
-- [ ] 1.2 未定义 `type-*` 类修复：`type-headline-small`（portal/page.tsx:34、users/[id]/page.tsx:43）随共享 StatCard 换 `type-display-small`；`type-heading-small`（failure-rules/page.tsx:30）换 `type-title-medium`；`type-label-small` 命中点（login ×5、hero-section、edit-user-dialog）接新定义
-- [ ] 1.3 全仓半径 sweep：`rounded-md`(30 处/8 弹窗文件)→`rounded-cf-md`；裸 `rounded`(10 处)→`rounded-cf-sm`；任意值 13 处按映射归并（[1/2/5/6px]→cf-sm、[8/10px]→cf-md、[18/22px]→rounded-full）
-- [ ] 1.4 从 `tailwind.config.ts` 删裸 `sm`/`md`/`lg` 半径别名（保留 `--vr-radius-lg` 令牌本体）
-- [ ] 1.5 新增半径守护单测 `tests/unit/radius-guard.test.ts`：禁裸 `rounded`、`rounded-[`、`rounded-(sm|md|lg|xl)`；含 `rounded-cf-*`/`rounded-full`/`rounded-none`/方向类反例断言不误伤
-- [ ] 1.6 抽取 `admin/page-header.tsx`（PageHeader）与 `admin/page-shell.tsx`（PageShell，maxWidth prop），含组件测试
-- [ ] 1.7 抽取 `ui/icon-box.tsx`（IconBox，size/tone），替换 23 处手写 amber 图标方块（9 文件），含组件测试
-- [ ] 1.8 抽取 `dashboard/stat-card.tsx`（StatCard，Tier-1 数字），合并 portal `OverviewStatCard` 与 users/[id] `StatCard`（消除重复与 type-* bug），含组件测试
-- [ ] 1.9 抽取 `admin/section-form.tsx`（SectionForm：标题 + dirty 徽标 + 保存/重置底栏，disabled-until-dirty），含组件测试
-- [ ] 1.10 `live-pulse-bar.tsx` 全部主指标迁 Tier 1（Saira `font-display` + tabular-nums）；topbar 字号档由双主题实测定档
-- [ ] 1.11 修 settings 页缺 users/cliproxy 两入口 bug；header-compensation 非标骨架归一到 PageShell
-- [ ] 1.12 就地将 `ui/terminal/status-led.tsx` 的 `rounded-[6px]` 迁移为 `rounded-cf-sm`（该组件仍被 `upstreams-table.tsx` 消费，**本阶段不可删**）；注意存在两个 StatusLed：terminal 版（status/showLabel/label API）vs `ui/status-led.tsx`（tone/pulse API），保留后者，terminal 版删除改期至 Phase B3（task 4.4）
-- [ ] 1.13 新增串双语同落 `src/messages/{en,zh-CN}.json`（namespace 顶层无点号）
-- [ ] 1.14 验收并提交：tsc + lint + 半径守护单测 + 新组件测试绿；双主题 spot check（dashboard/settings/portal 概览）；提交
+- [x] 1.1 `globals.css` 补 `.type-label-small` 定义（label 尺度底端档，含字距）
+- [x] 1.2 未定义 `type-*` 类修复：`type-headline-small`（portal/page.tsx:34、users/[id]/page.tsx:43）随共享 StatCard 换 `type-display-small`；`type-heading-small`（failure-rules/page.tsx:30）换 `type-title-medium`；`type-label-small` 命中点（login ×5、hero-section、edit-user-dialog）接新定义
+- [x] 1.3 全仓半径 sweep：`rounded-md`(30 处/8 弹窗文件)→`rounded-cf-md`；裸 `rounded`(10 处)→`rounded-cf-sm`；任意值 13 处按映射归并（[1/2/5/6px]→cf-sm、[8/10px]→cf-md、[18/22px]→rounded-full）
+- [x] 1.4 从 `tailwind.config.ts` 删裸 `sm`/`md`/`lg` 半径别名（保留 `--vr-radius-lg` 令牌本体）
+- [x] 1.5 新增半径守护单测 `tests/unit/radius-style-guard.test.ts`：禁裸 `rounded`、`rounded-[`、`rounded-(sm|md|lg|xl)`；含 `rounded-cf-*`/`rounded-full`/`rounded-none`/方向类反例断言不误伤
+- [x] 1.6 抽取 `admin/page-header.tsx`（PageHeader）与 `admin/page-shell.tsx`（PageShell，maxWidth prop），含组件测试
+- [x] 1.7 抽取 `ui/icon-box.tsx`（IconBox，size/tone）+ 组件测试；Phase A 仅在 settings 首个接入，**不做全仓一次性替换**——其余存续文件的替换随各自阶段落地（B/C 重构文件在重构中直接用 IconBox，D3 对齐组覆盖存续 admin 页面），避免替换将被 B2/C2 拆解或删除的文件（upstream-form-dialog、edit-key-dialog 等）
+- [x] 1.8 抽取 `dashboard/stat-card.tsx`（StatCard，Tier-1 数字），合并 portal `OverviewStatCard` 与 users/[id] `StatCard`（消除重复与 type-* bug），含组件测试
+- [x] 1.9 抽取 `admin/section-form.tsx`（SectionForm：标题 + dirty 徽标 + 保存/重置底栏，disabled-until-dirty），含组件测试
+- [x] 1.10 `live-pulse-bar.tsx` 全部主指标迁 Tier 1（Saira `font-display` + tabular-nums）；topbar 字号档由双主题实测定档
+- [x] 1.11 修 settings 页缺 users/cliproxy 两入口 bug；header-compensation 非标骨架归一到 PageShell
+- [x] 1.12 就地将 `ui/terminal/status-led.tsx` 的 `rounded-[6px]` 迁移为 `rounded-cf-sm`（该组件仍被 `upstreams-table.tsx` 消费，**本阶段不可删**）；注意存在两个 StatusLed：terminal 版（status/showLabel/label API）vs `ui/status-led.tsx`（tone/pulse API），保留后者，terminal 版删除改期至 Phase B3（task 4.4）
+- [x] 1.13 新增串双语同落 `src/messages/{en,zh-CN}.json`（namespace 顶层无点号）
+- [x] 1.14 验收并提交：tsc + lint + 半径守护单测 + 新组件测试绿；双主题 spot check（dashboard/settings/portal 概览）；提交
 
 ## 2. Phase B1 · useUpstream + 瘦 create + 详情页骨架（提交 `feat(upstreams)` B1）
 
@@ -74,7 +74,7 @@
 
 ## 9. Phase D3 · admin 对齐组（提交 `refactor(admin)` D3）
 
-- [ ] 9.1 dashboard、system/users、system/cliproxy、traffic-recording、background-sync、failure-rules、header-compensation、settings 接 PageHeader/PageShell/IconBox/StatCard + 半径/排印契约对齐
+- [ ] 9.1 dashboard、system/users、system/cliproxy、traffic-recording、background-sync、failure-rules、header-compensation、settings 接 PageHeader/PageShell/IconBox/StatCard + 半径/排印契约对齐；完成后全仓 grep 核实无残留手写 amber 图标方块三连样式（IconBox 收敛到位）
 - [ ] 9.2 为 settings 补 visual/a11y 覆盖；user-management/相关 spec 守护
 - [ ] 9.3 验收并提交：tsc + lint + 相关单测/spec 绿；对齐各页双主题 spot check（无测试覆盖页由视觉校验代理浏览器兜底）；本地 e2e --workers=2 绿；提交
 
