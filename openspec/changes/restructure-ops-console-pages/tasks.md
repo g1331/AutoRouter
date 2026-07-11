@@ -74,9 +74,9 @@
 
 ## 9. Phase D3 · admin 对齐组（提交 `refactor(admin)` D3）
 
-- [ ] 9.1 dashboard、system/users、system/cliproxy、traffic-recording、background-sync、failure-rules、header-compensation、settings 接 PageHeader/PageShell/IconBox/StatCard + 半径/排印契约对齐；完成后全仓 grep 核实无残留手写 amber 图标方块三连样式（IconBox 收敛到位）
-- [ ] 9.2 为 settings 补 visual/a11y 覆盖；user-management/相关 spec 守护
-- [ ] 9.3 验收并提交：tsc + lint + 相关单测/spec 绿；对齐各页双主题 spot check（无测试覆盖页由视觉校验代理浏览器兜底）；本地 e2e --workers=2 绿；提交
+- [x] 9.1 dashboard、system/users、system/cliproxy、traffic-recording、background-sync、failure-rules、header-compensation、settings 接 PageHeader/PageShell/IconBox/StatCard + 半径/排印契约对齐；完成后全仓 grep 核实无残留手写 amber 图标方块三连样式（IconBox 收敛到位）
+- [x] 9.2 为 settings 补 visual/a11y 覆盖；user-management/相关 spec 守护
+- [x] 9.3 验收并提交：tsc + lint + 相关单测/spec 绿；对齐各页双主题 spot check（无测试覆盖页由视觉校验代理浏览器兜底）；本地 e2e --workers=2 绿；提交
 
 ## 10. Phase D4 · portal + login 对齐（提交 `refactor(portal)` D4）
 
