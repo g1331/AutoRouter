@@ -8,9 +8,9 @@ import {
   Clock,
   ExternalLink,
   Pencil,
+  PlugZap,
   Server,
   ShieldCheck,
-  TestTube2,
   Trash2,
   Wallet,
 } from "lucide-react";
@@ -752,9 +752,10 @@ export function UpstreamsTable({
                                 isCompactDensity ? "h-7 w-7" : "h-8 w-8"
                               )}
                               onClick={() => onTest(upstream)}
+                              title={t("testUpstream")}
                               aria-label={`${t("testUpstream")}: ${upstream.name}`}
                             >
-                              <TestTube2 className="h-3.5 w-3.5" aria-hidden="true" />
+                              <PlugZap className="h-3.5 w-3.5" aria-hidden="true" />
                             </Button>
 
                             <Button

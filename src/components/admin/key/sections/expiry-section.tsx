@@ -66,7 +66,9 @@ export function ExpirySection({ apiKey }: { apiKey: APIKeyResponse }) {
           name="expires_at"
           render={({ field }) => (
             <FormItem className="flex flex-col">
-              <FormLabel>{t("expirationDate")}</FormLabel>
+              {/* 本区仅此一个字段，SectionForm 标题已可见呈现同一文案；FormLabel
+                  保留以给日期选择控件可访问名，视觉上隐藏避免与标题重复。 */}
+              <FormLabel className="sr-only">{t("expirationDate")}</FormLabel>
               <div className="flex gap-2">
                 <Popover>
                   <PopoverTrigger asChild>

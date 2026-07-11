@@ -1997,9 +1997,11 @@ export function LogsTable({
                           >
                             <div
                               className={cn(
+                                // 浅色态选中药丸仅靠白面抬起 + 阴影区分偏弱，顶边状态色边
+                                // 加粗到 3px 使选中态更明显；深色态维持 2px 不变。
                                 "absolute inset-x-0 top-0 h-0.5 opacity-0 transition-opacity duration-cf-fast ease-cf-standard motion-reduce:transition-none",
                                 progressTone.accent,
-                                isActive && "opacity-100"
+                                isActive && "opacity-100 light:h-[3px]"
                               )}
                             />
                             <span

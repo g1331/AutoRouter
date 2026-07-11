@@ -50,7 +50,9 @@ export function ShowKeyDialog({ apiKey, open, onClose }: ShowKeyDialogProps) {
             </div>
             {t("keyCreated")}
           </DialogTitle>
-          <DialogDescription>{t("keyCreatedDesc")}</DialogDescription>
+          {/* 同一句警示已由下方 amber 横幅醒目呈现；此处保留为对话框的可访问描述
+              （满足 Radix 的 aria-describedby），但视觉上隐藏以避免重复。 */}
+          <DialogDescription className="sr-only">{t("keyCreatedDesc")}</DialogDescription>
         </DialogHeader>
 
         {/* Warning Banner */}
