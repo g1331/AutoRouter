@@ -3,89 +3,34 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { CreateKeyDialog } from "@/components/admin/create-key-dialog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-const { mockToastError } = vi.hoisted(() => ({
-  mockToastError: vi.fn(),
-}));
+// The thin create dialog only captures name/description; access, spending
+// rules, model allowlist, and expiry now live on the /keys/[id] detail page
+// (Phase C1). This rewrite replaces the old fat-dialog suite, which exercised
+// fields the dialog no longer renders and failed to load entirely because
+// next/navigation (pulled in transitively via @/i18n/navigation's useRouter)
+// was unmocked.
 
-// Mock next-intl
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
-  useLocale: () => "en",
-}));
-
-// Mock date-locale
-vi.mock("@/lib/date-locale", () => ({
-  getDateLocale: () => undefined,
 }));
 
 vi.mock("sonner", () => ({
   toast: {
-    error: mockToastError,
+    error: vi.fn(),
     success: vi.fn(),
   },
 }));
 
-// Mock hooks
+const mockPush = vi.fn();
+vi.mock("@/i18n/navigation", () => ({
+  useRouter: () => ({ push: mockPush, replace: vi.fn() }),
+}));
+
 const mockCreateMutateAsync = vi.fn();
 vi.mock("@/hooks/use-api-keys", () => ({
   useCreateAPIKey: () => ({
     mutateAsync: mockCreateMutateAsync,
     isPending: false,
-  }),
-}));
-
-const mockUpstreams = [
-  {
-    id: "upstream-1",
-    name: "OpenAI",
-    provider: "openai",
-    description: "OpenAI API",
-    is_active: true,
-    model_catalog: [{ model: "gpt-4.1", source: "native" }],
-    allowed_models: null,
-    model_rules: null,
-  },
-  {
-    id: "upstream-2",
-    name: "Anthropic",
-    provider: "anthropic",
-    description: null,
-    is_active: true,
-    model_catalog: null,
-    allowed_models: ["claude-3-7-sonnet"],
-    model_rules: null,
-  },
-  {
-    id: "upstream-3",
-    name: "Google",
-    provider: "google",
-    description: "Google AI",
-    is_active: true,
-    model_catalog: null,
-    allowed_models: null,
-    model_rules: [
-      {
-        type: "exact",
-        value: "gemini-2.5-pro",
-        target_model: null,
-        source: "manual",
-        display_label: null,
-      },
-      {
-        type: "regex",
-        value: "^gemini-2\\.5-.*$",
-        target_model: null,
-        source: "manual",
-        display_label: null,
-      },
-    ],
-  },
-];
-
-vi.mock("@/hooks/use-upstreams", () => ({
-  useAllUpstreams: () => ({
-    data: mockUpstreams,
-    isLoading: false,
   }),
 }));
 
@@ -104,529 +49,215 @@ describe("CreateKeyDialog", () => {
       },
     });
     mockCreateMutateAsync.mockReset();
-    mockToastError.mockReset();
+    mockPush.mockReset();
   });
 
-  describe("Trigger Button", () => {
-    it("renders create key button", () => {
-      render(<CreateKeyDialog />, { wrapper: Wrapper });
+  it("renders the trigger button and opens the dialog", async () => {
+    render(<CreateKeyDialog />, { wrapper: Wrapper });
 
-      expect(screen.getByText("createKey")).toBeInTheDocument();
-    });
+    expect(screen.getByText("createKey")).toBeInTheDocument();
 
-    it("opens dialog when button is clicked", async () => {
-      render(<CreateKeyDialog />, { wrapper: Wrapper });
+    fireEvent.click(screen.getByText("createKey"));
 
-      const createButton = screen.getByText("createKey");
-      fireEvent.click(createButton);
-
-      await waitFor(() => {
-        expect(screen.getByText("createKeyTitle")).toBeInTheDocument();
-      });
+    await waitFor(() => {
+      expect(screen.getByText("createKeyTitle")).toBeInTheDocument();
     });
   });
 
-  describe("Dialog Content", () => {
-    it("renders form fields when dialog is open", async () => {
-      render(<CreateKeyDialog />, { wrapper: Wrapper });
+  it("renders only the name and description fields — no access/spending/model/expiry fields", async () => {
+    render(<CreateKeyDialog />, { wrapper: Wrapper });
 
-      fireEvent.click(screen.getByText("createKey"));
+    fireEvent.click(screen.getByText("createKey"));
 
-      await waitFor(() => {
-        // Check for form fields by placeholder/input existence
-        expect(screen.getByPlaceholderText("keyNamePlaceholder")).toBeInTheDocument();
-        expect(screen.getByPlaceholderText("keyDescriptionPlaceholder")).toBeInTheDocument();
-        expect(screen.getByText("expirationDate")).toBeInTheDocument();
-        expect(screen.getByText("unrestrictedAccess")).toBeInTheDocument();
-        expect(screen.getByText("restrictedAccess")).toBeInTheDocument();
-      });
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("keyNamePlaceholder")).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("keyDescriptionPlaceholder")).toBeInTheDocument();
+      // The configure-later hint replaces the fat form's remaining sections.
+      expect(screen.getByText("createKeyConfigureHint")).toBeInTheDocument();
     });
 
-    it("renders upstream checkboxes only in restricted mode", async () => {
-      render(<CreateKeyDialog />, { wrapper: Wrapper });
-
-      fireEvent.click(screen.getByText("createKey"));
-
-      expect(screen.queryByText("OpenAI")).not.toBeInTheDocument();
-
-      fireEvent.click(screen.getByText("restrictedAccess"));
-
-      await waitFor(() => {
-        expect(screen.getByText("OpenAI")).toBeInTheDocument();
-        expect(screen.getByText("Anthropic")).toBeInTheDocument();
-      });
-    });
-
-    it("renders upstream description when present", async () => {
-      render(<CreateKeyDialog />, { wrapper: Wrapper });
-
-      fireEvent.click(screen.getByText("createKey"));
-      fireEvent.click(screen.getByText("restrictedAccess"));
-
-      await waitFor(() => {
-        expect(screen.getByText("OpenAI API")).toBeInTheDocument();
-      });
-    });
-
-    it("filters upstreams with the search input", async () => {
-      render(<CreateKeyDialog />, { wrapper: Wrapper });
-
-      fireEvent.click(screen.getByText("createKey"));
-      fireEvent.click(screen.getByText("restrictedAccess"));
-
-      await waitFor(() => {
-        expect(screen.getByPlaceholderText("searchUpstreams")).toBeInTheDocument();
-      });
-
-      fireEvent.change(screen.getByPlaceholderText("searchUpstreams"), {
-        target: { value: "Anthro" },
-      });
-
-      await waitFor(() => {
-        expect(screen.getByText("Anthropic")).toBeInTheDocument();
-        expect(screen.queryByText("OpenAI")).not.toBeInTheDocument();
-      });
-    });
-
-    it("toggles all visible upstreams from the current search", async () => {
-      mockCreateMutateAsync.mockResolvedValueOnce({
-        id: "key-1",
-        key_value: "sk-auto-test",
-        key_prefix: "sk-auto-test",
-        name: "Filtered Key",
-        description: null,
-        access_mode: "restricted",
-        upstream_ids: ["upstream-2"],
-        allowed_models: null,
-        spending_rules: null,
-        spending_rule_statuses: [],
-        is_quota_exceeded: false,
-        is_active: true,
-        expires_at: null,
-        created_at: "2024-01-01T00:00:00Z",
-        updated_at: "2024-01-01T00:00:00Z",
-      });
-
-      render(<CreateKeyDialog />, { wrapper: Wrapper });
-
-      fireEvent.click(screen.getByText("createKey"));
-      fireEvent.click(screen.getByText("restrictedAccess"));
-      fireEvent.change(screen.getByPlaceholderText("searchUpstreams"), {
-        target: { value: "Anthro" },
-      });
-      fireEvent.click(screen.getByText("selectFilteredUpstreams"));
-
-      await waitFor(() => {
-        expect(screen.getByText("deselectFilteredUpstreams")).toBeInTheDocument();
-      });
-
-      fireEvent.click(screen.getByText("deselectFilteredUpstreams"));
-      fireEvent.click(screen.getByText("selectFilteredUpstreams"));
-      fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
-        target: { value: "Filtered Key" },
-      });
-      fireEvent.click(screen.getByText("create"));
-
-      await waitFor(() => {
-        expect(mockCreateMutateAsync).toHaveBeenCalledWith({
-          name: "Filtered Key",
-          description: null,
-          access_mode: "restricted",
-          upstream_ids: ["upstream-2"],
-          allowed_models: null,
-          expires_at: null,
-          spending_rules: null,
-        });
-      });
-    });
-
-    it("renders cancel and create buttons", async () => {
-      render(<CreateKeyDialog />, { wrapper: Wrapper });
-
-      fireEvent.click(screen.getByText("createKey"));
-
-      await waitFor(() => {
-        expect(screen.getByText("cancel")).toBeInTheDocument();
-        expect(screen.getByText("create")).toBeInTheDocument();
-      });
-    });
-
-    it("allows adding a spending rule and submits it", async () => {
-      mockCreateMutateAsync.mockResolvedValueOnce({
-        id: "key-2",
-        key_value: "sk-auto-quota",
-        key_prefix: "sk-auto-quota",
-        name: "Quota Key",
-        description: null,
-        access_mode: "unrestricted",
-        upstream_ids: [],
-        allowed_models: null,
-        spending_rules: [{ period_type: "daily", limit: 12.5 }],
-        spending_rule_statuses: [],
-        is_quota_exceeded: false,
-        is_active: true,
-        expires_at: null,
-        created_at: "2024-01-01T00:00:00Z",
-        updated_at: "2024-01-01T00:00:00Z",
-      });
-
-      render(<CreateKeyDialog />, { wrapper: Wrapper });
-
-      fireEvent.click(screen.getByText("createKey"));
-      fireEvent.click(screen.getByText("addSpendingRule"));
-      fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
-        target: { value: "Quota Key" },
-      });
-      fireEvent.change(screen.getByPlaceholderText("quotaLimitPlaceholder"), {
-        target: { value: "12.5" },
-      });
-      fireEvent.click(screen.getByText("create"));
-
-      await waitFor(() => {
-        expect(mockCreateMutateAsync).toHaveBeenCalledWith({
-          name: "Quota Key",
-          description: null,
-          access_mode: "unrestricted",
-          upstream_ids: [],
-          allowed_models: null,
-          expires_at: null,
-          spending_rules: [{ period_type: "daily", limit: 12.5 }],
-        });
-      });
-    });
-
-    it("imports candidate models from all enabled upstream sources in unrestricted mode", async () => {
-      mockCreateMutateAsync.mockResolvedValueOnce({
-        id: "key-models",
-        key_value: "sk-auto-models",
-        key_prefix: "sk-auto-models",
-        name: "Model Key",
-        description: null,
-        access_mode: "unrestricted",
-        upstream_ids: [],
-        allowed_models: ["claude-3-7-sonnet", "gemini-2.5-pro", "gpt-4.1"],
-        spending_rules: null,
-        spending_rule_statuses: [],
-        is_quota_exceeded: false,
-        is_active: true,
-        expires_at: null,
-        created_at: "2024-01-01T00:00:00Z",
-        updated_at: "2024-01-01T00:00:00Z",
-      });
-
-      render(<CreateKeyDialog />, { wrapper: Wrapper });
-
-      fireEvent.click(screen.getByText("createKey"));
-      fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
-        target: { value: "Model Key" },
-      });
-      fireEvent.click(screen.getByText("selectVisibleModelCandidates"));
-      fireEvent.click(screen.getByText("importSelectedModelCandidates"));
-      fireEvent.click(screen.getByText("create"));
-
-      await waitFor(() => {
-        expect(mockCreateMutateAsync).toHaveBeenCalledWith({
-          name: "Model Key",
-          description: null,
-          access_mode: "unrestricted",
-          upstream_ids: [],
-          allowed_models: ["claude-3-7-sonnet", "gemini-2.5-pro", "gpt-4.1"],
-          expires_at: null,
-          spending_rules: null,
-        });
-      });
-    });
-
-    it("imports only selected candidate models after filtering", async () => {
-      mockCreateMutateAsync.mockResolvedValueOnce({
-        id: "key-filtered-models",
-        key_value: "sk-auto-filtered-models",
-        key_prefix: "sk-auto-filtered",
-        name: "Filtered Model Key",
-        description: null,
-        access_mode: "unrestricted",
-        upstream_ids: [],
-        allowed_models: ["gemini-2.5-pro"],
-        spending_rules: null,
-        spending_rule_statuses: [],
-        is_quota_exceeded: false,
-        is_active: true,
-        expires_at: null,
-        created_at: "2024-01-01T00:00:00Z",
-        updated_at: "2024-01-01T00:00:00Z",
-      });
-
-      render(<CreateKeyDialog />, { wrapper: Wrapper });
-
-      fireEvent.click(screen.getByText("createKey"));
-      fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
-        target: { value: "Filtered Model Key" },
-      });
-      fireEvent.change(screen.getByPlaceholderText("searchModelCandidates"), {
-        target: { value: "gemini" },
-      });
-      fireEvent.click(screen.getByText("selectVisibleModelCandidates"));
-      fireEvent.click(screen.getByText("importSelectedModelCandidates"));
-      fireEvent.click(screen.getByText("create"));
-
-      await waitFor(() => {
-        expect(mockCreateMutateAsync).toHaveBeenCalledWith({
-          name: "Filtered Model Key",
-          description: null,
-          access_mode: "unrestricted",
-          upstream_ids: [],
-          allowed_models: ["gemini-2.5-pro"],
-          expires_at: null,
-          spending_rules: null,
-        });
-      });
-    });
-
-    it("keeps spending rule numeric inputs editable through empty string and zero", async () => {
-      mockCreateMutateAsync.mockResolvedValueOnce({
-        id: "key-3",
-        key_value: "sk-auto-sequence",
-        key_prefix: "sk-auto-sequence",
-        name: "Sequence Key",
-        description: null,
-        access_mode: "unrestricted",
-        upstream_ids: [],
-        allowed_models: null,
-        spending_rules: [{ period_type: "rolling", limit: 5, period_hours: 5 }],
-        spending_rule_statuses: [],
-        is_quota_exceeded: false,
-        is_active: true,
-        expires_at: null,
-        created_at: "2024-01-01T00:00:00Z",
-        updated_at: "2024-01-01T00:00:00Z",
-      });
-
-      render(<CreateKeyDialog />, { wrapper: Wrapper });
-
-      fireEvent.click(screen.getByText("createKey"));
-      fireEvent.click(screen.getByText("addSpendingRule"));
-      fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
-        target: { value: "Sequence Key" },
-      });
-
-      const limitInput = screen.getByPlaceholderText("quotaLimitPlaceholder") as HTMLInputElement;
-      fireEvent.change(limitInput, { target: { value: "30" } });
-      expect(limitInput.value).toBe("30");
-      fireEvent.change(limitInput, { target: { value: "3" } });
-      expect(limitInput.value).toBe("3");
-      fireEvent.change(limitInput, { target: { value: "" } });
-      expect(limitInput.value).toBe("");
-      fireEvent.change(limitInput, { target: { value: "0" } });
-      expect(limitInput.value).toBe("0");
-      fireEvent.change(limitInput, { target: { value: "5" } });
-      expect(limitInput.value).toBe("5");
-
-      fireEvent.click(screen.getByText("quotaPeriodType_rolling"));
-
-      const periodHoursInput = screen.getByPlaceholderText(
-        "quotaPeriodHoursPlaceholder"
-      ) as HTMLInputElement;
-      fireEvent.change(periodHoursInput, { target: { value: "30" } });
-      expect(periodHoursInput.value).toBe("30");
-      fireEvent.change(periodHoursInput, { target: { value: "3" } });
-      expect(periodHoursInput.value).toBe("3");
-      fireEvent.change(periodHoursInput, { target: { value: "" } });
-      expect(periodHoursInput.value).toBe("");
-      fireEvent.change(periodHoursInput, { target: { value: "0" } });
-      expect(periodHoursInput.value).toBe("0");
-      fireEvent.change(periodHoursInput, { target: { value: "5" } });
-      expect(periodHoursInput.value).toBe("5");
-
-      fireEvent.click(screen.getByText("create"));
-
-      await waitFor(() => {
-        expect(mockCreateMutateAsync).toHaveBeenCalledWith({
-          name: "Sequence Key",
-          description: null,
-          access_mode: "unrestricted",
-          upstream_ids: [],
-          allowed_models: null,
-          expires_at: null,
-          spending_rules: [{ period_type: "rolling", limit: 5, period_hours: 5 }],
-        });
-      });
-    });
+    // Fields that used to live in this dialog now belong to the detail page.
+    expect(screen.queryByText("unrestrictedAccess")).not.toBeInTheDocument();
+    expect(screen.queryByText("restrictedAccess")).not.toBeInTheDocument();
+    expect(screen.queryByText("addSpendingRule")).not.toBeInTheDocument();
+    expect(screen.queryByText("allowedModels")).not.toBeInTheDocument();
+    expect(screen.queryByText("expirationDate")).not.toBeInTheDocument();
   });
 
-  describe("Form Validation", () => {
-    it("shows validation error when name is empty", async () => {
-      render(<CreateKeyDialog />, { wrapper: Wrapper });
+  it("shows a validation error when name is empty", async () => {
+    render(<CreateKeyDialog />, { wrapper: Wrapper });
 
-      fireEvent.click(screen.getByText("createKey"));
+    fireEvent.click(screen.getByText("createKey"));
 
-      await waitFor(() => {
-        expect(screen.getByText("create")).toBeInTheDocument();
-      });
-
-      // Click create without filling form
-      fireEvent.click(screen.getByText("create"));
-
-      await waitFor(() => {
-        expect(screen.getByText("keyNameRequired")).toBeInTheDocument();
-      });
-
-      expect(mockToastError).toHaveBeenCalledWith("formValidationFailed");
+    await waitFor(() => {
+      expect(screen.getByText("create")).toBeInTheDocument();
     });
 
-    it("shows localized spending rule error instead of default english number error", async () => {
-      render(<CreateKeyDialog />, { wrapper: Wrapper });
+    fireEvent.click(screen.getByText("create"));
 
-      fireEvent.click(screen.getByText("createKey"));
-      fireEvent.click(screen.getByText("addSpendingRule"));
-      fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
-        target: { value: "Localized Error Key" },
-      });
-      fireEvent.change(screen.getByPlaceholderText("quotaLimitPlaceholder"), {
-        target: { value: "" },
-      });
-
-      fireEvent.click(screen.getByText("create"));
-
-      await waitFor(() => {
-        expect(screen.getByText("quotaLimitPositive")).toBeInTheDocument();
-      });
-
-      expect(
-        screen.queryByText("Invalid input: expected number, received undefined")
-      ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("keyNameRequired")).toBeInTheDocument();
     });
 
-    it("allows submit without selecting upstreams in unrestricted mode", async () => {
-      mockCreateMutateAsync.mockResolvedValueOnce({
-        id: "key-1",
-        key_value: "sk-auto-test",
-        key_prefix: "sk-auto-test",
+    expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("submits the minimal payload — name, description, and empty upstream_ids", async () => {
+    mockCreateMutateAsync.mockResolvedValueOnce({
+      id: "key-1",
+      key_value: "sk-auto-test",
+      key_prefix: "sk-auto-test",
+      name: "Test Key",
+      description: null,
+      access_mode: "unrestricted",
+      upstream_ids: [],
+      allowed_models: null,
+      spending_rules: null,
+      spending_rule_statuses: [],
+      is_quota_exceeded: false,
+      is_active: true,
+      expires_at: null,
+      created_at: "2024-01-01T00:00:00Z",
+      updated_at: "2024-01-01T00:00:00Z",
+    });
+
+    render(<CreateKeyDialog />, { wrapper: Wrapper });
+
+    fireEvent.click(screen.getByText("createKey"));
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("keyNamePlaceholder")).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
+      target: { value: "Test Key" },
+    });
+    fireEvent.click(screen.getByText("create"));
+
+    await waitFor(() => {
+      expect(mockCreateMutateAsync).toHaveBeenCalledWith({
         name: "Test Key",
         description: null,
-        access_mode: "unrestricted",
         upstream_ids: [],
-        allowed_models: null,
-        spending_rules: null,
-        spending_rule_statuses: [],
-        is_quota_exceeded: false,
-        is_active: true,
-        expires_at: null,
-        created_at: "2024-01-01T00:00:00Z",
-        updated_at: "2024-01-01T00:00:00Z",
-      });
-
-      render(<CreateKeyDialog />, { wrapper: Wrapper });
-
-      fireEvent.click(screen.getByText("createKey"));
-
-      await waitFor(() => {
-        expect(screen.getByPlaceholderText("keyNamePlaceholder")).toBeInTheDocument();
-      });
-
-      fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
-        target: { value: "Test Key" },
-      });
-      fireEvent.click(screen.getByText("create"));
-
-      await waitFor(() => {
-        expect(mockCreateMutateAsync).toHaveBeenCalledWith({
-          name: "Test Key",
-          description: null,
-          access_mode: "unrestricted",
-          upstream_ids: [],
-          allowed_models: null,
-          expires_at: null,
-          spending_rules: null,
-        });
-      });
-    });
-
-    it("shows validation error when no upstream selected in restricted mode", async () => {
-      render(<CreateKeyDialog />, { wrapper: Wrapper });
-
-      fireEvent.click(screen.getByText("createKey"));
-
-      await waitFor(() => {
-        expect(screen.getByPlaceholderText("keyNamePlaceholder")).toBeInTheDocument();
-      });
-
-      // Fill name but no upstream
-      const nameInput = screen.getByPlaceholderText("keyNamePlaceholder");
-      fireEvent.change(nameInput, { target: { value: "Test Key" } });
-      fireEvent.click(screen.getByText("restrictedAccess"));
-
-      fireEvent.click(screen.getByText("create"));
-
-      await waitFor(() => {
-        expect(screen.getByText("selectUpstreamsRequired")).toBeInTheDocument();
-      });
-    });
-
-    it("selects all visible upstreams from the filtered results", async () => {
-      mockCreateMutateAsync.mockResolvedValueOnce({
-        id: "key-1",
-        key_value: "sk-auto-test",
-        key_prefix: "sk-auto-test",
-        name: "Filtered Key",
-        description: null,
-        access_mode: "restricted",
-        upstream_ids: ["upstream-1"],
-        allowed_models: null,
-        spending_rules: null,
-        spending_rule_statuses: [],
-        is_quota_exceeded: false,
-        is_active: true,
-        expires_at: null,
-        created_at: "2024-01-01T00:00:00Z",
-        updated_at: "2024-01-01T00:00:00Z",
-      });
-
-      render(<CreateKeyDialog />, { wrapper: Wrapper });
-
-      fireEvent.click(screen.getByText("createKey"));
-      fireEvent.click(screen.getByText("restrictedAccess"));
-
-      await waitFor(() => {
-        expect(screen.getByPlaceholderText("searchUpstreams")).toBeInTheDocument();
-      });
-
-      fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
-        target: { value: "Filtered Key" },
-      });
-      fireEvent.change(screen.getByPlaceholderText("searchUpstreams"), {
-        target: { value: "Open" },
-      });
-      fireEvent.click(screen.getByText("selectFilteredUpstreams"));
-      fireEvent.click(screen.getByText("create"));
-
-      await waitFor(() => {
-        expect(mockCreateMutateAsync).toHaveBeenCalledWith({
-          name: "Filtered Key",
-          description: null,
-          access_mode: "restricted",
-          upstream_ids: ["upstream-1"],
-          allowed_models: null,
-          expires_at: null,
-          spending_rules: null,
-        });
       });
     });
   });
 
-  describe("Dialog Close", () => {
-    it("closes dialog when cancel is clicked", async () => {
+  it("includes a trimmed description in the payload when provided", async () => {
+    mockCreateMutateAsync.mockResolvedValueOnce({
+      id: "key-2",
+      key_value: "sk-auto-test-2",
+      key_prefix: "sk-auto-test-2",
+      name: "Described Key",
+      description: "Used by the billing service",
+      access_mode: "unrestricted",
+      upstream_ids: [],
+      allowed_models: null,
+      spending_rules: null,
+      spending_rule_statuses: [],
+      is_quota_exceeded: false,
+      is_active: true,
+      expires_at: null,
+      created_at: "2024-01-01T00:00:00Z",
+      updated_at: "2024-01-01T00:00:00Z",
+    });
+
+    render(<CreateKeyDialog />, { wrapper: Wrapper });
+
+    fireEvent.click(screen.getByText("createKey"));
+    fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
+      target: { value: "Described Key" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("keyDescriptionPlaceholder"), {
+      target: { value: "Used by the billing service" },
+    });
+    fireEvent.click(screen.getByText("create"));
+
+    await waitFor(() => {
+      expect(mockCreateMutateAsync).toHaveBeenCalledWith({
+        name: "Described Key",
+        description: "Used by the billing service",
+        upstream_ids: [],
+      });
+    });
+  });
+
+  it("closes the dialog when cancel is clicked", async () => {
+    render(<CreateKeyDialog />, { wrapper: Wrapper });
+
+    fireEvent.click(screen.getByText("createKey"));
+
+    await waitFor(() => {
+      expect(screen.getByText("createKeyTitle")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("cancel"));
+
+    await waitFor(() => {
+      expect(screen.queryByText("createKeyTitle")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("one-time key reveal", () => {
+    const createdKey = {
+      id: "key-reveal",
+      key_value: "sk-auto-reveal-secret",
+      key_prefix: "sk-auto-rev",
+      name: "Reveal Key",
+      description: null,
+      access_mode: "unrestricted" as const,
+      upstream_ids: [],
+      allowed_models: null,
+      spending_rules: null,
+      spending_rule_statuses: [],
+      is_quota_exceeded: false,
+      is_active: true,
+      expires_at: null,
+      created_at: "2024-01-01T00:00:00Z",
+      updated_at: "2024-01-01T00:00:00Z",
+    };
+
+    beforeEach(() => {
+      mockCreateMutateAsync.mockResolvedValueOnce(createdKey);
+    });
+
+    it("shows the ShowKeyDialog one-time reveal after a successful create, closes the create dialog", async () => {
       render(<CreateKeyDialog />, { wrapper: Wrapper });
 
       fireEvent.click(screen.getByText("createKey"));
+      fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
+        target: { value: "Reveal Key" },
+      });
+      fireEvent.click(screen.getByText("create"));
 
       await waitFor(() => {
-        expect(screen.getByText("createKeyTitle")).toBeInTheDocument();
+        expect(screen.getByText("keyCreated")).toBeInTheDocument();
+        expect(screen.getByText(createdKey.key_value)).toBeInTheDocument();
       });
 
-      fireEvent.click(screen.getByText("cancel"));
+      // The create dialog itself is closed once the reveal dialog takes over.
+      expect(screen.queryByText("createKeyTitle")).not.toBeInTheDocument();
+    });
+
+    it("navigates to the detail page once the reveal dialog is closed", async () => {
+      render(<CreateKeyDialog />, { wrapper: Wrapper });
+
+      fireEvent.click(screen.getByText("createKey"));
+      fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
+        target: { value: "Reveal Key" },
+      });
+      fireEvent.click(screen.getByText("create"));
 
       await waitFor(() => {
-        expect(screen.queryByText("createKeyTitle")).not.toBeInTheDocument();
+        expect(screen.getByText("keyCreated")).toBeInTheDocument();
+      });
+
+      expect(mockPush).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByText("close"));
+
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith(`/keys/${createdKey.id}`);
       });
     });
   });

@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 
 import {
+  KEY_DETAIL,
   mockAdminApis,
   seedAdminSession,
   seedTheme,
@@ -68,6 +69,13 @@ test.describe("Visual Regression", () => {
       );
 
       await expect(page).toHaveScreenshot("upstream-detail.png", SNAPSHOT_OPTIONS);
+    });
+
+    test("key detail page visual snapshot", async ({ page }) => {
+      // 分区导航渲染出密钥名称后再截图，避免拍到骨架态。
+      await gotoAndSettle(page, `/en/keys/${KEY_DETAIL.id}`, `text=${KEY_DETAIL.name}`);
+
+      await expect(page).toHaveScreenshot("key-detail.png", SNAPSHOT_OPTIONS);
     });
   });
 });

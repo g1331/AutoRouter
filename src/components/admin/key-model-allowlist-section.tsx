@@ -22,6 +22,10 @@ interface KeyModelAllowlistSectionProps {
   value: string[];
   candidates: string[];
   onChange: (models: string[]) => void;
+  // When embedded in a SectionForm shell (detail page) the shell already renders
+  // the title/description, so the inner card suppresses its own to avoid a
+  // verbatim duplicate. Standalone consumers (edit-key-dialog) keep the header.
+  hideHeader?: boolean;
 }
 
 const MODEL_ROW_HEIGHT = 42;
@@ -143,6 +147,7 @@ export function KeyModelAllowlistSection({
   value,
   candidates,
   onChange,
+  hideHeader = false,
 }: KeyModelAllowlistSectionProps) {
   const t = useTranslations("keys");
   const [draft, setDraft] = useState("");
@@ -277,12 +282,14 @@ export function KeyModelAllowlistSection({
 
   return (
     <div className="space-y-3 rounded-cf-md border border-divider-subtle bg-surface-200 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-1">
-          <p className="type-body-medium text-foreground">{t("allowedModels")}</p>
-          <p className="type-body-small text-muted-foreground">{t("allowedModelsDesc")}</p>
+      {!hideHeader && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1">
+            <p className="type-body-medium text-foreground">{t("allowedModels")}</p>
+            <p className="type-body-small text-muted-foreground">{t("allowedModelsDesc")}</p>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <Badge variant={value.length > 0 ? "info" : "neutral"}>

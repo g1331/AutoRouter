@@ -2,6 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
 import {
+  KEY_DETAIL,
   mockAdminApis,
   seedAdminSession,
   seedTheme,
@@ -71,6 +72,15 @@ for (const theme of THEMES) {
       test("upstream detail page has no WCAG A/AA violations", async ({ page }) => {
         await page.goto(`/en/upstreams/${UPSTREAM_DETAIL.id}`);
         await expect(page.getByText(UPSTREAM_DETAIL.name).first()).toBeVisible({
+          timeout: 15_000,
+        });
+
+        await expectNoViolations(page);
+      });
+
+      test("key detail page has no WCAG A/AA violations", async ({ page }) => {
+        await page.goto(`/en/keys/${KEY_DETAIL.id}`);
+        await expect(page.getByText(KEY_DETAIL.name).first()).toBeVisible({
           timeout: 15_000,
         });
 

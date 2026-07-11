@@ -346,7 +346,7 @@
     "managementDesc": "创建和管理用于客户端访问的 API Keys",
     "createKey": "创建 API Key",
     "createKeyTitle": "创建新的 API Key",
-    "createKeyDesc": "创建一个新的 API Key 用于客户端访问，选择可用的 Upstreams",
+    "createKeyDesc": "创建一个新的 API Key 用于客户端访问",
     "keyName": "名称",
     "keyNamePlaceholder": "例如: Production API Key",
     "keyNameRequired": "名称不能为空",
@@ -463,7 +463,18 @@
     "quickEnable": "启用",
     "quickDisable": "停用",
     "enableSuccess": "API Key 已启用",
-    "disableSuccess": "API Key 已停用"
+    "disableSuccess": "API Key 已停用",
+    "detailTitle": "API 密钥详情",
+    "backToKeys": "返回密钥列表",
+    "keyNotFound": "密钥不存在",
+    "keyNotFoundHint": "该密钥可能已被吊销，或链接无效。",
+    "configCategoryBasic": "基础",
+    "configCategoryPolicy": "访问与策略",
+    "sectionBasicTitle": "基础信息",
+    "sectionBasicDesc": "名称、描述与启用状态。",
+    "sectionAccessTitle": "访问模式与上游授权",
+    "sectionAccessDesc": "选择完全访问或受限访问，以及该密钥可使用的上游。",
+    "createKeyConfigureHint": "访问模式、花费规则、模型白名单与到期时间将在密钥创建后于下一页配置。"
   },
   "logs": {
     "title": "请求日志",

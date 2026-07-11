@@ -346,7 +346,7 @@
     "managementDesc": "Create and manage API Keys for client access",
     "createKey": "Create API Key",
     "createKeyTitle": "Create New API Key",
-    "createKeyDesc": "Create a new API Key for client access, select available Upstreams",
+    "createKeyDesc": "Create a new API Key for client access",
     "keyName": "Name",
     "keyNamePlaceholder": "e.g., Production API Key",
     "keyNameRequired": "Name is required",
@@ -463,7 +463,18 @@
     "quickEnable": "Enable",
     "quickDisable": "Disable",
     "enableSuccess": "API Key enabled",
-    "disableSuccess": "API Key disabled"
+    "disableSuccess": "API Key disabled",
+    "detailTitle": "API Key Detail",
+    "backToKeys": "Back to keys",
+    "keyNotFound": "API key not found",
+    "keyNotFoundHint": "This key may have been revoked, or the link is invalid.",
+    "configCategoryBasic": "Basics",
+    "configCategoryPolicy": "Access and Policy",
+    "sectionBasicTitle": "Basic info",
+    "sectionBasicDesc": "Name, description, and active status.",
+    "sectionAccessTitle": "Access and upstream grants",
+    "sectionAccessDesc": "Choose full or restricted access and the upstreams this key may use.",
+    "createKeyConfigureHint": "Access, spending rules, model allowlist, and expiry are configured on the next page after the key is created."
   },
   "logs": {
     "title": "Request Logs",

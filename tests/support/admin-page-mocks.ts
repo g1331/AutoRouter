@@ -198,6 +198,11 @@ const KEYS_PAGE = {
   total_pages: 1,
 };
 
+// 详情页 GET /admin/keys/{id}：与列表首项（visual-baseline-key）保持同一份数据，
+// 避免列表页与详情页之间出现不一致的 mock 快照。导出供 tests/e2e 引用其 id，
+// 避免测试文件里出现重复的魔法 UUID 字面量。
+export const KEY_DETAIL = KEYS_PAGE.items[0];
+
 /** 后注册的精确 route 优先于 catch-all（Playwright 路由匹配从新到旧）。 */
 export async function mockAdminApis(page: Page): Promise<void> {
   await page.route("**/api/admin/**", (route) => fulfillJson(route, 200, {}));
@@ -234,4 +239,7 @@ export async function mockAdminApis(page: Page): Promise<void> {
     fulfillJson(route, 200, LIVE_PULSE_SNAPSHOT)
   );
   await page.route("**/api/admin/keys?**", (route) => fulfillJson(route, 200, KEYS_PAGE));
+  await page.route(`**/api/admin/keys/${KEY_DETAIL.id}`, (route) =>
+    fulfillJson(route, 200, KEY_DETAIL)
+  );
 }

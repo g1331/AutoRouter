@@ -133,6 +133,95 @@ export function useUpdateAPIKey() {
 }
 
 /**
+ * Fetch a single API key by id (detail page).
+ */
+export function useApiKey(id: string | undefined, enabled: boolean = true) {
+  const { apiClient } = useAuth();
+
+  return useQuery({
+    queryKey: ["keys", id],
+    queryFn: () => apiClient.get<APIKeyResponse>(`/admin/keys/${id}`),
+    enabled: enabled && !!id,
+  });
+}
+
+/**
+ * Update a single API-key section (detail-page partial PUT).
+ *
+ * Modeled on the upstream `useUpdateUpstreamSection`: the passed `payload`
+ * carries only the editing section's fields and is optimistically shallow-merged
+ * into the detail (`["keys", id]`) and paginated (`["api-keys", …]`) caches,
+ * rolling back on error. On success the authoritative server response replaces
+ * the detail cache; `onSettled` invalidates both the single-key query and the
+ * list caches so no section reads stale data after another section saves.
+ */
+export function useUpdateApiKeySection() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  const t = useTranslations("keys");
+
+  return useMutation<
+    APIKeyResponse,
+    Error,
+    { id: string; payload: APIKeyUpdate },
+    {
+      previousDetail: APIKeyResponse | undefined;
+      previousPaginated: Array<[QueryKey, PaginatedAPIKeysResponse | undefined]>;
+    }
+  >({
+    mutationFn: ({ id, payload }) => apiClient.put<APIKeyResponse>(`/admin/keys/${id}`, payload),
+    onMutate: async ({ id, payload }) => {
+      await queryClient.cancelQueries({ queryKey: ["keys", id] });
+      await queryClient.cancelQueries({ queryKey: ["api-keys"] });
+
+      const previousDetail = queryClient.getQueryData<APIKeyResponse>(["keys", id]);
+      const previousPaginated = queryClient.getQueriesData<PaginatedAPIKeysResponse>({
+        queryKey: ["api-keys"],
+      });
+
+      if (previousDetail) {
+        queryClient.setQueryData<APIKeyResponse>(["keys", id], {
+          ...previousDetail,
+          ...payload,
+        } as APIKeyResponse);
+      }
+
+      queryClient.setQueriesData<PaginatedAPIKeysResponse>({ queryKey: ["api-keys"] }, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          items: old.items.map((key) =>
+            key.id === id ? ({ ...key, ...payload } as APIKeyResponse) : key
+          ),
+        };
+      });
+
+      return { previousDetail, previousPaginated };
+    },
+    onError: (error, { id }, context) => {
+      if (context?.previousDetail !== undefined) {
+        queryClient.setQueryData(["keys", id], context.previousDetail);
+      }
+      if (context?.previousPaginated) {
+        for (const [queryKey, data] of context.previousPaginated) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
+      toast.error(`${t("updateFailed")}: ${error.message}`);
+    },
+    onSuccess: (updated, { id }) => {
+      queryClient.setQueryData(["keys", id], updated);
+      toast.success(t("updateSuccess"));
+    },
+    onSettled: (_data, _error, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ["keys", id] });
+      queryClient.invalidateQueries({ queryKey: ["api-keys"] });
+      queryClient.invalidateQueries({ queryKey: ["stats", "keys"] });
+    },
+  });
+}
+
+/**
  * Toggle API key active status (optimistic update)
  */
 export function useToggleAPIKeyActive() {
