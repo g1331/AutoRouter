@@ -106,6 +106,14 @@ for (const theme of THEMES) {
 
         await expectNoViolations(page);
       });
+
+      test("settings page has no WCAG A/AA violations", async ({ page }) => {
+        // settings 页无异步数据；"Project Repository" 是仓库外链卡独有文案，用它当就绪信号。
+        await page.goto("/en/settings");
+        await expect(page.getByText("Project Repository").first()).toBeVisible({ timeout: 15_000 });
+
+        await expectNoViolations(page);
+      });
     });
   });
 }

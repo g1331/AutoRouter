@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { IconBox } from "@/components/ui/icon-box";
 import { useStatsTimeseries, type TimeseriesMetric } from "@/hooks/use-dashboard-stats";
 import { cn } from "@/lib/utils";
 import type { TimeseriesDataPoint } from "@/types/api";
@@ -174,7 +175,11 @@ function AnimatedCounter({
     );
   }
 
-  return <p className={cn("type-display-medium", valueClassName ?? "text-foreground")}>{value}</p>;
+  return (
+    <p className={cn("type-display-medium tabular-nums", valueClassName ?? "text-foreground")}>
+      {value}
+    </p>
+  );
 }
 
 function StatCard({
@@ -216,16 +221,9 @@ function StatCard({
       <CardContent className="p-5 sm:p-6">
         <div className="flex items-center justify-between">
           <p className="type-label text-muted-foreground">{title}</p>
-          <div
-            className={cn(
-              "flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-cf-sm border",
-              alert
-                ? "border-status-error/45 bg-status-error/10 text-status-error"
-                : "border-amber-500/35 bg-amber-500/10 text-amber-500"
-            )}
-          >
+          <IconBox size="sm" tone={alert ? "error" : "amber"} className="flex-shrink-0">
             <Icon className="h-3.5 w-3.5" />
-          </div>
+          </IconBox>
         </div>
         <div className="mt-2">
           <AnimatedCounter

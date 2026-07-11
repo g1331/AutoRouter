@@ -470,7 +470,7 @@ export default function TrafficRecordingPage() {
                           <TableCell className="max-w-[18rem] truncate font-mono text-xs">
                             {recording.method ?? "-"} {recording.path ?? ""}
                           </TableCell>
-                          <TableCell className="text-right font-mono text-xs">
+                          <TableCell className="text-right font-mono text-xs tabular-nums">
                             {formatBytes(recording.fixture_size_bytes)}
                           </TableCell>
                           <TableCell>
@@ -517,7 +517,7 @@ export default function TrafficRecordingPage() {
                       </p>
 
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                        <span className="font-mono text-muted-foreground">
+                        <span className="font-mono tabular-nums text-muted-foreground">
                           {formatBytes(recording.fixture_size_bytes)}
                         </span>
                         <Badge variant={recording.redacted ? "success" : "warning"}>

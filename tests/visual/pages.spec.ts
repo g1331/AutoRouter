@@ -93,5 +93,13 @@ test.describe("Visual Regression", () => {
 
       await expect(page).toHaveScreenshot("logs.png", SNAPSHOT_OPTIONS);
     });
+
+    test("settings page visual snapshot", async ({ page }) => {
+      // settings 页无异步数据（仅 useAuth + i18n），"Project Repository" 是仓库外链卡
+      // 独有的稳定文案，不与 Topbar 标题重复，用它当就绪信号。
+      await gotoAndSettle(page, "/en/settings", "text=Project Repository");
+
+      await expect(page).toHaveScreenshot("settings.png", SNAPSHOT_OPTIONS);
+    });
   });
 });

@@ -14,6 +14,7 @@ import {
 } from "@/components/dashboard";
 import type { UsageChartDisplayMode } from "@/components/dashboard/usage-chart";
 import { Card, CardContent } from "@/components/ui/card";
+import { IconBox } from "@/components/ui/icon-box";
 import {
   useStatsLeaderboard,
   useStatsOverview,
@@ -111,9 +112,9 @@ export default function DashboardPage() {
               >
                 <CardContent className="flex items-center justify-between p-4">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-cf-sm border border-amber-500/35 bg-amber-500/10 text-amber-500">
+                    <IconBox size="md">
                       <Key className="h-5 w-5" />
-                    </div>
+                    </IconBox>
                     <div>
                       <p className="type-body-medium text-foreground">{t("manageApiKeys")}</p>
                       <p className="type-caption text-muted-foreground">{t("manageApiKeysDesc")}</p>
@@ -131,9 +132,9 @@ export default function DashboardPage() {
               >
                 <CardContent className="flex items-center justify-between p-4">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-cf-sm border border-amber-500/35 bg-amber-500/10 text-amber-500">
+                    <IconBox size="md">
                       <Server className="h-5 w-5" />
-                    </div>
+                    </IconBox>
                     <div>
                       <p className="type-body-medium text-foreground">{t("configureUpstreams")}</p>
                       <p className="type-caption text-muted-foreground">
