@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { useState } from "react";
 import { CreateKeyDialog } from "@/components/admin/create-key-dialog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -9,6 +10,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 // fields the dialog no longer renders and failed to load entirely because
 // next/navigation (pulled in transitively via @/i18n/navigation's useRouter)
 // was unmocked.
+//
+// The dialog is now page-controlled (open / onOpenChange) so the trigger button
+// can drive the container-morph animation. Tests render it through a small
+// stateful harness that owns the open state and provides the trigger, mirroring
+// how the keys page wires it.
 
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
@@ -34,12 +40,26 @@ vi.mock("@/hooks/use-api-keys", () => ({
   }),
 }));
 
+function CreateKeyDialogHarness() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}>
+        openCreateDialog
+      </button>
+      <CreateKeyDialog open={open} onOpenChange={setOpen} />
+    </>
+  );
+}
+
 describe("CreateKeyDialog", () => {
   let queryClient: QueryClient;
 
   const Wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
+
+  const openDialog = () => fireEvent.click(screen.getByText("openCreateDialog"));
 
   beforeEach(() => {
     queryClient = new QueryClient({
@@ -52,12 +72,13 @@ describe("CreateKeyDialog", () => {
     mockPush.mockReset();
   });
 
-  it("renders the trigger button and opens the dialog", async () => {
-    render(<CreateKeyDialog />, { wrapper: Wrapper });
+  it("opens the dialog when the trigger sets it open", async () => {
+    render(<CreateKeyDialogHarness />, { wrapper: Wrapper });
 
-    expect(screen.getByText("createKey")).toBeInTheDocument();
+    // Closed by default — the page owns the trigger and open state.
+    expect(screen.queryByText("createKeyTitle")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByText("createKey"));
+    openDialog();
 
     await waitFor(() => {
       expect(screen.getByText("createKeyTitle")).toBeInTheDocument();
@@ -65,9 +86,9 @@ describe("CreateKeyDialog", () => {
   });
 
   it("renders only the name and description fields — no access/spending/model/expiry fields", async () => {
-    render(<CreateKeyDialog />, { wrapper: Wrapper });
+    render(<CreateKeyDialogHarness />, { wrapper: Wrapper });
 
-    fireEvent.click(screen.getByText("createKey"));
+    openDialog();
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText("keyNamePlaceholder")).toBeInTheDocument();
@@ -85,9 +106,9 @@ describe("CreateKeyDialog", () => {
   });
 
   it("shows a validation error when name is empty", async () => {
-    render(<CreateKeyDialog />, { wrapper: Wrapper });
+    render(<CreateKeyDialogHarness />, { wrapper: Wrapper });
 
-    fireEvent.click(screen.getByText("createKey"));
+    openDialog();
 
     await waitFor(() => {
       expect(screen.getByText("create")).toBeInTheDocument();
@@ -121,9 +142,9 @@ describe("CreateKeyDialog", () => {
       updated_at: "2024-01-01T00:00:00Z",
     });
 
-    render(<CreateKeyDialog />, { wrapper: Wrapper });
+    render(<CreateKeyDialogHarness />, { wrapper: Wrapper });
 
-    fireEvent.click(screen.getByText("createKey"));
+    openDialog();
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText("keyNamePlaceholder")).toBeInTheDocument();
@@ -162,9 +183,9 @@ describe("CreateKeyDialog", () => {
       updated_at: "2024-01-01T00:00:00Z",
     });
 
-    render(<CreateKeyDialog />, { wrapper: Wrapper });
+    render(<CreateKeyDialogHarness />, { wrapper: Wrapper });
 
-    fireEvent.click(screen.getByText("createKey"));
+    openDialog();
     fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
       target: { value: "Described Key" },
     });
@@ -183,9 +204,9 @@ describe("CreateKeyDialog", () => {
   });
 
   it("closes the dialog when cancel is clicked", async () => {
-    render(<CreateKeyDialog />, { wrapper: Wrapper });
+    render(<CreateKeyDialogHarness />, { wrapper: Wrapper });
 
-    fireEvent.click(screen.getByText("createKey"));
+    openDialog();
 
     await waitFor(() => {
       expect(screen.getByText("createKeyTitle")).toBeInTheDocument();
@@ -222,9 +243,9 @@ describe("CreateKeyDialog", () => {
     });
 
     it("shows the ShowKeyDialog one-time reveal after a successful create, closes the create dialog", async () => {
-      render(<CreateKeyDialog />, { wrapper: Wrapper });
+      render(<CreateKeyDialogHarness />, { wrapper: Wrapper });
 
-      fireEvent.click(screen.getByText("createKey"));
+      openDialog();
       fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
         target: { value: "Reveal Key" },
       });
@@ -240,9 +261,9 @@ describe("CreateKeyDialog", () => {
     });
 
     it("navigates to the detail page once the reveal dialog is closed", async () => {
-      render(<CreateKeyDialog />, { wrapper: Wrapper });
+      render(<CreateKeyDialogHarness />, { wrapper: Wrapper });
 
-      fireEvent.click(screen.getByText("createKey"));
+      openDialog();
       fireEvent.change(screen.getByPlaceholderText("keyNamePlaceholder"), {
         target: { value: "Reveal Key" },
       });

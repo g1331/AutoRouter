@@ -69,7 +69,6 @@ export function ModelAllowlistSection({ apiKey }: { apiKey: APIKeyResponse }) {
                 value={field.value ?? []}
                 candidates={modelCandidates}
                 onChange={(models) => field.onChange(models)}
-                hideHeader
               />
               <FormMessage />
             </FormItem>

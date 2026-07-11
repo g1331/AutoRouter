@@ -8,6 +8,7 @@ import type { APIKey } from "@/types/api";
 import { useRevealAPIKey } from "@/hooks/use-api-keys";
 import { useToggleAPIKeyActive } from "@/hooks/use-api-keys";
 import { Button } from "@/components/ui/button";
+import { Link } from "@/i18n/navigation";
 import {
   Table,
   TableBody,
@@ -26,7 +27,6 @@ import { cn } from "@/lib/utils";
 interface KeysTableProps {
   keys: APIKey[];
   onRevoke: (key: APIKey, source: HTMLElement | null) => void;
-  onEdit: (key: APIKey, source: HTMLElement | null) => void;
   /**
    * Server-side name search (controlled by the parent page, which feeds it
    * into the paginated query so matches span all pages, not just this one).
@@ -73,7 +73,6 @@ function formatQuotaPeriodLabel(
 export function KeysTable({
   keys,
   onRevoke,
-  onEdit,
   searchQuery = "",
   onSearchQueryChange,
 }: KeysTableProps) {
@@ -522,17 +521,13 @@ export function KeysTable({
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    type="button"
-                    className="h-8 w-8"
-                    onClick={(event) =>
-                      onEdit(key, event.currentTarget.closest<HTMLElement>("[data-morph-source]"))
-                    }
-                    aria-label={`${t("editKey")}: ${key.name} (mobile)`}
-                  >
-                    <Pencil className="h-4 w-4" aria-hidden="true" />
+                  <Button variant="ghost" size="icon" type="button" className="h-8 w-8" asChild>
+                    <Link
+                      href={`/keys/${key.id}`}
+                      aria-label={`${t("editKey")}: ${key.name} (mobile)`}
+                    >
+                      <Pencil className="h-4 w-4" aria-hidden="true" />
+                    </Link>
                   </Button>
                   <Button
                     variant="ghost"
@@ -715,15 +710,14 @@ export function KeysTable({
                             size="icon"
                             type="button"
                             className="h-8 w-8"
-                            onClick={(event) =>
-                              onEdit(
-                                key,
-                                event.currentTarget.closest<HTMLElement>("[data-morph-source]")
-                              )
-                            }
-                            aria-label={`${t("editKey")}: ${key.name}`}
+                            asChild
                           >
-                            <Pencil className="h-4 w-4" aria-hidden="true" />
+                            <Link
+                              href={`/keys/${key.id}`}
+                              aria-label={`${t("editKey")}: ${key.name}`}
+                            >
+                              <Pencil className="h-4 w-4" aria-hidden="true" />
+                            </Link>
                           </Button>
                           <Button
                             variant="ghost"
