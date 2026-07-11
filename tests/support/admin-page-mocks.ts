@@ -203,6 +203,122 @@ const KEYS_PAGE = {
 // 避免测试文件里出现重复的魔法 UUID 字面量。
 export const KEY_DETAIL = KEYS_PAGE.items[0];
 
+const BILLING_OVERVIEW = {
+  today_cost_usd: 12.34,
+  month_cost_usd: 345.67,
+  unresolved_model_count: 1,
+  latest_sync: {
+    status: "success",
+    source: "litellm",
+    success_count: 42,
+    failure_count: 0,
+    failure_reason: null,
+    synced_at: new Date("2026-06-10T08:00:00.000Z").toISOString(),
+  },
+};
+
+const BILLING_BACKGROUND_TASKS = {
+  items: [
+    {
+      task_name: "billing_price_catalog_sync",
+      display_name: "Billing price catalog sync",
+      enabled: true,
+      interval_seconds: 3600,
+      startup_delay_seconds: 0,
+      is_running: false,
+      last_started_at: new Date("2026-06-10T08:00:00.000Z").toISOString(),
+      last_finished_at: new Date("2026-06-10T08:00:05.000Z").toISOString(),
+      last_success_at: new Date("2026-06-10T08:00:05.000Z").toISOString(),
+      last_failed_at: null,
+      last_status: "success",
+      last_error: null,
+      last_duration_ms: 5000,
+      last_success_count: 42,
+      last_failure_count: 0,
+      next_run_at: new Date("2026-06-10T09:00:00.000Z").toISOString(),
+      updated_at: new Date("2026-06-10T08:00:05.000Z").toISOString(),
+    },
+  ],
+  total: 1,
+};
+
+const BILLING_UNRESOLVED_MODELS = {
+  items: [
+    {
+      model: "custom-unpriced-model",
+      occurrences: 7,
+      last_seen_at: new Date("2026-06-10T07:30:00.000Z").toISOString(),
+      last_upstream_id: "00000000-0000-4000-8000-00000000aa01",
+      last_upstream_name: "openai-primary",
+      has_manual_override: false,
+    },
+  ],
+  total: 1,
+};
+
+const BILLING_MANUAL_OVERRIDES = {
+  items: [
+    {
+      id: "00000000-0000-4000-8000-00000000cc01",
+      model: "gpt-4.1",
+      input_price_per_million: 2.5,
+      output_price_per_million: 10,
+      cache_read_input_price_per_million: 0.5,
+      cache_write_input_price_per_million: 1.25,
+      note: "Negotiated volume discount",
+      has_official_price: true,
+      created_at: new Date("2026-06-01T00:00:00.000Z").toISOString(),
+      updated_at: new Date("2026-06-05T00:00:00.000Z").toISOString(),
+    },
+  ],
+  total: 1,
+};
+
+const BILLING_TIER_RULE = {
+  id: "00000000-0000-4000-8000-00000000dd01",
+  model: "gpt-4.1",
+  source: "manual",
+  threshold_input_tokens: 200000,
+  display_label: null,
+  input_price_per_million: 3,
+  output_price_per_million: 12,
+  cache_read_input_price_per_million: 0.6,
+  cache_write_input_price_per_million: 1.5,
+  note: "Long-context tier",
+  is_active: true,
+  created_at: new Date("2026-06-01T00:00:00.000Z").toISOString(),
+  updated_at: new Date("2026-06-05T00:00:00.000Z").toISOString(),
+};
+
+const BILLING_TIER_RULES = {
+  items: [BILLING_TIER_RULE],
+  total: 1,
+};
+
+const BILLING_MODEL_PRICES = {
+  items: [
+    {
+      id: "00000000-0000-4000-8000-00000000ee01",
+      model: "gpt-4.1",
+      input_price_per_million: 2,
+      output_price_per_million: 8,
+      cache_read_input_price_per_million: 0.5,
+      cache_write_input_price_per_million: 1,
+      max_input_tokens: 128000,
+      max_output_tokens: 16000,
+      synced_tier_rules: [],
+      source: "litellm",
+      is_active: true,
+      synced_at: new Date("2026-06-10T08:00:00.000Z").toISOString(),
+      updated_at: new Date("2026-06-10T08:00:00.000Z").toISOString(),
+    },
+  ],
+  total: 1,
+  page: 1,
+  page_size: 20,
+  total_pages: 1,
+};
+
 /** 后注册的精确 route 优先于 catch-all（Playwright 路由匹配从新到旧）。 */
 export async function mockAdminApis(page: Page): Promise<void> {
   await page.route("**/api/admin/**", (route) => fulfillJson(route, 200, {}));
@@ -241,5 +357,23 @@ export async function mockAdminApis(page: Page): Promise<void> {
   await page.route("**/api/admin/keys?**", (route) => fulfillJson(route, 200, KEYS_PAGE));
   await page.route(`**/api/admin/keys/${KEY_DETAIL.id}`, (route) =>
     fulfillJson(route, 200, KEY_DETAIL)
+  );
+  await page.route("**/api/admin/background-sync/tasks", (route) =>
+    fulfillJson(route, 200, BILLING_BACKGROUND_TASKS)
+  );
+  await page.route("**/api/admin/billing/overview", (route) =>
+    fulfillJson(route, 200, BILLING_OVERVIEW)
+  );
+  await page.route("**/api/admin/billing/prices/unresolved", (route) =>
+    fulfillJson(route, 200, BILLING_UNRESOLVED_MODELS)
+  );
+  await page.route("**/api/admin/billing/overrides", (route) =>
+    fulfillJson(route, 200, BILLING_MANUAL_OVERRIDES)
+  );
+  await page.route("**/api/admin/billing/tier-rules", (route) =>
+    fulfillJson(route, 200, BILLING_TIER_RULES)
+  );
+  await page.route("**/api/admin/billing/prices?**", (route) =>
+    fulfillJson(route, 200, BILLING_MODEL_PRICES)
   );
 }

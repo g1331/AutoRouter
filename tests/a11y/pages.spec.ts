@@ -86,6 +86,17 @@ for (const theme of THEMES) {
 
         await expectNoViolations(page);
       });
+
+      test("billing page has no WCAG A/AA violations", async ({ page }) => {
+        await page.goto("/en/system/billing");
+        // 价目目录在桌面/移动两套布局各渲染一份 gpt-4.1，getByText().first() 会先命中
+        // 视口下隐藏的那一份；未匹配价的模型只在待处理表里渲染一次，用它当就绪信号。
+        await expect(page.getByText("custom-unpriced-model").first()).toBeVisible({
+          timeout: 15_000,
+        });
+
+        await expectNoViolations(page);
+      });
     });
   });
 }

@@ -77,5 +77,13 @@ test.describe("Visual Regression", () => {
 
       await expect(page).toHaveScreenshot("key-detail.png", SNAPSHOT_OPTIONS);
     });
+
+    test("billing page visual snapshot", async ({ page }) => {
+      // 价目目录在桌面/移动两套布局各渲染一份 gpt-4.1，用 text= 定位会先命中
+      // 视口下隐藏的那一份；未匹配价的模型只在待处理表里渲染一次，用它当就绪信号。
+      await gotoAndSettle(page, "/en/system/billing", "text=custom-unpriced-model");
+
+      await expect(page).toHaveScreenshot("billing.png", SNAPSHOT_OPTIONS);
+    });
   });
 });
