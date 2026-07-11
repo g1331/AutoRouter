@@ -38,12 +38,12 @@
 
 ## 4. Phase B3 · 列表行表 + Test 修复 + 删旧弹窗（提交 `feat(upstreams)` B3）
 
-- [ ] 4.1 上游列表大卡片网格 → 按 priority tier 分组紧凑行表（LED + 名称/base_url + 熔断 StateChip + 关键指标 Tier-2/3 + **最近使用相对时间「N 分钟前」/「未使用」常驻 compact 行内，满足 baseline「时间信息以最近使用为主」** + 展开行装原卡片密集信息）；compact/comfortable 切换沿用
-- [ ] 4.2 行操作：active 开关、**Test（恢复 onTest 调用，修死 bug）**、Edit（跳详情页）、Delete（保留 `morph-upstream-delete`）、熔断恢复；撤除 edit morph
-- [ ] 4.3 拆解后删除 `upstream-form-dialog.tsx`（分区体与 helper 已迁出）
-- [ ] 4.4 行表改写后列表 LED 全面改用 `@/components/ui/status-led`（tone/pulse API）；确认 terminal 版 StatusLed 无剩余消费者后（精确字面 grep 复核），删除 `ui/terminal/status-led.tsx`、其 barrel 导出行（`ui/terminal/index.ts`）与 `tests/components/ui/terminal/status-led.test.tsx`
-- [ ] 4.5 新增 upstreams 详情页 e2e；列表 + 详情 visual/a11y 基线；auth-role-routing 锚点（`text=openai-primary` 等）保持渲染
-- [ ] 4.6 验收并提交：tsc + lint + upstreams 相关单测/e2e 绿；本地 e2e --workers=2 绿；列表 + Test 动作 + delete morph 双主题冒烟；提交
+- [x] 4.1 上游列表大卡片网格 → 按 priority tier 分组紧凑行表（LED + 名称/base_url + 熔断 StateChip + 关键指标 Tier-2/3 + **最近使用相对时间「N 分钟前」/「未使用」常驻 compact 行内，满足 baseline「时间信息以最近使用为主」** + 展开行装原卡片密集信息）；compact/comfortable 切换沿用
+- [x] 4.2 行操作：active 开关、**Test（恢复 onTest 调用，修死 bug）**、Edit（跳详情页）、Delete（保留 `morph-upstream-delete`）、熔断恢复；撤除 edit morph
+- [x] 4.3 拆解后删除 `upstream-form-dialog.tsx`（分区体与 helper 已迁出）
+- [x] 4.4 行表改写后列表 LED 全面改用 `@/components/ui/status-led`（tone/pulse API）；确认 terminal 版 StatusLed 无剩余消费者后（精确字面 grep 复核），删除 `ui/terminal/status-led.tsx`、其 barrel 导出行（`ui/terminal/index.ts`）与 `tests/components/ui/terminal/status-led.test.tsx`
+- [x] 4.5 新增 upstreams 详情页 e2e；列表 + 详情 visual/a11y 基线；auth-role-routing 锚点（`text=openai-primary` 等）保持渲染
+- [x] 4.6 验收并提交：tsc + lint + upstreams 相关单测/e2e 绿；本地 e2e --workers=2 绿；列表 + Test 动作 + delete morph 双主题冒烟；提交
 
 ## 5. Phase C1 · useApiKey + /keys/[id] 详情页 + 瘦 create（提交 `feat(keys)` C1）
 
