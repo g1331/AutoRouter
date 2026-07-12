@@ -277,6 +277,20 @@ async function mockLogsApi(page: Page) {
     });
   });
 
+  // Registered after the list route so it wins for /logs/stats (Playwright
+  // matches routes in reverse registration order); the list-shaped payload
+  // above must not leak into the window-stats hook.
+  await page.route("**/api/admin/logs/stats**", async (route) => {
+    await fulfillJson(route, 200, {
+      total: 1,
+      stream_count: 0,
+      slow_count: 0,
+      p50_ttft_ms: null,
+      p90_ttft_ms: null,
+      p50_tps: null,
+    });
+  });
+
   // Expanding a log row mounts LogRecordingSection, whose recording probe hits
   // /api/admin/traffic-recordings. Left unmocked it reaches the real server with
   // the fake e2e token, and the resulting 401 logs the session out mid-test.
@@ -290,6 +304,21 @@ async function mockLogsApi(page: Page) {
       stats: { total: 0, total_size_bytes: 0, latest_created_at: null },
     });
   });
+}
+
+// The logs page fetches upstream / API-key filter options. Left unmocked they
+// reach the real server with the fake e2e token and the 401 logs the session
+// out mid-test, so stub them with empty pages.
+async function mockLogsFilterOptionApis(page: Page): Promise<void> {
+  const emptyPage = { items: [], total: 0, page: 1, page_size: 100, total_pages: 0 };
+  const fulfillEmpty = (route: Parameters<Parameters<Page["route"]>[1]>[0]) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(emptyPage),
+    });
+  await page.route("**/api/admin/upstreams?**", fulfillEmpty);
+  await page.route("**/api/admin/keys?**", fulfillEmpty);
 }
 
 // The live pulse bar in the dashboard layout opens a stats/live connection on
@@ -326,6 +355,7 @@ test.describe("Billing tier-aware verification", () => {
     await seedAdminToken(page);
     await mockBillingApis(page);
     await mockLogsApi(page);
+    await mockLogsFilterOptionApis(page);
 
     await page.goto("/en/system/billing");
 

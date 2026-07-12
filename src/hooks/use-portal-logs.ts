@@ -13,6 +13,12 @@ export interface PortalRequestLogsFilters {
   // Preset resolved to start_time at fetch time; ignored when start_time is
   // set. "all" applies no lower bound.
   time_range?: TimeRange | "all";
+  // Performance threshold filters (same surface as the admin logs endpoint).
+  ttft_min_ms?: number;
+  duration_min_ms?: number;
+  tps_max?: number;
+  sort?: "created_at" | "duration_ms" | "total_tokens" | "ttft_ms" | "cost";
+  order?: "asc" | "desc";
 }
 
 export interface UsePortalRequestLogsOptions {
@@ -58,6 +64,19 @@ export function usePortalRequestLogs(
       }
       if (filters?.end_time) {
         params.set("end_time", filters.end_time);
+      }
+      if (filters?.ttft_min_ms !== undefined) {
+        params.set("ttft_min_ms", String(filters.ttft_min_ms));
+      }
+      if (filters?.duration_min_ms !== undefined) {
+        params.set("duration_min_ms", String(filters.duration_min_ms));
+      }
+      if (filters?.tps_max !== undefined) {
+        params.set("tps_max", String(filters.tps_max));
+      }
+      if (filters?.sort) {
+        params.set("sort", filters.sort);
+        params.set("order", filters.order ?? "desc");
       }
 
       return apiClient.get<PaginatedRequestLogsResponse>(`/user/logs?${params.toString()}`);

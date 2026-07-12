@@ -67,7 +67,8 @@ describe("admin logs route", () => {
     expect(listRequestLogsMock).toHaveBeenCalledWith(
       1,
       1,
-      expect.objectContaining({ id: "log-1" })
+      expect.objectContaining({ id: "log-1" }),
+      undefined
     );
   });
 
@@ -91,7 +92,8 @@ describe("admin logs route", () => {
     expect(listRequestLogsMock).toHaveBeenCalledWith(
       1,
       1,
-      expect.objectContaining({ userId: "user-1" })
+      expect.objectContaining({ userId: "user-1" }),
+      undefined
     );
   });
 
@@ -179,7 +181,8 @@ describe("admin logs route", () => {
     expect(listRequestLogsMock).toHaveBeenCalledWith(
       1,
       20,
-      expect.objectContaining({ statusClass: "5xx" })
+      expect.objectContaining({ statusClass: "5xx" }),
+      undefined
     );
   });
 
@@ -188,6 +191,97 @@ describe("admin logs route", () => {
 
     const response = await GET(
       new NextRequest("http://localhost/api/admin/logs?status_class=3xx", {
+        headers: { authorization: AUTH_HEADER },
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(listRequestLogsMock).not.toHaveBeenCalled();
+  });
+
+  it("forwards sort and order as a sort argument", async () => {
+    const { GET } = await import("@/app/api/admin/logs/route");
+    listRequestLogsMock.mockResolvedValueOnce({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+    });
+
+    const response = await GET(
+      new NextRequest("http://localhost/api/admin/logs?sort=duration_ms&order=asc", {
+        headers: { authorization: AUTH_HEADER },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(listRequestLogsMock).toHaveBeenCalledWith(
+      1,
+      20,
+      {},
+      { field: "duration_ms", order: "asc" }
+    );
+  });
+
+  it("defaults order to desc when only sort is provided", async () => {
+    const { GET } = await import("@/app/api/admin/logs/route");
+    listRequestLogsMock.mockResolvedValueOnce({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+    });
+
+    const response = await GET(
+      new NextRequest("http://localhost/api/admin/logs?sort=cost", {
+        headers: { authorization: AUTH_HEADER },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(listRequestLogsMock).toHaveBeenCalledWith(1, 20, {}, { field: "cost", order: "desc" });
+  });
+
+  it("forwards performance threshold filters", async () => {
+    const { GET } = await import("@/app/api/admin/logs/route");
+    listRequestLogsMock.mockResolvedValueOnce({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+    });
+
+    const response = await GET(
+      new NextRequest(
+        "http://localhost/api/admin/logs?ttft_min_ms=5000&duration_min_ms=20000&tps_max=30",
+        { headers: { authorization: AUTH_HEADER } }
+      )
+    );
+
+    expect(response.status).toBe(200);
+    expect(listRequestLogsMock).toHaveBeenCalledWith(
+      1,
+      20,
+      { ttftMinMs: 5000, durationMinMs: 20000, tpsMax: 30 },
+      undefined
+    );
+  });
+
+  it.each([
+    ["sort=model", "unknown sort field"],
+    ["sort=created_at&order=sideways", "invalid order"],
+    ["ttft_min_ms=-1", "negative ttft_min_ms"],
+    ["duration_min_ms=abc", "non-numeric duration_min_ms"],
+    ["tps_max=0", "non-positive tps_max"],
+    ["tps_max=abc", "non-numeric tps_max"],
+  ])("rejects %s with 400 (%s)", async (query) => {
+    const { GET } = await import("@/app/api/admin/logs/route");
+
+    const response = await GET(
+      new NextRequest(`http://localhost/api/admin/logs?${query}`, {
         headers: { authorization: AUTH_HEADER },
       })
     );

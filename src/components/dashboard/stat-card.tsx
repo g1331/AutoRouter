@@ -1,7 +1,9 @@
+import type { CSSProperties } from "react";
 import type { LucideIcon } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 interface StatCardProps {
   icon: LucideIcon;
@@ -9,6 +11,8 @@ interface StatCardProps {
   value: string;
   hint?: string;
   isLoading?: boolean;
+  className?: string;
+  style?: CSSProperties;
 }
 
 /**
@@ -16,9 +20,21 @@ interface StatCardProps {
  * per-user usage page. Values use the Tier-1 display family (Saira) with tabular
  * figures so numeric readouts stay aligned.
  */
-export function StatCard({ icon: Icon, label, value, hint, isLoading }: StatCardProps) {
+export function StatCard({
+  icon: Icon,
+  label,
+  value,
+  hint,
+  isLoading,
+  className,
+  style,
+}: StatCardProps) {
   return (
-    <Card variant="outlined" className="border-divider bg-surface-200/70">
+    <Card
+      variant="outlined"
+      className={cn("border-divider bg-surface-200/70", className)}
+      style={style}
+    >
       <CardContent className="space-y-2 p-4">
         <div className="flex items-center gap-2 text-muted-foreground">
           <Icon className="h-4 w-4 text-amber-500" aria-hidden="true" />

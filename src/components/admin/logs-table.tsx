@@ -2,11 +2,25 @@
 
 import { useState, useMemo, useEffect, useRef, Fragment, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { ScrollText, Filter, ChevronDown, Loader2 } from "lucide-react";
+import {
+  ScrollText,
+  Filter,
+  ChevronDown,
+  Loader2,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Gauge,
+  Radio,
+  Timer,
+  Turtle,
+  Zap,
+} from "lucide-react";
 import type {
   ExclusionReason,
   FailoverErrorType,
   RequestLog,
+  RequestLogStatsResponse,
   RoutingCircuitState,
   RoutingQueueStatus,
   RoutingSelectionReason,
@@ -22,6 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { TimeRangeSelector } from "@/components/dashboard/time-range-selector";
+import { StatCard } from "@/components/dashboard/stat-card";
 import { statusTone } from "@/lib/status-tone";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +61,11 @@ import {
 import { ModelIdentity, getReasoningEffortLevel } from "@/components/logs/model-identity";
 import { ThinkingConfigPanel } from "@/components/logs/thinking-config-panel";
 
+export type PerformancePreset = "all" | "high_ttft" | "low_tps" | "slow_duration";
+
+/** Sortable list columns; created_at desc is the implicit default order. */
+export type LogsSortField = "created_at" | "duration_ms" | "total_tokens" | "cost";
+
 /**
  * Filters resolved server-side: the parent owns this state, feeds it into its
  * logs query (so filtering spans all pages, not just the fetched one) and
@@ -53,15 +73,58 @@ import { ThinkingConfigPanel } from "@/components/logs/thinking-config-panel";
  */
 export interface LogsServerFilters {
   statusClass: "all" | "2xx" | "4xx" | "5xx";
+  /** Exact status code as raw digits; empty = off. Takes precedence over statusClass server-side. */
+  statusCode: string;
   model: string;
-  timeRange: TimeRange | "all";
+  timeRange: TimeRange | "all" | "custom";
+  /** ISO strings (not Dates) so the parent's query key stays stable. */
+  customRange: { startIso: string; endIso: string } | null;
+  /** Empty string = all upstreams / keys. */
+  upstreamId: string;
+  apiKeyId: string;
+  perfPreset: PerformancePreset;
+  sortField: LogsSortField | null;
+  sortOrder: "asc" | "desc";
 }
 
 export const DEFAULT_LOGS_SERVER_FILTERS: LogsServerFilters = {
   statusClass: "all",
+  statusCode: "",
   model: "",
   timeRange: "30d",
+  customRange: null,
+  upstreamId: "",
+  apiKeyId: "",
+  perfPreset: "all",
+  sortField: null,
+  sortOrder: "desc",
 };
+
+/**
+ * Maps a quick-filter preset onto the server-side threshold params shared by
+ * the admin and portal logs endpoints (same thresholds the chips advertise).
+ */
+export function resolvePerfPresetParams(preset: PerformancePreset): {
+  ttft_min_ms?: number;
+  duration_min_ms?: number;
+  tps_max?: number;
+} {
+  switch (preset) {
+    case "high_ttft":
+      return { ttft_min_ms: HIGH_TTFT_THRESHOLD_MS };
+    case "low_tps":
+      return { tps_max: LOW_TPS_THRESHOLD };
+    case "slow_duration":
+      return { duration_min_ms: SLOW_DURATION_THRESHOLD_MS };
+    default:
+      return {};
+  }
+}
+
+export interface LogsFilterOption {
+  id: string;
+  name: string;
+}
 
 interface LogsTableProps {
   logs: RequestLog[];
@@ -85,17 +148,30 @@ interface LogsTableProps {
    * server-filter controls are hidden (e.g. the focus view pins one entry).
    */
   onServerFiltersChange?: (patch: Partial<LogsServerFilters>) => void;
+  /**
+   * Options for the upstream / API-key selects. Only the admin page passes
+   * these (they come from admin-only endpoints); when absent the selects are
+   * not rendered, so the member portal never fires admin probes — same
+   * philosophy as hideRecordingSection.
+   */
+  upstreamFilterOptions?: LogsFilterOption[];
+  apiKeyFilterOptions?: LogsFilterOption[];
+  /**
+   * Window-scoped stats from the /logs/stats endpoint. undefined hides the
+   * stats strip entirely (focus view); null renders loading skeletons.
+   */
+  windowStats?: RequestLogStatsResponse | null;
 }
-
-type PerformancePreset = "all" | "high_ttft" | "low_tps" | "slow_duration";
 
 const HIGH_TTFT_THRESHOLD_MS = 5000;
 const LOW_TPS_THRESHOLD = 30;
 const SLOW_DURATION_THRESHOLD_MS = 20000;
+const DURATION_WARNING_THRESHOLD_MS = 8000;
+const COST_HEAT_THRESHOLD_USD = 0.1;
 const MIN_TPS_COMPLETION_TOKENS = 10;
 const MIN_TPS_DURATION_MS = 100;
 const DESKTOP_MODEL_COLUMN_MAX_WIDTH = 264;
-const DESKTOP_MODEL_COLUMN_MIN_WIDTH = 136;
+const DESKTOP_MODEL_COLUMN_MIN_WIDTH = 112;
 const DESKTOP_TABLE_BASE_WIDTHS = {
   expand: 36,
   time: 148,
@@ -261,6 +337,21 @@ function getTtftPerformanceClass(ttftMs: number): string {
   return "text-status-success";
 }
 
+/** Text-color heat only (no fills) so slow rows pop while scanning the list. */
+function getDurationPerformanceClass(durationMs: number): string {
+  if (durationMs >= SLOW_DURATION_THRESHOLD_MS) return "text-status-error";
+  if (durationMs >= DURATION_WARNING_THRESHOLD_MS) return "text-status-warning";
+  return "";
+}
+
+function getCostHeatClass(log: RequestLog): string {
+  const currency = log.currency ?? "USD";
+  if (log.final_cost != null && currency === "USD" && log.final_cost >= COST_HEAT_THRESHOLD_USD) {
+    return "text-status-warning";
+  }
+  return "";
+}
+
 function getGenerationMs(log: RequestLog): number | null {
   if (
     !log.is_stream ||
@@ -316,15 +407,6 @@ function getQueueStatusVariant(
   }
 }
 
-function getPercentile(values: number[], percentile: number): number | null {
-  if (values.length === 0) {
-    return null;
-  }
-  const sorted = [...values].sort((a, b) => a - b);
-  const index = Math.ceil((percentile / 100) * sorted.length) - 1;
-  return sorted[Math.max(0, Math.min(index, sorted.length - 1))];
-}
-
 export function LogsTable({
   logs,
   isLive = false,
@@ -332,8 +414,12 @@ export function LogsTable({
   hideRecordingSection = false,
   serverFilters = DEFAULT_LOGS_SERVER_FILTERS,
   onServerFiltersChange,
+  upstreamFilterOptions,
+  apiKeyFilterOptions,
+  windowStats,
 }: LogsTableProps) {
   const t = useTranslations("logs");
+  const tDashboard = useTranslations("dashboard");
   const locale = useLocale();
   const [desktopTableContainerElement, setDesktopTableContainerElement] =
     useState<HTMLDivElement | null>(null);
@@ -446,9 +532,39 @@ export function LogsTable({
       }
     };
   }, []);
-  // Performance presets stay client-side: they derive from runtime-computed
-  // metrics (TPS is calculated in the frontend) and only narrow the fetched page.
-  const [performancePreset, setPerformancePreset] = useState<PerformancePreset>("all");
+  // Exact status-code input mirrors the model input pattern: local echo for
+  // responsive typing, debounced patch upward, no-op commits skipped.
+  const [statusCodeInput, setStatusCodeInput] = useState<string>(serverFilters.statusCode);
+  const [lastServerStatusCode, setLastServerStatusCode] = useState<string>(
+    serverFilters.statusCode
+  );
+  if (serverFilters.statusCode !== lastServerStatusCode) {
+    setLastServerStatusCode(serverFilters.statusCode);
+    if (serverFilters.statusCode !== statusCodeInput.trim()) {
+      setStatusCodeInput(serverFilters.statusCode);
+    }
+  }
+  const statusCodeDebounceRef = useRef<number | null>(null);
+  useEffect(() => {
+    return () => {
+      if (statusCodeDebounceRef.current != null) {
+        window.clearTimeout(statusCodeDebounceRef.current);
+      }
+    };
+  }, []);
+  // Quick-filter presets are server-side filters like the rest: the parent
+  // maps them onto threshold params (resolvePerfPresetParams) so they span
+  // the whole window, not just the fetched page.
+  const performancePreset = serverFilters.perfPreset;
+  // The selector wants Dates; filters keep ISO strings for query-key stability.
+  const customRangeIso = serverFilters.customRange;
+  const selectorCustomRange = useMemo(
+    () =>
+      customRangeIso
+        ? { start: new Date(customRangeIso.startIso), end: new Date(customRangeIso.endIso) }
+        : undefined,
+    [customRangeIso]
+  );
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [desktopBreakpointState, setDesktopBreakpointState] = useState({
     md: true,
@@ -626,50 +742,6 @@ export function LogsTable({
     }
     setExpandedRows(newExpanded);
   };
-
-  // Status/model/time filters are resolved server-side via serverFilters; only
-  // the performance presets (runtime-computed metrics) narrow the fetched page.
-  const filteredLogs = useMemo(() => {
-    return logs.filter((log) => {
-      if (performancePreset === "high_ttft") {
-        if (log.ttft_ms == null || log.ttft_ms <= HIGH_TTFT_THRESHOLD_MS) {
-          return false;
-        }
-      } else if (performancePreset === "low_tps") {
-        const tps = getRequestTps(log);
-        if (tps == null || tps >= LOW_TPS_THRESHOLD) {
-          return false;
-        }
-      } else if (performancePreset === "slow_duration") {
-        if (log.duration_ms == null || log.duration_ms <= SLOW_DURATION_THRESHOLD_MS) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [logs, performancePreset]);
-
-  const performanceSummary = useMemo(() => {
-    const streamLogs = filteredLogs.filter((log) => log.is_stream);
-    const ttftValues = streamLogs
-      .map((log) => log.ttft_ms)
-      .filter((value): value is number => value != null && value > 0);
-    const tpsValues = streamLogs
-      .map((log) => getRequestTps(log))
-      .filter((value): value is number => value != null && value > 0);
-    const slowCount = filteredLogs.filter(
-      (log) => log.duration_ms != null && log.duration_ms > SLOW_DURATION_THRESHOLD_MS
-    ).length;
-
-    return {
-      p50TtftMs: getPercentile(ttftValues, 50),
-      p90TtftMs: getPercentile(ttftValues, 90),
-      p50Tps: getPercentile(tpsValues, 50),
-      slowRatio: filteredLogs.length > 0 ? (slowCount / filteredLogs.length) * 100 : 0,
-      streamRatio: filteredLogs.length > 0 ? (streamLogs.length / filteredLogs.length) * 100 : 0,
-    };
-  }, [filteredLogs]);
 
   const getStatusBadgeVariant = (statusCode: number | null) => {
     if (statusCode === null) return "neutral";
@@ -993,7 +1065,6 @@ export function LogsTable({
     };
 
     type JourneyTone = "neutral" | "info" | "warning" | "success" | "error";
-    type JourneyProgressState = "done" | "active" | "failed" | "pending";
     type JourneyStep = {
       index: number;
       title: string;
@@ -1008,54 +1079,32 @@ export function LogsTable({
     const JOURNEY_TONE_STYLES: Record<
       JourneyTone,
       {
-        tab: string;
-        tabActive: string;
-        number: string;
         accent: string;
         panel: string;
       }
     > = {
       neutral: {
-        tab: "border-divider/80 bg-surface-200/78 text-foreground hover:border-divider hover:bg-surface-200",
-        tabActive: "border-divider bg-surface-200 text-foreground shadow-[var(--vr-shadow-xs)]",
-        number: "border-divider bg-surface-300 text-muted-foreground",
         accent: "bg-foreground/12",
         panel: "border-divider/80 bg-surface-200/82",
       },
       info: {
-        tab: "border-divider/80 bg-surface-200/78 text-foreground hover:border-divider hover:bg-surface-200",
-        tabActive: "border-divider bg-surface-200 text-foreground shadow-[var(--vr-shadow-xs)]",
-        number: "border-divider bg-surface-300 text-muted-foreground",
         accent: "bg-foreground/12",
         panel: "border-divider/80 bg-surface-200/82",
       },
       warning: {
-        tab: "border-divider/80 bg-surface-200/78 text-foreground hover:border-amber-400/20 hover:bg-surface-200",
-        tabActive:
-          "border-amber-400/25 bg-surface-200 text-foreground shadow-[var(--vr-shadow-glow-subtle)]",
-        number: "border-amber-400/20 bg-amber-500/10 text-amber-300",
         accent: "bg-amber-400/75",
         panel: "border-amber-400/22 bg-surface-200/82",
       },
       success: {
-        tab: "border-divider/80 bg-surface-200/78 text-foreground hover:border-status-success/20 hover:bg-surface-200",
-        tabActive:
-          "border-status-success/25 bg-surface-200 text-foreground shadow-[var(--vr-shadow-xs)]",
-        number: statusTone("success", "faint"),
         accent: "bg-status-success/80",
         panel: "border-status-success/22 bg-surface-200/82",
       },
       error: {
-        tab: "border-divider/80 bg-surface-200/78 text-foreground hover:border-status-error/20 hover:bg-surface-200",
-        tabActive:
-          "border-status-error/25 bg-surface-200 text-foreground shadow-[var(--vr-shadow-xs)]",
-        number: statusTone("error", "faint"),
         accent: "bg-status-error/85",
         panel: "border-status-error/22 bg-surface-200/82",
       },
     };
 
-    const requestSignature = [log.method, log.path].filter(Boolean).join(" ");
     const candidateSummary =
       routingDecision && didSendUpstream !== false
         ? String(routingDecision.final_candidate_count) +
@@ -1064,10 +1113,6 @@ export function LogsTable({
           " " +
           t("tooltipCandidates").toLowerCase()
         : null;
-    const requestArrivedSummary = (modelDisplay ?? log.model ?? requestSignature) || "-";
-    const requestArrivedMeta = [requestSignature || null, requestModeLabel, groupName]
-      .filter(Boolean)
-      .join(" · ");
     const decisionStepSummary = routingDecision
       ? getSelectionReasonText(decisionSelectionReason)
       : t("noRoutingDecision");
@@ -1203,80 +1248,6 @@ export function LogsTable({
     };
 
     const activeJourneyStepIndex = focusedJourneySteps[log.id] ?? getDefaultJourneyStepIndex();
-    const failureJourneyStepIndex = (() => {
-      if (!isError) {
-        return null;
-      }
-      if (
-        didSendUpstream === false ||
-        hasFailoverHistory ||
-        hasFailoverWithoutHistory ||
-        routingDecision?.failure_stage === "upstream_request"
-      ) {
-        return 3;
-      }
-      if (routingDecision?.failure_stage === "downstream_streaming") {
-        return 4;
-      }
-      return 5;
-    })();
-    const getJourneyProgressState = (stepIndex: number): JourneyProgressState => {
-      if (failureJourneyStepIndex != null) {
-        if (stepIndex < failureJourneyStepIndex) {
-          return "done";
-        }
-        if (stepIndex === failureJourneyStepIndex) {
-          return "failed";
-        }
-        return "pending";
-      }
-
-      if (log.status_code != null && log.status_code >= 200 && log.status_code < 300) {
-        return "done";
-      }
-
-      if (stepIndex < activeJourneyStepIndex) {
-        return "done";
-      }
-      if (stepIndex === activeJourneyStepIndex) {
-        return "active";
-      }
-      return "pending";
-    };
-    const JOURNEY_PROGRESS_STYLES: Record<
-      JourneyProgressState,
-      {
-        tab: string;
-        number: string;
-        accent: string;
-        arrow: string;
-      }
-    > = {
-      done: {
-        tab: "border-status-success/30 bg-status-success-muted/16 text-foreground",
-        number: statusTone("success", "faint"),
-        accent: "bg-status-success/80",
-        arrow: "text-status-success/70",
-      },
-      active: {
-        tab: "border-amber-400/30 bg-surface-200 text-foreground shadow-[var(--vr-shadow-glow-subtle)]",
-        number: "border-amber-400/25 bg-amber-500/12 text-amber-300",
-        accent: "bg-amber-400/80",
-        arrow: "text-amber-300/70",
-      },
-      failed: {
-        tab: "border-status-error/30 bg-status-error-muted/14 text-foreground",
-        number: statusTone("error", "faint"),
-        accent: "bg-status-error/85",
-        arrow: "text-status-error/70",
-      },
-      pending: {
-        tab: "border-divider/80 bg-surface-200/58 text-muted-foreground",
-        number: "border-divider/70 bg-surface-300/70 text-muted-foreground/70",
-        accent: "bg-transparent",
-        arrow: "text-muted-foreground/45",
-      },
-    };
     const setActiveJourneyStep = (stepIndex: number) => {
       setFocusedJourneySteps((prev) =>
         prev[log.id] === stepIndex ? prev : { ...prev, [log.id]: stepIndex }
@@ -1285,51 +1256,6 @@ export function LogsTable({
 
     const journeySteps: JourneyStep[] = [
       {
-        index: 1,
-        title: t("journeyRequestArrived"),
-        summary: requestArrivedSummary,
-        meta: requestArrivedMeta,
-        tone: "neutral" as JourneyTone,
-        metrics: (
-          <>
-            {renderMetricPill(requestModeLabel, "", "neutral")}
-            {routingTypeLabel ? renderMetricPill(routingTypeLabel, "", "neutral") : null}
-          </>
-        ),
-        content: (
-          <>
-            <div className="flex flex-wrap items-center gap-2">
-              <ModelIdentity
-                label={modelDisplay ?? log.model}
-                reasoningEffort={reasoningEffort}
-                thinkingConfig={log.thinking_config}
-                className="min-w-0"
-                textClassName="font-medium text-foreground"
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-              {log.method ? <span>{log.method}</span> : null}
-              {log.path ? <span className="break-all">{log.path}</span> : null}
-              {groupName ? <span>{groupName}</span> : null}
-              {routingDecision?.model_redirect_applied ? (
-                <Badge variant="info" className="px-1.5 py-0 text-[10px]">
-                  {t("timelineModelResolution")}
-                </Badge>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-              <span>{t("requestKey")}:</span>
-              <RequestKeyIdentity
-                keyName={log.api_key_name}
-                keyPrefix={log.api_key_prefix}
-                textClassName="text-foreground"
-              />
-            </div>
-          </>
-        ),
-        focusedContent: null,
-      },
-      {
         index: 2,
         title: t("lifecycleDecision"),
         summary: decisionStepSummary,
@@ -1337,6 +1263,7 @@ export function LogsTable({
         tone: "neutral" as JourneyTone,
         metrics: (
           <>
+            {renderMetricPill(requestModeLabel, "", "neutral")}
             {routingTypeLabel ? renderMetricPill(routingTypeLabel, "", "neutral") : null}
             {routingDecision && didSendUpstream !== false
               ? renderMetricPill(
@@ -1356,28 +1283,46 @@ export function LogsTable({
           <>
             <div className="rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
               <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-                {t("timelineModelResolution")}
+                {t("journeyRequestArrived")}
               </div>
-              {routingDecision ? (
-                <div className="space-y-2">
-                  <ModelIdentity
-                    label={modelDisplay}
-                    reasoningEffort={reasoningEffort}
-                    thinkingConfig={log.thinking_config}
-                    textClassName="font-medium text-foreground"
+              <div className="space-y-2">
+                <ModelIdentity
+                  label={modelDisplay ?? log.model}
+                  reasoningEffort={reasoningEffort}
+                  thinkingConfig={log.thinking_config}
+                  className="min-w-0"
+                  textClassName="font-medium text-foreground"
+                />
+                <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+                  {log.method ? <span>{log.method}</span> : null}
+                  {log.path ? <span className="break-all">{log.path}</span> : null}
+                  {groupName ? <span>{groupName}</span> : null}
+                  {routingDecision?.model_redirect_applied ? (
+                    <Badge variant="info" className="px-1.5 py-0 text-[10px]">
+                      {t("timelineModelResolution")}
+                    </Badge>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+                  <span>{t("requestKey")}:</span>
+                  <RequestKeyIdentity
+                    keyName={log.api_key_name}
+                    keyPrefix={log.api_key_prefix}
+                    textClassName="text-foreground"
                   />
+                </div>
+                {routingDecision ? (
                   <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-                    {groupName ? <span>{groupName}</span> : null}
                     <span>
                       {t("tooltipStrategy")}:{" "}
                       <span className="text-foreground">{routingDecision.selection_strategy}</span>
                     </span>
                     <span>{candidateSummary}</span>
                   </div>
-                </div>
-              ) : (
-                <div className="text-muted-foreground">{t("noRoutingDecision")}</div>
-              )}
+                ) : (
+                  <div className="text-muted-foreground">{t("noRoutingDecision")}</div>
+                )}
+              </div>
             </div>
 
             <div className="rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
@@ -1946,98 +1891,18 @@ export function LogsTable({
                 {t("lifecycleTimeline")}
               </div>
 
-              <div className="space-y-2">
-                <div className="sm:hidden">
-                  <LifecycleTrack
-                    lifecycleStatus={log.lifecycle_status ?? undefined}
-                    stageTimings={log.stage_timings_ms}
-                    upstreamError={log.upstream_error}
-                    statusCode={log.status_code}
-                    isStream={log.is_stream}
-                    failureStage={routingDecision?.failure_stage ?? null}
-                    durationMs={totalMs}
-                    compact
-                  />
-                </div>
-                <div className="hidden sm:block">
-                  <LifecycleTrack
-                    lifecycleStatus={log.lifecycle_status ?? undefined}
-                    stageTimings={log.stage_timings_ms}
-                    upstreamError={log.upstream_error}
-                    statusCode={log.status_code}
-                    isStream={log.is_stream}
-                    failureStage={routingDecision?.failure_stage ?? null}
-                    durationMs={totalMs}
-                  />
-                </div>
-              </div>
-
               <div className="space-y-3">
-                <div className="relative">
-                  <div className="flex flex-wrap items-center gap-1.5 xl:grid-cols-5">
-                    {journeySteps.map((step, index) => {
-                      const tone = JOURNEY_TONE_STYLES[step.tone];
-                      const isActive = step.index === activeJourneyStep.index;
-                      const progressState = getJourneyProgressState(step.index);
-                      const progressTone = JOURNEY_PROGRESS_STYLES[progressState];
-                      return (
-                        <Fragment key={step.index}>
-                          <button
-                            type="button"
-                            onClick={() => setActiveJourneyStep(step.index)}
-                            aria-pressed={isActive}
-                            aria-label={step.title}
-                            className={cn(
-                              "group relative inline-flex min-w-0 items-center gap-2 overflow-hidden rounded-full border px-3 py-2 text-left",
-                              LOGS_SURFACE_TRANSITION_CLASS,
-                              "motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0",
-                              progressTone.tab,
-                              isActive && cn("motion-safe:-translate-y-0.5", tone.tabActive)
-                            )}
-                          >
-                            <div
-                              className={cn(
-                                // 浅色态选中药丸仅靠白面抬起 + 阴影区分偏弱，顶边状态色边
-                                // 加粗到 3px 使选中态更明显；深色态维持 2px 不变。
-                                "absolute inset-x-0 top-0 h-0.5 opacity-0 transition-opacity duration-cf-fast ease-cf-standard motion-reduce:transition-none",
-                                progressTone.accent,
-                                isActive && "opacity-100 light:h-[3px]"
-                              )}
-                            />
-                            <span
-                              className={cn(
-                                "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold transition-[background-color,border-color,color] duration-cf-fast ease-cf-standard motion-reduce:transition-none",
-                                progressTone.number
-                              )}
-                            >
-                              {step.index}
-                            </span>
-                            <div className="min-w-0">
-                              <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                                {step.title}
-                              </div>
-                              <div className="truncate text-[11px] text-foreground">
-                                {step.summary}
-                              </div>
-                            </div>
-                          </button>
-                          {index < journeySteps.length - 1 ? (
-                            <span
-                              className={cn(
-                                "inline-flex h-6 items-center px-0.5",
-                                progressTone.arrow
-                              )}
-                              aria-hidden="true"
-                            >
-                              →
-                            </span>
-                          ) : null}
-                        </Fragment>
-                      );
-                    })}
-                  </div>
-                </div>
-
+                <LifecycleTrack
+                  lifecycleStatus={log.lifecycle_status ?? undefined}
+                  stageTimings={log.stage_timings_ms}
+                  upstreamError={log.upstream_error}
+                  statusCode={log.status_code}
+                  isStream={log.is_stream}
+                  failureStage={routingDecision?.failure_stage ?? null}
+                  durationMs={totalMs}
+                  activeJourneyStep={activeJourneyStep.index}
+                  onJourneyStepSelect={setActiveJourneyStep}
+                />
                 <div
                   key={`journey-panel-${activeJourneyStep.index}`}
                   className={cn(
@@ -2049,18 +1914,8 @@ export function LogsTable({
                   <div className={cn("absolute inset-x-0 top-0 h-0.5", activeJourneyTone.accent)} />
                   <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={cn(
-                            "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold",
-                            activeJourneyTone.number
-                          )}
-                        >
-                          {activeJourneyStep.index}
-                        </span>
-                        <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                          {activeJourneyStep.title}
-                        </div>
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                        {activeJourneyStep.title}
                       </div>
                       <div className="mt-2 text-[11px] leading-relaxed text-foreground">
                         {activeJourneyStep.summary}
@@ -2459,7 +2314,7 @@ export function LogsTable({
       derived: ReturnType<typeof getLogDerived>;
     }> = [];
 
-    filteredLogs.forEach((log, index) => {
+    logs.forEach((log, index) => {
       const derived = getLogDerived(log);
       currentRows.push({ log, index, derived });
 
@@ -2496,7 +2351,7 @@ export function LogsTable({
       : 0);
   const resolvedDesktopTableWidth =
     !isMobileLayout && desktopTableContainerElement ? desktopTableWidth : null;
-  const desktopModelColumnWidth = desktopBreakpointState.xl
+  const desktopModelColumnWidth = desktopBreakpointState.lg
     ? Math.max(
         DESKTOP_MODEL_COLUMN_MIN_WIDTH,
         Math.min(
@@ -2507,9 +2362,67 @@ export function LogsTable({
       )
     : DESKTOP_MODEL_COLUMN_MAX_WIDTH;
   const desktopTableMinWidth =
-    desktopFixedColumnWidth + (desktopBreakpointState.xl ? desktopModelColumnWidth : 0);
+    desktopFixedColumnWidth + (desktopBreakpointState.lg ? desktopModelColumnWidth : 0);
   const desktopModelColumnStyle = { width: `${desktopModelColumnWidth}px` };
   const desktopTableStyle = { minWidth: `${desktopTableMinWidth}px` };
+
+  // Column sorting cycles desc → asc → default (created_at desc) per column;
+  // only rendered on the list view (focus view has no onServerFiltersChange).
+  const handleSortToggle = (field: LogsSortField) => {
+    if (!onServerFiltersChange) {
+      return;
+    }
+    if (serverFilters.sortField !== field) {
+      onServerFiltersChange({ sortField: field, sortOrder: "desc" });
+    } else if (serverFilters.sortOrder === "desc") {
+      onServerFiltersChange({ sortOrder: "asc" });
+    } else {
+      onServerFiltersChange({ sortField: null, sortOrder: "desc" });
+    }
+  };
+
+  const getAriaSort = (field: LogsSortField): "ascending" | "descending" | undefined => {
+    if (!onServerFiltersChange || serverFilters.sortField !== field) {
+      return undefined;
+    }
+    return serverFilters.sortOrder === "asc" ? "ascending" : "descending";
+  };
+
+  const renderSortableHeadContent = (field: LogsSortField, label: string) => {
+    if (!onServerFiltersChange) {
+      return label;
+    }
+    const isActive = serverFilters.sortField === field;
+    const nextActionLabel = !isActive
+      ? t("sortDescending")
+      : serverFilters.sortOrder === "desc"
+        ? t("sortAscending")
+        : t("sortCleared");
+    const SortIcon = !isActive
+      ? ArrowUpDown
+      : serverFilters.sortOrder === "asc"
+        ? ArrowUp
+        : ArrowDown;
+    return (
+      <button
+        type="button"
+        onClick={() => handleSortToggle(field)}
+        aria-label={t("sortColumnAria", { column: label })}
+        title={nextActionLabel}
+        className={cn(
+          "inline-flex items-center gap-1 rounded-cf-sm hover:text-foreground",
+          LOGS_COLOR_TRANSITION_CLASS,
+          isActive && "text-foreground"
+        )}
+      >
+        <span>{label}</span>
+        <SortIcon
+          className={cn("h-3 w-3 shrink-0", !isActive && "opacity-45")}
+          aria-hidden="true"
+        />
+      </button>
+    );
+  };
 
   // The filter bar always stays mounted, even on an empty page: the default
   // 30d window may hide older entries, and without the bar there would be no
@@ -2517,7 +2430,10 @@ export function LogsTable({
   // distinguishes "nothing matching" / "nothing in this window" / "nothing at all".
   const hasNarrowingFilters =
     serverFilters.statusClass !== "all" ||
+    serverFilters.statusCode !== "" ||
     serverFilters.model.trim() !== "" ||
+    serverFilters.upstreamId !== "" ||
+    serverFilters.apiKeyId !== "" ||
     performancePreset !== "all";
   // Any time window short of ALL is still a filter: users whose logs are all
   // older must be pointed at the ALL preset instead of "no logs yet".
@@ -2527,6 +2443,44 @@ export function LogsTable({
       ? { icon: Filter, title: "noLogsInRange", description: "noLogsInRangeDesc" }
       : { icon: ScrollText, title: "noLogs", description: "noLogsDesc" };
   const EmptyStateIcon = emptyState.icon;
+
+  // Window caption for the stats strip: the selected time range plus a
+  // "filtered" marker when any narrowing filter shapes the same window.
+  const windowStatsLabel = `${tDashboard(`timeRange.${serverFilters.timeRange}`)}${
+    hasNarrowingFilters ? ` · ${t("statsWindowFiltered")}` : ""
+  }`;
+  const statsTotal = windowStats?.total ?? 0;
+  const windowStatTiles = [
+    {
+      labelKey: "summaryP50Ttft",
+      icon: Timer,
+      value: formatSummaryTtft(windowStats?.p50_ttft_ms ?? null),
+    },
+    {
+      labelKey: "summaryP90Ttft",
+      icon: Gauge,
+      value: formatSummaryTtft(windowStats?.p90_ttft_ms ?? null),
+    },
+    {
+      labelKey: "summaryP50Tps",
+      icon: Zap,
+      value: formatSummaryTps(windowStats?.p50_tps ?? null),
+    },
+    {
+      labelKey: "summarySlowRatio",
+      icon: Turtle,
+      value: formatPercent(
+        statsTotal > 0 ? ((windowStats?.slow_count ?? 0) / statsTotal) * 100 : 0
+      ),
+    },
+    {
+      labelKey: "summaryStreamRatio",
+      icon: Radio,
+      value: formatPercent(
+        statsTotal > 0 ? ((windowStats?.stream_count ?? 0) / statsTotal) * 100 : 0
+      ),
+    },
+  ] as const;
 
   return (
     <div
@@ -2569,6 +2523,78 @@ export function LogsTable({
                 </Select>
               </div>
 
+              <div className="w-full sm:w-[96px]">
+                <Input
+                  id="logs-status-code-filter"
+                  name="logs-status-code-filter"
+                  aria-label={t("filterStatusCode")}
+                  type="text"
+                  inputMode="numeric"
+                  placeholder={t("filterStatusCode")}
+                  value={statusCodeInput}
+                  onChange={(e) => {
+                    // Exact code wins over the class select server-side, so
+                    // clearing it hands control back to statusClass.
+                    const nextValue = e.target.value.replace(/[^0-9]/g, "").slice(0, 3);
+                    setStatusCodeInput(nextValue);
+                    if (statusCodeDebounceRef.current != null) {
+                      window.clearTimeout(statusCodeDebounceRef.current);
+                    }
+                    statusCodeDebounceRef.current = window.setTimeout(() => {
+                      if (nextValue !== serverFilters.statusCode) {
+                        onServerFiltersChange({ statusCode: nextValue });
+                      }
+                    }, 300);
+                  }}
+                />
+              </div>
+
+              {upstreamFilterOptions && (
+                <div className="w-full sm:w-[180px]">
+                  <Select
+                    value={serverFilters.upstreamId || "all"}
+                    onValueChange={(value) =>
+                      onServerFiltersChange({ upstreamId: value === "all" ? "" : value })
+                    }
+                  >
+                    <SelectTrigger aria-label={t("filterUpstream")}>
+                      <SelectValue placeholder={t("filterUpstream")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t("filterUpstreamAll")}</SelectItem>
+                      {upstreamFilterOptions.map((option) => (
+                        <SelectItem key={option.id} value={option.id}>
+                          {option.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {apiKeyFilterOptions && (
+                <div className="w-full sm:w-[180px]">
+                  <Select
+                    value={serverFilters.apiKeyId || "all"}
+                    onValueChange={(value) =>
+                      onServerFiltersChange({ apiKeyId: value === "all" ? "" : value })
+                    }
+                  >
+                    <SelectTrigger aria-label={t("filterApiKey")}>
+                      <SelectValue placeholder={t("filterApiKey")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t("filterApiKeyAll")}</SelectItem>
+                      {apiKeyFilterOptions.map((option) => (
+                        <SelectItem key={option.id} value={option.id}>
+                          {option.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <div className="w-full sm:w-[220px]">
                 <Input
                   id="logs-model-filter"
@@ -2600,12 +2626,25 @@ export function LogsTable({
               <div className="w-full sm:ml-auto sm:w-auto">
                 <TimeRangeSelector
                   value={serverFilters.timeRange}
-                  onChange={(value) =>
+                  customRange={selectorCustomRange}
+                  onChange={(value, customRange) => {
+                    if (value === "custom") {
+                      if (!customRange) return;
+                      // Store ISO strings so the parent's query key stays stable.
+                      onServerFiltersChange({
+                        timeRange: "custom",
+                        customRange: {
+                          startIso: customRange.start.toISOString(),
+                          endIso: customRange.end.toISOString(),
+                        },
+                      });
+                      return;
+                    }
                     onServerFiltersChange({
                       timeRange: value as LogsServerFilters["timeRange"],
-                    })
-                  }
-                  hideCustom
+                      customRange: null,
+                    });
+                  }}
                   includeAll
                 />
               </div>
@@ -2613,123 +2652,71 @@ export function LogsTable({
           )}
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="type-caption text-muted-foreground">{t("quickFilters")}</span>
-          {(
-            [
-              ["all", t("presetAll")],
-              ["high_ttft", t("presetHighTtft")],
-              ["low_tps", t("presetLowTps")],
-              ["slow_duration", t("presetSlowDuration")],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setPerformancePreset(value)}
-              className={cn(
-                "rounded-cf-sm border px-2 py-1 font-mono text-xs",
-                LOGS_SURFACE_TRANSITION_CLASS,
-                LOGS_INTERACTIVE_RAISE_CLASS,
-                performancePreset === value
-                  ? "border-amber-500/45 bg-amber-500/10 text-amber-700 dark:text-amber-500"
-                  : "border-divider bg-surface-300 text-muted-foreground hover:bg-surface-300/70"
-              )}
-            >
-              {label}
-            </button>
-          ))}
-          <span className="type-caption text-muted-foreground">{t("quickFiltersPageOnly")}</span>
-        </div>
-      </div>
-
-      <div
-        className={cn(
-          "border-b border-divider bg-surface-200/70 px-4 py-3",
-          LOGS_SECTION_ENTER_CLASS
+        {onServerFiltersChange && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="type-caption text-muted-foreground">{t("quickFilters")}</span>
+            {(
+              [
+                ["all", t("presetAll")],
+                ["high_ttft", t("presetHighTtft")],
+                ["low_tps", t("presetLowTps")],
+                ["slow_duration", t("presetSlowDuration")],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => onServerFiltersChange({ perfPreset: value })}
+                className={cn(
+                  "rounded-cf-sm border px-2 py-1 font-mono text-xs",
+                  LOGS_SURFACE_TRANSITION_CLASS,
+                  LOGS_INTERACTIVE_RAISE_CLASS,
+                  performancePreset === value
+                    ? "border-amber-500/45 bg-amber-500/10 text-amber-700 dark:text-amber-500"
+                    : "border-divider bg-surface-300 text-muted-foreground hover:bg-surface-300/70"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+            <span className="type-caption text-muted-foreground">
+              {t("quickFiltersServerScope")}
+            </span>
+          </div>
         )}
-        style={{ animationDelay: "90ms" }}
-      >
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
-          <div
-            className={cn(
-              "rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2",
-              LOGS_CARD_ENTER_CLASS,
-              LOGS_SURFACE_TRANSITION_CLASS,
-              LOGS_INTERACTIVE_RAISE_CLASS,
-              hasLiveActivity && LOGS_LIVE_HIGHLIGHT_CLASS
-            )}
-            style={{ animationDelay: "130ms" }}
-          >
-            <p className="type-caption text-muted-foreground">{t("summaryP50Ttft")}</p>
-            <p className="font-mono text-sm text-foreground">
-              {formatSummaryTtft(performanceSummary.p50TtftMs)}
-            </p>
-          </div>
-          <div
-            className={cn(
-              "rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2",
-              LOGS_CARD_ENTER_CLASS,
-              LOGS_SURFACE_TRANSITION_CLASS,
-              LOGS_INTERACTIVE_RAISE_CLASS,
-              hasLiveActivity && LOGS_LIVE_HIGHLIGHT_CLASS
-            )}
-            style={{ animationDelay: "170ms" }}
-          >
-            <p className="type-caption text-muted-foreground">{t("summaryP90Ttft")}</p>
-            <p className="font-mono text-sm text-foreground">
-              {formatSummaryTtft(performanceSummary.p90TtftMs)}
-            </p>
-          </div>
-          <div
-            className={cn(
-              "rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2",
-              LOGS_CARD_ENTER_CLASS,
-              LOGS_SURFACE_TRANSITION_CLASS,
-              LOGS_INTERACTIVE_RAISE_CLASS,
-              hasLiveActivity && LOGS_LIVE_HIGHLIGHT_CLASS
-            )}
-            style={{ animationDelay: "210ms" }}
-          >
-            <p className="type-caption text-muted-foreground">{t("summaryP50Tps")}</p>
-            <p className="font-mono text-sm text-foreground">
-              {formatSummaryTps(performanceSummary.p50Tps)}
-            </p>
-          </div>
-          <div
-            className={cn(
-              "rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2",
-              LOGS_CARD_ENTER_CLASS,
-              LOGS_SURFACE_TRANSITION_CLASS,
-              LOGS_INTERACTIVE_RAISE_CLASS,
-              hasLiveActivity && LOGS_LIVE_HIGHLIGHT_CLASS
-            )}
-            style={{ animationDelay: "250ms" }}
-          >
-            <p className="type-caption text-muted-foreground">{t("summarySlowRatio")}</p>
-            <p className="font-mono text-sm text-foreground">
-              {formatPercent(performanceSummary.slowRatio)}
-            </p>
-          </div>
-          <div
-            className={cn(
-              "rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2",
-              LOGS_CARD_ENTER_CLASS,
-              LOGS_SURFACE_TRANSITION_CLASS,
-              LOGS_INTERACTIVE_RAISE_CLASS,
-              hasLiveActivity && LOGS_LIVE_HIGHLIGHT_CLASS
-            )}
-            style={{ animationDelay: "290ms" }}
-          >
-            <p className="type-caption text-muted-foreground">{t("summaryStreamRatio")}</p>
-            <p className="font-mono text-sm text-foreground">
-              {formatPercent(performanceSummary.streamRatio)}
-            </p>
-          </div>
-        </div>
       </div>
 
-      {filteredLogs.length === 0 ? (
+      {windowStats !== undefined && (
+        <div
+          className={cn(
+            "border-b border-divider bg-surface-200/70 px-4 py-3",
+            LOGS_SECTION_ENTER_CLASS
+          )}
+          style={{ animationDelay: "90ms" }}
+        >
+          <p className="type-caption mb-2 text-muted-foreground">{windowStatsLabel}</p>
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
+            {windowStatTiles.map((tile, index) => (
+              <StatCard
+                key={tile.labelKey}
+                icon={tile.icon}
+                label={t(tile.labelKey)}
+                value={tile.value}
+                isLoading={windowStats === null}
+                className={cn(
+                  LOGS_CARD_ENTER_CLASS,
+                  LOGS_SURFACE_TRANSITION_CLASS,
+                  LOGS_INTERACTIVE_RAISE_CLASS,
+                  hasLiveActivity && LOGS_LIVE_HIGHLIGHT_CLASS
+                )}
+                style={{ animationDelay: `${130 + index * 40}ms` }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {logs.length === 0 ? (
         <div
           className={cn(
             "flex flex-col items-center justify-center py-16 text-center",
@@ -2752,7 +2739,7 @@ export function LogsTable({
           {isMobileLayout ? (
             <TooltipProvider>
               <div className="space-y-3 p-3">
-                {filteredLogs.map((log, index) => {
+                {logs.map((log, index) => {
                   const {
                     isExpanded,
                     canExpand,
@@ -2883,10 +2870,34 @@ export function LogsTable({
                                 log.status_code
                               )}
                             </Badge>
+                            {log.failover_attempts > 0 && (
+                              <Badge
+                                variant="warning"
+                                className="px-1.5 py-0 text-[10px] leading-4 whitespace-nowrap"
+                                aria-label={t("rowFailoverTooltip", {
+                                  count: log.failover_attempts,
+                                })}
+                              >
+                                {t("rowFailoverBadge", { count: log.failover_attempts })}
+                              </Badge>
+                            )}
                           </div>
-                          <div className="mt-1 tabular-nums">{formatDuration(log.duration_ms)}</div>
+                          <div
+                            className={cn(
+                              "mt-1 tabular-nums",
+                              log.duration_ms != null &&
+                                getDurationPerformanceClass(log.duration_ms)
+                            )}
+                          >
+                            {formatDuration(log.duration_ms)}
+                          </div>
                           {shouldShowBillingCost(log) ? (
-                            <div className="mt-1 tabular-nums text-foreground">
+                            <div
+                              className={cn(
+                                "mt-1 tabular-nums text-foreground",
+                                getCostHeatClass(log)
+                              )}
+                            >
                               {formatBillingCost(log)}
                             </div>
                           ) : null}
@@ -2971,7 +2982,12 @@ export function LogsTable({
                         <TableHeader>
                           <TableRow>
                             <TableHead className="w-9 px-1.5"></TableHead>
-                            <TableHead className="w-[148px] px-1.5">{t("tableTime")}</TableHead>
+                            <TableHead
+                              className="w-[148px] px-1.5"
+                              aria-sort={getAriaSort("created_at")}
+                            >
+                              {renderSortableHeadContent("created_at", t("tableTime"))}
+                            </TableHead>
                             <TableHead className="w-[148px] px-1.5">{t("tableKey")}</TableHead>
                             <TableHead className="hidden lg:table-cell w-[96px] px-1.5">
                               {t("tableUpstream")}
@@ -2981,19 +2997,30 @@ export function LogsTable({
                               {t("tableInterfaceType")}
                             </TableHead>
                             <TableHead
-                              className="hidden xl:table-cell px-1.5 pl-1"
+                              className="hidden lg:table-cell px-1.5 pl-1"
                               style={desktopModelColumnStyle}
                             >
                               {t("tableModel")}
                             </TableHead>
-                            <TableHead className="hidden md:table-cell w-[104px] px-1.5">
-                              {t("tableTokens")}
+                            <TableHead
+                              className="hidden md:table-cell w-[104px] px-1.5"
+                              aria-sort={getAriaSort("total_tokens")}
+                            >
+                              {renderSortableHeadContent("total_tokens", t("tableTokens"))}
                             </TableHead>
-                            <TableHead className="w-[84px] px-1.5 text-right">
-                              {t("tableCost")}
+                            <TableHead
+                              className="w-[84px] px-1.5 text-right"
+                              aria-sort={getAriaSort("cost")}
+                            >
+                              {renderSortableHeadContent("cost", t("tableCost"))}
                             </TableHead>
                             <TableHead className="w-[68px] px-1.5">{t("tableStatus")}</TableHead>
-                            <TableHead className="w-[112px] px-1.5">{t("tableDuration")}</TableHead>
+                            <TableHead
+                              className="w-[112px] px-1.5"
+                              aria-sort={getAriaSort("duration_ms")}
+                            >
+                              {renderSortableHeadContent("duration_ms", t("tableDuration"))}
+                            </TableHead>
                           </TableRow>
                         </TableHeader>
                       ) : null}
@@ -3099,7 +3126,7 @@ export function LogsTable({
                                 />
                               </TableCell>
                               <TableCell
-                                className="hidden font-mono text-[10px] xl:table-cell px-1.5 py-1 pl-1 min-w-0"
+                                className="hidden font-mono text-[10px] lg:table-cell px-1.5 py-1 pl-1 min-w-0"
                                 style={desktopModelColumnStyle}
                               >
                                 {log.model ? (
@@ -3130,7 +3157,12 @@ export function LogsTable({
                               <TableCell className="w-[84px] px-1.5 py-1 text-right">
                                 <div className="flex flex-col items-end gap-0">
                                   {shouldShowBillingCost(log) ? (
-                                    <span className="font-mono text-[11px] tabular-nums whitespace-nowrap">
+                                    <span
+                                      className={cn(
+                                        "font-mono text-[11px] tabular-nums whitespace-nowrap",
+                                        getCostHeatClass(log)
+                                      )}
+                                    >
                                       {formatBillingCost(log)}
                                     </span>
                                   ) : null}
@@ -3171,11 +3203,39 @@ export function LogsTable({
                                       log.status_code
                                     )}
                                   </Badge>
+                                  {log.failover_attempts > 0 && (
+                                    <Tooltip delayDuration={200}>
+                                      <TooltipTrigger asChild>
+                                        <Badge
+                                          variant="warning"
+                                          className="px-1.5 py-0 text-[10px] leading-4 whitespace-nowrap"
+                                          aria-label={t("rowFailoverTooltip", {
+                                            count: log.failover_attempts,
+                                          })}
+                                        >
+                                          {t("rowFailoverBadge", {
+                                            count: log.failover_attempts,
+                                          })}
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top">
+                                        {t("rowFailoverTooltip", {
+                                          count: log.failover_attempts,
+                                        })}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
                                 </div>
                               </TableCell>
                               <TableCell className="w-[112px] px-1.5 py-1 font-mono text-[10px] leading-tight">
                                 <div className="flex flex-col gap-0">
-                                  <span className="tabular-nums whitespace-nowrap">
+                                  <span
+                                    className={cn(
+                                      "tabular-nums whitespace-nowrap",
+                                      log.duration_ms != null &&
+                                        getDurationPerformanceClass(log.duration_ms)
+                                    )}
+                                  >
                                     {formatDuration(log.duration_ms)}
                                   </span>
                                   {(log.ttft_ms != null || requestTps != null) && (

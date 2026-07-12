@@ -6,7 +6,7 @@ function seedAdminToken(page: Page): Promise<void> {
   });
 }
 
-function mockLogsApi(page: Page): Promise<void> {
+async function mockLogsApi(page: Page): Promise<void> {
   const now = new Date().toISOString();
   const payload = {
     items: [
@@ -66,11 +66,28 @@ function mockLogsApi(page: Page): Promise<void> {
     page_size: 20,
   };
 
-  return page.route("**/api/admin/logs**", async (route) => {
+  await page.route("**/api/admin/logs**", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify(payload),
+    });
+  });
+  // Registered after the list route so it wins for /logs/stats (Playwright
+  // matches routes in reverse registration order); the list-shaped payload
+  // above must not leak into the window-stats hook.
+  await page.route("**/api/admin/logs/stats**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        total: 1,
+        stream_count: 0,
+        slow_count: 0,
+        p50_ttft_ms: null,
+        p90_ttft_ms: null,
+        p50_tps: null,
+      }),
     });
   });
 }
@@ -93,6 +110,21 @@ function mockTrafficRecordingsApi(page: Page): Promise<void> {
       }),
     });
   });
+}
+
+// The logs page fetches upstream / API-key filter options. Left unmocked they
+// reach the real server with the fake e2e token and the 401 logs the session
+// out mid-test, so stub them with empty pages.
+async function mockLogsFilterOptionApis(page: Page): Promise<void> {
+  const emptyPage = { items: [], total: 0, page: 1, page_size: 100, total_pages: 0 };
+  const fulfillEmpty = (route: Parameters<Parameters<Page["route"]>[1]>[0]) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(emptyPage),
+    });
+  await page.route("**/api/admin/upstreams?**", fulfillEmpty);
+  await page.route("**/api/admin/keys?**", fulfillEmpty);
 }
 
 // The live pulse bar in the dashboard layout opens a stats/live connection on
@@ -126,6 +158,7 @@ test.describe("Logs routing diagnostics", () => {
   test("does not show selected upstream when request was never sent upstream", async ({ page }) => {
     await seedAdminToken(page);
     await mockLogsApi(page);
+    await mockLogsFilterOptionApis(page);
     await mockTrafficRecordingsApi(page);
 
     await page.goto("/en/logs");

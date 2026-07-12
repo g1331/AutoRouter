@@ -17,6 +17,12 @@ export interface RequestLogsFilters {
   // while live refetches keep a fresh boundary. Ignored when start_time is set;
   // "all" applies no lower bound.
   time_range?: TimeRange | "all";
+  // Performance threshold filters (see /api/admin/logs docs).
+  ttft_min_ms?: number;
+  duration_min_ms?: number;
+  tps_max?: number;
+  sort?: "created_at" | "duration_ms" | "total_tokens" | "ttft_ms" | "cost";
+  order?: "asc" | "desc";
 }
 
 export interface UseRequestLogsOptions {
@@ -78,6 +84,19 @@ export function useRequestLogs(
       }
       if (filters?.end_time) {
         params.set("end_time", filters.end_time);
+      }
+      if (filters?.ttft_min_ms !== undefined) {
+        params.set("ttft_min_ms", String(filters.ttft_min_ms));
+      }
+      if (filters?.duration_min_ms !== undefined) {
+        params.set("duration_min_ms", String(filters.duration_min_ms));
+      }
+      if (filters?.tps_max !== undefined) {
+        params.set("tps_max", String(filters.tps_max));
+      }
+      if (filters?.sort) {
+        params.set("sort", filters.sort);
+        params.set("order", filters.order ?? "desc");
       }
 
       return apiClient.get<PaginatedRequestLogsResponse>(`/admin/logs?${params.toString()}`);

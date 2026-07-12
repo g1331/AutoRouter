@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor, act, within } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
-import { LogsTable } from "@/components/admin/logs-table";
+import { DEFAULT_LOGS_SERVER_FILTERS, LogsTable } from "@/components/admin/logs-table";
 import type { RequestLog, RoutingDecisionLog } from "@/types/api";
 
 // Mock next-intl
@@ -185,7 +185,7 @@ describe("LogsTable", () => {
 
         await waitFor(() => {
           const modelHeader = screen.getByText("tableModel").closest("th");
-          expect(modelHeader).toHaveStyle({ width: "136px" });
+          expect(modelHeader).toHaveStyle({ width: "112px" });
         });
       } finally {
         window.matchMedia = originalMatchMedia;
@@ -236,7 +236,7 @@ describe("LogsTable", () => {
 
         await waitFor(() => {
           const modelHeader = screen.getByText("tableModel").closest("th");
-          expect(modelHeader).toHaveStyle({ width: "136px" });
+          expect(modelHeader).toHaveStyle({ width: "112px" });
         });
       } finally {
         window.matchMedia = originalMatchMedia;
@@ -984,7 +984,7 @@ describe("LogsTable", () => {
       render(<LogsTable logs={[streamLog]} />);
 
       fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
-      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleResponse" })[0]);
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleGeneration" })[0]);
       expect(screen.getByText("journeyGenerationFinished")).toBeInTheDocument();
       expect(screen.getAllByText(/450ms/).length).toBeGreaterThan(0);
     });
@@ -1047,9 +1047,18 @@ describe("LogsTable", () => {
     });
   });
 
+  const mockWindowStats = {
+    total: 20,
+    stream_count: 8,
+    slow_count: 2,
+    p50_ttft_ms: 850,
+    p90_ttft_ms: 2600,
+    p50_tps: 41.3,
+  };
+
   describe("New Row Highlight", () => {
     it("applies subtle highlight class for newly arrived logs", async () => {
-      const { rerender } = render(<LogsTable logs={[mockLog]} />);
+      const { rerender } = render(<LogsTable logs={[mockLog]} windowStats={mockWindowStats} />);
 
       const newLog: RequestLog = {
         ...mockLog,
@@ -1058,103 +1067,95 @@ describe("LogsTable", () => {
       };
 
       await act(async () => {
-        rerender(<LogsTable logs={[newLog, mockLog]} />);
+        rerender(<LogsTable logs={[newLog, mockLog]} windowStats={mockWindowStats} />);
       });
 
       const row = screen.getAllByRole("row")[1];
-      const summaryTile = screen.getByText("summaryP50Ttft").closest("div");
 
       await waitFor(() => {
         expect(row.className).toContain("bg-status-info-muted/25");
         expect(row.className).toContain("animate-log-row-emphasis");
-        expect(summaryTile).toBeInTheDocument();
-        expect(summaryTile?.className).toContain("animate-log-live-highlight");
+        // The highlight class lands on the StatCard root, a few levels above the label.
+        const summaryTile = screen
+          .getByText("summaryP50Ttft")
+          .closest('div[class*="animate-log-live-highlight"]');
+        expect(summaryTile).not.toBeNull();
       });
     });
   });
 
   describe("Performance Summary And Quick Filters", () => {
-    it("renders performance summary tiles", () => {
-      render(<LogsTable logs={[mockLog]} />);
+    it("renders window stat tiles from windowStats", () => {
+      render(<LogsTable logs={[mockLog]} windowStats={mockWindowStats} />);
 
       expect(screen.getByText("summaryP50Ttft")).toBeInTheDocument();
       expect(screen.getByText("summaryP90Ttft")).toBeInTheDocument();
       expect(screen.getByText("summaryP50Tps")).toBeInTheDocument();
       expect(screen.getByText("summarySlowRatio")).toBeInTheDocument();
       expect(screen.getByText("summaryStreamRatio")).toBeInTheDocument();
+
+      expect(screen.getByText("850ms")).toBeInTheDocument();
+      expect(screen.getByText("2.60s")).toBeInTheDocument();
+      expect(screen.getByText("41.3 tok/s")).toBeInTheDocument();
+      expect(screen.getByText("10%")).toBeInTheDocument();
+      expect(screen.getByText("40%")).toBeInTheDocument();
+      // Window caption: the selected time range, unfiltered by default.
+      expect(screen.getByText("timeRange.30d")).toBeInTheDocument();
+    });
+
+    it("marks the window caption as filtered when narrowing filters are active", () => {
+      render(
+        <LogsTable
+          logs={[mockLog]}
+          windowStats={mockWindowStats}
+          serverFilters={{ ...DEFAULT_LOGS_SERVER_FILTERS, model: "gpt-4" }}
+        />
+      );
+
+      expect(screen.getByText("timeRange.30d · statsWindowFiltered")).toBeInTheDocument();
+    });
+
+    it("hides the stats strip when windowStats is undefined and shows skeletons when null", () => {
+      const { rerender } = render(<LogsTable logs={[mockLog]} />);
+      expect(screen.queryByText("summaryP50Ttft")).not.toBeInTheDocument();
+
+      rerender(<LogsTable logs={[mockLog]} windowStats={null} />);
+      expect(screen.getByText("summaryP50Ttft")).toBeInTheDocument();
+      expect(screen.queryByText("850ms")).not.toBeInTheDocument();
     });
 
     it("adds hover motion to summary tiles and quick filter chips", () => {
-      render(<LogsTable logs={[mockLog]} />);
+      render(
+        <LogsTable logs={[mockLog]} windowStats={mockWindowStats} onServerFiltersChange={vi.fn()} />
+      );
 
-      const summaryTile = screen.getByText("summaryP50Ttft").closest("div");
+      const summaryTile = screen
+        .getByText("summaryP50Ttft")
+        .closest('div[class*="motion-safe:hover:-translate-y-0.5"]');
       const quickFilter = screen.getByRole("button", { name: "presetHighTtft" });
 
-      expect(summaryTile).toBeInTheDocument();
-      expect(summaryTile?.className).toContain("motion-safe:hover:-translate-y-0.5");
+      expect(summaryTile).not.toBeNull();
       expect(quickFilter.className).toContain("motion-safe:hover:-translate-y-0.5");
     });
 
-    it("filters to high TTFT logs with quick filter preset", () => {
-      const highTtftLog: RequestLog = {
-        ...mockLog,
-        id: "high-ttft",
-        path: "/v1/high-ttft",
-        is_stream: true,
-        ttft_ms: 6000,
-        duration_ms: 12000,
-        routing_duration_ms: 300,
-        completion_tokens: 120,
-      };
-      const normalLog: RequestLog = {
-        ...mockLog,
-        id: "normal-ttft",
-        path: "/v1/normal-ttft",
-        is_stream: true,
-        ttft_ms: 400,
-        duration_ms: 3500,
-        routing_duration_ms: 250,
-        completion_tokens: 120,
-      };
-
-      render(<LogsTable logs={[highTtftLog, normalLog]} />);
+    it("emits a perfPreset patch when a quick filter chip is clicked", () => {
+      const onServerFiltersChange = vi.fn();
+      render(<LogsTable logs={[mockLog]} onServerFiltersChange={onServerFiltersChange} />);
 
       fireEvent.click(screen.getByRole("button", { name: "presetHighTtft" }));
+      expect(onServerFiltersChange).toHaveBeenLastCalledWith({ perfPreset: "high_ttft" });
 
-      expect(screen.getByText("/v1/high-ttft")).toBeInTheDocument();
-      expect(screen.queryByText("/v1/normal-ttft")).not.toBeInTheDocument();
-    });
-
-    it("filters to low TPS logs with quick filter preset", () => {
-      const lowTpsLog: RequestLog = {
-        ...mockLog,
-        id: "low-tps",
-        path: "/v1/low-tps",
-        is_stream: true,
-        duration_ms: 5000,
-        routing_duration_ms: 500,
-        ttft_ms: 1000,
-        completion_tokens: 20,
-      };
-      const highTpsLog: RequestLog = {
-        ...mockLog,
-        id: "high-tps",
-        path: "/v1/high-tps",
-        is_stream: true,
-        duration_ms: 1500,
-        routing_duration_ms: 200,
-        ttft_ms: 200,
-        completion_tokens: 200,
-      };
-
-      render(<LogsTable logs={[lowTpsLog, highTpsLog]} />);
       fireEvent.click(screen.getByRole("button", { name: "presetLowTps" }));
+      expect(onServerFiltersChange).toHaveBeenLastCalledWith({ perfPreset: "low_tps" });
 
-      expect(screen.getByText("/v1/low-tps")).toBeInTheDocument();
-      expect(screen.queryByText("/v1/high-tps")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "presetSlowDuration" }));
+      expect(onServerFiltersChange).toHaveBeenLastCalledWith({ perfPreset: "slow_duration" });
+
+      fireEvent.click(screen.getByRole("button", { name: "presetAll" }));
+      expect(onServerFiltersChange).toHaveBeenLastCalledWith({ perfPreset: "all" });
     });
 
-    it("filters to slow duration logs with quick filter preset", () => {
+    it("renders every row regardless of the active preset (narrowing is server-side)", () => {
       const slowLog: RequestLog = {
         ...mockLog,
         id: "slow-duration",
@@ -1168,11 +1169,42 @@ describe("LogsTable", () => {
         duration_ms: 5000,
       };
 
-      render(<LogsTable logs={[slowLog, fastLog]} />);
-      fireEvent.click(screen.getByRole("button", { name: "presetSlowDuration" }));
+      render(
+        <LogsTable
+          logs={[slowLog, fastLog]}
+          serverFilters={{ ...DEFAULT_LOGS_SERVER_FILTERS, perfPreset: "slow_duration" }}
+          onServerFiltersChange={vi.fn()}
+        />
+      );
 
+      // The server already applied the preset; the page is rendered as-is.
       expect(screen.getByText("/v1/slow-duration")).toBeInTheDocument();
-      expect(screen.queryByText("/v1/fast-duration")).not.toBeInTheDocument();
+      expect(screen.getByText("/v1/fast-duration")).toBeInTheDocument();
+    });
+
+    it("highlights the active preset chip from serverFilters", () => {
+      render(
+        <LogsTable
+          logs={[mockLog]}
+          serverFilters={{ ...DEFAULT_LOGS_SERVER_FILTERS, perfPreset: "high_ttft" }}
+          onServerFiltersChange={vi.fn()}
+        />
+      );
+
+      expect(screen.getByRole("button", { name: "presetHighTtft" }).className).toContain(
+        "border-amber-500/45"
+      );
+      expect(screen.getByRole("button", { name: "presetAll" }).className).not.toContain(
+        "border-amber-500/45"
+      );
+    });
+
+    it("hides the quick filter chips when onServerFiltersChange is omitted", () => {
+      // Focus view: without a change callback the chips would be silent no-ops.
+      render(<LogsTable logs={[mockLog]} />);
+
+      expect(screen.queryByRole("button", { name: "presetAll" })).not.toBeInTheDocument();
+      expect(screen.queryByText("quickFiltersServerScope")).not.toBeInTheDocument();
     });
   });
 
@@ -1288,13 +1320,13 @@ describe("LogsTable", () => {
 
       it("hides the server filter controls when onServerFiltersChange is omitted", () => {
         // The focus view pins a single entry: without a change callback the
-        // status/model/time controls would be silent no-ops, so they are hidden.
+        // status/model/time controls and quick filter chips would be silent
+        // no-ops, so they are all hidden.
         render(<LogsTable logs={logsForFiltering} />);
 
         expect(screen.queryByPlaceholderText("filterModel")).not.toBeInTheDocument();
         expect(screen.queryByText("timeRange.7d")).not.toBeInTheDocument();
-        // The client-side quick filters stay available.
-        expect(screen.getByText("presetAll")).toBeInTheDocument();
+        expect(screen.queryByText("presetAll")).not.toBeInTheDocument();
       });
     });
 
@@ -1322,7 +1354,7 @@ describe("LogsTable", () => {
         render(
           <LogsTable
             logs={logsForFiltering}
-            serverFilters={{ statusClass: "all", model: "claude", timeRange: "30d" }}
+            serverFilters={{ ...DEFAULT_LOGS_SERVER_FILTERS, model: "claude" }}
             onServerFiltersChange={onServerFiltersChange}
           />
         );
@@ -1339,7 +1371,7 @@ describe("LogsTable", () => {
         const { rerender } = render(
           <LogsTable
             logs={logsForFiltering}
-            serverFilters={{ statusClass: "all", model: "claude", timeRange: "30d" }}
+            serverFilters={{ ...DEFAULT_LOGS_SERVER_FILTERS, model: "claude" }}
             onServerFiltersChange={vi.fn()}
           />
         );
@@ -1349,7 +1381,7 @@ describe("LogsTable", () => {
         rerender(
           <LogsTable
             logs={logsForFiltering}
-            serverFilters={{ statusClass: "all", model: "", timeRange: "30d" }}
+            serverFilters={{ ...DEFAULT_LOGS_SERVER_FILTERS, model: "" }}
             onServerFiltersChange={vi.fn()}
           />
         );
@@ -1373,7 +1405,9 @@ describe("LogsTable", () => {
 
         fireEvent.click(screen.getByText("timeRange.7d"));
 
-        expect(onServerFiltersChange).toHaveBeenCalledWith({ timeRange: "7d" });
+        // customRange is reset alongside: a stale custom window must not
+        // survive a preset click.
+        expect(onServerFiltersChange).toHaveBeenCalledWith({ timeRange: "7d", customRange: null });
       });
 
       it("offers an all-time preset so entries older than 30d stay reachable", () => {
@@ -1382,7 +1416,139 @@ describe("LogsTable", () => {
 
         fireEvent.click(screen.getByText("timeRange.all"));
 
-        expect(onServerFiltersChange).toHaveBeenCalledWith({ timeRange: "all" });
+        expect(onServerFiltersChange).toHaveBeenCalledWith({ timeRange: "all", customRange: null });
+      });
+    });
+
+    describe("Status Code Input", () => {
+      it("debounces digit-only status code patches and skips no-ops", async () => {
+        const onServerFiltersChange = vi.fn();
+        render(<LogsTable logs={logsForFiltering} onServerFiltersChange={onServerFiltersChange} />);
+
+        const input = screen.getByPlaceholderText("filterStatusCode");
+        fireEvent.change(input, { target: { value: "4a04" } });
+
+        // Non-digits stripped in the local echo; not committed synchronously.
+        expect(input).toHaveValue("404");
+        expect(onServerFiltersChange).not.toHaveBeenCalled();
+
+        await waitFor(() =>
+          expect(onServerFiltersChange).toHaveBeenCalledWith({ statusCode: "404" })
+        );
+      });
+
+      it("does not commit a status code patch when the value is unchanged", async () => {
+        const onServerFiltersChange = vi.fn();
+        render(
+          <LogsTable
+            logs={logsForFiltering}
+            serverFilters={{ ...DEFAULT_LOGS_SERVER_FILTERS, statusCode: "404" }}
+            onServerFiltersChange={onServerFiltersChange}
+          />
+        );
+
+        const input = screen.getByPlaceholderText("filterStatusCode");
+        fireEvent.change(input, { target: { value: "404x" } });
+
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        expect(onServerFiltersChange).not.toHaveBeenCalled();
+      });
+    });
+
+    describe("Upstream / API Key Selects", () => {
+      it("renders the selects only when option props are provided (portal omits them)", () => {
+        const { rerender } = render(
+          <LogsTable logs={logsForFiltering} onServerFiltersChange={vi.fn()} />
+        );
+
+        // Portal / no-options case: the admin-only selects must not render.
+        expect(screen.queryByLabelText("filterUpstream")).not.toBeInTheDocument();
+        expect(screen.queryByLabelText("filterApiKey")).not.toBeInTheDocument();
+
+        rerender(
+          <LogsTable
+            logs={logsForFiltering}
+            onServerFiltersChange={vi.fn()}
+            upstreamFilterOptions={[{ id: "up-1", name: "Upstream One" }]}
+            apiKeyFilterOptions={[{ id: "key-1", name: "Key One" }]}
+          />
+        );
+
+        expect(screen.getByLabelText("filterUpstream")).toBeInTheDocument();
+        expect(screen.getByLabelText("filterApiKey")).toBeInTheDocument();
+      });
+    });
+
+    describe("Column Sorting", () => {
+      function durationSortButton() {
+        return screen.getByText("tableDuration").closest("button")!;
+      }
+
+      it("cycles desc → asc → cleared on repeated header clicks", () => {
+        const onServerFiltersChange = vi.fn();
+        const { rerender } = render(
+          <LogsTable logs={logsForFiltering} onServerFiltersChange={onServerFiltersChange} />
+        );
+
+        fireEvent.click(durationSortButton());
+        expect(onServerFiltersChange).toHaveBeenLastCalledWith({
+          sortField: "duration_ms",
+          sortOrder: "desc",
+        });
+
+        rerender(
+          <LogsTable
+            logs={logsForFiltering}
+            serverFilters={{ ...DEFAULT_LOGS_SERVER_FILTERS, sortField: "duration_ms" }}
+            onServerFiltersChange={onServerFiltersChange}
+          />
+        );
+        fireEvent.click(durationSortButton());
+        expect(onServerFiltersChange).toHaveBeenLastCalledWith({ sortOrder: "asc" });
+
+        rerender(
+          <LogsTable
+            logs={logsForFiltering}
+            serverFilters={{
+              ...DEFAULT_LOGS_SERVER_FILTERS,
+              sortField: "duration_ms",
+              sortOrder: "asc",
+            }}
+            onServerFiltersChange={onServerFiltersChange}
+          />
+        );
+        fireEvent.click(durationSortButton());
+        expect(onServerFiltersChange).toHaveBeenLastCalledWith({
+          sortField: null,
+          sortOrder: "desc",
+        });
+      });
+
+      it("exposes the active sort via aria-sort on the header cell", () => {
+        render(
+          <LogsTable
+            logs={logsForFiltering}
+            serverFilters={{
+              ...DEFAULT_LOGS_SERVER_FILTERS,
+              sortField: "duration_ms",
+              sortOrder: "asc",
+            }}
+            onServerFiltersChange={vi.fn()}
+          />
+        );
+
+        expect(screen.getByText("tableDuration").closest("th")).toHaveAttribute(
+          "aria-sort",
+          "ascending"
+        );
+        expect(screen.getByText("tableTokens").closest("th")).not.toHaveAttribute("aria-sort");
+      });
+
+      it("renders plain header labels without sort buttons in the focus view", () => {
+        render(<LogsTable logs={logsForFiltering} />);
+
+        expect(screen.getByText("tableDuration").closest("button")).toBeNull();
+        expect(screen.getByText("tableTime").closest("button")).toBeNull();
       });
     });
 
@@ -1401,7 +1567,7 @@ describe("LogsTable", () => {
         render(
           <LogsTable
             logs={[]}
-            serverFilters={{ statusClass: "all", model: "gpt-999", timeRange: "30d" }}
+            serverFilters={{ ...DEFAULT_LOGS_SERVER_FILTERS, model: "gpt-999" }}
             onServerFiltersChange={vi.fn()}
           />
         );
@@ -1425,7 +1591,7 @@ describe("LogsTable", () => {
         render(
           <LogsTable
             logs={[]}
-            serverFilters={{ statusClass: "all", model: "", timeRange: "all" }}
+            serverFilters={{ ...DEFAULT_LOGS_SERVER_FILTERS, timeRange: "all" }}
             onServerFiltersChange={vi.fn()}
           />
         );
@@ -1983,13 +2149,19 @@ describe("LogsTable", () => {
 
       expect(screen.getByText("tokenDetails")).toBeInTheDocument();
       expect(screen.getByText("lifecycleTimeline")).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "journeyRequestArrived" })).toBeInTheDocument();
+      // 药丸步骤条已合并进生命周期轨道条；step 1（进入网关）不再是独立 tab。
+      expect(
+        screen.queryByRole("button", { name: "journeyRequestArrived" })
+      ).not.toBeInTheDocument();
       expect(screen.getAllByRole("button", { name: "lifecycleDecision" }).length).toBeGreaterThan(
         0
       );
       expect(screen.queryByText("timelineUpstreamSelection")).not.toBeInTheDocument();
       expect(screen.getAllByRole("button", { name: "lifecycleRequest" }).length).toBeGreaterThan(0);
-      expect(screen.getAllByRole("button", { name: "lifecycleResponse" }).length).toBeGreaterThan(
+      expect(
+        screen.getAllByRole("button", { name: "lifecycleFirstOutput" }).length
+      ).toBeGreaterThan(0);
+      expect(screen.getAllByRole("button", { name: "lifecycleGeneration" }).length).toBeGreaterThan(
         0
       );
       expect(screen.getAllByRole("button", { name: "lifecycleComplete" }).length).toBeGreaterThan(
@@ -2003,7 +2175,7 @@ describe("LogsTable", () => {
       fireEvent.click(screen.getAllByRole("button", { name: "lifecycleRequest" })[0]);
       expect(screen.getByText(/journeyRequestAction/)).toBeInTheDocument();
 
-      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleResponse" })[0]);
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleFirstOutput" })[0]);
       expect(screen.getAllByText(/1\.20s \(\+900ms\)/).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/1\.65s \(\+400ms\)/).length).toBeGreaterThan(0);
     });
@@ -2245,13 +2417,15 @@ describe("LogsTable", () => {
         routing_decision: mockRoutingDecision,
       };
 
-      const { container } = render(<LogsTable logs={[logWithRouting]} />);
+      render(<LogsTable logs={[logWithRouting]} />);
 
       // Click expand button
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
       fireEvent.click(expandButton);
 
-      expect(screen.getByRole("button", { name: "journeyRequestArrived" })).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "journeyRequestArrived" })
+      ).not.toBeInTheDocument();
       expect(screen.getAllByRole("button", { name: "lifecycleDecision" }).length).toBeGreaterThan(
         0
       );
@@ -2261,9 +2435,6 @@ describe("LogsTable", () => {
 
       fireEvent.click(screen.getAllByRole("button", { name: "lifecycleDecision" })[0]);
       expect(screen.getByText("journeyDecisionResult")).toBeInTheDocument();
-
-      const focusRail = container.querySelector("[class*='xl:grid-cols-5']");
-      expect(focusRail).toBeInTheDocument();
     });
 
     it("shows each lifecycle stage detail when its journey step is selected", () => {
@@ -2295,11 +2466,11 @@ describe("LogsTable", () => {
       fireEvent.click(screen.getAllByRole("button", { name: "lifecycleRequest" })[0]);
       expect(screen.getByText("timelineExecutionRetries")).toBeInTheDocument();
 
-      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleResponse" })[0]);
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleGeneration" })[0]);
       expect(screen.getAllByText(/1\.65s \(\+400ms\)/).length).toBeGreaterThan(0);
     });
 
-    it("falls back to request-arrived content in focused view when no focused detail exists", () => {
+    it("shows request-arrived content inside the decision panel", () => {
       const logWithRouting: RequestLog = {
         ...logWithFailoverBase,
         routing_decision: mockRoutingDecision,
@@ -2308,7 +2479,7 @@ describe("LogsTable", () => {
       render(<LogsTable logs={[logWithRouting]} />);
 
       fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
-      fireEvent.click(screen.getByRole("button", { name: "journeyRequestArrived" }));
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleDecision" })[0]);
 
       expect(screen.getByText("requestKey")).toBeInTheDocument();
       expect(screen.getAllByText("Primary Key").length).toBeGreaterThan(0);
@@ -2360,6 +2531,46 @@ describe("LogsTable", () => {
       expect(screen.getByRole("button", { name: "Collapse diff" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "headerDiffShowValues" })).toBeInTheDocument();
       expect(screen.getByText("authorization")).toBeInTheDocument();
+    });
+  });
+
+  describe("Row Visual Enhancements", () => {
+    it("shows a failover badge only on rows with failover attempts", () => {
+      const { rerender } = render(<LogsTable logs={[{ ...mockLog, failover_attempts: 2 }]} />);
+      expect(screen.getByText("rowFailoverBadge")).toBeInTheDocument();
+
+      rerender(<LogsTable logs={[mockLog]} />);
+      expect(screen.queryByText("rowFailoverBadge")).not.toBeInTheDocument();
+    });
+
+    it("heat-colors slow durations and expensive costs via text color", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              duration_ms: 25000,
+              final_cost: 0.25,
+              billing_status: "billed",
+              currency: "USD",
+            },
+          ]}
+        />
+      );
+
+      expect(screen.getByText("25.00s").className).toContain("text-status-error");
+      expect(screen.getByText("$0.25").className).toContain("text-status-warning");
+    });
+
+    it("leaves fast, cheap rows without heat coloring", () => {
+      render(
+        <LogsTable
+          logs={[{ ...mockLog, duration_ms: 1500, final_cost: 0.01, billing_status: "billed" }]}
+        />
+      );
+
+      expect(screen.getByText("1.50s").className).not.toContain("text-status-");
+      expect(screen.getByText("$0.01").className).not.toContain("text-status-");
     });
   });
 

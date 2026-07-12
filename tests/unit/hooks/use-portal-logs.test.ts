@@ -100,6 +100,32 @@ describe("usePortalRequestLogs", () => {
     expect(params.time_range).toBeUndefined();
   });
 
+  it("serializes performance thresholds, sort and order into the query", async () => {
+    mockGet.mockResolvedValueOnce({ items: [], total: 0 });
+
+    const { result } = renderHook(
+      () =>
+        usePortalRequestLogs(1, 20, {
+          time_range: "all",
+          ttft_min_ms: 5000,
+          duration_min_ms: 20000,
+          tps_max: 30,
+          sort: "ttft_ms",
+          order: "asc",
+        }),
+      { wrapper }
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const params = parseUrlParams(mockGet.mock.calls[0][0] as string);
+    expect(params.ttft_min_ms).toBe("5000");
+    expect(params.duration_min_ms).toBe("20000");
+    expect(params.tps_max).toBe("30");
+    expect(params.sort).toBe("ttft_ms");
+    expect(params.order).toBe("asc");
+  });
+
   it("prefers an explicit start_time over the time_range preset", async () => {
     mockGet.mockResolvedValueOnce({ items: [], total: 0 });
 

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import LogsPage from "@/app/[locale]/(dashboard)/logs/page";
@@ -6,6 +6,8 @@ import LogsPage from "@/app/[locale]/(dashboard)/logs/page";
 const useSearchParamsMock = vi.fn();
 const useRequestLogsMock = vi.fn();
 const useRequestLogLiveMock = vi.fn();
+const useRequestLogStatsMock = vi.fn();
+const useLivePulseContextMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => useSearchParamsMock(),
@@ -31,26 +33,55 @@ vi.mock("@/hooks/use-request-log-live", () => ({
   useRequestLogLive: (...args: unknown[]) => useRequestLogLiveMock(...args),
 }));
 
-vi.mock("@/components/admin/logs-table", () => ({
-  DEFAULT_LOGS_SERVER_FILTERS: { statusClass: "all", model: "", timeRange: "30d" },
-  LogsTable: ({
-    logs,
-    initialExpandedIds,
-  }: {
-    logs: Array<{ id: string }>;
-    isLive?: boolean;
-    initialExpandedIds?: readonly string[];
-  }) => (
-    <div
-      data-testid="logs-table"
-      data-log-count={logs.length}
-      data-initial-expanded={(initialExpandedIds ?? []).join(",")}
-    />
-  ),
+vi.mock("@/hooks/use-request-log-stats", () => ({
+  useRequestLogStats: (...args: unknown[]) => useRequestLogStatsMock(...args),
 }));
 
+vi.mock("@/hooks/use-upstreams", () => ({
+  useAllUpstreams: () => ({ data: [{ id: "up-1", name: "Upstream One" }] }),
+}));
+
+vi.mock("@/hooks/use-api-keys", () => ({
+  useAPIKeys: () => ({ data: { items: [{ id: "key-1", name: "Key One" }] } }),
+}));
+
+interface LogsTableMockProps {
+  logs: Array<{ id: string }>;
+  isLive?: boolean;
+  initialExpandedIds?: readonly string[];
+  onServerFiltersChange?: (patch: Record<string, unknown>) => void;
+  upstreamFilterOptions?: Array<{ id: string; name: string }>;
+  apiKeyFilterOptions?: Array<{ id: string; name: string }>;
+  windowStats?: Record<string, unknown> | null;
+}
+
+let lastLogsTableProps: LogsTableMockProps | null = null;
+
+// Keep the real DEFAULT_LOGS_SERVER_FILTERS / resolvePerfPresetParams so the
+// page-level preset→param mapping under test uses the actual thresholds.
+vi.mock("@/components/admin/logs-table", async (importActual) => {
+  const actual = await importActual<typeof import("@/components/admin/logs-table")>();
+  return {
+    ...actual,
+    LogsTable: (props: LogsTableMockProps) => {
+      lastLogsTableProps = props;
+      return (
+        <div
+          data-testid="logs-table"
+          data-log-count={props.logs.length}
+          data-initial-expanded={(props.initialExpandedIds ?? []).join(",")}
+        />
+      );
+    },
+  };
+});
+
 vi.mock("@/components/admin/pagination-controls", () => ({
-  PaginationControls: () => <nav data-testid="pagination" />,
+  PaginationControls: ({ onPageChange }: { onPageChange: (page: number) => void }) => (
+    <nav data-testid="pagination">
+      <button type="button" data-testid="go-page-2" onClick={() => onPageChange(2)} />
+    </nav>
+  ),
 }));
 
 vi.mock("@/components/admin/refresh-interval-select", () => ({
@@ -59,6 +90,16 @@ vi.mock("@/components/admin/refresh-interval-select", () => ({
 
 vi.mock("@/components/admin/topbar", () => ({
   Topbar: ({ title }: { title: string }) => <div>{title}</div>,
+}));
+
+vi.mock("@/providers/live-pulse-provider", () => ({
+  useLivePulseContext: () => useLivePulseContextMock(),
+}));
+
+vi.mock("@/components/admin/live-pulse-bar", () => ({
+  LivePulseBar: ({ variant }: { variant?: string }) => (
+    <div data-testid="live-pulse-bar" data-variant={variant} />
+  ),
 }));
 
 vi.mock("@/components/ui/badge", () => ({
@@ -114,10 +155,15 @@ describe("LogsPage focus query param", () => {
     useSearchParamsMock.mockReset();
     useRequestLogsMock.mockReset();
     useRequestLogLiveMock.mockReset();
+    useRequestLogStatsMock.mockReset();
+    useLivePulseContextMock.mockReset();
+    lastLogsTableProps = null;
     useRequestLogLiveMock.mockReturnValue({
       connectionState: "fallback",
       fallbackRefetchIntervalMs: 5000,
     });
+    useRequestLogStatsMock.mockReturnValue({ data: undefined });
+    useLivePulseContextMock.mockReturnValue(null);
   });
 
   it("renders the standard management header when no focus param is present", () => {
@@ -226,5 +272,174 @@ describe("LogsPage focus query param", () => {
       expect.objectContaining({ refetchInterval: false })
     );
     expect(screen.queryByText("logs.userFilterActive")).not.toBeInTheDocument();
+  });
+});
+
+describe("LogsPage server filter mapping", () => {
+  beforeEach(() => {
+    useSearchParamsMock.mockReset();
+    useRequestLogsMock.mockReset();
+    useRequestLogLiveMock.mockReset();
+    useRequestLogStatsMock.mockReset();
+    useLivePulseContextMock.mockReset();
+    lastLogsTableProps = null;
+    useRequestLogLiveMock.mockReturnValue({
+      connectionState: "fallback",
+      fallbackRefetchIntervalMs: 5000,
+    });
+    useRequestLogStatsMock.mockReturnValue({ data: undefined });
+    useLivePulseContextMock.mockReturnValue(null);
+    setFocusParam(null);
+    useRequestLogsMock.mockReturnValue({
+      isLoading: false,
+      data: { items: [], total: 60, total_pages: 3, page: 1, page_size: 20 },
+      refetch: vi.fn(),
+    });
+  });
+
+  function lastFilters() {
+    const call = useRequestLogsMock.mock.calls.at(-1)!;
+    return { page: call[0] as number, filters: call[2] as Record<string, unknown> };
+  }
+
+  function patchFilters(patch: Record<string, unknown>) {
+    act(() => {
+      lastLogsTableProps?.onServerFiltersChange?.(patch);
+    });
+  }
+
+  it("maps performance presets to threshold params and resets the page", () => {
+    render(<LogsPage />);
+    fireEvent.click(screen.getByTestId("go-page-2"));
+    expect(lastFilters().page).toBe(2);
+
+    patchFilters({ perfPreset: "high_ttft" });
+    expect(lastFilters()).toEqual({ page: 1, filters: { ttft_min_ms: 5000, time_range: "30d" } });
+
+    patchFilters({ perfPreset: "low_tps" });
+    expect(lastFilters().filters).toEqual({ tps_max: 30, time_range: "30d" });
+
+    patchFilters({ perfPreset: "slow_duration" });
+    expect(lastFilters().filters).toEqual({ duration_min_ms: 20000, time_range: "30d" });
+  });
+
+  it("sends start_time/end_time instead of time_range for a custom range", () => {
+    render(<LogsPage />);
+    patchFilters({
+      timeRange: "custom",
+      customRange: { startIso: "2026-07-01T00:00:00.000Z", endIso: "2026-07-08T00:00:00.000Z" },
+    });
+    expect(lastFilters().filters).toEqual({
+      start_time: "2026-07-01T00:00:00.000Z",
+      end_time: "2026-07-08T00:00:00.000Z",
+    });
+  });
+
+  it("prefers the exact status code over the status class", () => {
+    render(<LogsPage />);
+    patchFilters({ statusClass: "5xx", statusCode: "429" });
+    expect(lastFilters().filters).toEqual({ status_code: 429, time_range: "30d" });
+
+    patchFilters({ statusCode: "" });
+    expect(lastFilters().filters).toEqual({ status_class: "5xx", time_range: "30d" });
+  });
+
+  it("maps upstream/key selections and sort state to query params", () => {
+    render(<LogsPage />);
+    patchFilters({ upstreamId: "up-1", apiKeyId: "key-1", sortField: "cost", sortOrder: "asc" });
+    expect(lastFilters().filters).toEqual({
+      upstream_id: "up-1",
+      api_key_id: "key-1",
+      time_range: "30d",
+      sort: "cost",
+      order: "asc",
+    });
+  });
+
+  it("passes admin filter options to the table and withholds them in focus view", () => {
+    render(<LogsPage />);
+    expect(lastLogsTableProps?.upstreamFilterOptions).toEqual([
+      { id: "up-1", name: "Upstream One" },
+    ]);
+    expect(lastLogsTableProps?.apiKeyFilterOptions).toEqual([{ id: "key-1", name: "Key One" }]);
+  });
+
+  it("withholds filter options and server filters in focus view", () => {
+    setFocusParam("log-1");
+    useRequestLogsMock.mockReturnValue({
+      isLoading: false,
+      data: { items: [{ id: "log-1" }], total: 1, total_pages: 1, page: 1, page_size: 1 },
+      refetch: vi.fn(),
+    });
+
+    render(<LogsPage />);
+
+    expect(lastLogsTableProps?.upstreamFilterOptions).toBeUndefined();
+    expect(lastLogsTableProps?.apiKeyFilterOptions).toBeUndefined();
+    expect(lastLogsTableProps?.onServerFiltersChange).toBeUndefined();
+  });
+
+  it("requests window stats without sort/order and forwards them to the table", () => {
+    const stats = {
+      total: 10,
+      stream_count: 4,
+      slow_count: 1,
+      p50_ttft_ms: 800,
+      p90_ttft_ms: 2400,
+      p50_tps: 42.5,
+    };
+    useRequestLogStatsMock.mockReturnValue({ data: stats });
+
+    render(<LogsPage />);
+    patchFilters({ sortField: "cost", sortOrder: "asc", upstreamId: "up-1" });
+
+    const statsCall = useRequestLogStatsMock.mock.calls.at(-1)!;
+    expect(statsCall[0]).toBe("admin");
+    // Sort state must not leak into the stats query key.
+    expect(statsCall[1]).toEqual({ upstream_id: "up-1", time_range: "30d" });
+    expect(statsCall[2]).toEqual({ enabled: true });
+    expect(lastLogsTableProps?.windowStats).toEqual(stats);
+  });
+
+  it("passes windowStats=null while stats are loading", () => {
+    useRequestLogStatsMock.mockReturnValue({ data: undefined });
+
+    render(<LogsPage />);
+
+    expect(lastLogsTableProps?.windowStats).toBeNull();
+  });
+
+  it("renders a compact live pulse bar in the management card when the context is available", () => {
+    useLivePulseContextMock.mockReturnValue({
+      snapshot: { requests_per_minute: 12 },
+      connectionState: "live",
+    });
+
+    render(<LogsPage />);
+
+    const pulseBar = screen.getByTestId("live-pulse-bar");
+    expect(pulseBar).toHaveAttribute("data-variant", "compact");
+  });
+
+  it("renders no pulse bar when the live pulse context is unavailable", () => {
+    render(<LogsPage />);
+
+    expect(screen.queryByTestId("live-pulse-bar")).not.toBeInTheDocument();
+  });
+
+  it("disables and withholds window stats in focus view", () => {
+    setFocusParam("log-1");
+    useRequestLogsMock.mockReturnValue({
+      isLoading: false,
+      data: { items: [{ id: "log-1" }], total: 1, total_pages: 1, page: 1, page_size: 1 },
+      refetch: vi.fn(),
+    });
+    useRequestLogStatsMock.mockReturnValue({ data: undefined });
+
+    render(<LogsPage />);
+
+    const statsCall = useRequestLogStatsMock.mock.calls.at(-1)!;
+    expect(statsCall[2]).toEqual({ enabled: false });
+    expect(lastLogsTableProps?.windowStats).toBeUndefined();
   });
 });

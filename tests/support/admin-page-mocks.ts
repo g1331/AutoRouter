@@ -402,6 +402,16 @@ const LOGS_PAGE = {
   total_pages: 1,
 };
 
+// 统计瓦片的窗口级指标；catch-all 的裸 `{}` 会让 StatCard 全部渲染成空值。
+const LOGS_WINDOW_STATS = {
+  total: 2,
+  stream_count: 1,
+  slow_count: 0,
+  p50_ttft_ms: 480,
+  p90_ttft_ms: 1200,
+  p50_tps: 42,
+};
+
 const BILLING_MODEL_PRICES = {
   items: [
     {
@@ -484,6 +494,9 @@ export async function mockAdminApis(page: Page): Promise<void> {
     fulfillJson(route, 200, BILLING_MODEL_PRICES)
   );
   await page.route("**/api/admin/logs?**", (route) => fulfillJson(route, 200, LOGS_PAGE));
+  await page.route("**/api/admin/logs/stats**", (route) =>
+    fulfillJson(route, 200, LOGS_WINDOW_STATS)
+  );
   // useRequestLogLive 读取 text/event-stream；给一个立即结束的空流即可让它稳定
   // 降级为 fallback 轮询，不必等 10s 重连超时或让请求悬挂拖慢页面就绪。
   await page.route("**/api/admin/logs/live**", (route) =>

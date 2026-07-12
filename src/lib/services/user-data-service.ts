@@ -1,10 +1,13 @@
 import { and, asc, count, eq, gte, inArray, sql } from "drizzle-orm";
 import { db, apiKeys, requestLogs, requestBillingSnapshots, upstreams, userUpstreams } from "../db";
 import {
+  getRequestLogWindowStats,
   listRequestLogs,
   reconcileStaleInProgressRequestLogs,
   type ListRequestLogsFilter,
   type PaginatedRequestLogs,
+  type RequestLogSort,
+  type RequestLogWindowStats,
 } from "./request-logger";
 import { buildTimeBucketExpr, parseTimeBucket } from "./stats-service";
 
@@ -174,9 +177,20 @@ export async function listUserRequestLogs(
   userId: string,
   page: number = 1,
   pageSize: number = 20,
-  filters: Omit<ListRequestLogsFilter, "userId"> = {}
+  filters: Omit<ListRequestLogsFilter, "userId"> = {},
+  sort?: RequestLogSort
 ): Promise<PaginatedRequestLogs> {
-  return listRequestLogs(page, pageSize, { ...filters, userId });
+  return listRequestLogs(page, pageSize, { ...filters, userId }, sort);
+}
+
+/**
+ * Personal window stats: same owner-forcing wrapper as listUserRequestLogs.
+ */
+export async function getUserRequestLogWindowStats(
+  userId: string,
+  filters: Omit<ListRequestLogsFilter, "userId"> = {}
+): Promise<RequestLogWindowStats> {
+  return getRequestLogWindowStats({ ...filters, userId });
 }
 
 /**

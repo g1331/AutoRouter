@@ -8,11 +8,15 @@ import { ScrollText, X } from "lucide-react";
 import {
   DEFAULT_LOGS_SERVER_FILTERS,
   LogsTable,
+  resolvePerfPresetParams,
+  type LogsFilterOption,
   type LogsServerFilters,
 } from "@/components/admin/logs-table";
+import { LivePulseBar } from "@/components/admin/live-pulse-bar";
 import { PaginationControls } from "@/components/admin/pagination-controls";
 import { RefreshIntervalSelect } from "@/components/admin/refresh-interval-select";
 import { Topbar } from "@/components/admin/topbar";
+import { useLivePulseContext } from "@/providers/live-pulse-provider";
 import { Link, usePathname } from "@/i18n/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,8 +31,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { useAPIKeys } from "@/hooks/use-api-keys";
 import { useRequestLogLive } from "@/hooks/use-request-log-live";
+import { useRequestLogStats, type RequestLogStatsFilters } from "@/hooks/use-request-log-stats";
 import { useRequestLogs, type RequestLogsFilters } from "@/hooks/use-request-logs";
+import { useAllUpstreams } from "@/hooks/use-upstreams";
 
 interface LogsLoadingSkeletonProps {
   loadingLabel: string;
@@ -65,7 +72,7 @@ function LogsLoadingSkeleton({ loadingLabel }: LogsLoadingSkeletonProps) {
             <TableHead className="hidden lg:table-cell w-[60px] px-1.5">
               <Skeleton className="h-3 w-12" />
             </TableHead>
-            <TableHead className="hidden xl:table-cell w-[272px] px-1.5 pl-1">
+            <TableHead className="hidden lg:table-cell w-[272px] px-1.5 pl-1">
               <Skeleton className="h-3 w-12" />
             </TableHead>
             <TableHead className="hidden md:table-cell w-[140px] px-1.5">
@@ -100,7 +107,7 @@ function LogsLoadingSkeleton({ loadingLabel }: LogsLoadingSkeletonProps) {
               <TableCell className="hidden text-[10px] lg:table-cell w-[60px] px-1.5 py-1 pr-1 min-w-0">
                 <Skeleton className="h-2 w-10" />
               </TableCell>
-              <TableCell className="hidden font-mono text-[10px] xl:table-cell w-[272px] px-1.5 py-1 pl-1 min-w-0">
+              <TableCell className="hidden font-mono text-[10px] lg:table-cell w-[272px] px-1.5 py-1 pl-1 min-w-0">
                 <Skeleton className="h-2 w-24" />
               </TableCell>
               <TableCell className="hidden md:table-cell w-[140px] px-1.5 py-1 min-w-0 overflow-hidden text-[10px]">
@@ -139,6 +146,7 @@ export default function LogsPage() {
   const { connectionState, fallbackRefetchIntervalMs } = useRequestLogLive({
     enabled: focusId === null,
   });
+  const pulse = useLivePulseContext();
   const effectiveRefetchInterval =
     refetchInterval !== false ? refetchInterval : fallbackRefetchIntervalMs;
 
@@ -150,15 +158,52 @@ export default function LogsPage() {
     setPage(1);
   }, []);
 
+  // Filter-select options; admin-only endpoints, so the portal never receives
+  // these props. Keys are capped at the first 100 — acceptable for a selector.
+  const { data: allUpstreams } = useAllUpstreams();
+  const { data: apiKeysData } = useAPIKeys(1, 100);
+  const upstreamFilterOptions = useMemo<LogsFilterOption[]>(
+    () => (allUpstreams ?? []).map((upstream) => ({ id: upstream.id, name: upstream.name })),
+    [allUpstreams]
+  );
+  const apiKeyFilterOptions = useMemo<LogsFilterOption[]>(
+    () => (apiKeysData?.items ?? []).map((key) => ({ id: key.id, name: key.name })),
+    [apiKeysData]
+  );
+
   const filters = useMemo<RequestLogsFilters>(() => {
     if (focusId) return { id: focusId };
+    const statusCode = tableFilters.statusCode ? Number.parseInt(tableFilters.statusCode, 10) : NaN;
+    const customRange = tableFilters.timeRange === "custom" ? tableFilters.customRange : null;
     return {
       ...(userId ? { user_id: userId } : {}),
-      ...(tableFilters.statusClass !== "all" ? { status_class: tableFilters.statusClass } : {}),
+      ...(tableFilters.upstreamId ? { upstream_id: tableFilters.upstreamId } : {}),
+      ...(tableFilters.apiKeyId ? { api_key_id: tableFilters.apiKeyId } : {}),
+      // Exact status code wins over the class range, mirroring the backend.
+      ...(Number.isFinite(statusCode)
+        ? { status_code: statusCode }
+        : tableFilters.statusClass !== "all"
+          ? { status_class: tableFilters.statusClass }
+          : {}),
       ...(tableFilters.model ? { model: tableFilters.model } : {}),
-      time_range: tableFilters.timeRange,
+      ...resolvePerfPresetParams(tableFilters.perfPreset),
+      ...(customRange
+        ? { start_time: customRange.startIso, end_time: customRange.endIso }
+        : { time_range: tableFilters.timeRange === "custom" ? "all" : tableFilters.timeRange }),
+      ...(tableFilters.sortField
+        ? { sort: tableFilters.sortField, order: tableFilters.sortOrder }
+        : {}),
     };
   }, [focusId, userId, tableFilters]);
+  // Stats describe the window, not the page: drop sort/order so a header
+  // click never refires the percentile queries.
+  const statsFilters = useMemo<RequestLogStatsFilters>(() => {
+    const { id: _id, sort: _sort, order: _order, ...rest } = filters;
+    return rest;
+  }, [filters]);
+  const { data: windowStats } = useRequestLogStats("admin", statsFilters, {
+    enabled: !focusId,
+  });
   const focusInitialExpanded = useMemo(() => (focusId ? [focusId] : []), [focusId]);
   const { data, isLoading, refetch } = useRequestLogs(
     focusId ? 1 : page,
@@ -281,11 +326,21 @@ export default function LogsPage() {
                   </div>
                 </div>
 
-                <RefreshIntervalSelect
-                  onIntervalChange={handleIntervalChange}
-                  onManualRefresh={handleManualRefresh}
-                  isRefreshing={isManualRefreshPending}
-                />
+                <div className="flex flex-col items-start gap-3 sm:items-end">
+                  {pulse && (
+                    <LivePulseBar
+                      snapshot={pulse.snapshot}
+                      connectionState={pulse.connectionState}
+                      variant="compact"
+                      className="shrink-0"
+                    />
+                  )}
+                  <RefreshIntervalSelect
+                    onIntervalChange={handleIntervalChange}
+                    onManualRefresh={handleManualRefresh}
+                    isRefreshing={isManualRefreshPending}
+                  />
+                </div>
               </CardContent>
             </Card>
           </>
@@ -307,6 +362,9 @@ export default function LogsPage() {
                 initialExpandedIds={focusInitialExpanded}
                 serverFilters={focusId ? undefined : tableFilters}
                 onServerFiltersChange={focusId ? undefined : handleTableFiltersChange}
+                upstreamFilterOptions={focusId ? undefined : upstreamFilterOptions}
+                apiKeyFilterOptions={focusId ? undefined : apiKeyFilterOptions}
+                windowStats={focusId ? undefined : (windowStats ?? null)}
               />
             </div>
 

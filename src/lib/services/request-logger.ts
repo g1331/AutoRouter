@@ -1,5 +1,19 @@
-import { eq, desc, count, and, gte, lte, lt, asc, isNull } from "drizzle-orm";
-import { db, requestLogs, type RequestLog } from "../db";
+import {
+  eq,
+  desc,
+  count,
+  and,
+  gte,
+  lte,
+  lt,
+  gt,
+  asc,
+  isNull,
+  inArray,
+  sql,
+  type SQL,
+} from "drizzle-orm";
+import { db, requestLogs, requestBillingSnapshots, type RequestLog } from "../db";
 import { caseInsensitiveLike } from "../db/sql-helpers";
 import type {
   FailoverErrorType,
@@ -251,6 +265,32 @@ export interface ListRequestLogsFilter {
   model?: string;
   startTime?: Date;
   endTime?: Date;
+  // Performance threshold filters (server-side slow-request presets).
+  ttftMinMs?: number;
+  durationMinMs?: number;
+  // Upper bound on tokens/s (completion_tokens / duration seconds); rows below
+  // the TPS guard thresholds are excluded so near-zero requests don't match.
+  tpsMax?: number;
+}
+
+// Guards mirroring the client-side TPS display rules: a TPS value is only
+// meaningful once the request produced enough output over enough time.
+export const MIN_TPS_COMPLETION_TOKENS = 10;
+export const MIN_TPS_DURATION_MS = 100;
+
+export const REQUEST_LOG_SORT_FIELDS = [
+  "created_at",
+  "duration_ms",
+  "total_tokens",
+  "ttft_ms",
+  "cost",
+] as const;
+export type RequestLogSortField = (typeof REQUEST_LOG_SORT_FIELDS)[number];
+export type RequestLogSortOrder = "asc" | "desc";
+
+export interface RequestLogSort {
+  field: RequestLogSortField;
+  order: RequestLogSortOrder;
 }
 
 const STATUS_CLASS_RANGES: Record<RequestLogStatusClass, [number, number]> = {
@@ -757,27 +797,14 @@ export function extractModelName(
   return null;
 }
 
-/**
- * List request logs with pagination and optional filtering.
- */
-export async function listRequestLogs(
-  page: number = 1,
-  pageSize: number = 20,
-  filters: ListRequestLogsFilter = {}
-): Promise<PaginatedRequestLogs> {
-  if (process.env.NODE_ENV !== "test") {
-    try {
-      await reconcileStaleInProgressRequestLogs();
-    } catch (error) {
-      log.warn({ err: error }, "failed to reconcile stale in-progress request logs");
-    }
-  }
+const REQUEST_LOG_PAGE_RELATIONS = {
+  apiKey: true,
+  upstream: true,
+  billingSnapshot: true,
+} as const;
 
-  // Validate pagination params
-  page = Math.max(1, page);
-  pageSize = Math.min(100, Math.max(1, pageSize));
-
-  // Build filter conditions
+/** Shared filter → WHERE translation for the list and window-stats queries. */
+function buildRequestLogWhereClause(filters: ListRequestLogsFilter): SQL | undefined {
   const conditions = [];
 
   if (filters.id) {
@@ -807,8 +834,221 @@ export async function listRequestLogs(
   if (filters.endTime) {
     conditions.push(lte(requestLogs.createdAt, filters.endTime));
   }
+  if (filters.ttftMinMs !== undefined) {
+    conditions.push(gt(requestLogs.ttftMs, filters.ttftMinMs));
+  }
+  if (filters.durationMinMs !== undefined) {
+    conditions.push(gt(requestLogs.durationMs, filters.durationMinMs));
+  }
+  if (filters.tpsMax !== undefined) {
+    // TPS = completion_tokens / (duration_ms / 1000). Rewritten as integer-safe
+    // arithmetic so PostgreSQL and SQLite evaluate it identically, guarded to
+    // exactly mirror the row-level display rule (getRequestTps) and the window
+    // stats: streaming rows only, duration strictly above the minimum signal.
+    conditions.push(
+      eq(requestLogs.isStream, true),
+      gt(requestLogs.durationMs, MIN_TPS_DURATION_MS),
+      gte(requestLogs.completionTokens, MIN_TPS_COMPLETION_TOKENS),
+      sql`${requestLogs.completionTokens} * 1000.0 < ${filters.tpsMax} * ${requestLogs.durationMs}`
+    );
+  }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  return conditions.length > 0 ? and(...conditions) : undefined;
+}
+
+function buildRequestLogOrderBy(sort?: RequestLogSort) {
+  const direction = sort?.order === "asc" ? asc : desc;
+  // Stable tiebreakers so pagination never duplicates or drops rows when the
+  // primary sort value ties.
+  const tiebreakers = [desc(requestLogs.createdAt), desc(requestLogs.id)];
+  switch (sort?.field) {
+    case "duration_ms":
+      // coalesce removes the pg/sqlite NULL-ordering divergence: NULL sorts as
+      // the smallest value on both dialects.
+      return [direction(sql`coalesce(${requestLogs.durationMs}, -1)`), ...tiebreakers];
+    case "total_tokens":
+      return [direction(requestLogs.totalTokens), ...tiebreakers];
+    case "ttft_ms":
+      return [direction(sql`coalesce(${requestLogs.ttftMs}, -1)`), ...tiebreakers];
+    default:
+      return [direction(requestLogs.createdAt), desc(requestLogs.id)];
+  }
+}
+
+async function queryRequestLogPage(
+  whereClause: SQL | undefined,
+  sort: RequestLogSort | undefined,
+  limit: number,
+  offset: number
+) {
+  if (sort?.field !== "cost") {
+    return db.query.requestLogs.findMany({
+      where: whereClause,
+      orderBy: buildRequestLogOrderBy(sort),
+      limit,
+      offset,
+      with: REQUEST_LOG_PAGE_RELATIONS,
+    });
+  }
+
+  // Cost lives on the joined billing snapshot, which the relational API cannot
+  // order by. Resolve the page of IDs with an explicit join first, then
+  // hydrate relations for just those rows and restore the join order.
+  const direction = sort.order === "asc" ? asc : desc;
+  const idRows = await db
+    .select({ id: requestLogs.id })
+    .from(requestLogs)
+    .leftJoin(requestBillingSnapshots, eq(requestBillingSnapshots.requestLogId, requestLogs.id))
+    .where(whereClause)
+    .orderBy(
+      direction(sql`coalesce(${requestBillingSnapshots.finalCost}, -1)`),
+      desc(requestLogs.createdAt),
+      desc(requestLogs.id)
+    )
+    .limit(limit)
+    .offset(offset);
+
+  const ids = idRows.map((row) => row.id);
+  if (ids.length === 0) {
+    return [];
+  }
+
+  const rows = await db.query.requestLogs.findMany({
+    where: inArray(requestLogs.id, ids),
+    with: REQUEST_LOG_PAGE_RELATIONS,
+  });
+  const rowById = new Map(rows.map((row) => [row.id, row]));
+  return ids.flatMap((id) => rowById.get(id) ?? []);
+}
+
+// Duration above which a request counts as "slow" in the window stats,
+// matching the slow_duration quick-filter preset threshold.
+export const SLOW_REQUEST_DURATION_MS = 20_000;
+
+export interface RequestLogWindowStats {
+  total: number;
+  streamCount: number;
+  slowCount: number;
+  p50TtftMs: number | null;
+  p90TtftMs: number | null;
+  p50Tps: number | null;
+}
+
+/**
+ * Nearest-rank percentile via ORDER BY + OFFSET (SQLite has no
+ * percentile_cont). Index mirrors the former client-side getPercentile:
+ * ceil(p/100 · n) − 1.
+ */
+async function selectRequestLogPercentile(
+  expr: SQL,
+  whereClause: SQL | undefined,
+  n: number,
+  percentile: number
+): Promise<number | null> {
+  if (n <= 0) {
+    return null;
+  }
+  const offset = Math.min(n - 1, Math.max(0, Math.ceil((percentile / 100) * n) - 1));
+  const rows = await db
+    .select({ value: expr })
+    .from(requestLogs)
+    .where(whereClause)
+    .orderBy(asc(expr))
+    .limit(1)
+    .offset(offset);
+  const value = rows[0]?.value;
+  // pg returns numeric/bigint aggregates as strings.
+  return value == null ? null : Number(value);
+}
+
+/**
+ * Window-scoped performance stats over the same filter surface as
+ * listRequestLogs, so the tiles describe the whole selected window instead of
+ * the fetched page.
+ */
+export async function getRequestLogWindowStats(
+  filters: ListRequestLogsFilter = {}
+): Promise<RequestLogWindowStats> {
+  const whereClause = buildRequestLogWhereClause(filters);
+
+  const [aggregate] = await db
+    .select({
+      total: count(),
+      streamCount: sql<
+        number | string | null
+      >`sum(case when ${requestLogs.isStream} then 1 else 0 end)`,
+      slowCount: sql<
+        number | string | null
+      >`sum(case when ${requestLogs.durationMs} > ${SLOW_REQUEST_DURATION_MS} then 1 else 0 end)`,
+      ttftCount: sql<
+        number | string | null
+      >`sum(case when ${requestLogs.isStream} and ${requestLogs.ttftMs} > 0 then 1 else 0 end)`,
+      tpsCount: sql<
+        number | string | null
+      >`sum(case when ${requestLogs.isStream} and ${requestLogs.durationMs} > ${MIN_TPS_DURATION_MS} and ${requestLogs.completionTokens} >= ${MIN_TPS_COMPLETION_TOKENS} then 1 else 0 end)`,
+    })
+    .from(requestLogs)
+    .where(whereClause);
+
+  const ttftCount = Number(aggregate.ttftCount ?? 0);
+  const tpsCount = Number(aggregate.tpsCount ?? 0);
+
+  // TTFT percentiles over streaming rows with a real first-token time.
+  const ttftWhere = and(
+    ...[whereClause, eq(requestLogs.isStream, true), gt(requestLogs.ttftMs, 0)].filter(
+      (condition): condition is SQL => condition !== undefined
+    )
+  );
+  // TPS over streaming rows above the minimum-signal guards, mirroring the
+  // row-level display rule (getRequestTps).
+  const tpsWhere = and(
+    ...[
+      whereClause,
+      eq(requestLogs.isStream, true),
+      gt(requestLogs.durationMs, MIN_TPS_DURATION_MS),
+      gte(requestLogs.completionTokens, MIN_TPS_COMPLETION_TOKENS),
+    ].filter((condition): condition is SQL => condition !== undefined)
+  );
+  const tpsExpr = sql`${requestLogs.completionTokens} * 1000.0 / ${requestLogs.durationMs}`;
+
+  const [p50TtftMs, p90TtftMs, p50Tps] = await Promise.all([
+    selectRequestLogPercentile(sql`${requestLogs.ttftMs}`, ttftWhere, ttftCount, 50),
+    selectRequestLogPercentile(sql`${requestLogs.ttftMs}`, ttftWhere, ttftCount, 90),
+    selectRequestLogPercentile(tpsExpr, tpsWhere, tpsCount, 50),
+  ]);
+
+  return {
+    total: Number(aggregate.total ?? 0),
+    streamCount: Number(aggregate.streamCount ?? 0),
+    slowCount: Number(aggregate.slowCount ?? 0),
+    p50TtftMs,
+    p90TtftMs,
+    p50Tps: p50Tps == null ? null : Math.round(p50Tps * 10) / 10,
+  };
+}
+
+/**
+ * List request logs with pagination and optional filtering.
+ */
+export async function listRequestLogs(
+  page: number = 1,
+  pageSize: number = 20,
+  filters: ListRequestLogsFilter = {},
+  sort?: RequestLogSort
+): Promise<PaginatedRequestLogs> {
+  if (process.env.NODE_ENV !== "test") {
+    try {
+      await reconcileStaleInProgressRequestLogs();
+    } catch (error) {
+      log.warn({ err: error }, "failed to reconcile stale in-progress request logs");
+    }
+  }
+
+  // Validate pagination params
+  page = Math.max(1, page);
+  pageSize = Math.min(100, Math.max(1, pageSize));
+
+  const whereClause = buildRequestLogWhereClause(filters);
 
   // Count total with filters
   const [{ value: total }] = await db
@@ -818,17 +1058,7 @@ export async function listRequestLogs(
 
   // Query paginated results with upstream name
   const offset = (page - 1) * pageSize;
-  const logs = await db.query.requestLogs.findMany({
-    where: whereClause,
-    orderBy: [desc(requestLogs.createdAt)],
-    limit: pageSize,
-    offset,
-    with: {
-      apiKey: true,
-      upstream: true,
-      billingSnapshot: true,
-    },
-  });
+  const logs = await queryRequestLogPage(whereClause, sort, pageSize, offset);
 
   const items: RequestLogResponse[] = logs.map((log) => ({
     id: log.id,

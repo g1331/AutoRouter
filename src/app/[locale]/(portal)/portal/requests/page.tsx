@@ -7,6 +7,7 @@ import { ScrollText } from "lucide-react";
 import {
   DEFAULT_LOGS_SERVER_FILTERS,
   LogsTable,
+  resolvePerfPresetParams,
   type LogsServerFilters,
 } from "@/components/admin/logs-table";
 import { PaginationControls } from "@/components/admin/pagination-controls";
@@ -15,6 +16,7 @@ import { Topbar } from "@/components/admin/topbar";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePortalRequestLogs, type PortalRequestLogsFilters } from "@/hooks/use-portal-logs";
+import { useRequestLogStats, type RequestLogStatsFilters } from "@/hooks/use-request-log-stats";
 
 export default function PortalRequestsPage() {
   const t = useTranslations("portal");
@@ -31,18 +33,38 @@ export default function PortalRequestsPage() {
     setPage(1);
   }, []);
 
-  const filters = useMemo<PortalRequestLogsFilters>(
-    () => ({
-      ...(tableFilters.statusClass !== "all" ? { status_class: tableFilters.statusClass } : {}),
+  const filters = useMemo<PortalRequestLogsFilters>(() => {
+    const statusCode = tableFilters.statusCode ? Number.parseInt(tableFilters.statusCode, 10) : NaN;
+    const customRange = tableFilters.timeRange === "custom" ? tableFilters.customRange : null;
+    return {
+      // Exact status code wins over the class range, mirroring the backend.
+      ...(Number.isFinite(statusCode)
+        ? { status_code: statusCode }
+        : tableFilters.statusClass !== "all"
+          ? { status_class: tableFilters.statusClass }
+          : {}),
       ...(tableFilters.model ? { model: tableFilters.model } : {}),
-      time_range: tableFilters.timeRange,
-    }),
-    [tableFilters]
-  );
+      ...resolvePerfPresetParams(tableFilters.perfPreset),
+      ...(customRange
+        ? { start_time: customRange.startIso, end_time: customRange.endIso }
+        : { time_range: tableFilters.timeRange === "custom" ? "all" : tableFilters.timeRange }),
+      ...(tableFilters.sortField
+        ? { sort: tableFilters.sortField, order: tableFilters.sortOrder }
+        : {}),
+    };
+  }, [tableFilters]);
 
   const { data, isLoading, isFetching, refetch } = usePortalRequestLogs(page, pageSize, filters, {
     refetchInterval: refreshInterval,
   });
+
+  // Stats describe the window, not the page: drop sort/order so a header
+  // click never refires the percentile queries.
+  const statsFilters = useMemo<RequestLogStatsFilters>(() => {
+    const { sort: _sort, order: _order, ...rest } = filters;
+    return rest;
+  }, [filters]);
+  const { data: windowStats } = useRequestLogStats("user", statsFilters);
 
   return (
     <>
@@ -82,6 +104,7 @@ export default function PortalRequestsPage() {
               hideRecordingSection
               serverFilters={tableFilters}
               onServerFiltersChange={handleTableFiltersChange}
+              windowStats={windowStats ?? null}
             />
 
             {data && data.total_pages > 1 && (

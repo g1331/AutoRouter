@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { LifecycleTrack } from "@/components/admin/lifecycle-track";
 import type { RequestStageTimings, UpstreamErrorSummary } from "@/types/api";
@@ -253,35 +253,36 @@ describe("LifecycleTrack", () => {
     });
   });
 
-  describe("Compact mode (task 4.4)", () => {
-    it("renders compact view without all 4 stages", () => {
+  describe("Interactive journey tabs", () => {
+    it("renders segments as plain divs when no onJourneyStepSelect is provided", () => {
+      render(
+        <LifecycleTrack statusCode={200} isStream={false} lifecycleStatus="completed_success" />
+      );
+
+      expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    });
+
+    it("invokes onJourneyStepSelect with the mapped journey step on segment click", () => {
+      const onSelect = vi.fn();
       render(
         <LifecycleTrack
           statusCode={200}
           isStream={false}
           lifecycleStatus="completed_success"
-          compact
+          activeJourneyStep={2}
+          onJourneyStepSelect={onSelect}
         />
       );
 
-      // Compact shows primary segment + complete, not necessarily all 4
-      expect(screen.getByText("lifecycleComplete")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "lifecycleResponse" }));
+      expect(onSelect).toHaveBeenCalledWith(4);
+
+      fireEvent.click(screen.getByRole("button", { name: "lifecycleComplete" }));
+      expect(onSelect).toHaveBeenCalledWith(5);
     });
 
-    it("shows status code in compact mode", () => {
-      render(
-        <LifecycleTrack
-          statusCode={200}
-          isStream={false}
-          lifecycleStatus="completed_success"
-          compact
-        />
-      );
-
-      expect(screen.getByText("200")).toBeInTheDocument();
-    });
-
-    it("prefers response summary in compact mode for completed streaming requests", () => {
+    it("maps streaming first output and generation segments to the response step", () => {
+      const onSelect = vi.fn();
       render(
         <LifecycleTrack
           statusCode={200}
@@ -295,27 +296,37 @@ describe("LifecycleTrack", () => {
             generation_ms: 400,
             gateway_processing_ms: null,
           }}
-          compact
+          activeJourneyStep={2}
+          onJourneyStepSelect={onSelect}
         />
       );
 
-      expect(screen.getByText("lifecycleGeneration")).toBeInTheDocument();
-      expect(screen.getByText(/1\.6s \(\+400ms\)/)).toBeInTheDocument();
-      expect(screen.getByText(/200 · 1\.6s/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "lifecycleFirstOutput" }));
+      expect(onSelect).toHaveBeenCalledWith(4);
+
+      fireEvent.click(screen.getByRole("button", { name: "lifecycleGeneration" }));
+      expect(onSelect).toHaveBeenCalledWith(4);
     });
 
-    it("shows failed status code with error color in compact mode", () => {
+    it("marks the segment matching activeJourneyStep as pressed", () => {
       render(
         <LifecycleTrack
-          statusCode={429}
+          statusCode={200}
           isStream={false}
-          lifecycleStatus="completed_failed"
-          compact
+          lifecycleStatus="completed_success"
+          activeJourneyStep={3}
+          onJourneyStepSelect={() => {}}
         />
       );
 
-      const statusEl = screen.getByText("429");
-      expect(statusEl.className).toContain("text-status-error");
+      expect(screen.getByRole("button", { name: "lifecycleRequest" })).toHaveAttribute(
+        "aria-pressed",
+        "true"
+      );
+      expect(screen.getByRole("button", { name: "lifecycleDecision" })).toHaveAttribute(
+        "aria-pressed",
+        "false"
+      );
     });
   });
 
