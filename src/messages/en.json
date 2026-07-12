@@ -465,6 +465,8 @@
     "backToKeys": "Back to keys",
     "keyNotFound": "API key not found",
     "keyNotFoundHint": "This key may have been revoked, or the link is invalid.",
+    "keyLoadFailed": "Failed to load API key",
+    "keyLoadFailedHint": "Something went wrong while loading this key. Please try again.",
     "configCategoryBasic": "Basics",
     "configCategoryPolicy": "Access and Policy",
     "sectionBasicTitle": "Basic info",
@@ -1270,7 +1272,8 @@
     "backToUpstreams": "Back to upstreams",
     "upstreamNotFound": "Upstream not found",
     "upstreamNotFoundHint": "This upstream may have been deleted, or the link is invalid.",
-    "detailSectionPlaceholder": "This section's fields load on the detail page."
+    "upstreamLoadFailed": "Failed to load upstream",
+    "upstreamLoadFailedHint": "Something went wrong while loading this upstream. Please try again."
   },
   "circuitBreaker": {
     "title": "Circuit Breaker Status",

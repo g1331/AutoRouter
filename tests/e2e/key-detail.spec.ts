@@ -101,6 +101,36 @@ test.describe("Key detail page", () => {
     await expect(page.getByText("该密钥可能已被吊销，或链接无效。")).toBeVisible();
   });
 
+  test("shows the load-error state on a 500 and recovers on retry", async ({ page }) => {
+    // Fail every GET of the first query (initial attempt + the query client's
+    // one retry) so it settles into the error state; the GETs triggered by the
+    // retry button then succeed.
+    let getCount = 0;
+    await page.route(`**/api/admin/keys/${KEY_DETAIL.id}`, async (route) => {
+      if (route.request().method() !== "GET") {
+        await fulfillJson(route, 200, KEY_DETAIL);
+        return;
+      }
+      getCount += 1;
+      if (getCount <= 2) {
+        await fulfillJson(route, 500, { error: "Internal server error" });
+        return;
+      }
+      await fulfillJson(route, 200, KEY_DETAIL);
+    });
+
+    await page.goto(`/zh-CN/keys/${KEY_DETAIL.id}`);
+
+    await expect(page.getByText("加载密钥失败")).toBeVisible();
+    const retryButton = page.getByRole("button", { name: "重试" });
+    await expect(retryButton).toBeVisible();
+
+    await retryButton.click();
+
+    await expect(page.getByText(KEY_DETAIL.name, { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("加载密钥失败")).toBeHidden();
+  });
+
   test("the back button returns to the keys list", async ({ page }) => {
     await page.goto(`/zh-CN/keys/${KEY_DETAIL.id}`);
 

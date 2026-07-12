@@ -159,6 +159,10 @@ export function useUpdateUpstreamSection() {
     onMutate: async ({ id, payload }) => {
       await queryClient.cancelQueries({ queryKey: ["upstreams"] });
 
+      // `api_key` is a write-only field that never appears on the Upstream
+      // response, so it must not leak into the optimistic cache merge below.
+      const { api_key: _api_key, ...mergePayload } = payload;
+
       const previousDetail = queryClient.getQueryData<Upstream>(["upstreams", id]);
       const previousPaginated = queryClient.getQueriesData<PaginatedUpstreamsResponse>({
         queryKey: ["upstreams"],
@@ -170,7 +174,7 @@ export function useUpdateUpstreamSection() {
       if (previousDetail) {
         queryClient.setQueryData<Upstream>(["upstreams", id], {
           ...previousDetail,
-          ...payload,
+          ...mergePayload,
         } as Upstream);
       }
 
@@ -185,7 +189,7 @@ export function useUpdateUpstreamSection() {
           return {
             ...old,
             items: old.items.map((upstream) =>
-              upstream.id === id ? ({ ...upstream, ...payload } as Upstream) : upstream
+              upstream.id === id ? ({ ...upstream, ...mergePayload } as Upstream) : upstream
             ),
           };
         }
@@ -194,7 +198,7 @@ export function useUpdateUpstreamSection() {
       queryClient.setQueryData<Upstream[]>(["upstreams", "all"], (old) => {
         if (!old) return old;
         return old.map((upstream) =>
-          upstream.id === id ? ({ ...upstream, ...payload } as Upstream) : upstream
+          upstream.id === id ? ({ ...upstream, ...mergePayload } as Upstream) : upstream
         );
       });
 

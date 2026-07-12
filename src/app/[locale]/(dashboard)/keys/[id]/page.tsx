@@ -86,9 +86,11 @@ export default function KeyDetailPage() {
   const params = useParams<{ id: string }>();
   const keyId = params.id;
   const t = useTranslations("keys");
+  const tCommon = useTranslations("common");
 
-  const { data: apiKey, isLoading, error } = useApiKey(keyId);
+  const { data: apiKey, isLoading, error, refetch } = useApiKey(keyId);
   const notFound = error instanceof ApiError && error.status === 404;
+  const loadFailed = Boolean(error) && !notFound;
 
   const groupedSections = DETAIL_CATEGORY_ORDER.map((category) => ({
     category,
@@ -112,6 +114,18 @@ export default function KeyDetailPage() {
             <CardContent className="flex flex-col items-center justify-center gap-2 py-16 text-center">
               <h2 className="type-title-medium text-foreground">{t("keyNotFound")}</h2>
               <p className="type-body-medium text-muted-foreground">{t("keyNotFoundHint")}</p>
+            </CardContent>
+          </Card>
+        ) : loadFailed ? (
+          <Card variant="outlined" className="border-divider bg-surface-200/70">
+            <CardContent className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+              <div className="space-y-2">
+                <h2 className="type-title-medium text-foreground">{t("keyLoadFailed")}</h2>
+                <p className="type-body-medium text-muted-foreground">{t("keyLoadFailedHint")}</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => refetch()}>
+                {tCommon("retry")}
+              </Button>
             </CardContent>
           </Card>
         ) : (

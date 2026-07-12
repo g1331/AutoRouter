@@ -465,6 +465,8 @@
     "backToKeys": "返回密钥列表",
     "keyNotFound": "密钥不存在",
     "keyNotFoundHint": "该密钥可能已被吊销，或链接无效。",
+    "keyLoadFailed": "加载密钥失败",
+    "keyLoadFailedHint": "加载该密钥时出现问题，请重试。",
     "configCategoryBasic": "基础",
     "configCategoryPolicy": "访问与策略",
     "sectionBasicTitle": "基础信息",
@@ -750,11 +752,6 @@
     "lifecycleFirstOutput": "首个输出",
     "lifecycleGeneration": "生成",
     "lifecycleComplete": "完成",
-    "lifecycleStageDecision": "决策中",
-    "lifecycleStageRequesting": "请求中",
-    "lifecycleStageCompleted": "已完成",
-    "lifecycleStageFailed": "失败",
-    "lifecycleStageUnknown": "未知",
     "journeyDecisionResult": "决策结果",
     "journeySelectionReason": "选中原因",
     "journeySelectionReasonUnavailable": "该日志未记录结构化选中原因",
@@ -1275,7 +1272,8 @@
     "backToUpstreams": "返回上游列表",
     "upstreamNotFound": "未找到该上游",
     "upstreamNotFoundHint": "该上游可能已被删除，或链接无效。",
-    "detailSectionPlaceholder": "该分区表单将在后续阶段接入。"
+    "upstreamLoadFailed": "加载上游失败",
+    "upstreamLoadFailedHint": "加载该上游时出现问题，请重试。"
   },
   "circuitBreaker": {
     "title": "熔断器状态",

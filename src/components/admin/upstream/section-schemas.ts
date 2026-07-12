@@ -121,7 +121,7 @@ export function hasValidRollingPeriodHours(rules: z.input<typeof spendingRuleSch
  * detail-page schemas both compose from this map so validation stays identical.
  */
 export const upstreamFieldSchemas = {
-  name: z.string().min(1).max(100),
+  name: z.string().min(1).max(64),
   base_url: z.string().url(),
   official_website_url: z.union([z.literal(""), z.string().url()]),
   description: z.string().max(500),

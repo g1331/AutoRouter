@@ -162,9 +162,11 @@ export default function UpstreamDetailPage() {
   const params = useParams<{ id: string }>();
   const upstreamId = params.id;
   const t = useTranslations("upstreams");
+  const tCommon = useTranslations("common");
 
-  const { data: upstream, isLoading, error } = useUpstream(upstreamId);
+  const { data: upstream, isLoading, error, refetch } = useUpstream(upstreamId);
   const notFound = error instanceof ApiError && error.status === 404;
+  const loadFailed = Boolean(error) && !notFound;
 
   const groupedSections = DETAIL_CATEGORY_ORDER.map((category) => ({
     category,
@@ -188,6 +190,20 @@ export default function UpstreamDetailPage() {
             <CardContent className="flex flex-col items-center justify-center gap-2 py-16 text-center">
               <h2 className="type-title-medium text-foreground">{t("upstreamNotFound")}</h2>
               <p className="type-body-medium text-muted-foreground">{t("upstreamNotFoundHint")}</p>
+            </CardContent>
+          </Card>
+        ) : loadFailed ? (
+          <Card variant="outlined" className="border-divider bg-surface-200/70">
+            <CardContent className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+              <div className="space-y-2">
+                <h2 className="type-title-medium text-foreground">{t("upstreamLoadFailed")}</h2>
+                <p className="type-body-medium text-muted-foreground">
+                  {t("upstreamLoadFailedHint")}
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => refetch()}>
+                {tCommon("retry")}
+              </Button>
             </CardContent>
           </Card>
         ) : (

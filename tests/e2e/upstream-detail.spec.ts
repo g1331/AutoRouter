@@ -112,6 +112,36 @@ test.describe("Upstream detail page", () => {
     await expect(page.getByText("该上游可能已被删除，或链接无效。")).toBeVisible();
   });
 
+  test("shows the load-error state on a 500 and recovers on retry", async ({ page }) => {
+    // Fail every GET of the first query (initial attempt + the query client's
+    // one retry) so it settles into the error state; the GETs triggered by the
+    // retry button then succeed.
+    let getCount = 0;
+    await page.route(`**/api/admin/upstreams/${UPSTREAM_DETAIL.id}`, async (route) => {
+      if (route.request().method() !== "GET") {
+        await fulfillJson(route, 200, UPSTREAM_DETAIL);
+        return;
+      }
+      getCount += 1;
+      if (getCount <= 2) {
+        await fulfillJson(route, 500, { error: "Internal server error" });
+        return;
+      }
+      await fulfillJson(route, 200, UPSTREAM_DETAIL);
+    });
+
+    await page.goto(`/zh-CN/upstreams/${UPSTREAM_DETAIL.id}`);
+
+    await expect(page.getByText("加载上游失败")).toBeVisible();
+    const retryButton = page.getByRole("button", { name: "重试" });
+    await expect(retryButton).toBeVisible();
+
+    await retryButton.click();
+
+    await expect(page.getByText(UPSTREAM_DETAIL.name, { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("加载上游失败")).toBeHidden();
+  });
+
   test("the back button returns to the upstreams list", async ({ page }) => {
     await page.goto(`/zh-CN/upstreams/${UPSTREAM_DETAIL.id}`);
 

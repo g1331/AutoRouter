@@ -65,7 +65,7 @@ export function CreateUpstreamDialog({
     () =>
       z
         .object({
-          name: z.string().min(1, t("upstreamNameRequired")).max(100),
+          name: z.string().min(1, t("upstreamNameRequired")).max(64),
           base_url: z.string().min(1, t("baseUrlRequired")).url(t("baseUrlInvalid")),
           route_capabilities: z
             .array(z.enum(ROUTE_CAPABILITY_VALUES))
