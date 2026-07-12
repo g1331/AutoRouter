@@ -167,7 +167,7 @@ describe("GET /api/user/logs", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.total).toBe(0);
-    expect(userDataService.listUserRequestLogs).toHaveBeenCalledWith(SELF_ID, 1, 20, {});
+    expect(userDataService.listUserRequestLogs).toHaveBeenCalledWith(SELF_ID, 1, 20, {}, undefined);
   });
 
   it("ignores an externally supplied user_id parameter", async () => {
@@ -178,7 +178,7 @@ describe("GET /api/user/logs", () => {
     );
     expect(res.status).toBe(200);
     // The owner scope still comes from the principal, never from the query.
-    expect(userDataService.listUserRequestLogs).toHaveBeenCalledWith(SELF_ID, 1, 20, {});
+    expect(userDataService.listUserRequestLogs).toHaveBeenCalledWith(SELF_ID, 1, 20, {}, undefined);
   });
 
   it("parses pagination and the supported filters", async () => {
@@ -192,12 +192,18 @@ describe("GET /api/user/logs", () => {
       )
     );
     expect(res.status).toBe(200);
-    expect(userDataService.listUserRequestLogs).toHaveBeenCalledWith(SELF_ID, 2, 50, {
-      apiKeyId: "key-1",
-      statusCode: 429,
-      startTime: new Date("2026-06-01T00:00:00.000Z"),
-      endTime: new Date("2026-06-10T00:00:00.000Z"),
-    });
+    expect(userDataService.listUserRequestLogs).toHaveBeenCalledWith(
+      SELF_ID,
+      2,
+      50,
+      {
+        apiKeyId: "key-1",
+        statusCode: 429,
+        startTime: new Date("2026-06-01T00:00:00.000Z"),
+        endTime: new Date("2026-06-10T00:00:00.000Z"),
+      },
+      undefined
+    );
   });
 
   it("rejects a non-numeric status_code with 400 instead of failing downstream", async () => {
@@ -219,7 +225,8 @@ describe("GET /api/user/logs", () => {
       SELF_ID,
       1,
       20,
-      expect.objectContaining({ statusClass: "4xx" })
+      expect.objectContaining({ statusClass: "4xx" }),
+      undefined
     );
   });
 
@@ -235,6 +242,33 @@ describe("GET /api/user/logs", () => {
     const res = await logsRoute(
       makeRequest("http://localhost/api/user/logs?start_time=not-a-date", MEMBER)
     );
+    expect(res.status).toBe(400);
+    expect(userDataService.listUserRequestLogs).not.toHaveBeenCalled();
+  });
+
+  it("forwards sort/order and performance filters, ignoring upstream_id", async () => {
+    vi.mocked(userDataService.listUserRequestLogs).mockResolvedValue(makeEmptyLogsPage());
+
+    const res = await logsRoute(
+      makeRequest(
+        "http://localhost/api/user/logs?sort=ttft_ms&order=asc&ttft_min_ms=5000&tps_max=30" +
+          "&upstream_id=up-1",
+        MEMBER
+      )
+    );
+    expect(res.status).toBe(200);
+    // upstream_id is admin-scope only and must not appear in the filters.
+    expect(userDataService.listUserRequestLogs).toHaveBeenCalledWith(
+      SELF_ID,
+      1,
+      20,
+      { ttftMinMs: 5000, tpsMax: 30 },
+      { field: "ttft_ms", order: "asc" }
+    );
+  });
+
+  it("rejects an unknown sort field with 400", async () => {
+    const res = await logsRoute(makeRequest("http://localhost/api/user/logs?sort=model", MEMBER));
     expect(res.status).toBe(400);
     expect(userDataService.listUserRequestLogs).not.toHaveBeenCalled();
   });

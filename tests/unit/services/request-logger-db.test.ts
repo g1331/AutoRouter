@@ -24,6 +24,14 @@ vi.mock("@/lib/db", () => ({
     statusCode: "status_code",
     model: "model",
     createdAt: "created_at",
+    durationMs: "duration_ms",
+    ttftMs: "ttft_ms",
+    totalTokens: "total_tokens",
+    completionTokens: "completion_tokens",
+  },
+  requestBillingSnapshots: {
+    requestLogId: "request_log_id",
+    finalCost: "final_cost",
   },
 }));
 
@@ -36,7 +44,9 @@ vi.mock("drizzle-orm", async (importOriginal) => {
     count: vi.fn(() => ({ __op: "count" })),
     desc: vi.fn((arg) => ({ __op: "desc", arg })),
     eq: vi.fn((a, b) => ({ __op: "eq", a, b })),
+    gt: vi.fn((a, b) => ({ __op: "gt", a, b })),
     gte: vi.fn((a, b) => ({ __op: "gte", a, b })),
+    inArray: vi.fn((a, b) => ({ __op: "inArray", a, b })),
     isNull: vi.fn((arg) => ({ __op: "isNull", arg })),
     lt: vi.fn((a, b) => ({ __op: "lt", a, b })),
     lte: vi.fn((a, b) => ({ __op: "lte", a, b })),
@@ -529,6 +539,188 @@ describe("request-logger (db flows)", () => {
     expect(sqlMock).toHaveBeenCalledTimes(1);
     // Trimmed + lowercased needle wrapped in like wildcards.
     expect(sqlMock.mock.calls[0].slice(1)).toEqual(["model", "%gpt-4%"]);
+  });
+
+  function mockCountSelect(total: number) {
+    const whereMock = vi.fn().mockResolvedValueOnce([{ value: total }]);
+    dbSelectMock.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({ where: whereMock }),
+    });
+  }
+
+  // Minimal row shape: the response mapper tolerates nulls everywhere else.
+  function makeLogRow(id: string) {
+    return {
+      id,
+      apiKeyId: null,
+      upstreamId: null,
+      upstream: null,
+      method: null,
+      path: null,
+      model: null,
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      cachedTokens: 0,
+      reasoningTokens: 0,
+      reasoningEffort: null,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+      statusCode: 200,
+      durationMs: 1,
+      routingDurationMs: null,
+      errorMessage: null,
+      routingType: null,
+      priorityTier: null,
+      groupName: null,
+      lbStrategy: null,
+      failoverAttempts: 0,
+      failoverHistory: null,
+      routingDecision: null,
+      thinkingConfig: null,
+      sessionId: null,
+      affinityHit: false,
+      affinityMigrated: false,
+      ttftMs: null,
+      isStream: false,
+      sessionIdCompensated: false,
+      headerDiff: null,
+      billingSnapshot: null,
+      createdAt: new Date("2026-03-01T00:00:00.000Z"),
+    };
+  }
+
+  it("listRequestLogs orders by createdAt desc with an id tiebreaker when no sort is given", async () => {
+    const { listRequestLogs } = await import("@/lib/services/request-logger");
+
+    mockCountSelect(0);
+    requestLogsFindManyMock.mockResolvedValueOnce([]);
+
+    await listRequestLogs(1, 20, {});
+
+    const findManyArgs = requestLogsFindManyMock.mock.calls[0][0];
+    expect(findManyArgs.orderBy).toEqual([
+      { __op: "desc", arg: "created_at" },
+      { __op: "desc", arg: "id" },
+    ]);
+  });
+
+  it.each([
+    ["duration_ms", { __op: "sql" }, "duration_ms"],
+    ["ttft_ms", { __op: "sql" }, "ttft_ms"],
+    ["total_tokens", null, "total_tokens"],
+  ] as const)(
+    "listRequestLogs maps sort field %s onto orderBy with stable tiebreakers",
+    async (field, wrapped, column) => {
+      const { listRequestLogs } = await import("@/lib/services/request-logger");
+
+      mockCountSelect(0);
+      requestLogsFindManyMock.mockResolvedValueOnce([]);
+
+      await listRequestLogs(1, 20, {}, { field, order: "asc" });
+
+      const orderBy = requestLogsFindManyMock.mock.calls[0][0].orderBy;
+      expect(orderBy).toHaveLength(3);
+      expect(orderBy[0].__op).toBe("asc");
+      if (wrapped) {
+        // Nullable columns are coalesce-wrapped so NULL sorts identically on
+        // pg and sqlite; the sql tag captures the column as a value.
+        expect(orderBy[0].arg).toEqual(expect.objectContaining({ __op: "sql" }));
+        expect(orderBy[0].arg.values).toEqual([column]);
+      } else {
+        expect(orderBy[0].arg).toBe(column);
+      }
+      expect(orderBy.slice(1)).toEqual([
+        { __op: "desc", arg: "created_at" },
+        { __op: "desc", arg: "id" },
+      ]);
+    }
+  );
+
+  it("listRequestLogs sort=cost resolves page IDs via the billing-snapshot join and restores order", async () => {
+    const { listRequestLogs } = await import("@/lib/services/request-logger");
+
+    mockCountSelect(2);
+
+    const offsetMock = vi.fn().mockResolvedValueOnce([{ id: "log-b" }, { id: "log-a" }]);
+    const limitMock = vi.fn().mockReturnValue({ offset: offsetMock });
+    const orderByMock = vi.fn().mockReturnValue({ limit: limitMock });
+    const whereMock = vi.fn().mockReturnValue({ orderBy: orderByMock });
+    const leftJoinMock = vi.fn().mockReturnValue({ where: whereMock });
+    const fromMock = vi.fn().mockReturnValue({ leftJoin: leftJoinMock });
+    dbSelectMock.mockReturnValueOnce({ from: fromMock });
+
+    // findMany hydrates by inArray without ordering guarantees; return the
+    // rows in the wrong order to prove the JS reorder step.
+    requestLogsFindManyMock.mockResolvedValueOnce([makeLogRow("log-a"), makeLogRow("log-b")]);
+
+    const result = await listRequestLogs(1, 20, {}, { field: "cost", order: "asc" });
+
+    // The join orders by coalesced final_cost with the stable tiebreakers.
+    const orderByArgs = orderByMock.mock.calls[0];
+    expect(orderByArgs[0]).toEqual(
+      expect.objectContaining({ __op: "asc", arg: expect.objectContaining({ __op: "sql" }) })
+    );
+    expect(orderByArgs[0].arg.values).toEqual(["final_cost"]);
+    expect(orderByArgs.slice(1)).toEqual([
+      { __op: "desc", arg: "created_at" },
+      { __op: "desc", arg: "id" },
+    ]);
+
+    const { inArray } = await import("drizzle-orm");
+    expect(inArray).toHaveBeenCalledWith("id", ["log-b", "log-a"]);
+    expect(result.items.map((item) => item.id)).toEqual(["log-b", "log-a"]);
+  });
+
+  it("listRequestLogs sort=cost short-circuits on an empty ID page", async () => {
+    const { listRequestLogs } = await import("@/lib/services/request-logger");
+
+    mockCountSelect(0);
+
+    const offsetMock = vi.fn().mockResolvedValueOnce([]);
+    const limitMock = vi.fn().mockReturnValue({ offset: offsetMock });
+    const orderByMock = vi.fn().mockReturnValue({ limit: limitMock });
+    const whereMock = vi.fn().mockReturnValue({ orderBy: orderByMock });
+    const leftJoinMock = vi.fn().mockReturnValue({ where: whereMock });
+    dbSelectMock.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({ leftJoin: leftJoinMock }),
+    });
+
+    const result = await listRequestLogs(1, 20, {}, { field: "cost", order: "desc" });
+
+    expect(requestLogsFindManyMock).not.toHaveBeenCalled();
+    expect(result.items).toEqual([]);
+  });
+
+  it("listRequestLogs maps ttftMinMs and durationMinMs to strict gt conditions", async () => {
+    const { listRequestLogs } = await import("@/lib/services/request-logger");
+    const { gt } = await import("drizzle-orm");
+
+    mockCountSelect(0);
+    requestLogsFindManyMock.mockResolvedValueOnce([]);
+
+    await listRequestLogs(1, 20, { ttftMinMs: 5000, durationMinMs: 20000 });
+
+    expect(gt).toHaveBeenCalledWith("ttft_ms", 5000);
+    expect(gt).toHaveBeenCalledWith("duration_ms", 20000);
+  });
+
+  it("listRequestLogs maps tpsMax to guarded integer-safe arithmetic", async () => {
+    const { listRequestLogs, MIN_TPS_DURATION_MS, MIN_TPS_COMPLETION_TOKENS } =
+      await import("@/lib/services/request-logger");
+    const { gte, sql } = await import("drizzle-orm");
+
+    mockCountSelect(0);
+    requestLogsFindManyMock.mockResolvedValueOnce([]);
+
+    await listRequestLogs(1, 20, { tpsMax: 30 });
+
+    // Minimum-signal guards keep near-zero requests out of the TPS match.
+    expect(gte).toHaveBeenCalledWith("duration_ms", MIN_TPS_DURATION_MS);
+    expect(gte).toHaveBeenCalledWith("completion_tokens", MIN_TPS_COMPLETION_TOKENS);
+    // completion_tokens * 1000.0 < tps_max * duration_ms
+    const sqlCall = vi.mocked(sql).mock.calls[0];
+    expect(sqlCall.slice(1)).toEqual(["completion_tokens", 30, "duration_ms"]);
   });
 
   it("reconcileStaleInProgressRequestLogs skips streams and persists billing snapshots", async () => {

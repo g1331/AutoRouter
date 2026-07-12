@@ -1,5 +1,19 @@
-import { eq, desc, count, and, gte, lte, lt, asc, isNull } from "drizzle-orm";
-import { db, requestLogs, type RequestLog } from "../db";
+import {
+  eq,
+  desc,
+  count,
+  and,
+  gte,
+  lte,
+  lt,
+  gt,
+  asc,
+  isNull,
+  inArray,
+  sql,
+  type SQL,
+} from "drizzle-orm";
+import { db, requestLogs, requestBillingSnapshots, type RequestLog } from "../db";
 import { caseInsensitiveLike } from "../db/sql-helpers";
 import type {
   FailoverErrorType,
@@ -251,6 +265,32 @@ export interface ListRequestLogsFilter {
   model?: string;
   startTime?: Date;
   endTime?: Date;
+  // Performance threshold filters (server-side slow-request presets).
+  ttftMinMs?: number;
+  durationMinMs?: number;
+  // Upper bound on tokens/s (completion_tokens / duration seconds); rows below
+  // the TPS guard thresholds are excluded so near-zero requests don't match.
+  tpsMax?: number;
+}
+
+// Guards mirroring the client-side TPS display rules: a TPS value is only
+// meaningful once the request produced enough output over enough time.
+export const MIN_TPS_COMPLETION_TOKENS = 10;
+export const MIN_TPS_DURATION_MS = 100;
+
+export const REQUEST_LOG_SORT_FIELDS = [
+  "created_at",
+  "duration_ms",
+  "total_tokens",
+  "ttft_ms",
+  "cost",
+] as const;
+export type RequestLogSortField = (typeof REQUEST_LOG_SORT_FIELDS)[number];
+export type RequestLogSortOrder = "asc" | "desc";
+
+export interface RequestLogSort {
+  field: RequestLogSortField;
+  order: RequestLogSortOrder;
 }
 
 const STATUS_CLASS_RANGES: Record<RequestLogStatusClass, [number, number]> = {
@@ -757,13 +797,85 @@ export function extractModelName(
   return null;
 }
 
+const REQUEST_LOG_PAGE_RELATIONS = {
+  apiKey: true,
+  upstream: true,
+  billingSnapshot: true,
+} as const;
+
+function buildRequestLogOrderBy(sort?: RequestLogSort) {
+  const direction = sort?.order === "asc" ? asc : desc;
+  // Stable tiebreakers so pagination never duplicates or drops rows when the
+  // primary sort value ties.
+  const tiebreakers = [desc(requestLogs.createdAt), desc(requestLogs.id)];
+  switch (sort?.field) {
+    case "duration_ms":
+      // coalesce removes the pg/sqlite NULL-ordering divergence: NULL sorts as
+      // the smallest value on both dialects.
+      return [direction(sql`coalesce(${requestLogs.durationMs}, -1)`), ...tiebreakers];
+    case "total_tokens":
+      return [direction(requestLogs.totalTokens), ...tiebreakers];
+    case "ttft_ms":
+      return [direction(sql`coalesce(${requestLogs.ttftMs}, -1)`), ...tiebreakers];
+    default:
+      return [direction(requestLogs.createdAt), desc(requestLogs.id)];
+  }
+}
+
+async function queryRequestLogPage(
+  whereClause: SQL | undefined,
+  sort: RequestLogSort | undefined,
+  limit: number,
+  offset: number
+) {
+  if (sort?.field !== "cost") {
+    return db.query.requestLogs.findMany({
+      where: whereClause,
+      orderBy: buildRequestLogOrderBy(sort),
+      limit,
+      offset,
+      with: REQUEST_LOG_PAGE_RELATIONS,
+    });
+  }
+
+  // Cost lives on the joined billing snapshot, which the relational API cannot
+  // order by. Resolve the page of IDs with an explicit join first, then
+  // hydrate relations for just those rows and restore the join order.
+  const direction = sort.order === "asc" ? asc : desc;
+  const idRows = await db
+    .select({ id: requestLogs.id })
+    .from(requestLogs)
+    .leftJoin(requestBillingSnapshots, eq(requestBillingSnapshots.requestLogId, requestLogs.id))
+    .where(whereClause)
+    .orderBy(
+      direction(sql`coalesce(${requestBillingSnapshots.finalCost}, -1)`),
+      desc(requestLogs.createdAt),
+      desc(requestLogs.id)
+    )
+    .limit(limit)
+    .offset(offset);
+
+  const ids = idRows.map((row) => row.id);
+  if (ids.length === 0) {
+    return [];
+  }
+
+  const rows = await db.query.requestLogs.findMany({
+    where: inArray(requestLogs.id, ids),
+    with: REQUEST_LOG_PAGE_RELATIONS,
+  });
+  const rowById = new Map(rows.map((row) => [row.id, row]));
+  return ids.flatMap((id) => rowById.get(id) ?? []);
+}
+
 /**
  * List request logs with pagination and optional filtering.
  */
 export async function listRequestLogs(
   page: number = 1,
   pageSize: number = 20,
-  filters: ListRequestLogsFilter = {}
+  filters: ListRequestLogsFilter = {},
+  sort?: RequestLogSort
 ): Promise<PaginatedRequestLogs> {
   if (process.env.NODE_ENV !== "test") {
     try {
@@ -807,6 +919,22 @@ export async function listRequestLogs(
   if (filters.endTime) {
     conditions.push(lte(requestLogs.createdAt, filters.endTime));
   }
+  if (filters.ttftMinMs !== undefined) {
+    conditions.push(gt(requestLogs.ttftMs, filters.ttftMinMs));
+  }
+  if (filters.durationMinMs !== undefined) {
+    conditions.push(gt(requestLogs.durationMs, filters.durationMinMs));
+  }
+  if (filters.tpsMax !== undefined) {
+    // TPS = completion_tokens / (duration_ms / 1000). Rewritten as integer-safe
+    // arithmetic so PostgreSQL and SQLite evaluate it identically, guarded so
+    // near-zero requests don't produce meaningless TPS matches.
+    conditions.push(
+      gte(requestLogs.durationMs, MIN_TPS_DURATION_MS),
+      gte(requestLogs.completionTokens, MIN_TPS_COMPLETION_TOKENS),
+      sql`${requestLogs.completionTokens} * 1000.0 < ${filters.tpsMax} * ${requestLogs.durationMs}`
+    );
+  }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -818,17 +946,7 @@ export async function listRequestLogs(
 
   // Query paginated results with upstream name
   const offset = (page - 1) * pageSize;
-  const logs = await db.query.requestLogs.findMany({
-    where: whereClause,
-    orderBy: [desc(requestLogs.createdAt)],
-    limit: pageSize,
-    offset,
-    with: {
-      apiKey: true,
-      upstream: true,
-      billingSnapshot: true,
-    },
-  });
+  const logs = await queryRequestLogPage(whereClause, sort, pageSize, offset);
 
   const items: RequestLogResponse[] = logs.map((log) => ({
     id: log.id,

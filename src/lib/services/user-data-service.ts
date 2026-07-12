@@ -5,6 +5,7 @@ import {
   reconcileStaleInProgressRequestLogs,
   type ListRequestLogsFilter,
   type PaginatedRequestLogs,
+  type RequestLogSort,
 } from "./request-logger";
 import { buildTimeBucketExpr, parseTimeBucket } from "./stats-service";
 
@@ -174,9 +175,10 @@ export async function listUserRequestLogs(
   userId: string,
   page: number = 1,
   pageSize: number = 20,
-  filters: Omit<ListRequestLogsFilter, "userId"> = {}
+  filters: Omit<ListRequestLogsFilter, "userId"> = {},
+  sort?: RequestLogSort
 ): Promise<PaginatedRequestLogs> {
-  return listRequestLogs(page, pageSize, { ...filters, userId });
+  return listRequestLogs(page, pageSize, { ...filters, userId }, sort);
 }
 
 /**

@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  getPaginationParams,
-  errorResponse,
-  requireMember,
-  parseIntFilterParam,
-  parseDateFilterParam,
-} from "@/lib/utils/api-auth";
+import { getPaginationParams, errorResponse, requireMember } from "@/lib/utils/api-auth";
 import { listUserRequestLogs } from "@/lib/services/user-data-service";
-import type { ListRequestLogsFilter } from "@/lib/services/request-logger";
+import { parseRequestLogListQuery } from "@/lib/utils/request-log-filters";
 import { transformPaginatedRequestLogs } from "@/lib/utils/api-transformers";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -25,6 +19,8 @@ const log = createLogger("user-logs");
  * - status_class: "2xx" | "4xx" | "5xx" (filter - status code range, ignored when status_code is set)
  * - model: string (filter - case-insensitive substring match)
  * - start_time / end_time: ISO datetime (filter)
+ * - ttft_min_ms / duration_min_ms / tps_max: performance threshold filters
+ * - sort / order: sorting, same surface as the admin logs endpoint
  *
  * A user_id parameter is intentionally not accepted: the owner scope always
  * comes from the authenticated principal (decision 7).
@@ -37,40 +33,18 @@ export async function GET(request: NextRequest) {
 
   try {
     const { page, pageSize } = getPaginationParams(request);
-    const url = new URL(request.url);
-
-    const filters: Omit<ListRequestLogsFilter, "userId"> = {};
-
-    const id = url.searchParams.get("id");
-    if (id) filters.id = id;
-
-    const apiKeyId = url.searchParams.get("api_key_id");
-    if (apiKeyId) filters.apiKeyId = apiKeyId;
-
-    const statusCode = parseIntFilterParam(url.searchParams.get("status_code"));
-    if (statusCode === null) return errorResponse("Invalid status_code", 400);
-    if (statusCode !== undefined) filters.statusCode = statusCode;
-
-    const statusClass = url.searchParams.get("status_class");
-    if (statusClass) {
-      if (statusClass !== "2xx" && statusClass !== "4xx" && statusClass !== "5xx") {
-        return errorResponse("Invalid status_class", 400);
-      }
-      filters.statusClass = statusClass;
+    const parsed = parseRequestLogListQuery(new URL(request.url), "user");
+    if (!parsed.ok) {
+      return errorResponse(parsed.error, 400);
     }
 
-    const model = url.searchParams.get("model")?.trim();
-    if (model) filters.model = model;
-
-    const startTime = parseDateFilterParam(url.searchParams.get("start_time"));
-    if (startTime === null) return errorResponse("Invalid start_time", 400);
-    if (startTime !== undefined) filters.startTime = startTime;
-
-    const endTime = parseDateFilterParam(url.searchParams.get("end_time"));
-    if (endTime === null) return errorResponse("Invalid end_time", 400);
-    if (endTime !== undefined) filters.endTime = endTime;
-
-    const result = await listUserRequestLogs(auth.userId, page, pageSize, filters);
+    const result = await listUserRequestLogs(
+      auth.userId,
+      page,
+      pageSize,
+      parsed.filters,
+      parsed.sort
+    );
 
     return NextResponse.json(transformPaginatedRequestLogs(result));
   } catch (error) {
