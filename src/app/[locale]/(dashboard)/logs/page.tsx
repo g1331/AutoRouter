@@ -12,9 +12,11 @@ import {
   type LogsFilterOption,
   type LogsServerFilters,
 } from "@/components/admin/logs-table";
+import { LivePulseBar } from "@/components/admin/live-pulse-bar";
 import { PaginationControls } from "@/components/admin/pagination-controls";
 import { RefreshIntervalSelect } from "@/components/admin/refresh-interval-select";
 import { Topbar } from "@/components/admin/topbar";
+import { useLivePulseContext } from "@/providers/live-pulse-provider";
 import { Link, usePathname } from "@/i18n/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -70,7 +72,7 @@ function LogsLoadingSkeleton({ loadingLabel }: LogsLoadingSkeletonProps) {
             <TableHead className="hidden lg:table-cell w-[60px] px-1.5">
               <Skeleton className="h-3 w-12" />
             </TableHead>
-            <TableHead className="hidden xl:table-cell w-[272px] px-1.5 pl-1">
+            <TableHead className="hidden lg:table-cell w-[272px] px-1.5 pl-1">
               <Skeleton className="h-3 w-12" />
             </TableHead>
             <TableHead className="hidden md:table-cell w-[140px] px-1.5">
@@ -105,7 +107,7 @@ function LogsLoadingSkeleton({ loadingLabel }: LogsLoadingSkeletonProps) {
               <TableCell className="hidden text-[10px] lg:table-cell w-[60px] px-1.5 py-1 pr-1 min-w-0">
                 <Skeleton className="h-2 w-10" />
               </TableCell>
-              <TableCell className="hidden font-mono text-[10px] xl:table-cell w-[272px] px-1.5 py-1 pl-1 min-w-0">
+              <TableCell className="hidden font-mono text-[10px] lg:table-cell w-[272px] px-1.5 py-1 pl-1 min-w-0">
                 <Skeleton className="h-2 w-24" />
               </TableCell>
               <TableCell className="hidden md:table-cell w-[140px] px-1.5 py-1 min-w-0 overflow-hidden text-[10px]">
@@ -144,6 +146,7 @@ export default function LogsPage() {
   const { connectionState, fallbackRefetchIntervalMs } = useRequestLogLive({
     enabled: focusId === null,
   });
+  const pulse = useLivePulseContext();
   const effectiveRefetchInterval =
     refetchInterval !== false ? refetchInterval : fallbackRefetchIntervalMs;
 
@@ -323,11 +326,21 @@ export default function LogsPage() {
                   </div>
                 </div>
 
-                <RefreshIntervalSelect
-                  onIntervalChange={handleIntervalChange}
-                  onManualRefresh={handleManualRefresh}
-                  isRefreshing={isManualRefreshPending}
-                />
+                <div className="flex flex-col items-start gap-3 sm:items-end">
+                  {pulse && (
+                    <LivePulseBar
+                      snapshot={pulse.snapshot}
+                      connectionState={pulse.connectionState}
+                      variant="compact"
+                      className="shrink-0"
+                    />
+                  )}
+                  <RefreshIntervalSelect
+                    onIntervalChange={handleIntervalChange}
+                    onManualRefresh={handleManualRefresh}
+                    isRefreshing={isManualRefreshPending}
+                  />
+                </div>
               </CardContent>
             </Card>
           </>

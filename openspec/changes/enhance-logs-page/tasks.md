@@ -25,10 +25,10 @@
 
 ## 4. 行内视觉 + 管理卡片脉冲条
 
-- [ ] 4.1 `logs-table.tsx`：failover 徽标（状态单元格 + 移动卡片 meta，`failover_attempts > 0`）；`getDurationPerformanceClass` 耗时热度、费用文字热度（仅文字色）；i18n 键
-- [ ] 4.2 模型列 xl→lg：表头/单元格类名、宽度计算断点、`DESKTOP_MODEL_COLUMN_MIN_WIDTH` 调整避免 1024px 横向滚动；同步 `logs/page.tsx` 骨架屏
-- [ ] 4.3 `logs/page.tsx` 管理卡片接入 compact LivePulseBar（保留日志流连接徽章）
-- [ ] 4.4 测试：徽标出现/不出现、脉冲条渲染（mock context）；质量门禁通过后提交
+- [x] 4.1 `logs-table.tsx`：failover 徽标（状态单元格 + 移动卡片 meta，`failover_attempts > 0`）；`getDurationPerformanceClass` 耗时热度、费用文字热度（仅文字色，费用阈值 $0.10）；i18n 键
+- [x] 4.2 模型列 xl→lg：表头/单元格类名、宽度计算断点、`DESKTOP_MODEL_COLUMN_MIN_WIDTH` 136→112；同步 `logs/page.tsx` 骨架屏
+- [x] 4.3 `logs/page.tsx` 管理卡片接入 compact LivePulseBar（保留日志流连接徽章）
+- [x] 4.4 测试：徽标出现/不出现、热度文字色、脉冲条渲染（mock context）；质量门禁通过后提交
 
 ## 5. 验证与收尾
 

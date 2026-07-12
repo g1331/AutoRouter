@@ -166,10 +166,12 @@ interface LogsTableProps {
 const HIGH_TTFT_THRESHOLD_MS = 5000;
 const LOW_TPS_THRESHOLD = 30;
 const SLOW_DURATION_THRESHOLD_MS = 20000;
+const DURATION_WARNING_THRESHOLD_MS = 8000;
+const COST_HEAT_THRESHOLD_USD = 0.1;
 const MIN_TPS_COMPLETION_TOKENS = 10;
 const MIN_TPS_DURATION_MS = 100;
 const DESKTOP_MODEL_COLUMN_MAX_WIDTH = 264;
-const DESKTOP_MODEL_COLUMN_MIN_WIDTH = 136;
+const DESKTOP_MODEL_COLUMN_MIN_WIDTH = 112;
 const DESKTOP_TABLE_BASE_WIDTHS = {
   expand: 36,
   time: 148,
@@ -333,6 +335,21 @@ function getTtftPerformanceClass(ttftMs: number): string {
   if (ttftMs >= 1000) return "text-status-error";
   if (ttftMs >= 500) return "text-status-warning";
   return "text-status-success";
+}
+
+/** Text-color heat only (no fills) so slow rows pop while scanning the list. */
+function getDurationPerformanceClass(durationMs: number): string {
+  if (durationMs >= SLOW_DURATION_THRESHOLD_MS) return "text-status-error";
+  if (durationMs >= DURATION_WARNING_THRESHOLD_MS) return "text-status-warning";
+  return "";
+}
+
+function getCostHeatClass(log: RequestLog): string {
+  const currency = log.currency ?? "USD";
+  if (log.final_cost != null && currency === "USD" && log.final_cost >= COST_HEAT_THRESHOLD_USD) {
+    return "text-status-warning";
+  }
+  return "";
 }
 
 function getGenerationMs(log: RequestLog): number | null {
@@ -2551,7 +2568,7 @@ export function LogsTable({
       : 0);
   const resolvedDesktopTableWidth =
     !isMobileLayout && desktopTableContainerElement ? desktopTableWidth : null;
-  const desktopModelColumnWidth = desktopBreakpointState.xl
+  const desktopModelColumnWidth = desktopBreakpointState.lg
     ? Math.max(
         DESKTOP_MODEL_COLUMN_MIN_WIDTH,
         Math.min(
@@ -2562,7 +2579,7 @@ export function LogsTable({
       )
     : DESKTOP_MODEL_COLUMN_MAX_WIDTH;
   const desktopTableMinWidth =
-    desktopFixedColumnWidth + (desktopBreakpointState.xl ? desktopModelColumnWidth : 0);
+    desktopFixedColumnWidth + (desktopBreakpointState.lg ? desktopModelColumnWidth : 0);
   const desktopModelColumnStyle = { width: `${desktopModelColumnWidth}px` };
   const desktopTableStyle = { minWidth: `${desktopTableMinWidth}px` };
 
@@ -3070,10 +3087,34 @@ export function LogsTable({
                                 log.status_code
                               )}
                             </Badge>
+                            {log.failover_attempts > 0 && (
+                              <Badge
+                                variant="warning"
+                                className="px-1.5 py-0 text-[10px] leading-4 whitespace-nowrap"
+                                aria-label={t("rowFailoverTooltip", {
+                                  count: log.failover_attempts,
+                                })}
+                              >
+                                {t("rowFailoverBadge", { count: log.failover_attempts })}
+                              </Badge>
+                            )}
                           </div>
-                          <div className="mt-1 tabular-nums">{formatDuration(log.duration_ms)}</div>
+                          <div
+                            className={cn(
+                              "mt-1 tabular-nums",
+                              log.duration_ms != null &&
+                                getDurationPerformanceClass(log.duration_ms)
+                            )}
+                          >
+                            {formatDuration(log.duration_ms)}
+                          </div>
                           {shouldShowBillingCost(log) ? (
-                            <div className="mt-1 tabular-nums text-foreground">
+                            <div
+                              className={cn(
+                                "mt-1 tabular-nums text-foreground",
+                                getCostHeatClass(log)
+                              )}
+                            >
                               {formatBillingCost(log)}
                             </div>
                           ) : null}
@@ -3173,7 +3214,7 @@ export function LogsTable({
                               {t("tableInterfaceType")}
                             </TableHead>
                             <TableHead
-                              className="hidden xl:table-cell px-1.5 pl-1"
+                              className="hidden lg:table-cell px-1.5 pl-1"
                               style={desktopModelColumnStyle}
                             >
                               {t("tableModel")}
@@ -3302,7 +3343,7 @@ export function LogsTable({
                                 />
                               </TableCell>
                               <TableCell
-                                className="hidden font-mono text-[10px] xl:table-cell px-1.5 py-1 pl-1 min-w-0"
+                                className="hidden font-mono text-[10px] lg:table-cell px-1.5 py-1 pl-1 min-w-0"
                                 style={desktopModelColumnStyle}
                               >
                                 {log.model ? (
@@ -3333,7 +3374,12 @@ export function LogsTable({
                               <TableCell className="w-[84px] px-1.5 py-1 text-right">
                                 <div className="flex flex-col items-end gap-0">
                                   {shouldShowBillingCost(log) ? (
-                                    <span className="font-mono text-[11px] tabular-nums whitespace-nowrap">
+                                    <span
+                                      className={cn(
+                                        "font-mono text-[11px] tabular-nums whitespace-nowrap",
+                                        getCostHeatClass(log)
+                                      )}
+                                    >
                                       {formatBillingCost(log)}
                                     </span>
                                   ) : null}
@@ -3374,11 +3420,39 @@ export function LogsTable({
                                       log.status_code
                                     )}
                                   </Badge>
+                                  {log.failover_attempts > 0 && (
+                                    <Tooltip delayDuration={200}>
+                                      <TooltipTrigger asChild>
+                                        <Badge
+                                          variant="warning"
+                                          className="px-1.5 py-0 text-[10px] leading-4 whitespace-nowrap"
+                                          aria-label={t("rowFailoverTooltip", {
+                                            count: log.failover_attempts,
+                                          })}
+                                        >
+                                          {t("rowFailoverBadge", {
+                                            count: log.failover_attempts,
+                                          })}
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top">
+                                        {t("rowFailoverTooltip", {
+                                          count: log.failover_attempts,
+                                        })}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
                                 </div>
                               </TableCell>
                               <TableCell className="w-[112px] px-1.5 py-1 font-mono text-[10px] leading-tight">
                                 <div className="flex flex-col gap-0">
-                                  <span className="tabular-nums whitespace-nowrap">
+                                  <span
+                                    className={cn(
+                                      "tabular-nums whitespace-nowrap",
+                                      log.duration_ms != null &&
+                                        getDurationPerformanceClass(log.duration_ms)
+                                    )}
+                                  >
                                     {formatDuration(log.duration_ms)}
                                   </span>
                                   {(log.ttft_ms != null || requestTps != null) && (

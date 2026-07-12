@@ -584,6 +584,8 @@
     "summarySlowRatio": "慢请求占比(>20秒)",
     "summaryStreamRatio": "流式占比",
     "statsWindowFiltered": "已过滤",
+    "rowFailoverBadge": "↻ {count}",
+    "rowFailoverTooltip": "发生 {count} 次故障转移，展开行可查看重试时间线",
     "expandedDetails": "展开详情",
     "performanceStats": "性能统计",
     "perfTtft": "TTFT",

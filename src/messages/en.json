@@ -580,6 +580,8 @@
     "summarySlowRatio": "Slow >20s",
     "summaryStreamRatio": "Stream",
     "statsWindowFiltered": "Filtered",
+    "rowFailoverBadge": "↻ {count}",
+    "rowFailoverTooltip": "{count, plural, one {# failover attempt} other {# failover attempts}} — expand the row for the retry timeline",
     "expandedDetails": "Expanded Details",
     "performanceStats": "Performance",
     "perfTtft": "TTFT",

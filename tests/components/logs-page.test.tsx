@@ -7,6 +7,7 @@ const useSearchParamsMock = vi.fn();
 const useRequestLogsMock = vi.fn();
 const useRequestLogLiveMock = vi.fn();
 const useRequestLogStatsMock = vi.fn();
+const useLivePulseContextMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => useSearchParamsMock(),
@@ -91,6 +92,16 @@ vi.mock("@/components/admin/topbar", () => ({
   Topbar: ({ title }: { title: string }) => <div>{title}</div>,
 }));
 
+vi.mock("@/providers/live-pulse-provider", () => ({
+  useLivePulseContext: () => useLivePulseContextMock(),
+}));
+
+vi.mock("@/components/admin/live-pulse-bar", () => ({
+  LivePulseBar: ({ variant }: { variant?: string }) => (
+    <div data-testid="live-pulse-bar" data-variant={variant} />
+  ),
+}));
+
 vi.mock("@/components/ui/badge", () => ({
   Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
@@ -145,12 +156,14 @@ describe("LogsPage focus query param", () => {
     useRequestLogsMock.mockReset();
     useRequestLogLiveMock.mockReset();
     useRequestLogStatsMock.mockReset();
+    useLivePulseContextMock.mockReset();
     lastLogsTableProps = null;
     useRequestLogLiveMock.mockReturnValue({
       connectionState: "fallback",
       fallbackRefetchIntervalMs: 5000,
     });
     useRequestLogStatsMock.mockReturnValue({ data: undefined });
+    useLivePulseContextMock.mockReturnValue(null);
   });
 
   it("renders the standard management header when no focus param is present", () => {
@@ -268,12 +281,14 @@ describe("LogsPage server filter mapping", () => {
     useRequestLogsMock.mockReset();
     useRequestLogLiveMock.mockReset();
     useRequestLogStatsMock.mockReset();
+    useLivePulseContextMock.mockReset();
     lastLogsTableProps = null;
     useRequestLogLiveMock.mockReturnValue({
       connectionState: "fallback",
       fallbackRefetchIntervalMs: 5000,
     });
     useRequestLogStatsMock.mockReturnValue({ data: undefined });
+    useLivePulseContextMock.mockReturnValue(null);
     setFocusParam(null);
     useRequestLogsMock.mockReturnValue({
       isLoading: false,
@@ -392,6 +407,24 @@ describe("LogsPage server filter mapping", () => {
     render(<LogsPage />);
 
     expect(lastLogsTableProps?.windowStats).toBeNull();
+  });
+
+  it("renders a compact live pulse bar in the management card when the context is available", () => {
+    useLivePulseContextMock.mockReturnValue({
+      snapshot: { requests_per_minute: 12 },
+      connectionState: "live",
+    });
+
+    render(<LogsPage />);
+
+    const pulseBar = screen.getByTestId("live-pulse-bar");
+    expect(pulseBar).toHaveAttribute("data-variant", "compact");
+  });
+
+  it("renders no pulse bar when the live pulse context is unavailable", () => {
+    render(<LogsPage />);
+
+    expect(screen.queryByTestId("live-pulse-bar")).not.toBeInTheDocument();
   });
 
   it("disables and withholds window stats in focus view", () => {

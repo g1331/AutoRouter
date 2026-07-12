@@ -185,7 +185,7 @@ describe("LogsTable", () => {
 
         await waitFor(() => {
           const modelHeader = screen.getByText("tableModel").closest("th");
-          expect(modelHeader).toHaveStyle({ width: "136px" });
+          expect(modelHeader).toHaveStyle({ width: "112px" });
         });
       } finally {
         window.matchMedia = originalMatchMedia;
@@ -236,7 +236,7 @@ describe("LogsTable", () => {
 
         await waitFor(() => {
           const modelHeader = screen.getByText("tableModel").closest("th");
-          expect(modelHeader).toHaveStyle({ width: "136px" });
+          expect(modelHeader).toHaveStyle({ width: "112px" });
         });
       } finally {
         window.matchMedia = originalMatchMedia;
@@ -2526,6 +2526,46 @@ describe("LogsTable", () => {
       expect(screen.getByRole("button", { name: "Collapse diff" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "headerDiffShowValues" })).toBeInTheDocument();
       expect(screen.getByText("authorization")).toBeInTheDocument();
+    });
+  });
+
+  describe("Row Visual Enhancements", () => {
+    it("shows a failover badge only on rows with failover attempts", () => {
+      const { rerender } = render(<LogsTable logs={[{ ...mockLog, failover_attempts: 2 }]} />);
+      expect(screen.getByText("rowFailoverBadge")).toBeInTheDocument();
+
+      rerender(<LogsTable logs={[mockLog]} />);
+      expect(screen.queryByText("rowFailoverBadge")).not.toBeInTheDocument();
+    });
+
+    it("heat-colors slow durations and expensive costs via text color", () => {
+      render(
+        <LogsTable
+          logs={[
+            {
+              ...mockLog,
+              duration_ms: 25000,
+              final_cost: 0.25,
+              billing_status: "billed",
+              currency: "USD",
+            },
+          ]}
+        />
+      );
+
+      expect(screen.getByText("25.00s").className).toContain("text-status-error");
+      expect(screen.getByText("$0.25").className).toContain("text-status-warning");
+    });
+
+    it("leaves fast, cheap rows without heat coloring", () => {
+      render(
+        <LogsTable
+          logs={[{ ...mockLog, duration_ms: 1500, final_cost: 0.01, billing_status: "billed" }]}
+        />
+      );
+
+      expect(screen.getByText("1.50s").className).not.toContain("text-status-");
+      expect(screen.getByText("$0.01").className).not.toContain("text-status-");
     });
   });
 
