@@ -4,11 +4,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import {
   useAPIKeys,
+  useApiKey,
   useCreateAPIKey,
   useRevealAPIKey,
   useRevokeAPIKey,
   useToggleAPIKeyActive,
   useUpdateAPIKey,
+  useUpdateApiKeySection,
 } from "@/hooks/use-api-keys";
 import type { APIKeyResponse, PaginatedAPIKeysResponse } from "@/types/api";
 
@@ -578,6 +580,116 @@ describe("use-api-keys hooks", () => {
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
       expect(mockToastSuccess).toHaveBeenCalledWith("disableSuccess");
+    });
+  });
+
+  describe("useApiKey", () => {
+    it("fetches a single API key by id and stores it under the ['keys', id] cache key", async () => {
+      const apiKey = makeApiKey({ id: "key-1", name: "Detail Key" });
+      mockGet.mockResolvedValueOnce(apiKey);
+
+      const { result } = renderHook(() => useApiKey("key-1"), { wrapper });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      expect(mockGet).toHaveBeenCalledWith("/admin/keys/key-1");
+      expect(result.current.data).toEqual(apiKey);
+      expect(queryClient.getQueryData(["keys", "key-1"])).toEqual(apiKey);
+    });
+
+    it("does not fetch when id is undefined", async () => {
+      renderHook(() => useApiKey(undefined), { wrapper });
+
+      expect(mockGet).not.toHaveBeenCalled();
+    });
+
+    it("does not fetch when enabled is false", async () => {
+      renderHook(() => useApiKey("key-1", false), { wrapper });
+
+      expect(mockGet).not.toHaveBeenCalled();
+    });
+
+    it("surfaces fetch errors", async () => {
+      mockGet.mockRejectedValueOnce(new Error("Not found"));
+
+      const { result } = renderHook(() => useApiKey("missing-key"), { wrapper });
+
+      await waitFor(() => expect(result.current.isError).toBe(true));
+
+      expect(result.current.error?.message).toBe("Not found");
+    });
+  });
+
+  describe("useUpdateApiKeySection", () => {
+    it("optimistically shallow-merges the payload into the detail and paginated caches", async () => {
+      const initialDetail = makeApiKey({ id: "key-1", name: "Old Name" });
+      queryClient.setQueryData<APIKeyResponse>(["keys", "key-1"], initialDetail);
+      queryClient.setQueryData<PaginatedAPIKeysResponse>(
+        ["api-keys", 1, 10],
+        makePaginatedAPIKeys([initialDetail])
+      );
+
+      const updatedDetail = { ...initialDetail, name: "New Name" };
+      mockPut.mockResolvedValueOnce(updatedDetail);
+
+      const { result } = renderHook(() => useUpdateApiKeySection(), { wrapper });
+
+      result.current.mutate({ id: "key-1", payload: { name: "New Name" } });
+
+      // Optimistic update lands synchronously (before the mutation settles).
+      await waitFor(() => {
+        expect(queryClient.getQueryData<APIKeyResponse>(["keys", "key-1"])?.name).toBe("New Name");
+      });
+      expect(
+        queryClient.getQueryData<PaginatedAPIKeysResponse>(["api-keys", 1, 10])?.items[0].name
+      ).toBe("New Name");
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      expect(mockPut).toHaveBeenCalledWith("/admin/keys/key-1", { name: "New Name" });
+      expect(queryClient.getQueryData(["keys", "key-1"])).toEqual(updatedDetail);
+      expect(mockToastSuccess).toHaveBeenCalledWith("updateSuccess");
+    });
+
+    it("rolls back both caches and shows an error toast when the PUT fails", async () => {
+      const initialDetail = makeApiKey({ id: "key-1", name: "Stable Name" });
+      queryClient.setQueryData<APIKeyResponse>(["keys", "key-1"], initialDetail);
+      queryClient.setQueryData<PaginatedAPIKeysResponse>(
+        ["api-keys", 1, 10],
+        makePaginatedAPIKeys([initialDetail])
+      );
+
+      mockPut.mockRejectedValueOnce(new Error("Update failed"));
+
+      const { result } = renderHook(() => useUpdateApiKeySection(), { wrapper });
+
+      result.current.mutate({ id: "key-1", payload: { name: "Rejected Name" } });
+
+      await waitFor(() => expect(result.current.isError).toBe(true));
+
+      expect(queryClient.getQueryData<APIKeyResponse>(["keys", "key-1"])).toEqual(initialDetail);
+      expect(
+        queryClient.getQueryData<PaginatedAPIKeysResponse>(["api-keys", 1, 10])?.items[0].name
+      ).toBe("Stable Name");
+      expect(mockToastError).toHaveBeenCalledWith("updateFailed: Update failed");
+    });
+
+    it("invalidates the single-key, list, and stats caches on settle", async () => {
+      const initialDetail = makeApiKey({ id: "key-1" });
+      queryClient.setQueryData<APIKeyResponse>(["keys", "key-1"], initialDetail);
+      mockPut.mockResolvedValueOnce(initialDetail);
+
+      const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+      const { result } = renderHook(() => useUpdateApiKeySection(), { wrapper });
+
+      result.current.mutate({ id: "key-1", payload: { is_active: false } });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["keys", "key-1"] });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["api-keys"] });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["stats", "keys"] });
     });
   });
 });

@@ -50,27 +50,27 @@ export function TestUpstreamDialog({
   const getHeaderIcon = () => {
     if (isLoading) {
       return (
-        <div className="w-10 h-10 rounded-md bg-[var(--vr-accent-dim)] flex items-center justify-center">
+        <div className="w-10 h-10 rounded-cf-md bg-[var(--vr-accent-dim)] flex items-center justify-center">
           <Loader2 className="h-5 w-5 text-amber-800 dark:text-amber-100 animate-spin" />
         </div>
       );
     }
     if (isSuccess) {
       return (
-        <div className="w-10 h-10 rounded-md bg-status-info-muted flex items-center justify-center">
+        <div className="w-10 h-10 rounded-cf-md bg-status-info-muted flex items-center justify-center">
           <CheckCircle2 className="h-5 w-5 text-status-info" />
         </div>
       );
     }
     if (isFailed) {
       return (
-        <div className="w-10 h-10 rounded-md bg-status-error-muted flex items-center justify-center">
+        <div className="w-10 h-10 rounded-cf-md bg-status-error-muted flex items-center justify-center">
           <XCircle className="h-5 w-5 text-status-error" />
         </div>
       );
     }
     return (
-      <div className="w-10 h-10 rounded-md bg-surface-500 flex items-center justify-center">
+      <div className="w-10 h-10 rounded-cf-md bg-surface-500 flex items-center justify-center">
         <TestTube2 className="h-5 w-5 text-foreground" />
       </div>
     );
@@ -101,7 +101,7 @@ export function TestUpstreamDialog({
 
         <div className="space-y-3 py-4">
           {/* Upstream Info */}
-          <div className="bg-surface-500 rounded-md p-4">
+          <div className="bg-surface-500 rounded-cf-md p-4">
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="type-label-large text-foreground">{tCommon("name")}:</span>
@@ -124,7 +124,7 @@ export function TestUpstreamDialog({
           )}
 
           {isSuccess && testResult && (
-            <div className="bg-status-info-muted rounded-md p-4">
+            <div className="bg-status-info-muted rounded-cf-md p-4">
               <div className="space-y-2">
                 {testResult.latency_ms !== null && (
                   <div className="flex justify-between">
@@ -149,7 +149,7 @@ export function TestUpstreamDialog({
           )}
 
           {isFailed && testResult && (
-            <div className="bg-status-error-muted rounded-md p-4">
+            <div className="bg-status-error-muted rounded-cf-md p-4">
               <div className="space-y-2">
                 {testResult.error_type && (
                   <div className="flex justify-between">

@@ -11,19 +11,23 @@ import {
   RefreshCw,
   ShieldAlert,
   SlidersHorizontal,
+  TerminalSquare,
+  Users,
   Wallet,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { PageHeader } from "@/components/admin/page-header";
+import { PageShell } from "@/components/admin/page-shell";
 import { Topbar } from "@/components/admin/topbar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { IconBox } from "@/components/ui/icon-box";
 import { Link } from "@/i18n/navigation";
 import { APP_REPOSITORY_URL, APP_VERSION_TAG } from "@/lib/app-version";
 import { useAuth } from "@/providers/auth-provider";
-import { statusTone } from "@/lib/status-tone";
 import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
@@ -38,6 +42,8 @@ export default function SettingsPage() {
   const tTrafficRecording = useTranslations("trafficRecording");
   const tRepository = useTranslations("repository");
   const tFailureRules = useTranslations("upstreamFailureRules");
+  const tUsers = useTranslations("users");
+  const tCliproxy = useTranslations("cliproxy");
 
   const settingsItems = [
     {
@@ -55,6 +61,12 @@ export default function SettingsPage() {
   ];
 
   const systemLinks = [
+    {
+      href: "/system/users",
+      icon: Users,
+      title: t("users"),
+      description: tUsers("managementDesc"),
+    },
     {
       href: "/system/billing",
       icon: Wallet,
@@ -85,6 +97,12 @@ export default function SettingsPage() {
       title: tCompensation("title"),
       description: tCompensation("managementDesc"),
     },
+    {
+      href: "/system/cliproxy",
+      icon: TerminalSquare,
+      title: t("cliproxy"),
+      description: tCliproxy("pageDescription"),
+    },
   ];
 
   const externalLinks = [
@@ -100,16 +118,12 @@ export default function SettingsPage() {
     <>
       <Topbar title={t("settings")} />
 
-      <div className="mx-auto max-w-4xl space-y-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
-        <Card variant="outlined" className="border-divider bg-surface-200/70">
-          <CardContent className="space-y-2 p-5 sm:p-6">
-            <div className="flex items-center gap-2 text-amber-500">
-              <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
-              <span className="type-label-medium">{t("settings")}</span>
-            </div>
-            <p className="type-body-medium text-muted-foreground">{tCommon("adminConsole")}</p>
-          </CardContent>
-        </Card>
+      <PageShell maxWidth="4xl">
+        <PageHeader
+          icon={SlidersHorizontal}
+          title={t("settings")}
+          description={tCommon("adminConsole")}
+        />
 
         <div className="space-y-4">
           {settingsItems.map((item) => {
@@ -123,9 +137,9 @@ export default function SettingsPage() {
                 <CardContent className="p-4 sm:p-5">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-cf-sm border border-divider bg-surface-300 text-amber-500">
+                      <IconBox size="md">
                         <Icon className="h-5 w-5" aria-hidden="true" />
-                      </div>
+                      </IconBox>
                       <div>
                         <h3 className="type-body-medium text-foreground">{item.title}</h3>
                         <p className="type-caption text-muted-foreground">{item.description}</p>
@@ -152,9 +166,9 @@ export default function SettingsPage() {
                   <CardContent className="p-4 sm:p-5">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex min-w-0 items-start gap-3">
-                        <div className="mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-cf-sm border border-divider bg-surface-300 text-amber-500">
+                        <IconBox size="md" className="mt-0.5 flex-shrink-0">
                           <Icon className="h-5 w-5" aria-hidden="true" />
-                        </div>
+                        </IconBox>
                         <div className="min-w-0">
                           <h3 className="type-body-medium text-foreground">{item.title}</h3>
                           <p className="type-caption text-muted-foreground">{item.description}</p>
@@ -193,9 +207,9 @@ export default function SettingsPage() {
                   <CardContent className="p-4 sm:p-5">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex min-w-0 items-start gap-3">
-                        <div className="mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-cf-sm border border-divider bg-surface-300 text-amber-500">
+                        <IconBox size="md" className="mt-0.5 flex-shrink-0">
                           <Icon className="h-5 w-5" aria-hidden="true" />
-                        </div>
+                        </IconBox>
                         <div className="min-w-0">
                           <h3 className="type-body-medium text-foreground">{item.title}</h3>
                           <p className="type-caption text-muted-foreground">{item.description}</p>
@@ -217,14 +231,9 @@ export default function SettingsPage() {
             <CardContent className="p-4 sm:p-5">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
-                  <div
-                    className={cn(
-                      "flex h-10 w-10 items-center justify-center rounded-cf-sm border",
-                      statusTone("error")
-                    )}
-                  >
+                  <IconBox size="md" tone="error">
                     <LogOut className="h-5 w-5" aria-hidden="true" />
-                  </div>
+                  </IconBox>
                   <div>
                     <h3 className="type-body-medium text-status-error">{t("logout")}</h3>
                     <p className="type-caption text-muted-foreground">{tCommon("logout")}</p>
@@ -250,7 +259,7 @@ export default function SettingsPage() {
             </p>
           </div>
         </div>
-      </div>
+      </PageShell>
     </>
   );
 }

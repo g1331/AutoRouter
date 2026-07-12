@@ -276,6 +276,20 @@ async function mockLogsApi(page: Page) {
       page_size: 20,
     });
   });
+
+  // Expanding a log row mounts LogRecordingSection, whose recording probe hits
+  // /api/admin/traffic-recordings. Left unmocked it reaches the real server with
+  // the fake e2e token, and the resulting 401 logs the session out mid-test.
+  await page.route("**/api/admin/traffic-recordings**", async (route) => {
+    await fulfillJson(route, 200, {
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 1,
+      total_pages: 0,
+      stats: { total: 0, total_size_bytes: 0, latest_created_at: null },
+    });
+  });
 }
 
 // The live pulse bar in the dashboard layout opens a stats/live connection on

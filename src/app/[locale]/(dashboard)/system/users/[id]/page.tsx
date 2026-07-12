@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatCard } from "@/components/dashboard/stat-card";
 import { formatCost, formatNumber } from "@/components/dashboard/chart-theme";
 import { Link } from "@/i18n/navigation";
 import {
@@ -20,33 +21,6 @@ import {
 } from "@/hooks/use-admin-user-stats";
 import { ApiError } from "@/lib/api";
 import type { PortalUsageRange } from "@/types/api";
-
-interface StatCardProps {
-  icon: typeof Activity;
-  label: string;
-  value: string;
-  hint: string;
-  isLoading: boolean;
-}
-
-function StatCard({ icon: Icon, label, value, hint, isLoading }: StatCardProps) {
-  return (
-    <Card variant="outlined" className="border-divider bg-surface-200/70">
-      <CardContent className="space-y-2 p-4">
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <Icon className="h-4 w-4 text-amber-500" aria-hidden="true" />
-          <span className="type-label-medium">{label}</span>
-        </div>
-        {isLoading ? (
-          <Skeleton className="h-8 w-24" />
-        ) : (
-          <p className="type-headline-small text-foreground">{value}</p>
-        )}
-        <p className="type-body-small text-muted-foreground">{hint}</p>
-      </CardContent>
-    </Card>
-  );
-}
 
 export default function AdminUserUsagePage() {
   const params = useParams<{ id: string }>();

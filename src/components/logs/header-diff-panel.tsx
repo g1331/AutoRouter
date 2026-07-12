@@ -74,7 +74,7 @@ export function HeaderDiffPanel({ headerDiff, className }: HeaderDiffPanelProps)
         <button
           type="button"
           onClick={() => setIsExpanded((prev) => !prev)}
-          className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded border border-divider px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+          className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-cf-sm border border-divider px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
           aria-expanded={isExpanded}
           aria-label={isExpanded ? collapseLabel : expandLabel}
         >
@@ -89,7 +89,7 @@ export function HeaderDiffPanel({ headerDiff, className }: HeaderDiffPanelProps)
           <button
             type="button"
             onClick={() => setShowValues((prev) => !prev)}
-            className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded border border-divider px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+            className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-cf-sm border border-divider px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
             aria-label={showValues ? hideValuesLabel : showValuesLabel}
           >
             {showValues ? (
@@ -103,7 +103,7 @@ export function HeaderDiffPanel({ headerDiff, className }: HeaderDiffPanelProps)
       </div>
 
       {isExpanded && (
-        <div className="overflow-hidden rounded border border-divider bg-surface-400/20">
+        <div className="overflow-hidden rounded-cf-sm border border-divider bg-surface-400/20">
           {headerDiff.dropped.map((item) => (
             <div
               key={`drop-${item.header}-${item.value}`}

@@ -59,7 +59,7 @@ export function DeleteUpstreamDialog({
       <DialogContent className="max-w-md" morph={morph} morphName="morph-upstream-delete">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-md bg-status-error-muted flex items-center justify-center">
+            <div className="w-10 h-10 rounded-cf-md bg-status-error-muted flex items-center justify-center">
               <AlertTriangle className="h-5 w-5 text-status-error" />
             </div>
             {t("deleteUpstreamTitle")}
@@ -68,7 +68,7 @@ export function DeleteUpstreamDialog({
         </DialogHeader>
 
         <div className="space-y-3 py-4">
-          <div className="bg-status-error-muted rounded-md p-4">
+          <div className="bg-status-error-muted rounded-cf-md p-4">
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="type-label-large text-status-error">{tCommon("name")}:</span>
@@ -93,7 +93,7 @@ export function DeleteUpstreamDialog({
             </div>
           </div>
 
-          <div className="flex items-start gap-3 bg-status-warning-muted rounded-md p-3">
+          <div className="flex items-start gap-3 bg-status-warning-muted rounded-cf-md p-3">
             <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5 text-status-warning" />
             <p className="type-body-small text-status-warning">{t("deleteUpstreamWarning")}</p>
           </div>

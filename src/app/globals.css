@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @config "../../tailwind.config.ts";
 
+/* 仅浅色态变体：与 darkMode:"class" 对称，用于个别只需在浅色主题下补强的样式
+   （如开关 OFF 轨对比度、日志 journey 选中药丸的强调边）。深色态不受影响。 */
+@custom-variant light (&:where(.light, .light *));
+
 :root,
 .dark {
   color-scheme: dark;
@@ -633,6 +637,15 @@ html.theme-switching::before {
     font-weight: 600;
     line-height: 1.4;
     letter-spacing: 0.03em;
+  }
+
+  .type-label-small {
+    font-family: var(--vr-font-display);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.35;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
   }
 
   .type-caption {

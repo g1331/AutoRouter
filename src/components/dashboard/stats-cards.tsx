@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { IconBox } from "@/components/ui/icon-box";
 import { useStatsTimeseries, type TimeseriesMetric } from "@/hooks/use-dashboard-stats";
 import { cn } from "@/lib/utils";
 import type { TimeseriesDataPoint } from "@/types/api";
@@ -67,7 +68,7 @@ function DeltaBadge({ today, yesterday, lowerIsBetter = false }: DeltaBadgeProps
 
   if (yesterday === 0) {
     return (
-      <span className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 type-caption bg-status-success/10 text-status-success">
+      <span className="inline-flex items-center gap-0.5 rounded-cf-sm px-1 py-0.5 type-caption bg-status-success/10 text-status-success">
         <TrendingUp className="h-2.5 w-2.5" />
         NEW
       </span>
@@ -86,7 +87,7 @@ function DeltaBadge({ today, yesterday, lowerIsBetter = false }: DeltaBadgeProps
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-0.5 rounded px-1 py-0.5 type-caption",
+        "inline-flex items-center gap-0.5 rounded-cf-sm px-1 py-0.5 type-caption",
         isGood ? "bg-status-success/10 text-status-success" : "bg-status-error/10 text-status-error"
       )}
     >
@@ -174,7 +175,11 @@ function AnimatedCounter({
     );
   }
 
-  return <p className={cn("type-display-medium", valueClassName ?? "text-foreground")}>{value}</p>;
+  return (
+    <p className={cn("type-display-medium tabular-nums", valueClassName ?? "text-foreground")}>
+      {value}
+    </p>
+  );
 }
 
 function StatCard({
@@ -216,16 +221,9 @@ function StatCard({
       <CardContent className="p-5 sm:p-6">
         <div className="flex items-center justify-between">
           <p className="type-label text-muted-foreground">{title}</p>
-          <div
-            className={cn(
-              "flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-cf-sm border",
-              alert
-                ? "border-status-error/45 bg-status-error/10 text-status-error"
-                : "border-amber-500/35 bg-amber-500/10 text-amber-500"
-            )}
-          >
+          <IconBox size="sm" tone={alert ? "error" : "amber"} className="flex-shrink-0">
             <Icon className="h-3.5 w-3.5" />
-          </div>
+          </IconBox>
         </div>
         <div className="mt-2">
           <AnimatedCounter

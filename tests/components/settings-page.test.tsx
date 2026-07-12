@@ -90,6 +90,8 @@ vi.mock("lucide-react", () => ({
   RefreshCw: () => <svg data-testid="icon-refresh-cw" />,
   ShieldAlert: () => <svg data-testid="icon-shield-alert" />,
   SlidersHorizontal: () => <svg data-testid="icon-sliders-horizontal" />,
+  TerminalSquare: () => <svg data-testid="icon-terminal-square" />,
+  Users: () => <svg data-testid="icon-users" />,
   Wallet: () => <svg data-testid="icon-wallet" />,
 }));
 
@@ -127,5 +129,21 @@ describe("SettingsPage", () => {
     const trafficRecordingLink = screen.getByRole("link", { name: /trafficRecording.title/i });
     expect(trafficRecordingLink).toHaveAttribute("href", "/system/traffic-recording");
     expect(screen.getByText("trafficRecording.settingsDescription")).toBeInTheDocument();
+  });
+
+  it("renders user management settings entry", () => {
+    render(<SettingsPage />);
+
+    const usersLink = screen.getByRole("link", { name: /nav.users/i });
+    expect(usersLink).toHaveAttribute("href", "/system/users");
+    expect(screen.getByText("users.managementDesc")).toBeInTheDocument();
+  });
+
+  it("renders CLIProxyAPI settings entry", () => {
+    render(<SettingsPage />);
+
+    const cliproxyLink = screen.getByRole("link", { name: /nav.cliproxy/i });
+    expect(cliproxyLink).toHaveAttribute("href", "/system/cliproxy");
+    expect(screen.getByText("cliproxy.pageDescription")).toBeInTheDocument();
   });
 });

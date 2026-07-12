@@ -101,9 +101,6 @@ const config: Config = {
         display: ["var(--vr-font-display)"],
       },
       borderRadius: {
-        lg: "var(--vr-radius-lg)",
-        md: "var(--vr-radius-md)",
-        sm: "var(--vr-radius-sm)",
         "cf-sm": "var(--vr-radius-xs)",
         "cf-md": "var(--vr-radius-sm)",
       },

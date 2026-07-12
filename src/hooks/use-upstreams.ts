@@ -130,6 +130,119 @@ export function useUpdateUpstream() {
   });
 }
 
+/**
+ * Update a single upstream section (detail-page partial PUT).
+ *
+ * Modeled on {@link useToggleUpstreamActive}: the passed `payload` carries only
+ * the editing section's fields and is optimistically shallow-merged into the
+ * detail (`["upstreams", id]`), paginated, and "all" caches, rolling back on
+ * error. On success the authoritative server response replaces the detail cache;
+ * `onSettled` invalidates both the single-upstream query and the list caches so
+ * no section reads stale data after another section saves.
+ */
+export function useUpdateUpstreamSection() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+  const t = useTranslations("upstreams") as UpstreamsTranslator;
+
+  return useMutation<
+    Upstream,
+    Error,
+    { id: string; payload: UpstreamUpdate },
+    {
+      previousDetail: Upstream | undefined;
+      previousPaginated: Array<[QueryKey, PaginatedUpstreamsResponse | undefined]>;
+      previousAll: Upstream[] | undefined;
+    }
+  >({
+    mutationFn: ({ id, payload }) => apiClient.put<Upstream>(`/admin/upstreams/${id}`, payload),
+    onMutate: async ({ id, payload }) => {
+      await queryClient.cancelQueries({ queryKey: ["upstreams"] });
+
+      // `api_key` is a write-only field that never appears on the Upstream
+      // response, so it must not leak into the optimistic cache merge below.
+      const { api_key: _api_key, ...mergePayload } = payload;
+
+      const previousDetail = queryClient.getQueryData<Upstream>(["upstreams", id]);
+      const previousPaginated = queryClient.getQueriesData<PaginatedUpstreamsResponse>({
+        queryKey: ["upstreams"],
+        predicate: (query) =>
+          query.queryKey[0] === "upstreams" && typeof query.queryKey[1] === "number",
+      });
+      const previousAll = queryClient.getQueryData<Upstream[]>(["upstreams", "all"]);
+
+      if (previousDetail) {
+        queryClient.setQueryData<Upstream>(["upstreams", id], {
+          ...previousDetail,
+          ...mergePayload,
+        } as Upstream);
+      }
+
+      queryClient.setQueriesData<PaginatedUpstreamsResponse>(
+        {
+          queryKey: ["upstreams"],
+          predicate: (query) =>
+            query.queryKey[0] === "upstreams" && typeof query.queryKey[1] === "number",
+        },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            items: old.items.map((upstream) =>
+              upstream.id === id ? ({ ...upstream, ...mergePayload } as Upstream) : upstream
+            ),
+          };
+        }
+      );
+
+      queryClient.setQueryData<Upstream[]>(["upstreams", "all"], (old) => {
+        if (!old) return old;
+        return old.map((upstream) =>
+          upstream.id === id ? ({ ...upstream, ...mergePayload } as Upstream) : upstream
+        );
+      });
+
+      return { previousDetail, previousPaginated, previousAll };
+    },
+    onError: (error, { id }, context) => {
+      if (context?.previousDetail !== undefined) {
+        queryClient.setQueryData(["upstreams", id], context.previousDetail);
+      }
+      if (context?.previousPaginated) {
+        for (const [queryKey, data] of context.previousPaginated) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
+      if (context?.previousAll) {
+        queryClient.setQueryData(["upstreams", "all"], context.previousAll);
+      }
+      toast.error(formatUpstreamError(t, "updateFailed", error));
+    },
+    onSuccess: (updated, { id }) => {
+      queryClient.setQueryData(["upstreams", id], updated);
+      toast.success(t("updateSuccess"));
+    },
+    onSettled: (_data, _error, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ["upstreams", id] });
+      queryClient.invalidateQueries({ queryKey: ["upstreams"] });
+      queryClient.invalidateQueries({ queryKey: ["upstreams", "quota"] });
+    },
+  });
+}
+
+/**
+ * Fetch a single upstream by id (detail page).
+ */
+export function useUpstream(id: string | undefined, enabled: boolean = true) {
+  const { apiClient } = useAuth();
+
+  return useQuery({
+    queryKey: ["upstreams", id],
+    queryFn: () => apiClient.get<Upstream>(`/admin/upstreams/${id}`),
+    enabled: enabled && !!id,
+  });
+}
+
 export function useUpstreamFailureRules(upstreamId: string | undefined, enabled: boolean = true) {
   const { apiClient } = useAuth();
 

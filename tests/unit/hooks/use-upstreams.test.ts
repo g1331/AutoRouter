@@ -333,6 +333,62 @@ describe("useUpstreams", () => {
   });
 });
 
+describe("useUpstream", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("fetches a single upstream by id and stores it under the ['upstreams', id] cache key", async () => {
+    mockGet.mockResolvedValueOnce(sampleUpstream);
+
+    const { useUpstream } = await import("@/hooks/use-upstreams");
+    const { queryClient, wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useUpstream("upstream-1"), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(mockGet).toHaveBeenCalledWith("/admin/upstreams/upstream-1");
+    expect(result.current.data).toEqual(sampleUpstream);
+    expect(queryClient.getQueryData(["upstreams", "upstream-1"])).toEqual(sampleUpstream);
+  });
+
+  it("surfaces fetch errors", async () => {
+    mockGet.mockRejectedValueOnce(new Error("Not found"));
+
+    const { useUpstream } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useUpstream("missing-upstream"), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true);
+    });
+
+    expect(result.current.error?.message).toBe("Not found");
+  });
+
+  it("does not fetch when id is undefined", async () => {
+    const { useUpstream } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    renderHook(() => useUpstream(undefined), { wrapper });
+
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it("does not fetch when enabled is false", async () => {
+    const { useUpstream } = await import("@/hooks/use-upstreams");
+    const { wrapper } = createWrapper();
+
+    renderHook(() => useUpstream("upstream-1", false), { wrapper });
+
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+});
+
 describe("useAllUpstreams", () => {
   beforeEach(() => {
     vi.clearAllMocks();

@@ -6,6 +6,7 @@ import { Cpu, Key, Server, Trophy, Users } from "lucide-react";
 import { Cell, Pie, PieChart, Tooltip } from "recharts";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { IconBox } from "@/components/ui/icon-box";
 import { Link } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import type { StatsLeaderboardResponse, DistributionItem } from "@/types/api";
@@ -203,9 +204,9 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
       <Card className="border-border bg-card">
         <CardContent className="p-4 sm:p-5">
           <div className="mb-3 flex items-center gap-2 border-b border-divider pb-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-cf-sm border border-amber-500/35 bg-amber-500/10 text-amber-500">
+            <IconBox size="sm">
               <Server className="h-3.5 w-3.5" />
-            </div>
+            </IconBox>
             <h4 className="type-label-medium text-foreground">{t("stats.upstreamRanking")}</h4>
           </div>
 
@@ -279,9 +280,9 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
       <Card className="border-border bg-card">
         <CardContent className="p-4 sm:p-5">
           <div className="mb-3 flex items-center gap-2 border-b border-divider pb-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-cf-sm border border-amber-500/35 bg-amber-500/10 text-amber-500">
+            <IconBox size="sm">
               <Cpu className="h-3.5 w-3.5" />
-            </div>
+            </IconBox>
             <h4 className="type-label-medium text-foreground">{t("stats.modelRanking")}</h4>
           </div>
 
@@ -344,9 +345,9 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
       <Card className="border-border bg-card">
         <CardContent className="p-4 sm:p-5">
           <div className="mb-3 flex items-center gap-2 border-b border-divider pb-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-cf-sm border border-amber-500/35 bg-amber-500/10 text-amber-500">
+            <IconBox size="sm">
               <Key className="h-3.5 w-3.5" />
-            </div>
+            </IconBox>
             <h4 className="type-label-medium text-foreground">{t("stats.apiKeyRanking")}</h4>
           </div>
 
@@ -407,9 +408,9 @@ export function LeaderboardSection({ data, isLoading }: LeaderboardSectionProps)
       <Card className="border-border bg-card">
         <CardContent className="p-4 sm:p-5">
           <div className="mb-3 flex items-center gap-2 border-b border-divider pb-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-cf-sm border border-amber-500/35 bg-amber-500/10 text-amber-500">
+            <IconBox size="sm">
               <Users className="h-3.5 w-3.5" />
-            </div>
+            </IconBox>
             <h4 className="type-label-medium text-foreground">{t("stats.userRanking")}</h4>
           </div>
 

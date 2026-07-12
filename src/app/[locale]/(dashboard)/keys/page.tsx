@@ -2,14 +2,14 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Key } from "lucide-react";
+import { Key, Plus } from "lucide-react";
 
 import { CreateKeyDialog } from "@/components/admin/create-key-dialog";
-import { EditKeyDialog } from "@/components/admin/edit-key-dialog";
 import { KeysTable } from "@/components/admin/keys-table";
 import { PaginationControls } from "@/components/admin/pagination-controls";
 import { RevokeKeyDialog } from "@/components/admin/revoke-key-dialog";
 import { Topbar } from "@/components/admin/topbar";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useAPIKeys } from "@/hooks/use-api-keys";
 import { useContainerMorph } from "@/hooks/use-container-morph";
@@ -61,7 +61,7 @@ export default function KeysPage() {
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [revokeKey, setRevokeKey] = useState<APIKey | null>(null);
-  const [editingKey, setEditingKey] = useState<APIKey | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const pageSize = 10;
 
   const handleSearchQueryChange = useCallback((value: string) => {
@@ -70,8 +70,10 @@ export default function KeysPage() {
   }, []);
 
   // 容器变形动画：记录触发弹窗的源元素（表格行 / 卡片），关闭时收回同一元素。
+  // 撤销与新建各用独立的源引用，避免相互覆盖。
   const { startMorph, canMorph } = useContainerMorph();
   const morphSourceRef = useRef<HTMLElement | null>(null);
+  const createMorphSourceRef = useRef<HTMLElement | null>(null);
 
   const t = useTranslations("keys");
   const tCommon = useTranslations("common");
@@ -87,7 +89,20 @@ export default function KeysPage() {
             <Key className="h-4 w-4 text-amber-500" aria-hidden="true" />
             <span className="type-body-medium text-muted-foreground">{t("managementDesc")}</span>
           </div>
-          <CreateKeyDialog />
+          <Button
+            onClick={(event) => {
+              const source = event.currentTarget;
+              createMorphSourceRef.current = source;
+              startMorph(() => setCreateDialogOpen(true), {
+                source,
+                name: "morph-key-form",
+                mode: "enter",
+              });
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+            {t("createKey")}
+          </Button>
         </div>
 
         {isLoading ? (
@@ -109,14 +124,6 @@ export default function KeysPage() {
                 startMorph(() => setRevokeKey(key), {
                   source,
                   name: "morph-key-revoke",
-                  mode: "enter",
-                });
-              }}
-              onEdit={(key, source) => {
-                morphSourceRef.current = source;
-                startMorph(() => setEditingKey(key), {
-                  source,
-                  name: "morph-key-form",
                   mode: "enter",
                 });
               }}
@@ -152,23 +159,22 @@ export default function KeysPage() {
         morph={canMorph}
       />
 
-      {editingKey && (
-        <EditKeyDialog
-          apiKey={editingKey}
-          open={!!editingKey}
-          onOpenChange={(open) => {
-            if (!open) {
-              startMorph(() => setEditingKey(null), {
-                source: morphSourceRef.current,
-                name: "morph-key-form",
-                mode: "exit",
-              });
-            }
-          }}
-          morph={canMorph}
-          morphName="morph-key-form"
-        />
-      )}
+      <CreateKeyDialog
+        open={createDialogOpen}
+        onOpenChange={(open) => {
+          if (open) {
+            setCreateDialogOpen(true);
+          } else {
+            startMorph(() => setCreateDialogOpen(false), {
+              source: createMorphSourceRef.current,
+              name: "morph-key-form",
+              mode: "exit",
+            });
+          }
+        }}
+        morph={canMorph}
+        morphName="morph-key-form"
+      />
     </>
   );
 }

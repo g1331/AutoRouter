@@ -38,7 +38,13 @@ import { HeaderDiffPanel } from "@/components/logs/header-diff-panel";
 import { LogRecordingSection } from "@/components/admin/log-recording-section";
 import { matchRouteCapability } from "@/lib/services/route-capability-matcher";
 import { ROUTE_CAPABILITY_DEFINITIONS } from "@/lib/route-capabilities";
-import { getRequestThinkingBadgeLabel } from "@/lib/utils/request-thinking-config";
+import { TruncatedTextTooltip } from "@/components/logs/truncated-text-tooltip";
+import {
+  RequestKeyIdentity,
+  getRequestKeyDisplayMeta,
+} from "@/components/logs/request-key-identity";
+import { ModelIdentity, getReasoningEffortLevel } from "@/components/logs/model-identity";
+import { ThinkingConfigPanel } from "@/components/logs/thinking-config-panel";
 
 /**
  * Filters resolved server-side: the parent owns this state, feeds it into its
@@ -113,7 +119,6 @@ const DETAIL_PANEL_ROW_CLASS =
   "flex items-start gap-3 border-b border-divider/35 py-2 first:pt-0 last:border-b-0 last:pb-0";
 const DETAIL_PANEL_LABEL_CLASS =
   "min-w-0 shrink-0 text-[10px] uppercase tracking-[0.14em] text-muted-foreground/82";
-const DETAIL_PANEL_VALUE_CLASS = "ml-auto min-w-0 text-right text-foreground break-all";
 const DETAIL_PANEL_MUTED_TEXT_CLASS = "text-[12px] text-muted-foreground";
 const DETAIL_SUMMARY_BANNER_CLASS =
   "relative overflow-hidden rounded-cf-md border px-4 py-3 shadow-[var(--vr-shadow-xs)]";
@@ -146,241 +151,6 @@ function ExpandChevron({ expanded, className }: { expanded: boolean; className?:
   );
 }
 
-type ReasoningEffortLevel = NonNullable<RequestLog["reasoning_effort"]>;
-
-type RequestLogReasoningMeta = RequestLog & {
-  reasoning_effort?: unknown;
-  reasoningEffort?: unknown;
-  thinking_level?: unknown;
-  thinkingLevel?: unknown;
-};
-
-const REASONING_EFFORT_LABELS: Record<ReasoningEffortLevel, string> = {
-  none: "None",
-  enabled: "Think",
-  minimal: "Minimal",
-  low: "Low",
-  medium: "Medium",
-  high: "High",
-  xhigh: "XHigh",
-};
-
-const REASONING_EFFORT_BADGE_CLASSES: Record<ReasoningEffortLevel, string> = {
-  none: "border-divider/70 bg-surface-300/65 text-muted-foreground/85",
-  enabled: statusTone("info", "faint"),
-  minimal: "border-divider/70 bg-surface-300/70 text-muted-foreground",
-  low: "border-divider bg-surface-300/85 text-foreground/85",
-  medium: statusTone("info", "faint"),
-  high: "border-amber-500/35 bg-amber-500/10 text-amber-300",
-  xhigh: statusTone("warning"),
-};
-
-const THINKING_BADGE_BASE_CLASS =
-  "h-5 shrink-0 rounded-full px-1.5 py-0 font-mono text-[9px] font-medium leading-none tracking-[0.12em] shadow-none";
-
-function extractThinkingBudgetBadgeValue(label: string): string | null {
-  return label.startsWith("budget:") ? label.slice("budget:".length).trim() : null;
-}
-
-function TruncatedTextTooltip({ text, className }: { text: string; className?: string }) {
-  return (
-    <Tooltip delayDuration={200}>
-      <TooltipTrigger asChild>
-        <span className={cn("block min-w-0 truncate", className)}>{text}</span>
-      </TooltipTrigger>
-      <TooltipContent
-        side="top"
-        align="start"
-        className={cn(
-          "p-2.5",
-          "border-divider bg-surface-200 text-foreground",
-          "shadow-[var(--vr-shadow-md)]",
-          "max-w-[80vw] sm:max-w-[640px]"
-        )}
-      >
-        <div className="font-mono text-[11px] leading-snug whitespace-pre-wrap break-words">
-          {text}
-        </div>
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-function getRequestKeyDisplayMeta(options: {
-  keyName: string | null | undefined;
-  keyPrefix: string | null | undefined;
-  fallbackLabel: string;
-}) {
-  const keyName = options.keyName?.trim() ? options.keyName.trim() : null;
-  const keyPrefix = options.keyPrefix?.trim() ? options.keyPrefix.trim() : null;
-
-  if (keyName && keyPrefix) {
-    return {
-      primaryLabel: keyName,
-      secondaryLabel: keyPrefix,
-      tooltipLabel: `${keyName} · ${keyPrefix}`,
-      hasKeyData: true,
-    };
-  }
-
-  if (keyName) {
-    return {
-      primaryLabel: keyName,
-      secondaryLabel: null,
-      tooltipLabel: keyName,
-      hasKeyData: true,
-    };
-  }
-
-  if (keyPrefix) {
-    return {
-      primaryLabel: keyPrefix,
-      secondaryLabel: null,
-      tooltipLabel: keyPrefix,
-      hasKeyData: true,
-    };
-  }
-
-  return {
-    primaryLabel: options.fallbackLabel,
-    secondaryLabel: null,
-    tooltipLabel: options.fallbackLabel,
-    hasKeyData: false,
-  };
-}
-
-function RequestKeyIdentity({
-  keyName,
-  keyPrefix,
-  className,
-  textClassName,
-  compact = false,
-}: {
-  keyName: RequestLog["api_key_name"] | null | undefined;
-  keyPrefix: RequestLog["api_key_prefix"] | null | undefined;
-  className?: string;
-  textClassName?: string;
-  compact?: boolean;
-}) {
-  const t = useTranslations("logs");
-  const keyMeta = getRequestKeyDisplayMeta({
-    keyName,
-    keyPrefix,
-    fallbackLabel: t("unknownKey"),
-  });
-
-  if (!keyMeta.hasKeyData) {
-    return <span className="text-muted-foreground">{keyMeta.primaryLabel}</span>;
-  }
-
-  return (
-    <div className={cn("flex min-w-0 max-w-full items-center gap-1.5", className)}>
-      <TruncatedTextTooltip text={keyMeta.primaryLabel} className={cn("shrink", textClassName)} />
-      {keyMeta.secondaryLabel ? (
-        <span
-          className={cn(
-            "shrink-0 rounded-cf-sm border border-divider bg-surface-300 px-1.5 py-0.5 font-mono text-[10px] leading-none text-muted-foreground",
-            compact && "px-1 py-0 text-[9px]"
-          )}
-          title={keyMeta.secondaryLabel}
-        >
-          {keyMeta.secondaryLabel}
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-function getReasoningEffortLevel(log: RequestLog): ReasoningEffortLevel | null {
-  const requestLogWithMeta = log as RequestLogReasoningMeta;
-  const rawValue =
-    requestLogWithMeta.reasoning_effort ??
-    requestLogWithMeta.reasoningEffort ??
-    requestLogWithMeta.thinking_level ??
-    requestLogWithMeta.thinkingLevel;
-
-  if (typeof rawValue !== "string") {
-    return null;
-  }
-
-  const normalizedValue = rawValue.trim().toLowerCase();
-  return normalizedValue === "none" ||
-    normalizedValue === "enabled" ||
-    normalizedValue === "minimal" ||
-    normalizedValue === "low" ||
-    normalizedValue === "medium" ||
-    normalizedValue === "high" ||
-    normalizedValue === "xhigh"
-    ? normalizedValue
-    : null;
-}
-
-function ReasoningEffortBadge({ level }: { level: ReasoningEffortLevel }) {
-  const label = REASONING_EFFORT_LABELS[level];
-
-  return (
-    <Badge
-      variant="neutral"
-      className={cn(
-        "h-5 shrink-0 rounded-full px-1.5 py-0 font-mono text-[9px] font-medium leading-none tracking-[0.12em] shadow-none",
-        REASONING_EFFORT_BADGE_CLASSES[level]
-      )}
-      aria-label={label}
-      title={label}
-    >
-      <span>{label}</span>
-    </Badge>
-  );
-}
-
-function isThinkingBadgeDuplicatedByReasoningEffort(
-  thinkingConfig: RequestLog["thinking_config"] | null | undefined,
-  reasoningEffort: ReasoningEffortLevel | null | undefined
-): boolean {
-  if (!thinkingConfig || !reasoningEffort) {
-    return false;
-  }
-
-  const badgeLabel = getRequestThinkingBadgeLabel(thinkingConfig);
-  if (!badgeLabel) {
-    return false;
-  }
-
-  return badgeLabel.trim().toLowerCase() === reasoningEffort;
-}
-
-function ModelIdentity({
-  label,
-  reasoningEffort,
-  thinkingConfig,
-  compactBadges = false,
-  className,
-  textClassName,
-}: {
-  label: string | null | undefined;
-  reasoningEffort?: ReasoningEffortLevel | null;
-  thinkingConfig?: RequestLog["thinking_config"] | null;
-  compactBadges?: boolean;
-  className?: string;
-  textClassName?: string;
-}) {
-  if (!label) {
-    return <span className="text-muted-foreground">-</span>;
-  }
-
-  return (
-    <div className={cn("flex min-w-0 max-w-full items-center gap-1", className)}>
-      <TruncatedTextTooltip text={label} className={cn("shrink", textClassName)} />
-      {reasoningEffort ? <ReasoningEffortBadge level={reasoningEffort} /> : null}
-      <ThinkingConfigBadge
-        thinkingConfig={thinkingConfig}
-        dedupeWithReasoningEffort={reasoningEffort}
-        compact={compactBadges}
-      />
-    </div>
-  );
-}
-
 function RequestModeBadge({ isStream, compact = false }: { isStream: boolean; compact?: boolean }) {
   const t = useTranslations("logs");
   const label = isStream ? t("requestModeStreaming") : t("requestModeNonStreaming");
@@ -398,200 +168,6 @@ function RequestModeBadge({ isStream, compact = false }: { isStream: boolean; co
     >
       <span>{compact ? shortLabel : label}</span>
     </Badge>
-  );
-}
-
-function ThinkingConfigBadge({
-  thinkingConfig,
-  dedupeWithReasoningEffort,
-  compact = false,
-}: {
-  thinkingConfig: RequestLog["thinking_config"] | null | undefined;
-  dedupeWithReasoningEffort?: ReasoningEffortLevel | null;
-  compact?: boolean;
-}) {
-  const t = useTranslations("logs");
-  const badgeLabel = getRequestThinkingBadgeLabel(thinkingConfig ?? null);
-  const budgetValue = badgeLabel ? extractThinkingBudgetBadgeValue(badgeLabel) : null;
-
-  if (
-    !badgeLabel ||
-    isThinkingBadgeDuplicatedByReasoningEffort(thinkingConfig, dedupeWithReasoningEffort)
-  ) {
-    return null;
-  }
-
-  if (budgetValue) {
-    return (
-      <Badge
-        variant="success"
-        className={cn(
-          THINKING_BADGE_BASE_CLASS,
-          "gap-1",
-          statusTone("success", "faint"),
-          compact && "gap-0.5 px-1 py-0 text-[8px]"
-        )}
-        aria-label={t("thinkingBadgeAria", { value: badgeLabel })}
-        title={t("thinkingBadgeAria", { value: badgeLabel })}
-      >
-        <span className="uppercase tracking-[0.16em]">Budget</span>
-        <span
-          className={cn(
-            "rounded-full bg-background/65 px-1 py-[1px] text-[8px] leading-none tracking-[0.08em] text-foreground/85",
-            compact && "px-0.5 text-[7px]"
-          )}
-        >
-          {budgetValue}
-        </span>
-      </Badge>
-    );
-  }
-
-  return (
-    <Badge
-      variant="outline"
-      className={cn(
-        "shrink-0 border-divider px-1.5 py-0 font-mono text-[10px] leading-4 text-muted-foreground",
-        compact && "px-1 py-0 text-[9px]"
-      )}
-      aria-label={t("thinkingBadgeAria", { value: badgeLabel })}
-      title={t("thinkingBadgeAria", { value: badgeLabel })}
-    >
-      [{badgeLabel}]
-    </Badge>
-  );
-}
-
-function ThinkingConfigPanel({
-  thinkingConfig,
-}: {
-  thinkingConfig: RequestLog["thinking_config"] | null | undefined;
-}) {
-  const t = useTranslations("logs");
-  const locale = useLocale();
-  const [isExpanded, setIsExpanded] = useState(false);
-  const isZh = locale === "zh-CN" || locale === "zh";
-  const panelTitle = t("thinkingConfig");
-  const expandLabel = isZh ? "展开思考信息" : "Expand thinking details";
-  const collapseLabel = isZh ? "收起思考信息" : "Collapse thinking details";
-
-  const summaryText = thinkingConfig
-    ? [
-        t(`thinkingProviderValue.${thinkingConfig.provider}`),
-        t(`thinkingModeValue.${thinkingConfig.mode}`),
-        getRequestThinkingBadgeLabel(thinkingConfig),
-      ]
-        .filter(Boolean)
-        .join(" · ")
-    : t("thinkingNotExplicitlySpecified");
-
-  if (!thinkingConfig) {
-    return (
-      <div className={DETAIL_PANEL_CLASS}>
-        <div className={DETAIL_PANEL_HEADER_CLASS}>{panelTitle}</div>
-        <div className={DETAIL_PANEL_BODY_CLASS}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className={cn(DETAIL_PANEL_MUTED_TEXT_CLASS, "min-w-0 flex-1")}>{summaryText}</div>
-            <button
-              type="button"
-              onClick={() => setIsExpanded((prev) => !prev)}
-              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded border border-divider px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
-              aria-expanded={isExpanded}
-              aria-label={isExpanded ? collapseLabel : expandLabel}
-            >
-              <ChevronDown
-                className={cn("h-3 w-3", LOGS_ICON_TRANSFORM_CLASS, isExpanded && "rotate-180")}
-                aria-hidden="true"
-              />
-              <span>{isExpanded ? collapseLabel : expandLabel}</span>
-            </button>
-          </div>
-          {isExpanded ? (
-            <div
-              className={cn("mt-3 border-t border-divider/40 pt-3", DETAIL_PANEL_MUTED_TEXT_CLASS)}
-            >
-              {t("thinkingNotExplicitlySpecified")}
-            </div>
-          ) : null}
-        </div>
-      </div>
-    );
-  }
-
-  const detailRows = [
-    {
-      label: t("thinkingProvider"),
-      value: t(`thinkingProviderValue.${thinkingConfig.provider}`),
-    },
-    {
-      label: t("thinkingProtocol"),
-      value: t(`thinkingProtocolValue.${thinkingConfig.protocol}`),
-    },
-    {
-      label: t("thinkingMode"),
-      value: t(`thinkingModeValue.${thinkingConfig.mode}`),
-    },
-    {
-      label: t("thinkingLevel"),
-      value: thinkingConfig.level ?? t("thinkingValueUnset"),
-    },
-    {
-      label: t("thinkingBudgetTokens"),
-      value:
-        thinkingConfig.budget_tokens != null
-          ? thinkingConfig.budget_tokens.toLocaleString(locale)
-          : t("thinkingValueUnset"),
-    },
-    {
-      label: t("thinkingIncludeThoughts"),
-      value:
-        thinkingConfig.include_thoughts == null
-          ? t("thinkingValueUnset")
-          : thinkingConfig.include_thoughts
-            ? t("thinkingBooleanEnabled")
-            : t("thinkingBooleanDisabled"),
-    },
-    {
-      label: t("thinkingSourcePaths"),
-      value:
-        thinkingConfig.source_paths.length > 0
-          ? thinkingConfig.source_paths.join(" · ")
-          : t("thinkingValueUnset"),
-    },
-  ];
-
-  return (
-    <div className={DETAIL_PANEL_CLASS}>
-      <div className={DETAIL_PANEL_HEADER_CLASS}>{panelTitle}</div>
-      <div className={DETAIL_PANEL_BODY_CLASS}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0 flex-1 text-[12px] text-muted-foreground">{summaryText}</div>
-          <button
-            type="button"
-            onClick={() => setIsExpanded((prev) => !prev)}
-            className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded border border-divider px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
-            aria-expanded={isExpanded}
-            aria-label={isExpanded ? collapseLabel : expandLabel}
-          >
-            <ChevronDown
-              className={cn("h-3 w-3", LOGS_ICON_TRANSFORM_CLASS, isExpanded && "rotate-180")}
-              aria-hidden="true"
-            />
-            <span>{isExpanded ? collapseLabel : expandLabel}</span>
-          </button>
-        </div>
-        {isExpanded ? (
-          <div className={cn("mt-3 border-t border-divider/40 pt-3", DETAIL_PANEL_STACK_CLASS)}>
-            {detailRows.map((row) => (
-              <div key={row.label} className={DETAIL_PANEL_ROW_CLASS}>
-                <span className={DETAIL_PANEL_LABEL_CLASS}>{row.label}</span>
-                <span className={DETAIL_PANEL_VALUE_CLASS}>{row.value}</span>
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </div>
-    </div>
   );
 }
 
@@ -888,7 +464,6 @@ export function LogsTable({
   );
   const [hasExpansionInteraction, setHasExpansionInteraction] = useState(false);
   const [focusedJourneySteps, setFocusedJourneySteps] = useState<Record<string, number>>({});
-  const [journeyViewMode, setJourneyViewMode] = useState<"focused" | "sequential">("focused");
 
   // Track new log IDs for scan animation
   const [newLogIds, setNewLogIds] = useState<Set<string>>(new Set());
@@ -1621,9 +1196,6 @@ export function LogsTable({
       if (routingDecision?.failure_stage === "downstream_streaming") {
         return 4;
       }
-      if (log.is_stream && (ttftMs != null || genMs != null)) {
-        return 4;
-      }
       if (isError) {
         return 5;
       }
@@ -2274,10 +1846,6 @@ export function LogsTable({
       activeJourneyStep.focusedContent != null
         ? activeJourneyStep.focusedContent
         : activeJourneyStep.content;
-    const journeyViewOptions = [
-      { value: "focused" as const, label: t("journeyViewFocused") },
-      { value: "sequential" as const, label: t("journeyViewSequential") },
-    ];
 
     return (
       <div className={cn("space-y-4 font-mono text-xs", className)}>
@@ -2405,196 +1973,112 @@ export function LogsTable({
               </div>
 
               <div className="space-y-3">
-                <div className="px-1">
-                  <div className="flex w-full max-w-full flex-wrap items-center justify-start gap-1">
-                    {journeyViewOptions.map((option) => {
-                      const isActive = journeyViewMode === option.value;
+                <div className="relative">
+                  <div className="flex flex-wrap items-center gap-1.5 xl:grid-cols-5">
+                    {journeySteps.map((step, index) => {
+                      const tone = JOURNEY_TONE_STYLES[step.tone];
+                      const isActive = step.index === activeJourneyStep.index;
+                      const progressState = getJourneyProgressState(step.index);
+                      const progressTone = JOURNEY_PROGRESS_STYLES[progressState];
                       return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() => setJourneyViewMode(option.value)}
-                          aria-pressed={isActive}
-                          aria-label={option.label}
-                          className={cn(
-                            "rounded-full px-3 py-1.5 text-[10px] uppercase tracking-[0.16em]",
-                            LOGS_SURFACE_TRANSITION_CLASS,
-                            LOGS_INTERACTIVE_RAISE_CLASS,
-                            isActive
-                              ? "border border-divider bg-surface-300 text-foreground shadow-[var(--vr-shadow-xs)]"
-                              : "text-muted-foreground hover:bg-surface-200/70 hover:text-foreground"
-                          )}
-                        >
-                          {option.label}
-                        </button>
+                        <Fragment key={step.index}>
+                          <button
+                            type="button"
+                            onClick={() => setActiveJourneyStep(step.index)}
+                            aria-pressed={isActive}
+                            aria-label={step.title}
+                            className={cn(
+                              "group relative inline-flex min-w-0 items-center gap-2 overflow-hidden rounded-full border px-3 py-2 text-left",
+                              LOGS_SURFACE_TRANSITION_CLASS,
+                              "motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0",
+                              progressTone.tab,
+                              isActive && cn("motion-safe:-translate-y-0.5", tone.tabActive)
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                // 浅色态选中药丸仅靠白面抬起 + 阴影区分偏弱，顶边状态色边
+                                // 加粗到 3px 使选中态更明显；深色态维持 2px 不变。
+                                "absolute inset-x-0 top-0 h-0.5 opacity-0 transition-opacity duration-cf-fast ease-cf-standard motion-reduce:transition-none",
+                                progressTone.accent,
+                                isActive && "opacity-100 light:h-[3px]"
+                              )}
+                            />
+                            <span
+                              className={cn(
+                                "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold transition-[background-color,border-color,color] duration-cf-fast ease-cf-standard motion-reduce:transition-none",
+                                progressTone.number
+                              )}
+                            >
+                              {step.index}
+                            </span>
+                            <div className="min-w-0">
+                              <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                                {step.title}
+                              </div>
+                              <div className="truncate text-[11px] text-foreground">
+                                {step.summary}
+                              </div>
+                            </div>
+                          </button>
+                          {index < journeySteps.length - 1 ? (
+                            <span
+                              className={cn(
+                                "inline-flex h-6 items-center px-0.5",
+                                progressTone.arrow
+                              )}
+                              aria-hidden="true"
+                            >
+                              →
+                            </span>
+                          ) : null}
+                        </Fragment>
                       );
                     })}
                   </div>
                 </div>
 
-                {journeyViewMode === "focused" ? (
-                  <>
-                    <div className="relative">
-                      <div className="flex flex-wrap items-center gap-1.5 xl:grid-cols-5">
-                        {journeySteps.map((step, index) => {
-                          const tone = JOURNEY_TONE_STYLES[step.tone];
-                          const isActive = step.index === activeJourneyStep.index;
-                          const progressState = getJourneyProgressState(step.index);
-                          const progressTone = JOURNEY_PROGRESS_STYLES[progressState];
-                          return (
-                            <Fragment key={step.index}>
-                              <button
-                                type="button"
-                                onClick={() => setActiveJourneyStep(step.index)}
-                                aria-pressed={isActive}
-                                aria-label={step.title}
-                                className={cn(
-                                  "group relative inline-flex min-w-0 items-center gap-2 overflow-hidden rounded-full border px-3 py-2 text-left",
-                                  LOGS_SURFACE_TRANSITION_CLASS,
-                                  "motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0",
-                                  progressTone.tab,
-                                  isActive && cn("motion-safe:-translate-y-0.5", tone.tabActive)
-                                )}
-                              >
-                                <div
-                                  className={cn(
-                                    "absolute inset-x-0 top-0 h-0.5 opacity-0 transition-opacity duration-cf-fast ease-cf-standard motion-reduce:transition-none",
-                                    progressTone.accent,
-                                    isActive && "opacity-100"
-                                  )}
-                                />
-                                <span
-                                  className={cn(
-                                    "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold transition-[background-color,border-color,color] duration-cf-fast ease-cf-standard motion-reduce:transition-none",
-                                    progressTone.number
-                                  )}
-                                >
-                                  {step.index}
-                                </span>
-                                <div className="min-w-0">
-                                  <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                                    {step.title}
-                                  </div>
-                                  <div className="truncate text-[11px] text-foreground">
-                                    {step.summary}
-                                  </div>
-                                </div>
-                              </button>
-                              {index < journeySteps.length - 1 ? (
-                                <span
-                                  className={cn(
-                                    "inline-flex h-6 items-center px-0.5",
-                                    progressTone.arrow
-                                  )}
-                                  aria-hidden="true"
-                                >
-                                  →
-                                </span>
-                              ) : null}
-                            </Fragment>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div
-                      key={`journey-panel-${activeJourneyStep.index}-${journeyViewMode}`}
-                      className={cn(
-                        "relative overflow-hidden rounded-[22px] border p-3 shadow-[var(--vr-shadow-xs)] transition-[background-color,border-color,box-shadow,opacity] duration-cf-normal ease-cf-standard motion-reduce:transition-none",
-                        LOGS_CARD_ENTER_CLASS,
-                        activeJourneyTone.panel
-                      )}
-                    >
-                      <div
-                        className={cn("absolute inset-x-0 top-0 h-0.5", activeJourneyTone.accent)}
-                      />
-                      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={cn(
-                                "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold",
-                                activeJourneyTone.number
-                              )}
-                            >
-                              {activeJourneyStep.index}
-                            </span>
-                            <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                              {activeJourneyStep.title}
-                            </div>
-                          </div>
-                          <div className="mt-2 text-[11px] leading-relaxed text-foreground">
-                            {activeJourneyStep.summary}
-                          </div>
-                          {activeJourneyStep.meta ? (
-                            <div className="mt-1 text-[10px] leading-relaxed text-muted-foreground/80">
-                              {activeJourneyStep.meta}
-                            </div>
-                          ) : null}
-                        </div>
-                        <div className="flex flex-wrap justify-end gap-1">
-                          {activeJourneyStep.metrics}
+                <div
+                  key={`journey-panel-${activeJourneyStep.index}`}
+                  className={cn(
+                    "relative overflow-hidden rounded-cf-md border p-3 shadow-[var(--vr-shadow-xs)] transition-[background-color,border-color,box-shadow,opacity] duration-cf-normal ease-cf-standard motion-reduce:transition-none",
+                    LOGS_CARD_ENTER_CLASS,
+                    activeJourneyTone.panel
+                  )}
+                >
+                  <div className={cn("absolute inset-x-0 top-0 h-0.5", activeJourneyTone.accent)} />
+                  <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold",
+                            activeJourneyTone.number
+                          )}
+                        >
+                          {activeJourneyStep.index}
+                        </span>
+                        <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                          {activeJourneyStep.title}
                         </div>
                       </div>
-                      {activeJourneyDetail ? (
-                        <div className="space-y-2 text-[11px]">{activeJourneyDetail}</div>
+                      <div className="mt-2 text-[11px] leading-relaxed text-foreground">
+                        {activeJourneyStep.summary}
+                      </div>
+                      {activeJourneyStep.meta ? (
+                        <div className="mt-1 text-[10px] leading-relaxed text-muted-foreground/80">
+                          {activeJourneyStep.meta}
+                        </div>
                       ) : null}
                     </div>
-                  </>
-                ) : (
-                  <div className="space-y-3">
-                    {journeySteps.map((step) => {
-                      const tone = JOURNEY_TONE_STYLES[step.tone];
-                      return (
-                        <section
-                          key={step.index}
-                          aria-label={step.title}
-                          className={cn(
-                            "relative overflow-hidden rounded-[22px] border p-3 shadow-[var(--vr-shadow-xs)] transition-[background-color,border-color,box-shadow,opacity] duration-cf-normal ease-cf-standard motion-reduce:transition-none sm:p-3.5",
-                            LOGS_CARD_ENTER_CLASS,
-                            tone.panel
-                          )}
-                          style={{ animationDelay: `${Math.min(step.index - 1, 4) * 45}ms` }}
-                        >
-                          <div className={cn("absolute inset-x-0 top-0 h-0.5", tone.accent)} />
-                          <div className="flex items-start gap-3">
-                            <div className="relative z-10 pt-0.5">
-                              <span
-                                className={cn(
-                                  "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold",
-                                  tone.number
-                                )}
-                              >
-                                {step.index}
-                              </span>
-                            </div>
-                            <div className="min-w-0 flex-1 space-y-3">
-                              <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div className="min-w-0 flex-1">
-                                  <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                                    {step.title}
-                                  </div>
-                                  <div className="mt-1 text-[11px] leading-relaxed text-foreground">
-                                    {step.summary}
-                                  </div>
-                                  {step.meta ? (
-                                    <div className="mt-1 text-[10px] leading-relaxed text-muted-foreground/80">
-                                      {step.meta}
-                                    </div>
-                                  ) : null}
-                                </div>
-                                <div className="flex flex-wrap justify-end gap-1">
-                                  {step.metrics}
-                                </div>
-                              </div>
-                              <div className="space-y-2 text-[11px]">{step.content}</div>
-                            </div>
-                          </div>
-                        </section>
-                      );
-                    })}
+                    <div className="flex flex-wrap justify-end gap-1">
+                      {activeJourneyStep.metrics}
+                    </div>
                   </div>
-                )}
+                  {activeJourneyDetail ? (
+                    <div className="space-y-2 text-[11px]">{activeJourneyDetail}</div>
+                  ) : null}
+                </div>
               </div>
             </div>
           </section>
@@ -3073,7 +2557,7 @@ export function LogsTable({
                     })
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label={t("filterStatus")}>
                     <SelectValue placeholder={t("filterStatus")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -3148,14 +2632,14 @@ export function LogsTable({
                 LOGS_SURFACE_TRANSITION_CLASS,
                 LOGS_INTERACTIVE_RAISE_CLASS,
                 performancePreset === value
-                  ? "border-amber-500/45 bg-amber-500/10 text-amber-500"
+                  ? "border-amber-500/45 bg-amber-500/10 text-amber-700 dark:text-amber-500"
                   : "border-divider bg-surface-300 text-muted-foreground hover:bg-surface-300/70"
               )}
             >
               {label}
             </button>
           ))}
-          <span className="type-caption text-muted-foreground/70">{t("quickFiltersPageOnly")}</span>
+          <span className="type-caption text-muted-foreground">{t("quickFiltersPageOnly")}</span>
         </div>
       </div>
 

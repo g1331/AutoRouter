@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { ArrowLeftRight, GripVertical, Pencil, Plus, Trash2, X, Check } from "lucide-react";
 import { toast } from "sonner";
 
+import { PageShell } from "@/components/admin/page-shell";
 import { Topbar } from "@/components/admin/topbar";
 import { ROUTE_CAPABILITY_ICON_META } from "@/components/admin/route-capability-badges";
 import { Button } from "@/components/ui/button";
@@ -371,7 +372,7 @@ function RuleCard({ rule, onEdit, onDelete }: RuleCardProps) {
       <div className="px-3 py-2.5 space-y-2">
         <div className="flex items-center gap-2 text-[11px]">
           <span className="text-muted-foreground">{t("targetHeader")}:</span>
-          <code className="rounded bg-surface-400/40 px-1 py-0.5 font-mono text-foreground">
+          <code className="rounded-cf-sm bg-surface-400/40 px-1 py-0.5 font-mono text-foreground">
             {rule.target_header}
           </code>
           <span className="ml-auto text-muted-foreground">{t("mode")}:</span>
@@ -387,7 +388,7 @@ function RuleCard({ rule, onEdit, onDelete }: RuleCardProps) {
             return (
               <span
                 key={cap}
-                className="inline-flex items-center gap-1 rounded border border-divider bg-surface-400/30 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                className="inline-flex items-center gap-1 rounded-cf-sm border border-divider bg-surface-400/30 px-1.5 py-0.5 text-[10px] text-muted-foreground"
               >
                 <span
                   className={cn(
@@ -617,9 +618,9 @@ export default function HeaderCompensationPage() {
   };
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <>
       <Topbar title={t("pageTitle")} />
-      <main className="flex-1 space-y-6 px-6 py-6 lg:px-8">
+      <PageShell>
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-sm font-medium tracking-wider text-foreground">
@@ -701,7 +702,7 @@ export default function HeaderCompensationPage() {
         )}
 
         {rules.length > 0 && <CapabilityMatrix rules={rules} />}
-      </main>
+      </PageShell>
 
       {formOpen && (
         <RuleFormDialog open={formOpen} onClose={closeForm} initial={editTarget} morph={canMorph} />
@@ -724,6 +725,6 @@ export default function HeaderCompensationPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 }

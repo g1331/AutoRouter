@@ -323,7 +323,7 @@ export function RoutingDecisionTimeline({
               {sessionIdCompensated && (
                 <span
                   title={t("compensationBadgeTooltip")}
-                  className="inline-flex items-center gap-0.5 rounded border border-amber-500/40 bg-amber-500/10 px-1 py-0.5 text-[10px] text-amber-400 cursor-help"
+                  className="inline-flex items-center gap-0.5 rounded-cf-sm border border-amber-500/40 bg-amber-500/10 px-1 py-0.5 text-[10px] text-amber-400 cursor-help"
                 >
                   <Zap className="w-2.5 h-2.5" />
                   {t("compensationBadge")}

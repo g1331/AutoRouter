@@ -3,6 +3,7 @@
  */
 
 export { RoutingTopology } from "./routing-topology";
+export { StatCard } from "./stat-card";
 export { StatsCards } from "./stats-cards";
 export { TimeRangeSelector } from "./time-range-selector";
 export { UsageChart } from "./usage-chart";
