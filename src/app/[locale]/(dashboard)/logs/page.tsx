@@ -8,6 +8,8 @@ import { ScrollText, X } from "lucide-react";
 import {
   DEFAULT_LOGS_SERVER_FILTERS,
   LogsTable,
+  resolvePerfPresetParams,
+  type LogsFilterOption,
   type LogsServerFilters,
 } from "@/components/admin/logs-table";
 import { PaginationControls } from "@/components/admin/pagination-controls";
@@ -27,8 +29,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { useAPIKeys } from "@/hooks/use-api-keys";
 import { useRequestLogLive } from "@/hooks/use-request-log-live";
 import { useRequestLogs, type RequestLogsFilters } from "@/hooks/use-request-logs";
+import { useAllUpstreams } from "@/hooks/use-upstreams";
 
 interface LogsLoadingSkeletonProps {
   loadingLabel: string;
@@ -150,13 +154,41 @@ export default function LogsPage() {
     setPage(1);
   }, []);
 
+  // Filter-select options; admin-only endpoints, so the portal never receives
+  // these props. Keys are capped at the first 100 — acceptable for a selector.
+  const { data: allUpstreams } = useAllUpstreams();
+  const { data: apiKeysData } = useAPIKeys(1, 100);
+  const upstreamFilterOptions = useMemo<LogsFilterOption[]>(
+    () => (allUpstreams ?? []).map((upstream) => ({ id: upstream.id, name: upstream.name })),
+    [allUpstreams]
+  );
+  const apiKeyFilterOptions = useMemo<LogsFilterOption[]>(
+    () => (apiKeysData?.items ?? []).map((key) => ({ id: key.id, name: key.name })),
+    [apiKeysData]
+  );
+
   const filters = useMemo<RequestLogsFilters>(() => {
     if (focusId) return { id: focusId };
+    const statusCode = tableFilters.statusCode ? Number.parseInt(tableFilters.statusCode, 10) : NaN;
+    const customRange = tableFilters.timeRange === "custom" ? tableFilters.customRange : null;
     return {
       ...(userId ? { user_id: userId } : {}),
-      ...(tableFilters.statusClass !== "all" ? { status_class: tableFilters.statusClass } : {}),
+      ...(tableFilters.upstreamId ? { upstream_id: tableFilters.upstreamId } : {}),
+      ...(tableFilters.apiKeyId ? { api_key_id: tableFilters.apiKeyId } : {}),
+      // Exact status code wins over the class range, mirroring the backend.
+      ...(Number.isFinite(statusCode)
+        ? { status_code: statusCode }
+        : tableFilters.statusClass !== "all"
+          ? { status_class: tableFilters.statusClass }
+          : {}),
       ...(tableFilters.model ? { model: tableFilters.model } : {}),
-      time_range: tableFilters.timeRange,
+      ...resolvePerfPresetParams(tableFilters.perfPreset),
+      ...(customRange
+        ? { start_time: customRange.startIso, end_time: customRange.endIso }
+        : { time_range: tableFilters.timeRange === "custom" ? "all" : tableFilters.timeRange }),
+      ...(tableFilters.sortField
+        ? { sort: tableFilters.sortField, order: tableFilters.sortOrder }
+        : {}),
     };
   }, [focusId, userId, tableFilters]);
   const focusInitialExpanded = useMemo(() => (focusId ? [focusId] : []), [focusId]);
@@ -307,6 +339,8 @@ export default function LogsPage() {
                 initialExpandedIds={focusInitialExpanded}
                 serverFilters={focusId ? undefined : tableFilters}
                 onServerFiltersChange={focusId ? undefined : handleTableFiltersChange}
+                upstreamFilterOptions={focusId ? undefined : upstreamFilterOptions}
+                apiKeyFilterOptions={focusId ? undefined : apiKeyFilterOptions}
               />
             </div>
 

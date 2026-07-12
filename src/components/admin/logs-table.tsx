@@ -2,7 +2,15 @@
 
 import { useState, useMemo, useEffect, useRef, Fragment, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { ScrollText, Filter, ChevronDown, Loader2 } from "lucide-react";
+import {
+  ScrollText,
+  Filter,
+  ChevronDown,
+  Loader2,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+} from "lucide-react";
 import type {
   ExclusionReason,
   FailoverErrorType,
@@ -46,6 +54,11 @@ import {
 import { ModelIdentity, getReasoningEffortLevel } from "@/components/logs/model-identity";
 import { ThinkingConfigPanel } from "@/components/logs/thinking-config-panel";
 
+export type PerformancePreset = "all" | "high_ttft" | "low_tps" | "slow_duration";
+
+/** Sortable list columns; created_at desc is the implicit default order. */
+export type LogsSortField = "created_at" | "duration_ms" | "total_tokens" | "cost";
+
 /**
  * Filters resolved server-side: the parent owns this state, feeds it into its
  * logs query (so filtering spans all pages, not just the fetched one) and
@@ -53,15 +66,58 @@ import { ThinkingConfigPanel } from "@/components/logs/thinking-config-panel";
  */
 export interface LogsServerFilters {
   statusClass: "all" | "2xx" | "4xx" | "5xx";
+  /** Exact status code as raw digits; empty = off. Takes precedence over statusClass server-side. */
+  statusCode: string;
   model: string;
-  timeRange: TimeRange | "all";
+  timeRange: TimeRange | "all" | "custom";
+  /** ISO strings (not Dates) so the parent's query key stays stable. */
+  customRange: { startIso: string; endIso: string } | null;
+  /** Empty string = all upstreams / keys. */
+  upstreamId: string;
+  apiKeyId: string;
+  perfPreset: PerformancePreset;
+  sortField: LogsSortField | null;
+  sortOrder: "asc" | "desc";
 }
 
 export const DEFAULT_LOGS_SERVER_FILTERS: LogsServerFilters = {
   statusClass: "all",
+  statusCode: "",
   model: "",
   timeRange: "30d",
+  customRange: null,
+  upstreamId: "",
+  apiKeyId: "",
+  perfPreset: "all",
+  sortField: null,
+  sortOrder: "desc",
 };
+
+/**
+ * Maps a quick-filter preset onto the server-side threshold params shared by
+ * the admin and portal logs endpoints (same thresholds the chips advertise).
+ */
+export function resolvePerfPresetParams(preset: PerformancePreset): {
+  ttft_min_ms?: number;
+  duration_min_ms?: number;
+  tps_max?: number;
+} {
+  switch (preset) {
+    case "high_ttft":
+      return { ttft_min_ms: HIGH_TTFT_THRESHOLD_MS };
+    case "low_tps":
+      return { tps_max: LOW_TPS_THRESHOLD };
+    case "slow_duration":
+      return { duration_min_ms: SLOW_DURATION_THRESHOLD_MS };
+    default:
+      return {};
+  }
+}
+
+export interface LogsFilterOption {
+  id: string;
+  name: string;
+}
 
 interface LogsTableProps {
   logs: RequestLog[];
@@ -85,9 +141,15 @@ interface LogsTableProps {
    * server-filter controls are hidden (e.g. the focus view pins one entry).
    */
   onServerFiltersChange?: (patch: Partial<LogsServerFilters>) => void;
+  /**
+   * Options for the upstream / API-key selects. Only the admin page passes
+   * these (they come from admin-only endpoints); when absent the selects are
+   * not rendered, so the member portal never fires admin probes — same
+   * philosophy as hideRecordingSection.
+   */
+  upstreamFilterOptions?: LogsFilterOption[];
+  apiKeyFilterOptions?: LogsFilterOption[];
 }
-
-type PerformancePreset = "all" | "high_ttft" | "low_tps" | "slow_duration";
 
 const HIGH_TTFT_THRESHOLD_MS = 5000;
 const LOW_TPS_THRESHOLD = 30;
@@ -332,6 +394,8 @@ export function LogsTable({
   hideRecordingSection = false,
   serverFilters = DEFAULT_LOGS_SERVER_FILTERS,
   onServerFiltersChange,
+  upstreamFilterOptions,
+  apiKeyFilterOptions,
 }: LogsTableProps) {
   const t = useTranslations("logs");
   const locale = useLocale();
@@ -446,9 +510,39 @@ export function LogsTable({
       }
     };
   }, []);
-  // Performance presets stay client-side: they derive from runtime-computed
-  // metrics (TPS is calculated in the frontend) and only narrow the fetched page.
-  const [performancePreset, setPerformancePreset] = useState<PerformancePreset>("all");
+  // Exact status-code input mirrors the model input pattern: local echo for
+  // responsive typing, debounced patch upward, no-op commits skipped.
+  const [statusCodeInput, setStatusCodeInput] = useState<string>(serverFilters.statusCode);
+  const [lastServerStatusCode, setLastServerStatusCode] = useState<string>(
+    serverFilters.statusCode
+  );
+  if (serverFilters.statusCode !== lastServerStatusCode) {
+    setLastServerStatusCode(serverFilters.statusCode);
+    if (serverFilters.statusCode !== statusCodeInput.trim()) {
+      setStatusCodeInput(serverFilters.statusCode);
+    }
+  }
+  const statusCodeDebounceRef = useRef<number | null>(null);
+  useEffect(() => {
+    return () => {
+      if (statusCodeDebounceRef.current != null) {
+        window.clearTimeout(statusCodeDebounceRef.current);
+      }
+    };
+  }, []);
+  // Quick-filter presets are server-side filters like the rest: the parent
+  // maps them onto threshold params (resolvePerfPresetParams) so they span
+  // the whole window, not just the fetched page.
+  const performancePreset = serverFilters.perfPreset;
+  // The selector wants Dates; filters keep ISO strings for query-key stability.
+  const customRangeIso = serverFilters.customRange;
+  const selectorCustomRange = useMemo(
+    () =>
+      customRangeIso
+        ? { start: new Date(customRangeIso.startIso), end: new Date(customRangeIso.endIso) }
+        : undefined,
+    [customRangeIso]
+  );
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [desktopBreakpointState, setDesktopBreakpointState] = useState({
     md: true,
@@ -627,38 +721,17 @@ export function LogsTable({
     setExpandedRows(newExpanded);
   };
 
-  // Status/model/time filters are resolved server-side via serverFilters; only
-  // the performance presets (runtime-computed metrics) narrow the fetched page.
-  const filteredLogs = useMemo(() => {
-    return logs.filter((log) => {
-      if (performancePreset === "high_ttft") {
-        if (log.ttft_ms == null || log.ttft_ms <= HIGH_TTFT_THRESHOLD_MS) {
-          return false;
-        }
-      } else if (performancePreset === "low_tps") {
-        const tps = getRequestTps(log);
-        if (tps == null || tps >= LOW_TPS_THRESHOLD) {
-          return false;
-        }
-      } else if (performancePreset === "slow_duration") {
-        if (log.duration_ms == null || log.duration_ms <= SLOW_DURATION_THRESHOLD_MS) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [logs, performancePreset]);
-
+  // All filters (including the quick-filter presets) are resolved server-side
+  // via serverFilters, so the fetched page is rendered as-is.
   const performanceSummary = useMemo(() => {
-    const streamLogs = filteredLogs.filter((log) => log.is_stream);
+    const streamLogs = logs.filter((log) => log.is_stream);
     const ttftValues = streamLogs
       .map((log) => log.ttft_ms)
       .filter((value): value is number => value != null && value > 0);
     const tpsValues = streamLogs
       .map((log) => getRequestTps(log))
       .filter((value): value is number => value != null && value > 0);
-    const slowCount = filteredLogs.filter(
+    const slowCount = logs.filter(
       (log) => log.duration_ms != null && log.duration_ms > SLOW_DURATION_THRESHOLD_MS
     ).length;
 
@@ -666,10 +739,10 @@ export function LogsTable({
       p50TtftMs: getPercentile(ttftValues, 50),
       p90TtftMs: getPercentile(ttftValues, 90),
       p50Tps: getPercentile(tpsValues, 50),
-      slowRatio: filteredLogs.length > 0 ? (slowCount / filteredLogs.length) * 100 : 0,
-      streamRatio: filteredLogs.length > 0 ? (streamLogs.length / filteredLogs.length) * 100 : 0,
+      slowRatio: logs.length > 0 ? (slowCount / logs.length) * 100 : 0,
+      streamRatio: logs.length > 0 ? (streamLogs.length / logs.length) * 100 : 0,
     };
-  }, [filteredLogs]);
+  }, [logs]);
 
   const getStatusBadgeVariant = (statusCode: number | null) => {
     if (statusCode === null) return "neutral";
@@ -2459,7 +2532,7 @@ export function LogsTable({
       derived: ReturnType<typeof getLogDerived>;
     }> = [];
 
-    filteredLogs.forEach((log, index) => {
+    logs.forEach((log, index) => {
       const derived = getLogDerived(log);
       currentRows.push({ log, index, derived });
 
@@ -2511,13 +2584,74 @@ export function LogsTable({
   const desktopModelColumnStyle = { width: `${desktopModelColumnWidth}px` };
   const desktopTableStyle = { minWidth: `${desktopTableMinWidth}px` };
 
+  // Column sorting cycles desc → asc → default (created_at desc) per column;
+  // only rendered on the list view (focus view has no onServerFiltersChange).
+  const handleSortToggle = (field: LogsSortField) => {
+    if (!onServerFiltersChange) {
+      return;
+    }
+    if (serverFilters.sortField !== field) {
+      onServerFiltersChange({ sortField: field, sortOrder: "desc" });
+    } else if (serverFilters.sortOrder === "desc") {
+      onServerFiltersChange({ sortOrder: "asc" });
+    } else {
+      onServerFiltersChange({ sortField: null, sortOrder: "desc" });
+    }
+  };
+
+  const getAriaSort = (field: LogsSortField): "ascending" | "descending" | undefined => {
+    if (!onServerFiltersChange || serverFilters.sortField !== field) {
+      return undefined;
+    }
+    return serverFilters.sortOrder === "asc" ? "ascending" : "descending";
+  };
+
+  const renderSortableHeadContent = (field: LogsSortField, label: string) => {
+    if (!onServerFiltersChange) {
+      return label;
+    }
+    const isActive = serverFilters.sortField === field;
+    const nextActionLabel = !isActive
+      ? t("sortDescending")
+      : serverFilters.sortOrder === "desc"
+        ? t("sortAscending")
+        : t("sortCleared");
+    const SortIcon = !isActive
+      ? ArrowUpDown
+      : serverFilters.sortOrder === "asc"
+        ? ArrowUp
+        : ArrowDown;
+    return (
+      <button
+        type="button"
+        onClick={() => handleSortToggle(field)}
+        aria-label={t("sortColumnAria", { column: label })}
+        title={nextActionLabel}
+        className={cn(
+          "inline-flex items-center gap-1 rounded-cf-sm hover:text-foreground",
+          LOGS_COLOR_TRANSITION_CLASS,
+          isActive && "text-foreground"
+        )}
+      >
+        <span>{label}</span>
+        <SortIcon
+          className={cn("h-3 w-3 shrink-0", !isActive && "opacity-45")}
+          aria-hidden="true"
+        />
+      </button>
+    );
+  };
+
   // The filter bar always stays mounted, even on an empty page: the default
   // 30d window may hide older entries, and without the bar there would be no
   // way to widen the range or clear a filter. The empty-state copy below
   // distinguishes "nothing matching" / "nothing in this window" / "nothing at all".
   const hasNarrowingFilters =
     serverFilters.statusClass !== "all" ||
+    serverFilters.statusCode !== "" ||
     serverFilters.model.trim() !== "" ||
+    serverFilters.upstreamId !== "" ||
+    serverFilters.apiKeyId !== "" ||
     performancePreset !== "all";
   // Any time window short of ALL is still a filter: users whose logs are all
   // older must be pointed at the ALL preset instead of "no logs yet".
@@ -2569,6 +2703,78 @@ export function LogsTable({
                 </Select>
               </div>
 
+              <div className="w-full sm:w-[96px]">
+                <Input
+                  id="logs-status-code-filter"
+                  name="logs-status-code-filter"
+                  aria-label={t("filterStatusCode")}
+                  type="text"
+                  inputMode="numeric"
+                  placeholder={t("filterStatusCode")}
+                  value={statusCodeInput}
+                  onChange={(e) => {
+                    // Exact code wins over the class select server-side, so
+                    // clearing it hands control back to statusClass.
+                    const nextValue = e.target.value.replace(/[^0-9]/g, "").slice(0, 3);
+                    setStatusCodeInput(nextValue);
+                    if (statusCodeDebounceRef.current != null) {
+                      window.clearTimeout(statusCodeDebounceRef.current);
+                    }
+                    statusCodeDebounceRef.current = window.setTimeout(() => {
+                      if (nextValue !== serverFilters.statusCode) {
+                        onServerFiltersChange({ statusCode: nextValue });
+                      }
+                    }, 300);
+                  }}
+                />
+              </div>
+
+              {upstreamFilterOptions && (
+                <div className="w-full sm:w-[180px]">
+                  <Select
+                    value={serverFilters.upstreamId || "all"}
+                    onValueChange={(value) =>
+                      onServerFiltersChange({ upstreamId: value === "all" ? "" : value })
+                    }
+                  >
+                    <SelectTrigger aria-label={t("filterUpstream")}>
+                      <SelectValue placeholder={t("filterUpstream")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t("filterUpstreamAll")}</SelectItem>
+                      {upstreamFilterOptions.map((option) => (
+                        <SelectItem key={option.id} value={option.id}>
+                          {option.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {apiKeyFilterOptions && (
+                <div className="w-full sm:w-[180px]">
+                  <Select
+                    value={serverFilters.apiKeyId || "all"}
+                    onValueChange={(value) =>
+                      onServerFiltersChange({ apiKeyId: value === "all" ? "" : value })
+                    }
+                  >
+                    <SelectTrigger aria-label={t("filterApiKey")}>
+                      <SelectValue placeholder={t("filterApiKey")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t("filterApiKeyAll")}</SelectItem>
+                      {apiKeyFilterOptions.map((option) => (
+                        <SelectItem key={option.id} value={option.id}>
+                          {option.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <div className="w-full sm:w-[220px]">
                 <Input
                   id="logs-model-filter"
@@ -2600,12 +2806,25 @@ export function LogsTable({
               <div className="w-full sm:ml-auto sm:w-auto">
                 <TimeRangeSelector
                   value={serverFilters.timeRange}
-                  onChange={(value) =>
+                  customRange={selectorCustomRange}
+                  onChange={(value, customRange) => {
+                    if (value === "custom") {
+                      if (!customRange) return;
+                      // Store ISO strings so the parent's query key stays stable.
+                      onServerFiltersChange({
+                        timeRange: "custom",
+                        customRange: {
+                          startIso: customRange.start.toISOString(),
+                          endIso: customRange.end.toISOString(),
+                        },
+                      });
+                      return;
+                    }
                     onServerFiltersChange({
                       timeRange: value as LogsServerFilters["timeRange"],
-                    })
-                  }
-                  hideCustom
+                      customRange: null,
+                    });
+                  }}
                   includeAll
                 />
               </div>
@@ -2613,34 +2832,38 @@ export function LogsTable({
           )}
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="type-caption text-muted-foreground">{t("quickFilters")}</span>
-          {(
-            [
-              ["all", t("presetAll")],
-              ["high_ttft", t("presetHighTtft")],
-              ["low_tps", t("presetLowTps")],
-              ["slow_duration", t("presetSlowDuration")],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setPerformancePreset(value)}
-              className={cn(
-                "rounded-cf-sm border px-2 py-1 font-mono text-xs",
-                LOGS_SURFACE_TRANSITION_CLASS,
-                LOGS_INTERACTIVE_RAISE_CLASS,
-                performancePreset === value
-                  ? "border-amber-500/45 bg-amber-500/10 text-amber-700 dark:text-amber-500"
-                  : "border-divider bg-surface-300 text-muted-foreground hover:bg-surface-300/70"
-              )}
-            >
-              {label}
-            </button>
-          ))}
-          <span className="type-caption text-muted-foreground">{t("quickFiltersPageOnly")}</span>
-        </div>
+        {onServerFiltersChange && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="type-caption text-muted-foreground">{t("quickFilters")}</span>
+            {(
+              [
+                ["all", t("presetAll")],
+                ["high_ttft", t("presetHighTtft")],
+                ["low_tps", t("presetLowTps")],
+                ["slow_duration", t("presetSlowDuration")],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => onServerFiltersChange({ perfPreset: value })}
+                className={cn(
+                  "rounded-cf-sm border px-2 py-1 font-mono text-xs",
+                  LOGS_SURFACE_TRANSITION_CLASS,
+                  LOGS_INTERACTIVE_RAISE_CLASS,
+                  performancePreset === value
+                    ? "border-amber-500/45 bg-amber-500/10 text-amber-700 dark:text-amber-500"
+                    : "border-divider bg-surface-300 text-muted-foreground hover:bg-surface-300/70"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+            <span className="type-caption text-muted-foreground">
+              {t("quickFiltersServerScope")}
+            </span>
+          </div>
+        )}
       </div>
 
       <div
@@ -2729,7 +2952,7 @@ export function LogsTable({
         </div>
       </div>
 
-      {filteredLogs.length === 0 ? (
+      {logs.length === 0 ? (
         <div
           className={cn(
             "flex flex-col items-center justify-center py-16 text-center",
@@ -2752,7 +2975,7 @@ export function LogsTable({
           {isMobileLayout ? (
             <TooltipProvider>
               <div className="space-y-3 p-3">
-                {filteredLogs.map((log, index) => {
+                {logs.map((log, index) => {
                   const {
                     isExpanded,
                     canExpand,
@@ -2971,7 +3194,12 @@ export function LogsTable({
                         <TableHeader>
                           <TableRow>
                             <TableHead className="w-9 px-1.5"></TableHead>
-                            <TableHead className="w-[148px] px-1.5">{t("tableTime")}</TableHead>
+                            <TableHead
+                              className="w-[148px] px-1.5"
+                              aria-sort={getAriaSort("created_at")}
+                            >
+                              {renderSortableHeadContent("created_at", t("tableTime"))}
+                            </TableHead>
                             <TableHead className="w-[148px] px-1.5">{t("tableKey")}</TableHead>
                             <TableHead className="hidden lg:table-cell w-[96px] px-1.5">
                               {t("tableUpstream")}
@@ -2986,14 +3214,25 @@ export function LogsTable({
                             >
                               {t("tableModel")}
                             </TableHead>
-                            <TableHead className="hidden md:table-cell w-[104px] px-1.5">
-                              {t("tableTokens")}
+                            <TableHead
+                              className="hidden md:table-cell w-[104px] px-1.5"
+                              aria-sort={getAriaSort("total_tokens")}
+                            >
+                              {renderSortableHeadContent("total_tokens", t("tableTokens"))}
                             </TableHead>
-                            <TableHead className="w-[84px] px-1.5 text-right">
-                              {t("tableCost")}
+                            <TableHead
+                              className="w-[84px] px-1.5 text-right"
+                              aria-sort={getAriaSort("cost")}
+                            >
+                              {renderSortableHeadContent("cost", t("tableCost"))}
                             </TableHead>
                             <TableHead className="w-[68px] px-1.5">{t("tableStatus")}</TableHead>
-                            <TableHead className="w-[112px] px-1.5">{t("tableDuration")}</TableHead>
+                            <TableHead
+                              className="w-[112px] px-1.5"
+                              aria-sort={getAriaSort("duration_ms")}
+                            >
+                              {renderSortableHeadContent("duration_ms", t("tableDuration"))}
+                            </TableHead>
                           </TableRow>
                         </TableHeader>
                       ) : null}

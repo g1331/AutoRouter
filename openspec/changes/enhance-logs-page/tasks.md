@@ -11,10 +11,10 @@
 
 ## 2. 前端：补齐筛选器 + 列排序 + 快捷筛选服务端化
 
-- [ ] 2.1 `logs-table.tsx`：`LogsServerFilters` 扩展（upstreamId / apiKeyId / statusCode / customRange ISO / perfPreset / sortField / sortOrder）；筛选栏加上游与密钥 Select（可选 props 门控）、精确状态码防抖输入、TimeRangeSelector 开放自定义范围
-- [ ] 2.2 `logs-table.tsx`：快捷筛选 chips 改 emit perfPreset patch，删除客户端页内过滤，提示改为窗口级；focus 视图隐藏 chips；Time/Duration/Cost/Tokens 表头排序按钮（desc→asc→默认，aria-sort，仅桌面）
-- [ ] 2.3 admin `logs/page.tsx` 与 portal `requests/page.tsx`：preset→阈值参数映射、customRange→start/end、statusCode 解析；admin 传 `useAllUpstreams()` / `useAPIKeys(1,100)` 选项；两 hook 补参数序列化；i18n 双语言新键
-- [ ] 2.4 组件/hook 测试：选项 props 门控（portal 无 admin 请求）、chip 与表头 patch、preset 映射与页码重置、参数序列化与 key 稳定；质量门禁通过后提交
+- [x] 2.1 `logs-table.tsx`：`LogsServerFilters` 扩展（upstreamId / apiKeyId / statusCode / customRange ISO / perfPreset / sortField / sortOrder）；筛选栏加上游与密钥 Select（可选 props 门控）、精确状态码防抖输入、TimeRangeSelector 开放自定义范围
+- [x] 2.2 `logs-table.tsx`：快捷筛选 chips 改 emit perfPreset patch，删除客户端页内过滤，提示改为窗口级；focus 视图隐藏 chips；Time/Duration/Cost/Tokens 表头排序按钮（desc→asc→默认，aria-sort，仅桌面）
+- [x] 2.3 admin `logs/page.tsx` 与 portal `requests/page.tsx`：preset→阈值参数映射、customRange→start/end、statusCode 解析；admin 传 `useAllUpstreams()` / `useAPIKeys(1,100)` 选项；两 hook 补参数序列化；i18n 双语言新键
+- [x] 2.4 组件/hook 测试：选项 props 门控（portal 无 admin 请求）、chip 与表头 patch、preset 映射与页码重置、参数序列化与 key 稳定；质量门禁通过后提交
 
 ## 3. 统计区：窗口级指标 + StatCard 化
 

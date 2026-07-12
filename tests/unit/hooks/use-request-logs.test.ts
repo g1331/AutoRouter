@@ -228,6 +228,60 @@ describe("use-request-logs hooks", () => {
       expect(params.start_time).toBe("2024-01-01T00:00:00Z");
     });
 
+    it("serializes performance threshold filters into the query", async () => {
+      mockGet.mockResolvedValueOnce({ items: [], total: 0 });
+
+      const { result } = renderHook(
+        () =>
+          useRequestLogs(1, 20, {
+            time_range: "all",
+            ttft_min_ms: 5000,
+            duration_min_ms: 20000,
+            tps_max: 30,
+          }),
+        { wrapper }
+      );
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      const params = parseUrlParams(mockGet.mock.calls[0][0] as string);
+      expect(params.ttft_min_ms).toBe("5000");
+      expect(params.duration_min_ms).toBe("20000");
+      expect(params.tps_max).toBe("30");
+    });
+
+    it("serializes sort and defaults order to desc", async () => {
+      mockGet.mockResolvedValueOnce({ items: [], total: 0 });
+
+      const { result } = renderHook(
+        () => useRequestLogs(1, 20, { time_range: "all", sort: "cost" }),
+        {
+          wrapper,
+        }
+      );
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      const params = parseUrlParams(mockGet.mock.calls[0][0] as string);
+      expect(params.sort).toBe("cost");
+      expect(params.order).toBe("desc");
+    });
+
+    it("omits order when sort is not set", async () => {
+      mockGet.mockResolvedValueOnce({ items: [], total: 0 });
+
+      const { result } = renderHook(
+        () => useRequestLogs(1, 20, { time_range: "all", order: "asc" }),
+        { wrapper }
+      );
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+      const params = parseUrlParams(mockGet.mock.calls[0][0] as string);
+      expect(params.sort).toBeUndefined();
+      expect(params.order).toBeUndefined();
+    });
+
     it("handles fetch error", async () => {
       mockGet.mockRejectedValueOnce(new Error("Failed to fetch logs"));
 
