@@ -1,87 +1,142 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" role="img" aria-labelledby="title desc">
-  <title id="title">AutoRouter Banner</title>
-  <desc id="desc">AutoRouter dark visual banner with upstream routing flow and metrics.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 320" role="img" aria-labelledby="title desc" font-family="'Segoe UI', 'SF Pro Display', system-ui, -apple-system, Roboto, Arial, sans-serif">
+  <title id="title">AutoRouter</title>
+  <desc id="desc">AutoRouter — an AI API Gateway. Upstream pool routes through a capability-aware gateway core to client apps, with live ops metrics.</desc>
 
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#0d1013" />
-      <stop offset="100%" stop-color="#151a20" />
+    <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0%" stop-color="#0a0b0e" />
+      <stop offset="100%" stop-color="#101216" />
     </linearGradient>
-    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
-      <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#2a323d" stroke-width="1" opacity="0.52" />
+    <linearGradient id="core" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#171b21" />
+      <stop offset="100%" stop-color="#111419" />
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="46%" r="60%">
+      <stop offset="0%" stop-color="#f2a950" stop-opacity="0.18" />
+      <stop offset="70%" stop-color="#f2a950" stop-opacity="0.04" />
+      <stop offset="100%" stop-color="#f2a950" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="wireIn" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#4a525d" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#f2a950" stop-opacity="0.85" />
+    </linearGradient>
+    <linearGradient id="wireOut" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f2a950" stop-opacity="0.85" />
+      <stop offset="100%" stop-color="#4a525d" stop-opacity="0.35" />
+    </linearGradient>
+    <linearGradient id="accentRule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f2a950" stop-opacity="0" />
+      <stop offset="50%" stop-color="#f2a950" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#f2a950" stop-opacity="0" />
+    </linearGradient>
+    <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
+      <circle cx="1.5" cy="1.5" r="1.1" fill="#656c75" opacity="0.14" />
     </pattern>
-    <linearGradient id="accentLine" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#5ea89e" stop-opacity="0.4" />
-      <stop offset="100%" stop-color="#2f766e" stop-opacity="0.92" />
-    </linearGradient>
   </defs>
 
-  <rect width="1200" height="300" fill="url(#bg)" />
-  <rect width="1200" height="300" fill="url(#grid)" opacity="0.5" />
+  <!-- base -->
+  <rect width="1280" height="320" fill="url(#bg)" />
+  <rect width="1280" height="320" fill="url(#dots)" />
+  <rect width="1280" height="320" fill="url(#glow)" />
 
+  <!-- inner console frame -->
+  <rect x="24" y="20" width="1232" height="280" rx="20" fill="none" stroke="#21262e" stroke-width="1.5" />
+  <line x1="24" y1="20" x2="1256" y2="20" stroke="url(#accentRule)" stroke-width="2" />
+
+  <!-- window dots (terminal chrome) -->
   <g>
-    <rect x="30" y="26" width="1140" height="248" rx="22" fill="#161b21" stroke="#303947" stroke-width="1.5" />
+    <circle cx="52" cy="46" r="4.5" fill="#ff6b5e" />
+    <circle cx="70" cy="46" r="4.5" fill="#ff9f43" />
+    <circle cx="88" cy="46" r="4.5" fill="#46d68c" />
+    <text x="108" y="50" font-family="'SF Mono', 'Consolas', ui-monospace, monospace" font-size="11.5" fill="#626b78" letter-spacing="0.4">autorouter — /api/proxy/v1</text>
   </g>
 
-  <g font-family="'Segoe UI', 'SF Pro Display', Arial, sans-serif" fill="#d9e3ee">
-    <text x="70" y="72" font-size="13" font-weight="600" letter-spacing="0.8">UPSTREAM POOL</text>
-    <text x="932" y="72" font-size="13" font-weight="600" letter-spacing="0.8">CLIENT APPS</text>
+  <!-- column labels -->
+  <g font-size="11.5" font-weight="700" letter-spacing="1.6">
+    <text x="64" y="92" fill="#9aa2ae">UPSTREAM POOL</text>
+    <text x="1216" y="92" text-anchor="end" fill="#9aa2ae">CLIENT APPS</text>
   </g>
 
-  <g font-family="'Segoe UI', 'SF Pro Display', Arial, sans-serif" font-size="12" font-weight="600" fill="#d3deea">
-    <rect x="70" y="88" width="170" height="34" rx="10" fill="#1c222b" stroke="#364152" />
-    <text x="88" y="110">OpenAI Cluster</text>
-    <circle cx="223" cy="105" r="5" fill="#5aa89d" />
-
-    <rect x="70" y="132" width="170" height="34" rx="10" fill="#1c222b" stroke="#364152" />
-    <text x="88" y="154">Anthropic Cluster</text>
-    <circle cx="223" cy="149" r="5" fill="#5aa89d" />
-
-    <rect x="70" y="176" width="170" height="34" rx="10" fill="#1c222b" stroke="#364152" />
-    <text x="88" y="198">Azure Cluster</text>
-    <circle cx="223" cy="193" r="5" fill="#5aa89d" />
+  <!-- left: upstream cluster chips -->
+  <g font-size="12.5" font-weight="600" fill="#cbd2db">
+    <g>
+      <rect x="64" y="104" width="196" height="34" rx="9" fill="#15181d" stroke="#2b323c" />
+      <circle cx="82" cy="121" r="4.5" fill="#46d68c" />
+      <text x="98" y="125">OpenAI Cluster</text>
+    </g>
+    <g>
+      <rect x="64" y="146" width="196" height="34" rx="9" fill="#15181d" stroke="#2b323c" />
+      <circle cx="82" cy="163" r="4.5" fill="#46d68c" />
+      <text x="98" y="167">Anthropic Cluster</text>
+    </g>
+    <g>
+      <rect x="64" y="188" width="196" height="34" rx="9" fill="#15181d" stroke="#2b323c" />
+      <circle cx="82" cy="205" r="4.5" fill="#ff9f43" />
+      <text x="98" y="209">Azure / CLIProxy</text>
+    </g>
   </g>
 
+  <!-- wires: upstreams -> core -->
+  <g fill="none" stroke="url(#wireIn)" stroke-width="2.2" stroke-linecap="round">
+    <path d="M 260 121 C 360 121, 400 150, 486 156" />
+    <path d="M 260 163 C 360 163, 400 163, 486 163" />
+    <path d="M 260 205 C 360 205, 400 176, 486 170" />
+  </g>
+  <g fill="#f2a950">
+    <circle cx="486" cy="156" r="2.6" /><circle cx="486" cy="163" r="2.6" /><circle cx="486" cy="170" r="2.6" />
+  </g>
+
+  <!-- center: gateway core -->
   <g>
-    <path d="M 228 105 C 320 105, 360 118, 452 138" fill="none" stroke="url(#accentLine)" stroke-width="2.4" stroke-linecap="round" />
-    <path d="M 228 149 C 320 149, 360 149, 452 149" fill="none" stroke="url(#accentLine)" stroke-width="2.4" stroke-linecap="round" />
-    <path d="M 228 193 C 320 193, 360 180, 452 160" fill="none" stroke="url(#accentLine)" stroke-width="2.4" stroke-linecap="round" />
+    <rect x="486" y="92" width="308" height="120" rx="16" fill="url(#core)" stroke="#3a4250" stroke-width="1.5" />
+    <rect x="486" y="92" width="308" height="120" rx="16" fill="none" stroke="#f2a950" stroke-width="1" opacity="0.14" />
+    <text x="640" y="150" text-anchor="middle" font-family="'Segoe UI Semibold', 'SF Pro Display', system-ui, sans-serif" font-size="44" font-weight="800" letter-spacing="0.5" fill="#f3efe6">AutoRouter</text>
+    <text x="640" y="174" text-anchor="middle" font-family="'SF Mono', 'Consolas', ui-monospace, monospace" font-size="11.5" letter-spacing="0.6" fill="#f2a950">AI&#160;API&#160;GATEWAY</text>
+    <rect x="580" y="188" width="120" height="3" rx="1.5" fill="#f2a950" opacity="0.55" />
   </g>
 
+  <!-- wires: core -> clients -->
+  <g fill="#f2a950">
+    <circle cx="794" cy="156" r="2.6" /><circle cx="794" cy="163" r="2.6" /><circle cx="794" cy="170" r="2.6" />
+  </g>
+  <g fill="none" stroke="url(#wireOut)" stroke-width="2.2" stroke-linecap="round">
+    <path d="M 794 156 C 880 150, 920 121, 1020 121" />
+    <path d="M 794 163 C 880 163, 920 163, 1020 163" />
+    <path d="M 794 170 C 880 176, 920 205, 1020 205" />
+  </g>
+
+  <!-- right: client chips -->
+  <g font-size="12.5" font-weight="600" fill="#cbd2db">
+    <g>
+      <rect x="1020" y="104" width="196" height="34" rx="9" fill="#15181d" stroke="#2b323c" />
+      <text x="1038" y="125">Dashboard UI</text>
+      <circle cx="1198" cy="121" r="4.5" fill="#46d68c" />
+    </g>
+    <g>
+      <rect x="1020" y="146" width="196" height="34" rx="9" fill="#15181d" stroke="#2b323c" />
+      <text x="1038" y="167">SDK Clients</text>
+      <circle cx="1198" cy="163" r="4.5" fill="#46d68c" />
+    </g>
+    <g>
+      <rect x="1020" y="188" width="196" height="34" rx="9" fill="#15181d" stroke="#2b323c" />
+      <text x="1038" y="209">Agents / Workers</text>
+      <circle cx="1198" cy="205" r="4.5" fill="#46d68c" />
+    </g>
+  </g>
+
+  <!-- bottom: ops metrics strip -->
   <g>
-    <rect x="452" y="98" width="296" height="110" rx="16" fill="#1a222c" stroke="#405063" stroke-width="1.5" />
-    <text x="600" y="138" text-anchor="middle" font-family="'Segoe UI', 'SF Pro Display', Arial, sans-serif" font-size="44" font-weight="700" fill="#eef4fb">AutoRouter</text>
-    <text x="600" y="164" text-anchor="middle" font-family="'Segoe UI', 'SF Pro Display', Arial, sans-serif" font-size="13" font-weight="600" letter-spacing="0.7" fill="#a5b4c5">AI Gateway for Multi-Upstream Routing</text>
-    <rect x="540" y="178" width="120" height="6" rx="3" fill="#5aa89d" opacity="0.28" />
-  </g>
-
-  <g font-family="'Segoe UI', 'SF Pro Display', Arial, sans-serif" font-size="12" font-weight="600" fill="#d3deea">
-    <rect x="930" y="88" width="170" height="34" rx="10" fill="#1c222b" stroke="#364152" />
-    <circle cx="947" cy="105" r="5" fill="#5aa89d" />
-    <text x="960" y="110">Dashboard UI</text>
-
-    <rect x="930" y="132" width="170" height="34" rx="10" fill="#1c222b" stroke="#364152" />
-    <circle cx="947" cy="149" r="5" fill="#5aa89d" />
-    <text x="960" y="154">SDK Clients</text>
-
-    <rect x="930" y="176" width="170" height="34" rx="10" fill="#1c222b" stroke="#364152" />
-    <circle cx="947" cy="193" r="5" fill="#5aa89d" />
-    <text x="960" y="198">Service Workers</text>
-  </g>
-
-  <g>
-    <path d="M 748 138 C 835 118, 870 105, 930 105" fill="none" stroke="url(#accentLine)" stroke-width="2.4" stroke-linecap="round" />
-    <path d="M 748 149 C 835 149, 870 149, 930 149" fill="none" stroke="url(#accentLine)" stroke-width="2.4" stroke-linecap="round" />
-    <path d="M 748 160 C 835 180, 870 193, 930 193" fill="none" stroke="url(#accentLine)" stroke-width="2.4" stroke-linecap="round" />
-  </g>
-
-  <g font-family="'JetBrains Mono', 'Consolas', monospace" font-size="11" fill="#9aa9ba">
-    <rect x="70" y="224" width="1040" height="34" rx="10" fill="#171f28" stroke="#334151" />
-    <text x="94" y="245">REQ/s 1.2K</text>
-    <text x="266" y="245">LATENCY 45ms</text>
-    <text x="466" y="245">UPSTREAMS 4</text>
-    <text x="642" y="245">KEYS 12</text>
-    <text x="788" y="245">SUCCESS 99.9%</text>
-    <text x="978" y="245">AUTO FAILOVER ON</text>
+    <rect x="64" y="236" width="1152" height="42" rx="10" fill="#0d0f13" stroke="#21262e" />
+    <line x1="64" y1="257" x2="64" y2="257" />
+    <g font-family="'SF Mono', 'Consolas', ui-monospace, monospace" font-size="11.5" font-weight="600">
+      <text x="88" y="262"><tspan fill="#626b78">REQ/s</tspan><tspan fill="#e8e4da" dx="8">1.2K</tspan></text>
+      <text x="268" y="262"><tspan fill="#626b78">P50</tspan><tspan fill="#e8e4da" dx="8">45ms</tspan></text>
+      <text x="430" y="262"><tspan fill="#626b78">UPSTREAMS</tspan><tspan fill="#e8e4da" dx="8">4</tspan></text>
+      <text x="612" y="262"><tspan fill="#626b78">KEYS</tspan><tspan fill="#e8e4da" dx="8">12</tspan></text>
+      <text x="740" y="262"><tspan fill="#626b78">SUCCESS</tspan><tspan fill="#46d68c" dx="8">99.9%</tspan></text>
+      <text x="1192" y="262" text-anchor="end"><tspan fill="#626b78">BREAKER</tspan><tspan fill="#f2a950" dx="8">CLOSED</tspan></text>
+    </g>
+    <circle cx="932" cy="257" r="3.5" fill="#46d68c" />
+    <text x="944" y="262" font-family="'SF Mono', 'Consolas', ui-monospace, monospace" font-size="11.5" font-weight="600" fill="#9aa2ae">AUTO&#160;FAILOVER&#160;ON</text>
   </g>
 </svg>
