@@ -6,7 +6,7 @@ function seedAdminToken(page: Page): Promise<void> {
   });
 }
 
-function mockLogsApi(page: Page): Promise<void> {
+async function mockLogsApi(page: Page): Promise<void> {
   const now = new Date().toISOString();
   const payload = {
     items: [
@@ -66,11 +66,28 @@ function mockLogsApi(page: Page): Promise<void> {
     page_size: 20,
   };
 
-  return page.route("**/api/admin/logs**", async (route) => {
+  await page.route("**/api/admin/logs**", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify(payload),
+    });
+  });
+  // Registered after the list route so it wins for /logs/stats (Playwright
+  // matches routes in reverse registration order); the list-shaped payload
+  // above must not leak into the window-stats hook.
+  await page.route("**/api/admin/logs/stats**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        total: 1,
+        stream_count: 0,
+        slow_count: 0,
+        p50_ttft_ms: null,
+        p90_ttft_ms: null,
+        p50_tps: null,
+      }),
     });
   });
 }

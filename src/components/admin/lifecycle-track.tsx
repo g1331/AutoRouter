@@ -368,7 +368,7 @@ export function LifecycleTrack({
               data-state={seg.state}
               title={getTrackTitle(seg)}
               className={cn(
-                "flex items-center justify-center gap-1 whitespace-nowrap border-r px-2 text-[10px] font-medium last:border-r-0",
+                "flex min-w-0 items-center justify-center gap-1 whitespace-nowrap border-r px-2 text-[10px] font-medium last:border-r-0",
                 getTrackSegmentClassName(seg),
                 getTrackBorderClassName(seg),
                 seg.state === "active" && "ring-1 ring-inset ring-white/10",
@@ -378,7 +378,7 @@ export function LifecycleTrack({
               )}
               style={{ flexGrow: weights[seg.key], flexBasis: 0 }}
             >
-              <span>{seg.label}</span>
+              <span className="truncate">{seg.label}</span>
               {seg.key === "complete" && statusPart ? (
                 <>
                   <span

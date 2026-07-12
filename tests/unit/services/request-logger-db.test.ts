@@ -710,15 +710,17 @@ describe("request-logger (db flows)", () => {
   it("listRequestLogs maps tpsMax to guarded integer-safe arithmetic", async () => {
     const { listRequestLogs, MIN_TPS_DURATION_MS, MIN_TPS_COMPLETION_TOKENS } =
       await import("@/lib/services/request-logger");
-    const { gte, sql } = await import("drizzle-orm");
+    const { eq, gt, gte, sql } = await import("drizzle-orm");
 
     mockCountSelect(0);
     requestLogsFindManyMock.mockResolvedValueOnce([]);
 
     await listRequestLogs(1, 20, { tpsMax: 30 });
 
-    // Minimum-signal guards keep near-zero requests out of the TPS match.
-    expect(gte).toHaveBeenCalledWith("duration_ms", MIN_TPS_DURATION_MS);
+    // Guards mirror the row-level display rule (getRequestTps) and the window
+    // stats: streaming rows only, duration strictly above the minimum signal.
+    expect(eq).toHaveBeenCalledWith("is_stream", true);
+    expect(gt).toHaveBeenCalledWith("duration_ms", MIN_TPS_DURATION_MS);
     expect(gte).toHaveBeenCalledWith("completion_tokens", MIN_TPS_COMPLETION_TOKENS);
     // completion_tokens * 1000.0 < tps_max * duration_ms
     const sqlCall = vi.mocked(sql).mock.calls[0];

@@ -1,7 +1,7 @@
 # request-log-workbench Specification
 
 ## Purpose
-TBD - created by archiving change enhance-logs-page. Update Purpose after archive.
+定义请求日志工作台（admin logs 页与 portal requests 页共用）的服务端契约与前端行为：列表筛选与排序参数、窗口级统计端点、快捷性能筛选的守卫口径，以及行内视觉增强的展示规则。目标是让日志页的筛选、排序与统计在 PostgreSQL/SQLite 双方言下口径一致，且 admin 与 portal 两端共享同一套语义。
 ## Requirements
 ### Requirement: 日志列表 API 必须支持扩展筛选参数
 
@@ -15,7 +15,7 @@ TBD - created by archiving change enhance-logs-page. Update Purpose after archiv
 #### Scenario: 低 TPS 筛选带守卫条件
 
 - **WHEN** 请求 `GET /api/admin/logs?tps_max=30`
-- **THEN** 返回结果 SHALL 仅包含满足 `completion_tokens ≥ 10` 且 `duration_ms ≥ 100` 且 `completion_tokens × 1000 < 30 × duration_ms` 的日志
+- **THEN** 返回结果 SHALL 仅包含满足 `is_stream = true` 且 `completion_tokens ≥ 10` 且 `duration_ms > 100` 且 `completion_tokens × 1000 < 30 × duration_ms` 的日志（与行级 TPS 显示规则、窗口统计口径一致）
 - **AND** 该表达式在 PostgreSQL 与 SQLite 上 SHALL 产生一致结果
 
 #### Scenario: 非法参数拒绝

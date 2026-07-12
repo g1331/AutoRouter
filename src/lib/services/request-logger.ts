@@ -842,10 +842,12 @@ function buildRequestLogWhereClause(filters: ListRequestLogsFilter): SQL | undef
   }
   if (filters.tpsMax !== undefined) {
     // TPS = completion_tokens / (duration_ms / 1000). Rewritten as integer-safe
-    // arithmetic so PostgreSQL and SQLite evaluate it identically, guarded so
-    // near-zero requests don't produce meaningless TPS matches.
+    // arithmetic so PostgreSQL and SQLite evaluate it identically, guarded to
+    // exactly mirror the row-level display rule (getRequestTps) and the window
+    // stats: streaming rows only, duration strictly above the minimum signal.
     conditions.push(
-      gte(requestLogs.durationMs, MIN_TPS_DURATION_MS),
+      eq(requestLogs.isStream, true),
+      gt(requestLogs.durationMs, MIN_TPS_DURATION_MS),
       gte(requestLogs.completionTokens, MIN_TPS_COMPLETION_TOKENS),
       sql`${requestLogs.completionTokens} * 1000.0 < ${filters.tpsMax} * ${requestLogs.durationMs}`
     );
