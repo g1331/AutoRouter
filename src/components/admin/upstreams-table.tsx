@@ -669,38 +669,43 @@ export function UpstreamsTable({
                             </span>
                           </button>
 
-                          {!upstream.is_active && (
-                            <Badge
-                              variant="outline"
-                              className="hidden shrink-0 border-divider text-[10px] text-muted-foreground sm:inline-flex"
-                            >
-                              {t("inactive")}
-                            </Badge>
-                          )}
+                          {/* Status slot — reserved fixed width so the inactive
+                              marker never shifts the columns to its right. Empty
+                              (but width-holding) on active rows. */}
+                          <div className="hidden w-16 shrink-0 justify-end sm:flex">
+                            {!upstream.is_active && (
+                              <Badge
+                                variant="outline"
+                                className="border-divider text-[10px] text-muted-foreground"
+                              >
+                                {t("inactive")}
+                              </Badge>
+                            )}
+                          </div>
 
-                          {/* Circuit breaker state chip */}
-                          {upstream.circuit_breaker && (
-                            <StateChip
-                              state={upstream.circuit_breaker.state}
-                              className="hidden shrink-0 sm:inline-flex"
-                            />
-                          )}
+                          {/* Circuit breaker chip slot — reserved so CLOSED/OPEN
+                              label-width differences don't cascade into later columns. */}
+                          <div className="hidden w-[76px] shrink-0 items-center sm:flex">
+                            {upstream.circuit_breaker && (
+                              <StateChip state={upstream.circuit_breaker.state} />
+                            )}
+                          </div>
 
-                          {/* Key metrics (Tier-2 mono tabular) */}
+                          {/* Key metrics (Tier-2 mono tabular) in fixed-width slots */}
                           <div className="hidden shrink-0 items-center gap-3 md:flex">
                             <span
                               className={cn(
-                                "inline-flex items-center gap-1 font-mono text-xs tabular-nums",
+                                "inline-flex w-[88px] items-center gap-1 font-mono text-xs tabular-nums",
                                 concurrency.full ? "text-status-warning" : "text-muted-foreground"
                               )}
                               title={t("maxConcurrency")}
                             >
-                              <Server className="h-3 w-3" aria-hidden="true" />
-                              {concurrency.label}
+                              <Server className="h-3 w-3 shrink-0" aria-hidden="true" />
+                              <span className="min-w-0 truncate">{concurrency.label}</span>
                             </span>
                             <span
                               className={cn(
-                                "inline-flex items-center gap-1 font-mono text-xs tabular-nums",
+                                "inline-flex w-[52px] items-center gap-1 font-mono text-xs tabular-nums",
                                 quotaSummary.isExceeded
                                   ? "text-status-error"
                                   : quotaSummary.maxPercent >= 80
@@ -709,20 +714,23 @@ export function UpstreamsTable({
                               )}
                               title={t("tableQuota")}
                             >
-                              <Wallet className="h-3 w-3" aria-hidden="true" />
+                              <Wallet className="h-3 w-3 shrink-0" aria-hidden="true" />
                               {quotaSummary.hasRules
                                 ? `${Math.round(quotaSummary.maxPercent)}%`
                                 : "—"}
                             </span>
                           </div>
 
-                          {/* Last-used relative time (Tier-3), always visible inline */}
+                          {/* Last-used relative time (Tier-3): auto width on mobile
+                              (narrow layout unchanged), fixed & right-aligned from sm
+                              up so a longer phrase can't push the action cluster out
+                              of its column. */}
                           <span
-                            className="inline-flex shrink-0 items-center gap-1 text-[11px] tabular-nums text-muted-foreground"
+                            className="inline-flex shrink-0 items-center justify-end gap-1 whitespace-nowrap text-[11px] tabular-nums text-muted-foreground sm:w-[140px]"
                             title={t("lastUsed")}
                           >
-                            <Clock className="h-3 w-3" aria-hidden="true" />
-                            {formatLastUsed(upstream)}
+                            <Clock className="h-3 w-3 shrink-0" aria-hidden="true" />
+                            <span className="min-w-0 truncate">{formatLastUsed(upstream)}</span>
                           </span>
 
                           {/* Row actions — stop propagation so clicks do not toggle the row */}
@@ -776,15 +784,18 @@ export function UpstreamsTable({
                               </Link>
                             </Button>
 
-                            {showRecover && (
+                            {/* Recover slot — icon-only, fixed size to match the
+                                sibling actions. Reserved as an empty width-holder at
+                                sm+ so Delete keeps its column when recovery is absent
+                                (on mobile it collapses, keeping the narrow layout). */}
+                            {showRecover ? (
                               <Button
                                 variant="outline"
-                                size="sm"
+                                size="icon"
                                 type="button"
                                 className={cn(
-                                  "gap-1.5 px-2.5",
                                   statusTone("warning"),
-                                  isCompactDensity ? "h-7 text-xs" : "h-8"
+                                  isCompactDensity ? "h-7 w-7" : "h-8 w-8"
                                 )}
                                 onClick={() => {
                                   void handleRecoverCircuit(upstream);
@@ -793,13 +804,19 @@ export function UpstreamsTable({
                                   forceCircuitBreakerMutation.isPending &&
                                   forceCircuitBreakerMutation.variables?.upstreamId === upstream.id
                                 }
+                                title={t("recoverCircuitBreaker")}
                                 aria-label={`${t("recoverCircuitBreaker")}: ${upstream.name}`}
                               >
                                 <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-                                <span className="hidden lg:inline">
-                                  {t("recoverCircuitBreaker")}
-                                </span>
                               </Button>
+                            ) : (
+                              <div
+                                className={cn(
+                                  "hidden shrink-0 sm:block",
+                                  isCompactDensity ? "w-7" : "w-8"
+                                )}
+                                aria-hidden="true"
+                              />
                             )}
 
                             <Button
