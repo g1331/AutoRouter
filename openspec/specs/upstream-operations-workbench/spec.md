@@ -4,27 +4,32 @@
 TBD - created by archiving change optimize-upstream-management-experience. Update Purpose after archive.
 ## Requirements
 ### Requirement: 上游管理页必须提供运营工作台式信息结构
-系统 SHALL 将上游管理页构建为按优先级分组的运营工作台，并以统一卡片语义展示配置、运行态与操作入口。
+系统 SHALL 将上游管理页构建为按优先级分组的运营工作台，并以按 tier 分组的紧凑行表展示配置、运行态与操作入口。列表 MUST 以紧凑行呈现单条上游（LED 状态灯 + 名称与 base_url + 熔断状态芯片 + 关键运行指标 + 行操作），MUST NOT 使用信息全量平铺的大卡片网格。密集行内数字 MUST 遵循数据数字排印契约的 Tier-2/Tier-3 档。行 MUST 支持展开以呈现原卡片的密集信息（capabilities、计费倍率、并发/队列进度、quota 明细）。compact/comfortable 密度切换 MUST 保留。
 
 #### Scenario: 按优先级分组展示上游
 - **WHEN** 管理员进入上游管理页
 - **THEN** 页面 MUST 先展示 tier 分组摘要，再展示该组内上游条目
 
-#### Scenario: 单条上游卡片聚合关键信息
-- **WHEN** 管理员查看任意上游条目
-- **THEN** 该条目 MUST 同时提供身份信息、endpoint 信息、运行态信息与操作入口
+#### Scenario: 单条上游行聚合关键信息
+- **WHEN** 管理员查看任意上游行
+- **THEN** 该行 MUST 同时提供身份信息（LED + 名称 + base_url）、熔断状态芯片、关键运行指标与行操作入口
+
+#### Scenario: 展开行呈现密集详情
+- **WHEN** 管理员点击展开某条上游行
+- **THEN** 系统 MUST 在展开区呈现该上游的 capabilities、计费倍率、并发/队列进度与 quota 明细
 
 ### Requirement: 上游卡片头部与操作区应聚焦高频动作
-系统 SHALL 在上游卡片中前置关键状态并收敛操作按钮，降低误触与视觉噪声。
+系统 SHALL 在上游行中前置关键状态并收敛操作按钮，降低误触与视觉噪声。
 
 #### Scenario: 状态标记在名称前展示
-- **WHEN** 管理员查看上游卡片头部
-- **THEN** 系统 MUST 将启用/停用状态标记展示在上游名称前方，再展示名称与能力信息
+- **WHEN** 管理员查看上游行头部
+- **THEN** 系统 MUST 将启用/停用状态 LED 展示在上游名称前方，再展示名称与能力信息
 
-#### Scenario: 操作区仅保留启停、编辑、删除
-- **WHEN** 管理员在卡片操作区执行常见维护动作
-- **THEN** 系统 MUST 提供启停开关、编辑图标按钮、删除图标按钮
-- **AND** 测试按钮 MUST 默认不展示
+#### Scenario: 操作区提供启停、连接测试、编辑、删除
+- **WHEN** 管理员在行操作区执行常见维护动作
+- **THEN** 系统 MUST 提供启停开关、连接测试动作、编辑入口、删除入口
+- **AND** 连接测试动作 MUST 可达并真正触发上游连接测试（不得声明却从未调用）
+- **AND** 编辑入口 MUST 跳转到该上游的详情页而非打开内联编辑弹窗
 
 ### Requirement: 上游列表时间信息以最近使用时间为主
 系统 SHALL 在上游列表中展示最近一次使用时间（last used），替代创建时间作为默认运营时间指标。
@@ -108,3 +113,4 @@ TBD - created by archiving change optimize-upstream-management-experience. Updat
 #### Scenario: 搜索与筛选不改变主操作层级
 - **WHEN** 管理员使用搜索或来源筛选缩小目录范围
 - **THEN** 系统 MUST 保持列表扫描顺序和“导入所选模型”这一主操作层级不变
+

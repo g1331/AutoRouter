@@ -90,4 +90,4 @@
 - [x] 11.1 全量验证：`pnpm lint` + `pnpm format:check` + `pnpm exec tsc --noEmit` + `pnpm test:run --coverage` + `pnpm e2e --workers=2` + `pnpm build`（DB_TYPE=postgres）
 - [x] 11.2 visual 基线一次性重生成（含新增 upstreams/keys 详情页与 logs/settings/billing 覆盖）；a11y 全量复跑并按兜底档修复越界项
 - [x] 11.3 push 分支 + CI 绿 + 建 PR（按模板附前后截图与双主题对照，Closes 对应 issue）；停在交接边界（合并由用户决定）
-- [ ] 11.4 OpenSpec：`openspec validate restructure-ops-console-pages` 通过；PR 合并后归档 change（前置 chore 提交 + `--no-ff` 合并按仓库 OpenSpec PR 工作流）
+- [x] 11.4 OpenSpec：`openspec validate restructure-ops-console-pages` 通过；PR 合并后归档 change（前置 chore 提交 + `--no-ff` 合并按仓库 OpenSpec PR 工作流）
