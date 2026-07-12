@@ -16,12 +16,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { getUniqueCatalogModels } from "@/components/admin/upstream/catalog-workspace";
 import { useExecuteUpstreamProbe, useUpstreamProbes } from "@/hooks/use-upstreams";
 import { ROUTE_CAPABILITY_DEFINITIONS, resolveRouteCapabilities } from "@/lib/route-capabilities";
 import type {
   RouteCapability,
   Upstream,
-  UpstreamModelCatalogEntry,
   UpstreamProbeClientProfile,
   UpstreamProbeResponse,
 } from "@/types/api";
@@ -67,12 +67,6 @@ function getDefaultProbeModel(
     return "";
   }
   return PROBE_TEMPLATE_DEFAULT_MODELS[capability]?.[clientProfile] ?? "";
-}
-
-function getUniqueCatalogModels(catalog: readonly UpstreamModelCatalogEntry[]): string[] {
-  return Array.from(new Set(catalog.map((entry) => entry.model))).sort((left, right) =>
-    left.localeCompare(right)
-  );
 }
 
 function formatCatalogTimestamp(value: string | null): string | null {
@@ -275,6 +269,7 @@ export function BasicDiagnosticsSection({ upstream }: { upstream: Upstream }) {
               onChange={(event) => setProbeModel(event.target.value)}
               placeholder={t("probeModelPlaceholder", { model: defaultProbeModel })}
               list={catalogModelOptions.length > 0 ? probeModelListId : undefined}
+              aria-label={t("probeModel")}
             />
             {catalogModelOptions.length > 0 && (
               <datalist id={probeModelListId}>

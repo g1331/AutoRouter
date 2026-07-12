@@ -91,11 +91,8 @@ function makeApiKey(overrides: Partial<APIKeyResponse> = {}): APIKeyResponse {
   };
 }
 
-// The per-row remove button is an icon-only Button with no aria-label or visible
-// text (see the source oddity noted in the report), so it's the only button in the
-// tree with an empty accessible name — Add rule / Reset / Save all have text labels.
 function getRemoveButtons(): HTMLElement[] {
-  return screen.queryAllByRole("button", { name: "" });
+  return screen.queryAllByRole("button", { name: "keys.removeSpendingRule" });
 }
 
 describe("SpendingRulesSection", () => {
