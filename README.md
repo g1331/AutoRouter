@@ -111,14 +111,14 @@
 
 ```mermaid
 flowchart LR
-    C([客户端<br/>API Key]) --> V{验证密钥<br/>能力探测}
-    V --> R[构建候选上游集<br/>能力匹配 · 授权 · model_redirects]
-    R --> LB[负载均衡<br/>优先级 · 权重]
-    LB --> CB{熔断器<br/>CLOSED / OPEN / HALF_OPEN}
-    CB -->|放行| U[(上游转发<br/>SSE 流式)]
-    CB -.->|OPEN / 失败| FO[故障转移<br/>下一候选]
+    C(["客户端<br/>API Key"]) --> V{"验证密钥<br/>能力探测"}
+    V --> R["构建候选上游集<br/>能力匹配 · 授权 · model_redirects"]
+    R --> LB["负载均衡<br/>优先级 · 权重"]
+    LB --> CB{"熔断器<br/>CLOSED / OPEN / HALF_OPEN"}
+    CB -->|"放行"| U[("上游转发<br/>SSE 流式")]
+    CB -.->|"OPEN / 失败"| FO["故障转移<br/>下一候选"]
     FO --> U
-    U --> B[记录日志 + Token<br/>写入计费快照]
+    U --> B["记录日志 + Token<br/>写入计费快照"]
     B --> C
 ```
 

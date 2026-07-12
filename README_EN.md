@@ -113,14 +113,14 @@ The lifecycle of a single proxy request inside the gateway:
 
 ```mermaid
 flowchart LR
-    C([Client<br/>API Key]) --> V{Verify key<br/>detect capability}
-    V --> R[Build candidate pool<br/>capability · auth · model_redirects]
-    R --> LB[Load balance<br/>priority · weight]
-    LB --> CB{Circuit breaker<br/>CLOSED / OPEN / HALF_OPEN}
-    CB -->|pass| U[(Upstream forward<br/>SSE streaming)]
-    CB -.->|OPEN / fail| FO[Failover<br/>next candidate]
+    C(["Client<br/>API Key"]) --> V{"Verify key<br/>detect capability"}
+    V --> R["Build candidate pool<br/>capability · auth · model_redirects"]
+    R --> LB["Load balance<br/>priority · weight"]
+    LB --> CB{"Circuit breaker<br/>CLOSED / OPEN / HALF_OPEN"}
+    CB -->|"pass"| U[("Upstream forward<br/>SSE streaming")]
+    CB -.->|"OPEN / fail"| FO["Failover<br/>next candidate"]
     FO --> U
-    U --> B[Log + tokens<br/>write billing snapshot]
+    U --> B["Log + tokens<br/>write billing snapshot"]
     B --> C
 ```
 
