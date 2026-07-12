@@ -31,6 +31,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAPIKeys } from "@/hooks/use-api-keys";
 import { useRequestLogLive } from "@/hooks/use-request-log-live";
+import { useRequestLogStats, type RequestLogStatsFilters } from "@/hooks/use-request-log-stats";
 import { useRequestLogs, type RequestLogsFilters } from "@/hooks/use-request-logs";
 import { useAllUpstreams } from "@/hooks/use-upstreams";
 
@@ -191,6 +192,15 @@ export default function LogsPage() {
         : {}),
     };
   }, [focusId, userId, tableFilters]);
+  // Stats describe the window, not the page: drop sort/order so a header
+  // click never refires the percentile queries.
+  const statsFilters = useMemo<RequestLogStatsFilters>(() => {
+    const { id: _id, sort: _sort, order: _order, ...rest } = filters;
+    return rest;
+  }, [filters]);
+  const { data: windowStats } = useRequestLogStats("admin", statsFilters, {
+    enabled: !focusId,
+  });
   const focusInitialExpanded = useMemo(() => (focusId ? [focusId] : []), [focusId]);
   const { data, isLoading, refetch } = useRequestLogs(
     focusId ? 1 : page,
@@ -341,6 +351,7 @@ export default function LogsPage() {
                 onServerFiltersChange={focusId ? undefined : handleTableFiltersChange}
                 upstreamFilterOptions={focusId ? undefined : upstreamFilterOptions}
                 apiKeyFilterOptions={focusId ? undefined : apiKeyFilterOptions}
+                windowStats={focusId ? undefined : (windowStats ?? null)}
               />
             </div>
 

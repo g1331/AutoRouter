@@ -16,6 +16,7 @@ import { Topbar } from "@/components/admin/topbar";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePortalRequestLogs, type PortalRequestLogsFilters } from "@/hooks/use-portal-logs";
+import { useRequestLogStats, type RequestLogStatsFilters } from "@/hooks/use-request-log-stats";
 
 export default function PortalRequestsPage() {
   const t = useTranslations("portal");
@@ -57,6 +58,14 @@ export default function PortalRequestsPage() {
     refetchInterval: refreshInterval,
   });
 
+  // Stats describe the window, not the page: drop sort/order so a header
+  // click never refires the percentile queries.
+  const statsFilters = useMemo<RequestLogStatsFilters>(() => {
+    const { sort: _sort, order: _order, ...rest } = filters;
+    return rest;
+  }, [filters]);
+  const { data: windowStats } = useRequestLogStats("user", statsFilters);
+
   return (
     <>
       <Topbar title={t("requests.pageTitle")} />
@@ -95,6 +104,7 @@ export default function PortalRequestsPage() {
               hideRecordingSection
               serverFilters={tableFilters}
               onServerFiltersChange={handleTableFiltersChange}
+              windowStats={windowStats ?? null}
             />
 
             {data && data.total_pages > 1 && (

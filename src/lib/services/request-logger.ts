@@ -803,6 +803,57 @@ const REQUEST_LOG_PAGE_RELATIONS = {
   billingSnapshot: true,
 } as const;
 
+/** Shared filter → WHERE translation for the list and window-stats queries. */
+function buildRequestLogWhereClause(filters: ListRequestLogsFilter): SQL | undefined {
+  const conditions = [];
+
+  if (filters.id) {
+    conditions.push(eq(requestLogs.id, filters.id));
+  }
+  if (filters.apiKeyId) {
+    conditions.push(eq(requestLogs.apiKeyId, filters.apiKeyId));
+  }
+  if (filters.userId) {
+    conditions.push(eq(requestLogs.userId, filters.userId));
+  }
+  if (filters.upstreamId) {
+    conditions.push(eq(requestLogs.upstreamId, filters.upstreamId));
+  }
+  if (filters.statusCode !== undefined) {
+    conditions.push(eq(requestLogs.statusCode, filters.statusCode));
+  } else if (filters.statusClass) {
+    const [min, max] = STATUS_CLASS_RANGES[filters.statusClass];
+    conditions.push(gte(requestLogs.statusCode, min), lt(requestLogs.statusCode, max));
+  }
+  if (filters.model?.trim()) {
+    conditions.push(caseInsensitiveLike(requestLogs.model, filters.model));
+  }
+  if (filters.startTime) {
+    conditions.push(gte(requestLogs.createdAt, filters.startTime));
+  }
+  if (filters.endTime) {
+    conditions.push(lte(requestLogs.createdAt, filters.endTime));
+  }
+  if (filters.ttftMinMs !== undefined) {
+    conditions.push(gt(requestLogs.ttftMs, filters.ttftMinMs));
+  }
+  if (filters.durationMinMs !== undefined) {
+    conditions.push(gt(requestLogs.durationMs, filters.durationMinMs));
+  }
+  if (filters.tpsMax !== undefined) {
+    // TPS = completion_tokens / (duration_ms / 1000). Rewritten as integer-safe
+    // arithmetic so PostgreSQL and SQLite evaluate it identically, guarded so
+    // near-zero requests don't produce meaningless TPS matches.
+    conditions.push(
+      gte(requestLogs.durationMs, MIN_TPS_DURATION_MS),
+      gte(requestLogs.completionTokens, MIN_TPS_COMPLETION_TOKENS),
+      sql`${requestLogs.completionTokens} * 1000.0 < ${filters.tpsMax} * ${requestLogs.durationMs}`
+    );
+  }
+
+  return conditions.length > 0 ? and(...conditions) : undefined;
+}
+
 function buildRequestLogOrderBy(sort?: RequestLogSort) {
   const direction = sort?.order === "asc" ? asc : desc;
   // Stable tiebreakers so pagination never duplicates or drops rows when the
@@ -868,6 +919,112 @@ async function queryRequestLogPage(
   return ids.flatMap((id) => rowById.get(id) ?? []);
 }
 
+// Duration above which a request counts as "slow" in the window stats,
+// matching the slow_duration quick-filter preset threshold.
+export const SLOW_REQUEST_DURATION_MS = 20_000;
+
+export interface RequestLogWindowStats {
+  total: number;
+  streamCount: number;
+  slowCount: number;
+  p50TtftMs: number | null;
+  p90TtftMs: number | null;
+  p50Tps: number | null;
+}
+
+/**
+ * Nearest-rank percentile via ORDER BY + OFFSET (SQLite has no
+ * percentile_cont). Index mirrors the former client-side getPercentile:
+ * ceil(p/100 · n) − 1.
+ */
+async function selectRequestLogPercentile(
+  expr: SQL,
+  whereClause: SQL | undefined,
+  n: number,
+  percentile: number
+): Promise<number | null> {
+  if (n <= 0) {
+    return null;
+  }
+  const offset = Math.min(n - 1, Math.max(0, Math.ceil((percentile / 100) * n) - 1));
+  const rows = await db
+    .select({ value: expr })
+    .from(requestLogs)
+    .where(whereClause)
+    .orderBy(asc(expr))
+    .limit(1)
+    .offset(offset);
+  const value = rows[0]?.value;
+  // pg returns numeric/bigint aggregates as strings.
+  return value == null ? null : Number(value);
+}
+
+/**
+ * Window-scoped performance stats over the same filter surface as
+ * listRequestLogs, so the tiles describe the whole selected window instead of
+ * the fetched page.
+ */
+export async function getRequestLogWindowStats(
+  filters: ListRequestLogsFilter = {}
+): Promise<RequestLogWindowStats> {
+  const whereClause = buildRequestLogWhereClause(filters);
+
+  const [aggregate] = await db
+    .select({
+      total: count(),
+      streamCount: sql<
+        number | string | null
+      >`sum(case when ${requestLogs.isStream} then 1 else 0 end)`,
+      slowCount: sql<
+        number | string | null
+      >`sum(case when ${requestLogs.durationMs} > ${SLOW_REQUEST_DURATION_MS} then 1 else 0 end)`,
+      ttftCount: sql<
+        number | string | null
+      >`sum(case when ${requestLogs.isStream} and ${requestLogs.ttftMs} > 0 then 1 else 0 end)`,
+      tpsCount: sql<
+        number | string | null
+      >`sum(case when ${requestLogs.isStream} and ${requestLogs.durationMs} > ${MIN_TPS_DURATION_MS} and ${requestLogs.completionTokens} >= ${MIN_TPS_COMPLETION_TOKENS} then 1 else 0 end)`,
+    })
+    .from(requestLogs)
+    .where(whereClause);
+
+  const ttftCount = Number(aggregate.ttftCount ?? 0);
+  const tpsCount = Number(aggregate.tpsCount ?? 0);
+
+  // TTFT percentiles over streaming rows with a real first-token time.
+  const ttftWhere = and(
+    ...[whereClause, eq(requestLogs.isStream, true), gt(requestLogs.ttftMs, 0)].filter(
+      (condition): condition is SQL => condition !== undefined
+    )
+  );
+  // TPS over streaming rows above the minimum-signal guards, mirroring the
+  // row-level display rule (getRequestTps).
+  const tpsWhere = and(
+    ...[
+      whereClause,
+      eq(requestLogs.isStream, true),
+      gt(requestLogs.durationMs, MIN_TPS_DURATION_MS),
+      gte(requestLogs.completionTokens, MIN_TPS_COMPLETION_TOKENS),
+    ].filter((condition): condition is SQL => condition !== undefined)
+  );
+  const tpsExpr = sql`${requestLogs.completionTokens} * 1000.0 / ${requestLogs.durationMs}`;
+
+  const [p50TtftMs, p90TtftMs, p50Tps] = await Promise.all([
+    selectRequestLogPercentile(sql`${requestLogs.ttftMs}`, ttftWhere, ttftCount, 50),
+    selectRequestLogPercentile(sql`${requestLogs.ttftMs}`, ttftWhere, ttftCount, 90),
+    selectRequestLogPercentile(tpsExpr, tpsWhere, tpsCount, 50),
+  ]);
+
+  return {
+    total: Number(aggregate.total ?? 0),
+    streamCount: Number(aggregate.streamCount ?? 0),
+    slowCount: Number(aggregate.slowCount ?? 0),
+    p50TtftMs,
+    p90TtftMs,
+    p50Tps: p50Tps == null ? null : Math.round(p50Tps * 10) / 10,
+  };
+}
+
 /**
  * List request logs with pagination and optional filtering.
  */
@@ -889,54 +1046,7 @@ export async function listRequestLogs(
   page = Math.max(1, page);
   pageSize = Math.min(100, Math.max(1, pageSize));
 
-  // Build filter conditions
-  const conditions = [];
-
-  if (filters.id) {
-    conditions.push(eq(requestLogs.id, filters.id));
-  }
-  if (filters.apiKeyId) {
-    conditions.push(eq(requestLogs.apiKeyId, filters.apiKeyId));
-  }
-  if (filters.userId) {
-    conditions.push(eq(requestLogs.userId, filters.userId));
-  }
-  if (filters.upstreamId) {
-    conditions.push(eq(requestLogs.upstreamId, filters.upstreamId));
-  }
-  if (filters.statusCode !== undefined) {
-    conditions.push(eq(requestLogs.statusCode, filters.statusCode));
-  } else if (filters.statusClass) {
-    const [min, max] = STATUS_CLASS_RANGES[filters.statusClass];
-    conditions.push(gte(requestLogs.statusCode, min), lt(requestLogs.statusCode, max));
-  }
-  if (filters.model?.trim()) {
-    conditions.push(caseInsensitiveLike(requestLogs.model, filters.model));
-  }
-  if (filters.startTime) {
-    conditions.push(gte(requestLogs.createdAt, filters.startTime));
-  }
-  if (filters.endTime) {
-    conditions.push(lte(requestLogs.createdAt, filters.endTime));
-  }
-  if (filters.ttftMinMs !== undefined) {
-    conditions.push(gt(requestLogs.ttftMs, filters.ttftMinMs));
-  }
-  if (filters.durationMinMs !== undefined) {
-    conditions.push(gt(requestLogs.durationMs, filters.durationMinMs));
-  }
-  if (filters.tpsMax !== undefined) {
-    // TPS = completion_tokens / (duration_ms / 1000). Rewritten as integer-safe
-    // arithmetic so PostgreSQL and SQLite evaluate it identically, guarded so
-    // near-zero requests don't produce meaningless TPS matches.
-    conditions.push(
-      gte(requestLogs.durationMs, MIN_TPS_DURATION_MS),
-      gte(requestLogs.completionTokens, MIN_TPS_COMPLETION_TOKENS),
-      sql`${requestLogs.completionTokens} * 1000.0 < ${filters.tpsMax} * ${requestLogs.durationMs}`
-    );
-  }
-
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = buildRequestLogWhereClause(filters);
 
   // Count total with filters
   const [{ value: total }] = await db

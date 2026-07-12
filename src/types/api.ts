@@ -829,6 +829,16 @@ export type PaginatedAPIKeysResponse = PaginatedResponse<APIKeyResponse>;
 export type PaginatedUpstreamsResponse = PaginatedResponse<UpstreamResponse>;
 export type PaginatedRequestLogsResponse = PaginatedResponse<RequestLogResponse>;
 
+/** Window-scoped request log stats (GET /api/admin/logs/stats and /api/user/logs/stats). */
+export interface RequestLogStatsResponse {
+  total: number;
+  stream_count: number;
+  slow_count: number;
+  p50_ttft_ms: number | null;
+  p90_ttft_ms: number | null;
+  p50_tps: number | null;
+}
+
 export type TrafficRecordingMode = "all" | "success" | "failure";
 
 export interface TrafficRecordingSettingsResponse {

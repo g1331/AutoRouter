@@ -6,6 +6,7 @@ import LogsPage from "@/app/[locale]/(dashboard)/logs/page";
 const useSearchParamsMock = vi.fn();
 const useRequestLogsMock = vi.fn();
 const useRequestLogLiveMock = vi.fn();
+const useRequestLogStatsMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => useSearchParamsMock(),
@@ -31,6 +32,10 @@ vi.mock("@/hooks/use-request-log-live", () => ({
   useRequestLogLive: (...args: unknown[]) => useRequestLogLiveMock(...args),
 }));
 
+vi.mock("@/hooks/use-request-log-stats", () => ({
+  useRequestLogStats: (...args: unknown[]) => useRequestLogStatsMock(...args),
+}));
+
 vi.mock("@/hooks/use-upstreams", () => ({
   useAllUpstreams: () => ({ data: [{ id: "up-1", name: "Upstream One" }] }),
 }));
@@ -46,6 +51,7 @@ interface LogsTableMockProps {
   onServerFiltersChange?: (patch: Record<string, unknown>) => void;
   upstreamFilterOptions?: Array<{ id: string; name: string }>;
   apiKeyFilterOptions?: Array<{ id: string; name: string }>;
+  windowStats?: Record<string, unknown> | null;
 }
 
 let lastLogsTableProps: LogsTableMockProps | null = null;
@@ -138,11 +144,13 @@ describe("LogsPage focus query param", () => {
     useSearchParamsMock.mockReset();
     useRequestLogsMock.mockReset();
     useRequestLogLiveMock.mockReset();
+    useRequestLogStatsMock.mockReset();
     lastLogsTableProps = null;
     useRequestLogLiveMock.mockReturnValue({
       connectionState: "fallback",
       fallbackRefetchIntervalMs: 5000,
     });
+    useRequestLogStatsMock.mockReturnValue({ data: undefined });
   });
 
   it("renders the standard management header when no focus param is present", () => {
@@ -259,11 +267,13 @@ describe("LogsPage server filter mapping", () => {
     useSearchParamsMock.mockReset();
     useRequestLogsMock.mockReset();
     useRequestLogLiveMock.mockReset();
+    useRequestLogStatsMock.mockReset();
     lastLogsTableProps = null;
     useRequestLogLiveMock.mockReturnValue({
       connectionState: "fallback",
       fallbackRefetchIntervalMs: 5000,
     });
+    useRequestLogStatsMock.mockReturnValue({ data: undefined });
     setFocusParam(null);
     useRequestLogsMock.mockReturnValue({
       isLoading: false,
@@ -352,5 +362,51 @@ describe("LogsPage server filter mapping", () => {
     expect(lastLogsTableProps?.upstreamFilterOptions).toBeUndefined();
     expect(lastLogsTableProps?.apiKeyFilterOptions).toBeUndefined();
     expect(lastLogsTableProps?.onServerFiltersChange).toBeUndefined();
+  });
+
+  it("requests window stats without sort/order and forwards them to the table", () => {
+    const stats = {
+      total: 10,
+      stream_count: 4,
+      slow_count: 1,
+      p50_ttft_ms: 800,
+      p90_ttft_ms: 2400,
+      p50_tps: 42.5,
+    };
+    useRequestLogStatsMock.mockReturnValue({ data: stats });
+
+    render(<LogsPage />);
+    patchFilters({ sortField: "cost", sortOrder: "asc", upstreamId: "up-1" });
+
+    const statsCall = useRequestLogStatsMock.mock.calls.at(-1)!;
+    expect(statsCall[0]).toBe("admin");
+    // Sort state must not leak into the stats query key.
+    expect(statsCall[1]).toEqual({ upstream_id: "up-1", time_range: "30d" });
+    expect(statsCall[2]).toEqual({ enabled: true });
+    expect(lastLogsTableProps?.windowStats).toEqual(stats);
+  });
+
+  it("passes windowStats=null while stats are loading", () => {
+    useRequestLogStatsMock.mockReturnValue({ data: undefined });
+
+    render(<LogsPage />);
+
+    expect(lastLogsTableProps?.windowStats).toBeNull();
+  });
+
+  it("disables and withholds window stats in focus view", () => {
+    setFocusParam("log-1");
+    useRequestLogsMock.mockReturnValue({
+      isLoading: false,
+      data: { items: [{ id: "log-1" }], total: 1, total_pages: 1, page: 1, page_size: 1 },
+      refetch: vi.fn(),
+    });
+    useRequestLogStatsMock.mockReturnValue({ data: undefined });
+
+    render(<LogsPage />);
+
+    const statsCall = useRequestLogStatsMock.mock.calls.at(-1)!;
+    expect(statsCall[2]).toEqual({ enabled: false });
+    expect(lastLogsTableProps?.windowStats).toBeUndefined();
   });
 });

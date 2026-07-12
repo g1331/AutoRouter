@@ -10,11 +10,17 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  Gauge,
+  Radio,
+  Timer,
+  Turtle,
+  Zap,
 } from "lucide-react";
 import type {
   ExclusionReason,
   FailoverErrorType,
   RequestLog,
+  RequestLogStatsResponse,
   RoutingCircuitState,
   RoutingQueueStatus,
   RoutingSelectionReason,
@@ -30,6 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { TimeRangeSelector } from "@/components/dashboard/time-range-selector";
+import { StatCard } from "@/components/dashboard/stat-card";
 import { statusTone } from "@/lib/status-tone";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -149,6 +156,11 @@ interface LogsTableProps {
    */
   upstreamFilterOptions?: LogsFilterOption[];
   apiKeyFilterOptions?: LogsFilterOption[];
+  /**
+   * Window-scoped stats from the /logs/stats endpoint. undefined hides the
+   * stats strip entirely (focus view); null renders loading skeletons.
+   */
+  windowStats?: RequestLogStatsResponse | null;
 }
 
 const HIGH_TTFT_THRESHOLD_MS = 5000;
@@ -378,15 +390,6 @@ function getQueueStatusVariant(
   }
 }
 
-function getPercentile(values: number[], percentile: number): number | null {
-  if (values.length === 0) {
-    return null;
-  }
-  const sorted = [...values].sort((a, b) => a - b);
-  const index = Math.ceil((percentile / 100) * sorted.length) - 1;
-  return sorted[Math.max(0, Math.min(index, sorted.length - 1))];
-}
-
 export function LogsTable({
   logs,
   isLive = false,
@@ -396,8 +399,10 @@ export function LogsTable({
   onServerFiltersChange,
   upstreamFilterOptions,
   apiKeyFilterOptions,
+  windowStats,
 }: LogsTableProps) {
   const t = useTranslations("logs");
+  const tDashboard = useTranslations("dashboard");
   const locale = useLocale();
   const [desktopTableContainerElement, setDesktopTableContainerElement] =
     useState<HTMLDivElement | null>(null);
@@ -720,29 +725,6 @@ export function LogsTable({
     }
     setExpandedRows(newExpanded);
   };
-
-  // All filters (including the quick-filter presets) are resolved server-side
-  // via serverFilters, so the fetched page is rendered as-is.
-  const performanceSummary = useMemo(() => {
-    const streamLogs = logs.filter((log) => log.is_stream);
-    const ttftValues = streamLogs
-      .map((log) => log.ttft_ms)
-      .filter((value): value is number => value != null && value > 0);
-    const tpsValues = streamLogs
-      .map((log) => getRequestTps(log))
-      .filter((value): value is number => value != null && value > 0);
-    const slowCount = logs.filter(
-      (log) => log.duration_ms != null && log.duration_ms > SLOW_DURATION_THRESHOLD_MS
-    ).length;
-
-    return {
-      p50TtftMs: getPercentile(ttftValues, 50),
-      p90TtftMs: getPercentile(ttftValues, 90),
-      p50Tps: getPercentile(tpsValues, 50),
-      slowRatio: logs.length > 0 ? (slowCount / logs.length) * 100 : 0,
-      streamRatio: logs.length > 0 ? (streamLogs.length / logs.length) * 100 : 0,
-    };
-  }, [logs]);
 
   const getStatusBadgeVariant = (statusCode: number | null) => {
     if (statusCode === null) return "neutral";
@@ -2662,6 +2644,44 @@ export function LogsTable({
       : { icon: ScrollText, title: "noLogs", description: "noLogsDesc" };
   const EmptyStateIcon = emptyState.icon;
 
+  // Window caption for the stats strip: the selected time range plus a
+  // "filtered" marker when any narrowing filter shapes the same window.
+  const windowStatsLabel = `${tDashboard(`timeRange.${serverFilters.timeRange}`)}${
+    hasNarrowingFilters ? ` · ${t("statsWindowFiltered")}` : ""
+  }`;
+  const statsTotal = windowStats?.total ?? 0;
+  const windowStatTiles = [
+    {
+      labelKey: "summaryP50Ttft",
+      icon: Timer,
+      value: formatSummaryTtft(windowStats?.p50_ttft_ms ?? null),
+    },
+    {
+      labelKey: "summaryP90Ttft",
+      icon: Gauge,
+      value: formatSummaryTtft(windowStats?.p90_ttft_ms ?? null),
+    },
+    {
+      labelKey: "summaryP50Tps",
+      icon: Zap,
+      value: formatSummaryTps(windowStats?.p50_tps ?? null),
+    },
+    {
+      labelKey: "summarySlowRatio",
+      icon: Turtle,
+      value: formatPercent(
+        statsTotal > 0 ? ((windowStats?.slow_count ?? 0) / statsTotal) * 100 : 0
+      ),
+    },
+    {
+      labelKey: "summaryStreamRatio",
+      icon: Radio,
+      value: formatPercent(
+        statsTotal > 0 ? ((windowStats?.stream_count ?? 0) / statsTotal) * 100 : 0
+      ),
+    },
+  ] as const;
+
   return (
     <div
       className={cn(
@@ -2866,91 +2886,35 @@ export function LogsTable({
         )}
       </div>
 
-      <div
-        className={cn(
-          "border-b border-divider bg-surface-200/70 px-4 py-3",
-          LOGS_SECTION_ENTER_CLASS
-        )}
-        style={{ animationDelay: "90ms" }}
-      >
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
-          <div
-            className={cn(
-              "rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2",
-              LOGS_CARD_ENTER_CLASS,
-              LOGS_SURFACE_TRANSITION_CLASS,
-              LOGS_INTERACTIVE_RAISE_CLASS,
-              hasLiveActivity && LOGS_LIVE_HIGHLIGHT_CLASS
-            )}
-            style={{ animationDelay: "130ms" }}
-          >
-            <p className="type-caption text-muted-foreground">{t("summaryP50Ttft")}</p>
-            <p className="font-mono text-sm text-foreground">
-              {formatSummaryTtft(performanceSummary.p50TtftMs)}
-            </p>
-          </div>
-          <div
-            className={cn(
-              "rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2",
-              LOGS_CARD_ENTER_CLASS,
-              LOGS_SURFACE_TRANSITION_CLASS,
-              LOGS_INTERACTIVE_RAISE_CLASS,
-              hasLiveActivity && LOGS_LIVE_HIGHLIGHT_CLASS
-            )}
-            style={{ animationDelay: "170ms" }}
-          >
-            <p className="type-caption text-muted-foreground">{t("summaryP90Ttft")}</p>
-            <p className="font-mono text-sm text-foreground">
-              {formatSummaryTtft(performanceSummary.p90TtftMs)}
-            </p>
-          </div>
-          <div
-            className={cn(
-              "rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2",
-              LOGS_CARD_ENTER_CLASS,
-              LOGS_SURFACE_TRANSITION_CLASS,
-              LOGS_INTERACTIVE_RAISE_CLASS,
-              hasLiveActivity && LOGS_LIVE_HIGHLIGHT_CLASS
-            )}
-            style={{ animationDelay: "210ms" }}
-          >
-            <p className="type-caption text-muted-foreground">{t("summaryP50Tps")}</p>
-            <p className="font-mono text-sm text-foreground">
-              {formatSummaryTps(performanceSummary.p50Tps)}
-            </p>
-          </div>
-          <div
-            className={cn(
-              "rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2",
-              LOGS_CARD_ENTER_CLASS,
-              LOGS_SURFACE_TRANSITION_CLASS,
-              LOGS_INTERACTIVE_RAISE_CLASS,
-              hasLiveActivity && LOGS_LIVE_HIGHLIGHT_CLASS
-            )}
-            style={{ animationDelay: "250ms" }}
-          >
-            <p className="type-caption text-muted-foreground">{t("summarySlowRatio")}</p>
-            <p className="font-mono text-sm text-foreground">
-              {formatPercent(performanceSummary.slowRatio)}
-            </p>
-          </div>
-          <div
-            className={cn(
-              "rounded-cf-sm border border-divider bg-surface-300/80 px-3 py-2",
-              LOGS_CARD_ENTER_CLASS,
-              LOGS_SURFACE_TRANSITION_CLASS,
-              LOGS_INTERACTIVE_RAISE_CLASS,
-              hasLiveActivity && LOGS_LIVE_HIGHLIGHT_CLASS
-            )}
-            style={{ animationDelay: "290ms" }}
-          >
-            <p className="type-caption text-muted-foreground">{t("summaryStreamRatio")}</p>
-            <p className="font-mono text-sm text-foreground">
-              {formatPercent(performanceSummary.streamRatio)}
-            </p>
+      {windowStats !== undefined && (
+        <div
+          className={cn(
+            "border-b border-divider bg-surface-200/70 px-4 py-3",
+            LOGS_SECTION_ENTER_CLASS
+          )}
+          style={{ animationDelay: "90ms" }}
+        >
+          <p className="type-caption mb-2 text-muted-foreground">{windowStatsLabel}</p>
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
+            {windowStatTiles.map((tile, index) => (
+              <StatCard
+                key={tile.labelKey}
+                icon={tile.icon}
+                label={t(tile.labelKey)}
+                value={tile.value}
+                isLoading={windowStats === null}
+                className={cn(
+                  LOGS_CARD_ENTER_CLASS,
+                  LOGS_SURFACE_TRANSITION_CLASS,
+                  LOGS_INTERACTIVE_RAISE_CLASS,
+                  hasLiveActivity && LOGS_LIVE_HIGHLIGHT_CLASS
+                )}
+                style={{ animationDelay: `${130 + index * 40}ms` }}
+              />
+            ))}
           </div>
         </div>
-      </div>
+      )}
 
       {logs.length === 0 ? (
         <div

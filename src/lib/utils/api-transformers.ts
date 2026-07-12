@@ -11,6 +11,7 @@ import type {
 import type {
   RequestLogResponse,
   PaginatedRequestLogs,
+  RequestLogWindowStats,
   FailoverAttempt,
 } from "@/lib/services/request-logger";
 import type {
@@ -20,6 +21,7 @@ import type {
   RoutingDecisionLog,
   RoutingFailureStage,
   RequestLifecycleStatus,
+  RequestLogStatsResponse,
   UpstreamQueuePolicy,
   UpstreamFailureRuleConfig,
   CircuitBreakerConfig,
@@ -915,6 +917,22 @@ export function transformPaginatedRequestLogs(
     page: result.page,
     page_size: result.pageSize,
     total_pages: result.totalPages,
+  };
+}
+
+/**
+ * Transform window-scoped request log stats to API response format.
+ */
+export function transformRequestLogWindowStats(
+  stats: RequestLogWindowStats
+): RequestLogStatsResponse {
+  return {
+    total: stats.total,
+    stream_count: stats.streamCount,
+    slow_count: stats.slowCount,
+    p50_ttft_ms: stats.p50TtftMs,
+    p90_ttft_ms: stats.p90TtftMs,
+    p50_tps: stats.p50Tps,
   };
 }
 

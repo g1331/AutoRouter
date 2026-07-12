@@ -583,6 +583,7 @@
     "summaryP50Tps": "P50 TPS",
     "summarySlowRatio": "慢请求占比(>20秒)",
     "summaryStreamRatio": "流式占比",
+    "statsWindowFiltered": "已过滤",
     "expandedDetails": "展开详情",
     "performanceStats": "性能统计",
     "perfTtft": "TTFT",

@@ -18,9 +18,9 @@
 
 ## 3. 统计区：窗口级指标 + StatCard 化
 
-- [ ] 3.1 服务层 `getRequestLogWindowStats(filters)`：条件聚合计数 + offset 百分位（双方言）；新路由 `api/admin/logs/stats` + `api/user/logs/stats`（复用共享筛选解析，鉴权对齐列表端点）；`RequestLogStatsResponse` 入 `types/api.ts`
-- [ ] 3.2 新 hook `use-request-log-stats.ts`（`["request-log-stats", …]` key 隔离、30s interval、admin/portal 端点开关）；`logs-table.tsx` 瓦片替换为 StatCard（`windowStats` + `windowLabel` props），删除客户端 `performanceSummary` 计算；hint 标注窗口；i18n 键
-- [ ] 3.3 测试：stats 服务函数（node 环境，n=0/1 边界）、路由鉴权与筛选转发、瓦片渲染与加载态；质量门禁通过后提交
+- [x] 3.1 服务层 `getRequestLogWindowStats(filters)`：条件聚合计数 + offset 百分位（双方言）；新路由 `api/admin/logs/stats` + `api/user/logs/stats`（复用共享筛选解析，鉴权对齐列表端点）；`RequestLogStatsResponse` 入 `types/api.ts`
+- [x] 3.2 新 hook `use-request-log-stats.ts`（`["request-log-stats", …]` key 隔离、30s interval、admin/portal 端点开关）；`logs-table.tsx` 瓦片替换为 StatCard（`windowStats` prop，窗口标注在表格内从 serverFilters 推导），删除客户端 `performanceSummary` 计算；i18n 键
+- [x] 3.3 测试：stats 服务函数（n=0/1 边界与 offset 计算）、路由鉴权与筛选转发、hook 序列化与 key 隔离、瓦片渲染与加载态；质量门禁通过后提交
 - [ ] 3.4 （可裁剪）stats 端点加 series + StatCard footer 迷你面积图
 
 ## 4. 行内视觉 + 管理卡片脉冲条

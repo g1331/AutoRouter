@@ -1047,9 +1047,18 @@ describe("LogsTable", () => {
     });
   });
 
+  const mockWindowStats = {
+    total: 20,
+    stream_count: 8,
+    slow_count: 2,
+    p50_ttft_ms: 850,
+    p90_ttft_ms: 2600,
+    p50_tps: 41.3,
+  };
+
   describe("New Row Highlight", () => {
     it("applies subtle highlight class for newly arrived logs", async () => {
-      const { rerender } = render(<LogsTable logs={[mockLog]} />);
+      const { rerender } = render(<LogsTable logs={[mockLog]} windowStats={mockWindowStats} />);
 
       const newLog: RequestLog = {
         ...mockLog,
@@ -1058,40 +1067,74 @@ describe("LogsTable", () => {
       };
 
       await act(async () => {
-        rerender(<LogsTable logs={[newLog, mockLog]} />);
+        rerender(<LogsTable logs={[newLog, mockLog]} windowStats={mockWindowStats} />);
       });
 
       const row = screen.getAllByRole("row")[1];
-      const summaryTile = screen.getByText("summaryP50Ttft").closest("div");
 
       await waitFor(() => {
         expect(row.className).toContain("bg-status-info-muted/25");
         expect(row.className).toContain("animate-log-row-emphasis");
-        expect(summaryTile).toBeInTheDocument();
-        expect(summaryTile?.className).toContain("animate-log-live-highlight");
+        // The highlight class lands on the StatCard root, a few levels above the label.
+        const summaryTile = screen
+          .getByText("summaryP50Ttft")
+          .closest('div[class*="animate-log-live-highlight"]');
+        expect(summaryTile).not.toBeNull();
       });
     });
   });
 
   describe("Performance Summary And Quick Filters", () => {
-    it("renders performance summary tiles", () => {
-      render(<LogsTable logs={[mockLog]} />);
+    it("renders window stat tiles from windowStats", () => {
+      render(<LogsTable logs={[mockLog]} windowStats={mockWindowStats} />);
 
       expect(screen.getByText("summaryP50Ttft")).toBeInTheDocument();
       expect(screen.getByText("summaryP90Ttft")).toBeInTheDocument();
       expect(screen.getByText("summaryP50Tps")).toBeInTheDocument();
       expect(screen.getByText("summarySlowRatio")).toBeInTheDocument();
       expect(screen.getByText("summaryStreamRatio")).toBeInTheDocument();
+
+      expect(screen.getByText("850ms")).toBeInTheDocument();
+      expect(screen.getByText("2.60s")).toBeInTheDocument();
+      expect(screen.getByText("41.3 tok/s")).toBeInTheDocument();
+      expect(screen.getByText("10%")).toBeInTheDocument();
+      expect(screen.getByText("40%")).toBeInTheDocument();
+      // Window caption: the selected time range, unfiltered by default.
+      expect(screen.getByText("timeRange.30d")).toBeInTheDocument();
+    });
+
+    it("marks the window caption as filtered when narrowing filters are active", () => {
+      render(
+        <LogsTable
+          logs={[mockLog]}
+          windowStats={mockWindowStats}
+          serverFilters={{ ...DEFAULT_LOGS_SERVER_FILTERS, model: "gpt-4" }}
+        />
+      );
+
+      expect(screen.getByText("timeRange.30d · statsWindowFiltered")).toBeInTheDocument();
+    });
+
+    it("hides the stats strip when windowStats is undefined and shows skeletons when null", () => {
+      const { rerender } = render(<LogsTable logs={[mockLog]} />);
+      expect(screen.queryByText("summaryP50Ttft")).not.toBeInTheDocument();
+
+      rerender(<LogsTable logs={[mockLog]} windowStats={null} />);
+      expect(screen.getByText("summaryP50Ttft")).toBeInTheDocument();
+      expect(screen.queryByText("850ms")).not.toBeInTheDocument();
     });
 
     it("adds hover motion to summary tiles and quick filter chips", () => {
-      render(<LogsTable logs={[mockLog]} onServerFiltersChange={vi.fn()} />);
+      render(
+        <LogsTable logs={[mockLog]} windowStats={mockWindowStats} onServerFiltersChange={vi.fn()} />
+      );
 
-      const summaryTile = screen.getByText("summaryP50Ttft").closest("div");
+      const summaryTile = screen
+        .getByText("summaryP50Ttft")
+        .closest('div[class*="motion-safe:hover:-translate-y-0.5"]');
       const quickFilter = screen.getByRole("button", { name: "presetHighTtft" });
 
-      expect(summaryTile).toBeInTheDocument();
-      expect(summaryTile?.className).toContain("motion-safe:hover:-translate-y-0.5");
+      expect(summaryTile).not.toBeNull();
       expect(quickFilter.className).toContain("motion-safe:hover:-translate-y-0.5");
     });
 

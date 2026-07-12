@@ -16,6 +16,15 @@ vi.mock("next-intl", () => ({
   useLocale: () => "en",
 }));
 
+// The real logs-table module (pulled in via importActual below) transitively
+// imports the next-intl navigation helpers, which don't resolve under vitest.
+vi.mock("@/i18n/navigation", () => ({
+  Link: ({ children, href }: { children: React.ReactNode; href: string }) => (
+    <a href={href}>{children}</a>
+  ),
+  usePathname: () => "/portal/requests",
+}));
+
 vi.mock("@/hooks/use-portal-overview", () => ({
   usePortalOverview: (...args: unknown[]) => usePortalOverviewMock(...args),
   usePortalUsage: (...args: unknown[]) => usePortalUsageMock(...args),
@@ -23,6 +32,10 @@ vi.mock("@/hooks/use-portal-overview", () => ({
 
 vi.mock("@/hooks/use-portal-logs", () => ({
   usePortalRequestLogs: (...args: unknown[]) => usePortalRequestLogsMock(...args),
+}));
+
+vi.mock("@/hooks/use-request-log-stats", () => ({
+  useRequestLogStats: () => ({ data: undefined }),
 }));
 
 vi.mock("@/hooks/use-portal-keys", () => ({
@@ -39,22 +52,27 @@ vi.mock("@/components/portal/portal-usage-chart", () => ({
   ),
 }));
 
-vi.mock("@/components/admin/logs-table", () => ({
-  DEFAULT_LOGS_SERVER_FILTERS: { statusClass: "all", model: "", timeRange: "30d" },
-  LogsTable: ({
-    logs,
-    hideRecordingSection,
-  }: {
-    logs: Array<{ id: string }>;
-    hideRecordingSection?: boolean;
-  }) => (
-    <div
-      data-testid="logs-table"
-      data-log-count={logs.length}
-      data-hide-recording={String(Boolean(hideRecordingSection))}
-    />
-  ),
-}));
+// Keep the real DEFAULT_LOGS_SERVER_FILTERS / resolvePerfPresetParams so the
+// page-level filter mapping runs against the actual module contract.
+vi.mock("@/components/admin/logs-table", async (importActual) => {
+  const actual = await importActual<typeof import("@/components/admin/logs-table")>();
+  return {
+    ...actual,
+    LogsTable: ({
+      logs,
+      hideRecordingSection,
+    }: {
+      logs: Array<{ id: string }>;
+      hideRecordingSection?: boolean;
+    }) => (
+      <div
+        data-testid="logs-table"
+        data-log-count={logs.length}
+        data-hide-recording={String(Boolean(hideRecordingSection))}
+      />
+    ),
+  };
+});
 
 vi.mock("@/components/admin/pagination-controls", () => ({
   PaginationControls: () => <nav data-testid="pagination" />,

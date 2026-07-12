@@ -33,6 +33,7 @@ vi.mock("@/lib/utils/logger", () => ({
 vi.mock("@/lib/services/user-data-service", () => ({
   getUserOverview: vi.fn(),
   listUserRequestLogs: vi.fn(),
+  getUserRequestLogWindowStats: vi.fn(),
   getUserUsageStats: vi.fn(),
   listUserUpstreamOptions: vi.fn(),
 }));
@@ -40,6 +41,7 @@ vi.mock("@/lib/services/user-data-service", () => ({
 import * as userDataService from "@/lib/services/user-data-service";
 import { GET as overviewRoute } from "@/app/api/user/overview/route";
 import { GET as logsRoute } from "@/app/api/user/logs/route";
+import { GET as logsStatsRoute } from "@/app/api/user/logs/stats/route";
 import { GET as usageRoute } from "@/app/api/user/usage/route";
 import { GET as upstreamsRoute } from "@/app/api/user/upstreams/route";
 
@@ -95,6 +97,7 @@ describe("user routes — guard", () => {
   it.each([
     ["overview", () => overviewRoute(makeRequest("http://localhost/api/user/overview", null))],
     ["logs", () => logsRoute(makeRequest("http://localhost/api/user/logs", null))],
+    ["logs/stats", () => logsStatsRoute(makeRequest("http://localhost/api/user/logs/stats", null))],
     ["usage", () => usageRoute(makeRequest("http://localhost/api/user/usage", null))],
     ["upstreams", () => upstreamsRoute(makeRequest("http://localhost/api/user/upstreams", null))],
   ])("rejects an unauthenticated request to %s with 401", async (_name, invoke) => {
@@ -108,6 +111,10 @@ describe("user routes — guard", () => {
       () => overviewRoute(makeRequest("http://localhost/api/user/overview", ADMIN_TOKEN)),
     ],
     ["logs", () => logsRoute(makeRequest("http://localhost/api/user/logs", ADMIN_TOKEN))],
+    [
+      "logs/stats",
+      () => logsStatsRoute(makeRequest("http://localhost/api/user/logs/stats", ADMIN_TOKEN)),
+    ],
     ["usage", () => usageRoute(makeRequest("http://localhost/api/user/usage", ADMIN_TOKEN))],
     [
       "upstreams",
@@ -118,6 +125,7 @@ describe("user routes — guard", () => {
     expect(res.status).toBe(403);
     expect(userDataService.getUserOverview).not.toHaveBeenCalled();
     expect(userDataService.listUserRequestLogs).not.toHaveBeenCalled();
+    expect(userDataService.getUserRequestLogWindowStats).not.toHaveBeenCalled();
     expect(userDataService.getUserUsageStats).not.toHaveBeenCalled();
     expect(userDataService.listUserUpstreamOptions).not.toHaveBeenCalled();
   });
@@ -271,6 +279,59 @@ describe("GET /api/user/logs", () => {
     const res = await logsRoute(makeRequest("http://localhost/api/user/logs?sort=model", MEMBER));
     expect(res.status).toBe(400);
     expect(userDataService.listUserRequestLogs).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /api/user/logs/stats", () => {
+  function makeWindowStats() {
+    return {
+      total: 6,
+      streamCount: 2,
+      slowCount: 1,
+      p50TtftMs: 700,
+      p90TtftMs: 2100,
+      p50Tps: 38.4,
+    };
+  }
+
+  it("scopes the stats to the authenticated user and returns snake_case", async () => {
+    vi.mocked(userDataService.getUserRequestLogWindowStats).mockResolvedValue(makeWindowStats());
+
+    const res = await logsStatsRoute(makeRequest("http://localhost/api/user/logs/stats", MEMBER));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      total: 6,
+      stream_count: 2,
+      slow_count: 1,
+      p50_ttft_ms: 700,
+      p90_ttft_ms: 2100,
+      p50_tps: 38.4,
+    });
+    expect(userDataService.getUserRequestLogWindowStats).toHaveBeenCalledWith(SELF_ID, {});
+  });
+
+  it("forwards supported filters and ignores admin-scope params", async () => {
+    vi.mocked(userDataService.getUserRequestLogWindowStats).mockResolvedValue(makeWindowStats());
+
+    const res = await logsStatsRoute(
+      makeRequest(
+        `http://localhost/api/user/logs/stats?api_key_id=key-1&tps_max=30&user_id=${OTHER_ID}&upstream_id=up-1`,
+        MEMBER
+      )
+    );
+    expect(res.status).toBe(200);
+    expect(userDataService.getUserRequestLogWindowStats).toHaveBeenCalledWith(SELF_ID, {
+      apiKeyId: "key-1",
+      tpsMax: 30,
+    });
+  });
+
+  it("rejects an invalid status_code with 400", async () => {
+    const res = await logsStatsRoute(
+      makeRequest("http://localhost/api/user/logs/stats?status_code=abc", MEMBER)
+    );
+    expect(res.status).toBe(400);
+    expect(userDataService.getUserRequestLogWindowStats).not.toHaveBeenCalled();
   });
 });
 
