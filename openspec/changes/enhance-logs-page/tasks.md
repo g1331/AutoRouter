@@ -32,5 +32,5 @@
 
 ## 5. 验证与收尾
 
-- [ ] 5.1 dev server 浏览器实查：admin logs 页与 portal requests 页、双主题、lg/xl 视口；portal 无 admin 选择器且无 `/admin/*` 请求（test/test1234）
-- [ ] 5.2 本地 `pnpm e2e --workers=2` 通过；重新生成 `tests/visual/pages.spec.ts-snapshots/logs-visual-win32.png`；最终提交
+- [x] 5.1 dev server 浏览器实查：admin logs 页与 portal requests 页、双主题、lg/xl 视口；portal 无 admin 选择器且无 `/admin/*` 请求（test/test1234）
+- [x] 5.2 本地 `pnpm e2e --workers=2` 通过（新增筛选选项端点 stub 修复 401 登出）；重新生成 `tests/visual/pages.spec.ts-snapshots/logs-visual-win32.png`；最终提交

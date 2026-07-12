@@ -95,6 +95,21 @@ function mockTrafficRecordingsApi(page: Page): Promise<void> {
   });
 }
 
+// The logs page fetches upstream / API-key filter options. Left unmocked they
+// reach the real server with the fake e2e token and the 401 logs the session
+// out mid-test, so stub them with empty pages.
+async function mockLogsFilterOptionApis(page: Page): Promise<void> {
+  const emptyPage = { items: [], total: 0, page: 1, page_size: 100, total_pages: 0 };
+  const fulfillEmpty = (route: Parameters<Parameters<Page["route"]>[1]>[0]) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(emptyPage),
+    });
+  await page.route("**/api/admin/upstreams?**", fulfillEmpty);
+  await page.route("**/api/admin/keys?**", fulfillEmpty);
+}
+
 // The live pulse bar in the dashboard layout opens a stats/live connection on
 // every page. Stub it so this mocked flow stays isolated from the real server.
 function mockLivePulse(page: Page): Promise<void> {
@@ -126,6 +141,7 @@ test.describe("Logs routing diagnostics", () => {
   test("does not show selected upstream when request was never sent upstream", async ({ page }) => {
     await seedAdminToken(page);
     await mockLogsApi(page);
+    await mockLogsFilterOptionApis(page);
     await mockTrafficRecordingsApi(page);
 
     await page.goto("/en/logs");
