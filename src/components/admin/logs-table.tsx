@@ -1065,7 +1065,6 @@ export function LogsTable({
     };
 
     type JourneyTone = "neutral" | "info" | "warning" | "success" | "error";
-    type JourneyProgressState = "done" | "active" | "failed" | "pending";
     type JourneyStep = {
       index: number;
       title: string;
@@ -1080,54 +1079,32 @@ export function LogsTable({
     const JOURNEY_TONE_STYLES: Record<
       JourneyTone,
       {
-        tab: string;
-        tabActive: string;
-        number: string;
         accent: string;
         panel: string;
       }
     > = {
       neutral: {
-        tab: "border-divider/80 bg-surface-200/78 text-foreground hover:border-divider hover:bg-surface-200",
-        tabActive: "border-divider bg-surface-200 text-foreground shadow-[var(--vr-shadow-xs)]",
-        number: "border-divider bg-surface-300 text-muted-foreground",
         accent: "bg-foreground/12",
         panel: "border-divider/80 bg-surface-200/82",
       },
       info: {
-        tab: "border-divider/80 bg-surface-200/78 text-foreground hover:border-divider hover:bg-surface-200",
-        tabActive: "border-divider bg-surface-200 text-foreground shadow-[var(--vr-shadow-xs)]",
-        number: "border-divider bg-surface-300 text-muted-foreground",
         accent: "bg-foreground/12",
         panel: "border-divider/80 bg-surface-200/82",
       },
       warning: {
-        tab: "border-divider/80 bg-surface-200/78 text-foreground hover:border-amber-400/20 hover:bg-surface-200",
-        tabActive:
-          "border-amber-400/25 bg-surface-200 text-foreground shadow-[var(--vr-shadow-glow-subtle)]",
-        number: "border-amber-400/20 bg-amber-500/10 text-amber-300",
         accent: "bg-amber-400/75",
         panel: "border-amber-400/22 bg-surface-200/82",
       },
       success: {
-        tab: "border-divider/80 bg-surface-200/78 text-foreground hover:border-status-success/20 hover:bg-surface-200",
-        tabActive:
-          "border-status-success/25 bg-surface-200 text-foreground shadow-[var(--vr-shadow-xs)]",
-        number: statusTone("success", "faint"),
         accent: "bg-status-success/80",
         panel: "border-status-success/22 bg-surface-200/82",
       },
       error: {
-        tab: "border-divider/80 bg-surface-200/78 text-foreground hover:border-status-error/20 hover:bg-surface-200",
-        tabActive:
-          "border-status-error/25 bg-surface-200 text-foreground shadow-[var(--vr-shadow-xs)]",
-        number: statusTone("error", "faint"),
         accent: "bg-status-error/85",
         panel: "border-status-error/22 bg-surface-200/82",
       },
     };
 
-    const requestSignature = [log.method, log.path].filter(Boolean).join(" ");
     const candidateSummary =
       routingDecision && didSendUpstream !== false
         ? String(routingDecision.final_candidate_count) +
@@ -1136,10 +1113,6 @@ export function LogsTable({
           " " +
           t("tooltipCandidates").toLowerCase()
         : null;
-    const requestArrivedSummary = (modelDisplay ?? log.model ?? requestSignature) || "-";
-    const requestArrivedMeta = [requestSignature || null, requestModeLabel, groupName]
-      .filter(Boolean)
-      .join(" · ");
     const decisionStepSummary = routingDecision
       ? getSelectionReasonText(decisionSelectionReason)
       : t("noRoutingDecision");
@@ -1275,80 +1248,6 @@ export function LogsTable({
     };
 
     const activeJourneyStepIndex = focusedJourneySteps[log.id] ?? getDefaultJourneyStepIndex();
-    const failureJourneyStepIndex = (() => {
-      if (!isError) {
-        return null;
-      }
-      if (
-        didSendUpstream === false ||
-        hasFailoverHistory ||
-        hasFailoverWithoutHistory ||
-        routingDecision?.failure_stage === "upstream_request"
-      ) {
-        return 3;
-      }
-      if (routingDecision?.failure_stage === "downstream_streaming") {
-        return 4;
-      }
-      return 5;
-    })();
-    const getJourneyProgressState = (stepIndex: number): JourneyProgressState => {
-      if (failureJourneyStepIndex != null) {
-        if (stepIndex < failureJourneyStepIndex) {
-          return "done";
-        }
-        if (stepIndex === failureJourneyStepIndex) {
-          return "failed";
-        }
-        return "pending";
-      }
-
-      if (log.status_code != null && log.status_code >= 200 && log.status_code < 300) {
-        return "done";
-      }
-
-      if (stepIndex < activeJourneyStepIndex) {
-        return "done";
-      }
-      if (stepIndex === activeJourneyStepIndex) {
-        return "active";
-      }
-      return "pending";
-    };
-    const JOURNEY_PROGRESS_STYLES: Record<
-      JourneyProgressState,
-      {
-        tab: string;
-        number: string;
-        accent: string;
-        arrow: string;
-      }
-    > = {
-      done: {
-        tab: "border-status-success/30 bg-status-success-muted/16 text-foreground",
-        number: statusTone("success", "faint"),
-        accent: "bg-status-success/80",
-        arrow: "text-status-success/70",
-      },
-      active: {
-        tab: "border-amber-400/30 bg-surface-200 text-foreground shadow-[var(--vr-shadow-glow-subtle)]",
-        number: "border-amber-400/25 bg-amber-500/12 text-amber-300",
-        accent: "bg-amber-400/80",
-        arrow: "text-amber-300/70",
-      },
-      failed: {
-        tab: "border-status-error/30 bg-status-error-muted/14 text-foreground",
-        number: statusTone("error", "faint"),
-        accent: "bg-status-error/85",
-        arrow: "text-status-error/70",
-      },
-      pending: {
-        tab: "border-divider/80 bg-surface-200/58 text-muted-foreground",
-        number: "border-divider/70 bg-surface-300/70 text-muted-foreground/70",
-        accent: "bg-transparent",
-        arrow: "text-muted-foreground/45",
-      },
-    };
     const setActiveJourneyStep = (stepIndex: number) => {
       setFocusedJourneySteps((prev) =>
         prev[log.id] === stepIndex ? prev : { ...prev, [log.id]: stepIndex }
@@ -1357,51 +1256,6 @@ export function LogsTable({
 
     const journeySteps: JourneyStep[] = [
       {
-        index: 1,
-        title: t("journeyRequestArrived"),
-        summary: requestArrivedSummary,
-        meta: requestArrivedMeta,
-        tone: "neutral" as JourneyTone,
-        metrics: (
-          <>
-            {renderMetricPill(requestModeLabel, "", "neutral")}
-            {routingTypeLabel ? renderMetricPill(routingTypeLabel, "", "neutral") : null}
-          </>
-        ),
-        content: (
-          <>
-            <div className="flex flex-wrap items-center gap-2">
-              <ModelIdentity
-                label={modelDisplay ?? log.model}
-                reasoningEffort={reasoningEffort}
-                thinkingConfig={log.thinking_config}
-                className="min-w-0"
-                textClassName="font-medium text-foreground"
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-              {log.method ? <span>{log.method}</span> : null}
-              {log.path ? <span className="break-all">{log.path}</span> : null}
-              {groupName ? <span>{groupName}</span> : null}
-              {routingDecision?.model_redirect_applied ? (
-                <Badge variant="info" className="px-1.5 py-0 text-[10px]">
-                  {t("timelineModelResolution")}
-                </Badge>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-              <span>{t("requestKey")}:</span>
-              <RequestKeyIdentity
-                keyName={log.api_key_name}
-                keyPrefix={log.api_key_prefix}
-                textClassName="text-foreground"
-              />
-            </div>
-          </>
-        ),
-        focusedContent: null,
-      },
-      {
         index: 2,
         title: t("lifecycleDecision"),
         summary: decisionStepSummary,
@@ -1409,6 +1263,7 @@ export function LogsTable({
         tone: "neutral" as JourneyTone,
         metrics: (
           <>
+            {renderMetricPill(requestModeLabel, "", "neutral")}
             {routingTypeLabel ? renderMetricPill(routingTypeLabel, "", "neutral") : null}
             {routingDecision && didSendUpstream !== false
               ? renderMetricPill(
@@ -1428,28 +1283,46 @@ export function LogsTable({
           <>
             <div className="rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
               <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-                {t("timelineModelResolution")}
+                {t("journeyRequestArrived")}
               </div>
-              {routingDecision ? (
-                <div className="space-y-2">
-                  <ModelIdentity
-                    label={modelDisplay}
-                    reasoningEffort={reasoningEffort}
-                    thinkingConfig={log.thinking_config}
-                    textClassName="font-medium text-foreground"
+              <div className="space-y-2">
+                <ModelIdentity
+                  label={modelDisplay ?? log.model}
+                  reasoningEffort={reasoningEffort}
+                  thinkingConfig={log.thinking_config}
+                  className="min-w-0"
+                  textClassName="font-medium text-foreground"
+                />
+                <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+                  {log.method ? <span>{log.method}</span> : null}
+                  {log.path ? <span className="break-all">{log.path}</span> : null}
+                  {groupName ? <span>{groupName}</span> : null}
+                  {routingDecision?.model_redirect_applied ? (
+                    <Badge variant="info" className="px-1.5 py-0 text-[10px]">
+                      {t("timelineModelResolution")}
+                    </Badge>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+                  <span>{t("requestKey")}:</span>
+                  <RequestKeyIdentity
+                    keyName={log.api_key_name}
+                    keyPrefix={log.api_key_prefix}
+                    textClassName="text-foreground"
                   />
+                </div>
+                {routingDecision ? (
                   <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-                    {groupName ? <span>{groupName}</span> : null}
                     <span>
                       {t("tooltipStrategy")}:{" "}
                       <span className="text-foreground">{routingDecision.selection_strategy}</span>
                     </span>
                     <span>{candidateSummary}</span>
                   </div>
-                </div>
-              ) : (
-                <div className="text-muted-foreground">{t("noRoutingDecision")}</div>
-              )}
+                ) : (
+                  <div className="text-muted-foreground">{t("noRoutingDecision")}</div>
+                )}
+              </div>
             </div>
 
             <div className="rounded-cf-sm border border-divider bg-surface-200/60 p-2.5">
@@ -2018,98 +1891,18 @@ export function LogsTable({
                 {t("lifecycleTimeline")}
               </div>
 
-              <div className="space-y-2">
-                <div className="sm:hidden">
-                  <LifecycleTrack
-                    lifecycleStatus={log.lifecycle_status ?? undefined}
-                    stageTimings={log.stage_timings_ms}
-                    upstreamError={log.upstream_error}
-                    statusCode={log.status_code}
-                    isStream={log.is_stream}
-                    failureStage={routingDecision?.failure_stage ?? null}
-                    durationMs={totalMs}
-                    compact
-                  />
-                </div>
-                <div className="hidden sm:block">
-                  <LifecycleTrack
-                    lifecycleStatus={log.lifecycle_status ?? undefined}
-                    stageTimings={log.stage_timings_ms}
-                    upstreamError={log.upstream_error}
-                    statusCode={log.status_code}
-                    isStream={log.is_stream}
-                    failureStage={routingDecision?.failure_stage ?? null}
-                    durationMs={totalMs}
-                  />
-                </div>
-              </div>
-
               <div className="space-y-3">
-                <div className="relative">
-                  <div className="flex flex-wrap items-center gap-1.5 xl:grid-cols-5">
-                    {journeySteps.map((step, index) => {
-                      const tone = JOURNEY_TONE_STYLES[step.tone];
-                      const isActive = step.index === activeJourneyStep.index;
-                      const progressState = getJourneyProgressState(step.index);
-                      const progressTone = JOURNEY_PROGRESS_STYLES[progressState];
-                      return (
-                        <Fragment key={step.index}>
-                          <button
-                            type="button"
-                            onClick={() => setActiveJourneyStep(step.index)}
-                            aria-pressed={isActive}
-                            aria-label={step.title}
-                            className={cn(
-                              "group relative inline-flex min-w-0 items-center gap-2 overflow-hidden rounded-full border px-3 py-2 text-left",
-                              LOGS_SURFACE_TRANSITION_CLASS,
-                              "motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0",
-                              progressTone.tab,
-                              isActive && cn("motion-safe:-translate-y-0.5", tone.tabActive)
-                            )}
-                          >
-                            <div
-                              className={cn(
-                                // 浅色态选中药丸仅靠白面抬起 + 阴影区分偏弱，顶边状态色边
-                                // 加粗到 3px 使选中态更明显；深色态维持 2px 不变。
-                                "absolute inset-x-0 top-0 h-0.5 opacity-0 transition-opacity duration-cf-fast ease-cf-standard motion-reduce:transition-none",
-                                progressTone.accent,
-                                isActive && "opacity-100 light:h-[3px]"
-                              )}
-                            />
-                            <span
-                              className={cn(
-                                "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold transition-[background-color,border-color,color] duration-cf-fast ease-cf-standard motion-reduce:transition-none",
-                                progressTone.number
-                              )}
-                            >
-                              {step.index}
-                            </span>
-                            <div className="min-w-0">
-                              <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                                {step.title}
-                              </div>
-                              <div className="truncate text-[11px] text-foreground">
-                                {step.summary}
-                              </div>
-                            </div>
-                          </button>
-                          {index < journeySteps.length - 1 ? (
-                            <span
-                              className={cn(
-                                "inline-flex h-6 items-center px-0.5",
-                                progressTone.arrow
-                              )}
-                              aria-hidden="true"
-                            >
-                              →
-                            </span>
-                          ) : null}
-                        </Fragment>
-                      );
-                    })}
-                  </div>
-                </div>
-
+                <LifecycleTrack
+                  lifecycleStatus={log.lifecycle_status ?? undefined}
+                  stageTimings={log.stage_timings_ms}
+                  upstreamError={log.upstream_error}
+                  statusCode={log.status_code}
+                  isStream={log.is_stream}
+                  failureStage={routingDecision?.failure_stage ?? null}
+                  durationMs={totalMs}
+                  activeJourneyStep={activeJourneyStep.index}
+                  onJourneyStepSelect={setActiveJourneyStep}
+                />
                 <div
                   key={`journey-panel-${activeJourneyStep.index}`}
                   className={cn(
@@ -2121,18 +1914,8 @@ export function LogsTable({
                   <div className={cn("absolute inset-x-0 top-0 h-0.5", activeJourneyTone.accent)} />
                   <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={cn(
-                            "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold",
-                            activeJourneyTone.number
-                          )}
-                        >
-                          {activeJourneyStep.index}
-                        </span>
-                        <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                          {activeJourneyStep.title}
-                        </div>
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                        {activeJourneyStep.title}
                       </div>
                       <div className="mt-2 text-[11px] leading-relaxed text-foreground">
                         {activeJourneyStep.summary}

@@ -984,7 +984,7 @@ describe("LogsTable", () => {
       render(<LogsTable logs={[streamLog]} />);
 
       fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
-      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleResponse" })[0]);
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleGeneration" })[0]);
       expect(screen.getByText("journeyGenerationFinished")).toBeInTheDocument();
       expect(screen.getAllByText(/450ms/).length).toBeGreaterThan(0);
     });
@@ -2149,13 +2149,19 @@ describe("LogsTable", () => {
 
       expect(screen.getByText("tokenDetails")).toBeInTheDocument();
       expect(screen.getByText("lifecycleTimeline")).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "journeyRequestArrived" })).toBeInTheDocument();
+      // 药丸步骤条已合并进生命周期轨道条；step 1（进入网关）不再是独立 tab。
+      expect(
+        screen.queryByRole("button", { name: "journeyRequestArrived" })
+      ).not.toBeInTheDocument();
       expect(screen.getAllByRole("button", { name: "lifecycleDecision" }).length).toBeGreaterThan(
         0
       );
       expect(screen.queryByText("timelineUpstreamSelection")).not.toBeInTheDocument();
       expect(screen.getAllByRole("button", { name: "lifecycleRequest" }).length).toBeGreaterThan(0);
-      expect(screen.getAllByRole("button", { name: "lifecycleResponse" }).length).toBeGreaterThan(
+      expect(
+        screen.getAllByRole("button", { name: "lifecycleFirstOutput" }).length
+      ).toBeGreaterThan(0);
+      expect(screen.getAllByRole("button", { name: "lifecycleGeneration" }).length).toBeGreaterThan(
         0
       );
       expect(screen.getAllByRole("button", { name: "lifecycleComplete" }).length).toBeGreaterThan(
@@ -2169,7 +2175,7 @@ describe("LogsTable", () => {
       fireEvent.click(screen.getAllByRole("button", { name: "lifecycleRequest" })[0]);
       expect(screen.getByText(/journeyRequestAction/)).toBeInTheDocument();
 
-      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleResponse" })[0]);
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleFirstOutput" })[0]);
       expect(screen.getAllByText(/1\.20s \(\+900ms\)/).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/1\.65s \(\+400ms\)/).length).toBeGreaterThan(0);
     });
@@ -2411,13 +2417,15 @@ describe("LogsTable", () => {
         routing_decision: mockRoutingDecision,
       };
 
-      const { container } = render(<LogsTable logs={[logWithRouting]} />);
+      render(<LogsTable logs={[logWithRouting]} />);
 
       // Click expand button
       const expandButton = screen.getByRole("button", { name: "expandDetails" });
       fireEvent.click(expandButton);
 
-      expect(screen.getByRole("button", { name: "journeyRequestArrived" })).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "journeyRequestArrived" })
+      ).not.toBeInTheDocument();
       expect(screen.getAllByRole("button", { name: "lifecycleDecision" }).length).toBeGreaterThan(
         0
       );
@@ -2427,9 +2435,6 @@ describe("LogsTable", () => {
 
       fireEvent.click(screen.getAllByRole("button", { name: "lifecycleDecision" })[0]);
       expect(screen.getByText("journeyDecisionResult")).toBeInTheDocument();
-
-      const focusRail = container.querySelector("[class*='xl:grid-cols-5']");
-      expect(focusRail).toBeInTheDocument();
     });
 
     it("shows each lifecycle stage detail when its journey step is selected", () => {
@@ -2461,11 +2466,11 @@ describe("LogsTable", () => {
       fireEvent.click(screen.getAllByRole("button", { name: "lifecycleRequest" })[0]);
       expect(screen.getByText("timelineExecutionRetries")).toBeInTheDocument();
 
-      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleResponse" })[0]);
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleGeneration" })[0]);
       expect(screen.getAllByText(/1\.65s \(\+400ms\)/).length).toBeGreaterThan(0);
     });
 
-    it("falls back to request-arrived content in focused view when no focused detail exists", () => {
+    it("shows request-arrived content inside the decision panel", () => {
       const logWithRouting: RequestLog = {
         ...logWithFailoverBase,
         routing_decision: mockRoutingDecision,
@@ -2474,7 +2479,7 @@ describe("LogsTable", () => {
       render(<LogsTable logs={[logWithRouting]} />);
 
       fireEvent.click(screen.getByRole("button", { name: "expandDetails" }));
-      fireEvent.click(screen.getByRole("button", { name: "journeyRequestArrived" }));
+      fireEvent.click(screen.getAllByRole("button", { name: "lifecycleDecision" })[0]);
 
       expect(screen.getByText("requestKey")).toBeInTheDocument();
       expect(screen.getAllByText("Primary Key").length).toBeGreaterThan(0);

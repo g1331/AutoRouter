@@ -1,7 +1,6 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { statusTone } from "@/lib/status-tone";
 import { cn } from "@/lib/utils";
 import type {
   RequestLifecycleStatus,
@@ -18,12 +17,25 @@ interface LifecycleTrackProps {
   isStream: boolean;
   failureStage?: RoutingFailureStage | null;
   durationMs?: number | null;
-  compact?: boolean;
+  /** Journey step index (2–5) whose segment should render as the selected tab. */
+  activeJourneyStep?: number;
+  /** When provided, segments become clickable tabs that select a journey step. */
+  onJourneyStepSelect?: (step: number) => void;
 }
 
 type SegState = "done" | "active" | "pending" | "failed" | "success";
 type SegKey = "decision" | "request" | "response" | "complete";
 type TrackSegKey = SegKey | "first_output" | "generation";
+
+/** Maps track segments onto the journey step panels below the track. */
+export const TRACK_SEG_JOURNEY_STEP: Record<TrackSegKey, number> = {
+  decision: 2,
+  request: 3,
+  response: 4,
+  first_output: 4,
+  generation: 4,
+  complete: 5,
+};
 
 interface TrackSeg {
   key: TrackSegKey;
@@ -266,115 +278,6 @@ function buildTrackVisualWeights(
   return weights;
 }
 
-const CARD_CONTAINER_CLS: Record<SegState, string> = {
-  done: "border-divider bg-surface-200/70 shadow-[var(--vr-shadow-xs)]",
-  active:
-    "border-foreground/15 bg-surface-200 shadow-[0_10px_28px_rgba(15,23,42,0.08)] -translate-y-0.5",
-  pending: "border-divider/70 bg-surface-200/40 opacity-70",
-  failed:
-    "border-status-error/20 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--vr-status-error)_8%,transparent),rgba(15,23,42,0.02))] shadow-[var(--vr-shadow-xs)]",
-  success:
-    "border-status-success/20 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--vr-status-success)_8%,transparent),rgba(15,23,42,0.02))] shadow-[var(--vr-shadow-xs)]",
-};
-
-const NUMBER_CLS: Record<SegState, string> = {
-  done: "border-divider bg-surface-300 text-muted-foreground",
-  active: "border-foreground/15 bg-surface-300 text-foreground",
-  pending: "border-divider/60 bg-surface-300/50 text-muted-foreground/50",
-  failed: statusTone("error", "faint"),
-  success: statusTone("success", "faint"),
-};
-
-const LABEL_CLS: Record<SegState, string> = {
-  done: "text-muted-foreground",
-  active: "text-foreground",
-  pending: "text-muted-foreground/45",
-  failed: "text-status-error",
-  success: "text-status-success",
-};
-
-const TIME_CLS: Record<SegState, string> = {
-  done: "text-foreground",
-  active: "text-foreground",
-  pending: "text-muted-foreground/45",
-  failed: "text-status-error",
-  success: "text-status-success",
-};
-
-const SUB_CLS: Record<SegState, string> = {
-  done: "text-muted-foreground/70",
-  active: "text-muted-foreground/80",
-  pending: "text-muted-foreground/40",
-  failed: "text-status-error/75",
-  success: "text-status-success/75",
-};
-
-function SegCard({
-  seg,
-  index,
-}: {
-  seg: Pick<TrackSeg, "label" | "time" | "sub" | "state">;
-  index: number;
-}) {
-  return (
-    <div
-      data-state={seg.state}
-      className={cn(
-        "group relative min-w-0 overflow-hidden rounded-full border px-3 py-2.5 transition-all duration-200 ease-out",
-        "before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.55),transparent)]",
-        "flex-1 px-2.5 py-2",
-        CARD_CONTAINER_CLS[seg.state]
-      )}
-    >
-      <div className="flex items-center gap-2">
-        <span
-          className={cn(
-            "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold transition-colors duration-200",
-            NUMBER_CLS[seg.state]
-          )}
-        >
-          {index}
-        </span>
-        <span
-          className={cn(
-            "min-w-0 truncate text-[10px] uppercase tracking-[0.16em] transition-colors duration-200",
-            LABEL_CLS[seg.state]
-          )}
-        >
-          {seg.label}
-        </span>
-      </div>
-
-      <div className="mt-1.5 space-y-1">
-        {seg.time ? (
-          <div
-            className={cn(
-              "font-mono text-[11px] tabular-nums transition-colors duration-200",
-              TIME_CLS[seg.state]
-            )}
-          >
-            {seg.time}
-          </div>
-        ) : (
-          <div className="h-[16px]" />
-        )}
-        {seg.sub ? (
-          <div
-            className={cn(
-              "line-clamp-2 text-[10px] leading-relaxed transition-colors duration-200",
-              SUB_CLS[seg.state]
-            )}
-          >
-            {seg.sub}
-          </div>
-        ) : (
-          <div className="h-[14px]" />
-        )}
-      </div>
-    </div>
-  );
-}
-
 export function LifecycleTrack({
   lifecycleStatus,
   stageTimings,
@@ -383,7 +286,8 @@ export function LifecycleTrack({
   isStream,
   failureStage,
   durationMs,
-  compact = false,
+  activeJourneyStep,
+  onJourneyStepSelect,
 }: LifecycleTrackProps) {
   const t = useTranslations("logs");
   const props = {
@@ -396,31 +300,6 @@ export function LifecycleTrack({
     durationMs,
   };
   const trackSegs = buildTrackSegs(props, t);
-
-  if (compact) {
-    const primarySeg =
-      trackSegs.find((s) => s.state === "active" || s.state === "failed") ??
-      (isStream
-        ? (trackSegs.find((s) => s.key === "generation" && (s.time != null || s.sub != null)) ??
-          trackSegs.find((s) => s.key === "first_output" && (s.time != null || s.sub != null)))
-        : trackSegs.find((s) => s.key === "request" && (s.time != null || s.sub != null))) ??
-      trackSegs.find((s) => s.key === "decision") ??
-      trackSegs[0];
-    const completeSeg = trackSegs[trackSegs.length - 1];
-    const compactSegs = primarySeg !== completeSeg ? [primarySeg, completeSeg] : [primarySeg];
-
-    return (
-      <div className="flex min-w-0 gap-1.5 overflow-hidden">
-        {compactSegs.map((seg) => (
-          <SegCard
-            key={seg.key}
-            seg={seg}
-            index={1 + trackSegs.findIndex((item) => item.key === seg.key)}
-          />
-        ))}
-      </div>
-    );
-  }
 
   const weights = buildTrackVisualWeights(props, trackSegs);
 
@@ -471,17 +350,31 @@ export function LifecycleTrack({
         {trackSegs.map((seg) => {
           const [statusPart, durationPart] =
             seg.key === "complete" && seg.time ? seg.time.split(" · ") : [null, null];
+          const interactive = onJourneyStepSelect != null;
+          const isSelected = interactive && TRACK_SEG_JOURNEY_STEP[seg.key] === activeJourneyStep;
+          const SegElement = interactive ? "button" : "div";
 
           return (
-            <div
+            <SegElement
               key={seg.key}
+              {...(interactive
+                ? {
+                    type: "button" as const,
+                    "aria-label": seg.label,
+                    "aria-pressed": isSelected,
+                    onClick: () => onJourneyStepSelect(TRACK_SEG_JOURNEY_STEP[seg.key]),
+                  }
+                : {})}
               data-state={seg.state}
               title={getTrackTitle(seg)}
               className={cn(
                 "flex items-center justify-center gap-1 whitespace-nowrap border-r px-2 text-[10px] font-medium last:border-r-0",
                 getTrackSegmentClassName(seg),
                 getTrackBorderClassName(seg),
-                seg.state === "active" && "ring-1 ring-inset ring-white/10"
+                seg.state === "active" && "ring-1 ring-inset ring-white/10",
+                interactive &&
+                  "cursor-pointer transition-[box-shadow] duration-cf-fast ease-cf-standard hover:ring-1 hover:ring-inset hover:ring-foreground/20 motion-reduce:transition-none",
+                isSelected && "shadow-[inset_0_-2px_0_0_currentColor]"
               )}
               style={{ flexGrow: weights[seg.key], flexBasis: 0 }}
             >
@@ -499,15 +392,15 @@ export function LifecycleTrack({
                   </span>
                   {durationPart ? (
                     <>
-                      <span className="text-current/45">·</span>
-                      <span className="tabular-nums">{durationPart}</span>
+                      <span className="text-current/45 max-sm:hidden">·</span>
+                      <span className="tabular-nums max-sm:hidden">{durationPart}</span>
                     </>
                   ) : null}
                 </>
               ) : seg.time ? (
-                <span className="tabular-nums">{seg.time}</span>
+                <span className="tabular-nums max-sm:hidden">{seg.time}</span>
               ) : null}
-            </div>
+            </SegElement>
           );
         })}
       </div>
