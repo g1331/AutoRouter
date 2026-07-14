@@ -4602,6 +4602,78 @@ describe("proxy route upstream selection", () => {
     );
   });
 
+  it("should surface UPSTREAM_CIRCUIT_OPEN with blocked upstream details when selection is circuit-blocked", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType, NoHealthyUpstreamsError } =
+      await import("@/lib/services/load-balancer");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-anthropic-1" },
+    ]);
+
+    const selectionError = new NoHealthyUpstreamsError(
+      "No healthy upstreams available across all priority tiers"
+    ) as InstanceType<typeof NoHealthyUpstreamsError> & {
+      circuitBlockedCandidates?: Array<{
+        upstreamId: string;
+        upstreamName: string;
+        circuitState: "open" | "half_open";
+        remainingSeconds: number | null;
+      }>;
+    };
+    selectionError.circuitBlockedCandidates = [
+      {
+        upstreamId: "up-anthropic-1",
+        upstreamName: "anthropic-1",
+        circuitState: "open",
+        remainingSeconds: 180,
+      },
+    ];
+    vi.mocked(selectFromProviderType).mockRejectedValueOnce(selectionError);
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-test",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
+    const data = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(data).toEqual({
+      error: expect.objectContaining({
+        code: "ALL_UPSTREAMS_UNAVAILABLE",
+        reason: "UPSTREAM_CIRCUIT_OPEN",
+        did_send_upstream: false,
+      }),
+    });
+    expect(data.error.user_hint).toContain("anthropic-1");
+    expect(data.error.user_hint).toContain("熔断");
+    expect(data.error.user_hint).toContain("180");
+    expect(forwardRequest).not.toHaveBeenCalled();
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload?.routingDecision).toEqual(
+      expect.objectContaining({
+        failure_stage: "candidate_selection",
+        excluded: expect.arrayContaining([
+          { id: "up-anthropic-1", name: "anthropic-1", reason: "circuit_open" },
+        ]),
+      })
+    );
+  });
+
   it("should record failure fixture when upstreams are unavailable and recorder is enabled", async () => {
     process.env.RECORDER_ENABLED = "true";
 

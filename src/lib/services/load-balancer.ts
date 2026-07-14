@@ -24,9 +24,23 @@ export { VALID_PROVIDER_TYPES };
 export type { ProviderType };
 
 /**
+ * Candidate upstream blocked by circuit breaker state during selection.
+ */
+export interface CircuitBlockedCandidate {
+  upstreamId: string;
+  upstreamName: string;
+  circuitState: "open" | "half_open";
+  /** Seconds until the upstream becomes eligible for a probe request. */
+  remainingSeconds: number | null;
+}
+
+/**
  * Error thrown when no healthy upstreams are available.
  */
 export class NoHealthyUpstreamsError extends Error {
+  /** Candidates excluded by circuit breaker when selection exhausted all tiers. */
+  circuitBlockedCandidates?: CircuitBlockedCandidate[];
+
   constructor(message: string) {
     super(message);
     this.name = "NoHealthyUpstreamsError";
@@ -243,9 +257,10 @@ export function filterHealthyUpstreams(
 export function filterByCircuitBreaker(upstreamList: UpstreamWithCircuitBreaker[]): {
   allowed: UpstreamWithCircuitBreaker[];
   excludedCount: number;
+  excluded: CircuitBlockedCandidate[];
 } {
   const allowed: UpstreamWithCircuitBreaker[] = [];
-  let excludedCount = 0;
+  const excluded: CircuitBlockedCandidate[] = [];
 
   const nowMs = Date.now();
 
@@ -275,7 +290,12 @@ export function filterByCircuitBreaker(upstreamList: UpstreamWithCircuitBreaker[
         continue;
       }
 
-      excludedCount++;
+      excluded.push({
+        upstreamId: u.upstream.id,
+        upstreamName: u.upstream.name,
+        circuitState: "open",
+        remainingSeconds: Math.ceil((config.openDuration - elapsedMs) / 1000),
+      });
       continue;
     }
 
@@ -291,7 +311,12 @@ export function filterByCircuitBreaker(upstreamList: UpstreamWithCircuitBreaker[
         continue;
       }
 
-      excludedCount++;
+      excluded.push({
+        upstreamId: u.upstream.id,
+        upstreamName: u.upstream.name,
+        circuitState: "half_open",
+        remainingSeconds: Math.ceil((config.probeInterval - elapsedMs) / 1000),
+      });
       continue;
     }
 
@@ -299,7 +324,7 @@ export function filterByCircuitBreaker(upstreamList: UpstreamWithCircuitBreaker[
     allowed.push(u);
   }
 
-  return { allowed, excludedCount };
+  return { allowed, excludedCount: excluded.length, excluded };
 }
 
 /**
@@ -1003,14 +1028,22 @@ async function performTieredSelection(
   let totalConcurrencyFiltered = 0;
   let concurrencyScreenedCandidates = 0;
   const concurrencyExcluded: ConcurrencyExcludedCandidate[] = [];
+  const circuitBlocked: CircuitBlockedCandidate[] = [];
   const waitableCandidates: WaitableUpstreamEntry[] = [];
   let didResyncQuota = false;
+
+  const appendCircuitBlocked = (candidate: CircuitBlockedCandidate) => {
+    if (!circuitBlocked.some((item) => item.upstreamId === candidate.upstreamId)) {
+      circuitBlocked.push(candidate);
+    }
+  };
 
   // Try each tier in priority order
   for (const [tier, tierUpstreams] of sortedTiers) {
     // Filter by circuit breaker
     const afterCircuitBreaker = filterByCircuitBreaker(tierUpstreams);
     totalCircuitBreakerFiltered += afterCircuitBreaker.excludedCount;
+    afterCircuitBreaker.excluded.forEach(appendCircuitBlocked);
 
     // Filter by spending quota
     let afterQuota = filterBySpendingQuota(afterCircuitBreaker.allowed);
@@ -1112,6 +1145,12 @@ async function performTieredSelection(
         } catch (error) {
           if (error instanceof CircuitBreakerOpenError) {
             totalCircuitBreakerFiltered += 1;
+            appendCircuitBlocked({
+              upstreamId: selected.upstream.id,
+              upstreamName: selected.upstream.name,
+              circuitState: selected.circuitState === "half_open" ? "half_open" : "open",
+              remainingSeconds: error.remainingSeconds,
+            });
             const idx = candidates.findIndex((u) => u.upstream.id === selected.upstream.id);
             if (idx >= 0) {
               candidates.splice(idx, 1);
@@ -1138,8 +1177,12 @@ async function performTieredSelection(
   }
 
   // All tiers exhausted
-  throw new NoHealthyUpstreamsError(
+  const exhaustedError = new NoHealthyUpstreamsError(
     `No healthy upstreams available across all priority tiers` +
       (excludeIds?.length ? ` (excluded: ${excludeIds.length})` : "")
   );
+  if (circuitBlocked.length > 0) {
+    exhaustedError.circuitBlockedCandidates = circuitBlocked;
+  }
+  throw exhaustedError;
 }

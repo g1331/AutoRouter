@@ -40,6 +40,7 @@ import {
   NoAuthorizedUpstreamsError,
   type WaitableUpstreamCandidate,
   type ConcurrencyExcludedCandidate,
+  type CircuitBlockedCandidate,
 } from "@/lib/services/load-balancer";
 import { markHealthy, markUnhealthy } from "@/lib/services/health-checker";
 import {
@@ -961,12 +962,22 @@ function resolveFailureReason(
     return "CONCURRENCY_FULL";
   }
   if (!didSendUpstream) {
+    if (getCircuitBlockedCandidates(error).length > 0) {
+      return "UPSTREAM_CIRCUIT_OPEN";
+    }
     return "NO_HEALTHY_CANDIDATES";
   }
   if (lastFailoverAttempt?.status_code != null) {
     return "UPSTREAM_HTTP_ERROR";
   }
   return "UPSTREAM_NETWORK_ERROR";
+}
+
+function getCircuitBlockedCandidates(error: unknown): CircuitBlockedCandidate[] {
+  if (error instanceof NoHealthyUpstreamsError && error.circuitBlockedCandidates) {
+    return error.circuitBlockedCandidates;
+  }
+  return [];
 }
 
 function resolveDidSendUpstream(
@@ -987,7 +998,8 @@ function resolveDidSendUpstream(
 function getUserHint(
   errorCode: UnifiedErrorCode,
   reason: UnifiedErrorReason,
-  routeCapability: RouteCapability
+  routeCapability: RouteCapability,
+  circuitBlockedCandidates: CircuitBlockedCandidate[] = []
 ): string {
   if (errorCode === "NO_AUTHORIZED_UPSTREAMS") {
     const capabilityLabel: Record<RouteCapability, string> = {
@@ -1013,6 +1025,21 @@ function getUserHint(
   }
   if (reason === "API_KEY_QUOTA_EXCEEDED") {
     return "当前密钥已达到消费限额，请等待额度窗口恢复或联系管理员调整额度规则";
+  }
+  if (reason === "UPSTREAM_CIRCUIT_OPEN") {
+    const names = circuitBlockedCandidates.map((candidate) => candidate.upstreamName).join("、");
+    const remainingSeconds = circuitBlockedCandidates.reduce<number | null>(
+      (max, candidate) =>
+        candidate.remainingSeconds != null && (max == null || candidate.remainingSeconds > max)
+          ? candidate.remainingSeconds
+          : max,
+      null
+    );
+    return (
+      `候选上游${names ? `（${names}）` : ""}因近期连续失败已触发熔断，请求被暂时拦截` +
+      (remainingSeconds != null ? `，预计 ${remainingSeconds} 秒内自动恢复探测` : "") +
+      "；请检查上游服务状态或密钥余额，也可在管理后台手动关闭熔断"
+    );
   }
   if (reason === "NO_HEALTHY_CANDIDATES") {
     return "当前没有可用上游候选，请检查上游启用状态、熔断状态与路径能力配置";
@@ -1335,6 +1362,19 @@ async function forwardWithFailover(
   let finalSelectionReason: RoutingSelectionReason | null = null;
   let queueLifecycle: RoutingQueueLog | null = null;
 
+  const circuitBlockedCandidates: CircuitBlockedCandidate[] = [];
+
+  const appendCircuitBlocked = (error: unknown) => {
+    if (!(error instanceof NoHealthyUpstreamsError) || !error.circuitBlockedCandidates) {
+      return;
+    }
+    for (const candidate of error.circuitBlockedCandidates) {
+      if (!circuitBlockedCandidates.some((item) => item.upstreamId === candidate.upstreamId)) {
+        circuitBlockedCandidates.push(candidate);
+      }
+    }
+  };
+
   const appendConcurrencyExclusions = (
     excludedCandidates: NonNullable<
       Awaited<ReturnType<typeof selectFromUpstreamCandidates>>["concurrencyExcluded"]
@@ -1436,6 +1476,7 @@ async function forwardWithFailover(
               lastError = resumeError;
               hasMoreUpstreams = false;
             } else if (resumeError instanceof NoHealthyUpstreamsError) {
+              appendCircuitBlocked(resumeError);
               lastError = resumeError;
               hasMoreUpstreams = false;
             } else if (resumeError instanceof ClientDisconnectedError) {
@@ -1463,6 +1504,7 @@ async function forwardWithFailover(
           hasMoreUpstreams = false;
         }
       } else if (error instanceof NoHealthyUpstreamsError) {
+        appendCircuitBlocked(error);
         hasMoreUpstreams = false;
       } else {
         throw attachFailoverContext(
@@ -1483,6 +1525,9 @@ async function forwardWithFailover(
       const exhaustedError = new NoHealthyUpstreamsError(
         lastError?.message ?? "All upstreams exhausted"
       );
+      if (circuitBlockedCandidates.length > 0) {
+        exhaustedError.circuitBlockedCandidates = circuitBlockedCandidates;
+      }
       throw attachFailoverContext(
         exhaustedError,
         failoverHistory,
@@ -3877,6 +3922,17 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         (error as FailoverErrorWithHistory).concurrencyExcludedCandidates ?? []
       );
     }
+    const circuitBlockedCandidates = getCircuitBlockedCandidates(error);
+    if (circuitBlockedCandidates.length > 0) {
+      excludedCapabilityCandidates = mergeExcludedCandidates(
+        excludedCapabilityCandidates,
+        circuitBlockedCandidates.map((candidate) => ({
+          id: candidate.upstreamId,
+          name: candidate.upstreamName,
+          reason: "circuit_open" as const,
+        }))
+      );
+    }
 
     const durationMs = Date.now() - startTime;
     const lastFailoverAttempt = failoverHistory[failoverHistory.length - 1];
@@ -3932,7 +3988,12 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       reason: failureReason,
       did_send_upstream: didSendUpstream,
       request_id: requestId,
-      user_hint: getUserHint(errorCode, failureReason, matchedRouteCapability),
+      user_hint: getUserHint(
+        errorCode,
+        failureReason,
+        matchedRouteCapability,
+        circuitBlockedCandidates
+      ),
     } as const;
     const downstreamErrorBody = createUnifiedErrorBody(errorCode, errorDetails);
     const upstreamForModelResolution =
