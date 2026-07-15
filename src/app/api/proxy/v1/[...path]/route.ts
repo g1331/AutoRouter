@@ -38,8 +38,10 @@ import {
   AllCandidatesConcurrencyFullError,
   NoHealthyUpstreamsError,
   NoAuthorizedUpstreamsError,
+  mergeCircuitBlockedCandidates,
   type WaitableUpstreamCandidate,
   type ConcurrencyExcludedCandidate,
+  type CircuitBlockedCandidate,
 } from "@/lib/services/load-balancer";
 import { markHealthy, markUnhealthy } from "@/lib/services/health-checker";
 import {
@@ -125,6 +127,7 @@ import {
   createApiKeyModelListResponseBody,
   isModelAllowedByApiKey,
   normalizeApiKeyAllowedModels,
+  pickUpstreamLocalModels,
 } from "@/lib/api-key-models";
 
 const log = createLogger("proxy-route");
@@ -640,6 +643,28 @@ function getApiKeyVisibleModelList(
   );
 }
 
+/**
+ * Collect the model names an upstream is known to serve, from local data only:
+ * synced model catalog first, then declared allowed models, then exact model rules.
+ * Used to answer /v1/models locally when no upstream candidate is reachable.
+ */
+function collectLocalModelListFallbackModels(candidates: Upstream[]): string[] {
+  const models = new Set<string>();
+  for (const upstream of candidates) {
+    const upstreamModels = pickUpstreamLocalModels({
+      catalogModels: (upstream.modelCatalog ?? []).map((entry) => entry.model),
+      allowedModels: upstream.allowedModels ?? [],
+      exactRuleModels: (upstream.modelRules ?? [])
+        .filter((rule) => rule.type === "exact")
+        .map((rule) => rule.value),
+    });
+    for (const model of upstreamModels) {
+      models.add(model);
+    }
+  }
+  return [...models].sort((a, b) => a.localeCompare(b));
+}
+
 function mergeExcludedCandidates(
   base: RoutingExcluded[],
   additions: RoutingExcluded[]
@@ -961,12 +986,22 @@ function resolveFailureReason(
     return "CONCURRENCY_FULL";
   }
   if (!didSendUpstream) {
+    if (getCircuitBlockedCandidates(error).length > 0) {
+      return "UPSTREAM_CIRCUIT_OPEN";
+    }
     return "NO_HEALTHY_CANDIDATES";
   }
   if (lastFailoverAttempt?.status_code != null) {
     return "UPSTREAM_HTTP_ERROR";
   }
   return "UPSTREAM_NETWORK_ERROR";
+}
+
+function getCircuitBlockedCandidates(error: unknown): CircuitBlockedCandidate[] {
+  if (error instanceof NoHealthyUpstreamsError && error.circuitBlockedCandidates) {
+    return error.circuitBlockedCandidates;
+  }
+  return [];
 }
 
 function resolveDidSendUpstream(
@@ -987,7 +1022,8 @@ function resolveDidSendUpstream(
 function getUserHint(
   errorCode: UnifiedErrorCode,
   reason: UnifiedErrorReason,
-  routeCapability: RouteCapability
+  routeCapability: RouteCapability,
+  circuitBlockedCandidates: CircuitBlockedCandidate[] = []
 ): string {
   if (errorCode === "NO_AUTHORIZED_UPSTREAMS") {
     const capabilityLabel: Record<RouteCapability, string> = {
@@ -1013,6 +1049,23 @@ function getUserHint(
   }
   if (reason === "API_KEY_QUOTA_EXCEEDED") {
     return "当前密钥已达到消费限额，请等待额度窗口恢复或联系管理员调整额度规则";
+  }
+  if (reason === "UPSTREAM_CIRCUIT_OPEN") {
+    // Do not leak upstream identities downstream; details go to internal logs only.
+    // Report the earliest recovery: a single probe-eligible upstream is enough for
+    // routing to succeed, so the minimum remaining time is the usable retry-after.
+    const remainingSeconds = circuitBlockedCandidates.reduce<number | null>(
+      (min, candidate) =>
+        candidate.remainingSeconds != null && (min == null || candidate.remainingSeconds < min)
+          ? candidate.remainingSeconds
+          : min,
+      null
+    );
+    return (
+      "当前所有可选上游因近期连续失败已被熔断保护暂时拦截" +
+      (remainingSeconds != null ? `，最快 ${remainingSeconds} 秒后自动恢复探测` : "") +
+      "；请稍后重试或联系管理员"
+    );
   }
   if (reason === "NO_HEALTHY_CANDIDATES") {
     return "当前没有可用上游候选，请检查上游启用状态、熔断状态与路径能力配置";
@@ -1335,6 +1388,12 @@ async function forwardWithFailover(
   let finalSelectionReason: RoutingSelectionReason | null = null;
   let queueLifecycle: RoutingQueueLog | null = null;
 
+  const circuitBlockedCandidates: CircuitBlockedCandidate[] = [];
+
+  const appendCircuitBlocked = (error: unknown) => {
+    mergeCircuitBlockedCandidates(circuitBlockedCandidates, getCircuitBlockedCandidates(error));
+  };
+
   const appendConcurrencyExclusions = (
     excludedCandidates: NonNullable<
       Awaited<ReturnType<typeof selectFromUpstreamCandidates>>["concurrencyExcluded"]
@@ -1436,6 +1495,7 @@ async function forwardWithFailover(
               lastError = resumeError;
               hasMoreUpstreams = false;
             } else if (resumeError instanceof NoHealthyUpstreamsError) {
+              appendCircuitBlocked(resumeError);
               lastError = resumeError;
               hasMoreUpstreams = false;
             } else if (resumeError instanceof ClientDisconnectedError) {
@@ -1463,6 +1523,7 @@ async function forwardWithFailover(
           hasMoreUpstreams = false;
         }
       } else if (error instanceof NoHealthyUpstreamsError) {
+        appendCircuitBlocked(error);
         hasMoreUpstreams = false;
       } else {
         throw attachFailoverContext(
@@ -1483,6 +1544,9 @@ async function forwardWithFailover(
       const exhaustedError = new NoHealthyUpstreamsError(
         lastError?.message ?? "All upstreams exhausted"
       );
+      if (circuitBlockedCandidates.length > 0) {
+        exhaustedError.circuitBlockedCandidates = circuitBlockedCandidates;
+      }
       throw attachFailoverContext(
         exhaustedError,
         failoverHistory,
@@ -3099,6 +3163,18 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         activeCandidatePool.candidateCapability === matchedRouteCapability &&
         shouldRetryWithGenericFallback(error, fallbackCandidatePool)
       ) {
+        // Preserve the primary pool's circuit-open details: errors thrown on the
+        // fallback path below are fresh objects and would otherwise lose them.
+        const primaryCircuitBlocked = getCircuitBlockedCandidates(error);
+        const attachPrimaryCircuitBlocked = (retryError: unknown): unknown => {
+          if (retryError instanceof NoHealthyUpstreamsError && primaryCircuitBlocked.length > 0) {
+            const merged = [...(retryError.circuitBlockedCandidates ?? [])];
+            mergeCircuitBlockedCandidates(merged, primaryCircuitBlocked);
+            retryError.circuitBlockedCandidates = merged;
+          }
+          return retryError;
+        };
+
         activeCandidatePool = fallbackCandidatePool!;
         capabilityCandidates = activeCandidatePool.capabilityCandidates;
         finalCapabilityCandidates = activeCandidatePool.authorizedCapabilityCandidates;
@@ -3118,7 +3194,9 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         );
 
         if (finalCapabilityCandidates.length === 0) {
-          throw new NoHealthyUpstreamsError("All fallback candidates were excluded by model rules");
+          throw attachPrimaryCircuitBlocked(
+            new NoHealthyUpstreamsError("All fallback candidates were excluded by model rules")
+          );
         }
 
         const fallbackSelectedCandidate = finalCapabilityCandidates[0];
@@ -3138,17 +3216,21 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
           "cli-only capability pool unavailable, retrying with generic capability fallback"
         );
 
-        proxySelection = await forwardWithFailover(
-          request,
-          matchedRouteCapability,
-          path,
-          requestId,
-          candidateUpstreamIds,
-          model,
-          affinityContext,
-          compensationHeaders,
-          persistQueueWaitingState
-        );
+        try {
+          proxySelection = await forwardWithFailover(
+            request,
+            matchedRouteCapability,
+            path,
+            requestId,
+            candidateUpstreamIds,
+            model,
+            affinityContext,
+            compensationHeaders,
+            persistQueueWaitingState
+          );
+        } catch (retryError) {
+          throw attachPrimaryCircuitBlocked(retryError);
+        }
       } else {
         throw error;
       }
@@ -3877,6 +3959,17 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         (error as FailoverErrorWithHistory).concurrencyExcludedCandidates ?? []
       );
     }
+    const circuitBlockedCandidates = getCircuitBlockedCandidates(error);
+    if (circuitBlockedCandidates.length > 0) {
+      excludedCapabilityCandidates = mergeExcludedCandidates(
+        excludedCapabilityCandidates,
+        circuitBlockedCandidates.map((candidate) => ({
+          id: candidate.upstreamId,
+          name: candidate.upstreamName,
+          reason: "circuit_open" as const,
+        }))
+      );
+    }
 
     const durationMs = Date.now() - startTime;
     const lastFailoverAttempt = failoverHistory[failoverHistory.length - 1];
@@ -3932,7 +4025,12 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
       reason: failureReason,
       did_send_upstream: didSendUpstream,
       request_id: requestId,
-      user_hint: getUserHint(errorCode, failureReason, matchedRouteCapability),
+      user_hint: getUserHint(
+        errorCode,
+        failureReason,
+        matchedRouteCapability,
+        circuitBlockedCandidates
+      ),
     } as const;
     const downstreamErrorBody = createUnifiedErrorBody(errorCode, errorDetails);
     const upstreamForModelResolution =
@@ -3968,6 +4066,68 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         queue: queueLifecycle,
       }
     );
+
+    // Shared field set for the failure-path request-log writes below; branch-specific
+    // fields (upstreamId, model, statusCode, errorMessage) are overridden per call.
+    const failureLogBaseFields = {
+      ...apiKeySnapshot,
+      reasoningEffort,
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      durationMs,
+      routingDurationMs,
+      routingType,
+      priorityTier,
+      failoverAttempts: failoverHistory.length,
+      failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
+      routingDecision: failureRoutingDecisionLog,
+      thinkingConfig,
+      sessionIdCompensated,
+      headerDiff: failureHeaderDiff,
+    };
+
+    // Model listing is a read-only discovery endpoint: when every candidate was
+    // blocked by circuit breakers, answer from the locally synced model catalog
+    // instead of failing the request. Other outage classes (concurrency saturation,
+    // plain unhealthy candidates, …) keep their 503 semantics.
+    if (
+      failureReason === "UPSTREAM_CIRCUIT_OPEN" &&
+      isOpenAIModelListRequest(request.method, path)
+    ) {
+      const fallbackModels = collectLocalModelListFallbackModels(
+        activeUpstreams.filter((upstream) => allowedUpstreamIdSet.has(upstream.id))
+      );
+      if (fallbackModels.length > 0) {
+        log.warn(
+          { requestId, path, failureReason, modelCount: fallbackModels.length },
+          "no upstream candidate available for model list, serving local catalog fallback"
+        );
+        const modelListLogFields = {
+          ...failureLogBaseFields,
+          upstreamId: null,
+          model: "(model-list)",
+          statusCode: 200,
+          errorMessage: null,
+        };
+        if (requestLogId) {
+          await updateRequestLog(requestLogId, modelListLogFields);
+        } else {
+          await logRequest({
+            apiKeyId: validApiKey.id,
+            method: request.method,
+            path,
+            ...modelListLogFields,
+          });
+        }
+        return new Response(Buffer.from(createApiKeyModelListResponseBody(fallbackModels)), {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+          },
+        });
+      }
+    }
 
     if (shouldRecordFailure && inboundBody) {
       const fallbackOutboundHeaders = filterHeaders(new Headers(request.headers)).filtered;
@@ -4093,54 +4253,23 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
     }
 
     // Log failed request (internal logging with full details)
+    const failureLogFields = {
+      ...failureLogBaseFields,
+      upstreamId: actualUpstreamId,
+      model: resolvedModel,
+      statusCode: errorStatusCode,
+      errorMessage,
+    };
     let persistedLogId: string | null = requestLogId;
     if (requestLogId) {
-      const updatedLog = await updateRequestLog(requestLogId, {
-        ...apiKeySnapshot,
-        upstreamId: actualUpstreamId,
-        model: resolvedModel,
-        reasoningEffort,
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0,
-        statusCode: errorStatusCode,
-        durationMs,
-        routingDurationMs,
-        errorMessage,
-        routingType,
-        priorityTier,
-        failoverAttempts: failoverHistory.length,
-        failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
-        routingDecision: failureRoutingDecisionLog,
-        thinkingConfig,
-        sessionIdCompensated,
-        headerDiff: failureHeaderDiff,
-      });
+      const updatedLog = await updateRequestLog(requestLogId, failureLogFields);
       persistedLogId = updatedLog?.id ?? requestLogId;
     } else {
       const createdLog = await logRequest({
         apiKeyId: validApiKey.id,
-        ...apiKeySnapshot,
-        upstreamId: actualUpstreamId,
         method: request.method,
         path,
-        model: resolvedModel,
-        reasoningEffort,
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0,
-        statusCode: errorStatusCode,
-        durationMs,
-        routingDurationMs,
-        errorMessage,
-        routingType,
-        priorityTier,
-        failoverAttempts: failoverHistory.length,
-        failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
-        routingDecision: failureRoutingDecisionLog,
-        thinkingConfig,
-        sessionIdCompensated,
-        headerDiff: failureHeaderDiff,
+        ...failureLogFields,
       });
       persistedLogId = createdLog.id;
     }

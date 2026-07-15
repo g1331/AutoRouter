@@ -257,6 +257,17 @@ vi.mock("@/lib/services/load-balancer", () => {
     }
   }
 
+  function mergeCircuitBlockedCandidates(
+    target: Array<{ upstreamId: string }>,
+    additions: Array<{ upstreamId: string }>
+  ): void {
+    for (const candidate of additions) {
+      if (!target.some((item) => item.upstreamId === candidate.upstreamId)) {
+        target.push(candidate);
+      }
+    }
+  }
+
   return {
     selectFromProviderType: mockSelectFromUpstreamCandidates,
     selectFromUpstreamCandidates: mockSelectFromUpstreamCandidates,
@@ -264,6 +275,7 @@ vi.mock("@/lib/services/load-balancer", () => {
     reselectQueuedUpstreamOnce: mockReselectQueuedUpstreamOnce,
     recordConnection: vi.fn(),
     releaseConnection: vi.fn(),
+    mergeCircuitBlockedCandidates,
     NoHealthyUpstreamsError,
     NoAuthorizedUpstreamsError,
     AllCandidatesConcurrencyFullError,
@@ -4602,6 +4614,197 @@ describe("proxy route upstream selection", () => {
     );
   });
 
+  it("should surface UPSTREAM_CIRCUIT_OPEN with blocked upstream details when selection is circuit-blocked", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType, NoHealthyUpstreamsError } =
+      await import("@/lib/services/load-balancer");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-anthropic-1" },
+    ]);
+
+    const selectionError = new NoHealthyUpstreamsError(
+      "No healthy upstreams available across all priority tiers"
+    ) as InstanceType<typeof NoHealthyUpstreamsError> & {
+      circuitBlockedCandidates?: Array<{
+        upstreamId: string;
+        upstreamName: string;
+        circuitState: "open" | "half_open";
+        remainingSeconds: number | null;
+      }>;
+    };
+    selectionError.circuitBlockedCandidates = [
+      {
+        upstreamId: "up-anthropic-1",
+        upstreamName: "anthropic-1",
+        circuitState: "open",
+        remainingSeconds: 180,
+      },
+      {
+        upstreamId: "up-anthropic-2",
+        upstreamName: "anthropic-2",
+        circuitState: "open",
+        remainingSeconds: 290,
+      },
+    ];
+    vi.mocked(selectFromProviderType).mockRejectedValueOnce(selectionError);
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/messages", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-test",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await POST(request, { params: Promise.resolve({ path: ["v1", "messages"] }) });
+    const data = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(data).toEqual({
+      error: expect.objectContaining({
+        code: "ALL_UPSTREAMS_UNAVAILABLE",
+        reason: "UPSTREAM_CIRCUIT_OPEN",
+        did_send_upstream: false,
+      }),
+    });
+    // Upstream identities must not leak downstream; they only go to internal logs.
+    expect(data.error.user_hint).not.toContain("anthropic-1");
+    expect(data.error.user_hint).toContain("熔断");
+    // The hint reports the earliest recovery across blocked candidates (min, not max).
+    expect(data.error.user_hint).toContain("180");
+    expect(data.error.user_hint).not.toContain("290");
+    expect(forwardRequest).not.toHaveBeenCalled();
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload?.routingDecision).toEqual(
+      expect.objectContaining({
+        failure_stage: "candidate_selection",
+        excluded: expect.arrayContaining([
+          { id: "up-anthropic-1", name: "anthropic-1", reason: "circuit_open" },
+        ]),
+      })
+    );
+  });
+
+  it("should keep primary pool circuit-open details when generic fallback retry also fails", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType, NoHealthyUpstreamsError } =
+      await import("@/lib/services/load-balancer");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      { id: "key-1", keyHash: "hash-1", expiresAt: null, isActive: true },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-cli" },
+      { upstreamId: "up-generic" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+      {
+        id: "up-cli",
+        name: "codex-cli-upstream",
+        providerType: "openai",
+        baseUrl: "https://cli.openai.example",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["codex_cli_responses"],
+        modelRules: null,
+        allowedModels: null,
+        modelRedirects: null,
+      },
+      {
+        id: "up-generic",
+        name: "generic-responses-upstream",
+        providerType: "openai",
+        baseUrl: "https://api.openai.example",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        routeCapabilities: ["openai_responses"],
+        // Explicit rules that do not match the requested model, so the fallback
+        // retry excludes every candidate and throws a fresh error.
+        modelRules: [
+          {
+            type: "exact",
+            value: "gpt-4.1",
+            targetModel: null,
+          },
+        ],
+        allowedModels: null,
+        modelRedirects: null,
+      },
+    ]);
+
+    // Primary (cli-only) pool selection fails with circuit-open details attached.
+    const selectionError = new NoHealthyUpstreamsError(
+      "No healthy upstreams available across all priority tiers"
+    ) as InstanceType<typeof NoHealthyUpstreamsError> & {
+      circuitBlockedCandidates?: Array<{
+        upstreamId: string;
+        upstreamName: string;
+        circuitState: "open" | "half_open";
+        remainingSeconds: number | null;
+      }>;
+    };
+    selectionError.circuitBlockedCandidates = [
+      {
+        upstreamId: "up-cli",
+        upstreamName: "codex-cli-upstream",
+        circuitState: "open",
+        remainingSeconds: 120,
+      },
+    ];
+    vi.mocked(selectFromProviderType).mockRejectedValue(selectionError);
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/responses", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sk-test",
+        "content-type": "application/json",
+        originator: "codex_cli_rs",
+      },
+      body: JSON.stringify({
+        model: "gpt-5-codex",
+        input: "hello",
+      }),
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["responses"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(data.error.reason).toBe("UPSTREAM_CIRCUIT_OPEN");
+    expect(data.error.user_hint).toContain("熔断");
+    expect(data.error.user_hint).toContain("120");
+    expect(forwardRequest).not.toHaveBeenCalled();
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload?.routingDecision).toEqual(
+      expect.objectContaining({
+        excluded: expect.arrayContaining([
+          { id: "up-cli", name: "codex-cli-upstream", reason: "circuit_open" },
+          { id: "up-generic", name: "generic-responses-upstream", reason: "model_not_allowed" },
+        ]),
+      })
+    );
+  });
+
   it("should record failure fixture when upstreams are unavailable and recorder is enabled", async () => {
     process.env.RECORDER_ENABLED = "true";
 
@@ -6624,6 +6827,261 @@ describe("proxy route upstream selection", () => {
     expect(response.status).toBe(200);
     expect(data.data.map((item: { id: string }) => item.id)).toEqual(["gpt-5.5", "claude-3.7"]);
     expect(forwardRequest).not.toHaveBeenCalled();
+  });
+
+  it("should serve model list from local catalog when all upstream candidates are circuit-blocked", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType, NoHealthyUpstreamsError } =
+      await import("@/lib/services/load-balancer");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+
+    // Key WITHOUT allowedModels: the pre-routing local short-circuit does not fire
+    // and the request goes through normal candidate selection.
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      {
+        id: "key-1",
+        keyHash: "hash-1",
+        keyPrefix: "sk-test",
+        name: "Catalog Fallback Key",
+        expiresAt: null,
+        isActive: true,
+        allowedModels: null,
+      },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-openai" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+      {
+        id: "up-openai",
+        name: "openai-main",
+        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        modelCatalog: [
+          { model: "gpt-5.5", source: "native" },
+          { model: "gpt-5.2-mini", source: "native" },
+        ],
+        modelRules: null,
+        allowedModels: null,
+        modelRedirects: null,
+      },
+    ]);
+
+    const selectionError = new NoHealthyUpstreamsError(
+      "No healthy upstreams available across all priority tiers"
+    ) as InstanceType<typeof NoHealthyUpstreamsError> & {
+      circuitBlockedCandidates?: Array<{
+        upstreamId: string;
+        upstreamName: string;
+        circuitState: "open" | "half_open";
+        remainingSeconds: number | null;
+      }>;
+    };
+    selectionError.circuitBlockedCandidates = [
+      {
+        upstreamId: "up-openai",
+        upstreamName: "openai-main",
+        circuitState: "open",
+        remainingSeconds: 240,
+      },
+    ];
+    vi.mocked(selectFromProviderType).mockRejectedValue(selectionError);
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/models", {
+      method: "GET",
+      headers: {
+        authorization: "Bearer sk-test",
+      },
+    });
+
+    const response = await GET(request, {
+      params: Promise.resolve({ path: ["models"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.data.map((item: { id: string }) => item.id)).toEqual(["gpt-5.2-mini", "gpt-5.5"]);
+    expect(forwardRequest).not.toHaveBeenCalled();
+    // The request log still records the circuit-blocked routing decision internally.
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload?.statusCode).toBe(200);
+    expect(updateLogPayload?.routingDecision).toEqual(
+      expect.objectContaining({
+        excluded: expect.arrayContaining([
+          { id: "up-openai", name: "openai-main", reason: "circuit_open" },
+        ]),
+      })
+    );
+  });
+
+  it("should keep 503 for model list when selection fails without circuit-blocked candidates", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType, AllCandidatesConcurrencyFullError } =
+      await import("@/lib/services/load-balancer");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      {
+        id: "key-1",
+        keyHash: "hash-1",
+        keyPrefix: "sk-test",
+        name: "Catalog Fallback Key",
+        expiresAt: null,
+        isActive: true,
+        allowedModels: null,
+      },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-openai" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+      {
+        id: "up-openai",
+        name: "openai-main",
+        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        modelCatalog: [{ model: "gpt-5.5", source: "native" }],
+        modelRules: null,
+        allowedModels: null,
+        modelRedirects: null,
+      },
+    ]);
+
+    // Concurrency saturation (no circuit-blocked details): the local catalog
+    // fallback must NOT fire, the caller keeps the 503 outage signal.
+    vi.mocked(selectFromProviderType).mockRejectedValue(
+      new AllCandidatesConcurrencyFullError([
+        {
+          upstreamId: "up-openai",
+          upstreamName: "openai-main",
+          upstreamBaseUrl: "https://api.openai.com",
+          upstreamProviderType: "openai",
+          tier: 0,
+          currentConcurrency: 4,
+          maxConcurrency: 4,
+        },
+      ])
+    );
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/models", {
+      method: "GET",
+      headers: {
+        authorization: "Bearer sk-test",
+      },
+    });
+
+    const response = await GET(request, {
+      params: Promise.resolve({ path: ["models"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(data.error.reason).toBe("CONCURRENCY_FULL");
+    expect(forwardRequest).not.toHaveBeenCalled();
+  });
+
+  it("should create a request log when model list fallback runs after start-log failure", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType, NoHealthyUpstreamsError } =
+      await import("@/lib/services/load-balancer");
+    const { logRequestStart, logRequest, updateRequestLog } =
+      await import("@/lib/services/request-logger");
+
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      {
+        id: "key-1",
+        keyHash: "hash-1",
+        keyPrefix: "sk-test",
+        name: "Catalog Fallback Key",
+        expiresAt: null,
+        isActive: true,
+        allowedModels: null,
+      },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-openai" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+      {
+        id: "up-openai",
+        name: "openai-main",
+        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        modelCatalog: [{ model: "gpt-5.5", source: "native" }],
+        modelRules: null,
+        allowedModels: null,
+        modelRedirects: null,
+      },
+    ]);
+
+    const selectionError = new NoHealthyUpstreamsError(
+      "No healthy upstreams available across all priority tiers"
+    ) as InstanceType<typeof NoHealthyUpstreamsError> & {
+      circuitBlockedCandidates?: Array<{
+        upstreamId: string;
+        upstreamName: string;
+        circuitState: "open" | "half_open";
+        remainingSeconds: number | null;
+      }>;
+    };
+    selectionError.circuitBlockedCandidates = [
+      {
+        upstreamId: "up-openai",
+        upstreamName: "openai-main",
+        circuitState: "open",
+        remainingSeconds: 240,
+      },
+    ];
+    vi.mocked(selectFromProviderType).mockRejectedValue(selectionError);
+
+    // In-progress log creation fails: the fallback must still persist a log row
+    // via logRequest instead of silently dropping the request from logs.
+    vi.mocked(logRequestStart).mockRejectedValueOnce(new Error("start log failed"));
+    vi.mocked(logRequest).mockResolvedValueOnce({ id: "created-log-id" } as never);
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/models", {
+      method: "GET",
+      headers: {
+        authorization: "Bearer sk-test",
+      },
+    });
+
+    const response = await GET(request, {
+      params: Promise.resolve({ path: ["models"] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(forwardRequest).not.toHaveBeenCalled();
+    expect(updateRequestLog).not.toHaveBeenCalled();
+    expect(logRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKeyId: "key-1",
+        model: "(model-list)",
+        statusCode: 200,
+        errorMessage: null,
+        upstreamId: null,
+      })
+    );
   });
 
   it("should reject when API key not authorized for selected upstream", async () => {
