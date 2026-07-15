@@ -35,6 +35,22 @@ export interface CircuitBlockedCandidate {
 }
 
 /**
+ * Merge circuit-blocked candidates into a target list, deduplicating by upstreamId
+ * (first entry wins). Shared by every accumulation site so the dedupe rule lives in
+ * one place.
+ */
+export function mergeCircuitBlockedCandidates(
+  target: CircuitBlockedCandidate[],
+  additions: CircuitBlockedCandidate[]
+): void {
+  for (const candidate of additions) {
+    if (!target.some((item) => item.upstreamId === candidate.upstreamId)) {
+      target.push(candidate);
+    }
+  }
+}
+
+/**
  * Error thrown when no healthy upstreams are available.
  */
 export class NoHealthyUpstreamsError extends Error {
@@ -1032,18 +1048,12 @@ async function performTieredSelection(
   const waitableCandidates: WaitableUpstreamEntry[] = [];
   let didResyncQuota = false;
 
-  const appendCircuitBlocked = (candidate: CircuitBlockedCandidate) => {
-    if (!circuitBlocked.some((item) => item.upstreamId === candidate.upstreamId)) {
-      circuitBlocked.push(candidate);
-    }
-  };
-
   // Try each tier in priority order
   for (const [tier, tierUpstreams] of sortedTiers) {
     // Filter by circuit breaker
     const afterCircuitBreaker = filterByCircuitBreaker(tierUpstreams);
     totalCircuitBreakerFiltered += afterCircuitBreaker.excludedCount;
-    afterCircuitBreaker.excluded.forEach(appendCircuitBlocked);
+    mergeCircuitBlockedCandidates(circuitBlocked, afterCircuitBreaker.excluded);
 
     // Filter by spending quota
     let afterQuota = filterBySpendingQuota(afterCircuitBreaker.allowed);
@@ -1145,12 +1155,14 @@ async function performTieredSelection(
         } catch (error) {
           if (error instanceof CircuitBreakerOpenError) {
             totalCircuitBreakerFiltered += 1;
-            appendCircuitBlocked({
-              upstreamId: selected.upstream.id,
-              upstreamName: selected.upstream.name,
-              circuitState: selected.circuitState === "half_open" ? "half_open" : "open",
-              remainingSeconds: error.remainingSeconds,
-            });
+            mergeCircuitBlockedCandidates(circuitBlocked, [
+              {
+                upstreamId: selected.upstream.id,
+                upstreamName: selected.upstream.name,
+                circuitState: selected.circuitState === "half_open" ? "half_open" : "open",
+                remainingSeconds: error.remainingSeconds,
+              },
+            ]);
             const idx = candidates.findIndex((u) => u.upstream.id === selected.upstream.id);
             if (idx >= 0) {
               candidates.splice(idx, 1);
