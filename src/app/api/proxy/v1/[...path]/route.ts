@@ -641,6 +641,37 @@ function getApiKeyVisibleModelList(
   );
 }
 
+/**
+ * Collect the model names an upstream is known to serve, from local data only:
+ * synced model catalog first, then declared allowed models, then exact model rules.
+ * Used to answer /v1/models locally when no upstream candidate is reachable.
+ */
+function collectLocalModelListFallbackModels(candidates: Upstream[]): string[] {
+  const models = new Set<string>();
+  for (const upstream of candidates) {
+    const catalogModels = (upstream.modelCatalog ?? [])
+      .map((entry) => entry.model.trim())
+      .filter((model) => model.length > 0);
+    const allowedModels = (upstream.allowedModels ?? [])
+      .map((model) => model.trim())
+      .filter((model) => model.length > 0);
+    const exactRuleModels = (upstream.modelRules ?? [])
+      .filter((rule) => rule.type === "exact")
+      .map((rule) => rule.value.trim())
+      .filter((value) => value.length > 0);
+    const upstreamModels =
+      catalogModels.length > 0
+        ? catalogModels
+        : allowedModels.length > 0
+          ? allowedModels
+          : exactRuleModels;
+    for (const model of upstreamModels) {
+      models.add(model);
+    }
+  }
+  return [...models].sort((a, b) => a.localeCompare(b));
+}
+
 function mergeExcludedCandidates(
   base: RoutingExcluded[],
   additions: RoutingExcluded[]
@@ -1027,7 +1058,7 @@ function getUserHint(
     return "当前密钥已达到消费限额，请等待额度窗口恢复或联系管理员调整额度规则";
   }
   if (reason === "UPSTREAM_CIRCUIT_OPEN") {
-    const names = circuitBlockedCandidates.map((candidate) => candidate.upstreamName).join("、");
+    // Do not leak upstream identities downstream; details go to internal logs only.
     const remainingSeconds = circuitBlockedCandidates.reduce<number | null>(
       (max, candidate) =>
         candidate.remainingSeconds != null && (max == null || candidate.remainingSeconds > max)
@@ -1036,9 +1067,9 @@ function getUserHint(
       null
     );
     return (
-      `候选上游${names ? `（${names}）` : ""}因近期连续失败已触发熔断，请求被暂时拦截` +
+      "当前所有可选上游因近期连续失败已被熔断保护暂时拦截" +
       (remainingSeconds != null ? `，预计 ${remainingSeconds} 秒内自动恢复探测` : "") +
-      "；请检查上游服务状态或密钥余额，也可在管理后台手动关闭熔断"
+      "；请稍后重试或联系管理员"
     );
   }
   if (reason === "NO_HEALTHY_CANDIDATES") {
@@ -4029,6 +4060,55 @@ async function handleProxy(request: NextRequest, context: RouteContext): Promise
         queue: queueLifecycle,
       }
     );
+
+    // Model listing is a read-only discovery endpoint: when no upstream candidate
+    // is reachable (e.g. all circuit-broken), answer from the locally synced model
+    // catalog instead of failing the request.
+    if (
+      !didSendUpstream &&
+      error instanceof NoHealthyUpstreamsError &&
+      !isNoAuthorizedUpstreamsError(error) &&
+      isOpenAIModelListRequest(request.method, path)
+    ) {
+      const fallbackModels = collectLocalModelListFallbackModels(
+        activeUpstreams.filter((upstream) => allowedUpstreamIdSet.has(upstream.id))
+      );
+      if (fallbackModels.length > 0) {
+        log.warn(
+          { requestId, path, failureReason, modelCount: fallbackModels.length },
+          "no upstream candidate available for model list, serving local catalog fallback"
+        );
+        if (requestLogId) {
+          await updateRequestLog(requestLogId, {
+            ...apiKeySnapshot,
+            upstreamId: null,
+            model: "(model-list)",
+            reasoningEffort,
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
+            statusCode: 200,
+            durationMs,
+            routingDurationMs,
+            errorMessage: null,
+            routingType,
+            priorityTier,
+            failoverAttempts: failoverHistory.length,
+            failoverHistory: failoverHistory.length > 0 ? failoverHistory : null,
+            routingDecision: failureRoutingDecisionLog,
+            thinkingConfig,
+            sessionIdCompensated,
+            headerDiff: failureHeaderDiff,
+          });
+        }
+        return new Response(Buffer.from(createApiKeyModelListResponseBody(fallbackModels)), {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+          },
+        });
+      }
+    }
 
     if (shouldRecordFailure && inboundBody) {
       const fallbackOutboundHeaders = filterHeaders(new Headers(request.headers)).filtered;

@@ -4659,7 +4659,8 @@ describe("proxy route upstream selection", () => {
         did_send_upstream: false,
       }),
     });
-    expect(data.error.user_hint).toContain("anthropic-1");
+    // Upstream identities must not leak downstream; they only go to internal logs.
+    expect(data.error.user_hint).not.toContain("anthropic-1");
     expect(data.error.user_hint).toContain("熔断");
     expect(data.error.user_hint).toContain("180");
     expect(forwardRequest).not.toHaveBeenCalled();
@@ -6696,6 +6697,98 @@ describe("proxy route upstream selection", () => {
     expect(response.status).toBe(200);
     expect(data.data.map((item: { id: string }) => item.id)).toEqual(["gpt-5.5", "claude-3.7"]);
     expect(forwardRequest).not.toHaveBeenCalled();
+  });
+
+  it("should serve model list from local catalog when all upstream candidates are circuit-blocked", async () => {
+    const { db } = await import("@/lib/db");
+    const { forwardRequest } = await import("@/lib/services/proxy-client");
+    const { selectFromProviderType, NoHealthyUpstreamsError } =
+      await import("@/lib/services/load-balancer");
+    const { updateRequestLog } = await import("@/lib/services/request-logger");
+
+    // Key WITHOUT allowedModels: the pre-routing local short-circuit does not fire
+    // and the request goes through normal candidate selection.
+    vi.mocked(db.query.apiKeys.findMany).mockResolvedValueOnce([
+      {
+        id: "key-1",
+        keyHash: "hash-1",
+        keyPrefix: "sk-test",
+        name: "Catalog Fallback Key",
+        expiresAt: null,
+        isActive: true,
+        allowedModels: null,
+      },
+    ]);
+    vi.mocked(db.query.apiKeyUpstreams.findMany).mockResolvedValueOnce([
+      { upstreamId: "up-openai" },
+    ]);
+    vi.mocked(db.query.upstreams.findMany).mockResolvedValue([
+      {
+        id: "up-openai",
+        name: "openai-main",
+        providerType: "openai",
+        routeCapabilities: ["openai_chat_compatible"],
+        baseUrl: "https://api.openai.com",
+        isDefault: false,
+        isActive: true,
+        timeout: 60,
+        priority: 0,
+        weight: 1,
+        modelCatalog: [
+          { model: "gpt-5.5", source: "native" },
+          { model: "gpt-5.2-mini", source: "native" },
+        ],
+        modelRules: null,
+        allowedModels: null,
+        modelRedirects: null,
+      },
+    ]);
+
+    const selectionError = new NoHealthyUpstreamsError(
+      "No healthy upstreams available across all priority tiers"
+    ) as InstanceType<typeof NoHealthyUpstreamsError> & {
+      circuitBlockedCandidates?: Array<{
+        upstreamId: string;
+        upstreamName: string;
+        circuitState: "open" | "half_open";
+        remainingSeconds: number | null;
+      }>;
+    };
+    selectionError.circuitBlockedCandidates = [
+      {
+        upstreamId: "up-openai",
+        upstreamName: "openai-main",
+        circuitState: "open",
+        remainingSeconds: 240,
+      },
+    ];
+    vi.mocked(selectFromProviderType).mockRejectedValue(selectionError);
+
+    const request = new NextRequest("http://localhost/api/proxy/v1/models", {
+      method: "GET",
+      headers: {
+        authorization: "Bearer sk-test",
+      },
+    });
+
+    const response = await GET(request, {
+      params: Promise.resolve({ path: ["models"] }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.data.map((item: { id: string }) => item.id)).toEqual(["gpt-5.2-mini", "gpt-5.5"]);
+    expect(forwardRequest).not.toHaveBeenCalled();
+    // The request log still records the circuit-blocked routing decision internally.
+    const updateLogPayload = vi.mocked(updateRequestLog).mock.calls.at(-1)?.[1];
+    expect(updateLogPayload?.statusCode).toBe(200);
+    expect(updateLogPayload?.routingDecision).toEqual(
+      expect.objectContaining({
+        excluded: expect.arrayContaining([
+          { id: "up-openai", name: "openai-main", reason: "circuit_open" },
+        ]),
+      })
+    );
   });
 
   it("should reject when API key not authorized for selected upstream", async () => {
