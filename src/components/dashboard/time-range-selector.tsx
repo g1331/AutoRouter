@@ -182,7 +182,11 @@ export function TimeRangeSelector({
               {customLabel}
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="end">
+          {/* 日期选择器弹层用中性描边（覆盖 Popover 默认的琥珀边框），与下拉菜单一致 */}
+          <PopoverContent
+            className="w-auto border border-border p-0 text-foreground shadow-[var(--vr-shadow-md)]"
+            align="end"
+          >
             <div className="flex">
               <div className="flex flex-col gap-1 border-r border-divider p-3">
                 <p className="type-label-medium mb-1 px-2 text-muted-foreground">
