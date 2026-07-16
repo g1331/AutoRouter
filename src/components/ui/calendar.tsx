@@ -32,7 +32,7 @@ function Calendar({
       classNames={{
         months: "relative flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
         month: "space-y-4",
-        month_caption: "flex h-9 items-center justify-center type-title-small text-foreground",
+        month_caption: "flex h-9 items-center justify-center text-foreground",
         caption_label: "type-title-small flex items-center gap-1",
         // 绝对定位让前/后翻月按钮始终固定在弹层左右上角，不随内容宽高漂移；
         // 容器本身穿透点击，避免盖住中间的月/年下拉
@@ -54,8 +54,8 @@ function Calendar({
         // 原生 select 以透明覆盖层承接交互，可见文案由 caption_label 呈现；
         // 弹出的原生选项列表不跟随页面主题，显式指定选项配色保证两种主题下可读
         dropdown: cn(
-          "absolute inset-0 w-full cursor-pointer opacity-0",
-          "[&>option]:bg-[var(--vr-surface-1)] [&>option]:text-[var(--vr-text)]"
+          "absolute inset-0 cursor-pointer opacity-0",
+          "[&>option]:bg-[var(--popover)] [&>option]:text-[var(--popover-foreground)]"
         ),
         month_grid: "w-full border-collapse space-y-1",
         weekdays: "flex",

@@ -6,6 +6,7 @@ import { CalendarIcon, X } from "lucide-react";
 import {
   addDays,
   format,
+  min,
   startOfDay,
   startOfMonth,
   startOfYear,
@@ -29,7 +30,7 @@ export const PRESET_RANGES: TimeRange[] = ["today", "7d", "30d"];
 
 export type QuickRangeKey = "last90d" | "thisMonth" | "lastMonth" | "thisYear" | "lastYear";
 
-export const QUICK_RANGE_KEYS: QuickRangeKey[] = [
+const QUICK_RANGE_KEYS: QuickRangeKey[] = [
   "last90d",
   "thisMonth",
   "lastMonth",
@@ -214,7 +215,8 @@ export function TimeRangeSelector({
                   defaultMonth={pendingRange?.from}
                   numberOfMonths={2}
                   disabled={{ after: new Date() }}
-                  startMonth={subYears(new Date(), 5)}
+                  // 默认最早到 5 年前；URL 恢复等来源的更早区间也要能在日历中查看
+                  startMonth={min([subYears(new Date(), 5), pendingRange?.from ?? new Date()])}
                   endMonth={new Date()}
                 />
                 {pendingRange?.from && (
