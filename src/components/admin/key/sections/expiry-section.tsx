@@ -3,7 +3,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon } from "lucide-react";
-import { format } from "date-fns";
+import { addDays, addYears, format, max, min, startOfDay } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
 import type { z } from "zod";
 
@@ -42,6 +42,7 @@ export function ExpirySection({ apiKey }: { apiKey: APIKeyResponse }) {
     defaultValues: expiryDefaults(apiKey),
   });
   const mutation = useUpdateApiKeySection();
+  const today = startOfDay(new Date());
 
   const onSave = form.handleSubmit(() => {
     const parsed = schema.parse(form.getValues());
@@ -89,13 +90,23 @@ export function ExpirySection({ apiKey }: { apiKey: APIKeyResponse }) {
                       </Button>
                     </FormControl>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
+                  {/* 日期选择器弹层用中性描边（覆盖 Popover 默认的琥珀边框），与下拉菜单一致 */}
+                  <PopoverContent
+                    className="w-auto border border-border p-0 text-foreground shadow-[var(--vr-shadow-md)]"
+                    align="start"
+                  >
                     <Calendar
                       locale={dateLocale}
                       mode="single"
                       selected={field.value ?? undefined}
                       onSelect={(date) => field.onChange(date ?? null)}
-                      disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                      defaultMonth={field.value ?? undefined}
+                      disabled={{ before: today }}
+                      // 边界向已存储的过期时间扩展，保证过期/超远期的现值仍可在日历中查看
+                      startMonth={field.value ? min([today, field.value]) : today}
+                      endMonth={
+                        field.value ? max([addYears(today, 10), field.value]) : addYears(today, 10)
+                      }
                       autoFocus
                     />
                   </PopoverContent>
@@ -107,9 +118,23 @@ export function ExpirySection({ apiKey }: { apiKey: APIKeyResponse }) {
                     size="sm"
                     onClick={() => field.onChange(null)}
                   >
-                    {tCommon("cancel")}
+                    {tCommon("clear")}
                   </Button>
                 )}
+              </div>
+              <div className="flex gap-1.5">
+                {([30, 90, 365] as const).map((days) => (
+                  <Button
+                    key={days}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="border-border bg-surface-200 hover:bg-surface-300"
+                    onClick={() => field.onChange(addDays(today, days))}
+                  >
+                    {t(`expiryPresets.${days}`)}
+                  </Button>
+                ))}
               </div>
               <FormMessage />
             </FormItem>

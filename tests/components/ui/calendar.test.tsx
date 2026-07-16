@@ -31,6 +31,7 @@ vi.mock("react-day-picker", () => ({
           <>
             <ChevronComponent orientation="left" />
             <ChevronComponent orientation="right" />
+            <ChevronComponent orientation="down" />
           </>
         )}
       </div>
@@ -45,6 +46,9 @@ vi.mock("lucide-react", () => ({
   ),
   ChevronRight: ({ className }: { className?: string }) => (
     <svg data-testid="chevron-right" className={className} />
+  ),
+  ChevronDown: ({ className }: { className?: string }) => (
+    <svg data-testid="chevron-down" className={className} />
   ),
 }));
 
@@ -118,6 +122,12 @@ describe("Calendar", () => {
       render(<Calendar />);
 
       expect(screen.getByTestId("chevron-right")).toBeInTheDocument();
+    });
+
+    it("renders down chevron for dropdown captions", () => {
+      render(<Calendar />);
+
+      expect(screen.getByTestId("chevron-down")).toBeInTheDocument();
     });
   });
 
