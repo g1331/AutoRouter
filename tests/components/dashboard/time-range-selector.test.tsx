@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { TimeRangeSelector, computeQuickRange } from "@/components/dashboard/time-range-selector";
+import type { CustomDateRange } from "@/hooks/use-dashboard-stats";
 
 // Mock next-intl
 vi.mock("next-intl", () => ({
@@ -100,6 +101,97 @@ describe("TimeRangeSelector", () => {
       fireEvent.click(screen.getByText("timeRange.7d"));
 
       expect(mockOnChange).toHaveBeenCalledWith("7d");
+    });
+  });
+
+  describe("includeAll and reset", () => {
+    it("prepends the all preset and forwards its click", () => {
+      render(<TimeRangeSelector value="7d" onChange={mockOnChange} includeAll />);
+
+      fireEvent.click(screen.getByText("timeRange.all"));
+      expect(mockOnChange).toHaveBeenCalledWith("all");
+    });
+
+    it("resets a custom selection back to 7d via the X button", () => {
+      const customRange: CustomDateRange = {
+        start: new Date(2026, 5, 1),
+        end: new Date(2026, 5, 11),
+      };
+      render(
+        <TimeRangeSelector value="custom" customRange={customRange} onChange={mockOnChange} />
+      );
+
+      fireEvent.click(screen.getByTitle("timeRange.resetToDefault"));
+      expect(mockOnChange).toHaveBeenCalledWith("7d");
+    });
+  });
+
+  describe("Custom label", () => {
+    it("shows MM/dd for a current-year range with the exclusive end collapsed", () => {
+      const year = new Date().getFullYear();
+      const customRange: CustomDateRange = {
+        start: new Date(year, 5, 1),
+        end: new Date(year, 5, 11), // exclusive → last shown day is 06/10
+      };
+      render(
+        <TimeRangeSelector value="custom" customRange={customRange} onChange={mockOnChange} />
+      );
+
+      expect(screen.getByText("06/01 – 06/10")).toBeInTheDocument();
+    });
+
+    it("includes the year when the range is not in the current year", () => {
+      const lastYear = new Date().getFullYear() - 1;
+      const customRange: CustomDateRange = {
+        start: new Date(lastYear, 0, 1),
+        end: new Date(lastYear + 1, 0, 1),
+      };
+      render(
+        <TimeRangeSelector value="custom" customRange={customRange} onChange={mockOnChange} />
+      );
+
+      expect(screen.getByText(`${lastYear}/01/01 – ${lastYear}/12/31`)).toBeInTheDocument();
+    });
+  });
+
+  describe("Custom popover", () => {
+    it("applies a quick preset and closes via onChange('custom', range)", () => {
+      render(<TimeRangeSelector value="7d" onChange={mockOnChange} />);
+
+      fireEvent.click(screen.getByText("timeRange.custom"));
+      fireEvent.click(screen.getByText("timeRange.lastYear"));
+
+      expect(mockOnChange).toHaveBeenCalledWith("custom", computeQuickRange("lastYear"));
+    });
+
+    it("re-seeds the pending range from the applied range and applies with an exclusive end", () => {
+      const year = new Date().getFullYear();
+      const customRange: CustomDateRange = {
+        start: new Date(year, 5, 1),
+        end: new Date(year, 5, 11),
+      };
+      render(
+        <TimeRangeSelector value="custom" customRange={customRange} onChange={mockOnChange} />
+      );
+
+      fireEvent.click(screen.getByText("06/01 – 06/10"));
+
+      // Re-seeded pending range is echoed under the calendar (PPP format, en).
+      expect(screen.getByText(/June 1st, \d{4} – June 10th, \d{4}/)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText("timeRange.apply"));
+      expect(mockOnChange).toHaveBeenCalledWith("custom", {
+        start: new Date(year, 5, 1),
+        end: new Date(year, 5, 11),
+      });
+    });
+
+    it("disables apply until a full range is pending", () => {
+      render(<TimeRangeSelector value="7d" onChange={mockOnChange} />);
+
+      fireEvent.click(screen.getByText("timeRange.custom"));
+
+      expect(screen.getByText("timeRange.apply").closest("button")).toBeDisabled();
     });
   });
 
