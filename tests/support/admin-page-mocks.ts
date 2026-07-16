@@ -412,6 +412,117 @@ const LOGS_WINDOW_STATS = {
   p50_tps: 42,
 };
 
+// 单维度排行榜（/admin/stats/leaderboard?dimension=...）的确定性数据。
+// 指标刻意做成「按请求数与按费用排序会互换第一名」，让 e2e 的列头排序
+// 断言真正可观察；comparison 覆盖排名上升/下降与「新上榜」三种形态。
+// 导出供 tests/e2e 引用 id / 名称，避免测试文件里出现重复的魔法字面量。
+export const RANKINGS_FIXTURES = {
+  upstreams: [
+    {
+      id: UPSTREAMS_PAGE.items[0].id,
+      name: UPSTREAMS_PAGE.items[0].name,
+      provider_type: "openai",
+      request_count: 12000,
+      total_tokens: 400_000,
+      total_cost_usd: 8,
+      avg_ttft_ms: 640,
+      avg_tps: 45.3,
+      cache_hit_rate: 5.2,
+      error_rate: 0.5,
+      model_distribution: [
+        { name: "gpt-4.1", count: 9000 },
+        { name: "gpt-4o-mini", count: 3000 },
+      ],
+      comparison: { prev_rank: 2, prev_request_count: 6000 },
+    },
+    {
+      id: UPSTREAMS_PAGE.items[1].id,
+      name: UPSTREAMS_PAGE.items[1].name,
+      provider_type: "anthropic",
+      request_count: 8000,
+      total_tokens: 280_000,
+      total_cost_usd: 15.5,
+      avg_ttft_ms: 900,
+      avg_tps: 38.2,
+      cache_hit_rate: 2.1,
+      error_rate: 6,
+      model_distribution: [{ name: "claude-3-opus", count: 8000 }],
+      comparison: { prev_rank: 1, prev_request_count: 9000 },
+    },
+  ],
+  models: [
+    {
+      model: "gpt-4.1",
+      request_count: 9000,
+      total_tokens: 320_000,
+      total_cost_usd: 6.4,
+      avg_ttft_ms: 620,
+      avg_tps: 48,
+      cache_hit_rate: 4.8,
+      error_rate: 0.2,
+      upstream_distribution: [{ name: UPSTREAMS_PAGE.items[0].name, count: 9000 }],
+      comparison: { prev_rank: 1, prev_request_count: 8200 },
+    },
+    {
+      model: "claude-3-opus",
+      request_count: 8000,
+      total_tokens: 280_000,
+      total_cost_usd: 15.5,
+      avg_ttft_ms: 900,
+      avg_tps: 38.2,
+      cache_hit_rate: 2.1,
+      error_rate: 6,
+      upstream_distribution: [{ name: UPSTREAMS_PAGE.items[1].name, count: 8000 }],
+      comparison: { prev_rank: null, prev_request_count: null },
+    },
+  ],
+  api_keys: [
+    {
+      id: KEYS_PAGE.items[0].id,
+      name: KEYS_PAGE.items[0].name,
+      key_prefix: KEYS_PAGE.items[0].key_prefix,
+      request_count: 15000,
+      total_tokens: 500_000,
+      total_cost_usd: 12.5,
+      avg_ttft_ms: 700,
+      avg_tps: 44,
+      cache_hit_rate: 3.5,
+      error_rate: 1.2,
+      model_distribution: [
+        { name: "gpt-4.1", count: 12000 },
+        { name: "claude-3-opus", count: 3000 },
+      ],
+      comparison: { prev_rank: 1, prev_request_count: 14000 },
+    },
+  ],
+  users: [
+    {
+      id: "00000000-0000-4000-8000-00000000dd11",
+      username: "alice",
+      display_name: "Alice Zhang",
+      request_count: 9000,
+      total_tokens: 320_000,
+      total_cost_usd: 7.8,
+      avg_ttft_ms: 680,
+      avg_tps: 42,
+      cache_hit_rate: 2.8,
+      error_rate: 0.9,
+      model_distribution: [{ name: "gpt-4.1", count: 9000 }],
+      comparison: { prev_rank: 1, prev_request_count: 8500 },
+    },
+  ],
+};
+
+const RANKINGS_SORT_COLUMNS: Record<string, string> = {
+  requests: "request_count",
+  tokens: "total_tokens",
+  cost: "total_cost_usd",
+  ttft: "avg_ttft_ms",
+  tps: "avg_tps",
+  cache_hit: "cache_hit_rate",
+  error_rate: "error_rate",
+};
+
 const BILLING_MODEL_PRICES = {
   items: [
     {
@@ -502,4 +613,29 @@ export async function mockAdminApis(page: Page): Promise<void> {
   await page.route("**/api/admin/logs/live**", (route) =>
     route.fulfill({ status: 200, contentType: "text/event-stream", body: "" })
   );
+  // 单维度排行榜：按请求的 dimension/sort_by/order 对固定数据排序后返回，
+  // 让 e2e 的排序断言观察到真实的名次变化。旧格式（无 dimension，dashboard
+  // Top5 用）fallback 给 catch-all 的 `{}`，保持既有视觉/a11y 基线不变。
+  await page.route("**/api/admin/stats/leaderboard**", async (route) => {
+    const url = new URL(route.request().url());
+    const dimension = url.searchParams.get("dimension");
+    if (!dimension || !(dimension in RANKINGS_FIXTURES)) {
+      await route.fallback();
+      return;
+    }
+    const sortBy = url.searchParams.get("sort_by") ?? "requests";
+    const order = url.searchParams.get("order") === "asc" ? 1 : -1;
+    const column = RANKINGS_SORT_COLUMNS[sortBy] ?? "request_count";
+    const metric = (item: object) => (item as unknown as Record<string, number>)[column];
+    const items = [...RANKINGS_FIXTURES[dimension as keyof typeof RANKINGS_FIXTURES]].sort(
+      (a, b) => (metric(a) - metric(b)) * order
+    );
+    await fulfillJson(route, 200, {
+      range: url.searchParams.get("range") ?? "7d",
+      dimension,
+      sort_by: sortBy,
+      order: order === 1 ? "asc" : "desc",
+      items,
+    });
+  });
 }

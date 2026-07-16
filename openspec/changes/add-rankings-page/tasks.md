@@ -32,6 +32,6 @@
 
 ## 5. E2E 与收尾
 
-- [ ] 5.1 admin-page-mocks stub 新接口形态（单维度 leaderboard 请求），新增 rankings 页 e2e spec（维度切换、排序、展开、跳转 logs 并返回）
-- [ ] 5.2 全量校验：`pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run`、本地 `pnpm e2e`（--workers=2）
+- [x] 5.1 admin-page-mocks stub 新接口形态（单维度 leaderboard 请求），新增 rankings 页 e2e spec（维度切换、排序、展开、跳转 logs 并返回）
+- [x] 5.2 全量校验：`pnpm lint`、`pnpm exec tsc --noEmit`、`pnpm test:run`、本地 `pnpm e2e`（--workers=2）
 - [ ] 5.3 浏览器双主题实查页面视觉效果
