@@ -3,7 +3,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon } from "lucide-react";
-import { format } from "date-fns";
+import { addDays, addYears, format, startOfDay } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
 import type { z } from "zod";
 
@@ -95,7 +95,10 @@ export function ExpirySection({ apiKey }: { apiKey: APIKeyResponse }) {
                       mode="single"
                       selected={field.value ?? undefined}
                       onSelect={(date) => field.onChange(date ?? null)}
+                      defaultMonth={field.value ?? undefined}
                       disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                      startMonth={new Date()}
+                      endMonth={addYears(new Date(), 10)}
                       autoFocus
                     />
                   </PopoverContent>
@@ -107,9 +110,23 @@ export function ExpirySection({ apiKey }: { apiKey: APIKeyResponse }) {
                     size="sm"
                     onClick={() => field.onChange(null)}
                   >
-                    {tCommon("cancel")}
+                    {tCommon("clear")}
                   </Button>
                 )}
+              </div>
+              <div className="flex gap-1.5">
+                {([30, 90, 365] as const).map((days) => (
+                  <Button
+                    key={days}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="border-border bg-surface-200 hover:bg-surface-300"
+                    onClick={() => field.onChange(addDays(startOfDay(new Date()), days))}
+                  >
+                    {t(`expiryPresets.${days}`)}
+                  </Button>
+                ))}
               </div>
               <FormMessage />
             </FormItem>

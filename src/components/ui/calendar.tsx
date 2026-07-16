@@ -1,7 +1,6 @@
 "use client";
 
-import * as React from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { DayPicker, type DayPickerProps } from "react-day-picker";
 
 import { cn } from "@/lib/utils";
@@ -11,26 +10,52 @@ export type CalendarProps = DayPickerProps;
 
 /**
  * M3 Date Picker Calendar
+ *
+ * 默认开启 captionLayout="dropdown"（月/年下拉直达）与 fixedWeeks（固定 6 行，
+ * 翻月时弹层高度不变，底部按钮位置稳定）。年份下拉范围由调用方通过
+ * startMonth/endMonth 控制。
  */
-function Calendar({ className, classNames, showOutsideDays = true, ...props }: CalendarProps) {
+function Calendar({
+  className,
+  classNames,
+  showOutsideDays = true,
+  captionLayout = "dropdown",
+  fixedWeeks = true,
+  ...props
+}: CalendarProps) {
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
+      captionLayout={captionLayout}
+      fixedWeeks={fixedWeeks}
       className={cn("p-3", className)}
       classNames={{
-        months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
+        months: "relative flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
         month: "space-y-4",
-        month_caption:
-          "flex justify-center pt-1 relative items-center type-title-small text-foreground",
-        caption_label: "type-title-small",
-        nav: "space-x-1 flex items-center",
+        month_caption: "flex h-9 items-center justify-center type-title-small text-foreground",
+        caption_label: "type-title-small flex items-center gap-1",
+        // 绝对定位让前/后翻月按钮始终固定在弹层左右上角，不随内容宽高漂移；
+        // 容器本身穿透点击，避免盖住中间的月/年下拉
+        nav: "pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-between",
         button_previous: cn(
           buttonVariants({ variant: "ghost", size: "icon" }),
-          "h-9 w-9 text-muted-foreground"
+          "pointer-events-auto h-9 w-9 text-muted-foreground"
         ),
         button_next: cn(
           buttonVariants({ variant: "ghost", size: "icon" }),
-          "h-9 w-9 text-muted-foreground"
+          "pointer-events-auto h-9 w-9 text-muted-foreground"
+        ),
+        dropdowns: "flex items-center justify-center gap-1.5",
+        dropdown_root: cn(
+          "relative inline-flex items-center rounded-cf-sm border border-border bg-surface-200 px-2 py-1",
+          "transition-colors hover:bg-surface-300",
+          "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
+        ),
+        // 原生 select 以透明覆盖层承接交互，可见文案由 caption_label 呈现；
+        // 弹出的原生选项列表不跟随页面主题，显式指定选项配色保证两种主题下可读
+        dropdown: cn(
+          "absolute inset-0 w-full cursor-pointer opacity-0",
+          "[&>option]:bg-[var(--vr-surface-1)] [&>option]:text-[var(--vr-text)]"
         ),
         month_grid: "w-full border-collapse space-y-1",
         weekdays: "flex",
@@ -74,9 +99,22 @@ function Calendar({ className, classNames, showOutsideDays = true, ...props }: C
         ...classNames,
       }}
       components={{
-        Chevron: ({ orientation }) => {
-          const Icon = orientation === "left" ? ChevronLeft : ChevronRight;
-          return <Icon className="h-5 w-5 text-muted-foreground" />;
+        Chevron: ({ orientation, className: chevronClassName }) => {
+          const Icon =
+            orientation === "left"
+              ? ChevronLeft
+              : orientation === "right"
+                ? ChevronRight
+                : ChevronDown;
+          return (
+            <Icon
+              className={cn(
+                orientation === "down" ? "h-4 w-4" : "h-5 w-5",
+                "text-muted-foreground",
+                chevronClassName
+              )}
+            />
+          );
         },
       }}
       {...props}
